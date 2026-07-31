@@ -1,3 +1,3 @@
 Alphafest Manager
-Versão 3.2.2
-Correções de interface e edição do catálogo
+Versão 3.3.0
+Base multiempresa e configurações centralizadas

@@ -41,3 +41,10 @@
 - Correção definitiva do nome ALPHAFEST.
 - Botão Editar do catálogo abre um formulário visível e preenchido.
 - Edição do catálogo mantém imagens locais e URLs existentes.
+
+## 3.3.0
+- Nova aba Configurações da Empresa.
+- Dados da empresa, PIX e padrões de orçamento agora são configuráveis.
+- WhatsApp, HTML da proposta, catálogo e barra lateral usam a configuração central.
+- Número do WhatsApp do catálogo configurável.
+- Novo arquivo empresa_config.json com fallback local e sincronização via Supabase.

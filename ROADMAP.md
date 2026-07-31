@@ -25,3 +25,12 @@
 - Fluxo de pedidos da arte à entrega
 - Linha do tempo e processos operacionais
 - Visão simplificada para uma operação pequena
+
+## Versão 3.3.0 — concluída
+- Fundação multiempresa.
+- Configuração central de identidade, dados cadastrais, PIX e padrões.
+
+## Próximas etapas
+- 3.3.1: upload de logo/QR Code pela interface.
+- 3.4.0: financeiro.
+- 4.0.0: marketing e conteúdo.

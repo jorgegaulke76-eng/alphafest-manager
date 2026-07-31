@@ -23,7 +23,8 @@ ARQUIVO_HISTORICO = "historico_orcamentos.json"
 ARQUIVO_CATALOGO = "catalogo_db.json"
 ARQUIVO_CLIENTES = "clientes_db.json"
 ARQUIVO_PRODUCAO = "producao_db.json"
-VERSAO_APP = "3.2.2"
+ARQUIVO_EMPRESA = "empresa_config.json"
+VERSAO_APP = "3.3.0"
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -54,19 +55,60 @@ def verificar_acesso():
 
 verificar_acesso()
 
+# --- CONFIGURAÇÃO DA EMPRESA ---
+CONFIG_EMPRESA_PADRAO = {
+    "nome": "Alphafest",
+    "nome_maiusculo": "ALPHAFEST",
+    "slogan": "O poder de estar presente em cada presente...",
+    "subtitulo": "Personalizados & Balões",
+    "cnpj": "24.374.857/0001-30",
+    "ie": "382105300112",
+    "endereco": "Avenida Manoel Verginio de Almeida, 442 - Alto Santa Cruz - Itatiba - SP",
+    "cep": "13251-530",
+    "email": "alphafesti@gmail.com",
+    "celular": "(11) 97294-9533",
+    "whatsapp_catalogo": "11972949533",
+    "cidade": "Itatiba",
+    "uf": "SP",
+    "pix_link": "https://linkspix.app/alphafestitatiba",
+    "pix_titular": "Ana Lúcia Zepelini",
+    "pix_banco": "Cora SCD (403)",
+    "pix_agencia": "0001",
+    "pix_conta": "2515972-5",
+    "pix_empresa": "ANA LUCIA VIEIRA ZEPELINI 29480359880",
+    "prazo_padrao": "10",
+    "validade_padrao": "5",
+    "frete_padrao": "Retirada em Itatiba",
+}
+
+def carregar_config_empresa():
+    dados = load_document("config_empresa", ARQUIVO_EMPRESA, CONFIG_EMPRESA_PADRAO)
+    config = dict(CONFIG_EMPRESA_PADRAO)
+    if isinstance(dados, dict):
+        config.update({k: v for k, v in dados.items() if v is not None})
+    return config
+
+def salvar_config_empresa(config):
+    if not isinstance(config, dict):
+        raise ValueError("A configuração da empresa precisa ser um dicionário.")
+    dados = dict(CONFIG_EMPRESA_PADRAO)
+    dados.update(config)
+    save_document("config_empresa", dados, ARQUIVO_EMPRESA)
+
 # --- FUNÇÕES AUXILIARES ---
 def formatar_msg_whatsapp(prop):
     """Monta a mensagem compacta aprovada para envio pelo WhatsApp."""
     prop = prop or {}
+    empresa = carregar_config_empresa()
 
     numero_proposta = str(prop.get("numero_proposta", "")).strip() or "N/A"
     data_emissao = str(prop.get("data_geracao", prop.get("data", ""))).strip() or "N/A"
     cliente = str(prop.get("cliente_nome", prop.get("cliente", ""))).strip() or "N/A"
     documento = str(prop.get("documento", prop.get("cliente_cpf_cnpj", ""))).strip() or "N/A"
     entrega = str(prop.get("data_entrega", "")).strip() or "A combinar"
-    prazo = str(prop.get("prazo_dias", "10")).strip() or "10"
-    frete = str(prop.get("frete_tipo", "Retirada em Itatiba")).strip() or "Retirada em Itatiba"
-    validade = str(prop.get("validade_dias", "5")).strip() or "5"
+    prazo = str(prop.get("prazo_dias", empresa.get("prazo_padrao", "10"))).strip() or str(empresa.get("prazo_padrao", "10"))
+    frete = str(prop.get("frete_tipo", empresa.get("frete_padrao", "Retirada em Itatiba"))).strip() or str(empresa.get("frete_padrao", "Retirada em Itatiba"))
+    validade = str(prop.get("validade_dias", empresa.get("validade_padrao", "5"))).strip() or str(empresa.get("validade_padrao", "5"))
 
     def numero(valor, padrao=0.0):
         try:
@@ -116,7 +158,7 @@ def formatar_msg_whatsapp(prop):
     sep = "────────────────────────"
 
     linhas = [
-        "*PROPOSTA ALPHAFEST ITATIBA*",
+        f"*PROPOSTA {str(empresa.get('nome_maiusculo', empresa.get('nome', 'EMPRESA'))).upper()} {str(empresa.get('cidade', '')).upper()}*".strip(),
         f"*Nº:* {numero_proposta}",
         f"*Emissão:* {data_emissao}",
         "",
@@ -139,12 +181,12 @@ def formatar_msg_whatsapp(prop):
         f"*Validade:* {validade} {unidade_validade}",
         sep,
         "*PAGAMENTO VIA PIX:*",
-        "*Clique no link para pagar:* https://linkspix.app/alphafestitatiba",
+        f"*Clique no link para pagar:* {empresa.get('pix_link', '')}",
         "",
-        "* Titular: Ana Lúcia Zepelini",
-        "* Banco: Cora SCD (403)",
-        "* Agência: 0001 | Conta: 2515972-5",
-        "* Empresa: ANA LUCIA VIEIRA ZEPELINI 29480359880",
+        f"* Titular: {empresa.get('pix_titular', '')}",
+        f"* Banco: {empresa.get('pix_banco', '')}",
+        f"* Agência: {empresa.get('pix_agencia', '')} | Conta: {empresa.get('pix_conta', '')}",
+        f"* Empresa: {empresa.get('pix_empresa', '')}",
         "",
         "*Somente após realizado o pagamento e nos enviando o comprovante daremos seguimento ao seu pedido!*",
     ])
@@ -390,13 +432,14 @@ def gerar_html(proposta):
     observacoes_txt = esc(observacoes, "Nenhuma observação adicional.")
     pagamento_txt = esc(pagamento, "A combinar")
 
-    empresa_nome = "Alphafest"
-    empresa_cnpj = "24.374.857/0001-30"
-    empresa_ie = "382105300112"
-    empresa_endereco = "Avenida Manoel Verginio de Almeida, 442 - Alto Santa Cruz - Itatiba - SP"
-    empresa_cep = "13251-530"
-    empresa_email = "alphafesti@gmail.com"
-    empresa_celular = "(11) 9724-9533"
+    empresa = carregar_config_empresa()
+    empresa_nome = str(empresa.get("nome", "Empresa"))
+    empresa_cnpj = str(empresa.get("cnpj", ""))
+    empresa_ie = str(empresa.get("ie", ""))
+    empresa_endereco = str(empresa.get("endereco", ""))
+    empresa_cep = str(empresa.get("cep", ""))
+    empresa_email = str(empresa.get("email", ""))
+    empresa_celular = str(empresa.get("celular", ""))
 
     logo_base64, logo_ext = encontrar_logo_base64()
     mime_logo = {
@@ -1515,8 +1558,11 @@ def formatar_preco_catalogo(valor):
         return f"R$ {texto}" if texto else "Preço sob consulta"
 
 
-def gerar_html_catalogo(produtos, titulo="Catálogo Alphafest", mostrar_precos=True):
+def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True):
     produtos = produtos or []
+    empresa = carregar_config_empresa()
+    if not titulo:
+        titulo = f"Catálogo {empresa.get('nome', 'Empresa')}"
     logo_b64, logo_ext = encontrar_logo_base64()
     ext = logo_ext.replace(".", "") or "png"
     if ext == "jpg":
@@ -1542,7 +1588,10 @@ def gerar_html_catalogo(produtos, titulo="Catálogo Alphafest", mostrar_precos=T
             imagem_html = f'<img src="{src}" alt="{nome}" onclick="abrirImagem(this.src)">' if src else '<div class="sem-imagem">Sem imagem</div>'
             preco_html = f'<div class="preco">{html.escape(formatar_preco_catalogo(produto.get("Preco")))}</div>' if mostrar_precos else ''
             msg = quote(f"Olá! Gostaria de informações sobre: {produto.get('Nome', 'produto')}")
-            cards.append(f'<article class="card">{imagem_html}<div class="card-body"><h3>{nome}</h3><p>{descricao}</p>{preco_html}<a class="btn" target="_blank" href="https://wa.me/5511972949533?text={msg}">Consultar no WhatsApp</a></div></article>')
+            numero_wpp = re.sub(r"\D", "", str(empresa.get("whatsapp_catalogo", "")))
+            if numero_wpp and not numero_wpp.startswith("55"):
+                numero_wpp = "55" + numero_wpp
+            cards.append(f'<article class="card">{imagem_html}<div class="card-body"><h3>{nome}</h3><p>{descricao}</p>{preco_html}<a class="btn" target="_blank" href="https://wa.me/{numero_wpp}?text={msg}">Consultar no WhatsApp</a></div></article>')
         cards_por_categoria.append(f'<section id="{slug_html(categoria)}"><h2>{html.escape(categoria)}</h2><div class="grid">{"".join(cards)}</div></section>')
 
     links = "".join(f'<a href="#{slug_html(c)}">{html.escape(c)}</a>' for c in categorias)
@@ -1550,7 +1599,7 @@ def gerar_html_catalogo(produtos, titulo="Catálogo Alphafest", mostrar_precos=T
     corpo = ''.join(cards_por_categoria) if cards_por_categoria else '<div class="intro">Nenhum produto selecionado.</div>'
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(titulo)}</title><style>
     *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f5f6f8;color:#20252b}} .layout{{display:flex;min-height:100vh}} aside{{width:260px;background:#18222d;color:#fff;padding:24px 18px;position:sticky;top:0;height:100vh;overflow:auto}} .logo{{max-width:180px;max-height:95px;display:block;margin:0 auto 18px;object-fit:contain}} aside h1{{font-size:20px;text-align:center;margin:8px 0 22px}} nav a{{display:block;color:#eef2f7;text-decoration:none;padding:11px 10px;border-bottom:1px solid rgba(255,255,255,.12)}} main{{flex:1;padding:32px;max-width:1400px}} .intro{{background:#fff;padding:22px;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.06);margin-bottom:28px}} section{{scroll-margin-top:20px;margin-bottom:42px}} section h2{{border-bottom:3px solid #202b36;padding-bottom:9px}} .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:22px}} .card{{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 5px 18px rgba(0,0,0,.08);display:flex;flex-direction:column}} .card img,.sem-imagem{{width:100%;height:220px;object-fit:cover;background:#e9edf2;display:flex;align-items:center;justify-content:center;cursor:pointer}} .card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .card h3{{margin:0 0 10px}} .card p{{line-height:1.45;flex:1}} .preco{{font-size:22px;font-weight:800;margin:12px 0;color:#147a42}} .btn{{display:block;text-align:center;background:#25d366;color:#fff;text-decoration:none;padding:12px;border-radius:9px;font-weight:800}} footer{{text-align:center;color:#6b7280;padding:30px}} #modal{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:999;align-items:center;justify-content:center}} #modal img{{max-width:92vw;max-height:90vh}} @media(max-width:760px){{.layout{{display:block}}aside{{width:100%;height:auto;position:relative}}main{{padding:18px}}nav{{display:flex;gap:5px;overflow:auto}}nav a{{white-space:nowrap;border:1px solid rgba(255,255,255,.18);border-radius:8px}}}}
-    </style></head><body><div class="layout"><aside>{logo_tag}<h1>{html.escape(titulo)}</h1><nav>{links}</nav></aside><main><div class="intro"><h1>{html.escape(titulo)}</h1><p>Seleção preparada pela Alphafest Itatiba. Consulte disponibilidade, personalização e prazo pelo WhatsApp.</p></div>{corpo}<footer>Alphafest Itatiba - O poder de estar presente em cada presente...</footer></main></div><div id="modal" onclick="this.style.display='none'"><img id="modal-img"></div><script>function abrirImagem(src){{document.getElementById('modal-img').src=src;document.getElementById('modal').style.display='flex';}}</script></body></html>'''
+    </style></head><body><div class="layout"><aside>{logo_tag}<h1>{html.escape(titulo)}</h1><nav>{links}</nav></aside><main><div class="intro"><h1>{html.escape(titulo)}</h1><p>Seleção preparada por {html.escape(str(empresa.get("nome", "Empresa")))}. Consulte disponibilidade, personalização e prazo pelo WhatsApp.</p></div>{corpo}<footer>{html.escape(str(empresa.get("nome", "Empresa")))} - {html.escape(str(empresa.get("slogan", "")))}</footer></main></div><div id="modal" onclick="this.style.display='none'"><img id="modal-img"></div><script>function abrirImagem(src){{document.getElementById('modal-img').src=src;document.getElementById('modal').style.display='flex';}}</script></body></html>'''
 
 
 def salvar_upload_catalogo(upload):
@@ -1560,6 +1609,7 @@ def salvar_upload_catalogo(upload):
 
 # --- SIDEBAR ---
 with st.sidebar:
+    empresa_sidebar = carregar_config_empresa()
     logo_sidebar_b64, logo_sidebar_ext = encontrar_logo_base64()
     if logo_sidebar_b64:
         mime_sidebar = {
@@ -1573,16 +1623,19 @@ with st.sidebar:
                      style="display:block; width:140px; max-width:72%; height:auto; object-fit:contain; margin:0 auto;">
             </div>
             <div style="text-align:center; width:100%;">
-                <div style="font-size:1.15rem; font-weight:800; letter-spacing:.5px;">ALPHAFEST</div>
-                <div style="font-size:.82rem; opacity:.75; margin-top:5px;">Personalizados &amp; Balões</div>
+                <div style="font-size:1.15rem; font-weight:800; letter-spacing:.5px;">{html.escape(str(empresa_sidebar.get("nome_maiusculo", empresa_sidebar.get("nome", "EMPRESA"))))}</div>
+                <div style="font-size:.82rem; opacity:.75; margin-top:5px;">{html.escape(str(empresa_sidebar.get("subtitulo", "")))}</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
     else:
         st.markdown(
-            "<div style='text-align:center'><div style='font-size:1.15rem;font-weight:800'>ALPHAFEST</div>"
-            "<div style='font-size:.82rem;opacity:.75;margin-top:5px'>Personalizados &amp; Balões</div></div>",
+            "<div style='text-align:center'><div style='font-size:1.15rem;font-weight:800'>"
+            + html.escape(str(empresa_sidebar.get("nome_maiusculo", empresa_sidebar.get("nome", "EMPRESA"))))
+            + "</div><div style='font-size:.82rem;opacity:.75;margin-top:5px'>"
+            + html.escape(str(empresa_sidebar.get("subtitulo", "")))
+            + "</div></div>",
             unsafe_allow_html=True,
         )
     st.divider()
@@ -1610,9 +1663,10 @@ with st.sidebar:
     st.divider()
     st.caption("📌 Sistema de Orçamentos e Catálogo")
     st.caption(f"Versão {VERSAO_APP}")
-    st.caption("O poder de estar presente em cada presente...")
+    st.caption(str(empresa_sidebar.get("slogan", "")))
 
 # --- ESTADO DO FORMULÁRIO ---
+empresa_form = carregar_config_empresa()
 def iniciar_estado(nome, valor):
     if nome not in st.session_state:
         st.session_state[nome] = valor
@@ -1622,9 +1676,9 @@ iniciar_estado("form_documento", "")
 iniciar_estado("form_whatsapp", "")
 iniciar_estado("form_desconto", 0.0)
 iniciar_estado("form_entrega", date.today())
-iniciar_estado("form_prazo", "10")
-iniciar_estado("form_frete", "Retirada em Itatiba")
-iniciar_estado("form_validade", "5")
+iniciar_estado("form_prazo", str(empresa_form.get("prazo_padrao", "10")))
+iniciar_estado("form_frete", str(empresa_form.get("frete_padrao", "Retirada em Itatiba")))
+iniciar_estado("form_validade", str(empresa_form.get("validade_padrao", "5")))
 iniciar_estado("editar_numero", None)
 iniciar_estado("alerta_proposta_numero", None)
 
@@ -1723,7 +1777,7 @@ mensagem_sucesso = st.session_state.pop("_mensagem_sucesso_pendente", None)
 if mensagem_sucesso:
     st.success(mensagem_sucesso)
 
-aba1, aba2, aba3, aba4, aba5, aba6 = st.tabs(["➕ Novo Orçamento", "📋 Histórico", "🎯 Fluxo de Pedidos", "📊 Relatórios", "📦 Catálogo", "👥 Clientes"])
+aba1, aba2, aba3, aba4, aba5, aba6, aba7 = st.tabs(["➕ Novo Orçamento", "📋 Histórico", "🎯 Fluxo de Pedidos", "📊 Relatórios", "📦 Catálogo", "👥 Clientes", "⚙️ Configurações"])
 
 with aba1:
     # Cabeçalho centralizado da área de orçamento.
@@ -2440,3 +2494,80 @@ with aba6:
             st.session_state.cliente_edit_id = None
             st.rerun()
 
+
+
+with aba7:
+    st.header("⚙️ Configurações da Empresa")
+    st.caption("Os dados salvos aqui são usados no painel, WhatsApp, HTML da proposta e catálogo do cliente.")
+    config_atual = carregar_config_empresa()
+
+    with st.form("form_config_empresa"):
+        st.subheader("Identidade")
+        c1, c2 = st.columns(2)
+        nome_empresa = c1.text_input("Nome da empresa", value=str(config_atual.get("nome", "")))
+        nome_maiusculo = c2.text_input("Nome no painel", value=str(config_atual.get("nome_maiusculo", "")))
+        subtitulo_empresa = c1.text_input("Subtítulo", value=str(config_atual.get("subtitulo", "")))
+        slogan_empresa = c2.text_input("Slogan", value=str(config_atual.get("slogan", "")))
+
+        st.subheader("Dados cadastrais")
+        c1, c2 = st.columns(2)
+        cnpj_empresa = c1.text_input("CNPJ", value=str(config_atual.get("cnpj", "")))
+        ie_empresa = c2.text_input("Inscrição Estadual", value=str(config_atual.get("ie", "")))
+        endereco_empresa = st.text_input("Endereço completo", value=str(config_atual.get("endereco", "")))
+        c1, c2, c3 = st.columns([1, 2, 1])
+        cep_empresa = c1.text_input("CEP", value=str(config_atual.get("cep", "")))
+        cidade_empresa = c2.text_input("Cidade", value=str(config_atual.get("cidade", "")))
+        uf_empresa = c3.text_input("UF", value=str(config_atual.get("uf", "")), max_chars=2)
+        c1, c2 = st.columns(2)
+        email_empresa = c1.text_input("E-mail", value=str(config_atual.get("email", "")))
+        celular_empresa = c2.text_input("Celular", value=str(config_atual.get("celular", "")))
+        whatsapp_catalogo = st.text_input("WhatsApp do catálogo (somente números)", value=str(config_atual.get("whatsapp_catalogo", "")))
+
+        st.subheader("Pagamento PIX")
+        pix_link = st.text_input("Link de pagamento PIX", value=str(config_atual.get("pix_link", "")))
+        c1, c2 = st.columns(2)
+        pix_titular = c1.text_input("Titular", value=str(config_atual.get("pix_titular", "")))
+        pix_banco = c2.text_input("Banco", value=str(config_atual.get("pix_banco", "")))
+        c1, c2 = st.columns(2)
+        pix_agencia = c1.text_input("Agência", value=str(config_atual.get("pix_agencia", "")))
+        pix_conta = c2.text_input("Conta", value=str(config_atual.get("pix_conta", "")))
+        pix_empresa = st.text_input("Empresa / favorecido", value=str(config_atual.get("pix_empresa", "")))
+
+        st.subheader("Padrões dos novos orçamentos")
+        c1, c2, c3 = st.columns(3)
+        prazo_padrao = c1.text_input("Prazo padrão (dias úteis)", value=str(config_atual.get("prazo_padrao", "10")))
+        validade_padrao = c2.text_input("Validade padrão (dias)", value=str(config_atual.get("validade_padrao", "5")))
+        frete_padrao = c3.text_input("Frete/entrega padrão", value=str(config_atual.get("frete_padrao", "Retirada em Itatiba")))
+
+        salvar_config = st.form_submit_button("💾 Salvar configurações", type="primary", use_container_width=True)
+
+    if salvar_config:
+        nova_config = {
+            "nome": nome_empresa.strip(),
+            "nome_maiusculo": nome_maiusculo.strip() or nome_empresa.strip().upper(),
+            "subtitulo": subtitulo_empresa.strip(),
+            "slogan": slogan_empresa.strip(),
+            "cnpj": cnpj_empresa.strip(),
+            "ie": ie_empresa.strip(),
+            "endereco": endereco_empresa.strip(),
+            "cep": cep_empresa.strip(),
+            "cidade": cidade_empresa.strip(),
+            "uf": uf_empresa.strip().upper(),
+            "email": email_empresa.strip(),
+            "celular": celular_empresa.strip(),
+            "whatsapp_catalogo": re.sub(r"\D", "", whatsapp_catalogo),
+            "pix_link": pix_link.strip(),
+            "pix_titular": pix_titular.strip(),
+            "pix_banco": pix_banco.strip(),
+            "pix_agencia": pix_agencia.strip(),
+            "pix_conta": pix_conta.strip(),
+            "pix_empresa": pix_empresa.strip(),
+            "prazo_padrao": prazo_padrao.strip() or "10",
+            "validade_padrao": validade_padrao.strip() or "5",
+            "frete_padrao": frete_padrao.strip() or "Retirada em Itatiba",
+        }
+        salvar_config_empresa(nova_config)
+        st.success("Configurações salvas. O sistema será atualizado agora.")
+        st.rerun()
+
+    st.info("A logo e o QR Code continuam sendo carregados dos arquivos logo.png e pix.png do repositório.")
