@@ -48,3 +48,13 @@
 - WhatsApp, HTML da proposta, catálogo e barra lateral usam a configuração central.
 - Número do WhatsApp do catálogo configurável.
 - Novo arquivo empresa_config.json com fallback local e sincronização via Supabase.
+
+## 3.4.0 — Central do Dia
+- Nova aba Central do Dia como primeira tela do sistema.
+- Saudação personalizada para Anna e Jorge.
+- Os três e-mails informados possuem acesso administrativo completo.
+- Identificação automática quando o login Google/OIDC do Streamlit disponibiliza o e-mail.
+- Se o e-mail não estiver disponível, seletor simples de usuário na barra lateral.
+- Indicadores de atrasados, entregas de hoje, aprovação, produção, pedidos prontos e valor previsto.
+- Priorização automática do pedido que precisa de atenção primeiro.
+- Central de alertas e pesquisa rápida por cliente, telefone, produto, tema ou pedido.

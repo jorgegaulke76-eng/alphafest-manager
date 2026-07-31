@@ -34,3 +34,15 @@
 - 3.3.1: upload de logo/QR Code pela interface.
 - 3.4.0: financeiro.
 - 4.0.0: marketing e conteúdo.
+
+## Concluído na 3.4.0
+- Central do Dia
+- Saudação personalizada por usuário
+- Prioridade automática
+- Alertas concentrados
+- Pesquisa rápida
+
+## Próximas etapas
+- Configuração completa do login Google/OIDC
+- Inteligência comercial avançada
+- Marketing e campanhas

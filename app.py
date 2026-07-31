@@ -6,7 +6,7 @@ import html
 import re
 import urllib.parse
 from urllib.parse import quote
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import altair as alt
 import base64
 
@@ -24,7 +24,7 @@ ARQUIVO_CATALOGO = "catalogo_db.json"
 ARQUIVO_CLIENTES = "clientes_db.json"
 ARQUIVO_PRODUCAO = "producao_db.json"
 ARQUIVO_EMPRESA = "empresa_config.json"
-VERSAO_APP = "3.3.0"
+VERSAO_APP = "3.4.0"
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -87,6 +87,50 @@ def carregar_config_empresa():
     if isinstance(dados, dict):
         config.update({k: v for k, v in dados.items() if v is not None})
     return config
+
+USUARIOS_ADMIN = {
+    "jorgegaulke76@gmail.com": {"nome": "Jorge", "perfil": "Administrador"},
+    "alphafesti@gmail.com": {"nome": "Anna", "perfil": "Administradora"},
+    "annazepelini@gmail.com": {"nome": "Anna", "perfil": "Administradora"},
+}
+
+def obter_email_usuario_autenticado():
+    """Tenta obter o e-mail do login OIDC do Streamlit, quando configurado."""
+    try:
+        usuario = st.user
+        email = getattr(usuario, "email", None)
+        if not email and hasattr(usuario, "get"):
+            email = usuario.get("email")
+        if email:
+            return str(email).strip().lower()
+    except Exception:
+        pass
+    return ""
+
+def obter_usuario_atual():
+    email = obter_email_usuario_autenticado()
+    if email in USUARIOS_ADMIN:
+        dados = dict(USUARIOS_ADMIN[email])
+        dados["email"] = email
+        dados["automatico"] = True
+        return dados
+
+    nome_fallback = st.session_state.get("usuario_atual_fallback", "Anna")
+    email_fallback = "jorgegaulke76@gmail.com" if nome_fallback == "Jorge" else "alphafesti@gmail.com"
+    dados = dict(USUARIOS_ADMIN[email_fallback])
+    dados["email"] = email_fallback
+    dados["automatico"] = False
+    return dados
+
+def saudacao_por_hora(nome):
+    hora = datetime.now().hour
+    if hora < 12:
+        periodo = "Bom dia"
+    elif hora < 18:
+        periodo = "Boa tarde"
+    else:
+        periodo = "Boa noite"
+    return f"{periodo}, {nome}!"
 
 def salvar_config_empresa(config):
     if not isinstance(config, dict):
@@ -1645,6 +1689,20 @@ with st.sidebar:
         st.success("🟢 Banco online conectado")
     else:
         st.warning(f"🟡 {mensagem_banco}")
+
+    email_detectado = obter_email_usuario_autenticado()
+    if email_detectado in USUARIOS_ADMIN:
+        usuario_sidebar = USUARIOS_ADMIN[email_detectado]
+        st.caption(f"👤 {usuario_sidebar['nome']} • {usuario_sidebar['perfil']}")
+    else:
+        st.selectbox(
+            "👤 Usuário atual",
+            ["Anna", "Jorge"],
+            key="usuario_atual_fallback",
+            help="A identificação automática funciona quando o login Google/OIDC está configurado no Streamlit.",
+        )
+        st.caption("Acesso administrativo completo")
+
     h_atual = carregar_historico()
     st.download_button("📥 BAIXAR BACKUP", data=json.dumps(h_atual, ensure_ascii=False, indent=4), file_name="backup_historico.json", mime="application/json", type="primary", use_container_width=True)
     st.download_button("📦 BACKUP DO CATÁLOGO", data=json.dumps(carregar_catalogo(), ensure_ascii=False, indent=4), file_name="backup_catalogo.json", mime="application/json", use_container_width=True)
@@ -1777,7 +1835,109 @@ mensagem_sucesso = st.session_state.pop("_mensagem_sucesso_pendente", None)
 if mensagem_sucesso:
     st.success(mensagem_sucesso)
 
-aba1, aba2, aba3, aba4, aba5, aba6, aba7 = st.tabs(["➕ Novo Orçamento", "📋 Histórico", "🎯 Fluxo de Pedidos", "📊 Relatórios", "📦 Catálogo", "👥 Clientes", "⚙️ Configurações"])
+aba0, aba1, aba2, aba3, aba4, aba5, aba6, aba7 = st.tabs([
+    "🏠 Central do Dia",
+    "➕ Novo Orçamento",
+    "📋 Histórico",
+    "🎯 Fluxo de Pedidos",
+    "📊 Relatórios",
+    "📦 Catálogo",
+    "👥 Clientes",
+    "⚙️ Configurações",
+])
+
+with aba0:
+    usuario_atual = obter_usuario_atual()
+    empresa_central = carregar_config_empresa()
+    hoje_central = date.today()
+    dias_semana = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
+    meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
+    data_extenso = f"{dias_semana[hoje_central.weekday()]}, {hoje_central.day} de {meses[hoje_central.month-1]} de {hoje_central.year}"
+
+    st.markdown(
+        f"<h1 style='text-align:center;margin-bottom:4px;'>☀️ {html.escape(saudacao_por_hora(usuario_atual['nome']))}</h1>"
+        f"<p style='text-align:center;color:#6b7280;margin-top:0;'>{html.escape(data_extenso.capitalize())}</p>"
+        f"<p style='text-align:center;font-style:italic;'>{html.escape(str(empresa_central.get('slogan', '')))}</p>",
+        unsafe_allow_html=True,
+    )
+    if not usuario_atual.get("automatico"):
+        st.caption("A saudação está usando o usuário selecionado na barra lateral. Para identificação automática por e-mail, configure o login Google/OIDC do Streamlit.")
+
+    historico_central = carregar_historico()
+    tarefas_central = sincronizar_producao_com_propostas()
+    tarefas_ativas_central = [t for t in tarefas_central if t.get("ativa", True)]
+
+    entregas_hoje_central = [p for p in historico_central if data_entrega_segura(p.get("data_entrega")) == hoje_central and not p.get("entregue", False)]
+    pedidos_atrasados_central = [p for p in historico_central if (data_entrega_segura(p.get("data_entrega")) or date.max) < hoje_central and not p.get("entregue", False)]
+    aguardando_aprovacao_central = [t for t in tarefas_ativas_central if normalizar_status_fluxo(t.get("status")) == "Aguardando aprovação"]
+    em_producao_central = [t for t in tarefas_ativas_central if normalizar_status_fluxo(t.get("status")) in ["Pronto para produzir", "Em produção", "Montagem/acabamento"]]
+    prontos_central = [t for t in tarefas_ativas_central if normalizar_status_fluxo(t.get("status")) == "Pronto"]
+    pendentes_pagamento_central = [p for p in historico_central if not p.get("pago", False) and not p.get("entregue", False)]
+    valor_previsto_hoje = sum(calcular_valores_proposta(p)[2] for p in entregas_hoje_central)
+
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1.metric("🚨 Atrasados", len(pedidos_atrasados_central))
+    c2.metric("📦 Entregas hoje", len(entregas_hoje_central))
+    c3.metric("🟡 Aprovação", len(aguardando_aprovacao_central))
+    c4.metric("🔵 Em produção", len(em_producao_central))
+    c5.metric("✅ Prontos", len(prontos_central))
+    c6.metric("💰 Previsto hoje", f"R$ {valor_previsto_hoje:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+    st.divider()
+    st.subheader("🎯 O que fazer agora")
+    prioridade = None
+    motivo = ""
+    if pedidos_atrasados_central:
+        prioridade = sorted(pedidos_atrasados_central, key=lambda p: data_entrega_segura(p.get("data_entrega")) or date.max)[0]
+        motivo = "Pedido atrasado — verificar imediatamente"
+    elif entregas_hoje_central:
+        prioridade = entregas_hoje_central[0]
+        motivo = "Entrega prevista para hoje"
+    elif aguardando_aprovacao_central:
+        tarefa = aguardando_aprovacao_central[0]
+        prioridade = next((p for p in historico_central if p.get("numero_proposta") == tarefa.get("numero_proposta")), None)
+        motivo = "Aguardando aprovação do cliente"
+    elif pendentes_pagamento_central:
+        prioridade = pendentes_pagamento_central[0]
+        motivo = "Pagamento pendente"
+
+    if prioridade:
+        _, _, total_prioridade = calcular_valores_proposta(prioridade)
+        with st.container(border=True):
+            st.markdown(f"### {html.escape(str(prioridade.get('cliente_nome', 'Cliente')))}")
+            st.write(f"**Pedido:** {prioridade.get('numero_proposta', '—')}  •  **Entrega:** {prioridade.get('data_entrega', 'A combinar')}")
+            st.write(f"**Motivo:** {motivo}")
+            st.write(f"**Valor:** R$ {total_prioridade:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            if st.button("📋 Selecionar no Histórico", key="central_abrir_prioridade", type="primary"):
+                st.session_state.alerta_proposta_numero = prioridade.get("numero_proposta")
+                st.info("Pedido selecionado. Abra a aba Histórico para consultar os detalhes.")
+    else:
+        st.success("Nenhuma prioridade crítica neste momento. Tudo em dia!")
+
+    st.divider()
+    st.subheader("🚨 Atenção")
+    alertas_central = []
+    for p in pedidos_atrasados_central[:5]:
+        alertas_central.append(("🚨", p.get("numero_proposta"), p.get("cliente_nome"), f"Atrasado desde {p.get('data_entrega', '—')}"))
+    for p in entregas_hoje_central[:5]:
+        alertas_central.append(("📦", p.get("numero_proposta"), p.get("cliente_nome"), "Entrega hoje"))
+    for t in aguardando_aprovacao_central[:5]:
+        alertas_central.append(("🟡", t.get("numero_proposta"), t.get("cliente_nome"), "Aguardando aprovação"))
+    if alertas_central:
+        for icone, numero, cliente, texto in alertas_central[:10]:
+            st.write(f"{icone} **{numero} — {cliente}** · {texto}")
+    else:
+        st.info("Nenhum alerta importante agora.")
+
+    st.divider()
+    st.subheader("🔎 Pesquisa rápida")
+    busca_central = st.text_input("Cliente, telefone, pedido, produto ou tema", key="busca_central_dia").strip().lower()
+    if busca_central:
+        resultados = [p for p in historico_central if busca_central in normalizar_texto_busca(p)]
+        st.caption(f"{len(resultados)} resultado(s)")
+        for p in resultados[:10]:
+            _, _, total_resultado = calcular_valores_proposta(p)
+            st.write(f"• **{p.get('numero_proposta', '—')} — {p.get('cliente_nome', 'Cliente')}** · {p.get('data_entrega', 'Sem data')} · R$ {total_resultado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
 with aba1:
     # Cabeçalho centralizado da área de orçamento.
