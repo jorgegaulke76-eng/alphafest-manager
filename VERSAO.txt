@@ -1,3 +1,4 @@
-FestManager / Alphafest Manager
-Versão 3.4.0
-Central do Dia e saudação por usuário
+FestManager
+Versão 3.5.0
+Biblioteca Comercial 360°
+Data: 31/07/2026

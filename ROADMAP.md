@@ -46,3 +46,11 @@
 - Configuração completa do login Google/OIDC
 - Inteligência comercial avançada
 - Marketing e campanhas
+
+## Concluído na 3.5.0
+- Primeira etapa da Biblioteca Comercial 360°.
+
+## Próximas etapas
+- Gestão de arquivos de produção por produto.
+- Integração do catálogo online com o domínio da empresa.
+- Sincronização com marketplaces e redes sociais via integrações oficiais.

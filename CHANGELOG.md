@@ -58,3 +58,16 @@
 - Indicadores de atrasados, entregas de hoje, aprovação, produção, pedidos prontos e valor previsto.
 - Priorização automática do pedido que precisa de atenção primeiro.
 - Central de alertas e pesquisa rápida por cliente, telefone, produto, tema ou pedido.
+
+## 3.5.0 - Biblioteca Comercial 360°
+- Catálogo ampliado com subcategoria e código interno.
+- Descrições curta e completa.
+- Preço, custo opcional e margem estimada.
+- Tempo médio e processos de produção.
+- Campos de personalização sugeridos.
+- Conteúdo de marketing para redes sociais, Mercado Livre e Shopee.
+- Upload de várias fotos por produto.
+- Produto em destaque e preparação para publicação no site.
+- Estatísticas de quantidade vendida, receita e última venda.
+- Pesquisa por nome, categoria, subcategoria, código e palavras-chave.
+- Compatibilidade preservada com os produtos já cadastrados.

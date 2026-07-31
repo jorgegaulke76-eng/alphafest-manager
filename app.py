@@ -24,7 +24,7 @@ ARQUIVO_CATALOGO = "catalogo_db.json"
 ARQUIVO_CLIENTES = "clientes_db.json"
 ARQUIVO_PRODUCAO = "producao_db.json"
 ARQUIVO_EMPRESA = "empresa_config.json"
-VERSAO_APP = "3.4.0"
+VERSAO_APP = "3.5.0"
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -1625,7 +1625,7 @@ def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True):
         selecionados = [p for p in produtos if (str(p.get("Categoria", "Sem categoria")).strip() or "Sem categoria") == categoria]
         for produto in selecionados:
             nome = html.escape(str(produto.get("Nome", "Produto")))
-            descricao = html.escape(str(produto.get("Descricao", "")))
+            descricao = html.escape(str(produto.get("DescricaoCurta", produto.get("Descricao", ""))))
             imagens = produto.get("Imagens", []) or []
             primeira = imagens[0] if imagens else ""
             src = primeira if str(primeira).startswith(("http://", "https://")) else imagem_data_uri(primeira)
@@ -2305,85 +2305,159 @@ with aba5:
             if indice_edicao is not None and 0 <= indice_edicao < len(catalogo)
             else None
         )
+        item_edicao = dict(item_edicao or {})
         sufixo = str(indice_edicao) if indice_edicao is not None else "novo"
         titulo_form = "✏️ Editar produto" if item_edicao else "➕ Adicionar produto"
         st.subheader(titulo_form)
         if item_edicao:
             st.info(f"Editando: {item_edicao.get('Nome', 'Produto')}")
 
-        with st.container(border=True):
-            c1, c2 = st.columns(2)
-            categoria_cat = c1.text_input(
-                "Categoria",
-                value=item_edicao.get("Categoria", "") if item_edicao else "",
-                key=f"cat_categoria_{sufixo}",
+        tab_info, tab_producao, tab_marketing, tab_midias = st.tabs([
+            "📦 Informações", "⚙️ Produção", "📣 Marketing", "🖼️ Fotos e publicação"
+        ])
+
+        with tab_info:
+            with st.container(border=True):
+                c1, c2 = st.columns(2)
+                categoria_cat = c1.text_input(
+                    "Categoria *", value=item_edicao.get("Categoria", ""), key=f"cat_categoria_{sufixo}"
+                )
+                subcategoria_cat = c1.text_input(
+                    "Subcategoria", value=item_edicao.get("Subcategoria", ""), key=f"cat_subcategoria_{sufixo}"
+                )
+                codigo_cat = c1.text_input(
+                    "Código interno", value=item_edicao.get("CodigoInterno", ""), key=f"cat_codigo_{sufixo}"
+                )
+                nome_cat = c1.text_input(
+                    "Nome do produto *", value=item_edicao.get("Nome", ""), key=f"cat_nome_{sufixo}"
+                )
+                descricao_curta_cat = c1.text_area(
+                    "Descrição curta", value=item_edicao.get("DescricaoCurta", item_edicao.get("Descricao", "")),
+                    height=100, key=f"cat_desc_curta_{sufixo}"
+                )
+                descricao_cat = c2.text_area(
+                    "Descrição completa", value=item_edicao.get("DescricaoCompleta", item_edicao.get("Descricao", "")),
+                    height=180, key=f"cat_desc_{sufixo}"
+                )
+                preco_cat = c2.text_input(
+                    "Preço sugerido", value=str(item_edicao.get("Preco", "")), key=f"cat_preco_{sufixo}"
+                )
+                custo_cat = c2.text_input(
+                    "Custo (opcional)", value=str(item_edicao.get("Custo", "")), key=f"cat_custo_{sufixo}"
+                )
+                tempo_cat = c2.text_input(
+                    "Tempo médio de produção", value=str(item_edicao.get("TempoProducao", "")),
+                    placeholder="Ex.: 30 minutos, 2 horas, 3 dias", key=f"cat_tempo_{sufixo}"
+                )
+                preco_num = valor_float(str(preco_cat).replace("R$", "").replace(".", "").replace(",", "."))
+                custo_num = valor_float(str(custo_cat).replace("R$", "").replace(".", "").replace(",", "."))
+                if preco_num > 0 and custo_num >= 0:
+                    margem = preco_num - custo_num
+                    margem_pct = (margem / preco_num * 100) if preco_num else 0
+                    c2.caption(f"Margem estimada: R$ {margem:,.2f} ({margem_pct:.1f}%)".replace(",", "X").replace(".", ",").replace("X", "."))
+
+        with tab_producao:
+            st.caption("Marque somente os processos que normalmente fazem parte deste produto.")
+            processos_atuais = set(item_edicao.get("Processos", []) or [])
+            processos_opcoes = ["Arte", "Impressão", "Corte", "Laser", "Impressão 3D", "Balões", "Montagem", "Acabamento"]
+            processos_cat = st.multiselect(
+                "Processos necessários", processos_opcoes,
+                default=[x for x in processos_opcoes if x in processos_atuais],
+                key=f"cat_processos_{sufixo}"
             )
-            nome_cat = c1.text_input(
-                "Nome do produto",
-                value=item_edicao.get("Nome", "") if item_edicao else "",
-                key=f"cat_nome_{sufixo}",
+            campos_personalizacao = st.multiselect(
+                "Campos de personalização sugeridos",
+                ["Tema", "Nome", "Idade", "Cor", "Data do evento", "Tamanho", "Frase", "Observações"],
+                default=item_edicao.get("CamposPersonalizacao", ["Tema", "Nome", "Idade", "Cor", "Observações"]),
+                key=f"cat_campos_personalizacao_{sufixo}"
             )
-            descricao_cat = c1.text_area(
-                "Descrição",
-                value=item_edicao.get("Descricao", "") if item_edicao else "",
-                key=f"cat_desc_{sufixo}",
-            )
-            preco_cat = c2.text_input(
-                "Preço",
-                value=str(item_edicao.get("Preco", "")) if item_edicao else "",
-                key=f"cat_preco_{sufixo}",
-            )
-            urls_existentes = [
-                x for x in (item_edicao.get("Imagens", []) if item_edicao else [])
-                if str(x).startswith("http")
-            ]
-            urls_cat = c2.text_area(
-                "URLs de imagens (uma por linha)",
-                value="\n".join(urls_existentes),
-                key=f"cat_urls_{sufixo}",
-            )
-            foto_cat = c2.file_uploader(
-                "Enviar foto",
-                type=["png", "jpg", "jpeg", "webp"],
-                key=f"cat_foto_{sufixo}",
+            observacao_interna = st.text_area(
+                "Observações internas de produção", value=item_edicao.get("ObservacaoInterna", ""),
+                key=f"cat_obs_interna_{sufixo}"
             )
 
-            b1, b2 = st.columns(2)
-            salvar = b1.button(
-                "💾 Salvar alterações" if item_edicao else "💾 Salvar produto",
-                type="primary",
-                use_container_width=True,
-                key=f"cat_salvar_{sufixo}",
+        with tab_marketing:
+            palavras_chave = st.text_input(
+                "Palavras-chave (separadas por vírgula)", value=item_edicao.get("PalavrasChave", ""),
+                key=f"cat_palavras_{sufixo}"
             )
-            cancelar = b2.button(
-                "↩️ Cancelar edição" if item_edicao else "🧹 Limpar",
-                use_container_width=True,
-                key=f"cat_cancelar_{sufixo}",
+            legenda_instagram = st.text_area(
+                "Legenda para Instagram/Facebook", value=item_edicao.get("LegendaSocial", ""),
+                key=f"cat_legenda_{sufixo}"
             )
+            hashtags = st.text_area(
+                "Hashtags", value=item_edicao.get("Hashtags", ""), key=f"cat_hashtags_{sufixo}"
+            )
+            texto_ml = st.text_area(
+                "Descrição para Mercado Livre", value=item_edicao.get("DescricaoMercadoLivre", ""),
+                key=f"cat_ml_{sufixo}"
+            )
+            texto_shopee = st.text_area(
+                "Descrição para Shopee", value=item_edicao.get("DescricaoShopee", ""),
+                key=f"cat_shopee_{sufixo}"
+            )
+
+        with tab_midias:
+            urls_existentes = [x for x in (item_edicao.get("Imagens", []) or []) if str(x).startswith("http")]
+            urls_cat = st.text_area(
+                "URLs de imagens (uma por linha)", value="\n".join(urls_existentes),
+                key=f"cat_urls_{sufixo}"
+            )
+            fotos_cat = st.file_uploader(
+                "Enviar uma ou mais fotos", type=["png", "jpg", "jpeg", "webp"],
+                accept_multiple_files=True, key=f"cat_fotos_{sufixo}"
+            )
+            publicar_site = st.checkbox(
+                "Publicar no site/catálogo online", value=bool(item_edicao.get("PublicarSite", False)),
+                key=f"cat_publicar_{sufixo}"
+            )
+            destaque_cat = st.checkbox(
+                "Produto em destaque", value=bool(item_edicao.get("Destaque", False)),
+                key=f"cat_destaque_{sufixo}"
+            )
+            if item_edicao.get("Imagens"):
+                st.caption(f"{len(item_edicao.get('Imagens', []))} imagem(ns) já cadastrada(s).")
+
+        b1, b2 = st.columns(2)
+        salvar = b1.button(
+            "💾 Salvar alterações" if item_edicao else "💾 Salvar produto", type="primary",
+            use_container_width=True, key=f"cat_salvar_{sufixo}"
+        )
+        cancelar = b2.button(
+            "↩️ Cancelar edição" if item_edicao else "🧹 Limpar", use_container_width=True,
+            key=f"cat_cancelar_{sufixo}"
+        )
 
         if salvar:
             if not nome_cat.strip() or not categoria_cat.strip():
                 st.warning("Informe pelo menos o nome e a categoria.")
             else:
                 imagens = [u.strip() for u in urls_cat.splitlines() if u.strip()]
-                if item_edicao:
-                    imagens.extend([
-                        x for x in item_edicao.get("Imagens", [])
-                        if not str(x).startswith("http")
-                    ])
-                caminho_novo = salvar_upload_catalogo(foto_cat)
-                if caminho_novo:
-                    imagens.insert(0, caminho_novo)
-                registro = {
-                    "Nome": nome_cat.strip(),
-                    "Categoria": categoria_cat.strip(),
-                    "Imagens": imagens,
-                    "Descricao": descricao_cat.strip(),
-                    "Preco": preco_cat.strip(),
-                }
+                imagens.extend([x for x in item_edicao.get("Imagens", []) if not str(x).startswith("http")])
+                for foto in fotos_cat or []:
+                    caminho_novo = salvar_upload_catalogo(foto)
+                    if caminho_novo:
+                        imagens.insert(0, caminho_novo)
+                # Mantém campos futuros/desconhecidos existentes ao editar.
+                registro = dict(item_edicao)
+                registro.update({
+                    "Nome": nome_cat.strip(), "Categoria": categoria_cat.strip(),
+                    "Subcategoria": subcategoria_cat.strip(), "CodigoInterno": codigo_cat.strip(),
+                    "Imagens": list(dict.fromkeys(imagens)),
+                    "Descricao": descricao_curta_cat.strip() or descricao_cat.strip(),
+                    "DescricaoCurta": descricao_curta_cat.strip(), "DescricaoCompleta": descricao_cat.strip(),
+                    "Preco": preco_cat.strip(), "Custo": custo_cat.strip(), "TempoProducao": tempo_cat.strip(),
+                    "Processos": processos_cat, "CamposPersonalizacao": campos_personalizacao,
+                    "ObservacaoInterna": observacao_interna.strip(), "PalavrasChave": palavras_chave.strip(),
+                    "LegendaSocial": legenda_instagram.strip(), "Hashtags": hashtags.strip(),
+                    "DescricaoMercadoLivre": texto_ml.strip(), "DescricaoShopee": texto_shopee.strip(),
+                    "PublicarSite": publicar_site, "Destaque": destaque_cat,
+                    "AtualizadoEm": datetime.now().isoformat(timespec="seconds"),
+                })
                 if item_edicao:
                     catalogo[indice_edicao] = registro
                 else:
+                    registro["CriadoEm"] = datetime.now().isoformat(timespec="seconds")
                     catalogo.append(registro)
                 salvar_catalogo(catalogo)
                 st.session_state.catalogo_edit_index = None
@@ -2392,9 +2466,9 @@ with aba5:
 
         if cancelar:
             st.session_state.catalogo_edit_index = None
-            # Remove os valores antigos dos widgets do formulário.
-            for prefixo in ["cat_categoria_", "cat_nome_", "cat_desc_", "cat_preco_", "cat_urls_", "cat_foto_"]:
-                st.session_state.pop(f"{prefixo}{sufixo}", None)
+            for chave in list(st.session_state.keys()):
+                if str(chave).startswith("cat_") and str(chave).endswith(f"_{sufixo}"):
+                    st.session_state.pop(chave, None)
             st.rerun()
 
     # Quando o usuário clica em Editar, o formulário ocupa a tela do catálogo.
@@ -2419,7 +2493,7 @@ with aba5:
             filtrados = [
                 (i, p) for i, p in enumerate(catalogo)
                 if not termo_cat
-                or termo_cat in f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Descricao','')}".lower()
+                or termo_cat in f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')} {p.get('CodigoInterno','')} {p.get('Descricao','')} {p.get('PalavrasChave','')}".lower()
             ]
             st.write(f"**{len(filtrados)} produto(s)**")
             for i, produto_cat in filtrados:
@@ -2433,12 +2507,37 @@ with aba5:
                             cimg.write("📷")
                     else:
                         cimg.write("📷")
-                    cinfo.markdown(f"### {produto_cat.get('Nome','Produto')}")
+                    nome_produto = str(produto_cat.get("Nome", "Produto"))
+                    cinfo.markdown(f"### {'⭐ ' if produto_cat.get('Destaque') else ''}{nome_produto}")
+                    subt = str(produto_cat.get("Subcategoria", "")).strip()
+                    categoria_txt = str(produto_cat.get("Categoria", "")) + (f" / {subt}" if subt else "")
                     cinfo.write(
-                        f"**Categoria:** {produto_cat.get('Categoria','')}  |  "
+                        f"**Categoria:** {categoria_txt}  |  "
                         f"**Preço:** {formatar_preco_catalogo(produto_cat.get('Preco'))}"
                     )
-                    cinfo.caption(produto_cat.get("Descricao", ""))
+                    descricao_lista = produto_cat.get("DescricaoCurta", produto_cat.get("Descricao", ""))
+                    cinfo.caption(descricao_lista)
+                    # Estatísticas calculadas a partir do histórico, sem duplicar dados no produto.
+                    vendas_qtd = 0.0
+                    vendas_valor = 0.0
+                    ultima_venda = "—"
+                    for proposta_hist in carregar_historico():
+                        for item_hist in proposta_hist.get("itens", []) or []:
+                            if str(item_hist.get("produto", "")).strip().casefold() == nome_produto.strip().casefold():
+                                qtd_hist = valor_float(item_hist.get("quantidade", 0))
+                                unit_hist = valor_float(item_hist.get("valor_unitario", 0))
+                                vendas_qtd += qtd_hist
+                                vendas_valor += qtd_hist * unit_hist
+                                if ultima_venda == "—":
+                                    ultima_venda = str(proposta_hist.get("data_geracao", "—"))
+                    cinfo.caption(
+                        f"Vendido: {vendas_qtd:g} un. | Receita histórica: {formatar_preco_catalogo(vendas_valor)} | Última venda: {ultima_venda}"
+                    )
+                    processos_lista = produto_cat.get("Processos", []) or []
+                    if processos_lista:
+                        cinfo.caption("Processos: " + " • ".join(processos_lista))
+                    if produto_cat.get("PublicarSite"):
+                        cinfo.success("🌐 Marcado para publicação no site")
                     if cacoes.button("✏️ Editar", key=f"cat_editar_{i}", use_container_width=True):
                         st.session_state.catalogo_edit_index = i
                         st.rerun()
