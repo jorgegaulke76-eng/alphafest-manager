@@ -23,7 +23,7 @@ ARQUIVO_HISTORICO = "historico_orcamentos.json"
 ARQUIVO_CATALOGO = "catalogo_db.json"
 ARQUIVO_CLIENTES = "clientes_db.json"
 ARQUIVO_PRODUCAO = "producao_db.json"
-VERSAO_APP = "3.2.1"
+VERSAO_APP = "3.2.2"
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -1560,14 +1560,31 @@ def salvar_upload_catalogo(upload):
 
 # --- SIDEBAR ---
 with st.sidebar:
-    logo_sidebar_b64, _ = encontrar_logo_base64()
+    logo_sidebar_b64, logo_sidebar_ext = encontrar_logo_base64()
     if logo_sidebar_b64:
-        try:
-            st.image(base64.b64decode(logo_sidebar_b64), width=150)
-        except Exception:
-            pass
-    st.markdown("### ALPHAFEST")
-    st.caption("Personalizados & Balões")
+        mime_sidebar = {
+            ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".webp": "image/webp", ".png": "image/png",
+        }.get(logo_sidebar_ext, "image/png")
+        st.markdown(
+            f"""
+            <div style="display:flex; justify-content:center; width:100%; margin:4px 0 12px 0;">
+                <img src="data:{mime_sidebar};base64,{logo_sidebar_b64}"
+                     style="display:block; width:140px; max-width:72%; height:auto; object-fit:contain; margin:0 auto;">
+            </div>
+            <div style="text-align:center; width:100%;">
+                <div style="font-size:1.15rem; font-weight:800; letter-spacing:.5px;">ALPHAFEST</div>
+                <div style="font-size:.82rem; opacity:.75; margin-top:5px;">Personalizados &amp; Balões</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            "<div style='text-align:center'><div style='font-size:1.15rem;font-weight:800'>ALPHAFEST</div>"
+            "<div style='font-size:.82rem;opacity:.75;margin-top:5px'>Personalizados &amp; Balões</div></div>",
+            unsafe_allow_html=True,
+        )
     st.divider()
     st.subheader("🔒 Painel de Segurança")
     conectado, mensagem_banco = connection_test()
@@ -2067,90 +2084,226 @@ with aba5:
     catalogo = carregar_catalogo()
     if "catalogo_edit_index" not in st.session_state:
         st.session_state.catalogo_edit_index = None
-    aba_cad, aba_lista, aba_cliente = st.tabs(["➕ Cadastrar / Editar", "📋 Produtos", "📤 Catálogo para cliente"])
 
-    with aba_cad:
-        indice_edicao = st.session_state.catalogo_edit_index
-        item_edicao = catalogo[indice_edicao] if indice_edicao is not None and 0 <= indice_edicao < len(catalogo) else None
-        st.subheader("✏️ Editar produto" if item_edicao else "➕ Adicionar produto")
-        c1, c2 = st.columns(2)
-        categoria_cat = c1.text_input("Categoria", value=item_edicao.get("Categoria", "") if item_edicao else "", key=f"cat_categoria_{indice_edicao}")
-        nome_cat = c1.text_input("Nome do produto", value=item_edicao.get("Nome", "") if item_edicao else "", key=f"cat_nome_{indice_edicao}")
-        descricao_cat = c1.text_area("Descrição", value=item_edicao.get("Descricao", "") if item_edicao else "", key=f"cat_desc_{indice_edicao}")
-        preco_cat = c2.text_input("Preço", value=str(item_edicao.get("Preco", "")) if item_edicao else "", key=f"cat_preco_{indice_edicao}")
-        urls_cat = c2.text_area("URLs de imagens (uma por linha)", value="\n".join([x for x in (item_edicao.get("Imagens", []) if item_edicao else []) if str(x).startswith("http")]), key=f"cat_urls_{indice_edicao}")
-        foto_cat = c2.file_uploader("Enviar foto", type=["png", "jpg", "jpeg", "webp"], key=f"cat_foto_{indice_edicao}")
-        b1, b2 = st.columns(2)
-        if b1.button("💾 Salvar produto", type="primary", use_container_width=True):
+    def formulario_catalogo(indice_edicao=None):
+        item_edicao = (
+            catalogo[indice_edicao]
+            if indice_edicao is not None and 0 <= indice_edicao < len(catalogo)
+            else None
+        )
+        sufixo = str(indice_edicao) if indice_edicao is not None else "novo"
+        titulo_form = "✏️ Editar produto" if item_edicao else "➕ Adicionar produto"
+        st.subheader(titulo_form)
+        if item_edicao:
+            st.info(f"Editando: {item_edicao.get('Nome', 'Produto')}")
+
+        with st.container(border=True):
+            c1, c2 = st.columns(2)
+            categoria_cat = c1.text_input(
+                "Categoria",
+                value=item_edicao.get("Categoria", "") if item_edicao else "",
+                key=f"cat_categoria_{sufixo}",
+            )
+            nome_cat = c1.text_input(
+                "Nome do produto",
+                value=item_edicao.get("Nome", "") if item_edicao else "",
+                key=f"cat_nome_{sufixo}",
+            )
+            descricao_cat = c1.text_area(
+                "Descrição",
+                value=item_edicao.get("Descricao", "") if item_edicao else "",
+                key=f"cat_desc_{sufixo}",
+            )
+            preco_cat = c2.text_input(
+                "Preço",
+                value=str(item_edicao.get("Preco", "")) if item_edicao else "",
+                key=f"cat_preco_{sufixo}",
+            )
+            urls_existentes = [
+                x for x in (item_edicao.get("Imagens", []) if item_edicao else [])
+                if str(x).startswith("http")
+            ]
+            urls_cat = c2.text_area(
+                "URLs de imagens (uma por linha)",
+                value="\n".join(urls_existentes),
+                key=f"cat_urls_{sufixo}",
+            )
+            foto_cat = c2.file_uploader(
+                "Enviar foto",
+                type=["png", "jpg", "jpeg", "webp"],
+                key=f"cat_foto_{sufixo}",
+            )
+
+            b1, b2 = st.columns(2)
+            salvar = b1.button(
+                "💾 Salvar alterações" if item_edicao else "💾 Salvar produto",
+                type="primary",
+                use_container_width=True,
+                key=f"cat_salvar_{sufixo}",
+            )
+            cancelar = b2.button(
+                "↩️ Cancelar edição" if item_edicao else "🧹 Limpar",
+                use_container_width=True,
+                key=f"cat_cancelar_{sufixo}",
+            )
+
+        if salvar:
             if not nome_cat.strip() or not categoria_cat.strip():
                 st.warning("Informe pelo menos o nome e a categoria.")
             else:
                 imagens = [u.strip() for u in urls_cat.splitlines() if u.strip()]
                 if item_edicao:
-                    imagens.extend([x for x in item_edicao.get("Imagens", []) if not str(x).startswith("http")])
+                    imagens.extend([
+                        x for x in item_edicao.get("Imagens", [])
+                        if not str(x).startswith("http")
+                    ])
                 caminho_novo = salvar_upload_catalogo(foto_cat)
                 if caminho_novo:
                     imagens.insert(0, caminho_novo)
-                registro = {"Nome": nome_cat.strip(), "Categoria": categoria_cat.strip(), "Imagens": imagens, "Descricao": descricao_cat.strip(), "Preco": preco_cat.strip()}
+                registro = {
+                    "Nome": nome_cat.strip(),
+                    "Categoria": categoria_cat.strip(),
+                    "Imagens": imagens,
+                    "Descricao": descricao_cat.strip(),
+                    "Preco": preco_cat.strip(),
+                }
                 if item_edicao:
                     catalogo[indice_edicao] = registro
                 else:
                     catalogo.append(registro)
                 salvar_catalogo(catalogo)
                 st.session_state.catalogo_edit_index = None
-                st.success("Produto salvo.")
+                st.success("Produto salvo com sucesso.")
                 st.rerun()
-        if item_edicao and b2.button("Cancelar edição", use_container_width=True):
+
+        if cancelar:
             st.session_state.catalogo_edit_index = None
+            # Remove os valores antigos dos widgets do formulário.
+            for prefixo in ["cat_categoria_", "cat_nome_", "cat_desc_", "cat_preco_", "cat_urls_", "cat_foto_"]:
+                st.session_state.pop(f"{prefixo}{sufixo}", None)
             st.rerun()
 
-    with aba_lista:
-        termo_cat = st.text_input("🔎 Pesquisar produto ou categoria", key="pesquisa_catalogo").strip().lower()
-        filtrados = [(i,p) for i,p in enumerate(catalogo) if not termo_cat or termo_cat in f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Descricao','')}".lower()]
-        st.write(f"**{len(filtrados)} produto(s)**")
-        for i, produto_cat in filtrados:
-            with st.container(border=True):
-                cimg, cinfo, cacoes = st.columns([1,5,2])
-                imgs = produto_cat.get("Imagens", []) or []
-                if imgs:
-                    try:
-                        cimg.image(imgs[0], width=100)
-                    except Exception:
-                        cimg.write("📷")
-                else:
-                    cimg.write("📷")
-                cinfo.markdown(f"### {produto_cat.get('Nome','Produto')}")
-                cinfo.write(f"**Categoria:** {produto_cat.get('Categoria','')}  |  **Preço:** {formatar_preco_catalogo(produto_cat.get('Preco'))}")
-                cinfo.caption(produto_cat.get("Descricao", ""))
-                if cacoes.button("✏️ Editar", key=f"cat_editar_{i}", use_container_width=True):
-                    st.session_state.catalogo_edit_index = i
-                    st.rerun()
-                if cacoes.button("🗑️ Excluir", key=f"cat_excluir_{i}", use_container_width=True):
-                    catalogo.pop(i)
-                    salvar_catalogo(catalogo)
-                    st.rerun()
-                if cacoes.button("➕ Orçamento", key=f"cat_orcamento_{i}", use_container_width=True):
-                    preco_txt = str(produto_cat.get("Preco", "0")).replace("R$", "").strip()
-                    preco_num = valor_float(preco_txt.replace(".", "").replace(",", "."))
-                    st.session_state.temp_itens.append({"produto": produto_cat.get("Nome", ""), "especificacoes": produto_cat.get("Descricao", ""), "quantidade": 1, "valor_unitario": preco_num})
-                    st.success("Produto adicionado ao orçamento. Abra a aba Novo Orçamento.")
+    # Quando o usuário clica em Editar, o formulário ocupa a tela do catálogo.
+    # Isso evita o problema de o Streamlit permanecer na aba "Produtos" após o rerun.
+    if st.session_state.catalogo_edit_index is not None:
+        formulario_catalogo(st.session_state.catalogo_edit_index)
+    else:
+        aba_cad, aba_lista, aba_cliente = st.tabs([
+            "➕ Cadastrar",
+            "📋 Produtos",
+            "📤 Catálogo para cliente",
+        ])
 
-    with aba_cliente:
-        if not catalogo:
-            st.info("Cadastre produtos para gerar um catálogo.")
-        else:
-            categorias_disponiveis = sorted({str(p.get("Categoria", "Sem categoria")).strip() or "Sem categoria" for p in catalogo})
-            titulo_cliente = st.text_input("Título do catálogo", value="Seleção Alphafest", key="titulo_catalogo_cliente")
-            categorias_cliente = st.multiselect("Categorias", categorias_disponiveis, default=categorias_disponiveis[:1], key="categorias_catalogo_cliente")
-            produtos_base = [p for p in catalogo if (str(p.get("Categoria", "Sem categoria")).strip() or "Sem categoria") in categorias_cliente]
-            nomes_disponiveis = [p.get("Nome", "Produto") for p in produtos_base]
-            nomes_selecionados = st.multiselect("Produtos específicos", nomes_disponiveis, default=nomes_disponiveis, key="produtos_catalogo_cliente")
-            mostrar_precos = st.checkbox("Mostrar preços", value=True, key="mostrar_precos_catalogo")
-            selecao_cliente = [p for p in produtos_base if p.get("Nome", "Produto") in nomes_selecionados]
-            st.caption(f"O catálogo do cliente terá {len(selecao_cliente)} produto(s).")
-            html_cliente = gerar_html_catalogo(selecao_cliente, titulo_cliente or "Seleção Alphafest", mostrar_precos)
-            st.download_button("📥 Gerar catálogo HTML para o cliente", data=html_cliente, file_name=f"{slug_html(titulo_cliente).lower()}.html", mime="text/html", type="primary", use_container_width=True)
-            st.download_button("📚 Gerar catálogo completo", data=gerar_html_catalogo(catalogo, "Catálogo Completo Alphafest", True), file_name="catalogo_completo_alphafest.html", mime="text/html", use_container_width=True)
+        with aba_cad:
+            formulario_catalogo(None)
+
+        with aba_lista:
+            termo_cat = st.text_input(
+                "🔎 Pesquisar produto ou categoria",
+                key="pesquisa_catalogo",
+            ).strip().lower()
+            filtrados = [
+                (i, p) for i, p in enumerate(catalogo)
+                if not termo_cat
+                or termo_cat in f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Descricao','')}".lower()
+            ]
+            st.write(f"**{len(filtrados)} produto(s)**")
+            for i, produto_cat in filtrados:
+                with st.container(border=True):
+                    cimg, cinfo, cacoes = st.columns([1, 5, 2])
+                    imgs = produto_cat.get("Imagens", []) or []
+                    if imgs:
+                        try:
+                            cimg.image(imgs[0], width=100)
+                        except Exception:
+                            cimg.write("📷")
+                    else:
+                        cimg.write("📷")
+                    cinfo.markdown(f"### {produto_cat.get('Nome','Produto')}")
+                    cinfo.write(
+                        f"**Categoria:** {produto_cat.get('Categoria','')}  |  "
+                        f"**Preço:** {formatar_preco_catalogo(produto_cat.get('Preco'))}"
+                    )
+                    cinfo.caption(produto_cat.get("Descricao", ""))
+                    if cacoes.button("✏️ Editar", key=f"cat_editar_{i}", use_container_width=True):
+                        st.session_state.catalogo_edit_index = i
+                        st.rerun()
+                    if cacoes.button("🗑️ Excluir", key=f"cat_excluir_{i}", use_container_width=True):
+                        catalogo.pop(i)
+                        salvar_catalogo(catalogo)
+                        st.rerun()
+                    if cacoes.button("➕ Orçamento", key=f"cat_orcamento_{i}", use_container_width=True):
+                        preco_txt = str(produto_cat.get("Preco", "0")).replace("R$", "").strip()
+                        preco_num = valor_float(preco_txt.replace(".", "").replace(",", "."))
+                        st.session_state.temp_itens.append({
+                            "produto": produto_cat.get("Nome", ""),
+                            "especificacoes": produto_cat.get("Descricao", ""),
+                            "quantidade": 1,
+                            "valor_unitario": preco_num,
+                        })
+                        st.success("Produto adicionado ao orçamento. Abra a aba Novo Orçamento.")
+
+        with aba_cliente:
+            if not catalogo:
+                st.info("Cadastre produtos para gerar um catálogo.")
+            else:
+                categorias_disponiveis = sorted({
+                    str(p.get("Categoria", "Sem categoria")).strip() or "Sem categoria"
+                    for p in catalogo
+                })
+                titulo_cliente = st.text_input(
+                    "Título do catálogo",
+                    value="Seleção Alphafest",
+                    key="titulo_catalogo_cliente",
+                )
+                categorias_cliente = st.multiselect(
+                    "Categorias",
+                    categorias_disponiveis,
+                    default=categorias_disponiveis[:1],
+                    key="categorias_catalogo_cliente",
+                )
+                produtos_base = [
+                    p for p in catalogo
+                    if (str(p.get("Categoria", "Sem categoria")).strip() or "Sem categoria")
+                    in categorias_cliente
+                ]
+                nomes_disponiveis = [str(p.get("Nome", "Produto")) for p in produtos_base]
+                nomes_selecionados = st.multiselect(
+                    "Produtos específicos",
+                    nomes_disponiveis,
+                    default=nomes_disponiveis,
+                    key="produtos_catalogo_cliente",
+                )
+                mostrar_precos = st.checkbox(
+                    "Mostrar preços",
+                    value=True,
+                    key="mostrar_precos_catalogo",
+                )
+                selecao_cliente = [
+                    p for p in produtos_base
+                    if str(p.get("Nome", "Produto")) in nomes_selecionados
+                ]
+                st.caption(f"O catálogo do cliente terá {len(selecao_cliente)} produto(s).")
+                html_cliente = gerar_html_catalogo(
+                    selecao_cliente,
+                    titulo_cliente or "Seleção Alphafest",
+                    mostrar_precos,
+                )
+                st.download_button(
+                    "📥 Gerar catálogo HTML para o cliente",
+                    data=html_cliente,
+                    file_name=f"{slug_html(titulo_cliente).lower()}.html",
+                    mime="text/html",
+                    type="primary",
+                    use_container_width=True,
+                )
+                st.download_button(
+                    "📚 Gerar catálogo completo",
+                    data=gerar_html_catalogo(catalogo, "Catálogo Completo Alphafest", True),
+                    file_name="catalogo_completo_alphafest.html",
+                    mime="text/html",
+                    use_container_width=True,
+                )
 
 with aba6:
     st.header("👥 Clientes")

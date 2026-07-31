@@ -35,3 +35,9 @@
 - Linha do tempo automática por item.
 - Indicadores de atrasos, entregas do dia, aprovação, produção e pedidos prontos.
 - Pesquisa por cliente, pedido, produto, tema, nome, telefone e detalhes.
+
+## 3.2.2
+- Logo e identidade da Alphafest centralizadas na barra lateral.
+- Correção definitiva do nome ALPHAFEST.
+- Botão Editar do catálogo abre um formulário visível e preenchido.
+- Edição do catálogo mantém imagens locais e URLs existentes.
