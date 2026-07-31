@@ -71,3 +71,10 @@
 - Estatísticas de quantidade vendida, receita e última venda.
 - Pesquisa por nome, categoria, subcategoria, código e palavras-chave.
 - Compatibilidade preservada com os produtos já cadastrados.
+
+## 3.5.1 — Preenchimento automático gratuito
+- Gerador automático de descrição curta e completa sem API paga.
+- Geração de palavras-chave, legenda social e hashtags.
+- Geração de descrições para Mercado Livre e Shopee.
+- Botões para gerar tudo, somente descrições ou somente marketing.
+- Campo de características-base salvo junto ao produto para reutilização.

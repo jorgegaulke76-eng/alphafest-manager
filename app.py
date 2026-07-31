@@ -24,7 +24,7 @@ ARQUIVO_CATALOGO = "catalogo_db.json"
 ARQUIVO_CLIENTES = "clientes_db.json"
 ARQUIVO_PRODUCAO = "producao_db.json"
 ARQUIVO_EMPRESA = "empresa_config.json"
-VERSAO_APP = "3.5.0"
+VERSAO_APP = "3.5.1"
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -1567,6 +1567,98 @@ def classe_prazo_producao(data_txt, status):
     return "Futuro"
 
 # --- CATÁLOGO INTEGRADO ---
+def gerar_conteudo_catalogo_gratuito(nome, categoria, subcategoria="", ideias="", preco="", processos=None):
+    """Gera textos comerciais sem API paga, usando modelos editáveis e dados do produto."""
+    nome = str(nome or "").strip()
+    categoria = str(categoria or "").strip()
+    subcategoria = str(subcategoria or "").strip()
+    ideias = re.sub(r"\s+", " ", str(ideias or "").strip())
+    processos = [str(x).strip() for x in (processos or []) if str(x).strip()]
+
+    produto = nome or "Produto personalizado"
+    classificacao = " / ".join(x for x in [categoria, subcategoria] if x) or "Personalizados"
+    complemento = ideias.rstrip(" .")
+    detalhe = f" {complemento}." if complemento else ""
+    processo_txt = ", ".join(processos)
+    producao_txt = f" Produção com {processo_txt.lower()}, conforme a necessidade do pedido." if processo_txt else ""
+
+    descricao_curta = (
+        f"{produto} personalizado pela {CONFIG_EMPRESA.get('nome', 'Alphafest')}, "
+        f"ideal para festas, presentes e ocasiões especiais.{detalhe}"
+    ).strip()
+
+    descricao_completa = (
+        f"O {produto} é desenvolvido de forma personalizada para combinar com o tema, as cores "
+        f"e os detalhes escolhidos pelo cliente. Faz parte da categoria {classificacao} e recebe "
+        f"acabamento cuidadoso em todas as etapas.{detalhe}{producao_txt} "
+        "Por se tratar de um item personalizado, cores, medidas, composição e prazo podem variar "
+        "conforme o modelo aprovado e a disponibilidade de materiais. Entre em contato para confirmar "
+        "as opções de personalização e a data desejada."
+    ).strip()
+
+    termos = [produto, categoria, subcategoria, "personalizado", "festa", "presente", CONFIG_EMPRESA.get("cidade", "")]
+    if ideias:
+        termos += re.findall(r"[A-Za-zÀ-ÿ0-9]{4,}", ideias)[:6]
+    palavras = []
+    for termo in termos:
+        termo = str(termo).strip().lower()
+        if termo and termo not in palavras:
+            palavras.append(termo)
+    palavras_chave = ", ".join(palavras[:12])
+
+    def hashtag(texto):
+        texto = re.sub(r"[^A-Za-zÀ-ÿ0-9]", "", str(texto).title())
+        return f"#{texto}" if texto else ""
+
+    tags_base = [produto, categoria, subcategoria, CONFIG_EMPRESA.get("nome", "Alphafest"), "Personalizados", "Festa", CONFIG_EMPRESA.get("cidade", "Itatiba")]
+    hashtags_lista = []
+    for item in tags_base:
+        tag = hashtag(item)
+        if tag and tag.lower() not in [x.lower() for x in hashtags_lista]:
+            hashtags_lista.append(tag)
+    hashtags = " ".join(hashtags_lista[:10])
+
+    preco_txt = str(preco or "").strip()
+    chamada_preco = f" Valor sugerido: R$ {preco_txt}." if preco_txt else ""
+    whatsapp = CONFIG_EMPRESA.get("celular", "")
+    legenda = (
+        f"✨ {produto} personalizado para tornar cada comemoração ainda mais especial!\n\n"
+        f"{descricao_curta}\n\n"
+        f"Personalizamos conforme o tema e os detalhes do seu evento.{chamada_preco}\n"
+        f"📲 Peça seu orçamento pelo WhatsApp {whatsapp}.\n\n{hashtags}"
+    ).strip()
+
+    descricao_marketplace = (
+        f"{produto} personalizado | {classificacao}\n\n"
+        f"{descricao_completa}\n\n"
+        "INFORMAÇÕES IMPORTANTES:\n"
+        "• Produto personalizado e produzido sob encomenda.\n"
+        "• Envie os dados de personalização após a compra.\n"
+        "• A produção começa após a confirmação dos dados e, quando necessário, da aprovação da arte.\n"
+        "• Consulte o prazo antes da compra para eventos com data marcada.\n"
+        "• Pequenas variações de cor podem ocorrer conforme a tela e o lote do material."
+    ).strip()
+
+    descricao_shopee = (
+        f"{produto} personalizado para sua festa ou ocasião especial.\n\n"
+        f"{descricao_curta}\n\n"
+        "COMO PERSONALIZAR:\n"
+        "1. Faça o pedido.\n"
+        "2. Envie tema, nome, idade, cores e demais informações pelo chat.\n"
+        "3. Aguarde a confirmação e a aprovação da arte, quando aplicável.\n\n"
+        "Produção sob encomenda. Consulte prazo e disponibilidade antes de finalizar a compra."
+    ).strip()
+
+    return {
+        "descricao_curta": descricao_curta,
+        "descricao_completa": descricao_completa,
+        "palavras_chave": palavras_chave,
+        "legenda": legenda,
+        "hashtags": hashtags,
+        "mercado_livre": descricao_marketplace,
+        "shopee": descricao_shopee,
+    }
+
 def carregar_catalogo():
     """Carrega catálogo do Supabase, com fallback automático para JSON local."""
     dados = load_document("catalogo_db", ARQUIVO_CATALOGO, [])
@@ -2307,6 +2399,22 @@ with aba5:
         )
         item_edicao = dict(item_edicao or {})
         sufixo = str(indice_edicao) if indice_edicao is not None else "novo"
+        pendente = st.session_state.pop(f"cat_geracao_pendente_{sufixo}", None)
+        if isinstance(pendente, dict):
+            mapa_campos = {
+                "descricao_curta": f"cat_desc_curta_{sufixo}",
+                "descricao_completa": f"cat_desc_{sufixo}",
+                "palavras_chave": f"cat_palavras_{sufixo}",
+                "legenda": f"cat_legenda_{sufixo}",
+                "hashtags": f"cat_hashtags_{sufixo}",
+                "mercado_livre": f"cat_ml_{sufixo}",
+                "shopee": f"cat_shopee_{sufixo}",
+            }
+            for campo, chave in mapa_campos.items():
+                if campo in pendente:
+                    st.session_state[chave] = pendente[campo]
+            st.session_state[f"cat_geracao_ok_{sufixo}"] = True
+
         titulo_form = "✏️ Editar produto" if item_edicao else "➕ Adicionar produto"
         st.subheader(titulo_form)
         if item_edicao:
@@ -2355,6 +2463,37 @@ with aba5:
                     margem = preco_num - custo_num
                     margem_pct = (margem / preco_num * 100) if preco_num else 0
                     c2.caption(f"Margem estimada: R$ {margem:,.2f} ({margem_pct:.1f}%)".replace(",", "X").replace(".", ",").replace("X", "."))
+
+                st.divider()
+                st.markdown("#### ✨ Preenchimento automático gratuito")
+                st.caption("Informe algumas características e deixe o sistema preparar descrições e textos de marketing. Você poderá revisar tudo antes de salvar.")
+                ideias_geracao = st.text_area(
+                    "Características, materiais, diferenciais e informações importantes",
+                    value=item_edicao.get("IdeiasGeracao", ""),
+                    placeholder="Ex.: feito em papel fotográfico, personalizado com nome e idade, acompanha palito, tamanho aproximado...",
+                    key=f"cat_ideias_geracao_{sufixo}",
+                )
+                g1, g2, g3 = st.columns(3)
+                gerar_tudo = g1.button("✨ Gerar tudo", use_container_width=True, key=f"cat_gerar_tudo_{sufixo}")
+                gerar_descricoes = g2.button("📝 Só descrições", use_container_width=True, key=f"cat_gerar_desc_{sufixo}")
+                gerar_marketing = g3.button("📣 Só marketing", use_container_width=True, key=f"cat_gerar_mkt_{sufixo}")
+
+                if gerar_tudo or gerar_descricoes or gerar_marketing:
+                    if not nome_cat.strip():
+                        st.warning("Informe o nome do produto antes de gerar o conteúdo.")
+                    else:
+                        gerado = gerar_conteudo_catalogo_gratuito(
+                            nome_cat, categoria_cat, subcategoria_cat, ideias_geracao, preco_cat, []
+                        )
+                        if gerar_descricoes:
+                            gerado = {k: v for k, v in gerado.items() if k in {"descricao_curta", "descricao_completa"}}
+                        elif gerar_marketing:
+                            gerado = {k: v for k, v in gerado.items() if k not in {"descricao_curta", "descricao_completa"}}
+                        st.session_state[f"cat_geracao_pendente_{sufixo}"] = gerado
+                        st.rerun()
+
+                if st.session_state.pop(f"cat_geracao_ok_{sufixo}", False):
+                    st.success("Conteúdo preenchido automaticamente. Revise os textos antes de salvar.")
 
         with tab_producao:
             st.caption("Marque somente os processos que normalmente fazem parte deste produto.")
@@ -2446,6 +2585,7 @@ with aba5:
                     "Imagens": list(dict.fromkeys(imagens)),
                     "Descricao": descricao_curta_cat.strip() or descricao_cat.strip(),
                     "DescricaoCurta": descricao_curta_cat.strip(), "DescricaoCompleta": descricao_cat.strip(),
+                    "IdeiasGeracao": ideias_geracao.strip(),
                     "Preco": preco_cat.strip(), "Custo": custo_cat.strip(), "TempoProducao": tempo_cat.strip(),
                     "Processos": processos_cat, "CamposPersonalizacao": campos_personalizacao,
                     "ObservacaoInterna": observacao_interna.strip(), "PalavrasChave": palavras_chave.strip(),

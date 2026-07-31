@@ -1,4 +1,3 @@
 FestManager
-Versão 3.5.0
-Biblioteca Comercial 360°
-Data: 31/07/2026
+Versão 3.5.1
+Biblioteca Comercial — preenchimento automático gratuito
