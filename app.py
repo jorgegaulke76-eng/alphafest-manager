@@ -7,6 +7,7 @@ import re
 import urllib.parse
 from urllib.parse import quote
 from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 import altair as alt
 import base64
 
@@ -15,6 +16,7 @@ from cloud_db import (
     load_document,
     save_document,
     upload_catalog_image,
+    upload_library_file,
 )
 
 # --- CONFIGURAÇÃO ---
@@ -24,9 +26,25 @@ ARQUIVO_CATALOGO = "catalogo_db.json"
 ARQUIVO_CLIENTES = "clientes_db.json"
 ARQUIVO_PRODUCAO = "producao_db.json"
 ARQUIVO_EMPRESA = "empresa_config.json"
-VERSAO_APP = "3.5.1"
+VERSAO_APP = "3.6.1"
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
+
+FUSO_PADRAO = "America/Sao_Paulo"
+
+def agora_local():
+    """Data e hora oficiais do sistema, independentes do fuso do servidor."""
+    try:
+        fuso = str(carregar_config_empresa().get("fuso_horario", FUSO_PADRAO)).strip()
+    except Exception:
+        fuso = FUSO_PADRAO
+    try:
+        return datetime.now(ZoneInfo(fuso or FUSO_PADRAO))
+    except Exception:
+        return datetime.now(ZoneInfo(FUSO_PADRAO))
+
+def hoje_local():
+    return agora_local().date()
 
 # --- INICIALIZAÇÃO DE SEGURANÇA ---
 if "form_key" not in st.session_state: st.session_state.form_key = 0
@@ -79,6 +97,7 @@ CONFIG_EMPRESA_PADRAO = {
     "prazo_padrao": "10",
     "validade_padrao": "5",
     "frete_padrao": "Retirada em Itatiba",
+    "fuso_horario": "America/Sao_Paulo",
 }
 
 def carregar_config_empresa():
@@ -123,7 +142,7 @@ def obter_usuario_atual():
     return dados
 
 def saudacao_por_hora(nome):
-    hora = datetime.now().hour
+    hora = agora_local().hour
     if hora < 12:
         periodo = "Bom dia"
     elif hora < 18:
@@ -1216,7 +1235,7 @@ def aplicar_proposta_pendente_no_formulario():
             str(prop.get("data_entrega", "")), "%d/%m/%Y"
         ).date()
     except (TypeError, ValueError):
-        st.session_state.form_entrega = date.today()
+        st.session_state.form_entrega = hoje_local()
 
     st.session_state.editar_numero = None if duplicar else prop.get("numero_proposta")
     st.session_state.form_key += 1
@@ -1237,7 +1256,7 @@ def aplicar_limpeza_formulario_pendente():
     st.session_state.form_documento = ""
     st.session_state.form_whatsapp = ""
     st.session_state.form_desconto = 0.0
-    st.session_state.form_entrega = date.today()
+    st.session_state.form_entrega = hoje_local()
     st.session_state.form_prazo = "10"
     st.session_state.form_frete = "Retirada em Itatiba"
     st.session_state.form_validade = "5"
@@ -1312,7 +1331,7 @@ def sincronizar_clientes_do_historico():
         chave = chave_cliente(nome, documento, whatsapp)
         if chave not in por_chave:
             novo = {
-                "id": f"CLI-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                "id": f"CLI-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
                 "nome": nome,
                 "documento": documento,
                 "whatsapp": whatsapp,
@@ -1320,7 +1339,7 @@ def sincronizar_clientes_do_historico():
                 "aniversario": "",
                 "observacoes": "",
                 "origem": "Histórico de propostas",
-                "criado_em": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
             }
             clientes.append(novo)
             por_chave[chave] = novo
@@ -1456,7 +1475,7 @@ def adicionar_evento_timeline(tarefa, descricao):
     if not isinstance(timeline, list):
         timeline = []
     timeline.append({
-        "data": datetime.now().strftime("%d/%m/%Y %H:%M"),
+        "data": agora_local().strftime("%d/%m/%Y %H:%M"),
         "descricao": descricao,
     })
     tarefa["timeline"] = timeline[-50:]
@@ -1492,8 +1511,8 @@ def sincronizar_producao_com_propostas():
                 "processos": processos,
                 "necessita_arte": "Criação/ajuste de arte" in processos,
                 "observacao_interna": "",
-                "timeline": [{"data": datetime.now().strftime("%d/%m/%Y %H:%M"), "descricao": "Pedido incluído no fluxo"}],
-                "atualizado_em": datetime.now().strftime("%d/%m/%Y %H:%M"),
+                "timeline": [{"data": agora_local().strftime("%d/%m/%Y %H:%M"), "descricao": "Pedido incluído no fluxo"}],
+                "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
             }
             if tarefa_id not in existentes:
                 tarefas.append(base)
@@ -1536,7 +1555,7 @@ def salvar_tarefa_producao(tarefa_id, novos_dados):
             status_anterior = normalizar_status_fluxo(tarefa.get("status"))
             tarefa.update(novos_dados)
             tarefa["status"] = normalizar_status_fluxo(tarefa.get("status"))
-            tarefa["atualizado_em"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+            tarefa["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
             if status_anterior != tarefa["status"]:
                 adicionar_evento_timeline(tarefa, f"Status alterado de {status_anterior} para {tarefa['status']}")
             else:
@@ -1555,7 +1574,7 @@ def classe_prazo_producao(data_txt, status):
     data_item = data_entrega_segura(data_txt)
     if not data_item:
         return "Sem data"
-    dias = (data_item - date.today()).days
+    dias = (data_item - hoje_local()).days
     if dias < 0:
         return "Atrasado"
     if dias == 0:
@@ -1743,6 +1762,22 @@ def salvar_upload_catalogo(upload):
     return upload_catalog_image(upload, PASTA_UPLOADS)
 
 
+def salvar_arquivo_biblioteca(upload, produto_nome="produto"):
+    """Salva um arquivo individual da memória da empresa."""
+    return upload_library_file(upload, produto_nome=produto_nome, local_upload_dir="biblioteca_uploads")
+
+def nome_tipo_arquivo(nome):
+    ext = Path(str(nome)).suffix.lower().lstrip(".")
+    mapa = {
+        "png": "Imagem", "jpg": "Imagem", "jpeg": "Imagem", "webp": "Imagem",
+        "pdf": "PDF", "svg": "Vetor/Corte", "stl": "Impressão 3D",
+        "cdr": "CorelDRAW", "ai": "Adobe Illustrator", "dxf": "Corte/Laser",
+        "zip": "Arquivo compactado", "rar": "Arquivo compactado",
+        "mp4": "Vídeo", "mov": "Vídeo", "avi": "Vídeo",
+    }
+    return mapa.get(ext, ext.upper() if ext else "Arquivo")
+
+
 # --- SIDEBAR ---
 with st.sidebar:
     empresa_sidebar = carregar_config_empresa()
@@ -1825,7 +1860,7 @@ iniciar_estado("form_cliente", "")
 iniciar_estado("form_documento", "")
 iniciar_estado("form_whatsapp", "")
 iniciar_estado("form_desconto", 0.0)
-iniciar_estado("form_entrega", date.today())
+iniciar_estado("form_entrega", hoje_local())
 iniciar_estado("form_prazo", str(empresa_form.get("prazo_padrao", "10")))
 iniciar_estado("form_frete", str(empresa_form.get("frete_padrao", "Retirada em Itatiba")))
 iniciar_estado("form_validade", str(empresa_form.get("validade_padrao", "5")))
@@ -1837,7 +1872,7 @@ aplicar_limpeza_formulario_pendente()
 aplicar_proposta_pendente_no_formulario()
 
 # --- ALERTAS DE ENTREGA MELHORADOS ---
-hoje = date.today()
+hoje = hoje_local()
 alertas_hoje, alertas_atrasados, alertas_proximos = [], [], []
 for p in carregar_historico():
     entrega = data_entrega_segura(p.get("data_entrega"))
@@ -1941,7 +1976,7 @@ aba0, aba1, aba2, aba3, aba4, aba5, aba6, aba7 = st.tabs([
 with aba0:
     usuario_atual = obter_usuario_atual()
     empresa_central = carregar_config_empresa()
-    hoje_central = date.today()
+    hoje_central = hoje_local()
     dias_semana = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
     meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
     data_extenso = f"{dias_semana[hoje_central.weekday()]}, {hoje_central.day} de {meses[hoje_central.month-1]} de {hoje_central.year}"
@@ -2105,7 +2140,7 @@ with aba1:
 
         rotulo_salvar = "💾 SALVAR ALTERAÇÕES" if st.session_state.editar_numero else "🚀 SALVAR PROPOSTA"
         if st.button(rotulo_salvar, type="primary"):
-            numero = st.session_state.editar_numero or f"PROP-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            numero = st.session_state.editar_numero or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S')}"
             antigo = {}
             if st.session_state.editar_numero:
                 antigo = next((p for p in carregar_historico() if p.get("numero_proposta") == numero), {})
@@ -2113,7 +2148,7 @@ with aba1:
             dados = {
                 **antigo,
                 "numero_proposta": numero,
-                "data_geracao": antigo.get("data_geracao", datetime.now().strftime("%d/%m/%Y")),
+                "data_geracao": antigo.get("data_geracao", agora_local().strftime("%d/%m/%Y")),
                 "data_entrega": dt_entrega.strftime("%d/%m/%Y"),
                 "cliente_nome": nome.strip(),
                 "documento": doc.strip(),
@@ -2421,7 +2456,7 @@ with aba5:
             st.info(f"Editando: {item_edicao.get('Nome', 'Produto')}")
 
         tab_info, tab_producao, tab_marketing, tab_midias = st.tabs([
-            "📦 Informações", "⚙️ Produção", "📣 Marketing", "🖼️ Fotos e publicação"
+            "📦 Informações", "⚙️ Produção", "📣 Marketing", "🧠 Arquivos, artes e fotos"
         ])
 
         with tab_info:
@@ -2537,6 +2572,105 @@ with aba5:
             )
 
         with tab_midias:
+            st.markdown("#### 🧠 Memória do produto")
+            st.caption("Adicione os arquivos individualmente conforme forem criados ou encontrados. Eles ficam vinculados a este produto.")
+            arquivos_atuais = list(item_edicao.get("ArquivosBiblioteca", []) or [])
+            arq_upload = st.file_uploader(
+                "➕ Adicionar um arquivo",
+                type=None,
+                accept_multiple_files=False,
+                key=f"cat_arquivo_memoria_{sufixo}",
+                help="Aceita imagens, PDF, SVG, STL, ZIP, vídeos e arquivos de produção.",
+            )
+            ac1, ac2 = st.columns(2)
+            arq_categoria = ac1.selectbox(
+                "Classificação",
+                ["Arte", "Arquivo de produção", "Foto final", "Referência", "Vídeo", "Manual/Dica", "Outro"],
+                key=f"cat_arquivo_categoria_{sufixo}",
+            )
+            arq_tags = ac2.text_input(
+                "Tags", placeholder="Ex.: Stitch, azul, menina, laser", key=f"cat_arquivo_tags_{sufixo}"
+            )
+            arq_descricao = st.text_input(
+                "Descrição do arquivo", placeholder="Ex.: arquivo final aprovado para corte", key=f"cat_arquivo_desc_{sufixo}"
+            )
+            arq_mestre = st.checkbox("⭐ Marcar como arquivo mestre", key=f"cat_arquivo_mestre_{sufixo}")
+            if st.button("📤 Enviar e vincular arquivo", key=f"cat_enviar_arquivo_{sufixo}", use_container_width=True):
+                if not item_edicao:
+                    st.warning("Salve o produto primeiro. Depois abra Editar para adicionar arquivos à memória.")
+                elif arq_upload is None:
+                    st.warning("Escolha um arquivo para enviar.")
+                else:
+                    caminho = salvar_arquivo_biblioteca(arq_upload, item_edicao.get("Nome", "produto"))
+                    if caminho:
+                        if arq_mestre:
+                            for arq in arquivos_atuais:
+                                arq["mestre"] = False
+                        arquivos_atuais.append({
+                            "id": f"ARQ-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
+                            "nome": str(arq_upload.name),
+                            "url": caminho,
+                            "tipo": nome_tipo_arquivo(arq_upload.name),
+                            "categoria": arq_categoria,
+                            "tags": [x.strip() for x in arq_tags.split(",") if x.strip()],
+                            "descricao": arq_descricao.strip(),
+                            "mestre": bool(arq_mestre),
+                            "arquivado": False,
+                            "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
+                        })
+                        item_edicao["ArquivosBiblioteca"] = arquivos_atuais
+                        catalogo[indice_edicao] = item_edicao
+                        salvar_catalogo(catalogo)
+                        st.success("Arquivo vinculado com sucesso.")
+                        st.rerun()
+                    else:
+                        st.error("Não foi possível salvar o arquivo.")
+
+            ativos = [(j, a) for j, a in enumerate(arquivos_atuais) if not a.get("arquivado")]
+            arquivados = [(j, a) for j, a in enumerate(arquivos_atuais) if a.get("arquivado")]
+            if ativos:
+                st.markdown(f"##### Arquivos vinculados ({len(ativos)})")
+                for j, arq in ativos:
+                    with st.container(border=True):
+                        i1, i2, i3 = st.columns([1, 5, 2])
+                        i1.write("⭐" if arq.get("mestre") else "📄")
+                        i2.markdown(f"**{arq.get('nome', 'Arquivo')}**")
+                        i2.caption(f"{arq.get('categoria', arq.get('tipo', 'Arquivo'))} • {arq.get('criado_em', '')}")
+                        if arq.get("descricao"):
+                            i2.write(arq.get("descricao"))
+                        if arq.get("tags"):
+                            i2.caption("Tags: " + " • ".join(arq.get("tags", [])))
+                        if arq.get("url"):
+                            i3.link_button("Abrir / baixar", arq.get("url"), use_container_width=True)
+                        if i3.button("⭐ Mestre" if not arq.get("mestre") else "✓ Mestre", key=f"arq_mestre_{sufixo}_{j}", use_container_width=True, disabled=bool(arq.get("mestre"))):
+                            for outro in arquivos_atuais:
+                                outro["mestre"] = False
+                            arquivos_atuais[j]["mestre"] = True
+                            item_edicao["ArquivosBiblioteca"] = arquivos_atuais
+                            catalogo[indice_edicao] = item_edicao
+                            salvar_catalogo(catalogo)
+                            st.rerun()
+                        if i3.button("📦 Arquivar", key=f"arq_arquivar_{sufixo}_{j}", use_container_width=True):
+                            arquivos_atuais[j]["arquivado"] = True
+                            arquivos_atuais[j]["mestre"] = False
+                            item_edicao["ArquivosBiblioteca"] = arquivos_atuais
+                            catalogo[indice_edicao] = item_edicao
+                            salvar_catalogo(catalogo)
+                            st.rerun()
+            if arquivados:
+                with st.expander(f"📦 Arquivados ({len(arquivados)})"):
+                    for j, arq in arquivados:
+                        r1, r2 = st.columns([5, 1])
+                        r1.write(f"{arq.get('nome', 'Arquivo')} — {arq.get('categoria', '')}")
+                        if r2.button("Restaurar", key=f"arq_restaurar_{sufixo}_{j}"):
+                            arquivos_atuais[j]["arquivado"] = False
+                            item_edicao["ArquivosBiblioteca"] = arquivos_atuais
+                            catalogo[indice_edicao] = item_edicao
+                            salvar_catalogo(catalogo)
+                            st.rerun()
+
+            st.divider()
+            st.markdown("#### 🖼️ Galeria e publicação")
             urls_existentes = [x for x in (item_edicao.get("Imagens", []) or []) if str(x).startswith("http")]
             urls_cat = st.text_area(
                 "URLs de imagens (uma por linha)", value="\n".join(urls_existentes),
@@ -2592,12 +2726,13 @@ with aba5:
                     "LegendaSocial": legenda_instagram.strip(), "Hashtags": hashtags.strip(),
                     "DescricaoMercadoLivre": texto_ml.strip(), "DescricaoShopee": texto_shopee.strip(),
                     "PublicarSite": publicar_site, "Destaque": destaque_cat,
-                    "AtualizadoEm": datetime.now().isoformat(timespec="seconds"),
+                    "ArquivosBiblioteca": list(item_edicao.get("ArquivosBiblioteca", []) or []),
+                    "AtualizadoEm": agora_local().isoformat(timespec="seconds"),
                 })
                 if item_edicao:
                     catalogo[indice_edicao] = registro
                 else:
-                    registro["CriadoEm"] = datetime.now().isoformat(timespec="seconds")
+                    registro["CriadoEm"] = agora_local().isoformat(timespec="seconds")
                     catalogo.append(registro)
                 salvar_catalogo(catalogo)
                 st.session_state.catalogo_edit_index = None
@@ -2633,7 +2768,10 @@ with aba5:
             filtrados = [
                 (i, p) for i, p in enumerate(catalogo)
                 if not termo_cat
-                or termo_cat in f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')} {p.get('CodigoInterno','')} {p.get('Descricao','')} {p.get('PalavrasChave','')}".lower()
+                or termo_cat in (f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')} {p.get('CodigoInterno','')} {p.get('Descricao','')} {p.get('PalavrasChave','')} " + " ".join(
+                    f"{a.get('nome','')} {a.get('descricao','')} {' '.join(a.get('tags', []) or [])}"
+                    for a in (p.get('ArquivosBiblioteca', []) or [])
+                )).lower()
             ]
             st.write(f"**{len(filtrados)} produto(s)**")
             for i, produto_cat in filtrados:
@@ -2676,6 +2814,10 @@ with aba5:
                     processos_lista = produto_cat.get("Processos", []) or []
                     if processos_lista:
                         cinfo.caption("Processos: " + " • ".join(processos_lista))
+                    arquivos_memoria = [a for a in (produto_cat.get("ArquivosBiblioteca", []) or []) if not a.get("arquivado")]
+                    if arquivos_memoria:
+                        mestres = sum(1 for a in arquivos_memoria if a.get("mestre"))
+                        cinfo.caption(f"🧠 Memória: {len(arquivos_memoria)} arquivo(s)" + (f" • {mestres} mestre" if mestres else ""))
                     if produto_cat.get("PublicarSite"):
                         cinfo.success("🌐 Marcado para publicação no site")
                     if cacoes.button("✏️ Editar", key=f"cat_editar_{i}", use_container_width=True):
@@ -2867,7 +3009,7 @@ with aba6:
                 st.warning("Informe o nome do cliente.")
             else:
                 registro_cli = {
-                    "id": cliente_edicao.get("id") if cliente_edicao else f"CLI-{datetime.now().strftime('%Y%m%d%H%M%S%f')}",
+                    "id": cliente_edicao.get("id") if cliente_edicao else f"CLI-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
                     "nome": cli_nome.strip(),
                     "documento": cli_doc.strip(),
                     "whatsapp": cli_wa.strip(),
@@ -2875,7 +3017,7 @@ with aba6:
                     "aniversario": cli_aniv.strip(),
                     "observacoes": cli_obs.strip(),
                     "origem": cliente_edicao.get("origem", "Cadastro manual") if cliente_edicao else "Cadastro manual",
-                    "criado_em": cliente_edicao.get("criado_em", datetime.now().strftime("%d/%m/%Y %H:%M")) if cliente_edicao else datetime.now().strftime("%d/%m/%Y %H:%M"),
+                    "criado_em": cliente_edicao.get("criado_em", agora_local().strftime("%d/%m/%Y %H:%M")) if cliente_edicao else agora_local().strftime("%d/%m/%Y %H:%M"),
                 }
                 if cliente_edicao:
                     clientes = [registro_cli if c.get("id") == edit_id else c for c in clientes]
@@ -2937,6 +3079,11 @@ with aba7:
         prazo_padrao = c1.text_input("Prazo padrão (dias úteis)", value=str(config_atual.get("prazo_padrao", "10")))
         validade_padrao = c2.text_input("Validade padrão (dias)", value=str(config_atual.get("validade_padrao", "5")))
         frete_padrao = c3.text_input("Frete/entrega padrão", value=str(config_atual.get("frete_padrao", "Retirada em Itatiba")))
+        fuso_horario = st.text_input(
+            "Fuso horário do sistema",
+            value=str(config_atual.get("fuso_horario", FUSO_PADRAO)),
+            help="Para Itatiba/SP, use America/Sao_Paulo.",
+        )
 
         salvar_config = st.form_submit_button("💾 Salvar configurações", type="primary", use_container_width=True)
 
@@ -2964,6 +3111,7 @@ with aba7:
             "prazo_padrao": prazo_padrao.strip() or "10",
             "validade_padrao": validade_padrao.strip() or "5",
             "frete_padrao": frete_padrao.strip() or "Retirada em Itatiba",
+            "fuso_horario": fuso_horario.strip() or FUSO_PADRAO,
         }
         salvar_config_empresa(nova_config)
         st.success("Configurações salvas. O sistema será atualizado agora.")

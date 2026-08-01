@@ -1,3 +1,12 @@
+# Versão 3.6.1 — Estabilidade e Memória do Produto
+
+- Corrige datas e saudações para o fuso configurável `America/Sao_Paulo`.
+- Adiciona upload individual de arquivos em cada produto.
+- Permite classificar, descrever, etiquetar, favoritar e arquivar arquivos.
+- Pesquisa do catálogo encontra nomes, tags e descrições dos anexos.
+- Armazenamento no Supabase Storage com fallback local.
+- Mantém compatibilidade com produtos e dados antigos.
+
 # CHANGELOG
 
 ## 3.2.0 — Produção

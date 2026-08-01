@@ -169,3 +169,44 @@ def upload_catalog_image(upload: Any, local_upload_dir: str = "uploads") -> str:
     local_path = Path(local_upload_dir) / unique_name
     local_path.write_bytes(content)
     return str(local_path).replace("\\", "/")
+
+
+def upload_library_file(upload: Any, produto_nome: str = "produto", local_upload_dir: str = "biblioteca_uploads") -> str:
+    """Envia qualquer arquivo da memória do produto ao bucket público ``catalogo``.
+
+    Usa uma subpasta ``biblioteca/<produto>`` e mantém fallback local.
+    """
+    if upload is None:
+        return ""
+
+    produto_seguro = re.sub(r"[^A-Za-z0-9._-]", "_", str(produto_nome).strip()) or "produto"
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", str(upload.name))
+    unique_name = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{safe_name}"
+    object_path = f"biblioteca/{produto_seguro}/{unique_name}"
+    content = bytes(upload.getbuffer())
+    content_type = getattr(upload, "type", None) or "application/octet-stream"
+
+    if online_configured():
+        url, _ = _config()
+        encoded_path = quote(object_path, safe="/")
+        try:
+            response = requests.post(
+                f"{url}/storage/v1/object/catalogo/{encoded_path}",
+                headers={
+                    **_headers(),
+                    "Content-Type": content_type,
+                    "x-upsert": "false",
+                },
+                data=content,
+                timeout=TIMEOUT,
+            )
+            response.raise_for_status()
+            return f"{url}/storage/v1/object/public/catalogo/{encoded_path}"
+        except requests.RequestException:
+            pass
+
+    local_dir = Path(local_upload_dir) / produto_seguro
+    local_dir.mkdir(parents=True, exist_ok=True)
+    local_path = local_dir / unique_name
+    local_path.write_bytes(content)
+    return str(local_path).replace("\\", "/")
