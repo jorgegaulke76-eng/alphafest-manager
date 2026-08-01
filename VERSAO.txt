@@ -1,4 +1,4 @@
 FestManager
-Versão 4.0.0
-Operação Inteligente
+Versão 4.0.1
+Proteção de Dados e Backup Automático
 Data: 01/08/2026

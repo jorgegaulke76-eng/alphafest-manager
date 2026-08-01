@@ -1,4 +1,14 @@
-# Changelog
+# CHANGELOG
+
+## 4.0.1 — Proteção de Dados e Backup Automático
+- Backup automático diário no primeiro acesso após o horário configurado.
+- Backup manual completo e protegido.
+- Retenção configurável dos backups automáticos.
+- Histórico, download ZIP, verificação de integridade e restauração controlada.
+- Backup de segurança automático antes de restaurações.
+- Separação entre versão do aplicativo e versão dos dados.
+
+hangelog
 
 ## 4.0.0 — Operação Inteligente
 - Atendimento vinculado automaticamente à proposta criada.

@@ -11,6 +11,9 @@ from zoneinfo import ZoneInfo
 from pathlib import Path
 import altair as alt
 import base64
+import io
+import zipfile
+import hashlib
 
 # Importação resiliente da camada de dados.
 # Evita que uma atualização parcial de cloud_db.py derrube todo o aplicativo.
@@ -88,7 +91,9 @@ ARQUIVO_PROJETOS = "projetos_db.json"
 ARQUIVO_CAMPANHAS = "campanhas_db.json"
 ARQUIVO_ATENDIMENTOS = "atendimentos_db.json"
 ARQUIVO_SEGMENTOS = "segmentos_db.json"
-VERSAO_APP = "4.0.0"
+ARQUIVO_BACKUP_CONFIG = "backup_config.json"
+VERSAO_APP = "4.0.1"
+VERSAO_DADOS = 1
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -2291,6 +2296,166 @@ def nome_tipo_arquivo(nome):
     return mapa.get(ext, ext.upper() if ext else "Arquivo")
 
 
+
+# --- PROTEÇÃO DE DADOS E BACKUP AUTOMÁTICO (4.0.1) ---
+BACKUP_CONFIG_PADRAO = {
+    "ativo": True,
+    "horario": "22:00",
+    "retencao_automatica": 30,
+    "ultimo_backup_em": "",
+    "versao_dados": VERSAO_DADOS,
+}
+
+DOCUMENTOS_BACKUP = [
+    ("historico_orcamentos", ARQUIVO_HISTORICO, []),
+    ("catalogo_db", ARQUIVO_CATALOGO, []),
+    ("clientes_db", ARQUIVO_CLIENTES, []),
+    ("producao_db", ARQUIVO_PRODUCAO, []),
+    ("config_empresa", ARQUIVO_EMPRESA, CONFIG_EMPRESA_PADRAO),
+    ("projetos_db", ARQUIVO_PROJETOS, []),
+    ("campanhas_db", ARQUIVO_CAMPANHAS, []),
+    ("atendimentos_db", ARQUIVO_ATENDIMENTOS, {"config": {}, "itens": []}),
+    ("segmentos_db", ARQUIVO_SEGMENTOS, []),
+]
+
+def carregar_config_backup():
+    dados = load_document("backup_config", ARQUIVO_BACKUP_CONFIG, BACKUP_CONFIG_PADRAO)
+    config = dict(BACKUP_CONFIG_PADRAO)
+    if isinstance(dados, dict):
+        config.update(dados)
+    return config
+
+def salvar_config_backup(config):
+    dados = dict(BACKUP_CONFIG_PADRAO)
+    if isinstance(config, dict):
+        dados.update(config)
+    save_document("backup_config", dados, ARQUIVO_BACKUP_CONFIG)
+
+def coletar_dados_backup():
+    documentos = {}
+    contagens = {}
+    for chave, caminho, padrao in DOCUMENTOS_BACKUP:
+        valor = load_document(chave, caminho, padrao)
+        documentos[chave] = valor
+        if isinstance(valor, list):
+            contagens[chave] = len(valor)
+        elif isinstance(valor, dict) and isinstance(valor.get("itens"), list):
+            contagens[chave] = len(valor["itens"])
+        elif isinstance(valor, dict):
+            contagens[chave] = len(valor)
+        else:
+            contagens[chave] = 0
+    return documentos, contagens
+
+def carregar_indice_backups():
+    dados = load_document("backups_index", "backups_index.json", [])
+    return dados if isinstance(dados, list) else []
+
+def salvar_indice_backups(indice):
+    save_document("backups_index", indice, "backups_index.json")
+
+def criar_backup_completo(tipo="manual", protegido=False, motivo=""):
+    documentos, contagens = coletar_dados_backup()
+    instante = agora_local()
+    backup_id = instante.strftime("%Y%m%d_%H%M%S_%f")
+    payload = {
+        "backup_id": backup_id,
+        "criado_em": instante.isoformat(),
+        "tipo": tipo,
+        "protegido": bool(protegido),
+        "motivo": str(motivo or ""),
+        "versao_app": VERSAO_APP,
+        "versao_dados": VERSAO_DADOS,
+        "contagens": contagens,
+        "documentos": documentos,
+    }
+    serializado = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
+    payload["sha256"] = hashlib.sha256(serializado).hexdigest()
+    save_document(f"backup_{backup_id}", payload, f"backup_{backup_id}.json")
+    indice = carregar_indice_backups()
+    indice.insert(0, {k: payload[k] for k in ["backup_id", "criado_em", "tipo", "protegido", "motivo", "versao_app", "versao_dados", "contagens", "sha256"]})
+    config = carregar_config_backup()
+    limite = max(1, int(config.get("retencao_automatica", 30) or 30))
+    automaticos = 0
+    novo_indice = []
+    for item in indice:
+        if item.get("tipo") == "automatico" and not item.get("protegido"):
+            automaticos += 1
+            if automaticos > limite:
+                continue
+        novo_indice.append(item)
+    salvar_indice_backups(novo_indice)
+    config["ultimo_backup_em"] = instante.isoformat()
+    salvar_config_backup(config)
+    return payload
+
+def carregar_backup_por_id(backup_id):
+    return load_document(f"backup_{backup_id}", f"backup_{backup_id}.json", {})
+
+def backup_para_zip_bytes(payload):
+    memoria = io.BytesIO()
+    with zipfile.ZipFile(memoria, "w", zipfile.ZIP_DEFLATED) as arquivo_zip:
+        arquivo_zip.writestr("backup_manifest.json", json.dumps({k: v for k, v in payload.items() if k != "documentos"}, ensure_ascii=False, indent=2, default=str))
+        for chave, valor in (payload.get("documentos") or {}).items():
+            arquivo_zip.writestr(f"dados/{chave}.json", json.dumps(valor, ensure_ascii=False, indent=2, default=str))
+    return memoria.getvalue()
+
+def verificar_integridade_dados():
+    documentos, contagens = coletar_dados_backup()
+    problemas = []
+    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db"}
+    for chave in esperados_lista:
+        if not isinstance(documentos.get(chave), list):
+            problemas.append(f"{chave}: estrutura inválida (esperada lista).")
+    if not isinstance(documentos.get("atendimentos_db"), dict):
+        problemas.append("atendimentos_db: estrutura inválida (esperado objeto).")
+    if not isinstance(documentos.get("config_empresa"), dict):
+        problemas.append("config_empresa: estrutura inválida (esperado objeto).")
+    return problemas, contagens
+
+def restaurar_backup_payload(payload):
+    documentos = payload.get("documentos") if isinstance(payload, dict) else None
+    if not isinstance(documentos, dict):
+        raise ValueError("Backup inválido ou incompleto.")
+    criar_backup_completo(tipo="antes_restauracao", protegido=True, motivo="Cópia automática antes da restauração")
+    mapa = {chave: caminho for chave, caminho, _ in DOCUMENTOS_BACKUP}
+    restaurados = []
+    for chave, valor in documentos.items():
+        if chave in mapa:
+            save_document(chave, valor, mapa[chave])
+            restaurados.append(chave)
+    return restaurados
+
+def executar_backup_automatico_se_necessario():
+    if st.session_state.get("backup_auto_verificado"):
+        return
+    st.session_state.backup_auto_verificado = True
+    config = carregar_config_backup()
+    if not config.get("ativo", True):
+        return
+    agora = agora_local()
+    try:
+        hora, minuto = [int(x) for x in str(config.get("horario", "22:00")).split(":", 1)]
+    except Exception:
+        hora, minuto = 22, 0
+    horario_alvo = agora.replace(hour=hora, minute=minuto, second=0, microsecond=0)
+    ultimo = None
+    try:
+        ultimo = datetime.fromisoformat(str(config.get("ultimo_backup_em", "")))
+        if ultimo.tzinfo is None:
+            ultimo = ultimo.replace(tzinfo=agora.tzinfo)
+    except Exception:
+        ultimo = None
+    deve_fazer = agora >= horario_alvo and (ultimo is None or ultimo.date() < agora.date())
+    if deve_fazer:
+        try:
+            criar_backup_completo(tipo="automatico", motivo="Rotina diária automática")
+            st.session_state._mensagem_sucesso_pendente = "Backup automático diário concluído com sucesso."
+        except Exception as exc:
+            st.session_state._erro_backup_automatico = f"Não foi possível concluir o backup automático: {exc}"
+
+executar_backup_automatico_se_necessario()
+
 # --- SIDEBAR ---
 with st.sidebar:
     empresa_sidebar = carregar_config_empresa()
@@ -2485,6 +2650,9 @@ def renderizar_painel_alertas(prefixo):
 mensagem_sucesso = st.session_state.pop("_mensagem_sucesso_pendente", None)
 if mensagem_sucesso:
     st.success(mensagem_sucesso)
+erro_backup_auto = st.session_state.pop("_erro_backup_automatico", None)
+if erro_backup_auto:
+    st.warning(erro_backup_auto)
 
 _dados_atendimento_badge = carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
@@ -4173,3 +4341,75 @@ with aba7:
         st.rerun()
 
     st.info("A logo e o QR Code continuam sendo carregados dos arquivos logo.png e pix.png do repositório.")
+
+    st.divider()
+    st.header("🛡️ Proteção de Dados")
+    st.caption("Atualizações trocam o código, mas não substituem os dados salvos. O backup automático cria pontos de recuperação sem depender da memória da equipe.")
+    cfg_backup = carregar_config_backup()
+    with st.form("form_config_backup"):
+        b1, b2, b3 = st.columns(3)
+        backup_ativo = b1.checkbox("Backup automático ativo", value=bool(cfg_backup.get("ativo", True)))
+        horario_backup = b2.text_input("Horário diário", value=str(cfg_backup.get("horario", "22:00")), help="Formato HH:MM. Se o sistema estiver fechado, o backup será feito no primeiro acesso após esse horário.")
+        retencao_backup = b3.number_input("Backups automáticos mantidos", min_value=1, max_value=365, value=int(cfg_backup.get("retencao_automatica", 30) or 30))
+        salvar_backup_cfg = st.form_submit_button("💾 Salvar rotina de backup", use_container_width=True)
+    if salvar_backup_cfg:
+        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", horario_backup.strip()):
+            st.warning("Informe o horário no formato HH:MM, por exemplo 22:00.")
+        else:
+            cfg_backup.update({"ativo": backup_ativo, "horario": horario_backup.strip(), "retencao_automatica": int(retencao_backup), "versao_dados": VERSAO_DADOS})
+            salvar_config_backup(cfg_backup)
+            st.success("Rotina de backup salva.")
+
+    ultimo_backup = str(cfg_backup.get("ultimo_backup_em", "")).strip()
+    if ultimo_backup:
+        try:
+            ultimo_fmt = datetime.fromisoformat(ultimo_backup).astimezone(agora_local().tzinfo).strftime("%d/%m/%Y às %H:%M")
+        except Exception:
+            ultimo_fmt = ultimo_backup
+        st.success(f"🟢 Proteção ativa — último backup: {ultimo_fmt}")
+    else:
+        st.warning("Ainda não existe backup completo registrado. Faça o primeiro backup agora.")
+
+    problemas_integridade, contagens_integridade = verificar_integridade_dados()
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Propostas", contagens_integridade.get("historico_orcamentos", 0))
+    c2.metric("Clientes", contagens_integridade.get("clientes_db", 0))
+    c3.metric("Produtos", contagens_integridade.get("catalogo_db", 0))
+    c4.metric("Atendimentos", contagens_integridade.get("atendimentos_db", 0))
+    ac1, ac2 = st.columns(2)
+    if ac1.button("🛡️ Fazer backup completo agora", type="primary", use_container_width=True):
+        try:
+            novo_backup = criar_backup_completo(tipo="manual", protegido=True, motivo="Backup manual solicitado pela equipe")
+            st.session_state._backup_download_id = novo_backup["backup_id"]
+            st.success("Backup completo criado e protegido.")
+        except Exception as exc:
+            st.error(f"Falha ao criar backup: {exc}")
+    if ac2.button("🔎 Verificar integridade dos dados", use_container_width=True):
+        if problemas_integridade:
+            for problema in problemas_integridade:
+                st.error(problema)
+        else:
+            st.success("Integridade verificada: todas as estruturas principais estão válidas.")
+
+    indice_backups = carregar_indice_backups()
+    if indice_backups:
+        st.subheader("Histórico de backups")
+        opcoes_backup = {f"{item.get('criado_em','')} — {item.get('tipo','')} — {'🔒 protegido' if item.get('protegido') else 'normal'}": item.get("backup_id") for item in indice_backups[:100]}
+        escolha_backup = st.selectbox("Selecione um backup", list(opcoes_backup.keys()), key="backup_historico_select")
+        backup_selecionado = carregar_backup_por_id(opcoes_backup[escolha_backup])
+        if backup_selecionado:
+            st.json({k: v for k, v in backup_selecionado.items() if k != "documentos"}, expanded=False)
+            d1, d2 = st.columns(2)
+            d1.download_button("⬇️ Baixar cópia ZIP", data=backup_para_zip_bytes(backup_selecionado), file_name=f"festmanager_backup_{backup_selecionado.get('backup_id','')}.zip", mime="application/zip", use_container_width=True)
+            confirmacao = d2.text_input("Para restaurar, digite RESTAURAR", key=f"confirmar_restauracao_{backup_selecionado.get('backup_id')}")
+            if st.button("♻️ Restaurar backup selecionado", disabled=confirmacao.strip().upper() != "RESTAURAR", use_container_width=True):
+                try:
+                    restaurados = restaurar_backup_payload(backup_selecionado)
+                    st.success(f"Restauração concluída. Documentos restaurados: {len(restaurados)}.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Falha na restauração: {exc}")
+    else:
+        st.info("O histórico aparecerá depois do primeiro backup.")
+
+    st.caption(f"Versão do aplicativo: {VERSAO_APP} • Versão dos dados: {VERSAO_DADOS}")
