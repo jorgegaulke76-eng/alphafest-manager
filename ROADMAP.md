@@ -1,16 +1,11 @@
-# Roadmap
+# Roadmap FestManager
 
-## Concluído — 4.0.0
-- Integração Atendimento → Orçamento → Fluxo de Pedidos.
-- Linha do tempo operacional automática.
-- Prioridade de atendimento na Central do Dia.
+## Entregue
+- 5.0.0 — Base de Conhecimento Alphafest
+- 5.1.1 — Centro de Trabalho e Minha Fila
 
 ## Próximos passos
-- Portal do Cliente.
-- Integração oficial com WhatsApp Business Platform.
-- Atualização automática do portal conforme produção.
-- Financeiro e confirmação de pagamento integrados.
-
-
-## Concluído — 4.2.0
-- Núcleo profissional de operação contínua: migrações, auditoria, lixeira, health check e pré-atualização segura.
+- Refinamento do fluxo Atendimento → Orçamento → Produção
+- Portal do Cliente
+- Integração oficial com WhatsApp
+- Assistente Alphafest IA

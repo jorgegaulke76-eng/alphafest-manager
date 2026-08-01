@@ -163,6 +163,26 @@ def agora_local():
 def hoje_local():
     return agora_local().date()
 
+def registro_eh_de_hoje(valor):
+    """Aceita datas ISO ou brasileiras e informa se pertencem ao dia local atual."""
+    if not valor:
+        return False
+    texto = str(valor).strip()
+    formatos = (
+        "%d/%m/%Y %H:%M", "%d/%m/%Y",
+        "%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d",
+    )
+    for formato in formatos:
+        try:
+            return datetime.strptime(texto, formato).date() == hoje_local()
+        except (ValueError, TypeError):
+            continue
+    try:
+        return datetime.fromisoformat(texto.replace("Z", "+00:00")).date() == hoje_local()
+    except (ValueError, TypeError):
+        return False
+
 # --- INICIALIZAÇÃO DE SEGURANÇA ---
 if "form_key" not in st.session_state: st.session_state.form_key = 0
 if "temp_itens" not in st.session_state: st.session_state.temp_itens = []
@@ -3433,6 +3453,23 @@ with aba0:
     if not usuario_atual.get("automatico"):
         st.caption("A saudação está usando o usuário selecionado na barra lateral. Para identificação automática por e-mail, configure o login Google/OIDC do Streamlit.")
 
+    st.markdown("#### ⚡ Ações rápidas")
+    ac1, ac2, ac3, ac4, ac5 = st.columns(5)
+    if ac1.button("📥 Novo atendimento", key="acao_rapida_atendimento", use_container_width=True):
+        st.session_state["foco_novo_atendimento"] = True
+        st.info("Abra Atendimento → Registrar contato. A tela está pronta para um novo atendimento.")
+    if ac2.button("➕ Novo orçamento", key="acao_rapida_orcamento", use_container_width=True):
+        st.session_state["form_cliente"] = ""
+        st.session_state["form_whatsapp"] = ""
+        st.info("Abra Novo Orçamento para iniciar.")
+    if ac3.button("🧩 Novo projeto", key="acao_rapida_projeto", use_container_width=True):
+        st.info("Abra Projeto Personalizado para registrar a necessidade do cliente.")
+    if ac4.button("👤 Novo cliente", key="acao_rapida_cliente", use_container_width=True):
+        st.session_state["cliente_edicao_id"] = None
+        st.info("Abra Clientes → Cadastrar / Editar.")
+    if ac5.button("📦 Fluxo de pedidos", key="acao_rapida_fluxo", use_container_width=True):
+        st.info("Abra Fluxo de Pedidos para acompanhar a produção.")
+
     historico_central = carregar_historico()
     tarefas_central = sincronizar_producao_com_propostas()
     tarefas_ativas_central = [t for t in tarefas_central if t.get("ativa", True)]
@@ -3450,6 +3487,53 @@ with aba0:
     orcamentos_whatsapp_central = [a for a in atendimentos_abertos_central if a.get("status") in ("Orçamento solicitado", "Orçamento em elaboração")]
     catalogos_whatsapp_central = [a for a in atendimentos_abertos_central if a.get("status") == "Catálogo solicitado"]
     aguardando_resposta_central = [a for a in atendimentos_abertos_central if minutos_aguardando(a) >= 30]
+
+    nome_usuario_central = str(usuario_atual.get("nome", "")).strip()
+    minha_fila_central = [
+        a for a in atendimentos_abertos_central
+        if str(a.get("responsavel", "")).strip() in ("", nome_usuario_central)
+    ]
+    minha_fila_central = sorted(
+        minha_fila_central,
+        key=lambda a: (
+            -faixa_sla_atendimento(a, dados_atendimento_central.get("config", {}))[2],
+            -minutos_aguardando(a),
+        ),
+    )
+
+    propostas_criadas_hoje = [
+        p for p in historico_central
+        if registro_eh_de_hoje(p.get("data_geracao") or p.get("data") or p.get("criado_em"))
+    ]
+    pedidos_aprovados_hoje = [
+        p for p in historico_central
+        if p.get("aprovado", False) and registro_eh_de_hoje(p.get("atualizado_em") or p.get("data_geracao") or p.get("data"))
+    ]
+    entregues_hoje_resumo = [
+        p for p in historico_central
+        if p.get("entregue", False) and registro_eh_de_hoje(p.get("entregue_em") or p.get("atualizado_em"))
+    ]
+
+    st.markdown("#### 📊 Resumo de hoje")
+    rs1, rs2, rs3, rs4 = st.columns(4)
+    rs1.metric("Orçamentos criados", len(propostas_criadas_hoje))
+    rs2.metric("Pedidos aprovados", len(pedidos_aprovados_hoje))
+    rs3.metric("Entregas concluídas", len(entregues_hoje_resumo))
+    rs4.metric("Minha fila", len(minha_fila_central))
+
+    if minha_fila_central:
+        with st.expander(f"👤 Minha fila — {nome_usuario_central} ({len(minha_fila_central)})", expanded=False):
+            for item_minha_fila in minha_fila_central[:8]:
+                nivel = faixa_sla_atendimento(item_minha_fila, dados_atendimento_central.get("config", {}))[2]
+                icone = "🔴" if nivel >= 3 else "🟡" if nivel >= 2 else "🟢"
+                st.write(
+                    f"{icone} **{item_minha_fila.get('cliente', 'Contato')}** · "
+                    f"{item_minha_fila.get('status', 'Novo contato')} · "
+                    f"{tempo_aguardando_formatado(item_minha_fila)}"
+                )
+            if len(minha_fila_central) > 8:
+                st.caption(f"Mais {len(minha_fila_central) - 8} item(ns) na aba Atendimento.")
+
     if atendimentos_abertos_central:
         st.subheader("📥 Caixa de atendimento")
         wa1, wa2, wa3, wa4 = st.columns(4)

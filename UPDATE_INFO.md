@@ -1,18 +1,15 @@
-# FestManager 5.0.0 — Base de Conhecimento
+# FestManager 5.1.1 — Centro de Trabalho
 
-Versão anterior: 4.4.0  
-Nova versão: 5.0.0  
-Versão dos dados: 3
+Base anterior: 5.0.0
 
-## Incluído
-- Biblioteca flexível de componentes e características.
-- Categorias editáveis e opção de adicionar novidades sem atualizar o sistema.
-- Vínculo de materiais, cores, tamanhos, acabamentos, acessórios, formatos, técnicas e temas aos projetos.
-- Campo livre para combinações únicas que não cabem em listas.
-- Pesquisa de projetos por qualquer característica.
-- Componentes incluídos na pesquisa global e no backup completo.
+## Alterações
+- Ações rápidas na Central do Dia.
+- Resumo diário de orçamentos, aprovações e entregas.
+- Minha Fila por usuário, incluindo atendimentos sem responsável.
+- Ordenação da fila por SLA e tempo de espera.
+- Leitura segura de datas brasileiras e ISO para indicadores do dia.
 
-## Segurança
-- Migração aditiva.
-- Nenhum cliente, produto, proposta, foto ou projeto existente é removido ou convertido.
-- O pacote de atualização contém apenas código e documentação.
+## Dados
+- Nenhuma migração.
+- Nenhum arquivo de dados é substituído.
+- Clientes, catálogo, fotos, propostas e projetos permanecem no Supabase.

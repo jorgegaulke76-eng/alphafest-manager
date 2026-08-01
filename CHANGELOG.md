@@ -207,3 +207,9 @@ hangelog
 - Componentes vinculados aos projetos realizados.
 - Pesquisa por material, cor, formato, acessório, técnica, tema e característica livre.
 - Backup e pesquisa global atualizados para incluir a base de conhecimento.
+
+## 5.1.1 — Centro de Trabalho
+- Adicionadas ações rápidas na Central do Dia.
+- Adicionado resumo operacional do dia.
+- Adicionada Minha Fila por usuário e prioridade de SLA.
+- Nenhuma alteração ou migração nos dados existentes.
