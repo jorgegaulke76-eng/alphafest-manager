@@ -1,3 +1,12 @@
+# Versão 3.7.0 — Memória da Empresa
+
+- Caixa do Projeto vinculada a cada proposta.
+- Upload individual de artes, arquivos de produção, fotos finais, vídeos e referências.
+- Observações, tags, arquivo mestre, favoritos e arquivamento.
+- Nova aba Memória com pesquisa por cliente, tema, produto, pedido, arquivo e tag.
+- Projetos podem ser marcados como modelos reutilizáveis e duplicados em novo orçamento.
+- Novo banco projetos_db.json, sincronizado pelo Supabase com fallback local.
+
 # CHANGELOG — FestManager
 
 ## 3.6.2 — Correção de inicialização

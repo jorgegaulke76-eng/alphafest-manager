@@ -84,7 +84,8 @@ ARQUIVO_CATALOGO = "catalogo_db.json"
 ARQUIVO_CLIENTES = "clientes_db.json"
 ARQUIVO_PRODUCAO = "producao_db.json"
 ARQUIVO_EMPRESA = "empresa_config.json"
-VERSAO_APP = "3.6.2"
+ARQUIVO_PROJETOS = "projetos_db.json"
+VERSAO_APP = "3.7.0"
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -1736,6 +1737,169 @@ def gerar_conteudo_catalogo_gratuito(nome, categoria, subcategoria="", ideias=""
         "shopee": descricao_shopee,
     }
 
+def carregar_projetos():
+    dados = load_document("projetos_db", ARQUIVO_PROJETOS, [])
+    return dados if isinstance(dados, list) else []
+
+
+def salvar_projetos(lista):
+    if not isinstance(lista, list):
+        raise ValueError("A memória de projetos precisa ser uma lista.")
+    save_document("projetos_db", lista, ARQUIVO_PROJETOS)
+
+
+def obter_ou_criar_projeto(proposta):
+    """Retorna a Caixa do Projeto ligada à proposta, criando-a quando necessário."""
+    numero = str(proposta.get("numero_proposta", "")).strip()
+    projetos = carregar_projetos()
+    projeto = next((p for p in projetos if str(p.get("numero_proposta", "")) == numero), None)
+    if projeto:
+        return projeto, projetos
+    itens = proposta.get("itens", []) or []
+    temas = []
+    for item in itens:
+        esp = str(item.get("especificacoes", ""))
+        m = re.search(r"Tema:\s*([^|]+)", esp, re.I)
+        if m and m.group(1).strip():
+            temas.append(m.group(1).strip())
+    projeto = {
+        "id": f"PRJ-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
+        "numero_proposta": numero,
+        "cliente_nome": proposta.get("cliente_nome", ""),
+        "whatsapp": proposta.get("whatsapp", proposta.get("cliente_wa", "")),
+        "data_entrega": proposta.get("data_entrega", ""),
+        "tema": ", ".join(dict.fromkeys(temas)),
+        "produtos": [str(i.get("produto", "")).strip() for i in itens if str(i.get("produto", "")).strip()],
+        "arquivos": [],
+        "observacoes": "",
+        "modelo": False,
+        "favorito": False,
+        "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
+        "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
+    }
+    projetos.insert(0, projeto)
+    salvar_projetos(projetos)
+    return projeto, projetos
+
+
+def atualizar_projeto(projeto_atualizado):
+    projetos = carregar_projetos()
+    pid = projeto_atualizado.get("id")
+    projeto_atualizado["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+    encontrado = False
+    for i, projeto in enumerate(projetos):
+        if projeto.get("id") == pid:
+            projetos[i] = projeto_atualizado
+            encontrado = True
+            break
+    if not encontrado:
+        projetos.insert(0, projeto_atualizado)
+    salvar_projetos(projetos)
+
+
+def texto_busca_projeto(projeto):
+    partes = [
+        projeto.get("id", ""), projeto.get("numero_proposta", ""), projeto.get("cliente_nome", ""),
+        projeto.get("whatsapp", ""), projeto.get("tema", ""), projeto.get("observacoes", ""),
+        " ".join(projeto.get("produtos", []) or []),
+    ]
+    for arq in projeto.get("arquivos", []) or []:
+        partes.extend([arq.get("nome", ""), arq.get("categoria", ""), arq.get("descricao", ""), " ".join(arq.get("tags", []) or [])])
+    return " ".join(str(x) for x in partes).lower()
+
+
+def renderizar_caixa_projeto(proposta, prefixo="historico"):
+    """Caixa do Projeto: arquivos, observações e reutilização ligados ao pedido."""
+    projeto, _ = obter_ou_criar_projeto(proposta)
+    projeto = dict(projeto)
+    st.markdown("#### 📦 Caixa do Projeto")
+    st.caption("Guarde artes, arquivos de produção, fotos finais e observações deste pedido.")
+    kbase = f"{prefixo}_{projeto.get('id')}"
+
+    c1, c2, c3 = st.columns(3)
+    c1.write(f"**Projeto:** {projeto.get('id', '—')}")
+    c2.write(f"**Tema:** {projeto.get('tema') or 'Não informado'}")
+    c3.write(f"**Arquivos:** {len([a for a in projeto.get('arquivos', []) if not a.get('arquivado')])}")
+
+    observacoes = st.text_area(
+        "Observações internas do projeto",
+        value=str(projeto.get("observacoes", "")),
+        key=f"proj_obs_{kbase}",
+        height=90,
+    )
+    o1, o2, o3 = st.columns(3)
+    modelo = o1.checkbox("♻️ Modelo reutilizável", value=bool(projeto.get("modelo")), key=f"proj_modelo_{kbase}")
+    favorito = o2.checkbox("⭐ Projeto favorito", value=bool(projeto.get("favorito")), key=f"proj_fav_{kbase}")
+    if o3.button("💾 Salvar projeto", key=f"proj_salvar_{kbase}", use_container_width=True):
+        projeto["observacoes"] = observacoes.strip()
+        projeto["modelo"] = bool(modelo)
+        projeto["favorito"] = bool(favorito)
+        atualizar_projeto(projeto)
+        st.success("Caixa do Projeto atualizada.")
+        st.rerun()
+
+    with st.expander("➕ Adicionar arquivo ao projeto", expanded=False):
+        upload = st.file_uploader("Escolher arquivo", type=None, key=f"proj_upload_{kbase}")
+        u1, u2 = st.columns(2)
+        categoria = u1.selectbox(
+            "Classificação",
+            ["Arte", "Arquivo de produção", "Foto final", "Referência", "Vídeo", "Manual/Dica", "Outro"],
+            key=f"proj_cat_{kbase}",
+        )
+        tags = u2.text_input("Tags", placeholder="Ex.: Stitch, azul, corte", key=f"proj_tags_{kbase}")
+        descricao = st.text_input("Descrição", placeholder="Ex.: arte final aprovada", key=f"proj_desc_{kbase}")
+        mestre = st.checkbox("⭐ Marcar como arquivo mestre", key=f"proj_mestre_{kbase}")
+        if st.button("📤 Enviar arquivo", key=f"proj_enviar_{kbase}", type="primary", use_container_width=True):
+            if upload is None:
+                st.warning("Escolha um arquivo.")
+            else:
+                caminho = upload_library_file(upload, produto_nome=f"projetos/{projeto.get('id', 'projeto')}", local_upload_dir="projetos_uploads")
+                if not caminho:
+                    st.error("Não foi possível salvar o arquivo.")
+                else:
+                    arquivos = list(projeto.get("arquivos", []) or [])
+                    if mestre:
+                        for arq in arquivos:
+                            arq["mestre"] = False
+                    arquivos.append({
+                        "id": f"PARQ-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
+                        "nome": str(upload.name),
+                        "url": caminho,
+                        "tipo": nome_tipo_arquivo(upload.name),
+                        "categoria": categoria,
+                        "tags": [x.strip() for x in tags.split(",") if x.strip()],
+                        "descricao": descricao.strip(),
+                        "mestre": bool(mestre),
+                        "arquivado": False,
+                        "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
+                    })
+                    projeto["arquivos"] = arquivos
+                    atualizar_projeto(projeto)
+                    st.success("Arquivo adicionado ao projeto.")
+                    st.rerun()
+
+    ativos = [(i, a) for i, a in enumerate(projeto.get("arquivos", []) or []) if not a.get("arquivado")]
+    if ativos:
+        for i, arq in ativos:
+            a1, a2, a3 = st.columns([1, 5, 2])
+            a1.write("⭐" if arq.get("mestre") else ("📷" if arq.get("categoria") == "Foto final" else "📄"))
+            a2.markdown(f"**{html.escape(str(arq.get('nome', 'Arquivo')))}**")
+            a2.caption(f"{arq.get('categoria', 'Arquivo')} • {arq.get('criado_em', '')}")
+            if arq.get("descricao"):
+                a2.write(arq.get("descricao"))
+            if arq.get("tags"):
+                a2.caption("Tags: " + " • ".join(arq.get("tags", [])))
+            if arq.get("url"):
+                a3.link_button("Abrir / baixar", arq.get("url"), use_container_width=True)
+            if a3.button("📦 Arquivar", key=f"proj_arq_{kbase}_{i}", use_container_width=True):
+                projeto["arquivos"][i]["arquivado"] = True
+                projeto["arquivos"][i]["mestre"] = False
+                atualizar_projeto(projeto)
+                st.rerun()
+    else:
+        st.info("Nenhum arquivo vinculado a este projeto ainda.")
+
+
 def carregar_catalogo():
     """Carrega catálogo do Supabase, com fallback automático para JSON local."""
     dados = load_document("catalogo_db", ARQUIVO_CATALOGO, [])
@@ -2020,7 +2184,7 @@ mensagem_sucesso = st.session_state.pop("_mensagem_sucesso_pendente", None)
 if mensagem_sucesso:
     st.success(mensagem_sucesso)
 
-aba0, aba1, aba2, aba3, aba4, aba5, aba6, aba7 = st.tabs([
+aba0, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba7 = st.tabs([
     "🏠 Central do Dia",
     "➕ Novo Orçamento",
     "📋 Histórico",
@@ -2028,6 +2192,7 @@ aba0, aba1, aba2, aba3, aba4, aba5, aba6, aba7 = st.tabs([
     "📊 Relatórios",
     "📦 Catálogo",
     "👥 Clientes",
+    "🧠 Memória",
     "⚙️ Configurações",
 ])
 
@@ -2293,6 +2458,9 @@ with aba2:
             s1, s2 = st.columns(2)
             s1.checkbox("Pago", value=prop.get("pago", False), key=f"p_{num_p}", on_change=alternar_status, args=(num_p, "pago", not prop.get("pago", False)))
             s2.checkbox("Entregue", value=prop.get("entregue", False), key=f"e_{num_p}", on_change=alternar_status, args=(num_p, "entregue", not prop.get("entregue", False)))
+
+            st.divider()
+            renderizar_caixa_projeto(prop, prefixo="hist")
 
 
 with aba3:
@@ -3092,6 +3260,78 @@ with aba6:
         if cliente_edicao and ac2.button("Cancelar edição", use_container_width=True):
             st.session_state.cliente_edit_id = None
             st.rerun()
+
+
+
+with aba8:
+    st.header("🧠 Memória da Empresa")
+    st.caption("Encontre projetos, temas, clientes, produtos e arquivos em poucos segundos.")
+    projetos_memoria = carregar_projetos()
+    busca_memoria = st.text_input(
+        "🔎 Pesquisar na memória",
+        placeholder="Tema, cliente, produto, pedido, arquivo ou tag",
+        key="busca_memoria_empresa",
+    ).strip().lower()
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Projetos", len(projetos_memoria))
+    m2.metric("Modelos", sum(1 for p in projetos_memoria if p.get("modelo")))
+    m3.metric("Favoritos", sum(1 for p in projetos_memoria if p.get("favorito")))
+    m4.metric("Arquivos", sum(len([a for a in p.get("arquivos", []) or [] if not a.get("arquivado")]) for p in projetos_memoria))
+
+    if busca_memoria:
+        projetos_filtrados = [p for p in projetos_memoria if busca_memoria in texto_busca_projeto(p)]
+    else:
+        projetos_filtrados = projetos_memoria
+
+    filtro_memoria = st.radio(
+        "Mostrar",
+        ["Todos", "Modelos reutilizáveis", "Favoritos"],
+        horizontal=True,
+        key="filtro_memoria",
+    )
+    if filtro_memoria == "Modelos reutilizáveis":
+        projetos_filtrados = [p for p in projetos_filtrados if p.get("modelo")]
+    elif filtro_memoria == "Favoritos":
+        projetos_filtrados = [p for p in projetos_filtrados if p.get("favorito")]
+
+    st.caption(f"{len(projetos_filtrados)} projeto(s) encontrado(s)")
+    if not projetos_filtrados:
+        st.info("A memória será preenchida conforme as Caixas de Projeto forem abertas no Histórico.")
+    for projeto in projetos_filtrados:
+        estrelas = "⭐ " if projeto.get("favorito") else ""
+        modelo_txt = " • ♻️ Modelo" if projeto.get("modelo") else ""
+        titulo = f"{estrelas}{projeto.get('numero_proposta') or projeto.get('id')} — {projeto.get('cliente_nome') or 'Cliente'}{modelo_txt}"
+        with st.expander(titulo):
+            c1, c2 = st.columns(2)
+            c1.write(f"**Tema:** {projeto.get('tema') or 'Não informado'}")
+            c1.write(f"**Produtos:** {', '.join(projeto.get('produtos', []) or []) or 'Não informado'}")
+            c2.write(f"**Entrega:** {projeto.get('data_entrega') or 'Não informada'}")
+            c2.write(f"**Atualizado:** {projeto.get('atualizado_em') or projeto.get('criado_em', '')}")
+            if projeto.get("observacoes"):
+                st.write(f"**Observações:** {projeto.get('observacoes')}")
+            arquivos = [a for a in projeto.get("arquivos", []) or [] if not a.get("arquivado")]
+            if arquivos:
+                st.markdown("#### Arquivos")
+                for arq in arquivos:
+                    x1, x2 = st.columns([5, 2])
+                    x1.write(f"{'⭐ ' if arq.get('mestre') else ''}{arq.get('nome', 'Arquivo')} — {arq.get('categoria', '')}")
+                    if arq.get("url"):
+                        x2.link_button("Abrir / baixar", arq.get("url"), use_container_width=True)
+            proposta_origem = next((p for p in carregar_historico() if p.get("numero_proposta") == projeto.get("numero_proposta")), None)
+            if proposta_origem:
+                b1, b2 = st.columns(2)
+                if b1.button("📋 Duplicar como novo pedido", key=f"mem_dup_{projeto.get('id')}", use_container_width=True):
+                    carregar_proposta_no_formulario(proposta_origem, duplicar=True)
+                    st.session_state._mensagem_sucesso_pendente = "Modelo carregado em Novo Orçamento."
+                    st.rerun()
+                b2.download_button(
+                    "📄 Baixar HTML original",
+                    gerar_html(proposta_origem),
+                    file_name=f"{proposta_origem.get('numero_proposta', 'pedido')}.html",
+                    mime="text/html",
+                    key=f"mem_html_{projeto.get('id')}",
+                    use_container_width=True,
+                )
 
 
 
