@@ -1,16 +1,24 @@
-# UPDATE_INFO — FestManager 4.2.0
+# UPDATE INFO — FestManager 4.2.1
 
-- Base anterior: 4.0.1
-- Nova versão: 4.2.0
-- Versão dos dados: 2
-- Migração automática: sim, apenas aditiva (não remove registros ou campos)
-- Dados incluídos no pacote: não
+Versão anterior: 4.2.0
+Nova versão: 4.2.1
+
+## Objetivo
+Melhorar a velocidade sem alterar ou substituir dados da empresa.
 
 ## Arquivos alterados
 - app.py
+- cloud_db.py
 - VERSAO.txt
 - CHANGELOG.md
-- ROADMAP.md
+- UPDATE_INFO.md
 
-## Segurança
-O pacote de atualização contém somente código e documentação. Os arquivos JSON de clientes, catálogo, propostas, produção, campanhas e demais dados não são incluídos, evitando sobrescrever o trabalho feito após o envio da base.
+## Dados
+- Migração de banco: não
+- Arquivos JSON incluídos: não
+- Registros existentes alterados: não
+
+## Comportamento do cache
+- Leituras ficam em memória por até 20 segundos em cada navegador.
+- Ao salvar, o cache é atualizado imediatamente.
+- Alterações feitas em outro computador aparecem em até 20 segundos ou ao recarregar a página.

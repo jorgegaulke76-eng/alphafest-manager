@@ -1,4 +1,4 @@
 FestManager
-Versão 4.2.0
-Núcleo Profissional — Migrações, Auditoria, Lixeira e Saúde do Sistema
+Versão 4.2.1
+Desempenho e Cache Inteligente
 Data: 01/08/2026

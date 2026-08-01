@@ -17,7 +17,8 @@ from urllib.parse import quote
 import requests
 import streamlit as st
 
-TIMEOUT = 20
+TIMEOUT = 10
+_SESSION = requests.Session()
 
 __all__ = [
     "online_configured",
@@ -79,7 +80,7 @@ def load_document(document_key: str, local_path: str, default: Any) -> Any:
 
     url, _ = _config()
     try:
-        response = requests.get(
+        response = _SESSION.get(
             f"{url}/rest/v1/app_data",
             headers=_headers(),
             params={"select": "value", "key": f"eq.{document_key}", "limit": "1"},
@@ -115,7 +116,7 @@ def save_document(document_key: str, value: Any, local_path: str) -> bool:
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     try:
-        response = requests.post(
+        response = _SESSION.post(
             f"{url}/rest/v1/app_data",
             headers=_headers({"Prefer": "resolution=merge-duplicates,return=minimal"}),
             params={"on_conflict": "key"},
@@ -133,7 +134,7 @@ def connection_test() -> tuple[bool, str]:
         return False, "Supabase não configurado — usando arquivos JSON locais."
     url, _ = _config()
     try:
-        response = requests.get(
+        response = _SESSION.get(
             f"{url}/rest/v1/app_data",
             headers=_headers(),
             params={"select": "key", "limit": "1"},
@@ -159,7 +160,7 @@ def upload_catalog_image(upload: Any, local_upload_dir: str = "uploads") -> str:
         url, _ = _config()
         encoded_name = quote(unique_name, safe="")
         try:
-            response = requests.post(
+            response = _SESSION.post(
                 f"{url}/storage/v1/object/catalogo/{encoded_name}",
                 headers={
                     **_headers(),
@@ -199,7 +200,7 @@ def upload_library_file(upload: Any, produto_nome: str = "produto", local_upload
         url, _ = _config()
         encoded_path = quote(object_path, safe="/")
         try:
-            response = requests.post(
+            response = _SESSION.post(
                 f"{url}/storage/v1/object/catalogo/{encoded_path}",
                 headers={
                     **_headers(),

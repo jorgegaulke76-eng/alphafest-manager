@@ -14,6 +14,8 @@ import base64
 import io
 import zipfile
 import hashlib
+import time
+import copy
 
 # Importação resiliente da camada de dados.
 # Evita que uma atualização parcial de cloud_db.py derrube todo o aplicativo.
@@ -39,20 +41,64 @@ def _write_json_fallback(path, value):
     except Exception:
         return False
 
-def load_document(document_key, local_path, default):
+DOCUMENT_CACHE_TTL_SECONDS = 20
+CONNECTION_CACHE_TTL_SECONDS = 30
+
+def _document_cache():
+    if "_document_cache" not in st.session_state:
+        st.session_state["_document_cache"] = {}
+    return st.session_state["_document_cache"]
+
+def invalidate_document_cache(document_key=None):
+    cache = _document_cache()
+    if document_key is None:
+        cache.clear()
+    else:
+        cache.pop(str(document_key), None)
+
+def load_document(document_key, local_path, default, force_refresh=False):
+    """Carrega cada documento no máximo uma vez por TTL em cada sessão.
+
+    Isso evita dezenas de consultas repetidas ao Supabase durante os reruns do
+    Streamlit. O cache é atualizado imediatamente após qualquer gravação e
+    expira rapidamente para que alterações feitas em outro computador apareçam.
+    """
+    key = str(document_key)
+    cache = _document_cache()
+    now = time.monotonic()
+    cached = cache.get(key)
+    if not force_refresh and cached and (now - cached["time"] < DOCUMENT_CACHE_TTL_SECONDS):
+        return copy.deepcopy(cached["value"])
+
     func = getattr(_cloud_db, "load_document", None) if _cloud_db else None
-    return func(document_key, local_path, default) if callable(func) else _read_json_fallback(local_path, default)
+    value = func(document_key, local_path, default) if callable(func) else _read_json_fallback(local_path, default)
+    cache[key] = {"time": now, "value": copy.deepcopy(value)}
+    return copy.deepcopy(value)
 
 def save_document(document_key, value, local_path):
     func = getattr(_cloud_db, "save_document", None) if _cloud_db else None
-    return func(document_key, value, local_path) if callable(func) else _write_json_fallback(local_path, value)
+    result = func(document_key, value, local_path) if callable(func) else _write_json_fallback(local_path, value)
+    _document_cache()[str(document_key)] = {
+        "time": time.monotonic(),
+        "value": copy.deepcopy(value),
+    }
+    return result
 
-def connection_test():
+def connection_test(force_refresh=False):
+    cache_key = "_connection_test_cache"
+    cached = st.session_state.get(cache_key)
+    now = time.monotonic()
+    if not force_refresh and cached and (now - cached["time"] < CONNECTION_CACHE_TTL_SECONDS):
+        return cached["value"]
+
     func = getattr(_cloud_db, "connection_test", None) if _cloud_db else None
     if callable(func):
-        return func()
-    detalhe = f" ({type(_cloud_import_error).__name__})" if _cloud_import_error else ""
-    return False, "Camada online indisponível" + detalhe + " — usando arquivos JSON locais."
+        value = func()
+    else:
+        detalhe = f" ({type(_cloud_import_error).__name__})" if _cloud_import_error else ""
+        value = (False, "Camada online indisponível" + detalhe + " — usando arquivos JSON locais.")
+    st.session_state[cache_key] = {"time": now, "value": value}
+    return value
 
 def upload_catalog_image(upload, local_upload_dir="uploads"):
     func = getattr(_cloud_db, "upload_catalog_image", None) if _cloud_db else None
@@ -95,7 +141,7 @@ ARQUIVO_BACKUP_CONFIG = "backup_config.json"
 ARQUIVO_AUDITORIA = "auditoria_db.json"
 ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
-VERSAO_APP = "4.2.0"
+VERSAO_APP = "4.2.1"
 VERSAO_DADOS = 2
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)

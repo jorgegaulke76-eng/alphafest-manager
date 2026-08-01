@@ -1,3 +1,14 @@
+# FestManager 4.2.1 — Desempenho e Cache Inteligente
+
+- Cache temporário por sessão para documentos do Supabase.
+- Redução de leituras repetidas durante os reruns do Streamlit.
+- Atualização imediata do cache após salvar dados.
+- Expiração em 20 segundos para sincronização entre computadores.
+- Teste de conexão em cache por 30 segundos.
+- Reutilização de conexão HTTP com o Supabase.
+- Timeout de rede reduzido para evitar telas presas em falhas de conexão.
+- Nenhum arquivo de dados incluído ou substituído.
+
 # CHANGELOG
 
 ## 4.0.1 — Proteção de Dados e Backup Automático
