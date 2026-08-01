@@ -10,3 +10,7 @@
 - Integração oficial com WhatsApp Business Platform.
 - Atualização automática do portal conforme produção.
 - Financeiro e confirmação de pagamento integrados.
+
+
+## Concluído — 4.2.0
+- Núcleo profissional de operação contínua: migrações, auditoria, lixeira, health check e pré-atualização segura.

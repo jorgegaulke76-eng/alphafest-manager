@@ -1,4 +1,4 @@
 FestManager
-Versão 4.0.1
-Proteção de Dados e Backup Automático
+Versão 4.2.0
+Núcleo Profissional — Migrações, Auditoria, Lixeira e Saúde do Sistema
 Data: 01/08/2026

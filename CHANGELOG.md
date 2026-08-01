@@ -163,3 +163,12 @@ hangelog
 - Atalhos para responder, criar orçamento, aguardar cliente, concluir e arquivar.
 - Resumo de atendimentos pendentes na barra lateral.
 - Correção do link do WhatsApp para números que já incluem o código do país.
+
+
+## 4.2.0 — Núcleo Profissional
+- Migrações automáticas aditivas e versionadas.
+- Auditoria de backups, migrações, exclusões e restaurações.
+- Lixeira recuperável para propostas, produtos, clientes e campanhas.
+- Diagnóstico de Supabase, integridade, backup e versão de dados.
+- Preparação segura de atualização com backup protegido.
+- Pacote de atualização sem arquivos de dados.

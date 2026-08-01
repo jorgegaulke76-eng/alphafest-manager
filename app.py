@@ -92,8 +92,11 @@ ARQUIVO_CAMPANHAS = "campanhas_db.json"
 ARQUIVO_ATENDIMENTOS = "atendimentos_db.json"
 ARQUIVO_SEGMENTOS = "segmentos_db.json"
 ARQUIVO_BACKUP_CONFIG = "backup_config.json"
-VERSAO_APP = "4.0.1"
-VERSAO_DADOS = 1
+ARQUIVO_AUDITORIA = "auditoria_db.json"
+ARQUIVO_LIXEIRA = "lixeira_db.json"
+ARQUIVO_SYSTEM_META = "system_meta.json"
+VERSAO_APP = "4.2.0"
+VERSAO_DADOS = 2
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -374,7 +377,11 @@ def alternar_status(num_proposta, campo, novo_valor):
     salvar_historico_completo(historico)
 
 def excluir_proposta(num_proposta):
-    historico = [p for p in carregar_historico() if p.get("numero_proposta") != num_proposta]
+    historico_atual = carregar_historico()
+    proposta = next((p for p in historico_atual if p.get("numero_proposta") == num_proposta), None)
+    if proposta:
+        enviar_para_lixeira("Proposta", proposta, num_proposta)
+    historico = [p for p in historico_atual if p.get("numero_proposta") != num_proposta]
     salvar_historico_completo(historico)
     st.rerun()
 
@@ -2297,6 +2304,186 @@ def nome_tipo_arquivo(nome):
 
 
 
+# --- NÚCLEO PROFISSIONAL: MIGRAÇÕES, AUDITORIA E LIXEIRA (4.2.0) ---
+SYSTEM_META_PADRAO = {
+    "schema_version": 1,
+    "ultima_migracao_em": "",
+    "migracoes_aplicadas": [],
+}
+
+
+def _usuario_auditoria():
+    try:
+        usuario = obter_usuario_atual()
+        return str(usuario.get("nome") or usuario.get("email") or "Sistema")
+    except Exception:
+        return "Sistema"
+
+
+def carregar_auditoria():
+    dados = load_document("auditoria_db", ARQUIVO_AUDITORIA, [])
+    return dados if isinstance(dados, list) else []
+
+
+def registrar_auditoria(acao, entidade="Sistema", identificador="", detalhes=None, resultado="OK"):
+    """Registra ações importantes sem impedir a operação caso a auditoria falhe."""
+    try:
+        registros = carregar_auditoria()
+        registros.insert(0, {
+            "id": agora_local().strftime("AUD%Y%m%d%H%M%S%f"),
+            "data_hora": agora_local().isoformat(),
+            "usuario": _usuario_auditoria(),
+            "acao": str(acao),
+            "entidade": str(entidade),
+            "identificador": str(identificador or ""),
+            "resultado": str(resultado),
+            "detalhes": detalhes if isinstance(detalhes, dict) else ({"mensagem": str(detalhes)} if detalhes else {}),
+        })
+        # Limite operacional para evitar crescimento indefinido; backups preservam o histórico.
+        save_document("auditoria_db", registros[:5000], ARQUIVO_AUDITORIA)
+    except Exception:
+        pass
+
+
+def carregar_lixeira():
+    dados = load_document("lixeira_db", ARQUIVO_LIXEIRA, [])
+    return dados if isinstance(dados, list) else []
+
+
+def enviar_para_lixeira(tipo, item, identificador=""):
+    lixeira = carregar_lixeira()
+    registro = {
+        "id_lixeira": agora_local().strftime("LIX%Y%m%d%H%M%S%f"),
+        "tipo": str(tipo),
+        "identificador": str(identificador or ""),
+        "excluido_em": agora_local().isoformat(),
+        "excluido_por": _usuario_auditoria(),
+        "item": item,
+    }
+    lixeira.insert(0, registro)
+    save_document("lixeira_db", lixeira, ARQUIVO_LIXEIRA)
+    registrar_auditoria("Mover para lixeira", tipo, identificador, {"id_lixeira": registro["id_lixeira"]})
+    return registro
+
+
+def remover_da_lixeira(id_lixeira):
+    lixeira = carregar_lixeira()
+    restante = [x for x in lixeira if x.get("id_lixeira") != id_lixeira]
+    save_document("lixeira_db", restante, ARQUIVO_LIXEIRA)
+
+
+def restaurar_item_lixeira(registro):
+    tipo = registro.get("tipo")
+    item = registro.get("item")
+    if not isinstance(item, dict):
+        raise ValueError("Item da lixeira inválido.")
+    if tipo == "Proposta":
+        dados = carregar_historico()
+        chave, valor = "numero_proposta", item.get("numero_proposta")
+        if not any(x.get(chave) == valor for x in dados): dados.append(item)
+        salvar_historico_completo(dados)
+    elif tipo == "Produto":
+        dados = carregar_catalogo()
+        # Produtos antigos podem não possuir ID; evita duplicidade por nome/categoria.
+        assinatura = (str(item.get("Nome", "")).casefold(), str(item.get("Categoria", "")).casefold())
+        if not any((str(x.get("Nome", "")).casefold(), str(x.get("Categoria", "")).casefold()) == assinatura for x in dados): dados.append(item)
+        salvar_catalogo(dados)
+    elif tipo == "Cliente":
+        dados = carregar_clientes()
+        if not any(x.get("id") == item.get("id") for x in dados): dados.append(item)
+        salvar_clientes(dados)
+    elif tipo == "Campanha":
+        dados = carregar_campanhas()
+        if not any(x.get("id") == item.get("id") for x in dados): dados.append(item)
+        salvar_campanhas(dados)
+    else:
+        raise ValueError(f"Tipo de item ainda não restaurável: {tipo}")
+    remover_da_lixeira(registro.get("id_lixeira"))
+    registrar_auditoria("Restaurar da lixeira", tipo, registro.get("identificador", ""))
+
+
+def executar_migracoes_seguras():
+    """Acrescenta somente estruturas ausentes; nunca remove campos ou registros."""
+    meta = load_document("system_meta", ARQUIVO_SYSTEM_META, SYSTEM_META_PADRAO)
+    if not isinstance(meta, dict):
+        meta = dict(SYSTEM_META_PADRAO)
+    atual = int(meta.get("schema_version", 1) or 1)
+    aplicadas = list(meta.get("migracoes_aplicadas", []) or [])
+    if atual >= VERSAO_DADOS:
+        return
+    alteracoes = {}
+    try:
+        # Migração v2: campos evolutivos opcionais e documentos de segurança.
+        clientes = carregar_clientes()
+        mudou = 0
+        defaults_cliente = {"segmentos": [], "interesses": [], "campanhas_interesse": [], "origem": "", "potencial": 0, "cidade": ""}
+        for cliente in clientes:
+            for campo, padrao in defaults_cliente.items():
+                if campo not in cliente:
+                    cliente[campo] = list(padrao) if isinstance(padrao, list) else padrao
+                    mudou += 1
+        if mudou:
+            salvar_clientes(clientes)
+        alteracoes["clientes_campos_adicionados"] = mudou
+
+        catalogo = carregar_catalogo()
+        mudou = 0
+        for produto in catalogo:
+            for campo, padrao in {"ArquivosBiblioteca": [], "PalavrasChave": [], "PublicarSite": False}.items():
+                if campo not in produto:
+                    produto[campo] = list(padrao) if isinstance(padrao, list) else padrao
+                    mudou += 1
+        if mudou:
+            salvar_catalogo(catalogo)
+        alteracoes["produtos_campos_adicionados"] = mudou
+
+        # Inicializa documentos sem sobrescrever conteúdo existente.
+        if not isinstance(load_document("auditoria_db", ARQUIVO_AUDITORIA, []), list):
+            save_document("auditoria_db", [], ARQUIVO_AUDITORIA)
+        if not isinstance(load_document("lixeira_db", ARQUIVO_LIXEIRA, []), list):
+            save_document("lixeira_db", [], ARQUIVO_LIXEIRA)
+
+        aplicadas.append({"versao": 2, "aplicada_em": agora_local().isoformat(), "alteracoes": alteracoes})
+        meta.update({"schema_version": 2, "ultima_migracao_em": agora_local().isoformat(), "migracoes_aplicadas": aplicadas})
+        save_document("system_meta", meta, ARQUIVO_SYSTEM_META)
+        registrar_auditoria("Migração de dados", "Banco", "v2", alteracoes)
+    except Exception as exc:
+        registrar_auditoria("Migração de dados", "Banco", "v2", {"erro": str(exc)}, resultado="ERRO")
+        # Não impede a abertura: mantém o sistema disponível e sinaliza na sessão.
+        st.session_state._erro_migracao = f"Migração pendente: {exc}"
+
+
+def diagnostico_sistema():
+    online, mensagem = connection_test()
+    problemas, contagens = verificar_integridade_dados()
+    cfg = carregar_config_backup()
+    ultimo = str(cfg.get("ultimo_backup_em", "")).strip()
+    backup_ok = False
+    idade_horas = None
+    if ultimo:
+        try:
+            dt = datetime.fromisoformat(ultimo)
+            if dt.tzinfo is None: dt = dt.replace(tzinfo=agora_local().tzinfo)
+            idade_horas = max(0, (agora_local() - dt.astimezone(agora_local().tzinfo)).total_seconds() / 3600)
+            backup_ok = idade_horas <= 48
+        except Exception:
+            pass
+    meta = load_document("system_meta", ARQUIVO_SYSTEM_META, SYSTEM_META_PADRAO)
+    return {
+        "supabase_ok": online,
+        "supabase_mensagem": mensagem,
+        "integridade_ok": not problemas,
+        "problemas": problemas,
+        "contagens": contagens,
+        "backup_ok": backup_ok,
+        "backup_idade_horas": idade_horas,
+        "schema_version": int(meta.get("schema_version", 1) or 1) if isinstance(meta, dict) else 1,
+        "auditorias": len(carregar_auditoria()),
+        "lixeira": len(carregar_lixeira()),
+    }
+
+
+
 # --- PROTEÇÃO DE DADOS E BACKUP AUTOMÁTICO (4.0.1) ---
 BACKUP_CONFIG_PADRAO = {
     "ativo": True,
@@ -2316,6 +2503,9 @@ DOCUMENTOS_BACKUP = [
     ("campanhas_db", ARQUIVO_CAMPANHAS, []),
     ("atendimentos_db", ARQUIVO_ATENDIMENTOS, {"config": {}, "itens": []}),
     ("segmentos_db", ARQUIVO_SEGMENTOS, []),
+    ("auditoria_db", ARQUIVO_AUDITORIA, []),
+    ("lixeira_db", ARQUIVO_LIXEIRA, []),
+    ("system_meta", ARQUIVO_SYSTEM_META, SYSTEM_META_PADRAO),
 ]
 
 def carregar_config_backup():
@@ -2387,6 +2577,7 @@ def criar_backup_completo(tipo="manual", protegido=False, motivo=""):
     salvar_indice_backups(novo_indice)
     config["ultimo_backup_em"] = instante.isoformat()
     salvar_config_backup(config)
+    registrar_auditoria("Criar backup", "Backup", backup_id, {"tipo": tipo, "contagens": contagens})
     return payload
 
 def carregar_backup_por_id(backup_id):
@@ -2424,6 +2615,7 @@ def restaurar_backup_payload(payload):
         if chave in mapa:
             save_document(chave, valor, mapa[chave])
             restaurados.append(chave)
+    registrar_auditoria("Restaurar backup", "Backup", payload.get("backup_id", ""), {"documentos": restaurados})
     return restaurados
 
 def executar_backup_automatico_se_necessario():
@@ -2454,6 +2646,7 @@ def executar_backup_automatico_se_necessario():
         except Exception as exc:
             st.session_state._erro_backup_automatico = f"Não foi possível concluir o backup automático: {exc}"
 
+executar_migracoes_seguras()
 executar_backup_automatico_se_necessario()
 
 # --- SIDEBAR ---
@@ -2653,6 +2846,9 @@ if mensagem_sucesso:
 erro_backup_auto = st.session_state.pop("_erro_backup_automatico", None)
 if erro_backup_auto:
     st.warning(erro_backup_auto)
+erro_migracao = st.session_state.pop("_erro_migracao", None)
+if erro_migracao:
+    st.warning(erro_migracao)
 
 _dados_atendimento_badge = carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
@@ -3787,8 +3983,9 @@ with aba5:
                     if cacoes.button("✏️ Editar", key=f"cat_editar_{i}", use_container_width=True):
                         st.session_state.catalogo_edit_index = i
                         st.rerun()
-                    if cacoes.button("🗑️ Excluir", key=f"cat_excluir_{i}", use_container_width=True):
-                        catalogo.pop(i)
+                    if cacoes.button("🗑️ Mover para lixeira", key=f"cat_excluir_{i}", use_container_width=True):
+                        removido = catalogo.pop(i)
+                        enviar_para_lixeira("Produto", removido, removido.get("Nome", ""))
                         salvar_catalogo(catalogo)
                         st.rerun()
                     if cacoes.button("➕ Orçamento", key=f"cat_orcamento_{i}", use_container_width=True):
@@ -3937,7 +4134,8 @@ with aba6:
                 if b2.button("✏️ Editar cliente", key=f"cli_edit_{cli.get('id')}", use_container_width=True):
                     st.session_state.cliente_edit_id = cli.get("id")
                     st.rerun()
-                if b3.button("🗑️ Excluir cadastro", key=f"cli_del_{cli.get('id')}", use_container_width=True):
+                if b3.button("🗑️ Mover para lixeira", key=f"cli_del_{cli.get('id')}", use_container_width=True):
+                    enviar_para_lixeira("Cliente", cli, cli.get("id") or cli.get("nome", ""))
                     restantes = [c for c in clientes if c.get("id") != cli.get("id")]
                     salvar_clientes(restantes)
                     st.rerun()
@@ -4201,7 +4399,8 @@ with aba9:
                     campanha["atualizado_em"] = agora_local().isoformat()
                     salvar_campanhas(campanhas)
                     st.rerun()
-                if x3.button("🗑️ Excluir", key=f"camp_del_{campanha.get('id')}", use_container_width=True):
+                if x3.button("🗑️ Mover para lixeira", key=f"camp_del_{campanha.get('id')}", use_container_width=True):
+                    enviar_para_lixeira("Campanha", campanha, campanha.get("id") or campanha.get("nome", ""))
                     salvar_campanhas([c for c in campanhas if c.get("id") != campanha.get("id")])
                     st.rerun()
 
@@ -4411,5 +4610,100 @@ with aba7:
                     st.error(f"Falha na restauração: {exc}")
     else:
         st.info("O histórico aparecerá depois do primeiro backup.")
+
+
+
+    st.divider()
+    st.header("🏭 Núcleo Profissional")
+    st.caption("Migrações seguras, auditoria, lixeira e diagnóstico para manter o FestManager em produção sem perder dados.")
+    tab_diag, tab_audit, tab_lix, tab_update = st.tabs(["🩺 Saúde do sistema", "🧾 Auditoria", "🗑️ Lixeira", "🔄 Atualização segura"])
+
+    with tab_diag:
+        diag = diagnostico_sistema()
+        d1, d2, d3, d4 = st.columns(4)
+        d1.metric("Supabase", "🟢 Online" if diag["supabase_ok"] else "🟡 Contingência")
+        d2.metric("Integridade", "🟢 OK" if diag["integridade_ok"] else "🔴 Atenção")
+        d3.metric("Backup", "🟢 Atual" if diag["backup_ok"] else "🟡 Verificar")
+        d4.metric("Estrutura de dados", f"v{diag['schema_version']}")
+        st.caption(diag["supabase_mensagem"])
+        if diag["backup_idade_horas"] is not None:
+            st.caption(f"Último backup há aproximadamente {diag['backup_idade_horas']:.1f} hora(s).")
+        if diag["problemas"]:
+            for problema in diag["problemas"]:
+                st.error(problema)
+        else:
+            st.success("Estruturas principais válidas.")
+        st.write(f"Registros de auditoria: **{diag['auditorias']}** • Itens recuperáveis na lixeira: **{diag['lixeira']}**")
+        if st.button("🔄 Executar diagnóstico novamente", key="health_refresh", use_container_width=True):
+            st.rerun()
+
+    with tab_audit:
+        auditoria = carregar_auditoria()
+        if not auditoria:
+            st.info("A auditoria começará a registrar backups, migrações, exclusões e restaurações.")
+        else:
+            filtro_acao = st.text_input("Filtrar auditoria", placeholder="Usuário, ação, entidade ou identificador", key="audit_filter").strip().casefold()
+            exibidos = []
+            for reg in auditoria:
+                texto = " ".join(str(reg.get(k, "")) for k in ["usuario", "acao", "entidade", "identificador", "resultado"]).casefold()
+                if not filtro_acao or filtro_acao in texto:
+                    exibidos.append(reg)
+            linhas = []
+            for reg in exibidos[:500]:
+                try:
+                    data_fmt = datetime.fromisoformat(reg.get("data_hora", "")).astimezone(agora_local().tzinfo).strftime("%d/%m/%Y %H:%M:%S")
+                except Exception:
+                    data_fmt = reg.get("data_hora", "")
+                linhas.append({"Data": data_fmt, "Usuário": reg.get("usuario"), "Ação": reg.get("acao"), "Entidade": reg.get("entidade"), "Identificador": reg.get("identificador"), "Resultado": reg.get("resultado")})
+            st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
+            st.download_button("⬇️ Exportar auditoria JSON", json.dumps(auditoria, ensure_ascii=False, indent=2), file_name=f"auditoria_festmanager_{hoje_local().isoformat()}.json", mime="application/json", use_container_width=True)
+
+    with tab_lix:
+        lixeira = carregar_lixeira()
+        if not lixeira:
+            st.success("A lixeira está vazia.")
+        else:
+            st.warning(f"{len(lixeira)} item(ns) podem ser restaurados. A remoção definitiva exige confirmação.")
+            for reg in lixeira[:200]:
+                try:
+                    dt_fmt = datetime.fromisoformat(reg.get("excluido_em", "")).astimezone(agora_local().tzinfo).strftime("%d/%m/%Y %H:%M")
+                except Exception:
+                    dt_fmt = reg.get("excluido_em", "")
+                with st.expander(f"{reg.get('tipo')} — {reg.get('identificador') or 'sem identificação'} — {dt_fmt}"):
+                    st.caption(f"Movido por: {reg.get('excluido_por', 'Não informado')}")
+                    st.json(reg.get("item", {}), expanded=False)
+                    r1, r2 = st.columns(2)
+                    if r1.button("♻️ Restaurar", key=f"lix_restore_{reg.get('id_lixeira')}", use_container_width=True):
+                        try:
+                            restaurar_item_lixeira(reg)
+                            st.success("Item restaurado.")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Não foi possível restaurar: {exc}")
+                    confirm = r2.checkbox("Confirmar remoção definitiva", key=f"lix_confirm_{reg.get('id_lixeira')}")
+                    if st.button("❌ Remover definitivamente", key=f"lix_purge_{reg.get('id_lixeira')}", disabled=not confirm, use_container_width=True):
+                        remover_da_lixeira(reg.get("id_lixeira"))
+                        registrar_auditoria("Remover definitivamente", reg.get("tipo", "Item"), reg.get("identificador", ""))
+                        st.rerun()
+
+    with tab_update:
+        st.info("Antes de publicar uma nova versão, gere um ponto de restauração e anote as contagens. O pacote de atualização deve conter somente código e migrações, nunca os dados da empresa.")
+        diag_pre = diagnostico_sistema()
+        st.json({
+            "versao_app": VERSAO_APP,
+            "versao_dados": VERSAO_DADOS,
+            "contagens_antes_atualizacao": diag_pre["contagens"],
+            "supabase": diag_pre["supabase_mensagem"],
+            "integridade": "OK" if diag_pre["integridade_ok"] else diag_pre["problemas"],
+        }, expanded=False)
+        if st.button("🛡️ Preparar atualização segura", type="primary", key="preparar_update_seguro", use_container_width=True):
+            try:
+                bk = criar_backup_completo(tipo="antes_atualizacao", protegido=True, motivo=f"Ponto de restauração antes de atualizar a partir da versão {VERSAO_APP}")
+                registrar_auditoria("Preparar atualização", "Sistema", VERSAO_APP, {"backup_id": bk.get("backup_id"), "contagens": bk.get("contagens")})
+                st.success(f"Atualização preparada. Backup protegido: {bk.get('backup_id')}")
+                st.download_button("⬇️ Baixar ponto de restauração", data=backup_para_zip_bytes(bk), file_name=f"antes_atualizacao_{bk.get('backup_id')}.zip", mime="application/zip", use_container_width=True)
+            except Exception as exc:
+                st.error(f"Falha ao preparar atualização: {exc}")
+
 
     st.caption(f"Versão do aplicativo: {VERSAO_APP} • Versão dos dados: {VERSAO_DADOS}")
