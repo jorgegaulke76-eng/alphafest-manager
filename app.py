@@ -8,16 +8,74 @@ import urllib.parse
 from urllib.parse import quote
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
+from pathlib import Path
 import altair as alt
 import base64
 
-from cloud_db import (
-    connection_test,
-    load_document,
-    save_document,
-    upload_catalog_image,
-    upload_library_file,
-)
+# Importação resiliente da camada de dados.
+# Evita que uma atualização parcial de cloud_db.py derrube todo o aplicativo.
+try:
+    import cloud_db as _cloud_db
+except Exception as _cloud_import_error:
+    _cloud_db = None
+else:
+    _cloud_import_error = None
+
+def _read_json_fallback(path, default):
+    try:
+        with open(path, "r", encoding="utf-8") as arquivo:
+            return json.load(arquivo)
+    except Exception:
+        return default
+
+def _write_json_fallback(path, value):
+    try:
+        with open(path, "w", encoding="utf-8") as arquivo:
+            json.dump(value, arquivo, ensure_ascii=False, indent=4)
+        return True
+    except Exception:
+        return False
+
+def load_document(document_key, local_path, default):
+    func = getattr(_cloud_db, "load_document", None) if _cloud_db else None
+    return func(document_key, local_path, default) if callable(func) else _read_json_fallback(local_path, default)
+
+def save_document(document_key, value, local_path):
+    func = getattr(_cloud_db, "save_document", None) if _cloud_db else None
+    return func(document_key, value, local_path) if callable(func) else _write_json_fallback(local_path, value)
+
+def connection_test():
+    func = getattr(_cloud_db, "connection_test", None) if _cloud_db else None
+    if callable(func):
+        return func()
+    detalhe = f" ({type(_cloud_import_error).__name__})" if _cloud_import_error else ""
+    return False, "Camada online indisponível" + detalhe + " — usando arquivos JSON locais."
+
+def upload_catalog_image(upload, local_upload_dir="uploads"):
+    func = getattr(_cloud_db, "upload_catalog_image", None) if _cloud_db else None
+    if callable(func):
+        return func(upload, local_upload_dir)
+    if upload is None:
+        return ""
+    Path(local_upload_dir).mkdir(parents=True, exist_ok=True)
+    nome = re.sub(r"[^A-Za-z0-9._-]", "_", str(upload.name))
+    destino = Path(local_upload_dir) / f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{nome}"
+    destino.write_bytes(bytes(upload.getbuffer()))
+    return str(destino).replace("\\", "/")
+
+def upload_library_file(upload, produto_nome="produto", local_upload_dir="biblioteca_uploads"):
+    func = getattr(_cloud_db, "upload_library_file", None) if _cloud_db else None
+    if callable(func):
+        return func(upload, produto_nome=produto_nome, local_upload_dir=local_upload_dir)
+    if upload is None:
+        return ""
+    produto_seguro = re.sub(r"[^A-Za-z0-9._-]", "_", str(produto_nome).strip()) or "produto"
+    pasta = Path(local_upload_dir) / produto_seguro
+    pasta.mkdir(parents=True, exist_ok=True)
+    nome = re.sub(r"[^A-Za-z0-9._-]", "_", str(upload.name))
+    destino = pasta / f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{nome}"
+    destino.write_bytes(bytes(upload.getbuffer()))
+    return str(destino).replace("\\", "/")
 
 # --- CONFIGURAÇÃO ---
 st.set_page_config(page_title="Orçamento Alphafest", layout="wide")
@@ -26,7 +84,7 @@ ARQUIVO_CATALOGO = "catalogo_db.json"
 ARQUIVO_CLIENTES = "clientes_db.json"
 ARQUIVO_PRODUCAO = "producao_db.json"
 ARQUIVO_EMPRESA = "empresa_config.json"
-VERSAO_APP = "3.6.1"
+VERSAO_APP = "3.6.2"
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 

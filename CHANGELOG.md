@@ -1,3 +1,13 @@
+# CHANGELOG — FestManager
+
+## 3.6.2 — Correção de inicialização
+- Importação resiliente da camada `cloud_db.py`, evitando falha total em atualizações parciais.
+- Fallback automático para JSON local quando uma função online estiver ausente ou indisponível.
+- Correção da importação de `Path`, necessária para arquivos e artes.
+- Mantido o fuso `America/Sao_Paulo` em todas as datas exibidas.
+- `cloud_db.py` agora declara explicitamente as funções públicas usadas pelo aplicativo.
+- Biblioteca de arquivos, artes e fotos preservada.
+
 # Versão 3.6.1 — Estabilidade e Memória do Produto
 
 - Corrige datas e saudações para o fuso configurável `America/Sao_Paulo`.
