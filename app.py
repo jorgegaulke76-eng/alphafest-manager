@@ -142,7 +142,7 @@ ARQUIVO_AUDITORIA = "auditoria_db.json"
 ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
-VERSAO_APP = "5.2.0"
+VERSAO_APP = "5.3.0"
 VERSAO_DADOS = 3
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
@@ -186,6 +186,8 @@ def registro_eh_de_hoje(valor):
 # --- INICIALIZAÇÃO DE SEGURANÇA ---
 if "form_key" not in st.session_state: st.session_state.form_key = 0
 if "temp_itens" not in st.session_state: st.session_state.temp_itens = []
+if "jornada_itens" not in st.session_state: st.session_state.jornada_itens = []
+if "jornada_rascunho_id" not in st.session_state: st.session_state.jornada_rascunho_id = ""
 
 # --- ACESSO OPCIONAL POR SENHA ---
 def verificar_acesso():
@@ -2403,6 +2405,228 @@ def texto_busca_projeto(projeto):
 
 
 
+
+def _texto_especificacoes_jornada(dados):
+    partes = [
+        f"Necessidade: {dados.get('necessidade', '').strip()}" if dados.get('necessidade', '').strip() else "",
+        f"Ocasião: {dados.get('ocasiao', '').strip()}" if dados.get('ocasiao', '').strip() else "",
+        f"Tema: {dados.get('tema', '').strip()}" if dados.get('tema', '').strip() else "",
+        f"Quantidade/necessidade: {dados.get('quantidade_livre', '').strip()}" if dados.get('quantidade_livre', '').strip() else "",
+        f"Prazo desejado: {dados.get('prazo_texto', '').strip()}" if dados.get('prazo_texto', '').strip() else "",
+        f"Faixa de orçamento: {dados.get('limite_orcamento', '').strip()}" if dados.get('limite_orcamento', '').strip() else "",
+        f"Detalhes: {dados.get('detalhes', '').strip()}" if dados.get('detalhes', '').strip() else "",
+        f"Observações: {dados.get('observacoes', '').strip()}" if dados.get('observacoes', '').strip() else "",
+    ]
+    return " | ".join(x for x in partes if x)
+
+
+def _salvar_rascunho_jornada(dados):
+    projetos = carregar_projetos()
+    pid = st.session_state.get("jornada_rascunho_id") or f"PRJ-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
+    existente = next((p for p in projetos if p.get("id") == pid), {})
+    projeto = {
+        **existente,
+        "id": pid,
+        "tipo": "jornada_atendimento",
+        "origem": "Jornada de Atendimento",
+        "numero_proposta": existente.get("numero_proposta", ""),
+        "cliente_nome": dados.get("cliente", "").strip(),
+        "whatsapp": dados.get("whatsapp", "").strip(),
+        "ocasiao": dados.get("ocasiao", "").strip(),
+        "tema": dados.get("tema", "").strip(),
+        "necessidade": dados.get("necessidade", "").strip(),
+        "quantidade_livre": dados.get("quantidade_livre", "").strip(),
+        "prazo_texto": dados.get("prazo_texto", "").strip(),
+        "limite_orcamento": dados.get("limite_orcamento", "").strip(),
+        "produtos": [str(i.get("produto", "")).strip() for i in st.session_state.jornada_itens if str(i.get("produto", "")).strip()],
+        "detalhes": dados.get("detalhes", "").strip(),
+        "observacoes": dados.get("observacoes", "").strip(),
+        "arquivos": existente.get("arquivos", []),
+        "modelo": existente.get("modelo", False),
+        "favorito": existente.get("favorito", False),
+        "status": "Briefing",
+        "timeline": existente.get("timeline", []) if isinstance(existente.get("timeline", []), list) else [],
+        "criado_em": existente.get("criado_em", agora_local().strftime("%d/%m/%Y %H:%M")),
+        "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
+    }
+    registrar_evento_projeto(projeto, "Rascunho da jornada salvo")
+    atualizar_projeto(projeto)
+    st.session_state.jornada_rascunho_id = pid
+    return projeto
+
+
+def renderizar_jornada_atendimento():
+    """Fluxo único: necessidade -> itens -> proposta, sem trocar de módulo."""
+    st.markdown("## 🚀 Jornada de Atendimento")
+    st.caption("Registre a necessidade, monte a solução e gere a proposta na mesma tela. Nada precisa ser digitado duas vezes.")
+
+    progresso = 0
+    if st.session_state.get("jornada_cliente") or st.session_state.get("jornada_whatsapp"):
+        progresso += 20
+    if st.session_state.get("jornada_necessidade"):
+        progresso += 30
+    if st.session_state.jornada_itens:
+        progresso += 30
+    if st.session_state.get("jornada_entrega"):
+        progresso += 20
+    st.progress(min(progresso, 100) / 100, text=f"Progresso do atendimento: {min(progresso, 100)}%")
+
+    st.markdown("### 1. Cliente e necessidade")
+    c1, c2 = st.columns(2)
+    cliente = c1.text_input("Cliente / identificação", key="jornada_cliente", placeholder="Ex.: Maria, Escola ABC, Arena Beach")
+    whatsapp = c2.text_input("WhatsApp", key="jornada_whatsapp", placeholder="Ex.: 11999999999")
+    necessidade = st.text_area(
+        "O que o cliente precisa?",
+        key="jornada_necessidade",
+        placeholder="Digite como o cliente falou no WhatsApp.",
+        height=110,
+    )
+    c3, c4, c5 = st.columns(3)
+    ocasiao = c3.text_input("Ocasião", key="jornada_ocasiao", placeholder="Aniversário, empresa, escola...")
+    tema = c4.text_input("Tema / personagem", key="jornada_tema", placeholder="Stitch, futebol, marca...")
+    quantidade_livre = c5.text_input("Quantidade / necessidade", key="jornada_quantidade", placeholder="1 unidade, 30 pessoas...")
+    c6, c7 = st.columns(2)
+    prazo_texto = c6.text_input("Prazo desejado", key="jornada_prazo", placeholder="sábado, 15/08, urgente...")
+    limite_orcamento = c7.text_input("Faixa de orçamento", key="jornada_limite", placeholder="até R$ 150...")
+    detalhes = st.text_area("Materiais, cores, tamanhos, acabamentos e acessórios", key="jornada_detalhes", height=80)
+    observacoes = st.text_area("Observações internas", key="jornada_observacoes", height=70)
+
+    dados_jornada = {
+        "cliente": cliente, "whatsapp": whatsapp, "necessidade": necessidade,
+        "ocasiao": ocasiao, "tema": tema, "quantidade_livre": quantidade_livre,
+        "prazo_texto": prazo_texto, "limite_orcamento": limite_orcamento,
+        "detalhes": detalhes, "observacoes": observacoes,
+    }
+
+    salvar_col, limpar_col = st.columns([1, 1])
+    if salvar_col.button("💾 Salvar rascunho", use_container_width=True):
+        if not necessidade.strip():
+            st.warning("Descreva o que o cliente precisa antes de salvar.")
+        else:
+            _salvar_rascunho_jornada(dados_jornada)
+            st.success("Rascunho salvo na Memória da Empresa.")
+    if limpar_col.button("🧹 Limpar jornada", use_container_width=True):
+        for chave in [
+            "jornada_cliente", "jornada_whatsapp", "jornada_necessidade", "jornada_ocasiao",
+            "jornada_tema", "jornada_quantidade", "jornada_prazo", "jornada_limite",
+            "jornada_detalhes", "jornada_observacoes", "jornada_entrega", "jornada_desconto",
+            "jornada_prazo_prod", "jornada_frete", "jornada_validade",
+        ]:
+            st.session_state.pop(chave, None)
+        st.session_state.jornada_itens = []
+        st.session_state.jornada_rascunho_id = ""
+        st.rerun()
+
+    st.divider()
+    st.markdown("### 2. Monte a solução")
+    catalogo = carregar_catalogo()
+    opcoes_catalogo = sorted({str(p.get("nome", "")).strip() for p in catalogo if str(p.get("nome", "")).strip()})
+    i1, i2, i3 = st.columns([3, 1, 1])
+    produto_item = i1.text_input("Produto / solução", key="jornada_produto", placeholder="Digite livremente ou escolha abaixo")
+    quantidade_item = i2.number_input("Qtd.", min_value=1, value=1, key="jornada_qtd")
+    valor_item = i3.number_input("Valor unitário", min_value=0.0, step=0.5, key="jornada_valor")
+    escolha_catalogo = st.selectbox("Ou selecione do catálogo", [""] + opcoes_catalogo, key="jornada_catalogo")
+    especificacao_item = st.text_area("Detalhes deste item", key="jornada_especificacao", height=70)
+    if st.button("➕ Adicionar à solução", type="primary", use_container_width=True):
+        nome_item = produto_item.strip() or escolha_catalogo.strip()
+        if not nome_item:
+            st.warning("Informe um produto ou solução.")
+        else:
+            preco = valor_item
+            if preco <= 0 and escolha_catalogo:
+                prod_cat = next((p for p in catalogo if str(p.get("nome", "")).strip() == escolha_catalogo), None)
+                if prod_cat:
+                    preco = valor_float(prod_cat.get("preco", prod_cat.get("valor", 0)))
+            geral = _texto_especificacoes_jornada(dados_jornada)
+            combinado = " | ".join(x for x in [geral, especificacao_item.strip()] if x)
+            st.session_state.jornada_itens.append({
+                "produto": nome_item,
+                "especificacoes": combinado,
+                "quantidade": quantidade_item,
+                "valor_unitario": preco,
+            })
+            st.session_state.pop("jornada_produto", None)
+            st.session_state.pop("jornada_catalogo", None)
+            st.session_state.pop("jornada_especificacao", None)
+            st.rerun()
+
+    if st.session_state.jornada_itens:
+        for idx, item in enumerate(st.session_state.jornada_itens):
+            cinfo, crem = st.columns([8, 1])
+            cinfo.write(f"**{idx + 1}. {item.get('produto')}** — {item.get('quantidade')} × R$ {valor_float(item.get('valor_unitario')):,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            cinfo.caption(item.get("especificacoes", ""))
+            if crem.button("🗑️", key=f"jornada_remover_{idx}"):
+                st.session_state.jornada_itens.pop(idx)
+                st.rerun()
+    else:
+        st.info("Adicione pelo menos um item para gerar a proposta.")
+
+    st.divider()
+    st.markdown("### 3. Finalize a proposta")
+    f1, f2, f3 = st.columns(3)
+    desconto = f1.number_input("Desconto (R$)", min_value=0.0, step=0.5, key="jornada_desconto")
+    data_entrega = f2.date_input("Data de entrega", key="jornada_entrega")
+    prazo_prod = f3.text_input("Prazo de produção", key="jornada_prazo_prod")
+    f4, f5 = st.columns(2)
+    frete = f4.text_input("Frete / entrega", key="jornada_frete")
+    validade = f5.text_input("Validade da proposta", key="jornada_validade")
+
+    subtotal = sum(valor_float(i.get("quantidade")) * valor_float(i.get("valor_unitario")) for i in st.session_state.jornada_itens)
+    total = max(subtotal - desconto, 0.0)
+    st.metric("Valor total", f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+    if st.button("🚀 Criar projeto e proposta", type="primary", use_container_width=True, disabled=not bool(st.session_state.jornada_itens)):
+        if not necessidade.strip():
+            st.warning("Descreva a necessidade do cliente.")
+            return
+        projeto = _salvar_rascunho_jornada(dados_jornada)
+        numero = f"PROP-{agora_local().strftime('%Y%m%d%H%M%S')}"
+        proposta = {
+            "numero_proposta": numero,
+            "data_geracao": agora_local().strftime("%d/%m/%Y"),
+            "data_entrega": data_entrega.strftime("%d/%m/%Y"),
+            "cliente_nome": cliente.strip(),
+            "documento": "",
+            "whatsapp": whatsapp.strip(),
+            "cliente_cpf_cnpj": "",
+            "cliente_wa": whatsapp.strip(),
+            "itens": list(st.session_state.jornada_itens),
+            "subtotal": subtotal,
+            "desconto": desconto,
+            "desconto_valor": desconto,
+            "valor_total": total,
+            "prazo_dias": prazo_prod,
+            "frete_tipo": frete,
+            "validade_dias": validade,
+            "pago": False,
+            "entregue": False,
+            "aprovado": False,
+            "timeline": [],
+            "atendimento_id": "",
+            "projeto_id": projeto.get("id", ""),
+        }
+        registrar_evento_proposta(proposta, "Proposta criada pela Jornada de Atendimento")
+        historico = carregar_historico()
+        historico.insert(0, proposta)
+        salvar_historico_completo(historico)
+        projeto["numero_proposta"] = numero
+        projeto["status"] = "Orçamento criado"
+        registrar_evento_projeto(projeto, f"Proposta {numero} criada na Jornada de Atendimento")
+        atualizar_projeto(projeto)
+        registrar_auditoria("Criar proposta", "Proposta", numero, {"origem": "Jornada de Atendimento", "cliente": cliente.strip()})
+        st.success(f"Proposta {numero} criada com sucesso. O projeto e a linha do tempo foram vinculados.")
+        st.session_state.alerta_proposta_numero = numero
+        for chave in [
+            "jornada_cliente", "jornada_whatsapp", "jornada_necessidade", "jornada_ocasiao",
+            "jornada_tema", "jornada_quantidade", "jornada_prazo", "jornada_limite",
+            "jornada_detalhes", "jornada_observacoes", "jornada_entrega", "jornada_desconto",
+            "jornada_prazo_prod", "jornada_frete", "jornada_validade",
+        ]:
+            st.session_state.pop(chave, None)
+        st.session_state.jornada_itens = []
+        st.session_state.jornada_rascunho_id = ""
+
+
 def renderizar_assistente_projeto_personalizado():
     """Cria um briefing livre, sem quantidade mínima e sem limitar combinações."""
     st.markdown("## 🧩 Projeto Personalizado")
@@ -3490,9 +3714,10 @@ _dados_atendimento_badge = carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
 _rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Atendimento"
 
-aba0, aba_atendimento, aba_projeto, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
+aba0, aba_atendimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
     _rotulo_atendimento,
+    "🚀 Jornada",
     "🧩 Projeto Personalizado",
     "➕ Novo Orçamento",
     "📋 Histórico",
@@ -3971,6 +4196,9 @@ with aba_atendimento:
             st.success("Configurações salvas.")
             st.rerun()
 
+
+with aba_jornada:
+    renderizar_jornada_atendimento()
 
 with aba_projeto:
     renderizar_assistente_projeto_personalizado()

@@ -218,3 +218,11 @@ hangelog
 - Fluxo Atendimento → Projeto → Orçamento → Produção.
 - Aprovação explícita de propostas.
 - Próxima ação e linha do tempo integradas.
+
+## 5.3.0 — Jornada Única de Atendimento
+- Adicionada a aba **Jornada** para conduzir cliente, necessidade, solução e proposta em uma única tela.
+- Incluído indicador de progresso do atendimento.
+- Incluído salvamento de rascunho na Memória da Empresa.
+- Incluída criação conjunta e vinculada de projeto e proposta.
+- Mantidos os módulos anteriores para compatibilidade e operação gradual.
+- Nenhuma migração destrutiva e nenhum arquivo de dados incluído.
