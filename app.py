@@ -141,7 +141,7 @@ ARQUIVO_BACKUP_CONFIG = "backup_config.json"
 ARQUIVO_AUDITORIA = "auditoria_db.json"
 ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
-VERSAO_APP = "4.2.1"
+VERSAO_APP = "4.3.0"
 VERSAO_DADOS = 2
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
@@ -2275,6 +2275,140 @@ def slug_html(texto):
     return texto.strip("_") or "categoria"
 
 
+def pesquisar_global(termo, limite_por_tipo=8):
+    """Pesquisa sob demanda em clientes, propostas, catálogo, atendimentos e projetos.
+
+    A função só deve ser chamada quando o usuário digitar ao menos dois caracteres,
+    evitando consultas desnecessárias ao Supabase durante os reruns do Streamlit.
+    """
+    termo = str(termo or "").strip().lower()
+    resultado = {"clientes": [], "propostas": [], "produtos": [], "atendimentos": [], "projetos": []}
+    if len(termo) < 2:
+        return resultado
+
+    for cliente in carregar_clientes():
+        base = " ".join(str(cliente.get(c, "")) for c in [
+            "nome", "documento", "whatsapp", "email", "cidade", "observacoes",
+            "segmentos", "interesses", "campanhas_interesse"
+        ]).lower()
+        if termo in base:
+            resultado["clientes"].append(cliente)
+            if len(resultado["clientes"]) >= limite_por_tipo:
+                break
+
+    for proposta in carregar_historico():
+        if termo in normalizar_texto_busca(proposta):
+            resultado["propostas"].append(proposta)
+            if len(resultado["propostas"]) >= limite_por_tipo:
+                break
+
+    for indice, produto in enumerate(carregar_catalogo()):
+        base = " ".join(str(produto.get(c, "")) for c in [
+            "Nome", "Categoria", "Subcategoria", "CodigoInterno", "Descricao",
+            "DescricaoCurta", "DescricaoCompleta", "PalavrasChave", "Tags"
+        ]).lower()
+        if termo in base:
+            registro = dict(produto)
+            registro["_indice_catalogo"] = indice
+            resultado["produtos"].append(registro)
+            if len(resultado["produtos"]) >= limite_por_tipo:
+                break
+
+    dados_at = carregar_atendimentos()
+    for atendimento in dados_at.get("itens", []):
+        base = " ".join(str(atendimento.get(c, "")) for c in [
+            "cliente", "telefone", "mensagem", "status", "assunto", "responsavel"
+        ]).lower()
+        if termo in base:
+            resultado["atendimentos"].append(atendimento)
+            if len(resultado["atendimentos"]) >= limite_por_tipo:
+                break
+
+    for projeto in carregar_projetos():
+        arquivos = projeto.get("arquivos", []) if isinstance(projeto.get("arquivos"), list) else []
+        partes = [
+            projeto.get("cliente", ""), projeto.get("tema", ""), projeto.get("produto", ""),
+            projeto.get("numero_proposta", ""), projeto.get("observacoes", "")
+        ]
+        for arquivo in arquivos:
+            partes.extend([arquivo.get("nome", ""), arquivo.get("descricao", ""), arquivo.get("tags", "")])
+        if termo in " ".join(map(str, partes)).lower():
+            resultado["projetos"].append(projeto)
+            if len(resultado["projetos"]) >= limite_por_tipo:
+                break
+    return resultado
+
+
+def montar_fila_operacional(historico, tarefas, atendimentos, limite=10):
+    """Cria uma fila única de próximas ações, ordenada por urgência."""
+    hoje = hoje_local()
+    itens = []
+    config_at = atendimentos.get("config", {}) if isinstance(atendimentos, dict) else {}
+    for atendimento in atendimentos.get("itens", []) if isinstance(atendimentos, dict) else []:
+        if atendimento.get("status") in ("Entregue", "Pós-venda", "Arquivado"):
+            continue
+        nivel = faixa_sla_atendimento(atendimento, config_at)[2]
+        minutos = minutos_aguardando(atendimento)
+        itens.append({
+            "peso": 500 + nivel * 100 + min(minutos, 180),
+            "tipo": "Atendimento",
+            "titulo": atendimento.get("cliente", "Contato"),
+            "detalhe": f"{atendimento.get('status', 'Novo contato')} · {tempo_aguardando_formatado(atendimento)}",
+            "acao": proxima_acao_atendimento(atendimento),
+            "referencia": atendimento.get("id", ""),
+        })
+    for proposta in historico:
+        if proposta.get("entregue", False):
+            continue
+        entrega = data_entrega_segura(proposta.get("data_entrega"))
+        if entrega:
+            dias = (entrega - hoje).days
+            if dias < 0:
+                peso = 900 + min(abs(dias), 30)
+                detalhe = f"Atrasado há {abs(dias)} dia(s)"
+            elif dias == 0:
+                peso = 800
+                detalhe = "Entrega hoje"
+            elif dias <= 2:
+                peso = 650 - dias
+                detalhe = f"Entrega em {dias} dia(s)"
+            else:
+                continue
+            itens.append({
+                "peso": peso,
+                "tipo": "Pedido",
+                "titulo": f"{proposta.get('numero_proposta', '—')} · {proposta.get('cliente_nome', 'Cliente')}",
+                "detalhe": detalhe,
+                "acao": "Revisar pedido e confirmar próxima etapa",
+                "referencia": proposta.get("numero_proposta", ""),
+            })
+    for tarefa in tarefas:
+        if not tarefa.get("ativa", True):
+            continue
+        status = normalizar_status_fluxo(tarefa.get("status"))
+        mapa = {
+            "Aguardando aprovação": (620, "Cobrar ou registrar aprovação da arte"),
+            "Arte aprovada": (610, "Iniciar impressão/produção"),
+            "Pronto para produzir": (600, "Iniciar produção"),
+            "Em produção": (520, "Continuar produção"),
+            "Montagem/acabamento": (540, "Concluir montagem e conferência"),
+            "Pronto": (700, "Avisar cliente e organizar entrega"),
+        }
+        if status not in mapa:
+            continue
+        peso, acao = mapa[status]
+        itens.append({
+            "peso": peso,
+            "tipo": "Produção",
+            "titulo": f"{tarefa.get('numero_proposta', '—')} · {tarefa.get('cliente_nome', 'Cliente')}",
+            "detalhe": status,
+            "acao": acao,
+            "referencia": tarefa.get("numero_proposta", ""),
+        })
+    itens.sort(key=lambda x: x.get("peso", 0), reverse=True)
+    return itens[:limite]
+
+
 def formatar_preco_catalogo(valor):
     texto = str(valor or "").strip().replace("R$", "").strip()
     try:
@@ -2747,6 +2881,44 @@ with st.sidebar:
         )
         st.caption("Acesso administrativo completo")
 
+    st.divider()
+    st.markdown("**🔎 Pesquisa global**")
+    termo_global_sidebar = st.text_input(
+        "Cliente, telefone, produto, pedido, tema ou arquivo",
+        key="pesquisa_global_sidebar",
+        placeholder="Digite pelo menos 2 caracteres",
+        label_visibility="collapsed",
+    ).strip()
+    if len(termo_global_sidebar) >= 2:
+        resultados_globais = pesquisar_global(termo_global_sidebar, limite_por_tipo=5)
+        total_global = sum(len(v) for v in resultados_globais.values())
+        st.caption(f"{total_global} resultado(s) encontrado(s)")
+        with st.expander("Ver resultados", expanded=True):
+            for cliente in resultados_globais["clientes"]:
+                st.write(f"👤 **{cliente.get('nome', 'Cliente')}** · {cliente.get('whatsapp') or 'sem WhatsApp'}")
+                a, b = st.columns(2)
+                if a.button("Orçamento", key=f"gcli_orc_{cliente.get('id')}", use_container_width=True):
+                    carregar_cliente_no_orcamento(cliente)
+                    st.success("Cliente preparado. Abra Novo Orçamento.")
+                telefone = re.sub(r"\D", "", str(cliente.get("whatsapp", "")))
+                numero = telefone if telefone.startswith("55") else f"55{telefone}"
+                if telefone:
+                    b.link_button("WhatsApp", f"https://wa.me/{numero}", use_container_width=True)
+            for proposta in resultados_globais["propostas"]:
+                st.write(f"📄 **{proposta.get('numero_proposta', '—')}** · {proposta.get('cliente_nome', 'Cliente')}")
+                if st.button("Selecionar proposta", key=f"gprop_{proposta.get('numero_proposta')}", use_container_width=True):
+                    st.session_state.alerta_proposta_numero = proposta.get("numero_proposta")
+                    st.success("Proposta selecionada. Abra Histórico.")
+            for produto in resultados_globais["produtos"]:
+                st.write(f"📦 **{produto.get('Nome', 'Produto')}** · {produto.get('Categoria', 'Sem categoria')}")
+                if st.button("Filtrar no catálogo", key=f"gprod_{produto.get('_indice_catalogo')}", use_container_width=True):
+                    st.session_state["pesquisa_catalogo"] = produto.get("Nome", "")
+                    st.success("Filtro preparado. Abra Catálogo → Produtos cadastrados.")
+            for atendimento in resultados_globais["atendimentos"]:
+                st.write(f"📥 **{atendimento.get('cliente', 'Contato')}** · {atendimento.get('status', 'Novo contato')}")
+            for projeto in resultados_globais["projetos"]:
+                st.write(f"🧠 **{projeto.get('tema') or projeto.get('produto') or 'Projeto'}** · {projeto.get('cliente', 'Cliente')}")
+
     h_atual = carregar_historico()
     st.download_button("📥 BAIXAR BACKUP", data=json.dumps(h_atual, ensure_ascii=False, indent=4), file_name="backup_historico.json", mime="application/json", type="primary", use_container_width=True)
     st.download_button("📦 BACKUP DO CATÁLOGO", data=json.dumps(carregar_catalogo(), ensure_ascii=False, indent=4), file_name="backup_catalogo.json", mime="application/json", use_container_width=True)
@@ -3065,14 +3237,61 @@ with aba0:
         st.info("Nenhuma campanha próxima. Use o Calendário Comercial para cadastrar novas oportunidades.")
 
     st.divider()
-    st.subheader("🔎 Pesquisa rápida")
-    busca_central = st.text_input("Cliente, telefone, pedido, produto ou tema", key="busca_central_dia").strip().lower()
-    if busca_central:
-        resultados = [p for p in historico_central if busca_central in normalizar_texto_busca(p)]
-        st.caption(f"{len(resultados)} resultado(s)")
-        for p in resultados[:10]:
-            _, _, total_resultado = calcular_valores_proposta(p)
-            st.write(f"• **{p.get('numero_proposta', '—')} — {p.get('cliente_nome', 'Cliente')}** · {p.get('data_entrega', 'Sem data')} · R$ {total_resultado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    st.subheader("📌 Fila operacional")
+    fila_operacional = montar_fila_operacional(
+        historico_central,
+        tarefas_ativas_central,
+        dados_atendimento_central,
+        limite=10,
+    )
+    if fila_operacional:
+        for posicao, item_fila in enumerate(fila_operacional, start=1):
+            icone = "📥" if item_fila["tipo"] == "Atendimento" else "📦" if item_fila["tipo"] == "Pedido" else "⚙️"
+            with st.container(border=True):
+                fc1, fc2 = st.columns([5, 2])
+                fc1.markdown(f"**{posicao}. {icone} {html.escape(str(item_fila['titulo']))}**")
+                fc1.caption(f"{item_fila['tipo']} · {item_fila['detalhe']}")
+                fc2.info(item_fila["acao"])
+    else:
+        st.success("Fila operacional vazia. Nenhuma ação pendente encontrada.")
+
+    st.divider()
+    st.subheader("🔎 Pesquisa global")
+    busca_central = st.text_input(
+        "Cliente, telefone, pedido, produto, tema ou arquivo",
+        key="busca_central_dia",
+        placeholder="Digite pelo menos 2 caracteres",
+    ).strip()
+    if len(busca_central) >= 2:
+        resultados = pesquisar_global(busca_central, limite_por_tipo=10)
+        total_resultados = sum(len(v) for v in resultados.values())
+        st.caption(f"{total_resultados} resultado(s) em todos os módulos")
+        rg1, rg2 = st.columns(2)
+        with rg1:
+            if resultados["clientes"]:
+                st.markdown("#### 👥 Clientes")
+                for cli in resultados["clientes"]:
+                    st.write(f"• **{cli.get('nome', 'Cliente')}** · {cli.get('whatsapp') or 'sem WhatsApp'}")
+            if resultados["produtos"]:
+                st.markdown("#### 📦 Produtos")
+                for prod in resultados["produtos"]:
+                    st.write(f"• **{prod.get('Nome', 'Produto')}** · {prod.get('Categoria', 'Sem categoria')}")
+            if resultados["projetos"]:
+                st.markdown("#### 🧠 Projetos e arquivos")
+                for proj in resultados["projetos"]:
+                    st.write(f"• **{proj.get('tema') or proj.get('produto') or 'Projeto'}** · {proj.get('cliente', 'Cliente')}")
+        with rg2:
+            if resultados["propostas"]:
+                st.markdown("#### 📋 Propostas")
+                for prop in resultados["propostas"]:
+                    _, _, total_resultado = calcular_valores_proposta(prop)
+                    st.write(f"• **{prop.get('numero_proposta', '—')} — {prop.get('cliente_nome', 'Cliente')}** · R$ {total_resultado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+            if resultados["atendimentos"]:
+                st.markdown("#### 📥 Atendimentos")
+                for at in resultados["atendimentos"]:
+                    st.write(f"• **{at.get('cliente', 'Contato')}** · {at.get('status', 'Novo contato')}")
+        if not total_resultados:
+            st.info("Nenhum resultado encontrado.")
 
 with aba_atendimento:
     st.header("📥 Central de Atendimento")

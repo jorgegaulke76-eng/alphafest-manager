@@ -1,4 +1,4 @@
 FestManager
-Versão 4.2.1
-Desempenho e Cache Inteligente
+Versão 4.3.0
+Produtividade Operacional e Pesquisa Global
 Data: 01/08/2026

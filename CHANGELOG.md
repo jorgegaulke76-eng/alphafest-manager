@@ -183,3 +183,13 @@ hangelog
 - Diagnóstico de Supabase, integridade, backup e versão de dados.
 - Preparação segura de atualização com backup protegido.
 - Pacote de atualização sem arquivos de dados.
+
+## 4.3.0 — Produtividade Operacional e Pesquisa Global
+
+- Pesquisa global sob demanda em clientes, propostas, catálogo, atendimentos, projetos e arquivos.
+- Pesquisa rápida disponível na barra lateral em todas as telas.
+- Ações rápidas para orçamento, WhatsApp, proposta e catálogo.
+- Nova fila operacional na Central do Dia.
+- Priorização automática por SLA, atraso, entrega e estágio de produção.
+- Próxima ação sugerida para cada pendência.
+- Sem migração ou substituição de dados.

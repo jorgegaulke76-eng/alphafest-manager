@@ -1,24 +1,27 @@
-# UPDATE INFO — FestManager 4.2.1
+# UPDATE INFO — FestManager 4.3.0
 
-Versão anterior: 4.2.0
-Nova versão: 4.2.1
+Versão anterior: 4.2.1
+Nova versão: 4.3.0
 
 ## Objetivo
-Melhorar a velocidade sem alterar ou substituir dados da empresa.
+Reduzir navegação e cliques na operação diária, mantendo o desempenho e a proteção dos dados.
+
+## Novidades
+- Pesquisa global em clientes, propostas, produtos, atendimentos, projetos e arquivos.
+- Pesquisa disponível na barra lateral em qualquer tela.
+- Ações rápidas para preparar orçamento, abrir WhatsApp, selecionar proposta e filtrar produto.
+- Fila operacional unificada na Central do Dia.
+- Ordenação automática por urgência, SLA, atraso, entrega e etapa de produção.
+- Próxima ação sugerida para cada item da fila.
 
 ## Arquivos alterados
 - app.py
-- cloud_db.py
 - VERSAO.txt
 - CHANGELOG.md
 - UPDATE_INFO.md
 
-## Dados
-- Migração de banco: não
-- Arquivos JSON incluídos: não
-- Registros existentes alterados: não
-
-## Comportamento do cache
-- Leituras ficam em memória por até 20 segundos em cada navegador.
-- Ao salvar, o cache é atualizado imediatamente.
-- Alterações feitas em outro computador aparecem em até 20 segundos ou ao recarregar a página.
+## Dados e segurança
+- Migração de banco: não.
+- Arquivos JSON incluídos: não.
+- Registros existentes alterados: não.
+- Compatível com a estrutura de dados v2.
