@@ -85,7 +85,8 @@ ARQUIVO_CLIENTES = "clientes_db.json"
 ARQUIVO_PRODUCAO = "producao_db.json"
 ARQUIVO_EMPRESA = "empresa_config.json"
 ARQUIVO_PROJETOS = "projetos_db.json"
-VERSAO_APP = "3.7.0"
+ARQUIVO_CAMPANHAS = "campanhas_db.json"
+VERSAO_APP = "3.8.0"
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -1737,6 +1738,100 @@ def gerar_conteudo_catalogo_gratuito(nome, categoria, subcategoria="", ideias=""
         "shopee": descricao_shopee,
     }
 
+
+CAMPANHAS_PADRAO = [
+    {"id": "CAMP-JAN-BRANCO", "nome": "Janeiro Branco", "tipo": "Nacional", "categoria": "Conscientização", "data_inicio": "2026-01-01", "data_fim": "2026-01-31", "recorrencia": "Anual", "antecedencia_dias": 45, "regiao": "Brasil", "produtos": [], "observacoes": "Campanha de conscientização sobre saúde mental.", "status": "Planejamento", "ativa": True},
+    {"id": "CAMP-VOLTA-AULAS", "nome": "Volta às Aulas", "tipo": "Personalizada", "categoria": "Escolar", "data_inicio": "2026-01-20", "data_fim": "2026-02-10", "recorrencia": "Anual", "antecedencia_dias": 45, "regiao": "Editar conforme calendário local", "produtos": ["Etiquetas", "Lembrancinhas", "Personalizados escolares"], "observacoes": "Ajustar as datas conforme as escolas da cidade.", "status": "Planejamento", "ativa": True},
+    {"id": "CAMP-DIA-MAES", "nome": "Dia das Mães", "tipo": "Nacional", "categoria": "Comercial", "data_inicio": "2026-05-01", "data_fim": "2026-05-10", "recorrencia": "Anual", "antecedencia_dias": 60, "regiao": "Brasil", "produtos": [], "observacoes": "Atualize a data final a cada ano.", "status": "Planejamento", "ativa": True},
+    {"id": "CAMP-DIA-PAIS", "nome": "Dia dos Pais", "tipo": "Nacional", "categoria": "Comercial", "data_inicio": "2026-08-01", "data_fim": "2026-08-09", "recorrencia": "Anual", "antecedencia_dias": 60, "regiao": "Brasil", "produtos": [], "observacoes": "Atualize a data final a cada ano.", "status": "Planejamento", "ativa": True},
+    {"id": "CAMP-OUTUBRO-ROSA", "nome": "Outubro Rosa", "tipo": "Nacional", "categoria": "Conscientização", "data_inicio": "2026-10-01", "data_fim": "2026-10-31", "recorrencia": "Anual", "antecedencia_dias": 60, "regiao": "Brasil", "produtos": ["Bubble rosa", "Balões", "Lembrancinhas", "Topos"], "observacoes": "Campanha de conscientização sobre o câncer de mama.", "status": "Planejamento", "ativa": True},
+    {"id": "CAMP-NOVEMBRO-AZUL", "nome": "Novembro Azul", "tipo": "Nacional", "categoria": "Conscientização", "data_inicio": "2026-11-01", "data_fim": "2026-11-30", "recorrencia": "Anual", "antecedencia_dias": 60, "regiao": "Brasil", "produtos": ["Bubble azul", "Balões", "Lembrancinhas", "Topos"], "observacoes": "Campanha de conscientização sobre a saúde do homem.", "status": "Planejamento", "ativa": True},
+    {"id": "CAMP-BLACK-FRIDAY", "nome": "Black Friday", "tipo": "Nacional", "categoria": "Comercial", "data_inicio": "2026-11-20", "data_fim": "2026-11-30", "recorrencia": "Anual", "antecedencia_dias": 60, "regiao": "Brasil", "produtos": [], "observacoes": "Definir produtos e condições da promoção.", "status": "Planejamento", "ativa": True},
+    {"id": "CAMP-NATAL", "nome": "Natal", "tipo": "Nacional", "categoria": "Comercial", "data_inicio": "2026-11-15", "data_fim": "2026-12-24", "recorrencia": "Anual", "antecedencia_dias": 90, "regiao": "Brasil", "produtos": [], "observacoes": "Planejar catálogo, presentes e decoração com antecedência.", "status": "Planejamento", "ativa": True},
+]
+
+
+def carregar_campanhas():
+    dados = load_document("campanhas_db", ARQUIVO_CAMPANHAS, [])
+    if not isinstance(dados, list):
+        dados = []
+    if not dados:
+        dados = [dict(item) for item in CAMPANHAS_PADRAO]
+        save_document("campanhas_db", dados, ARQUIVO_CAMPANHAS)
+    return dados
+
+
+def salvar_campanhas(lista):
+    if not isinstance(lista, list):
+        raise ValueError("O calendário comercial precisa ser uma lista.")
+    save_document("campanhas_db", lista, ARQUIVO_CAMPANHAS)
+
+
+def _data_iso_segura(valor):
+    if isinstance(valor, date):
+        return valor
+    texto = str(valor or "").strip()
+    for formato in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(texto, formato).date()
+        except ValueError:
+            pass
+    return None
+
+
+def periodo_campanha_no_ano(campanha, ano=None):
+    """Retorna início e fim aplicáveis ao ano informado."""
+    ano = int(ano or hoje_local().year)
+    inicio_base = _data_iso_segura(campanha.get("data_inicio"))
+    fim_base = _data_iso_segura(campanha.get("data_fim")) or inicio_base
+    if not inicio_base:
+        return None, None
+    if str(campanha.get("recorrencia", "Evento único")) == "Anual":
+        try:
+            inicio = date(ano, inicio_base.month, inicio_base.day)
+        except ValueError:
+            inicio = date(ano, inicio_base.month, 28)
+        try:
+            fim = date(ano, fim_base.month, fim_base.day)
+        except ValueError:
+            fim = date(ano, fim_base.month, 28)
+        if fim < inicio:
+            fim = date(ano + 1, fim_base.month, fim_base.day)
+        return inicio, fim
+    return inicio_base, fim_base
+
+
+def proxima_ocorrencia_campanha(campanha, referencia=None):
+    referencia = referencia or hoje_local()
+    inicio, fim = periodo_campanha_no_ano(campanha, referencia.year)
+    if not inicio:
+        return None, None
+    if str(campanha.get("recorrencia", "Evento único")) == "Anual" and fim < referencia:
+        inicio, fim = periodo_campanha_no_ano(campanha, referencia.year + 1)
+    return inicio, fim
+
+
+def campanhas_em_oportunidade(referencia=None, limite_dias=120):
+    referencia = referencia or hoje_local()
+    oportunidades = []
+    for campanha in carregar_campanhas():
+        if not campanha.get("ativa", True):
+            continue
+        inicio, fim = proxima_ocorrencia_campanha(campanha, referencia)
+        if not inicio:
+            continue
+        dias = (inicio - referencia).days
+        antecedencia = int(campanha.get("antecedencia_dias", 30) or 30)
+        em_periodo = inicio <= referencia <= fim
+        if em_periodo or (-7 <= dias <= max(limite_dias, antecedencia)):
+            item = dict(campanha)
+            item["inicio_calculado"] = inicio
+            item["fim_calculado"] = fim
+            item["dias_para_inicio"] = dias
+            item["em_periodo"] = em_periodo
+            oportunidades.append(item)
+    return sorted(oportunidades, key=lambda x: (0 if x["em_periodo"] else 1, x["inicio_calculado"]))
+
 def carregar_projetos():
     dados = load_document("projetos_db", ARQUIVO_PROJETOS, [])
     return dados if isinstance(dados, list) else []
@@ -2184,7 +2279,7 @@ mensagem_sucesso = st.session_state.pop("_mensagem_sucesso_pendente", None)
 if mensagem_sucesso:
     st.success(mensagem_sucesso)
 
-aba0, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba7 = st.tabs([
+aba0, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
     "➕ Novo Orçamento",
     "📋 Histórico",
@@ -2193,6 +2288,7 @@ aba0, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba7 = st.tabs([
     "📦 Catálogo",
     "👥 Clientes",
     "🧠 Memória",
+    "📅 Calendário Comercial",
     "⚙️ Configurações",
 ])
 
@@ -2278,6 +2374,37 @@ with aba0:
             st.write(f"{icone} **{numero} — {cliente}** · {texto}")
     else:
         st.info("Nenhum alerta importante agora.")
+
+    st.divider()
+    st.subheader("🎯 Oportunidades comerciais")
+    oportunidades_central = campanhas_em_oportunidade(hoje_central, limite_dias=90)
+    if oportunidades_central:
+        for oportunidade in oportunidades_central[:5]:
+            inicio = oportunidade.get("inicio_calculado")
+            fim = oportunidade.get("fim_calculado")
+            dias = oportunidade.get("dias_para_inicio", 0)
+            if oportunidade.get("em_periodo"):
+                chamada = "Campanha em andamento"
+            elif dias == 0:
+                chamada = "Começa hoje"
+            elif dias == 1:
+                chamada = "Começa amanhã"
+            else:
+                chamada = f"Faltam {dias} dias"
+            produtos = oportunidade.get("produtos", []) or []
+            with st.container(border=True):
+                cc1, cc2 = st.columns([5, 2])
+                cc1.markdown(f"**{oportunidade.get('nome', 'Campanha')}** · {chamada}")
+                cc1.caption(
+                    f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')} · "
+                    f"{oportunidade.get('tipo', 'Personalizada')}"
+                )
+                if produtos:
+                    cc1.write("Produtos sugeridos: " + ", ".join(map(str, produtos[:6])))
+                cc2.info(f"Preparar com {int(oportunidade.get('antecedencia_dias', 30) or 30)} dias")
+        st.caption("Cadastre datas locais, escolares e campanhas próprias na aba Calendário Comercial.")
+    else:
+        st.info("Nenhuma campanha próxima. Use o Calendário Comercial para cadastrar novas oportunidades.")
 
     st.divider()
     st.subheader("🔎 Pesquisa rápida")
@@ -3332,6 +3459,157 @@ with aba8:
                     key=f"mem_html_{projeto.get('id')}",
                     use_container_width=True,
                 )
+
+
+
+with aba9:
+    st.header("📅 Calendário Comercial Inteligente")
+    st.caption("Cadastre datas nacionais, locais, escolares e campanhas próprias. O sistema avisa quando é hora de começar a divulgação.")
+
+    campanhas = carregar_campanhas()
+    if "campanha_edit_id" not in st.session_state:
+        st.session_state.campanha_edit_id = None
+
+    visao_cal, lista_cal, cadastro_cal = st.tabs(["🎯 Oportunidades", "📋 Campanhas", "➕ Cadastrar / Editar"])
+
+    with visao_cal:
+        hoje_cal = hoje_local()
+        oportunidades = campanhas_em_oportunidade(hoje_cal, limite_dias=180)
+        ativas = [c for c in campanhas if c.get("ativa", True)]
+        em_andamento = [c for c in oportunidades if c.get("em_periodo")]
+        proximas_30 = [c for c in oportunidades if not c.get("em_periodo") and 0 <= c.get("dias_para_inicio", 9999) <= 30]
+        v1, v2, v3, v4 = st.columns(4)
+        v1.metric("Campanhas ativas", len(ativas))
+        v2.metric("Em andamento", len(em_andamento))
+        v3.metric("Próximos 30 dias", len(proximas_30))
+        v4.metric("Locais/personalizadas", sum(1 for c in ativas if c.get("tipo") in ["Local", "Personalizada", "Interna"]))
+
+        filtro_periodo = st.selectbox("Exibir oportunidades dos próximos", [30, 60, 90, 180, 365], index=2, format_func=lambda x: f"{x} dias")
+        oportunidades = campanhas_em_oportunidade(hoje_cal, limite_dias=filtro_periodo)
+        if not oportunidades:
+            st.info("Nenhuma campanha nesse período.")
+        for campanha in oportunidades:
+            inicio = campanha["inicio_calculado"]
+            fim = campanha["fim_calculado"]
+            dias = campanha["dias_para_inicio"]
+            if campanha["em_periodo"]:
+                destaque = "🟢 Em andamento"
+            elif dias <= int(campanha.get("antecedencia_dias", 30) or 30):
+                destaque = f"🟠 Hora de preparar · faltam {dias} dias"
+            else:
+                destaque = f"🔵 Faltam {dias} dias"
+            with st.container(border=True):
+                a, b = st.columns([5, 2])
+                a.markdown(f"### {campanha.get('nome', 'Campanha')}")
+                a.write(destaque)
+                a.caption(f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')} · {campanha.get('tipo')} · {campanha.get('regiao') or 'Sem região'}")
+                produtos = campanha.get("produtos", []) or []
+                if produtos:
+                    a.write("**Produtos relacionados:** " + ", ".join(map(str, produtos)))
+                if campanha.get("observacoes"):
+                    a.write(campanha.get("observacoes"))
+                b.write(f"**Status:** {campanha.get('status', 'Planejamento')}")
+                if b.button("✏️ Editar", key=f"camp_op_edit_{campanha.get('id')}", use_container_width=True):
+                    st.session_state.campanha_edit_id = campanha.get("id")
+                    st.rerun()
+
+    with lista_cal:
+        busca_camp = st.text_input("🔎 Buscar campanha", placeholder="Nome, tipo, cidade, produto ou observação").strip().lower()
+        tipo_camp = st.selectbox("Tipo", ["Todos", "Nacional", "Local", "Interna", "Personalizada"])
+        mostrar_inativas = st.checkbox("Mostrar desativadas")
+        filtradas = []
+        for campanha in campanhas:
+            texto = " ".join([
+                str(campanha.get("nome", "")), str(campanha.get("tipo", "")), str(campanha.get("categoria", "")),
+                str(campanha.get("regiao", "")), str(campanha.get("observacoes", "")),
+                " ".join(map(str, campanha.get("produtos", []) or [])),
+            ]).lower()
+            if busca_camp and busca_camp not in texto:
+                continue
+            if tipo_camp != "Todos" and campanha.get("tipo") != tipo_camp:
+                continue
+            if not mostrar_inativas and not campanha.get("ativa", True):
+                continue
+            filtradas.append(campanha)
+        st.caption(f"{len(filtradas)} campanha(s)")
+        for campanha in sorted(filtradas, key=lambda c: (proxima_ocorrencia_campanha(c)[0] or date.max, c.get("nome", ""))):
+            inicio, fim = proxima_ocorrencia_campanha(campanha)
+            titulo = f"{'✅' if campanha.get('ativa', True) else '⏸️'} {campanha.get('nome')} — {campanha.get('tipo')}"
+            with st.expander(titulo):
+                c1, c2 = st.columns(2)
+                c1.write(f"**Próximo período:** {inicio.strftime('%d/%m/%Y') if inicio else 'Sem data'} a {fim.strftime('%d/%m/%Y') if fim else 'Sem data'}")
+                c1.write(f"**Região:** {campanha.get('regiao') or 'Não informada'}")
+                c2.write(f"**Antecedência:** {campanha.get('antecedencia_dias', 30)} dias")
+                c2.write(f"**Recorrência:** {campanha.get('recorrencia', 'Evento único')}")
+                if campanha.get("produtos"):
+                    st.write("**Produtos:** " + ", ".join(map(str, campanha.get("produtos", []))))
+                if campanha.get("observacoes"):
+                    st.write("**Observações:** " + str(campanha.get("observacoes")))
+                x1, x2, x3 = st.columns(3)
+                if x1.button("✏️ Editar", key=f"camp_edit_{campanha.get('id')}", use_container_width=True):
+                    st.session_state.campanha_edit_id = campanha.get("id")
+                    st.rerun()
+                if x2.button("⏯️ Ativar/Desativar", key=f"camp_toggle_{campanha.get('id')}", use_container_width=True):
+                    campanha["ativa"] = not campanha.get("ativa", True)
+                    campanha["atualizado_em"] = agora_local().isoformat()
+                    salvar_campanhas(campanhas)
+                    st.rerun()
+                if x3.button("🗑️ Excluir", key=f"camp_del_{campanha.get('id')}", use_container_width=True):
+                    salvar_campanhas([c for c in campanhas if c.get("id") != campanha.get("id")])
+                    st.rerun()
+
+    with cadastro_cal:
+        edit_id = st.session_state.campanha_edit_id
+        atual = next((c for c in campanhas if c.get("id") == edit_id), None)
+        if atual:
+            st.info(f"Editando: {atual.get('nome')}")
+        with st.form(f"form_campanha_{edit_id or 'nova'}"):
+            nome_camp = st.text_input("Nome da campanha/evento", value=str(atual.get("nome", "")) if atual else "")
+            c1, c2, c3 = st.columns(3)
+            tipo = c1.selectbox("Tipo", ["Nacional", "Local", "Interna", "Personalizada"], index=["Nacional", "Local", "Interna", "Personalizada"].index(atual.get("tipo", "Personalizada")) if atual and atual.get("tipo") in ["Nacional", "Local", "Interna", "Personalizada"] else 3)
+            categoria = c2.text_input("Categoria", value=str(atual.get("categoria", "Comercial")) if atual else "Comercial")
+            status = c3.selectbox("Status", ["Ideia", "Planejamento", "Em produção", "Publicado", "Concluído"], index=["Ideia", "Planejamento", "Em produção", "Publicado", "Concluído"].index(atual.get("status", "Planejamento")) if atual and atual.get("status") in ["Ideia", "Planejamento", "Em produção", "Publicado", "Concluído"] else 1)
+            inicio_atual = _data_iso_segura(atual.get("data_inicio")) if atual else hoje_local()
+            fim_atual = _data_iso_segura(atual.get("data_fim")) if atual else hoje_local()
+            d1, d2, d3 = st.columns(3)
+            data_inicio = d1.date_input("Data inicial", value=inicio_atual or hoje_local())
+            data_fim = d2.date_input("Data final", value=fim_atual or inicio_atual or hoje_local())
+            recorrencia = d3.selectbox("Recorrência", ["Evento único", "Anual"], index=1 if atual and atual.get("recorrencia") == "Anual" else 0)
+            c1, c2 = st.columns(2)
+            antecedencia = c1.number_input("Começar campanha quantos dias antes?", min_value=0, max_value=365, value=int(atual.get("antecedencia_dias", 30) or 30) if atual else 30)
+            regiao = c2.text_input("Cidade / região / escola", value=str(atual.get("regiao", "")) if atual else "")
+            produtos_txt = st.text_area("Produtos relacionados (um por linha ou separados por vírgula)", value="\n".join(map(str, atual.get("produtos", []) or [])) if atual else "")
+            observacoes = st.text_area("Observações e ideias da campanha", value=str(atual.get("observacoes", "")) if atual else "")
+            ativa = st.checkbox("Campanha ativa", value=bool(atual.get("ativa", True)) if atual else True)
+            salvar = st.form_submit_button("💾 Salvar campanha", type="primary", use_container_width=True)
+        if salvar:
+            if not nome_camp.strip():
+                st.warning("Informe o nome da campanha.")
+            elif data_fim < data_inicio:
+                st.warning("A data final não pode ser anterior à data inicial.")
+            else:
+                produtos = [x.strip() for x in re.split(r"[,\n;]+", produtos_txt) if x.strip()]
+                registro = {
+                    "id": atual.get("id") if atual else f"CAMP-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
+                    "nome": nome_camp.strip(), "tipo": tipo, "categoria": categoria.strip(),
+                    "data_inicio": data_inicio.isoformat(), "data_fim": data_fim.isoformat(),
+                    "recorrencia": recorrencia, "antecedencia_dias": int(antecedencia),
+                    "regiao": regiao.strip(), "produtos": produtos, "observacoes": observacoes.strip(),
+                    "status": status, "ativa": ativa,
+                    "criado_em": atual.get("criado_em", agora_local().isoformat()) if atual else agora_local().isoformat(),
+                    "atualizado_em": agora_local().isoformat(),
+                }
+                if atual:
+                    campanhas = [registro if c.get("id") == atual.get("id") else c for c in campanhas]
+                else:
+                    campanhas.append(registro)
+                salvar_campanhas(campanhas)
+                st.session_state.campanha_edit_id = None
+                st.session_state._mensagem_sucesso_pendente = "Campanha salva no Calendário Comercial."
+                st.rerun()
+        if atual and st.button("Cancelar edição", key="cancelar_edicao_campanha"):
+            st.session_state.campanha_edit_id = None
+            st.rerun()
 
 
 

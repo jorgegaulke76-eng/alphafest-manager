@@ -1,3 +1,10 @@
+# Roadmap FestManager
+
+## 3.8.0 — Concluído
+- Calendário Comercial Inteligente
+- Datas nacionais, locais, internas e personalizadas
+- Radar de oportunidades na Central do Dia
+
 # Alphafest Manager — Roadmap
 
 - [x] 3.0 Fundação: orçamentos, catálogo, banco online e relatórios.

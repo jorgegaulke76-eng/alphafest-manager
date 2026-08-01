@@ -1,3 +1,14 @@
+# Versão 3.8.0 — Assistente Comercial
+
+- Calendário Comercial Inteligente com campanhas nacionais, locais, internas e personalizadas.
+- Cadastro livre de volta às aulas, férias, eventos escolares, campanhas da cidade e datas próprias.
+- Campanhas recorrentes anuais ou eventos únicos.
+- Alertas por antecedência configurável.
+- Outubro Rosa, Novembro Azul e outras campanhas iniciais editáveis.
+- Oportunidades comerciais exibidas na Central do Dia.
+- Produtos, região, observações e status ligados a cada campanha.
+- Persistência no Supabase com fallback em `campanhas_db.json`.
+
 # Versão 3.7.0 — Memória da Empresa
 
 - Caixa do Projeto vinculada a cada proposta.
