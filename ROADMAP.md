@@ -54,3 +54,14 @@
 - Gestão de arquivos de produção por produto.
 - Integração do catálogo online com o domínio da empresa.
 - Sincronização com marketplaces e redes sociais via integrações oficiais.
+
+## Concluído na 3.6.0
+- Memória individual por produto.
+- Arquivos e artes vinculados ao produto.
+- Favoritos, tags, arquivamento e restauração.
+
+## Próximos passos
+- Projetos/versões dentro do produto.
+- Vincular arquivos também a pedidos e clientes.
+- Foto final e reutilização de trabalho concluído.
+- Pesquisa global unificada.
