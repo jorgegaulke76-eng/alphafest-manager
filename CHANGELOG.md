@@ -1,3 +1,12 @@
+# Changelog
+
+## 4.0.0 — Operação Inteligente
+- Atendimento vinculado automaticamente à proposta criada.
+- Linha do tempo automática dentro de cada atendimento.
+- Mudanças de status podem atualizar o Fluxo de Pedidos.
+- A Central do Dia prioriza atendimentos com SLA vencendo.
+- Proposta criada pela fila mantém vínculo com o contato original.
+
 # Versão 3.9.1 — Central de Atendimento e CRM Evolutivo
 
 - Nova aba Central de Atendimento com fila, prioridades e tempo de espera.

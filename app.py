@@ -88,7 +88,7 @@ ARQUIVO_PROJETOS = "projetos_db.json"
 ARQUIVO_CAMPANHAS = "campanhas_db.json"
 ARQUIVO_ATENDIMENTOS = "atendimentos_db.json"
 ARQUIVO_SEGMENTOS = "segmentos_db.json"
-VERSAO_APP = "3.9.2"
+VERSAO_APP = "4.0.0"
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -1878,6 +1878,70 @@ def tempo_aguardando_formatado(item):
     return f"{horas:02d}h {mins:02d}min"
 
 
+def registrar_evento_atendimento(item, descricao, usuario="Sistema"):
+    """Registra uma linha do tempo simples dentro do próprio atendimento."""
+    historico = item.get("historico") if isinstance(item.get("historico"), list) else []
+    historico.append({
+        "data": agora_local().strftime("%d/%m/%Y %H:%M"),
+        "descricao": str(descricao or "Atualização").strip(),
+        "usuario": str(usuario or "Sistema"),
+    })
+    item["historico"] = historico[-100:]
+
+
+def sincronizar_atendimento_com_operacao(item, status_anterior=""):
+    """Conecta a fila de atendimento com orçamento e fluxo de produção."""
+    status = str(item.get("status", "Novo contato"))
+    numero = str(item.get("numero_proposta", "")).strip()
+    if not numero:
+        return
+
+    if status == "Pedido aprovado":
+        tarefas = carregar_producao()
+        alterou = False
+        for tarefa in tarefas:
+            if tarefa.get("numero_proposta") == numero and tarefa.get("ativa", True):
+                atual = normalizar_status_fluxo(tarefa.get("status"))
+                if atual in ["Pedido recebido", "Arte pendente"] and not tarefa.get("necessita_arte"):
+                    tarefa["status"] = "Pronto para produzir"
+                    tarefa["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                    alterou = True
+        if alterou:
+            salvar_producao(tarefas)
+    elif status == "Arte aprovada":
+        tarefas = carregar_producao()
+        alterou = False
+        for tarefa in tarefas:
+            if tarefa.get("numero_proposta") == numero and tarefa.get("ativa", True):
+                tarefa["status"] = "Arte aprovada"
+                tarefa["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                alterou = True
+        if alterou:
+            salvar_producao(tarefas)
+    elif status == "Em produção":
+        tarefas = carregar_producao()
+        alterou = False
+        for tarefa in tarefas:
+            if tarefa.get("numero_proposta") == numero and tarefa.get("ativa", True):
+                tarefa["status"] = "Em produção"
+                tarefa["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                alterou = True
+        if alterou:
+            salvar_producao(tarefas)
+    elif status == "Pronto":
+        tarefas = carregar_producao()
+        alterou = False
+        for tarefa in tarefas:
+            if tarefa.get("numero_proposta") == numero and tarefa.get("ativa", True):
+                tarefa["status"] = "Pronto"
+                tarefa["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                alterou = True
+        if alterou:
+            salvar_producao(tarefas)
+    elif status == "Entregue":
+        alternar_status(numero, "entregue", True)
+
+
 def proxima_acao_atendimento(item):
     status = str(item.get("status", "Novo contato"))
     mapa = {
@@ -2500,8 +2564,17 @@ with aba0:
     st.divider()
     st.subheader("🎯 O que fazer agora")
     prioridade = None
+    prioridade_atendimento = None
     motivo = ""
-    if pedidos_atrasados_central:
+    atendimentos_urgentes = sorted(
+        [a for a in atendimentos_abertos_central if faixa_sla_atendimento(a, dados_atendimento_central.get("config", {}))[2] >= 2],
+        key=minutos_aguardando,
+        reverse=True,
+    )
+    if atendimentos_urgentes:
+        prioridade_atendimento = atendimentos_urgentes[0]
+        motivo = f"Atendimento aguardando há {tempo_aguardando_formatado(prioridade_atendimento)}"
+    elif pedidos_atrasados_central:
         prioridade = sorted(pedidos_atrasados_central, key=lambda p: data_entrega_segura(p.get("data_entrega")) or date.max)[0]
         motivo = "Pedido atrasado — verificar imediatamente"
     elif entregas_hoje_central:
@@ -2515,7 +2588,14 @@ with aba0:
         prioridade = pendentes_pagamento_central[0]
         motivo = "Pagamento pendente"
 
-    if prioridade:
+    if prioridade_atendimento:
+        with st.container(border=True):
+            st.markdown(f"### 📥 {html.escape(str(prioridade_atendimento.get('cliente', 'Contato')))}")
+            st.write(f"**Situação:** {prioridade_atendimento.get('status', 'Novo contato')}")
+            st.write(f"**Motivo:** {motivo}")
+            st.write(f"**Próxima ação:** {proxima_acao_atendimento(prioridade_atendimento)}")
+            st.caption("Abra a aba Atendimento para responder ou criar o orçamento.")
+    elif prioridade:
         _, _, total_prioridade = calcular_valores_proposta(prioridade)
         with st.container(border=True):
             st.markdown(f"### {html.escape(str(prioridade.get('cliente_nome', 'Cliente')))}")
@@ -2652,9 +2732,21 @@ with aba_atendimento:
                     novo_responsavel = st.selectbox("Responsável", ["Sem responsável", "Anna", "Jorge"], index=["Sem responsável", "Anna", "Jorge"].index(responsavel_atual) if responsavel_atual in ["Sem responsável", "Anna", "Jorge"] else 0, key=f"resp_at_{item.get('id')}")
                     modo_conversa = st.selectbox("Modo desta conversa", ["Manual", "Assistido", "Automático"], index=["Manual", "Assistido", "Automático"].index(item.get("modo", config_at.get("modo", "Manual"))) if item.get("modo", config_at.get("modo", "Manual")) in ["Manual", "Assistido", "Automático"] else 0, key=f"modo_at_{item.get('id')}")
 
+                historico_item = item.get("historico") if isinstance(item.get("historico"), list) else []
+                if historico_item:
+                    with st.expander("🕒 Linha do tempo do atendimento"):
+                        for evento in reversed(historico_item[-20:]):
+                            st.write(f"**{evento.get('data', '—')}** · {evento.get('descricao', 'Atualização')}")
+                if item.get("numero_proposta"):
+                    st.info(f"📄 Atendimento vinculado à proposta **{item.get('numero_proposta')}**")
+
                 b1, b2, b3 = st.columns(3)
                 if b1.button("💾 Salvar", key=f"salvar_at_{item.get('id')}", use_container_width=True):
+                    status_anterior = item.get("status", "Novo contato")
                     item.update({"status": novo_status, "prioridade": nova_prioridade, "responsavel": "" if novo_responsavel == "Sem responsável" else novo_responsavel, "modo": modo_conversa, "resposta_rascunho": resposta, "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
+                    if status_anterior != novo_status:
+                        registrar_evento_atendimento(item, f"Status alterado de {status_anterior} para {novo_status}")
+                        sincronizar_atendimento_com_operacao(item, status_anterior)
                     salvar_atendimentos(dados_at)
                     st.rerun()
                 telefone_limpo = re.sub(r"\D", "", str(item.get("telefone", "")))
@@ -2666,26 +2758,37 @@ with aba_atendimento:
                     st.session_state.form_cliente = item.get("cliente", "")
                     st.session_state.form_whatsapp = item.get("telefone", "")
                     st.session_state.form_observacoes = item.get("mensagem", "")
+                    st.session_state._atendimento_origem_id = item.get("id")
+                    status_antigo = item.get("status", "Novo contato")
                     item["status"] = "Orçamento em elaboração"
                     item["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                    registrar_evento_atendimento(item, f"Status alterado de {status_antigo} para Orçamento em elaboração")
                     salvar_atendimentos(dados_at)
                     st.success("Dados preparados. Abra a aba Novo Orçamento.")
 
                 q1, q2, q3, q4 = st.columns(4)
                 if q1.button("✅ Atendido", key=f"atendido_{item.get('id')}", use_container_width=True):
+                    status_anterior = item.get("status", "Novo contato")
                     item.update({"status": "Aguardando cliente", "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
+                    registrar_evento_atendimento(item, f"Status alterado de {status_anterior} para Aguardando cliente")
                     salvar_atendimentos(dados_at)
                     st.rerun()
                 if q2.button("⏳ Aguardar cliente", key=f"aguardar_{item.get('id')}", use_container_width=True):
+                    status_anterior = item.get("status", "Novo contato")
                     item.update({"status": "Aguardando cliente", "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
+                    registrar_evento_atendimento(item, f"Status alterado de {status_anterior} para Aguardando cliente")
                     salvar_atendimentos(dados_at)
                     st.rerun()
                 if q3.button("🏁 Concluir", key=f"concluir_{item.get('id')}", use_container_width=True):
+                    status_anterior = item.get("status", "Novo contato")
                     item.update({"status": "Pós-venda", "concluido_em": agora_local().strftime("%d/%m/%Y %H:%M"), "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
+                    registrar_evento_atendimento(item, f"Atendimento concluído a partir do status {status_anterior}")
                     salvar_atendimentos(dados_at)
                     st.rerun()
                 if q4.button("📦 Arquivar", key=f"arquivar_{item.get('id')}", use_container_width=True):
+                    status_anterior = item.get("status", "Novo contato")
                     item.update({"status": "Arquivado", "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
+                    registrar_evento_atendimento(item, f"Atendimento arquivado a partir do status {status_anterior}")
                     salvar_atendimentos(dados_at)
                     st.rerun()
 
@@ -2715,6 +2818,7 @@ with aba_atendimento:
                     "modo": config_at.get("modo", "Manual"),
                     "origem": "Registro manual",
                     "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
+                    "historico": [{"data": agora_local().strftime("%d/%m/%Y %H:%M"), "descricao": "Atendimento registrado", "usuario": "Sistema"}],
                 })
                 salvar_atendimentos(dados_at)
                 st.success("Contato incluído na fila.")
@@ -2841,6 +2945,7 @@ with aba1:
                 "validade_dias": validade,
                 "pago": antigo.get("pago", False),
                 "entregue": antigo.get("entregue", False),
+                "atendimento_id": antigo.get("atendimento_id") or st.session_state.get("_atendimento_origem_id", ""),
             }
 
             if st.session_state.editar_numero:
@@ -2850,8 +2955,21 @@ with aba1:
                 h.insert(0, dados)
                 salvar_historico_completo(h)
 
+            atendimento_origem_id = st.session_state.pop("_atendimento_origem_id", None) or dados.get("atendimento_id")
+            if atendimento_origem_id:
+                dados_at_link = carregar_atendimentos()
+                for atendimento_link in dados_at_link.get("itens", []):
+                    if atendimento_link.get("id") == atendimento_origem_id:
+                        status_anterior = atendimento_link.get("status", "Novo contato")
+                        atendimento_link["numero_proposta"] = numero
+                        atendimento_link["status"] = "Aguardando cliente"
+                        atendimento_link["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                        registrar_evento_atendimento(atendimento_link, f"Proposta {numero} criada e enviada para acompanhamento")
+                        break
+                salvar_atendimentos(dados_at_link)
+
             agendar_limpeza_formulario()
-            st.session_state._mensagem_sucesso_pendente = "Proposta salva com sucesso."
+            st.session_state._mensagem_sucesso_pendente = "Proposta salva com sucesso e operação atualizada."
             st.rerun()
 
 with aba2:

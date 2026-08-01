@@ -1,74 +1,12 @@
-# Roadmap FestManager
+# Roadmap
 
-## 3.8.0 — Concluído
-- Calendário Comercial Inteligente
-- Datas nacionais, locais, internas e personalizadas
-- Radar de oportunidades na Central do Dia
+## Concluído — 4.0.0
+- Integração Atendimento → Orçamento → Fluxo de Pedidos.
+- Linha do tempo operacional automática.
+- Prioridade de atendimento na Central do Dia.
 
-# Alphafest Manager — Roadmap
-
-- [x] 3.0 Fundação: orçamentos, catálogo, banco online e relatórios.
-- [x] 3.1 Clientes: cadastro, histórico e indicadores.
-- [ ] 3.2 Produção: agenda, etapas e entregas.
-- [ ] 3.3 Financeiro: caixa e contas a receber.
-- [ ] 3.4 Dashboard executivo.
-- [ ] 4.0 Marketing gratuito: calendário, templates de posts e exportação de artes.
-- [ ] 5.0 Marketplaces: ferramentas gratuitas e APIs oficiais quando disponíveis.
-
-
-## Concluído na 3.2.0
-- [x] Gestão de produção por item
-- [x] Setores, grupos e classificação automática
-- [x] Prazos, prioridades e status
-- [x] Tela adaptada para computador e celular
-
-## Próxima versão sugerida: 3.3.0 — Financeiro
-- [ ] Contas a receber
-- [ ] Caixa e formas de pagamento
-- [ ] Custos e margem
-- [ ] Fluxo financeiro
-
-### Concluído na 3.2.1
-- Fluxo de pedidos da arte à entrega
-- Linha do tempo e processos operacionais
-- Visão simplificada para uma operação pequena
-
-## Versão 3.3.0 — concluída
-- Fundação multiempresa.
-- Configuração central de identidade, dados cadastrais, PIX e padrões.
-
-## Próximas etapas
-- 3.3.1: upload de logo/QR Code pela interface.
-- 3.4.0: financeiro.
-- 4.0.0: marketing e conteúdo.
-
-## Concluído na 3.4.0
-- Central do Dia
-- Saudação personalizada por usuário
-- Prioridade automática
-- Alertas concentrados
-- Pesquisa rápida
-
-## Próximas etapas
-- Configuração completa do login Google/OIDC
-- Inteligência comercial avançada
-- Marketing e campanhas
-
-## Concluído na 3.5.0
-- Primeira etapa da Biblioteca Comercial 360°.
-
-## Próximas etapas
-- Gestão de arquivos de produção por produto.
-- Integração do catálogo online com o domínio da empresa.
-- Sincronização com marketplaces e redes sociais via integrações oficiais.
-
-### Concluído na 3.9.2
-- Caixa de entrada com SLA visual.
-- Responsáveis e filtros da fila.
-- Ações rápidas de atendimento.
-- Resumo permanente na barra lateral.
-
-### Próximos passos
-- Integração oficial com WhatsApp Business Platform por webhook.
-- Centro de notificações em tempo real.
-- Portal do cliente e acompanhamento público do pedido.
+## Próximos passos
+- Portal do Cliente.
+- Integração oficial com WhatsApp Business Platform.
+- Atualização automática do portal conforme produção.
+- Financeiro e confirmação de pagamento integrados.

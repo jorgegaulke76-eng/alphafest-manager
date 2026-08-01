@@ -1,4 +1,4 @@
 FestManager
-Versão 3.9.2
-Caixa de Entrada Inteligente
+Versão 4.0.0
+Operação Inteligente
 Data: 01/08/2026
