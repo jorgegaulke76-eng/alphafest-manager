@@ -213,3 +213,8 @@ hangelog
 - Adicionado resumo operacional do dia.
 - Adicionada Minha Fila por usuário e prioridade de SLA.
 - Nenhuma alteração ou migração nos dados existentes.
+
+## 5.2.0
+- Fluxo Atendimento → Projeto → Orçamento → Produção.
+- Aprovação explícita de propostas.
+- Próxima ação e linha do tempo integradas.

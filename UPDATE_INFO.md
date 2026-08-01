@@ -1,12 +1,15 @@
-# FestManager 5.1.1 — Centro de Trabalho (correção de identificação)
+# FestManager 5.2.0 — Fluxo Inteligente
 
-Base anterior: 5.0.0
+Base: 5.1.1
 
-## Correção
-- Corrigida a constante interna `VERSAO_APP`, que ainda mostrava 5.0.0 apesar das funcionalidades 5.1.1 já estarem instaladas.
-- Mantidas as Ações rápidas, Resumo de hoje e Minha Fila.
+## Alterações
+- Atendimento pode preparar um Projeto Personalizado com cliente, WhatsApp e mensagem já preenchidos.
+- Projeto Personalizado transfere os dados para o Novo Orçamento sem redigitação.
+- Propostas possuem aprovação explícita, próxima ação e linha do tempo.
+- Aprovação libera automaticamente o pedido para o fluxo operacional.
+- Projeto, proposta, atendimento e produção ficam vinculados por IDs e número da proposta.
+- Linhas do tempo são aditivas e preservam registros existentes.
 
 ## Dados
-- Nenhuma migração.
-- Nenhum arquivo de dados é substituído.
-- Clientes, catálogo, fotos, propostas e projetos permanecem no Supabase.
+- Nenhum arquivo de dados deve ser substituído na atualização.
+- Sem migração destrutiva.

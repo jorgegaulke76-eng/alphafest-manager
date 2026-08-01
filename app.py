@@ -142,7 +142,7 @@ ARQUIVO_AUDITORIA = "auditoria_db.json"
 ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
-VERSAO_APP = "5.1.1"
+VERSAO_APP = "5.2.0"
 VERSAO_DADOS = 3
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
@@ -437,11 +437,45 @@ def salvar_historico_completo(historico):
         raise ValueError("O histórico precisa ser uma lista de propostas.")
     save_document("historico_orcamentos", historico, ARQUIVO_HISTORICO)
 
+def registrar_evento_proposta(proposta, descricao, usuario="Sistema"):
+    timeline = proposta.get("timeline") if isinstance(proposta.get("timeline"), list) else []
+    timeline.append({
+        "data": agora_local().strftime("%d/%m/%Y %H:%M"),
+        "descricao": str(descricao or "Atualização").strip(),
+        "usuario": str(usuario or "Sistema"),
+    })
+    proposta["timeline"] = timeline[-100:]
+    proposta["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+
+
 def alternar_status(num_proposta, campo, novo_valor):
     historico = carregar_historico()
+    proposta_alterada = None
     for p in historico:
-        if p.get("numero_proposta") == num_proposta: p[campo] = novo_valor
+        if p.get("numero_proposta") == num_proposta:
+            valor_anterior = bool(p.get(campo, False))
+            p[campo] = novo_valor
+            proposta_alterada = p
+            if valor_anterior != bool(novo_valor):
+                rotulos = {"pago": "Pagamento confirmado", "entregue": "Entrega concluída", "aprovado": "Orçamento aprovado"}
+                acao = rotulos.get(campo, campo.replace("_", " ").title())
+                registrar_evento_proposta(p, acao if novo_valor else f"{acao} desmarcado")
+            break
     salvar_historico_completo(historico)
+    if proposta_alterada and campo == "aprovado" and novo_valor:
+        sincronizar_producao_com_propostas()
+        tarefas = carregar_producao()
+        mudou = False
+        for tarefa in tarefas:
+            if tarefa.get("numero_proposta") == num_proposta and tarefa.get("ativa", True):
+                atual = normalizar_status_fluxo(tarefa.get("status"))
+                if atual == "Pedido recebido":
+                    tarefa["status"] = status_inicial_fluxo(tarefa.get("produto", ""), tarefa.get("especificacoes", ""))
+                    adicionar_evento_timeline(tarefa, "Orçamento aprovado e pedido liberado para operação")
+                    tarefa["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                    mudou = True
+        if mudou:
+            salvar_producao(tarefas)
 
 def excluir_proposta(num_proposta):
     historico_atual = carregar_historico()
@@ -2314,6 +2348,33 @@ def obter_ou_criar_projeto(proposta):
     return projeto, projetos
 
 
+def registrar_evento_projeto(projeto, descricao, usuario="Sistema"):
+    timeline = projeto.get("timeline") if isinstance(projeto.get("timeline"), list) else []
+    timeline.append({
+        "data": agora_local().strftime("%d/%m/%Y %H:%M"),
+        "descricao": str(descricao or "Atualização").strip(),
+        "usuario": str(usuario or "Sistema"),
+    })
+    projeto["timeline"] = timeline[-100:]
+    projeto["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+
+
+def proxima_acao_projeto(projeto):
+    status = str(projeto.get("status", "Briefing"))
+    if not str(projeto.get("numero_proposta", "")).strip():
+        return "Revisar briefing e preparar orçamento"
+    mapa = {
+        "Briefing": "Preparar orçamento",
+        "Orçamento preparado": "Revisar e salvar proposta",
+        "Orçamento criado": "Aguardar aprovação do cliente",
+        "Aprovado": "Enviar para produção",
+        "Em produção": "Acompanhar fabricação",
+        "Pronto": "Avisar cliente",
+        "Entregue": "Registrar pós-venda",
+    }
+    return mapa.get(status, "Revisar andamento")
+
+
 def atualizar_projeto(projeto_atualizado):
     projetos = carregar_projetos()
     pid = projeto_atualizado.get("id")
@@ -2349,13 +2410,15 @@ def renderizar_assistente_projeto_personalizado():
         "Comece pela necessidade do cliente. Os campos ajudam a organizar, mas não limitam o que a Alphafest pode criar."
     )
 
+    prefill = st.session_state.pop("_projeto_prefill", {}) if isinstance(st.session_state.get("_projeto_prefill", {}), dict) else {}
     with st.form("form_projeto_personalizado", clear_on_submit=False):
         c1, c2 = st.columns(2)
-        cliente = c1.text_input("Cliente / identificação (opcional)", placeholder="Ex.: Maria, Escola ABC, Arena Beach")
-        whatsapp = c2.text_input("WhatsApp (opcional)", placeholder="Ex.: 11999999999")
+        cliente = c1.text_input("Cliente / identificação (opcional)", value=str(prefill.get("cliente", "")), placeholder="Ex.: Maria, Escola ABC, Arena Beach")
+        whatsapp = c2.text_input("WhatsApp (opcional)", value=str(prefill.get("whatsapp", "")), placeholder="Ex.: 11999999999")
 
         necessidade = st.text_area(
             "O que o cliente precisa?",
+            value=str(prefill.get("necessidade", "")),
             placeholder=(
                 "Ex.: Um Bubble de 55 cm para aniversário de 6 anos, tema espaço, "
                 "confete fosco em formato de lua e coração, tons azul e prata, com LED."
@@ -2415,7 +2478,8 @@ def renderizar_assistente_projeto_personalizado():
         projeto = {
             "id": f"PRJ-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
             "tipo": "necessidade_personalizada",
-            "origem": "Assistente de Projetos",
+            "origem": prefill.get("origem", "Assistente de Projetos"),
+            "atendimento_id": prefill.get("atendimento_id", ""),
             "numero_proposta": "",
             "cliente_nome": cliente.strip(),
             "whatsapp": whatsapp.strip(),
@@ -2432,9 +2496,11 @@ def renderizar_assistente_projeto_personalizado():
             "modelo": False,
             "favorito": False,
             "status": "Briefing",
+            "timeline": [],
             "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
             "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
         }
+        registrar_evento_projeto(projeto, "Briefing do projeto criado")
         projetos = carregar_projetos()
         projetos.insert(0, projeto)
         salvar_projetos(projetos)
@@ -2465,7 +2531,11 @@ def renderizar_assistente_projeto_personalizado():
                     "valor_unitario": preco,
                     "projeto_id": projeto["id"],
                 })
+            projeto["status"] = "Orçamento preparado"
+            registrar_evento_projeto(projeto, "Dados enviados para preparação do orçamento")
+            atualizar_projeto(projeto)
             st.session_state._projeto_origem_id = projeto["id"]
+            st.session_state._atendimento_origem_id = projeto.get("atendimento_id", "") or st.session_state.get("_atendimento_origem_id", "")
             st.session_state._mensagem_sucesso_pendente = (
                 "Projeto salvo e itens preparados. Abra a aba Novo Orçamento para revisar valores e finalizar."
             )
@@ -3783,7 +3853,7 @@ with aba_atendimento:
                 if item.get("numero_proposta"):
                     st.info(f"📄 Atendimento vinculado à proposta **{item.get('numero_proposta')}**")
 
-                b1, b2, b3 = st.columns(3)
+                b1, b2, b3, b4 = st.columns(4)
                 if b1.button("💾 Salvar", key=f"salvar_at_{item.get('id')}", use_container_width=True):
                     status_anterior = item.get("status", "Novo contato")
                     item.update({"status": novo_status, "prioridade": nova_prioridade, "responsavel": "" if novo_responsavel == "Sem responsável" else novo_responsavel, "modo": modo_conversa, "resposta_rascunho": resposta, "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
@@ -3797,7 +3867,21 @@ with aba_atendimento:
                 link_wa = f"https://wa.me/{numero_wa}?text={urllib.parse.quote(resposta)}" if telefone_limpo else ""
                 if link_wa:
                     b2.link_button("📱 Responder", link_wa, use_container_width=True)
-                if b3.button("➕ Criar orçamento", key=f"orc_at_{item.get('id')}", use_container_width=True):
+                if b3.button("🧩 Criar projeto", key=f"proj_at_{item.get('id')}", use_container_width=True):
+                    st.session_state._projeto_prefill = {
+                        "cliente": item.get("cliente", ""),
+                        "whatsapp": item.get("telefone", ""),
+                        "necessidade": item.get("mensagem", ""),
+                        "atendimento_id": item.get("id", ""),
+                        "origem": "Atendimento",
+                    }
+                    status_antigo = item.get("status", "Novo contato")
+                    item["status"] = "Orçamento em elaboração"
+                    item["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                    registrar_evento_atendimento(item, "Dados enviados para criação de projeto personalizado")
+                    salvar_atendimentos(dados_at)
+                    st.success("Projeto preparado. Abra a aba Projeto Personalizado para revisar e salvar.")
+                if b4.button("➕ Criar orçamento", key=f"orc_at_{item.get('id')}", use_container_width=True):
                     st.session_state.form_cliente = item.get("cliente", "")
                     st.session_state.form_whatsapp = item.get("telefone", "")
                     st.session_state.form_observacoes = item.get("mensagem", "")
@@ -3992,10 +4076,13 @@ with aba1:
                 "validade_dias": validade,
                 "pago": antigo.get("pago", False),
                 "entregue": antigo.get("entregue", False),
+                "aprovado": antigo.get("aprovado", False),
+                "timeline": antigo.get("timeline", []) if isinstance(antigo.get("timeline", []), list) else [],
                 "atendimento_id": antigo.get("atendimento_id") or st.session_state.get("_atendimento_origem_id", ""),
                 "projeto_id": antigo.get("projeto_id") or st.session_state.get("_projeto_origem_id", ""),
             }
 
+            registrar_evento_proposta(dados, "Proposta atualizada" if st.session_state.editar_numero else "Proposta criada")
             if st.session_state.editar_numero:
                 atualizar_proposta(numero, dados)
             else:
@@ -4010,7 +4097,7 @@ with aba1:
                     if projeto_link.get("id") == projeto_origem_id:
                         projeto_link["numero_proposta"] = numero
                         projeto_link["status"] = "Orçamento criado"
-                        projeto_link["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                        registrar_evento_projeto(projeto_link, f"Proposta {numero} criada")
                         break
                 salvar_projetos(projetos_link)
 
@@ -4047,6 +4134,7 @@ with aba2:
         subtotal_p, desconto_p, total_p = calcular_valores_proposta(prop)
         pago_p = bool(prop.get("pago", False))
         entregue_p = bool(prop.get("entregue", False))
+        aprovado_p = bool(prop.get("aprovado", False))
         proposta_fechada = pago_p and entregue_p
 
         if proposta_fechada:
@@ -4084,9 +4172,25 @@ with aba2:
             if c5.button("🗑️ Excluir", key=f"del_{num_p}", use_container_width=True):
                 excluir_proposta(num_p)
 
-            s1, s2 = st.columns(2)
-            s1.checkbox("Pago", value=prop.get("pago", False), key=f"p_{num_p}", on_change=alternar_status, args=(num_p, "pago", not prop.get("pago", False)))
-            s2.checkbox("Entregue", value=prop.get("entregue", False), key=f"e_{num_p}", on_change=alternar_status, args=(num_p, "entregue", not prop.get("entregue", False)))
+            s1, s2, s3 = st.columns(3)
+            s1.checkbox("Aprovado", value=prop.get("aprovado", False), key=f"a_{num_p}", on_change=alternar_status, args=(num_p, "aprovado", not prop.get("aprovado", False)))
+            s2.checkbox("Pago", value=prop.get("pago", False), key=f"p_{num_p}", on_change=alternar_status, args=(num_p, "pago", not prop.get("pago", False)))
+            s3.checkbox("Entregue", value=prop.get("entregue", False), key=f"e_{num_p}", on_change=alternar_status, args=(num_p, "entregue", not prop.get("entregue", False)))
+
+            if entregue_p:
+                proxima_acao = "Registrar pós-venda"
+            elif not aprovado_p:
+                proxima_acao = "Aguardar ou registrar aprovação do cliente"
+            elif not pago_p:
+                proxima_acao = "Confirmar pagamento e acompanhar produção"
+            else:
+                proxima_acao = "Concluir produção e entregar"
+            st.info(f"🎯 **Próxima ação:** {proxima_acao}")
+            timeline_prop = prop.get("timeline", []) if isinstance(prop.get("timeline"), list) else []
+            if timeline_prop:
+                with st.expander("🕒 Linha do tempo da proposta"):
+                    for evento in reversed(timeline_prop[-20:]):
+                        st.write(f"**{evento.get('data', '—')}** · {evento.get('descricao', 'Atualização')}")
 
             st.divider()
             renderizar_caixa_projeto(prop, prefixo="hist")
@@ -4969,6 +5073,12 @@ with aba8:
         modelo_txt = " • ♻️ Modelo" if projeto.get("modelo") else ""
         titulo = f"{estrelas}{projeto.get('numero_proposta') or projeto.get('id')} — {projeto.get('cliente_nome') or 'Cliente'}{modelo_txt}"
         with st.expander(titulo):
+            st.info(f"🎯 **Próxima ação:** {proxima_acao_projeto(projeto)}")
+            timeline_projeto = projeto.get("timeline", []) if isinstance(projeto.get("timeline"), list) else []
+            if timeline_projeto:
+                with st.expander("🕒 Linha do tempo do projeto"):
+                    for evento in reversed(timeline_projeto[-20:]):
+                        st.write(f"**{evento.get('data', '—')}** · {evento.get('descricao', 'Atualização')}")
             c1, c2 = st.columns(2)
             c1.write(f"**Tema:** {projeto.get('tema') or 'Não informado'}")
             c1.write(f"**Produtos:** {', '.join(projeto.get('produtos', []) or []) or 'Não informado'}")
