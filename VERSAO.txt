@@ -1,3 +1,4 @@
-FestManager ERP
-Versão 3.9.1
-Sprint: Central de Atendimento + CRM Evolutivo
+FestManager
+Versão 3.9.2
+Caixa de Entrada Inteligente
+Data: 01/08/2026

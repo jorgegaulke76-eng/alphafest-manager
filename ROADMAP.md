@@ -61,3 +61,14 @@
 - Gestão de arquivos de produção por produto.
 - Integração do catálogo online com o domínio da empresa.
 - Sincronização com marketplaces e redes sociais via integrações oficiais.
+
+### Concluído na 3.9.2
+- Caixa de entrada com SLA visual.
+- Responsáveis e filtros da fila.
+- Ações rápidas de atendimento.
+- Resumo permanente na barra lateral.
+
+### Próximos passos
+- Integração oficial com WhatsApp Business Platform por webhook.
+- Centro de notificações em tempo real.
+- Portal do cliente e acompanhamento público do pedido.

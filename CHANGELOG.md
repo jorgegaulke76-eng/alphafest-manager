@@ -131,3 +131,16 @@
 - Geração de descrições para Mercado Livre e Shopee.
 - Botões para gerar tudo, somente descrições ou somente marketing.
 - Campo de características-base salvo junto ao produto para reutilização.
+
+## 3.9.2 — Caixa de Entrada Inteligente
+
+- Contador de atendimentos pendentes no título da aba.
+- Fila ordenada automaticamente por SLA e tempo de espera.
+- Indicadores separados para atendimentos em atenção e urgentes.
+- Configuração dos limites de SLA em minutos.
+- Responsável por atendimento: Anna, Jorge ou sem responsável.
+- Filtro por responsável.
+- Próxima ação sugerida conforme o status da conversa.
+- Atalhos para responder, criar orçamento, aguardar cliente, concluir e arquivar.
+- Resumo de atendimentos pendentes na barra lateral.
+- Correção do link do WhatsApp para números que já incluem o código do país.

@@ -88,7 +88,7 @@ ARQUIVO_PROJETOS = "projetos_db.json"
 ARQUIVO_CAMPANHAS = "campanhas_db.json"
 ARQUIVO_ATENDIMENTOS = "atendimentos_db.json"
 ARQUIVO_SEGMENTOS = "segmentos_db.json"
-VERSAO_APP = "3.9.1"
+VERSAO_APP = "3.9.2"
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -1769,7 +1769,7 @@ def salvar_campanhas(lista):
     save_document("campanhas_db", lista, ARQUIVO_CAMPANHAS)
 
 
-# --- CENTRAL DE ATENDIMENTO / CRM INTELIGENTE (3.9.1) ---
+# --- CENTRAL DE ATENDIMENTO / CRM INTELIGENTE (3.9.2) ---
 SEGMENTOS_PADRAO = [
     "Pessoa Física", "Empresa / CNPJ", "Boleira", "Doceira", "Confeiteira",
     "Escola", "Professor(a)", "Buffet", "Decoradora", "Igreja", "Loja",
@@ -1796,6 +1796,8 @@ CONFIG_ATENDIMENTO_PADRAO = {
     "aprovacao_arte": "Manual",
     "duvidas_negociacao": "Manual",
     "integracao_whatsapp": False,
+    "sla_atencao_min": 30,
+    "sla_urgente_min": 60,
 }
 
 def carregar_atendimentos():
@@ -1853,6 +1855,48 @@ def minutos_aguardando(item):
         except Exception:
             pass
     return 0
+
+def faixa_sla_atendimento(item, config=None):
+    """Retorna ícone, rótulo e prioridade numérica conforme o tempo de espera."""
+    config = config or CONFIG_ATENDIMENTO_PADRAO
+    minutos = minutos_aguardando(item)
+    atencao = max(1, int(config.get("sla_atencao_min", 30) or 30))
+    urgente = max(atencao + 1, int(config.get("sla_urgente_min", 60) or 60))
+    if minutos >= urgente:
+        return "🔴", "Urgente", 3
+    if minutos >= atencao:
+        return "🟡", "Atenção", 2
+    return "🟢", "No prazo", 1
+
+
+def tempo_aguardando_formatado(item):
+    minutos = minutos_aguardando(item)
+    horas, mins = divmod(minutos, 60)
+    if horas >= 24:
+        dias, horas = divmod(horas, 24)
+        return f"{dias}d {horas:02d}h {mins:02d}min"
+    return f"{horas:02d}h {mins:02d}min"
+
+
+def proxima_acao_atendimento(item):
+    status = str(item.get("status", "Novo contato"))
+    mapa = {
+        "Novo contato": "Ler e responder",
+        "Catálogo solicitado": "Enviar catálogo",
+        "Catálogo enviado": "Aguardar retorno",
+        "Orçamento solicitado": "Criar orçamento",
+        "Orçamento em elaboração": "Finalizar orçamento",
+        "Aguardando cliente": "Acompanhar retorno",
+        "Pedido aprovado": "Confirmar dados do pedido",
+        "Comprovante recebido": "Conferir pagamento",
+        "Arte aprovada": "Liberar produção",
+        "Em produção": "Atualizar andamento",
+        "Pronto": "Combinar entrega/retirada",
+        "Entregue": "Fazer pós-venda",
+        "Pós-venda": "Concluir atendimento",
+        "Arquivado": "Nenhuma ação",
+    }
+    return mapa.get(status, "Verificar atendimento")
 
 
 def _data_iso_segura(valor):
@@ -2239,6 +2283,17 @@ with st.sidebar:
     st.download_button("📥 BAIXAR BACKUP", data=json.dumps(h_atual, ensure_ascii=False, indent=4), file_name="backup_historico.json", mime="application/json", type="primary", use_container_width=True)
     st.download_button("📦 BACKUP DO CATÁLOGO", data=json.dumps(carregar_catalogo(), ensure_ascii=False, indent=4), file_name="backup_catalogo.json", mime="application/json", use_container_width=True)
     st.download_button("👥 BACKUP DE CLIENTES", data=json.dumps(carregar_clientes(), ensure_ascii=False, indent=4), file_name="backup_clientes.json", mime="application/json", use_container_width=True)
+
+    dados_sidebar_at = carregar_atendimentos()
+    abertos_sidebar_at = [a for a in dados_sidebar_at.get("itens", []) if a.get("status") not in ("Entregue", "Pós-venda", "Arquivado")]
+    if abertos_sidebar_at:
+        st.divider()
+        st.markdown("**📱 Atendimento agora**")
+        st.caption(f"🔔 {len(abertos_sidebar_at)} pendente(s) · 💰 {sum(1 for a in abertos_sidebar_at if 'Orçamento' in str(a.get('status', '')))} orçamento(s)")
+        urgentes_sidebar = sum(1 for a in abertos_sidebar_at if faixa_sla_atendimento(a, dados_sidebar_at.get("config"))[2] == 3)
+        if urgentes_sidebar:
+            st.error(f"{urgentes_sidebar} atendimento(s) urgente(s)")
+
     backup_enviado = st.file_uploader("💾 RESTAURAR BACKUP", type=["json"], key="restaurar_historico")
     if backup_enviado is not None and st.button("Restaurar agora", use_container_width=True):
         try:
@@ -2367,9 +2422,13 @@ mensagem_sucesso = st.session_state.pop("_mensagem_sucesso_pendente", None)
 if mensagem_sucesso:
     st.success(mensagem_sucesso)
 
+_dados_atendimento_badge = carregar_atendimentos()
+_qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
+_rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Atendimento"
+
 aba0, aba_atendimento, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
-    "📥 Atendimento",
+    _rotulo_atendimento,
     "➕ Novo Orçamento",
     "📋 Histórico",
     "🎯 Fluxo de Pedidos",
@@ -2535,33 +2594,51 @@ with aba_atendimento:
     tab_fila, tab_novo, tab_config = st.tabs(["📋 Fila de atendimento", "➕ Registrar contato", "⚙️ Modos e automações"])
 
     with tab_fila:
-        f1, f2, f3 = st.columns([2, 1, 1])
+        f1, f2, f3, f4 = st.columns([2, 1, 1, 1])
         busca_at = f1.text_input("Pesquisar cliente, telefone ou mensagem", key="busca_atendimento").strip().lower()
         status_filtro = f2.selectbox("Status", ["Todos"] + STATUS_ATENDIMENTO, key="filtro_status_at")
         prioridade_filtro = f3.selectbox("Prioridade", ["Todas", "Urgente", "Alta", "Normal", "Baixa"], key="filtro_prior_at")
+        responsavel_filtro = f4.selectbox("Responsável", ["Todos", "Anna", "Jorge", "Sem responsável"], key="filtro_resp_at")
         filtrados = []
         for item in itens_at:
-            base = " ".join(str(item.get(k, "")) for k in ["cliente", "telefone", "mensagem", "status", "assunto"]).lower()
+            base = " ".join(str(item.get(k, "")) for k in ["cliente", "telefone", "mensagem", "status", "assunto", "responsavel"]).lower()
             if busca_at and busca_at not in base:
                 continue
             if status_filtro != "Todos" and item.get("status") != status_filtro:
                 continue
             if prioridade_filtro != "Todas" and item.get("prioridade", "Normal") != prioridade_filtro:
                 continue
+            resp_item = str(item.get("responsavel", "")).strip() or "Sem responsável"
+            if responsavel_filtro != "Todos" and resp_item != responsavel_filtro:
+                continue
             filtrados.append(item)
-        filtrados = sorted(filtrados, key=lambda x: (x.get("status") in ("Arquivado", "Entregue"), -minutos_aguardando(x)))
-        m1, m2, m3, m4 = st.columns(4)
+
+        # Primeiro aparecem os itens com SLA mais crítico; depois, os mais antigos.
+        filtrados = sorted(
+            filtrados,
+            key=lambda x: (
+                x.get("status") in ("Arquivado", "Entregue", "Pós-venda"),
+                -faixa_sla_atendimento(x, config_at)[2],
+                -minutos_aguardando(x),
+            ),
+        )
+        m1, m2, m3, m4, m5 = st.columns(5)
         abertos = [x for x in itens_at if x.get("status") not in ("Arquivado", "Entregue", "Pós-venda")]
         m1.metric("Em aberto", len(abertos))
         m2.metric("Orçamentos", sum(1 for x in abertos if "Orçamento" in x.get("status", "")))
         m3.metric("Catálogos", sum(1 for x in abertos if x.get("status") == "Catálogo solicitado"))
-        m4.metric("+30 min", sum(1 for x in abertos if minutos_aguardando(x) >= 30))
+        m4.metric("Atenção", sum(1 for x in abertos if faixa_sla_atendimento(x, config_at)[2] == 2))
+        m5.metric("Urgentes", sum(1 for x in abertos if faixa_sla_atendimento(x, config_at)[2] == 3))
+
         if not filtrados:
             st.info("Nenhum atendimento encontrado.")
         for item in filtrados:
-            mins = minutos_aguardando(item)
-            titulo = f"{item.get('cliente', 'Contato')} · {item.get('status', 'Novo contato')} · {mins} min"
+            icone_sla, rotulo_sla, _ = faixa_sla_atendimento(item, config_at)
+            tempo_txt = tempo_aguardando_formatado(item)
+            responsavel_atual = str(item.get("responsavel", "")).strip() or "Sem responsável"
+            titulo = f"{icone_sla} {item.get('cliente', 'Contato')} · {item.get('status', 'Novo contato')} · {tempo_txt} · {responsavel_atual}"
             with st.expander(titulo):
+                st.caption(f"SLA: {rotulo_sla} · Próxima ação sugerida: **{proxima_acao_atendimento(item)}**")
                 a1, a2 = st.columns([2, 1])
                 with a1:
                     st.write(f"**WhatsApp:** {item.get('telefone') or 'Não informado'}")
@@ -2572,23 +2649,45 @@ with aba_atendimento:
                 with a2:
                     novo_status = st.selectbox("Status", STATUS_ATENDIMENTO, index=STATUS_ATENDIMENTO.index(item.get("status")) if item.get("status") in STATUS_ATENDIMENTO else 0, key=f"status_at_{item.get('id')}")
                     nova_prioridade = st.selectbox("Prioridade", ["Urgente", "Alta", "Normal", "Baixa"], index=["Urgente", "Alta", "Normal", "Baixa"].index(item.get("prioridade", "Normal")) if item.get("prioridade", "Normal") in ["Urgente", "Alta", "Normal", "Baixa"] else 2, key=f"prior_at_{item.get('id')}")
+                    novo_responsavel = st.selectbox("Responsável", ["Sem responsável", "Anna", "Jorge"], index=["Sem responsável", "Anna", "Jorge"].index(responsavel_atual) if responsavel_atual in ["Sem responsável", "Anna", "Jorge"] else 0, key=f"resp_at_{item.get('id')}")
                     modo_conversa = st.selectbox("Modo desta conversa", ["Manual", "Assistido", "Automático"], index=["Manual", "Assistido", "Automático"].index(item.get("modo", config_at.get("modo", "Manual"))) if item.get("modo", config_at.get("modo", "Manual")) in ["Manual", "Assistido", "Automático"] else 0, key=f"modo_at_{item.get('id')}")
+
                 b1, b2, b3 = st.columns(3)
-                if b1.button("💾 Salvar atendimento", key=f"salvar_at_{item.get('id')}", use_container_width=True):
-                    item.update({"status": novo_status, "prioridade": nova_prioridade, "modo": modo_conversa, "resposta_rascunho": resposta, "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
+                if b1.button("💾 Salvar", key=f"salvar_at_{item.get('id')}", use_container_width=True):
+                    item.update({"status": novo_status, "prioridade": nova_prioridade, "responsavel": "" if novo_responsavel == "Sem responsável" else novo_responsavel, "modo": modo_conversa, "resposta_rascunho": resposta, "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
                     salvar_atendimentos(dados_at)
                     st.rerun()
                 telefone_limpo = re.sub(r"\D", "", str(item.get("telefone", "")))
-                link_wa = f"https://wa.me/55{telefone_limpo}?text={urllib.parse.quote(resposta)}" if telefone_limpo else ""
+                numero_wa = telefone_limpo if telefone_limpo.startswith("55") else f"55{telefone_limpo}"
+                link_wa = f"https://wa.me/{numero_wa}?text={urllib.parse.quote(resposta)}" if telefone_limpo else ""
                 if link_wa:
-                    b2.link_button("📱 Responder no WhatsApp", link_wa, use_container_width=True)
+                    b2.link_button("📱 Responder", link_wa, use_container_width=True)
                 if b3.button("➕ Criar orçamento", key=f"orc_at_{item.get('id')}", use_container_width=True):
                     st.session_state.form_cliente = item.get("cliente", "")
                     st.session_state.form_whatsapp = item.get("telefone", "")
                     st.session_state.form_observacoes = item.get("mensagem", "")
                     item["status"] = "Orçamento em elaboração"
+                    item["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
                     salvar_atendimentos(dados_at)
                     st.success("Dados preparados. Abra a aba Novo Orçamento.")
+
+                q1, q2, q3, q4 = st.columns(4)
+                if q1.button("✅ Atendido", key=f"atendido_{item.get('id')}", use_container_width=True):
+                    item.update({"status": "Aguardando cliente", "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
+                    salvar_atendimentos(dados_at)
+                    st.rerun()
+                if q2.button("⏳ Aguardar cliente", key=f"aguardar_{item.get('id')}", use_container_width=True):
+                    item.update({"status": "Aguardando cliente", "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
+                    salvar_atendimentos(dados_at)
+                    st.rerun()
+                if q3.button("🏁 Concluir", key=f"concluir_{item.get('id')}", use_container_width=True):
+                    item.update({"status": "Pós-venda", "concluido_em": agora_local().strftime("%d/%m/%Y %H:%M"), "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
+                    salvar_atendimentos(dados_at)
+                    st.rerun()
+                if q4.button("📦 Arquivar", key=f"arquivar_{item.get('id')}", use_container_width=True):
+                    item.update({"status": "Arquivado", "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
+                    salvar_atendimentos(dados_at)
+                    st.rerun()
 
     with tab_novo:
         st.subheader("Registrar mensagem ou contato")
@@ -2597,9 +2696,10 @@ with aba_atendimento:
         telefone_at = n2.text_input("WhatsApp", key="novo_at_telefone")
         mensagem_at = st.text_area("Mensagem recebida", key="novo_at_mensagem", placeholder="Ex.: Gostaria do catálogo de topos e um orçamento para sábado")
         sugestao_status = sugerir_tipo_atendimento(mensagem_at)
-        n3, n4 = st.columns(2)
+        n3, n4, n5 = st.columns(3)
         status_at = n3.selectbox("Classificação", STATUS_ATENDIMENTO, index=STATUS_ATENDIMENTO.index(sugestao_status), key="novo_at_status")
         prioridade_at = n4.selectbox("Prioridade", ["Urgente", "Alta", "Normal", "Baixa"], index=2, key="novo_at_prioridade")
+        responsavel_at = n5.selectbox("Responsável", ["Sem responsável", "Anna", "Jorge"], key="novo_at_responsavel")
         if st.button("➕ Adicionar à fila", type="primary", use_container_width=True):
             if not nome_at.strip() and not telefone_at.strip():
                 st.warning("Informe pelo menos um nome ou WhatsApp.")
@@ -2611,6 +2711,7 @@ with aba_atendimento:
                     "mensagem": mensagem_at.strip(),
                     "status": status_at,
                     "prioridade": prioridade_at,
+                    "responsavel": "" if responsavel_at == "Sem responsável" else responsavel_at,
                     "modo": config_at.get("modo", "Manual"),
                     "origem": "Registro manual",
                     "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
@@ -2628,9 +2729,13 @@ with aba_atendimento:
         labels = {"boas_vindas": "Boas-vindas", "catalogo": "Solicitação de catálogo", "orcamento": "Pedido de orçamento", "comprovante": "Comprovante recebido", "aprovacao_arte": "Aprovação de arte", "duvidas_negociacao": "Dúvidas e negociações"}
         for chave, label in labels.items():
             regras[chave] = st.selectbox(label, ["Manual", "Assistido", "Automático"], index=["Manual", "Assistido", "Automático"].index(config_at.get(chave, "Manual")), key=f"regra_{chave}")
+        st.markdown("#### Tempo máximo de espera (SLA)")
+        sla1, sla2 = st.columns(2)
+        sla_atencao = sla1.number_input("Amarelo após (minutos)", min_value=1, max_value=1440, value=int(config_at.get("sla_atencao_min", 30)), step=5)
+        sla_urgente = sla2.number_input("Vermelho após (minutos)", min_value=int(sla_atencao) + 1, max_value=2880, value=max(int(sla_atencao) + 1, int(config_at.get("sla_urgente_min", 60))), step=5)
         st.warning("A leitura automática do WhatsApp ainda não está conectada. Esta versão organiza a fila e os modos de atendimento; a conexão oficial exigirá WhatsApp Business Platform e webhook.")
         if st.button("💾 Salvar modos de atendimento", type="primary"):
-            config_at.update({"modo": modo_geral, **regras})
+            config_at.update({"modo": modo_geral, "sla_atencao_min": int(sla_atencao), "sla_urgente_min": int(sla_urgente), **regras})
             salvar_atendimentos(dados_at)
             st.success("Configurações salvas.")
             st.rerun()
