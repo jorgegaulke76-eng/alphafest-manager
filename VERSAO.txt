@@ -1,4 +1,4 @@
 FestManager
-Versão 4.3.0
-Produtividade Operacional e Pesquisa Global
+Versão 4.4.0
+Projetos Personalizados e Necessidades do Cliente
 Data: 01/08/2026

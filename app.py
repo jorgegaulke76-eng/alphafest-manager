@@ -141,7 +141,7 @@ ARQUIVO_BACKUP_CONFIG = "backup_config.json"
 ARQUIVO_AUDITORIA = "auditoria_db.json"
 ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
-VERSAO_APP = "4.3.0"
+VERSAO_APP = "4.4.0"
 VERSAO_DADOS = 2
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
@@ -2157,6 +2157,140 @@ def texto_busca_projeto(projeto):
     return " ".join(str(x) for x in partes).lower()
 
 
+
+def renderizar_assistente_projeto_personalizado():
+    """Cria um briefing livre, sem quantidade mínima e sem limitar combinações."""
+    st.markdown("## 🧩 Projeto Personalizado")
+    st.caption(
+        "Comece pela necessidade do cliente. Os campos ajudam a organizar, mas não limitam o que a Alphafest pode criar."
+    )
+
+    with st.form("form_projeto_personalizado", clear_on_submit=False):
+        c1, c2 = st.columns(2)
+        cliente = c1.text_input("Cliente / identificação (opcional)", placeholder="Ex.: Maria, Escola ABC, Arena Beach")
+        whatsapp = c2.text_input("WhatsApp (opcional)", placeholder="Ex.: 11999999999")
+
+        necessidade = st.text_area(
+            "O que o cliente precisa?",
+            placeholder=(
+                "Ex.: Um Bubble de 55 cm para aniversário de 6 anos, tema espaço, "
+                "confete fosco em formato de lua e coração, tons azul e prata, com LED."
+            ),
+            height=130,
+        )
+
+        p1, p2, p3 = st.columns(3)
+        ocasiao = p1.text_input("Ocasião (opcional)", placeholder="Aniversário, empresa, escola...")
+        tema = p2.text_input("Tema / personagem (opcional)", placeholder="Stitch, futebol, marca da empresa...")
+        quantidade_livre = p3.text_input(
+            "Quantidade / necessidade (opcional)",
+            placeholder="1 unidade, 30 pessoas, conforme necessário...",
+        )
+
+        p4, p5 = st.columns(2)
+        prazo_texto = p4.text_input("Prazo ou data desejada (opcional)", placeholder="Ex.: sábado, 15/08, urgente")
+        limite_orcamento = p5.text_input("Faixa de orçamento do cliente (opcional)", placeholder="Ex.: até R$ 150")
+
+        catalogo_atual = carregar_catalogo()
+        nomes_catalogo = sorted({str(x.get("nome", "")).strip() for x in catalogo_atual if str(x.get("nome", "")).strip()})
+        bases = st.multiselect(
+            "Produtos-base que podem ajudar (opcional)",
+            nomes_catalogo,
+            help="Use apenas como ponto de partida. Você poderá criar qualquer solução fora do catálogo.",
+        )
+        solucao_livre = st.text_input(
+            "Outra solução / produto-base",
+            placeholder="Digite algo novo que ainda não existe no catálogo",
+        )
+        detalhes = st.text_area(
+            "Materiais, cores, tamanhos, acabamentos, acessórios e outros detalhes",
+            placeholder="Escreva livremente. Ex.: confete metalizado dourado, estrela pequena, fita azul, base de balões...",
+            height=110,
+        )
+        observacoes = st.text_area(
+            "Observações internas",
+            placeholder="Preferências do cliente, restrições, referências, dúvidas para confirmar...",
+            height=80,
+        )
+
+        salvar, preparar = st.columns(2)
+        botao_salvar = salvar.form_submit_button("💾 Salvar como projeto", use_container_width=True)
+        botao_preparar = preparar.form_submit_button("➡️ Salvar e preparar orçamento", type="primary", use_container_width=True)
+
+    if botao_salvar or botao_preparar:
+        if not necessidade.strip():
+            st.warning("Descreva o que o cliente precisa.")
+            return
+
+        produtos_base = list(bases)
+        if solucao_livre.strip() and solucao_livre.strip() not in produtos_base:
+            produtos_base.append(solucao_livre.strip())
+        if not produtos_base:
+            produtos_base = ["Solução personalizada"]
+
+        projeto = {
+            "id": f"PRJ-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
+            "tipo": "necessidade_personalizada",
+            "origem": "Assistente de Projetos",
+            "numero_proposta": "",
+            "cliente_nome": cliente.strip(),
+            "whatsapp": whatsapp.strip(),
+            "ocasiao": ocasiao.strip(),
+            "tema": tema.strip(),
+            "necessidade": necessidade.strip(),
+            "quantidade_livre": quantidade_livre.strip(),
+            "prazo_texto": prazo_texto.strip(),
+            "limite_orcamento": limite_orcamento.strip(),
+            "produtos": produtos_base,
+            "detalhes": detalhes.strip(),
+            "observacoes": observacoes.strip(),
+            "arquivos": [],
+            "modelo": False,
+            "favorito": False,
+            "status": "Briefing",
+            "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
+            "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
+        }
+        projetos = carregar_projetos()
+        projetos.insert(0, projeto)
+        salvar_projetos(projetos)
+
+        if botao_preparar:
+            st.session_state.form_cliente = cliente.strip()
+            st.session_state.form_whatsapp = whatsapp.strip()
+            especificacoes_partes = [
+                f"Necessidade: {necessidade.strip()}",
+                f"Ocasião: {ocasiao.strip()}" if ocasiao.strip() else "",
+                f"Tema: {tema.strip()}" if tema.strip() else "",
+                f"Quantidade/necessidade: {quantidade_livre.strip()}" if quantidade_livre.strip() else "",
+                f"Prazo desejado: {prazo_texto.strip()}" if prazo_texto.strip() else "",
+                f"Faixa de orçamento: {limite_orcamento.strip()}" if limite_orcamento.strip() else "",
+                f"Detalhes: {detalhes.strip()}" if detalhes.strip() else "",
+                f"Observações: {observacoes.strip()}" if observacoes.strip() else "",
+            ]
+            especificacoes = " | ".join(x for x in especificacoes_partes if x)
+            for nome_produto in produtos_base:
+                preco = 0.0
+                produto_catalogo = next((x for x in catalogo_atual if str(x.get("nome", "")).strip() == nome_produto), None)
+                if produto_catalogo:
+                    preco = valor_float(produto_catalogo.get("preco", produto_catalogo.get("valor", 0)))
+                st.session_state.temp_itens.append({
+                    "produto": nome_produto,
+                    "especificacoes": especificacoes,
+                    "quantidade": 1,
+                    "valor_unitario": preco,
+                    "projeto_id": projeto["id"],
+                })
+            st.session_state._projeto_origem_id = projeto["id"]
+            st.session_state._mensagem_sucesso_pendente = (
+                "Projeto salvo e itens preparados. Abra a aba Novo Orçamento para revisar valores e finalizar."
+            )
+            st.rerun()
+        else:
+            st.success("Projeto personalizado salvo na Memória da Empresa.")
+            st.rerun()
+
+
 def renderizar_caixa_projeto(proposta, prefixo="historico"):
     """Caixa do Projeto: arquivos, observações e reutilização ligados ao pedido."""
     projeto, _ = obter_ou_criar_projeto(proposta)
@@ -3072,9 +3206,10 @@ _dados_atendimento_badge = carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
 _rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Atendimento"
 
-aba0, aba_atendimento, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba9, aba7 = st.tabs([
+aba0, aba_atendimento, aba_projeto, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
     _rotulo_atendimento,
+    "🧩 Projeto Personalizado",
     "➕ Novo Orçamento",
     "📋 Histórico",
     "🎯 Fluxo de Pedidos",
@@ -3474,6 +3609,10 @@ with aba_atendimento:
             st.rerun()
 
 
+with aba_projeto:
+    renderizar_assistente_projeto_personalizado()
+
+
 with aba1:
     # Cabeçalho centralizado da área de orçamento.
     logo_aba1_b64, _ = encontrar_logo_base64()
@@ -3575,6 +3714,7 @@ with aba1:
                 "pago": antigo.get("pago", False),
                 "entregue": antigo.get("entregue", False),
                 "atendimento_id": antigo.get("atendimento_id") or st.session_state.get("_atendimento_origem_id", ""),
+                "projeto_id": antigo.get("projeto_id") or st.session_state.get("_projeto_origem_id", ""),
             }
 
             if st.session_state.editar_numero:
@@ -3583,6 +3723,17 @@ with aba1:
                 h = carregar_historico()
                 h.insert(0, dados)
                 salvar_historico_completo(h)
+
+            projeto_origem_id = st.session_state.pop("_projeto_origem_id", None) or dados.get("projeto_id")
+            if projeto_origem_id:
+                projetos_link = carregar_projetos()
+                for projeto_link in projetos_link:
+                    if projeto_link.get("id") == projeto_origem_id:
+                        projeto_link["numero_proposta"] = numero
+                        projeto_link["status"] = "Orçamento criado"
+                        projeto_link["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                        break
+                salvar_projetos(projetos_link)
 
             atendimento_origem_id = st.session_state.pop("_atendimento_origem_id", None) or dados.get("atendimento_id")
             if atendimento_origem_id:

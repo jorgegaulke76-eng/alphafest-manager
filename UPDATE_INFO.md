@@ -1,27 +1,11 @@
-# UPDATE INFO — FestManager 4.3.0
+# FestManager 4.4.0 — Atualização
 
-Versão anterior: 4.2.1
-Nova versão: 4.3.0
-
-## Objetivo
-Reduzir navegação e cliques na operação diária, mantendo o desempenho e a proteção dos dados.
-
-## Novidades
-- Pesquisa global em clientes, propostas, produtos, atendimentos, projetos e arquivos.
-- Pesquisa disponível na barra lateral em qualquer tela.
-- Ações rápidas para preparar orçamento, abrir WhatsApp, selecionar proposta e filtrar produto.
-- Fila operacional unificada na Central do Dia.
-- Ordenação automática por urgência, SLA, atraso, entrega e etapa de produção.
-- Próxima ação sugerida para cada item da fila.
-
-## Arquivos alterados
-- app.py
-- VERSAO.txt
-- CHANGELOG.md
-- UPDATE_INFO.md
-
-## Dados e segurança
-- Migração de banco: não.
-- Arquivos JSON incluídos: não.
-- Registros existentes alterados: não.
-- Compatível com a estrutura de dados v2.
+- Base: 4.3.0
+- Nova aba: **Projeto Personalizado**
+- Começa pela necessidade do cliente, sem quantidade mínima.
+- Campos são opcionais, exceto a descrição da necessidade.
+- Permite produtos-base do catálogo e soluções totalmente novas.
+- Salva o briefing na Memória da Empresa.
+- Pode preparar automaticamente os itens do Novo Orçamento.
+- Não altera nem substitui arquivos de dados.
+- Migração de banco: não necessária.

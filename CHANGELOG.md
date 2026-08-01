@@ -193,3 +193,10 @@ hangelog
 - Priorização automática por SLA, atraso, entrega e estágio de produção.
 - Próxima ação sugerida para cada pendência.
 - Sem migração ou substituição de dados.
+
+
+## 4.4.0
+- Assistente de Projeto Personalizado baseado na necessidade do cliente.
+- Quantidade livre e sem mínimo obrigatório.
+- Descrição livre de materiais, cores, tamanhos, acessórios e acabamentos.
+- Integração do briefing com orçamento e Memória da Empresa.
