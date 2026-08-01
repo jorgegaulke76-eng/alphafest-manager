@@ -1,3 +1,17 @@
+# Versão 3.9.1 — Central de Atendimento e CRM Evolutivo
+
+- Nova aba Central de Atendimento com fila, prioridades e tempo de espera.
+- Modos Manual, Assistido e Automático, com regras independentes por tipo de mensagem.
+- Respostas sugeridas editáveis e botão para abrir a conversa no WhatsApp.
+- Registro manual de contatos enquanto a integração oficial do WhatsApp não estiver conectada.
+- Atalho para iniciar orçamento a partir do atendimento.
+- Central do Dia mostra atendimentos pendentes, pedidos de orçamento, catálogos e contatos há mais de 30 minutos.
+- Cadastro de clientes evolutivo: apenas nome/identificação é necessário; os demais dados são opcionais.
+- Perfis comerciais múltiplos, interesses, campanhas, potencial, cidade e origem do cliente.
+- Perfis/segmentos comerciais editáveis pelo próprio sistema.
+- Novos bancos `atendimentos_db.json` e `segmentos_db.json`, sincronizados pelo Supabase com fallback local.
+- Integração automática com WhatsApp preparada, mas ainda depende da WhatsApp Business Platform e webhook oficial.
+
 # Versão 3.8.0 — Assistente Comercial
 
 - Calendário Comercial Inteligente com campanhas nacionais, locais, internas e personalizadas.

@@ -86,7 +86,9 @@ ARQUIVO_PRODUCAO = "producao_db.json"
 ARQUIVO_EMPRESA = "empresa_config.json"
 ARQUIVO_PROJETOS = "projetos_db.json"
 ARQUIVO_CAMPANHAS = "campanhas_db.json"
-VERSAO_APP = "3.8.0"
+ARQUIVO_ATENDIMENTOS = "atendimentos_db.json"
+ARQUIVO_SEGMENTOS = "segmentos_db.json"
+VERSAO_APP = "3.9.1"
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -1767,6 +1769,92 @@ def salvar_campanhas(lista):
     save_document("campanhas_db", lista, ARQUIVO_CAMPANHAS)
 
 
+# --- CENTRAL DE ATENDIMENTO / CRM INTELIGENTE (3.9.1) ---
+SEGMENTOS_PADRAO = [
+    "Pessoa Física", "Empresa / CNPJ", "Boleira", "Doceira", "Confeiteira",
+    "Escola", "Professor(a)", "Buffet", "Decoradora", "Igreja", "Loja",
+    "Parceiro", "Clínica", "Academia", "Esportes", "Beach Tennis",
+    "Tênis", "Basquete", "Futebol", "Vôlei", "Outros",
+]
+INTERESSES_PADRAO = [
+    "Papelaria personalizada", "Papel de arroz", "Balões", "Bubble",
+    "Impressão 3D", "Laser", "Lembrancinhas", "Gráfica rápida",
+    "Brindes", "Camisetas", "Medalhas", "Troféus", "Banners",
+]
+STATUS_ATENDIMENTO = [
+    "Novo contato", "Catálogo solicitado", "Catálogo enviado",
+    "Orçamento solicitado", "Orçamento em elaboração", "Aguardando cliente",
+    "Pedido aprovado", "Comprovante recebido", "Arte aprovada",
+    "Em produção", "Pronto", "Entregue", "Pós-venda", "Arquivado",
+]
+CONFIG_ATENDIMENTO_PADRAO = {
+    "modo": "Manual",
+    "boas_vindas": "Assistido",
+    "catalogo": "Assistido",
+    "orcamento": "Manual",
+    "comprovante": "Manual",
+    "aprovacao_arte": "Manual",
+    "duvidas_negociacao": "Manual",
+    "integracao_whatsapp": False,
+}
+
+def carregar_atendimentos():
+    dados = load_document("atendimentos_db", ARQUIVO_ATENDIMENTOS, {"config": CONFIG_ATENDIMENTO_PADRAO, "itens": []})
+    if not isinstance(dados, dict):
+        dados = {"config": dict(CONFIG_ATENDIMENTO_PADRAO), "itens": []}
+    config = dict(CONFIG_ATENDIMENTO_PADRAO)
+    config.update(dados.get("config") or {})
+    itens = dados.get("itens") if isinstance(dados.get("itens"), list) else []
+    return {"config": config, "itens": itens}
+
+def salvar_atendimentos(dados):
+    save_document("atendimentos_db", dados, ARQUIVO_ATENDIMENTOS)
+
+def carregar_segmentos():
+    dados = load_document("segmentos_db", ARQUIVO_SEGMENTOS, SEGMENTOS_PADRAO)
+    return dados if isinstance(dados, list) and dados else list(SEGMENTOS_PADRAO)
+
+def salvar_segmentos(lista):
+    lista_limpa = sorted({str(x).strip() for x in lista if str(x).strip()}, key=str.lower)
+    save_document("segmentos_db", lista_limpa, ARQUIVO_SEGMENTOS)
+
+def sugerir_tipo_atendimento(texto):
+    t = str(texto or "").lower()
+    if any(x in t for x in ["catálogo", "catalogo", "modelos", "o que vocês fazem", "o que voces fazem"]):
+        return "Catálogo solicitado"
+    if any(x in t for x in ["orçamento", "orcamento", "valor", "preço", "preco", "quanto custa"]):
+        return "Orçamento solicitado"
+    if any(x in t for x in ["comprovante", "paguei", "pagamento", "pix"]):
+        return "Comprovante recebido"
+    if any(x in t for x in ["aprovado", "aprovada", "pode fazer", "gostei da arte"]):
+        return "Arte aprovada"
+    return "Novo contato"
+
+def resposta_sugerida_atendimento(item, empresa=None):
+    empresa = empresa or carregar_config_empresa()
+    nome = str(item.get("cliente", "")).strip() or "cliente"
+    status = item.get("status", "Novo contato")
+    if status == "Catálogo solicitado":
+        return f"Olá, {nome}! 😊 Vou enviar nosso catálogo para você conhecer as opções da {empresa.get('nome', 'empresa')}. Depois me diga quais produtos chamaram mais sua atenção."
+    if status == "Orçamento solicitado":
+        return f"Olá, {nome}! Recebi sua solicitação de orçamento. Vou organizar as informações e retorno com a proposta. Se puder, envie tema, quantidade e data desejada."
+    if status == "Comprovante recebido":
+        return f"Olá, {nome}! Comprovante recebido. Obrigado! Vamos conferir e dar andamento ao seu pedido."
+    if status == "Arte aprovada":
+        return f"Perfeito, {nome}! Arte aprovada. Vamos seguir para a próxima etapa do seu pedido."
+    return f"Olá, {nome}! Recebemos sua mensagem e já vamos atender você. 😊"
+
+def minutos_aguardando(item):
+    criado = str(item.get("criado_em", ""))
+    for formato in ("%d/%m/%Y %H:%M", "%Y-%m-%dT%H:%M:%S"):
+        try:
+            dt = datetime.strptime(criado[:19], formato).replace(tzinfo=agora_local().tzinfo)
+            return max(0, int((agora_local() - dt).total_seconds() // 60))
+        except Exception:
+            pass
+    return 0
+
+
 def _data_iso_segura(valor):
     if isinstance(valor, date):
         return valor
@@ -2279,8 +2367,9 @@ mensagem_sucesso = st.session_state.pop("_mensagem_sucesso_pendente", None)
 if mensagem_sucesso:
     st.success(mensagem_sucesso)
 
-aba0, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba9, aba7 = st.tabs([
+aba0, aba_atendimento, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
+    "📥 Atendimento",
     "➕ Novo Orçamento",
     "📋 Histórico",
     "🎯 Fluxo de Pedidos",
@@ -2320,6 +2409,26 @@ with aba0:
     prontos_central = [t for t in tarefas_ativas_central if normalizar_status_fluxo(t.get("status")) == "Pronto"]
     pendentes_pagamento_central = [p for p in historico_central if not p.get("pago", False) and not p.get("entregue", False)]
     valor_previsto_hoje = sum(calcular_valores_proposta(p)[2] for p in entregas_hoje_central)
+
+    dados_atendimento_central = carregar_atendimentos()
+    atendimentos_abertos_central = [a for a in dados_atendimento_central.get("itens", []) if a.get("status") not in ("Entregue", "Pós-venda", "Arquivado")]
+    orcamentos_whatsapp_central = [a for a in atendimentos_abertos_central if a.get("status") in ("Orçamento solicitado", "Orçamento em elaboração")]
+    catalogos_whatsapp_central = [a for a in atendimentos_abertos_central if a.get("status") == "Catálogo solicitado"]
+    aguardando_resposta_central = [a for a in atendimentos_abertos_central if minutos_aguardando(a) >= 30]
+    if atendimentos_abertos_central:
+        st.subheader("📥 Caixa de atendimento")
+        wa1, wa2, wa3, wa4 = st.columns(4)
+        wa1.metric("Novos / pendentes", len(atendimentos_abertos_central))
+        wa2.metric("Orçamentos", len(orcamentos_whatsapp_central))
+        wa3.metric("Catálogos", len(catalogos_whatsapp_central))
+        wa4.metric("Aguardando +30 min", len(aguardando_resposta_central))
+        mais_urgentes = sorted(atendimentos_abertos_central, key=minutos_aguardando, reverse=True)[:5]
+        for item in mais_urgentes:
+            mins = minutos_aguardando(item)
+            cor = "🔴" if mins >= 60 else "🟡" if mins >= 30 else "🟢"
+            st.write(f"{cor} **{item.get('cliente', 'Contato')}** · {item.get('status', 'Novo contato')} · há {mins} min")
+        st.caption("Abra a aba Atendimento para responder, classificar ou criar orçamento.")
+        st.divider()
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("🚨 Atrasados", len(pedidos_atrasados_central))
@@ -2415,6 +2524,117 @@ with aba0:
         for p in resultados[:10]:
             _, _, total_resultado = calcular_valores_proposta(p)
             st.write(f"• **{p.get('numero_proposta', '—')} — {p.get('cliente_nome', 'Cliente')}** · {p.get('data_entrega', 'Sem data')} · R$ {total_resultado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+with aba_atendimento:
+    st.header("📥 Central de Atendimento")
+    st.caption("Organize contatos do WhatsApp em modo manual, assistido ou automático. A integração oficial poderá ser conectada depois sem alterar este fluxo.")
+    dados_at = carregar_atendimentos()
+    config_at = dados_at["config"]
+    itens_at = dados_at["itens"]
+
+    tab_fila, tab_novo, tab_config = st.tabs(["📋 Fila de atendimento", "➕ Registrar contato", "⚙️ Modos e automações"])
+
+    with tab_fila:
+        f1, f2, f3 = st.columns([2, 1, 1])
+        busca_at = f1.text_input("Pesquisar cliente, telefone ou mensagem", key="busca_atendimento").strip().lower()
+        status_filtro = f2.selectbox("Status", ["Todos"] + STATUS_ATENDIMENTO, key="filtro_status_at")
+        prioridade_filtro = f3.selectbox("Prioridade", ["Todas", "Urgente", "Alta", "Normal", "Baixa"], key="filtro_prior_at")
+        filtrados = []
+        for item in itens_at:
+            base = " ".join(str(item.get(k, "")) for k in ["cliente", "telefone", "mensagem", "status", "assunto"]).lower()
+            if busca_at and busca_at not in base:
+                continue
+            if status_filtro != "Todos" and item.get("status") != status_filtro:
+                continue
+            if prioridade_filtro != "Todas" and item.get("prioridade", "Normal") != prioridade_filtro:
+                continue
+            filtrados.append(item)
+        filtrados = sorted(filtrados, key=lambda x: (x.get("status") in ("Arquivado", "Entregue"), -minutos_aguardando(x)))
+        m1, m2, m3, m4 = st.columns(4)
+        abertos = [x for x in itens_at if x.get("status") not in ("Arquivado", "Entregue", "Pós-venda")]
+        m1.metric("Em aberto", len(abertos))
+        m2.metric("Orçamentos", sum(1 for x in abertos if "Orçamento" in x.get("status", "")))
+        m3.metric("Catálogos", sum(1 for x in abertos if x.get("status") == "Catálogo solicitado"))
+        m4.metric("+30 min", sum(1 for x in abertos if minutos_aguardando(x) >= 30))
+        if not filtrados:
+            st.info("Nenhum atendimento encontrado.")
+        for item in filtrados:
+            mins = minutos_aguardando(item)
+            titulo = f"{item.get('cliente', 'Contato')} · {item.get('status', 'Novo contato')} · {mins} min"
+            with st.expander(titulo):
+                a1, a2 = st.columns([2, 1])
+                with a1:
+                    st.write(f"**WhatsApp:** {item.get('telefone') or 'Não informado'}")
+                    st.write(f"**Mensagem:** {item.get('mensagem') or 'Sem mensagem registrada'}")
+                    st.caption(f"Criado em {item.get('criado_em', '—')} · Origem: {item.get('origem', 'Manual')}")
+                    sugestao = resposta_sugerida_atendimento(item)
+                    resposta = st.text_area("Resposta sugerida / manual", value=item.get("resposta_rascunho") or sugestao, key=f"resp_{item.get('id')}")
+                with a2:
+                    novo_status = st.selectbox("Status", STATUS_ATENDIMENTO, index=STATUS_ATENDIMENTO.index(item.get("status")) if item.get("status") in STATUS_ATENDIMENTO else 0, key=f"status_at_{item.get('id')}")
+                    nova_prioridade = st.selectbox("Prioridade", ["Urgente", "Alta", "Normal", "Baixa"], index=["Urgente", "Alta", "Normal", "Baixa"].index(item.get("prioridade", "Normal")) if item.get("prioridade", "Normal") in ["Urgente", "Alta", "Normal", "Baixa"] else 2, key=f"prior_at_{item.get('id')}")
+                    modo_conversa = st.selectbox("Modo desta conversa", ["Manual", "Assistido", "Automático"], index=["Manual", "Assistido", "Automático"].index(item.get("modo", config_at.get("modo", "Manual"))) if item.get("modo", config_at.get("modo", "Manual")) in ["Manual", "Assistido", "Automático"] else 0, key=f"modo_at_{item.get('id')}")
+                b1, b2, b3 = st.columns(3)
+                if b1.button("💾 Salvar atendimento", key=f"salvar_at_{item.get('id')}", use_container_width=True):
+                    item.update({"status": novo_status, "prioridade": nova_prioridade, "modo": modo_conversa, "resposta_rascunho": resposta, "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
+                    salvar_atendimentos(dados_at)
+                    st.rerun()
+                telefone_limpo = re.sub(r"\D", "", str(item.get("telefone", "")))
+                link_wa = f"https://wa.me/55{telefone_limpo}?text={urllib.parse.quote(resposta)}" if telefone_limpo else ""
+                if link_wa:
+                    b2.link_button("📱 Responder no WhatsApp", link_wa, use_container_width=True)
+                if b3.button("➕ Criar orçamento", key=f"orc_at_{item.get('id')}", use_container_width=True):
+                    st.session_state.form_cliente = item.get("cliente", "")
+                    st.session_state.form_whatsapp = item.get("telefone", "")
+                    st.session_state.form_observacoes = item.get("mensagem", "")
+                    item["status"] = "Orçamento em elaboração"
+                    salvar_atendimentos(dados_at)
+                    st.success("Dados preparados. Abra a aba Novo Orçamento.")
+
+    with tab_novo:
+        st.subheader("Registrar mensagem ou contato")
+        n1, n2 = st.columns(2)
+        nome_at = n1.text_input("Nome / identificação", key="novo_at_nome")
+        telefone_at = n2.text_input("WhatsApp", key="novo_at_telefone")
+        mensagem_at = st.text_area("Mensagem recebida", key="novo_at_mensagem", placeholder="Ex.: Gostaria do catálogo de topos e um orçamento para sábado")
+        sugestao_status = sugerir_tipo_atendimento(mensagem_at)
+        n3, n4 = st.columns(2)
+        status_at = n3.selectbox("Classificação", STATUS_ATENDIMENTO, index=STATUS_ATENDIMENTO.index(sugestao_status), key="novo_at_status")
+        prioridade_at = n4.selectbox("Prioridade", ["Urgente", "Alta", "Normal", "Baixa"], index=2, key="novo_at_prioridade")
+        if st.button("➕ Adicionar à fila", type="primary", use_container_width=True):
+            if not nome_at.strip() and not telefone_at.strip():
+                st.warning("Informe pelo menos um nome ou WhatsApp.")
+            else:
+                itens_at.append({
+                    "id": f"AT-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
+                    "cliente": nome_at.strip() or "Contato sem nome",
+                    "telefone": telefone_at.strip(),
+                    "mensagem": mensagem_at.strip(),
+                    "status": status_at,
+                    "prioridade": prioridade_at,
+                    "modo": config_at.get("modo", "Manual"),
+                    "origem": "Registro manual",
+                    "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
+                })
+                salvar_atendimentos(dados_at)
+                st.success("Contato incluído na fila.")
+                st.rerun()
+
+    with tab_config:
+        st.subheader("Modo geral de atendimento")
+        modo_geral = st.radio("Escolha como o FestManager deve atuar", ["Manual", "Assistido", "Automático"], index=["Manual", "Assistido", "Automático"].index(config_at.get("modo", "Manual")), horizontal=True)
+        st.caption("Manual: apenas alerta. Assistido: prepara a resposta. Automático: permitido somente para respostas simples configuradas abaixo.")
+        st.markdown("#### Regras por tipo de mensagem")
+        regras = {}
+        labels = {"boas_vindas": "Boas-vindas", "catalogo": "Solicitação de catálogo", "orcamento": "Pedido de orçamento", "comprovante": "Comprovante recebido", "aprovacao_arte": "Aprovação de arte", "duvidas_negociacao": "Dúvidas e negociações"}
+        for chave, label in labels.items():
+            regras[chave] = st.selectbox(label, ["Manual", "Assistido", "Automático"], index=["Manual", "Assistido", "Automático"].index(config_at.get(chave, "Manual")), key=f"regra_{chave}")
+        st.warning("A leitura automática do WhatsApp ainda não está conectada. Esta versão organiza a fila e os modos de atendimento; a conexão oficial exigirá WhatsApp Business Platform e webhook.")
+        if st.button("💾 Salvar modos de atendimento", type="primary"):
+            config_at.update({"modo": modo_geral, **regras})
+            salvar_atendimentos(dados_at)
+            st.success("Configurações salvas.")
+            st.rerun()
+
 
 with aba1:
     # Cabeçalho centralizado da área de orçamento.
@@ -3271,7 +3491,7 @@ with aba6:
 
         filtrados_cli = []
         for cli in clientes:
-            base = " ".join(str(cli.get(c, "")) for c in ["nome", "documento", "whatsapp", "email", "observacoes"]).lower()
+            base = " ".join(str(cli.get(c, "")) for c in ["nome", "documento", "whatsapp", "email", "observacoes", "cidade", "origem_cliente", "segmentos", "interesses", "campanhas_interesse"]).lower()
             if not termo_cli or termo_cli in base:
                 filtrados_cli.append(cli)
 
@@ -3306,6 +3526,12 @@ with aba6:
                     st.write(f"**WhatsApp:** {cli.get('whatsapp') or 'Não informado'}")
                     st.write(f"**E-mail:** {cli.get('email') or 'Não informado'}")
                     st.write(f"**Aniversário/Data especial:** {cli.get('aniversario') or 'Não informado'}")
+                    st.write(f"**Cidade:** {cli.get('cidade') or 'Não informado'}")
+                    if cli.get("segmentos"):
+                        st.write("**Perfis:** " + ", ".join(cli.get("segmentos", [])))
+                    if cli.get("interesses"):
+                        st.write("**Interesses:** " + ", ".join(cli.get("interesses", [])))
+                    st.write(f"**Potencial comercial:** {'⭐' * int(cli.get('potencial', 0) or 0) or 'Não avaliado'}")
                     if cli.get("observacoes"):
                         st.write(f"**Observações:** {cli.get('observacoes')}")
                 with cstats:
@@ -3353,9 +3579,33 @@ with aba6:
         cli_nome = c1.text_input("Nome / Razão Social", value=cliente_edicao.get("nome", "") if cliente_edicao else "", key=f"cli_nome_{edit_id}")
         cli_doc = c1.text_input("CPF / CNPJ", value=cliente_edicao.get("documento", "") if cliente_edicao else "", key=f"cli_doc_{edit_id}")
         cli_wa = c1.text_input("WhatsApp", value=cliente_edicao.get("whatsapp", "") if cliente_edicao else "", key=f"cli_wa_{edit_id}")
-        cli_email = c2.text_input("E-mail", value=cliente_edicao.get("email", "") if cliente_edicao else "", key=f"cli_email_{edit_id}")
-        cli_aniv = c2.text_input("Aniversário / Data especial", value=cliente_edicao.get("aniversario", "") if cliente_edicao else "", key=f"cli_aniv_{edit_id}")
-        cli_obs = c2.text_area("Observações", value=cliente_edicao.get("observacoes", "") if cliente_edicao else "", key=f"cli_obs_{edit_id}")
+        cli_email = c2.text_input("E-mail (opcional)", value=cliente_edicao.get("email", "") if cliente_edicao else "", key=f"cli_email_{edit_id}")
+        cli_aniv = c2.text_input("Aniversário / Data especial (opcional)", value=cliente_edicao.get("aniversario", "") if cliente_edicao else "", key=f"cli_aniv_{edit_id}")
+        cli_cidade = c2.text_input("Cidade (opcional)", value=cliente_edicao.get("cidade", "") if cliente_edicao else "", key=f"cli_cidade_{edit_id}")
+        segmentos_disponiveis = carregar_segmentos()
+        cli_segmentos = st.multiselect("Perfis comerciais (opcional, pode marcar vários)", segmentos_disponiveis, default=cliente_edicao.get("segmentos", []) if cliente_edicao else [], key=f"cli_segmentos_{edit_id}")
+        cli_interesses = st.multiselect("Interesses (opcional)", INTERESSES_PADRAO, default=cliente_edicao.get("interesses", []) if cliente_edicao else [], key=f"cli_interesses_{edit_id}")
+        campanhas_nomes = [c.get("nome") for c in carregar_campanhas() if c.get("ativa", True)]
+        cli_campanhas = st.multiselect("Campanhas de interesse (opcional)", campanhas_nomes, default=cliente_edicao.get("campanhas_interesse", []) if cliente_edicao else [], key=f"cli_campanhas_{edit_id}")
+        cli_potencial = st.slider("Potencial comercial (opcional)", 0, 5, int(cliente_edicao.get("potencial", 0) or 0) if cliente_edicao else 0, help="0 = ainda não avaliado; 5 = alto potencial")
+        opcoes_origem = ["Não informado", "WhatsApp", "Instagram", "Facebook", "TikTok", "Google", "Indicação", "Mercado Livre", "Shopee", "Loja", "Outro"]
+        origem_atual = cliente_edicao.get("origem_cliente", "Não informado") if cliente_edicao else "Não informado"
+        if origem_atual not in opcoes_origem:
+            origem_atual = "Não informado"
+        cli_origem = st.selectbox("Origem do cliente (opcional)", opcoes_origem, index=opcoes_origem.index(origem_atual), key=f"cli_origem_cliente_{edit_id}")
+        cli_obs = st.text_area("Observações internas (opcional)", value=cliente_edicao.get("observacoes", "") if cliente_edicao else "", key=f"cli_obs_{edit_id}")
+        st.caption("Somente o nome/identificação é necessário. O cadastro pode ser enriquecido aos poucos, sem bloquear o atendimento.")
+        with st.expander("⚙️ Gerenciar perfis comerciais"):
+            novo_segmento = st.text_input("Adicionar novo perfil/segmento", key=f"novo_segmento_{edit_id}")
+            gs1, gs2 = st.columns(2)
+            if gs1.button("Adicionar perfil", key=f"add_segmento_{edit_id}", use_container_width=True):
+                if novo_segmento.strip():
+                    salvar_segmentos(carregar_segmentos() + [novo_segmento.strip()])
+                    st.rerun()
+            segmento_remover = gs2.selectbox("Remover perfil", ["—"] + carregar_segmentos(), key=f"rem_segmento_{edit_id}")
+            if st.button("Remover perfil selecionado", key=f"btn_rem_segmento_{edit_id}") and segmento_remover != "—":
+                salvar_segmentos([x for x in carregar_segmentos() if x != segmento_remover])
+                st.rerun()
         ac1, ac2 = st.columns(2)
         if ac1.button("💾 Salvar cliente", type="primary", use_container_width=True):
             if not cli_nome.strip():
@@ -3368,6 +3618,12 @@ with aba6:
                     "whatsapp": cli_wa.strip(),
                     "email": cli_email.strip(),
                     "aniversario": cli_aniv.strip(),
+                    "cidade": cli_cidade.strip(),
+                    "segmentos": cli_segmentos,
+                    "interesses": cli_interesses,
+                    "campanhas_interesse": cli_campanhas,
+                    "potencial": cli_potencial,
+                    "origem_cliente": "" if cli_origem == "Não informado" else cli_origem,
                     "observacoes": cli_obs.strip(),
                     "origem": cliente_edicao.get("origem", "Cadastro manual") if cliente_edicao else "Cadastro manual",
                     "criado_em": cliente_edicao.get("criado_em", agora_local().strftime("%d/%m/%Y %H:%M")) if cliente_edicao else agora_local().strftime("%d/%m/%Y %H:%M"),

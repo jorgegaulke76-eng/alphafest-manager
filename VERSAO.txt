@@ -1,3 +1,3 @@
 FestManager ERP
-Versão 3.8.0
-Sprint: Assistente Comercial — Calendário Inteligente
+Versão 3.9.1
+Sprint: Central de Atendimento + CRM Evolutivo
