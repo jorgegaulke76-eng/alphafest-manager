@@ -200,3 +200,10 @@ hangelog
 - Quantidade livre e sem mínimo obrigatório.
 - Descrição livre de materiais, cores, tamanhos, acessórios e acabamentos.
 - Integração do briefing com orçamento e Memória da Empresa.
+
+## 5.0.0 — Base de Conhecimento
+- Biblioteca viva de componentes e características.
+- Categorias e opções criadas diretamente pela equipe.
+- Componentes vinculados aos projetos realizados.
+- Pesquisa por material, cor, formato, acessório, técnica, tema e característica livre.
+- Backup e pesquisa global atualizados para incluir a base de conhecimento.

@@ -141,8 +141,9 @@ ARQUIVO_BACKUP_CONFIG = "backup_config.json"
 ARQUIVO_AUDITORIA = "auditoria_db.json"
 ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
-VERSAO_APP = "4.4.0"
-VERSAO_DADOS = 2
+ARQUIVO_COMPONENTES = "componentes_db.json"
+VERSAO_APP = "5.0.0"
+VERSAO_DADOS = 3
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -2086,6 +2087,168 @@ def campanhas_em_oportunidade(referencia=None, limite_dias=120):
             oportunidades.append(item)
     return sorted(oportunidades, key=lambda x: (0 if x["em_periodo"] else 1, x["inicio_calculado"]))
 
+
+COMPONENTES_PADRAO = {
+    "Materiais": [],
+    "Cores": [],
+    "Tamanhos": [],
+    "Acabamentos": [],
+    "Acessórios": [],
+    "Formatos": [],
+    "Técnicas": [],
+    "Temas e personagens": [],
+    "Outros": [],
+}
+
+
+def carregar_componentes():
+    dados = load_document("componentes_db", ARQUIVO_COMPONENTES, COMPONENTES_PADRAO)
+    resultado = {chave: [] for chave in COMPONENTES_PADRAO}
+    if isinstance(dados, dict):
+        for categoria, valores in dados.items():
+            nome = str(categoria).strip()
+            if not nome:
+                continue
+            if isinstance(valores, list):
+                resultado[nome] = sorted({str(v).strip() for v in valores if str(v).strip()}, key=str.lower)
+    return resultado
+
+
+def salvar_componentes(dados):
+    if not isinstance(dados, dict):
+        raise ValueError("A biblioteca de componentes precisa ser um dicionário.")
+    limpo = {}
+    for categoria, valores in dados.items():
+        nome = str(categoria).strip()
+        if not nome:
+            continue
+        limpo[nome] = sorted({str(v).strip() for v in (valores or []) if str(v).strip()}, key=str.lower)
+    save_document("componentes_db", limpo, ARQUIVO_COMPONENTES)
+
+
+def componentes_do_projeto(projeto):
+    dados = projeto.get("componentes", {})
+    return dados if isinstance(dados, dict) else {}
+
+
+def texto_componentes_projeto(projeto):
+    partes = []
+    for categoria, valores in componentes_do_projeto(projeto).items():
+        partes.append(str(categoria))
+        partes.extend(str(v) for v in (valores or []))
+    return " ".join(partes)
+
+
+def renderizar_base_conhecimento():
+    st.header("🧠 Base de Conhecimento Alphafest")
+    st.caption("Cadastre opções que agilizam o trabalho, sem limitar a criação. Qualquer novidade pode ser adicionada na hora.")
+
+    tab_biblioteca, tab_vincular, tab_pesquisa = st.tabs([
+        "🧩 Biblioteca de componentes", "🔗 Componentes dos projetos", "🔎 Pesquisa por características"
+    ])
+
+    with tab_biblioteca:
+        componentes = carregar_componentes()
+        c1, c2, c3 = st.columns([2, 3, 1])
+        categorias = sorted(componentes.keys(), key=str.lower)
+        categoria = c1.selectbox("Categoria", categorias, key="kb_categoria")
+        novo = c2.text_input("Nova opção", placeholder="Ex.: Confete metalizado em formato de estrela", key="kb_nova_opcao")
+        if c3.button("Adicionar", type="primary", use_container_width=True, key="kb_add"):
+            if novo.strip():
+                componentes.setdefault(categoria, [])
+                if novo.strip().lower() not in {x.lower() for x in componentes[categoria]}:
+                    componentes[categoria].append(novo.strip())
+                    salvar_componentes(componentes)
+                    st.success("Opção adicionada.")
+                    st.rerun()
+                else:
+                    st.info("Essa opção já existe.")
+        with st.expander("➕ Criar nova categoria"):
+            nova_categoria = st.text_input("Nome da categoria", placeholder="Ex.: Tipos de confete", key="kb_nova_categoria")
+            if st.button("Criar categoria", key="kb_criar_categoria"):
+                if nova_categoria.strip() and nova_categoria.strip() not in componentes:
+                    componentes[nova_categoria.strip()] = []
+                    salvar_componentes(componentes)
+                    st.success("Categoria criada.")
+                    st.rerun()
+
+        st.divider()
+        for nome_cat in sorted(componentes.keys(), key=str.lower):
+            valores = componentes.get(nome_cat, [])
+            with st.expander(f"{nome_cat} ({len(valores)})", expanded=(nome_cat == categoria)):
+                if not valores:
+                    st.caption("Nenhuma opção cadastrada ainda.")
+                for idx, valor in enumerate(valores):
+                    a, b = st.columns([8, 1])
+                    a.write(valor)
+                    if b.button("🗑️", key=f"kb_del_{nome_cat}_{idx}", help="Remover da biblioteca; não altera projetos já salvos"):
+                        componentes[nome_cat] = [v for v in valores if v != valor]
+                        salvar_componentes(componentes)
+                        st.rerun()
+
+    with tab_vincular:
+        projetos = carregar_projetos()
+        if not projetos:
+            st.info("Ainda não há projetos na Memória da Empresa.")
+        else:
+            opcoes = {
+                f"{p.get('id')} — {p.get('cliente_nome') or 'Cliente'} — {p.get('tema') or ', '.join(p.get('produtos', []) or []) or 'Projeto'}": p
+                for p in projetos
+            }
+            escolhido = st.selectbox("Projeto", list(opcoes.keys()), key="kb_projeto")
+            projeto = dict(opcoes[escolhido])
+            biblioteca = carregar_componentes()
+            atuais = componentes_do_projeto(projeto)
+            novos_componentes = {}
+            st.caption("Marque apenas o que foi usado neste projeto. Você pode adicionar uma opção nova sem sair da tela.")
+            for cat in sorted(biblioteca.keys(), key=str.lower):
+                novos_componentes[cat] = st.multiselect(
+                    cat,
+                    biblioteca.get(cat, []),
+                    default=[x for x in atuais.get(cat, []) if x in biblioteca.get(cat, [])],
+                    key=f"kb_proj_{projeto.get('id')}_{cat}",
+                )
+            livres = st.text_area(
+                "Características livres / ainda não cadastradas",
+                value=str(projeto.get("caracteristicas_livres", "")),
+                placeholder="Ex.: confete meia-lua perolado, mistura exclusiva de cores...",
+                key=f"kb_livres_{projeto.get('id')}",
+            )
+            if st.button("💾 Salvar conhecimento do projeto", type="primary", use_container_width=True, key="kb_salvar_projeto"):
+                projeto["componentes"] = {k: v for k, v in novos_componentes.items() if v}
+                projeto["caracteristicas_livres"] = livres.strip()
+                atualizar_projeto(projeto)
+                st.success("Conhecimento do projeto salvo.")
+                st.rerun()
+
+    with tab_pesquisa:
+        termo = st.text_input("Pesquisar", placeholder="Ex.: coração, fosco, dourado, LED, beach tennis", key="kb_busca").strip().lower()
+        projetos = carregar_projetos()
+        if termo:
+            encontrados = []
+            for projeto in projetos:
+                base = " ".join([
+                    texto_busca_projeto(projeto), texto_componentes_projeto(projeto),
+                    str(projeto.get("caracteristicas_livres", "")), str(projeto.get("necessidade", "")),
+                    str(projeto.get("detalhes", "")),
+                ]).lower()
+                if termo in base:
+                    encontrados.append(projeto)
+            st.caption(f"{len(encontrados)} projeto(s) encontrado(s)")
+            for projeto in encontrados[:50]:
+                with st.expander(f"{projeto.get('id')} — {projeto.get('cliente_nome') or 'Cliente'}"):
+                    st.write(f"**Produtos:** {', '.join(projeto.get('produtos', []) or []) or 'Não informado'}")
+                    st.write(f"**Tema:** {projeto.get('tema') or 'Não informado'}")
+                    comps = componentes_do_projeto(projeto)
+                    if comps:
+                        for cat, valores in comps.items():
+                            st.write(f"**{cat}:** {', '.join(valores)}")
+                    if projeto.get("caracteristicas_livres"):
+                        st.write(f"**Características livres:** {projeto.get('caracteristicas_livres')}")
+        else:
+            st.info("Digite uma característica para localizar produções semelhantes.")
+
+
 def carregar_projetos():
     dados = load_document("projetos_db", ARQUIVO_PROJETOS, [])
     return dados if isinstance(dados, list) else []
@@ -2150,7 +2313,8 @@ def texto_busca_projeto(projeto):
     partes = [
         projeto.get("id", ""), projeto.get("numero_proposta", ""), projeto.get("cliente_nome", ""),
         projeto.get("whatsapp", ""), projeto.get("tema", ""), projeto.get("observacoes", ""),
-        " ".join(projeto.get("produtos", []) or []),
+        " ".join(projeto.get("produtos", []) or []), texto_componentes_projeto(projeto),
+        projeto.get("caracteristicas_livres", ""), projeto.get("necessidade", ""), projeto.get("detalhes", ""),
     ]
     for arq in projeto.get("arquivos", []) or []:
         partes.extend([arq.get("nome", ""), arq.get("categoria", ""), arq.get("descricao", ""), " ".join(arq.get("tags", []) or [])])
@@ -2416,7 +2580,7 @@ def pesquisar_global(termo, limite_por_tipo=8):
     evitando consultas desnecessárias ao Supabase durante os reruns do Streamlit.
     """
     termo = str(termo or "").strip().lower()
-    resultado = {"clientes": [], "propostas": [], "produtos": [], "atendimentos": [], "projetos": []}
+    resultado = {"clientes": [], "propostas": [], "produtos": [], "atendimentos": [], "projetos": [], "componentes": []}
     if len(termo) < 2:
         return resultado
 
@@ -2458,11 +2622,21 @@ def pesquisar_global(termo, limite_por_tipo=8):
             if len(resultado["atendimentos"]) >= limite_por_tipo:
                 break
 
+    for categoria, valores in carregar_componentes().items():
+        for valor in valores:
+            if termo in f"{categoria} {valor}".lower():
+                resultado["componentes"].append({"categoria": categoria, "valor": valor})
+                if len(resultado["componentes"]) >= limite_por_tipo:
+                    break
+        if len(resultado["componentes"]) >= limite_por_tipo:
+            break
+
     for projeto in carregar_projetos():
         arquivos = projeto.get("arquivos", []) if isinstance(projeto.get("arquivos"), list) else []
         partes = [
             projeto.get("cliente", ""), projeto.get("tema", ""), projeto.get("produto", ""),
-            projeto.get("numero_proposta", ""), projeto.get("observacoes", "")
+            projeto.get("numero_proposta", ""), projeto.get("observacoes", ""),
+            texto_componentes_projeto(projeto), projeto.get("caracteristicas_livres", ""), projeto.get("necessidade", ""), projeto.get("detalhes", "")
         ]
         for arquivo in arquivos:
             partes.extend([arquivo.get("nome", ""), arquivo.get("descricao", ""), arquivo.get("tags", "")])
@@ -2725,45 +2899,64 @@ def executar_migracoes_seguras():
     aplicadas = list(meta.get("migracoes_aplicadas", []) or [])
     if atual >= VERSAO_DADOS:
         return
-    alteracoes = {}
     try:
-        # Migração v2: campos evolutivos opcionais e documentos de segurança.
-        clientes = carregar_clientes()
-        mudou = 0
-        defaults_cliente = {"segmentos": [], "interesses": [], "campanhas_interesse": [], "origem": "", "potencial": 0, "cidade": ""}
-        for cliente in clientes:
-            for campo, padrao in defaults_cliente.items():
-                if campo not in cliente:
-                    cliente[campo] = list(padrao) if isinstance(padrao, list) else padrao
+        if atual < 2:
+            alteracoes = {}
+            clientes = carregar_clientes()
+            mudou = 0
+            defaults_cliente = {"segmentos": [], "interesses": [], "campanhas_interesse": [], "origem": "", "potencial": 0, "cidade": ""}
+            for cliente in clientes:
+                for campo, padrao in defaults_cliente.items():
+                    if campo not in cliente:
+                        cliente[campo] = list(padrao) if isinstance(padrao, list) else padrao
+                        mudou += 1
+            if mudou:
+                salvar_clientes(clientes)
+            alteracoes["clientes_campos_adicionados"] = mudou
+
+            catalogo = carregar_catalogo()
+            mudou = 0
+            for produto in catalogo:
+                for campo, padrao in {"ArquivosBiblioteca": [], "PalavrasChave": [], "PublicarSite": False}.items():
+                    if campo not in produto:
+                        produto[campo] = list(padrao) if isinstance(padrao, list) else padrao
+                        mudou += 1
+            if mudou:
+                salvar_catalogo(catalogo)
+            alteracoes["produtos_campos_adicionados"] = mudou
+            if not isinstance(load_document("auditoria_db", ARQUIVO_AUDITORIA, []), list):
+                save_document("auditoria_db", [], ARQUIVO_AUDITORIA)
+            if not isinstance(load_document("lixeira_db", ARQUIVO_LIXEIRA, []), list):
+                save_document("lixeira_db", [], ARQUIVO_LIXEIRA)
+            aplicadas.append({"versao": 2, "aplicada_em": agora_local().isoformat(), "alteracoes": alteracoes})
+            atual = 2
+            registrar_auditoria("Migração de dados", "Banco", "v2", alteracoes)
+
+        if atual < 3:
+            componentes = load_document("componentes_db", ARQUIVO_COMPONENTES, COMPONENTES_PADRAO)
+            if not isinstance(componentes, dict):
+                componentes = dict(COMPONENTES_PADRAO)
+                save_document("componentes_db", componentes, ARQUIVO_COMPONENTES)
+            projetos = carregar_projetos()
+            mudou = 0
+            for projeto in projetos:
+                if "componentes" not in projeto:
+                    projeto["componentes"] = {}
                     mudou += 1
-        if mudou:
-            salvar_clientes(clientes)
-        alteracoes["clientes_campos_adicionados"] = mudou
-
-        catalogo = carregar_catalogo()
-        mudou = 0
-        for produto in catalogo:
-            for campo, padrao in {"ArquivosBiblioteca": [], "PalavrasChave": [], "PublicarSite": False}.items():
-                if campo not in produto:
-                    produto[campo] = list(padrao) if isinstance(padrao, list) else padrao
+                if "caracteristicas_livres" not in projeto:
+                    projeto["caracteristicas_livres"] = ""
                     mudou += 1
-        if mudou:
-            salvar_catalogo(catalogo)
-        alteracoes["produtos_campos_adicionados"] = mudou
+            if mudou:
+                salvar_projetos(projetos)
+            alteracoes_v3 = {"projetos_campos_adicionados": mudou, "biblioteca_componentes_inicializada": True}
+            aplicadas.append({"versao": 3, "aplicada_em": agora_local().isoformat(), "alteracoes": alteracoes_v3})
+            atual = 3
+            registrar_auditoria("Migração de dados", "Banco", "v3", alteracoes_v3)
 
-        # Inicializa documentos sem sobrescrever conteúdo existente.
-        if not isinstance(load_document("auditoria_db", ARQUIVO_AUDITORIA, []), list):
-            save_document("auditoria_db", [], ARQUIVO_AUDITORIA)
-        if not isinstance(load_document("lixeira_db", ARQUIVO_LIXEIRA, []), list):
-            save_document("lixeira_db", [], ARQUIVO_LIXEIRA)
-
-        aplicadas.append({"versao": 2, "aplicada_em": agora_local().isoformat(), "alteracoes": alteracoes})
-        meta.update({"schema_version": 2, "ultima_migracao_em": agora_local().isoformat(), "migracoes_aplicadas": aplicadas})
+        meta.update({"schema_version": atual, "ultima_migracao_em": agora_local().isoformat(), "migracoes_aplicadas": aplicadas})
         save_document("system_meta", meta, ARQUIVO_SYSTEM_META)
-        registrar_auditoria("Migração de dados", "Banco", "v2", alteracoes)
     except Exception as exc:
-        registrar_auditoria("Migração de dados", "Banco", "v2", {"erro": str(exc)}, resultado="ERRO")
-        # Não impede a abertura: mantém o sistema disponível e sinaliza na sessão.
+        registrar_auditoria("Migração de dados", "Banco", f"v{atual + 1}", {"erro": str(exc)}, resultado="ERRO")
         st.session_state._erro_migracao = f"Migração pendente: {exc}"
 
 
@@ -2820,6 +3013,7 @@ DOCUMENTOS_BACKUP = [
     ("auditoria_db", ARQUIVO_AUDITORIA, []),
     ("lixeira_db", ARQUIVO_LIXEIRA, []),
     ("system_meta", ARQUIVO_SYSTEM_META, SYSTEM_META_PADRAO),
+    ("componentes_db", ARQUIVO_COMPONENTES, COMPONENTES_PADRAO),
 ]
 
 def carregar_config_backup():
@@ -2908,7 +3102,7 @@ def backup_para_zip_bytes(payload):
 def verificar_integridade_dados():
     documentos, contagens = coletar_dados_backup()
     problemas = []
-    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db"}
+    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db", "componentes_db"}
     for chave in esperados_lista:
         if not isinstance(documentos.get(chave), list):
             problemas.append(f"{chave}: estrutura inválida (esperada lista).")
@@ -3206,7 +3400,7 @@ _dados_atendimento_badge = carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
 _rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Atendimento"
 
-aba0, aba_atendimento, aba_projeto, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba9, aba7 = st.tabs([
+aba0, aba_atendimento, aba_projeto, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
     _rotulo_atendimento,
     "🧩 Projeto Personalizado",
@@ -3217,6 +3411,7 @@ aba0, aba_atendimento, aba_projeto, aba1, aba2, aba3, aba4, aba5, aba6, aba8, ab
     "📦 Catálogo",
     "👥 Clientes",
     "🧠 Memória",
+    "🧩 Conhecimento",
     "📅 Calendário Comercial",
     "⚙️ Configurações",
 ])
@@ -4721,6 +4916,10 @@ with aba8:
                     use_container_width=True,
                 )
 
+
+
+with aba_conhecimento:
+    renderizar_base_conhecimento()
 
 
 with aba9:
