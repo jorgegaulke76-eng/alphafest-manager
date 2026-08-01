@@ -15,7 +15,6 @@ from cloud_db import (
     load_document,
     save_document,
     upload_catalog_image,
-    upload_memory_file,
 )
 
 # --- CONFIGURAÇÃO ---
@@ -25,7 +24,7 @@ ARQUIVO_CATALOGO = "catalogo_db.json"
 ARQUIVO_CLIENTES = "clientes_db.json"
 ARQUIVO_PRODUCAO = "producao_db.json"
 ARQUIVO_EMPRESA = "empresa_config.json"
-VERSAO_APP = "3.6.0"
+VERSAO_APP = "3.5.1"
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -2421,8 +2420,8 @@ with aba5:
         if item_edicao:
             st.info(f"Editando: {item_edicao.get('Nome', 'Produto')}")
 
-        tab_info, tab_producao, tab_marketing, tab_midias, tab_memoria = st.tabs([
-            "📦 Informações", "⚙️ Produção", "📣 Marketing", "🖼️ Fotos e publicação", "🧠 Arquivos e artes"
+        tab_info, tab_producao, tab_marketing, tab_midias = st.tabs([
+            "📦 Informações", "⚙️ Produção", "📣 Marketing", "🖼️ Fotos e publicação"
         ])
 
         with tab_info:
@@ -2558,93 +2557,6 @@ with aba5:
             if item_edicao.get("Imagens"):
                 st.caption(f"{len(item_edicao.get('Imagens', []))} imagem(ns) já cadastrada(s).")
 
-        with tab_memoria:
-            st.markdown("### 🧠 Memória do produto")
-            st.caption("Adicione os arquivos individualmente conforme forem encontrados ou criados. Não é necessário organizar tudo de uma só vez.")
-
-            memoria_key = f"cat_memoria_temp_{sufixo}"
-            if memoria_key not in st.session_state:
-                st.session_state[memoria_key] = list(item_edicao.get("MemoriaArquivos", []) or [])
-            memoria_arquivos = st.session_state[memoria_key]
-
-            with st.container(border=True):
-                arquivo_memoria = st.file_uploader(
-                    "Selecionar um arquivo",
-                    type=None,
-                    accept_multiple_files=False,
-                    key=f"cat_memoria_upload_{sufixo}",
-                    help="Aceita fotos, PDFs, SVG, STL, ZIP, vídeos e arquivos de produção.",
-                )
-                m1, m2 = st.columns(2)
-                categoria_arquivo = m1.selectbox(
-                    "Tipo do arquivo",
-                    ["Arte", "Arquivo de produção", "Foto final", "Foto de referência", "Vídeo", "Manual/Dica", "Outro"],
-                    key=f"cat_memoria_tipo_{sufixo}",
-                )
-                tags_arquivo = m2.text_input(
-                    "Tags", placeholder="Ex.: Stitch, azul, menina, laser", key=f"cat_memoria_tags_{sufixo}"
-                )
-                descricao_arquivo = st.text_input(
-                    "Descrição curta", placeholder="Ex.: Arquivo final aprovado para corte", key=f"cat_memoria_desc_{sufixo}"
-                )
-                favorito_arquivo = st.checkbox(
-                    "⭐ Marcar como arquivo mestre/favorito", key=f"cat_memoria_fav_{sufixo}"
-                )
-                if st.button("⬆️ Adicionar arquivo", use_container_width=True, key=f"cat_memoria_add_{sufixo}"):
-                    if arquivo_memoria is None:
-                        st.warning("Escolha um arquivo antes de adicionar.")
-                    else:
-                        pasta_produto = slug_html(nome_cat or item_edicao.get("Nome", "produto")).lower()
-                        url_arquivo = upload_memory_file(arquivo_memoria, folder=f"memoria/{pasta_produto}")
-                        if url_arquivo:
-                            memoria_arquivos.append({
-                                "id": datetime.now().strftime("%Y%m%d%H%M%S%f"),
-                                "nome": str(arquivo_memoria.name),
-                                "url": url_arquivo,
-                                "mime": str(getattr(arquivo_memoria, "type", "") or ""),
-                                "tipo": categoria_arquivo,
-                                "tags": tags_arquivo.strip(),
-                                "descricao": descricao_arquivo.strip(),
-                                "favorito": bool(favorito_arquivo),
-                                "arquivado": False,
-                                "criado_em": datetime.now().isoformat(timespec="seconds"),
-                            })
-                            st.session_state[memoria_key] = memoria_arquivos
-                            st.success("Arquivo adicionado à memória do produto.")
-                            st.rerun()
-                        else:
-                            st.error("Não foi possível salvar o arquivo.")
-
-            ativos = [a for a in memoria_arquivos if not a.get("arquivado", False)]
-            arquivados = [a for a in memoria_arquivos if a.get("arquivado", False)]
-            st.markdown(f"#### Arquivos ativos ({len(ativos)})")
-            if not ativos:
-                st.info("Nenhum arquivo adicionado ainda.")
-            for pos, arq in enumerate(ativos):
-                with st.container(border=True):
-                    a1, a2, a3 = st.columns([5, 2, 2])
-                    estrela = "⭐ " if arq.get("favorito") else ""
-                    a1.markdown(f"**{estrela}{arq.get('nome', 'Arquivo')}**")
-                    a1.caption(f"{arq.get('tipo', 'Outro')} • {arq.get('descricao', '')}")
-                    if arq.get("tags"):
-                        a1.caption("Tags: " + str(arq.get("tags")))
-                    if arq.get("url"):
-                        a2.link_button("⬇️ Abrir/baixar", arq.get("url"), use_container_width=True)
-                    if a3.button("📦 Arquivar", key=f"cat_mem_arquivar_{sufixo}_{arq.get('id', pos)}", use_container_width=True):
-                        arq["arquivado"] = True
-                        st.session_state[memoria_key] = memoria_arquivos
-                        st.rerun()
-
-            if arquivados:
-                with st.expander(f"📦 Arquivados ({len(arquivados)})"):
-                    for pos, arq in enumerate(arquivados):
-                        c1, c2 = st.columns([6, 2])
-                        c1.write(f"{arq.get('nome', 'Arquivo')} — {arq.get('tipo', 'Outro')}")
-                        if c2.button("↩️ Restaurar", key=f"cat_mem_restaurar_{sufixo}_{arq.get('id', pos)}"):
-                            arq["arquivado"] = False
-                            st.session_state[memoria_key] = memoria_arquivos
-                            st.rerun()
-
         b1, b2 = st.columns(2)
         salvar = b1.button(
             "💾 Salvar alterações" if item_edicao else "💾 Salvar produto", type="primary",
@@ -2680,7 +2592,6 @@ with aba5:
                     "LegendaSocial": legenda_instagram.strip(), "Hashtags": hashtags.strip(),
                     "DescricaoMercadoLivre": texto_ml.strip(), "DescricaoShopee": texto_shopee.strip(),
                     "PublicarSite": publicar_site, "Destaque": destaque_cat,
-                    "MemoriaArquivos": list(st.session_state.get(memoria_key, item_edicao.get("MemoriaArquivos", [])) or []),
                     "AtualizadoEm": datetime.now().isoformat(timespec="seconds"),
                 })
                 if item_edicao:
@@ -2696,7 +2607,7 @@ with aba5:
         if cancelar:
             st.session_state.catalogo_edit_index = None
             for chave in list(st.session_state.keys()):
-                if (str(chave).startswith("cat_") and str(chave).endswith(f"_{sufixo}")) or str(chave) == memoria_key:
+                if str(chave).startswith("cat_") and str(chave).endswith(f"_{sufixo}"):
                     st.session_state.pop(chave, None)
             st.rerun()
 
@@ -2722,7 +2633,7 @@ with aba5:
             filtrados = [
                 (i, p) for i, p in enumerate(catalogo)
                 if not termo_cat
-                or termo_cat in (f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')} {p.get('CodigoInterno','')} {p.get('Descricao','')} {p.get('PalavrasChave','')} " + " ".join(f"{a.get('nome','')} {a.get('tags','')} {a.get('descricao','')}" for a in (p.get('MemoriaArquivos', []) or []))).lower()
+                or termo_cat in f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')} {p.get('CodigoInterno','')} {p.get('Descricao','')} {p.get('PalavrasChave','')}".lower()
             ]
             st.write(f"**{len(filtrados)} produto(s)**")
             for i, produto_cat in filtrados:
@@ -2765,11 +2676,6 @@ with aba5:
                     processos_lista = produto_cat.get("Processos", []) or []
                     if processos_lista:
                         cinfo.caption("Processos: " + " • ".join(processos_lista))
-                    memoria_lista = produto_cat.get("MemoriaArquivos", []) or []
-                    ativos_memoria = [a for a in memoria_lista if not a.get("arquivado", False)]
-                    if memoria_lista:
-                        favoritos_memoria = sum(1 for a in ativos_memoria if a.get("favorito"))
-                        cinfo.caption(f"🧠 Memória: {len(ativos_memoria)} arquivo(s) ativo(s)" + (f" • {favoritos_memoria} favorito(s)" if favoritos_memoria else ""))
                     if produto_cat.get("PublicarSite"):
                         cinfo.success("🌐 Marcado para publicação no site")
                     if cacoes.button("✏️ Editar", key=f"cat_editar_{i}", use_container_width=True):
