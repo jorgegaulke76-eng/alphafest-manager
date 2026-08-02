@@ -21,7 +21,12 @@ import requests
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
-from alpha_intelligence import render_alpha_intelligence
+try:
+    from alpha_intelligence import render_alpha_intelligence
+    ALPHA_INTELLIGENCE_IMPORT_ERROR = ""
+except Exception as _alpha_import_exc:
+    render_alpha_intelligence = None
+    ALPHA_INTELLIGENCE_IMPORT_ERROR = str(_alpha_import_exc)
 
 try:
     from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
@@ -297,6 +302,16 @@ def obter_usuario_atual():
     dados["email"] = email_fallback
     dados["automatico"] = False
     return dados
+
+def usuario_em_operacao_protegida(usuario=None):
+    """Mantém o atendimento isolado de módulos técnicos/experimentais."""
+    usuario = usuario or obter_usuario_atual()
+    return str(usuario.get("nome", "")).strip().casefold() == "anna"
+
+def pode_executar_acoes_tecnicas(usuario=None):
+    """Ações de conexão, diagnóstico e atualização ficam reservadas ao Jorge."""
+    usuario = usuario or obter_usuario_atual()
+    return str(usuario.get("nome", "")).strip().casefold() == "jorge"
 
 def saudacao_por_hora(nome):
     hora = agora_local().hour
@@ -4780,6 +4795,11 @@ with st.sidebar:
         )
         st.caption("Acesso administrativo completo")
 
+    _usuario_sidebar_atual = obter_usuario_atual()
+    if usuario_em_operacao_protegida(_usuario_sidebar_atual):
+        st.success("🛡️ Modo Operação Protegida ativo")
+        st.caption("Atendimento, orçamentos, histórico e pedidos continuam isolados das atualizações técnicas.")
+
     st.divider()
     st.markdown("**🔎 Pesquisa global**")
     termo_global_sidebar = st.text_input(
@@ -5702,12 +5722,24 @@ with aba_alpha:
 
 
 with aba_inteligencia:
-    def _salvar_snapshot_inteligencia(snapshot):
-        save_document("alpha_intelligence_db", snapshot, ARQUIVO_INTELIGENCIA)
-    render_alpha_intelligence(
-        carregar_clientes(), carregar_historico(), carregar_catalogo(), carregar_producao(),
-        save_snapshot=_salvar_snapshot_inteligencia, today=hoje_local(),
-    )
+    st.header("🧠 Alpha Intelligence")
+    if usuario_em_operacao_protegida():
+        st.info("🛡️ Este módulo está em modo protegido durante o atendimento da Anna. Os módulos operacionais continuam disponíveis normalmente.")
+    elif render_alpha_intelligence is None:
+        st.warning("O módulo Intelligence foi isolado porque não pôde ser carregado. O atendimento e os demais módulos continuam funcionando.")
+        if ALPHA_INTELLIGENCE_IMPORT_ERROR:
+            st.caption("Diagnóstico técnico disponível para o administrador.")
+    else:
+        def _salvar_snapshot_inteligencia(snapshot):
+            save_document("alpha_intelligence_db", snapshot, ARQUIVO_INTELIGENCIA)
+        try:
+            render_alpha_intelligence(
+                carregar_clientes(), carregar_historico(), carregar_catalogo(), carregar_producao(),
+                save_snapshot=_salvar_snapshot_inteligencia, today=hoje_local(),
+            )
+        except Exception as _alpha_runtime_exc:
+            st.warning("O Intelligence encontrou uma falha e foi isolado. Atendimento, orçamentos e pedidos não foram interrompidos.")
+            st.caption("O administrador pode consultar os logs para o diagnóstico técnico.")
 
 
 with aba_crescimento:
@@ -7591,7 +7623,9 @@ def renderizar_alpha_connect():
             if ultimo:
                 selo = "✅" if ultimo.get("ok") else "⚠️"
                 st.caption(f"{selo} Último teste: {ultimo.get('quando','—')} — {ultimo.get('mensagem','')}")
-            pode_testar = item["status"] == "Configurado"
+            pode_testar = item["status"] == "Configurado" and pode_executar_acoes_tecnicas()
+            if usuario_em_operacao_protegida():
+                st.caption("🛡️ Testes técnicos bloqueados no modo de atendimento.")
             if st.button("🧪 Testar conexão", key=f"teste_connect_{item['chave']}", use_container_width=True, disabled=not pode_testar):
                 with st.spinner(f"Testando {item['nome']}..."):
                     ok, mensagem = _testar_integracao(item["chave"])
