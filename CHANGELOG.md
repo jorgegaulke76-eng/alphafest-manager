@@ -289,3 +289,8 @@ hangelog
 - Corrigidas referências da configuração da empresa no Creative Studio.
 - Versão e configurações estáveis movidas para `config.py`.
 - Iniciada a arquitetura `services/` e `modules/`.
+
+## 9.0.1
+- Corrigida duplicidade segura de relacionamentos originada por propostas antigas sem telefone/documento.
+- Relacionamentos passaram a ser a fonte atual de dados pessoais nas propostas.
+- Histórico, HTML e WhatsApp usam os dados atuais sem alterar o conteúdo comercial histórico.

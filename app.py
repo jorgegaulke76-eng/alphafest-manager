@@ -1387,7 +1387,7 @@ def atualizar_proposta(numero_original, dados_atualizados):
     return False
 
 
-def carregar_proposta_no_formulario(prop, duplicar=False):
+def carregar_proposta_no_formulario(prop_atual, duplicar=False):
     """Agenda o carregamento para o próximo rerun.
 
     No Streamlit, uma chave ligada a um widget não pode ser alterada depois que
@@ -1499,47 +1499,162 @@ def chave_cliente(nome, documento="", whatsapp=""):
     return f"nome:{normalizar_texto_cliente(nome).lower()}"
 
 
+def _valor_preenchido(valor):
+    if isinstance(valor, (list, dict)):
+        return bool(valor)
+    return bool(str(valor or "").strip())
+
+
+def _pontuacao_cadastro_relacionamento(cliente):
+    """Prioriza o cadastro manual/mais completo ao consolidar duplicidades seguras."""
+    campos = ["documento", "whatsapp", "email", "cidade", "aniversario", "observacoes", "segmentos", "interesses", "papeis"]
+    pontos = sum(1 for campo in campos if _valor_preenchido(cliente.get(campo)))
+    origem = str(cliente.get("origem", cliente.get("origem_cliente", ""))).casefold()
+    if "histórico" not in origem and "historico" not in origem:
+        pontos += 3
+    if cliente.get("politica_atendimento"):
+        pontos += 2
+    if cliente.get("classificacao_relacionamento") not in (None, "", "Não classificado"):
+        pontos += 1
+    return pontos
+
+
+def consolidar_cadastros_duplicados_relacionamentos(clientes=None, historico=None, salvar=True):
+    """Consolida apenas duplicidades seguras e preserva o cadastro mais completo.
+
+    A consolidação automática exige nome exato normalizado e, além disso, identificadores
+    iguais ou ausência de documento/WhatsApp em pelo menos um dos cadastros. Propostas são
+    religadas ao cadastro canônico; nenhuma proposta é removida.
+    """
+    clientes = list(clientes if clientes is not None else carregar_clientes())
+    historico = list(historico if historico is not None else carregar_historico())
+    grupos = {}
+    for cli in clientes:
+        nome = normalizar_texto_cliente(cli.get("nome", "")).casefold()
+        if nome:
+            grupos.setdefault(nome, []).append(cli)
+
+    removidos = set()
+    alterou_clientes = False
+    alterou_historico = False
+    consolidados = 0
+
+    for _, grupo in grupos.items():
+        ativos = [c for c in grupo if id(c) not in removidos]
+        if len(ativos) < 2:
+            continue
+        canonico = max(ativos, key=_pontuacao_cadastro_relacionamento)
+        garantir_id_relacionamento(canonico)
+        for duplicado in ativos:
+            if duplicado is canonico or id(duplicado) in removidos:
+                continue
+            doc_c = re.sub(r"\D", "", str(canonico.get("documento", "")))
+            doc_d = re.sub(r"\D", "", str(duplicado.get("documento", "")))
+            wa_c = re.sub(r"\D", "", str(canonico.get("whatsapp", "")))
+            wa_d = re.sub(r"\D", "", str(duplicado.get("whatsapp", "")))
+            identificador_conflitante = (doc_c and doc_d and doc_c != doc_d) or (wa_c and wa_d and wa_c != wa_d)
+            if identificador_conflitante:
+                continue
+
+            # Preenche apenas lacunas do cadastro canônico; nunca sobrescreve dado manual atual.
+            for campo, valor in duplicado.items():
+                if campo in {"id", "nome", "criado_em"}:
+                    continue
+                if not _valor_preenchido(canonico.get(campo)) and _valor_preenchido(valor):
+                    canonico[campo] = valor
+                    alterou_clientes = True
+
+            dup_id = str(duplicado.get("id", "")).strip()
+            can_id = str(canonico.get("id", "")).strip()
+            for prop in historico:
+                prop_id = str(prop.get("relacionamento_id", "")).strip()
+                nome_prop = normalizar_texto_cliente(prop.get("cliente_nome", prop.get("cliente", ""))).casefold()
+                if (dup_id and prop_id == dup_id) or (not prop_id and nome_prop == normalizar_texto_cliente(canonico.get("nome", "")).casefold()):
+                    prop["relacionamento_id"] = can_id
+                    alterou_historico = True
+            removidos.add(id(duplicado))
+            alterou_clientes = True
+            consolidados += 1
+
+    if removidos:
+        clientes = [c for c in clientes if id(c) not in removidos]
+    if salvar:
+        if alterou_clientes:
+            salvar_clientes(clientes)
+        if alterou_historico:
+            salvar_historico_completo(historico)
+    return clientes, historico, {"consolidados": consolidados, "clientes_alterados": alterou_clientes, "historico_alterado": alterou_historico}
+
+
 def sincronizar_clientes_do_historico():
-    """Inclui no cadastro clientes encontrados nas propostas, sem apagar dados manuais."""
+    """Inclui clientes das propostas e consolida duplicidades seguras sem perder dados."""
     clientes = carregar_clientes()
-    por_chave = {
-        chave_cliente(c.get("nome"), c.get("documento"), c.get("whatsapp")): c
-        for c in clientes
-        if normalizar_texto_cliente(c.get("nome"))
-    }
+    historico = carregar_historico()
+    clientes, historico, _ = consolidar_cadastros_duplicados_relacionamentos(clientes, historico, salvar=True)
+
+    por_doc, por_wa, por_nome = {}, {}, {}
+    for c in clientes:
+        nome = normalizar_texto_cliente(c.get("nome", "")).casefold()
+        doc = re.sub(r"\D", "", str(c.get("documento", "")))
+        wa = re.sub(r"\D", "", str(c.get("whatsapp", "")))
+        if doc: por_doc.setdefault(doc, []).append(c)
+        if wa: por_wa.setdefault(wa, []).append(c)
+        if nome: por_nome.setdefault(nome, []).append(c)
+
     alterado = False
-    for prop in carregar_historico():
+    historico_alterado = False
+    for prop in historico:
         nome = normalizar_texto_cliente(prop.get("cliente_nome", prop.get("cliente", "")))
         if not nome:
             continue
         documento = normalizar_texto_cliente(prop.get("documento", prop.get("cliente_cpf_cnpj", "")))
         whatsapp = normalizar_texto_cliente(prop.get("whatsapp", prop.get("cliente_wa", "")))
-        chave = chave_cliente(nome, documento, whatsapp)
-        if chave not in por_chave:
-            novo = {
-                "id": f"CLI-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
-                "nome": nome,
-                "documento": documento,
-                "whatsapp": whatsapp,
-                "email": "",
-                "aniversario": "",
-                "observacoes": "",
-                "origem": "Histórico de propostas",
-                "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
-            }
-            clientes.append(novo)
-            por_chave[chave] = novo
-            alterado = True
-        else:
-            atual = por_chave[chave]
+        doc = re.sub(r"\D", "", documento)
+        wa = re.sub(r"\D", "", whatsapp)
+        nome_norm = nome.casefold()
+        candidatos = []
+        if doc and len(por_doc.get(doc, [])) == 1:
+            candidatos = por_doc[doc]
+        elif wa and len(por_wa.get(wa, [])) == 1:
+            candidatos = por_wa[wa]
+        elif len(por_nome.get(nome_norm, [])) == 1:
+            candidatos = por_nome[nome_norm]
+
+        if candidatos:
+            atual = candidatos[0]
+            garantir_id_relacionamento(atual)
+            if prop.get("relacionamento_id") != atual.get("id"):
+                prop["relacionamento_id"] = atual.get("id")
+                historico_alterado = True
             if not atual.get("documento") and documento:
-                atual["documento"] = documento
-                alterado = True
+                atual["documento"] = documento; alterado = True
             if not atual.get("whatsapp") and whatsapp:
-                atual["whatsapp"] = whatsapp
-                alterado = True
+                atual["whatsapp"] = whatsapp; alterado = True
+            continue
+
+        novo = {
+            "id": f"CLI-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
+            "nome": nome,
+            "documento": documento,
+            "whatsapp": whatsapp,
+            "email": "",
+            "aniversario": "",
+            "observacoes": "",
+            "origem": "Histórico de propostas",
+            "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
+        }
+        clientes.append(novo)
+        por_nome.setdefault(nome_norm, []).append(novo)
+        if doc: por_doc.setdefault(doc, []).append(novo)
+        if wa: por_wa.setdefault(wa, []).append(novo)
+        prop["relacionamento_id"] = novo["id"]
+        alterado = True
+        historico_alterado = True
+
     if alterado:
         salvar_clientes(clientes)
+    if historico_alterado:
+        salvar_historico_completo(historico)
     return clientes
 
 
@@ -1582,6 +1697,45 @@ def localizar_relacionamento(nome="", whatsapp=""):
         if nome_norm and normalizar_texto_cliente(cli.get("nome")).casefold() == nome_norm:
             return cli
     return None
+
+def relacionamento_da_proposta(prop):
+    """Retorna o cadastro atual vinculado à proposta, priorizando relacionamento_id."""
+    clientes = carregar_clientes()
+    rel_id = str(prop.get("relacionamento_id", "")).strip()
+    if rel_id:
+        encontrado = next((c for c in clientes if str(c.get("id", "")).strip() == rel_id), None)
+        if encontrado:
+            return encontrado
+    nome = prop.get("cliente_nome", prop.get("cliente", ""))
+    whatsapp = prop.get("whatsapp", prop.get("cliente_wa", ""))
+    return localizar_relacionamento(nome, whatsapp)
+
+
+def proposta_com_dados_atuais(prop):
+    """Cria uma visão da proposta usando os dados atuais do relacionamento.
+
+    Itens, valores, datas e status continuam vindo da proposta histórica.
+    """
+    atual = relacionamento_da_proposta(prop)
+    if not atual:
+        return dict(prop), None
+    visao = dict(prop)
+    nome = atual.get("nome") or visao.get("cliente_nome", visao.get("cliente", ""))
+    documento = atual.get("documento") or visao.get("documento", visao.get("cliente_cpf_cnpj", ""))
+    whatsapp = atual.get("whatsapp") or visao.get("whatsapp", visao.get("cliente_wa", ""))
+    visao.update({
+        "cliente_nome": nome,
+        "cliente": nome,
+        "documento": documento,
+        "cliente_cpf_cnpj": documento,
+        "whatsapp": whatsapp,
+        "cliente_wa": whatsapp,
+        "email": atual.get("email", visao.get("email", "")),
+        "cidade": atual.get("cidade", visao.get("cidade", "")),
+        "relacionamento_id": atual.get("id", visao.get("relacionamento_id", "")),
+    })
+    return visao, atual
+
 
 def resumo_restricao_relacionamento(cliente):
     if not cliente:
@@ -5554,8 +5708,9 @@ with aba2:
     st.caption(f"{len(historico)} proposta(s) encontrada(s)")
 
     for prop in historico:
+        prop_atual, relacionamento_atual = proposta_com_dados_atuais(prop)
         num_p = prop.get("numero_proposta", "SEM-NÚMERO")
-        cliente_p = prop.get("cliente_nome", "Cliente não informado")
+        cliente_p = prop_atual.get("cliente_nome", "Cliente não informado")
         subtotal_p, desconto_p, total_p = calcular_valores_proposta(prop)
         pago_p = bool(prop.get("pago", False))
         entregue_p = bool(prop.get("entregue", False))
@@ -5576,23 +5731,25 @@ with aba2:
             if proposta_fechada:
                 st.success("✅ Pedido fechado: pagamento recebido e entrega concluída.")
             st.write(f"📅 **Entrega:** {prop.get('data_entrega', 'Não informada')}")
-            whatsapp_hist = prop.get("whatsapp", prop.get("cliente_wa", "")) or "Não informado"
-            documento_hist = prop.get("documento", prop.get("cliente_cpf_cnpj", "")) or "Não informado"
+            whatsapp_hist = prop_atual.get("whatsapp", prop_atual.get("cliente_wa", "")) or "Não informado"
+            documento_hist = prop_atual.get("documento", prop_atual.get("cliente_cpf_cnpj", "")) or "Não informado"
             st.write(f"📱 **WhatsApp:** {whatsapp_hist}")
             st.write(f"🪪 **CPF/CNPJ:** {documento_hist}")
+            if relacionamento_atual:
+                st.caption("🌐 Dados pessoais atuais do módulo Relacionamentos. Itens, valores e datas permanecem históricos.")
             for item in prop.get('itens', []):
                 st.write(f"• {item.get('produto', '')} (Qtd: {item.get('quantidade', 0)})")
 
             c1, c2 = st.columns(2)
-            c1.link_button("📱 Enviar WhatsApp", f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop))}", use_container_width=True)
-            c2.download_button("📄 Gerar HTML", gerar_html(prop), file_name=f"{num_p}.html", mime="text/html", use_container_width=True)
+            c1.link_button("📱 Enviar WhatsApp", f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop_atual))}", use_container_width=True)
+            c2.download_button("📄 Gerar HTML", gerar_html(prop_atual), file_name=f"{num_p}.html", mime="text/html", use_container_width=True)
 
             c3, c4, c5 = st.columns(3)
             if c3.button("✏️ Editar", key=f"editar_{num_p}", use_container_width=True):
                 carregar_proposta_no_formulario(prop, duplicar=False)
                 st.rerun()
             if c4.button("📋 Duplicar pedido", key=f"duplicar_{num_p}", use_container_width=True):
-                carregar_proposta_no_formulario(prop, duplicar=True)
+                carregar_proposta_no_formulario(prop_atual, duplicar=True)
                 st.rerun()
             if c5.button("🗑️ Excluir", key=f"del_{num_p}", use_container_width=True):
                 excluir_proposta(num_p)
