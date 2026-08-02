@@ -21,7 +21,7 @@ import requests
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
-from modules.alpha_intelligence import render_alpha_intelligence
+from alpha_intelligence import render_alpha_intelligence
 
 try:
     from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter

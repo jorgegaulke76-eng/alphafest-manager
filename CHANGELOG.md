@@ -1,3 +1,8 @@
+## 10.0.2
+
+- Corrigida a importação do Alpha Intelligence no Streamlit Cloud.
+- O módulo agora fica na raiz para evitar falhas ao enviar pastas pelo GitHub.
+
 # 9.2.0
 - Cadastro Mestre e Alpha Connect Pro.
 - IDs permanentes e vínculos intermodulares.
@@ -315,8 +320,3 @@ hangelog
 - Upload opcional de vídeo curto preservado para Reels, TikTok e Shorts.
 - Aprovação individual mantida e envio em lote de todos os canais aprovados para a fila de publicação.
 - Registro explícito de que publicação automática depende das credenciais oficiais das redes.
-
-
-## 10.0.1 — 02/08/2026
-- Correção de empacotamento do módulo Alpha Intelligence.
-- Inclusão do pacote Python `modules`.
