@@ -29,6 +29,13 @@ except Exception as _alpha_import_exc:
     ALPHA_INTELLIGENCE_IMPORT_ERROR = str(_alpha_import_exc)
 
 try:
+    from central_oportunidades import render_central_oportunidades
+    CENTRAL_OPORTUNIDADES_IMPORT_ERROR = ""
+except Exception as _opp_import_exc:
+    render_central_oportunidades = None
+    CENTRAL_OPORTUNIDADES_IMPORT_ERROR = str(_opp_import_exc)
+
+try:
     from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
 except Exception:
     Image = ImageOps = ImageDraw = ImageFont = ImageFilter = None
@@ -5446,7 +5453,24 @@ with aba_atendimento:
     config_at = dados_at["config"]
     itens_at = dados_at["itens"]
 
-    tab_fila, tab_novo, tab_config, tab_integracoes = st.tabs(["📋 Caixa unificada", "➕ Registrar oportunidade", "⚙️ Modos e automações", "🔌 Integrações Meta"])
+    tab_oportunidades, tab_fila, tab_novo, tab_config, tab_integracoes = st.tabs(["🎯 Oportunidades", "📋 Caixa unificada", "➕ Registrar oportunidade", "⚙️ Modos e automações", "🔌 Integrações Meta"])
+
+    with tab_oportunidades:
+        if render_central_oportunidades is None:
+            st.warning("A Central de Oportunidades está temporariamente isolada para não interromper o atendimento.")
+            if CENTRAL_OPORTUNIDADES_IMPORT_ERROR:
+                st.caption(CENTRAL_OPORTUNIDADES_IMPORT_ERROR)
+        else:
+            try:
+                render_central_oportunidades(
+                    dados_at=dados_at,
+                    salvar_atendimentos=salvar_atendimentos,
+                    historico=carregar_historico(),
+                    now_fn=agora_local,
+                )
+            except Exception as exc:
+                st.error("A Central de Oportunidades encontrou um erro, mas a Caixa Unificada e o restante da operação continuam disponíveis.")
+                st.caption(str(exc))
 
     with tab_fila:
         f1, f2, f3, f4, f5 = st.columns([2, 1, 1, 1, 1])
@@ -5614,6 +5638,15 @@ with aba_atendimento:
         status_at = n3.selectbox("Classificação", STATUS_ATENDIMENTO, index=STATUS_ATENDIMENTO.index(sugestao_status), key="novo_at_status")
         prioridade_at = n4.selectbox("Prioridade", ["Urgente", "Alta", "Normal", "Baixa"], index=2, key="novo_at_prioridade")
         responsavel_at = n5.selectbox("Responsável", ["Sem responsável", "Anna", "Jorge"], key="novo_at_responsavel")
+        with st.expander("🎯 Fonte do contato / conteúdo que gerou o interesse", expanded=canal_at not in ("WhatsApp", "Telefone", "Balcão")):
+            fc1, fc2 = st.columns(2)
+            tipo_conteudo_at = fc1.selectbox("Tipo de conteúdo", ["Reel", "Story", "Post", "Comentário", "Short", "Vídeo", "Página do site", "Catálogo", "Anúncio", "Pesquisa Google", "Indicação", "Outro"], key="novo_at_tipo_conteudo")
+            motivo_contato_at = fc2.selectbox("Motivo do contato", ["Pedido de orçamento", "Pedido de catálogo", "Dúvida", "Solicitação de arte", "Balões", "Topo de bolo", "Lembrancinhas", "Locação", "Pós-venda", "Indicação", "Outro"], key="novo_at_motivo")
+            conteudo_titulo_at = st.text_input("Nome do post, Reel, vídeo ou página", key="novo_at_conteudo_titulo")
+            fc3, fc4 = st.columns(2)
+            campanha_at = fc3.text_input("Campanha", key="novo_at_campanha")
+            produto_interesse_at = fc4.text_input("Produto relacionado", key="novo_at_produto")
+            conteudo_url_at = st.text_input("Link do conteúdo (opcional)", key="novo_at_conteudo_url")
         if st.button("➕ Adicionar à fila", type="primary", use_container_width=True):
             if not nome_at.strip() and not telefone_at.strip():
                 st.warning("Informe pelo menos um nome ou WhatsApp.")
@@ -5629,6 +5662,15 @@ with aba_atendimento:
                     "modo": config_at.get("modo", "Manual"),
                     "origem": canal_at,
                     "canal": canal_at,
+                    "canal_origem": canal_at,
+                    "canal_atendimento": "WhatsApp" if canal_at == "WhatsApp" else canal_at,
+                    "etapa_captacao": "Nova captação" if canal_at not in ("WhatsApp", "Telefone", "Balcão") else "Em atendimento no WhatsApp",
+                    "tipo_conteudo": tipo_conteudo_at,
+                    "motivo_contato": motivo_contato_at,
+                    "conteudo_titulo": conteudo_titulo_at.strip(),
+                    "conteudo_url": conteudo_url_at.strip(),
+                    "campanha": campanha_at.strip(),
+                    "produto_interesse": produto_interesse_at.strip(),
                     "perfil_externo": "",
                     "id_mensagem_externa": "",
                     "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),

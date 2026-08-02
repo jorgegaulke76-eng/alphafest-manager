@@ -320,3 +320,10 @@ hangelog
 - Upload opcional de vídeo curto preservado para Reels, TikTok e Shorts.
 - Aprovação individual mantida e envio em lote de todos os canais aprovados para a fila de publicação.
 - Registro explícito de que publicação automática depende das credenciais oficiais das redes.
+
+## 11.1.0
+- Central de Oportunidades isolada e protegida.
+- Migração de contatos externos para atendimento no WhatsApp.
+- Fonte da venda por canal, conteúdo, campanha e produto.
+- Funil e conversão por canal.
+- Ranking de conteúdos por contatos, orçamentos, vendas e faturamento.
