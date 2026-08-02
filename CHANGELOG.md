@@ -1,3 +1,14 @@
+# FestManager 7.0.0 — Relacionamentos e Política de Atendimento
+
+- Novo núcleo de Relacionamentos no lugar do cadastro isolado de clientes.
+- Papéis múltiplos por pessoa ou empresa, incluindo cliente e fornecedor simultaneamente.
+- Controle individual de atendimento manual, assistido, automático, monitorado ou bloqueado.
+- Permissões para catálogo, orçamento, campanhas e respostas.
+- Pagamento antecipado e aprovação do gestor configuráveis.
+- Cadastro de materiais, prioridade, prazo e avaliação de fornecedores.
+- Alpha e Central Multicanal respeitam as restrições comerciais.
+- Migração aditiva para a versão de dados 4, sem apagar registros.
+
 # 5.6.0
 - Central Multicanal e preparação oficial dos webhooks Meta.
 - Caixa unificada e filtros por origem.

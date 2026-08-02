@@ -1,5 +1,18 @@
 # Roadmap FestManager
 
+## Concluído — 7.0.0
+- Relacionamentos com papéis múltiplos.
+- Política e segurança de atendimento.
+- Fornecedor e cliente no mesmo cadastro.
+
+## Próximos passos
+- Conectar as credenciais oficiais Meta.
+- Aplicar políticas individuais aos webhooks recebidos.
+- Histórico de compras com fornecedores.
+- Compras, estoque e contas a pagar.
+
+# Roadmap FestManager
+
 ## Atual
 - 5.7.0 CRM Inteligente
 

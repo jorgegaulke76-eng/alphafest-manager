@@ -144,8 +144,8 @@ ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
-VERSAO_APP = "6.1.0"
-VERSAO_DADOS = 3
+VERSAO_APP = "7.0.0"
+VERSAO_DADOS = 4
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -1536,6 +1536,57 @@ def sincronizar_clientes_do_historico():
     return clientes
 
 
+PAPEIS_RELACIONAMENTO = [
+    "Cliente", "Fornecedor", "Parceiro comercial", "Prestador de serviço",
+    "Freelancer", "Transportadora", "Influenciador / Indicador",
+    "Concorrente monitorado", "Ex-cliente", "Contato em observação"
+]
+NIVEIS_ATENDIMENTO = ["Normal", "Somente manual", "Atenção", "Monitorado", "Bloqueado"]
+CLASSIFICACOES_RELACIONAMENTO = ["Não classificado", "Bronze", "Prata", "Ouro", "VIP", "Atenção", "Restrito", "Bloqueado"]
+PRIORIDADES_FORNECEDOR = ["Não definida", "Preferencial", "Alternativo", "Emergencial"]
+
+def papeis_relacionamento(cliente):
+    papeis = cliente.get("papeis", []) or []
+    if isinstance(papeis, str):
+        papeis = [x.strip() for x in papeis.split(",") if x.strip()]
+    if not papeis:
+        papeis = ["Cliente"]
+    return list(dict.fromkeys(papeis))
+
+def politica_atendimento(cliente):
+    politica = cliente.get("politica_atendimento", {}) or {}
+    return {
+        "nivel": politica.get("nivel", "Normal"),
+        "motivo": politica.get("motivo", ""),
+        "permitir_resposta": bool(politica.get("permitir_resposta", True)),
+        "permitir_catalogo": bool(politica.get("permitir_catalogo", True)),
+        "permitir_orcamento": bool(politica.get("permitir_orcamento", True)),
+        "permitir_campanhas": bool(politica.get("permitir_campanhas", True)),
+        "exigir_pagamento_antecipado": bool(politica.get("exigir_pagamento_antecipado", False)),
+        "exigir_aprovacao_gestor": bool(politica.get("exigir_aprovacao_gestor", False)),
+    }
+
+def localizar_relacionamento(nome="", whatsapp=""):
+    chave_wa = _telefone_chave(whatsapp)
+    nome_norm = normalizar_texto_cliente(nome).casefold()
+    for cli in carregar_clientes():
+        if chave_wa and _telefone_chave(cli.get("whatsapp")) == chave_wa:
+            return cli
+        if nome_norm and normalizar_texto_cliente(cli.get("nome")).casefold() == nome_norm:
+            return cli
+    return None
+
+def resumo_restricao_relacionamento(cliente):
+    if not cliente:
+        return None
+    politica = politica_atendimento(cliente)
+    nivel = politica.get("nivel", "Normal")
+    papeis = papeis_relacionamento(cliente)
+    restrito = nivel != "Normal" or "Concorrente monitorado" in papeis or not politica.get("permitir_resposta", True)
+    if not restrito:
+        return None
+    return {"nivel": nivel, "motivo": politica.get("motivo", ""), "papeis": papeis, **politica}
+
 def propostas_do_cliente(cliente):
     chave = chave_cliente(cliente.get("nome"), cliente.get("documento"), cliente.get("whatsapp"))
     propostas = []
@@ -2669,6 +2720,22 @@ def renderizar_alpha_assistente_comercial():
         st.info("Digite uma mensagem para o Alpha preparar o atendimento.")
         return
 
+    relacionamento_alpha = localizar_relacionamento(cliente, whatsapp)
+    restricao_alpha = resumo_restricao_relacionamento(relacionamento_alpha)
+    if relacionamento_alpha:
+        st.caption("Contato identificado no módulo Relacionamentos: " + ", ".join(papeis_relacionamento(relacionamento_alpha)))
+    if restricao_alpha:
+        nivel = restricao_alpha.get("nivel", "Atenção")
+        motivo = restricao_alpha.get("motivo") or "Política comercial definida pela Alphafest."
+        if nivel == "Bloqueado" or not restricao_alpha.get("permitir_resposta", True):
+            st.error(f"🛑 Atendimento bloqueado: {motivo}")
+        else:
+            st.warning(f"🛡️ Atendimento {nivel}: {motivo}")
+        if restricao_alpha.get("exigir_pagamento_antecipado"):
+            st.info("💰 Este relacionamento exige pagamento antecipado.")
+        if restricao_alpha.get("exigir_aprovacao_gestor"):
+            st.info("👤 Este atendimento exige aprovação do gestor.")
+
     analise = analisar_mensagem_alpha(mensagem)
     projetos, produtos = buscar_referencias_alpha(analise)
     st.markdown("### Entendimento do pedido")
@@ -2691,17 +2758,20 @@ def renderizar_alpha_assistente_comercial():
     resposta = st.text_area("Revise antes de enviar", value=resposta_assistida_alpha(analise), height=130, key=f"alpha_resposta_{abs(hash(mensagem))}")
     telefone = _telefone_chave(whatsapp)
     a1, a2, a3 = st.columns(3)
-    if telefone:
+    bloqueado_alpha = bool(restricao_alpha and (restricao_alpha.get("nivel") == "Bloqueado" or not restricao_alpha.get("permitir_resposta", True)))
+    if telefone and not bloqueado_alpha:
         numero = telefone if telefone.startswith("55") else "55" + telefone
         a1.link_button("📱 Abrir WhatsApp", f"https://wa.me/{numero}?text={quote(resposta)}", use_container_width=True)
+    elif bloqueado_alpha:
+        a1.button("🛑 Resposta bloqueada", disabled=True, use_container_width=True)
     else:
         a1.button("📱 Informe o WhatsApp", disabled=True, use_container_width=True)
-    if a2.button("🚀 Levar para Jornada", type="primary", use_container_width=True):
+    if a2.button("🚀 Levar para Jornada", type="primary", use_container_width=True, disabled=bool(restricao_alpha and not restricao_alpha.get("permitir_orcamento", True))):
         preencher_jornada_com_alpha(analise, cliente, whatsapp)
         if atendimento_id:
             st.session_state["alpha_atendimento_origem"] = atendimento_id
         st.success("Dados preparados. Abra a aba Jornada para continuar sem redigitar.")
-    if a3.button("🧩 Preparar Projeto", use_container_width=True):
+    if a3.button("🧩 Preparar Projeto", use_container_width=True, disabled=bool(restricao_alpha and not restricao_alpha.get("permitir_orcamento", True))):
         st.session_state["_projeto_prefill"] = {"cliente": cliente, "whatsapp": whatsapp, "necessidade": mensagem, "origem": "Alpha Assistente Comercial", "atendimento_id": atendimento_id}
         st.success("Projeto preparado. Abra Projeto Personalizado.")
 
@@ -3758,6 +3828,37 @@ def executar_migracoes_seguras():
             atual = 3
             registrar_auditoria("Migração de dados", "Banco", "v3", alteracoes_v3)
 
+        if atual < 4:
+            clientes = carregar_clientes()
+            mudou = 0
+            for cliente in clientes:
+                defaults_v4 = {
+                    "papeis": ["Cliente"],
+                    "classificacao_relacionamento": "Não classificado",
+                    "politica_atendimento": {
+                        "nivel": "Normal", "motivo": "",
+                        "permitir_resposta": True, "permitir_catalogo": True,
+                        "permitir_orcamento": True, "permitir_campanhas": True,
+                        "exigir_pagamento_antecipado": False,
+                        "exigir_aprovacao_gestor": False,
+                    },
+                    "fornecedor": {
+                        "materiais": "", "contato_comercial": "",
+                        "prioridade": "Não definida", "prazo_medio": "",
+                        "avaliacao": 0, "observacoes": "",
+                    },
+                }
+                for campo, padrao in defaults_v4.items():
+                    if campo not in cliente:
+                        cliente[campo] = padrao.copy() if isinstance(padrao, dict) else list(padrao) if isinstance(padrao, list) else padrao
+                        mudou += 1
+            if mudou:
+                salvar_clientes(clientes)
+            alteracoes_v4 = {"relacionamentos_atualizados": len(clientes), "campos_adicionados": mudou}
+            aplicadas.append({"versao": 4, "aplicada_em": agora_local().isoformat(), "alteracoes": alteracoes_v4})
+            atual = 4
+            registrar_auditoria("Migração de dados", "Banco", "v4", alteracoes_v4)
+
         meta.update({"schema_version": atual, "ultima_migracao_em": agora_local().isoformat(), "migracoes_aplicadas": aplicadas})
         save_document("system_meta", meta, ARQUIVO_SYSTEM_META)
     except Exception as exc:
@@ -4218,7 +4319,7 @@ aba0, aba_atendimento, aba_crm, aba_alpha, aba_jornada, aba_projeto, aba1, aba2,
     "📊 Relatórios",
     "📈 Executivo",
     "📦 Catálogo",
-    "👥 Clientes",
+    "🌐 Relacionamentos",
     "🧠 Memória",
     "🧩 Conhecimento",
     "📅 Calendário Comercial",
@@ -4580,6 +4681,16 @@ with aba_atendimento:
             titulo = f"{icone_sla} {item.get('cliente', 'Contato')} · {item.get('status', 'Novo contato')} · {tempo_txt} · {responsavel_atual}"
             with st.expander(titulo):
                 st.caption(f"SLA: {rotulo_sla} · Próxima ação sugerida: **{proxima_acao_atendimento(item)}**")
+                relacionamento_item = localizar_relacionamento(item.get("cliente", ""), item.get("telefone", ""))
+                restricao_item = resumo_restricao_relacionamento(relacionamento_item)
+                if relacionamento_item:
+                    st.caption("🌐 Papéis: " + ", ".join(papeis_relacionamento(relacionamento_item)))
+                if restricao_item:
+                    motivo_item = restricao_item.get("motivo") or "Política comercial definida pela Alphafest."
+                    if restricao_item.get("nivel") == "Bloqueado" or not restricao_item.get("permitir_resposta", True):
+                        st.error(f"🛑 Atendimento bloqueado — {motivo_item}")
+                    else:
+                        st.warning(f"🛡️ Atendimento {restricao_item.get('nivel')} — {motivo_item}")
                 a1, a2 = st.columns([2, 1])
                 with a1:
                     st.write(f"**WhatsApp:** {item.get('telefone') or 'Não informado'}")
@@ -4591,7 +4702,11 @@ with aba_atendimento:
                     novo_status = st.selectbox("Status", STATUS_ATENDIMENTO, index=STATUS_ATENDIMENTO.index(item.get("status")) if item.get("status") in STATUS_ATENDIMENTO else 0, key=f"status_at_{item.get('id')}")
                     nova_prioridade = st.selectbox("Prioridade", ["Urgente", "Alta", "Normal", "Baixa"], index=["Urgente", "Alta", "Normal", "Baixa"].index(item.get("prioridade", "Normal")) if item.get("prioridade", "Normal") in ["Urgente", "Alta", "Normal", "Baixa"] else 2, key=f"prior_at_{item.get('id')}")
                     novo_responsavel = st.selectbox("Responsável", ["Sem responsável", "Anna", "Jorge"], index=["Sem responsável", "Anna", "Jorge"].index(responsavel_atual) if responsavel_atual in ["Sem responsável", "Anna", "Jorge"] else 0, key=f"resp_at_{item.get('id')}")
-                    modo_conversa = st.selectbox("Modo desta conversa", ["Manual", "Assistido", "Automático"], index=["Manual", "Assistido", "Automático"].index(item.get("modo", config_at.get("modo", "Manual"))) if item.get("modo", config_at.get("modo", "Manual")) in ["Manual", "Assistido", "Automático"] else 0, key=f"modo_at_{item.get('id')}")
+                    modos_permitidos = ["Manual"] if restricao_item and restricao_item.get("nivel") in ("Somente manual", "Atenção", "Monitorado", "Bloqueado") else ["Manual", "Assistido", "Automático"]
+                    modo_atual_item = item.get("modo", config_at.get("modo", "Manual"))
+                    if modo_atual_item not in modos_permitidos:
+                        modo_atual_item = "Manual"
+                    modo_conversa = st.selectbox("Modo desta conversa", modos_permitidos, index=modos_permitidos.index(modo_atual_item), key=f"modo_at_{item.get('id')}")
 
                 historico_item = item.get("historico") if isinstance(item.get("historico"), list) else []
                 if historico_item:
@@ -4613,9 +4728,13 @@ with aba_atendimento:
                 telefone_limpo = re.sub(r"\D", "", str(item.get("telefone", "")))
                 numero_wa = telefone_limpo if telefone_limpo.startswith("55") else f"55{telefone_limpo}"
                 link_wa = f"https://wa.me/{numero_wa}?text={urllib.parse.quote(resposta)}" if telefone_limpo else ""
-                if link_wa:
+                bloqueado_item = bool(restricao_item and (restricao_item.get("nivel") == "Bloqueado" or not restricao_item.get("permitir_resposta", True)))
+                orcamento_bloqueado_item = bool(restricao_item and not restricao_item.get("permitir_orcamento", True))
+                if link_wa and not bloqueado_item:
                     b2.link_button("📱 Responder", link_wa, use_container_width=True)
-                if b3.button("🧩 Criar projeto", key=f"proj_at_{item.get('id')}", use_container_width=True):
+                elif bloqueado_item:
+                    b2.button("🛑 Bloqueado", disabled=True, use_container_width=True)
+                if b3.button("🧩 Criar projeto", key=f"proj_at_{item.get('id')}", use_container_width=True, disabled=orcamento_bloqueado_item):
                     st.session_state._projeto_prefill = {
                         "cliente": item.get("cliente", ""),
                         "whatsapp": item.get("telefone", ""),
@@ -4629,7 +4748,7 @@ with aba_atendimento:
                     registrar_evento_atendimento(item, "Dados enviados para criação de projeto personalizado")
                     salvar_atendimentos(dados_at)
                     st.success("Projeto preparado. Abra a aba Projeto Personalizado para revisar e salvar.")
-                if b4.button("➕ Criar orçamento", key=f"orc_at_{item.get('id')}", use_container_width=True):
+                if b4.button("➕ Criar orçamento", key=f"orc_at_{item.get('id')}", use_container_width=True, disabled=orcamento_bloqueado_item):
                     st.session_state.form_cliente = item.get("cliente", "")
                     st.session_state.form_whatsapp = item.get("telefone", "")
                     st.session_state.form_observacoes = item.get("mensagem", "")
@@ -5980,24 +6099,24 @@ with aba5:
                 )
 
 with aba6:
-    st.header("👥 Clientes")
-    st.caption("Cadastro, pesquisa e histórico de relacionamento com a Alphafest.")
+    st.header("🌐 Relacionamentos")
+    st.caption("Um único cadastro para clientes, fornecedores, parceiros e contatos que exigem regras especiais de atendimento.")
 
     clientes = sincronizar_clientes_do_historico()
     if "cliente_edit_id" not in st.session_state:
         st.session_state.cliente_edit_id = None
 
-    aba_cli_lista, aba_cli_cadastro = st.tabs(["🔎 Consultar clientes", "➕ Cadastrar / Editar"])
+    aba_cli_lista, aba_cli_cadastro = st.tabs(["🔎 Consultar relacionamentos", "➕ Cadastrar / Editar"])
 
     with aba_cli_lista:
         termo_cli = st.text_input(
-            "Pesquisar por nome, CPF/CNPJ, WhatsApp, e-mail ou observação",
+            "Pesquisar por nome, papel, CPF/CNPJ, WhatsApp, e-mail ou observação",
             key="pesquisa_clientes_v31",
         ).strip().lower()
 
         filtrados_cli = []
         for cli in clientes:
-            base = " ".join(str(cli.get(c, "")) for c in ["nome", "documento", "whatsapp", "email", "observacoes", "cidade", "origem_cliente", "segmentos", "interesses", "campanhas_interesse"]).lower()
+            base = " ".join(str(cli.get(c, "")) for c in ["nome", "documento", "whatsapp", "email", "observacoes", "cidade", "origem_cliente", "segmentos", "interesses", "campanhas_interesse", "papeis", "classificacao_relacionamento", "politica_atendimento", "fornecedor"]).lower()
             if not termo_cli or termo_cli in base:
                 filtrados_cli.append(cli)
 
@@ -6005,11 +6124,11 @@ with aba6:
         clientes_com_pedidos = sum(1 for cli in clientes if propostas_do_cliente(cli))
         total_propostas_clientes = sum(len(propostas_do_cliente(cli)) for cli in clientes)
         m1, m2, m3 = st.columns(3)
-        m1.metric("Clientes cadastrados", total_clientes)
+        m1.metric("Relacionamentos cadastrados", total_clientes)
         m2.metric("Clientes com propostas", clientes_com_pedidos)
         m3.metric("Propostas vinculadas", total_propostas_clientes)
 
-        st.write(f"**{len(filtrados_cli)} cliente(s) encontrado(s)**")
+        st.write(f"**{len(filtrados_cli)} relacionamento(s) encontrado(s)**")
         for cli in sorted(filtrados_cli, key=lambda x: str(x.get("nome", "")).lower()):
             propostas_cli = propostas_do_cliente(cli)
             totais = [calcular_valores_proposta(p)[2] for p in propostas_cli]
@@ -6033,6 +6152,14 @@ with aba6:
                     st.write(f"**E-mail:** {cli.get('email') or 'Não informado'}")
                     st.write(f"**Aniversário/Data especial:** {cli.get('aniversario') or 'Não informado'}")
                     st.write(f"**Cidade:** {cli.get('cidade') or 'Não informado'}")
+                    st.write("**Papéis:** " + ", ".join(papeis_relacionamento(cli)))
+                    st.write(f"**Classificação:** {cli.get('classificacao_relacionamento') or 'Não classificado'}")
+                    pol_cli = politica_atendimento(cli)
+                    if pol_cli.get("nivel") != "Normal":
+                        st.warning(f"🛡️ Atendimento: {pol_cli.get('nivel')}" + (f" — {pol_cli.get('motivo')}" if pol_cli.get('motivo') else ""))
+                    if "Fornecedor" in papeis_relacionamento(cli):
+                        forn = cli.get("fornecedor", {}) or {}
+                        st.info(f"🏭 Fornecedor {forn.get('prioridade') or 'sem prioridade definida'}" + (f" — {forn.get('materiais')}" if forn.get('materiais') else ""))
                     if cli.get("segmentos"):
                         st.write("**Perfis:** " + ", ".join(cli.get("segmentos", [])))
                     if cli.get("interesses"):
@@ -6056,7 +6183,8 @@ with aba6:
                         st.info("🎯 Próxima ação sugerida: iniciar relacionamento ou registrar primeiro orçamento")
 
                 b1, b2, b3 = st.columns(3)
-                if b1.button("➕ Novo orçamento", key=f"cli_orc_{cli.get('id')}", use_container_width=True):
+                pol_acao_cli = politica_atendimento(cli)
+                if b1.button("➕ Novo orçamento", key=f"cli_orc_{cli.get('id')}", use_container_width=True, disabled=not pol_acao_cli.get("permitir_orcamento", True)):
                     carregar_cliente_no_orcamento(cli)
                     st.rerun()
                 if b2.button("✏️ Editar cliente", key=f"cli_edit_{cli.get('id')}", use_container_width=True):
@@ -6091,7 +6219,7 @@ with aba6:
     with aba_cli_cadastro:
         edit_id = st.session_state.cliente_edit_id
         cliente_edicao = next((c for c in clientes if c.get("id") == edit_id), None)
-        st.subheader("✏️ Editar cliente" if cliente_edicao else "➕ Novo cliente")
+        st.subheader("✏️ Editar relacionamento" if cliente_edicao else "➕ Novo relacionamento")
         c1, c2 = st.columns(2)
         cli_nome = c1.text_input("Nome / Razão Social", value=cliente_edicao.get("nome", "") if cliente_edicao else "", key=f"cli_nome_{edit_id}")
         cli_doc = c1.text_input("CPF / CNPJ", value=cliente_edicao.get("documento", "") if cliente_edicao else "", key=f"cli_doc_{edit_id}")
@@ -6104,6 +6232,47 @@ with aba6:
         cli_interesses = st.multiselect("Interesses (opcional)", INTERESSES_PADRAO, default=cliente_edicao.get("interesses", []) if cliente_edicao else [], key=f"cli_interesses_{edit_id}")
         campanhas_nomes = [c.get("nome") for c in carregar_campanhas() if c.get("ativa", True)]
         cli_campanhas = st.multiselect("Campanhas de interesse (opcional)", campanhas_nomes, default=cliente_edicao.get("campanhas_interesse", []) if cliente_edicao else [], key=f"cli_campanhas_{edit_id}")
+
+        st.markdown("#### 🌐 Papéis e política de relacionamento")
+        cli_papeis = st.multiselect("Papéis (pode marcar vários)", PAPEIS_RELACIONAMENTO, default=papeis_relacionamento(cliente_edicao) if cliente_edicao else ["Cliente"], key=f"cli_papeis_{edit_id}")
+        classificacao_atual = cliente_edicao.get("classificacao_relacionamento", "Não classificado") if cliente_edicao else "Não classificado"
+        if classificacao_atual not in CLASSIFICACOES_RELACIONAMENTO:
+            classificacao_atual = "Não classificado"
+        cli_classificacao = st.selectbox("Classificação do relacionamento", CLASSIFICACOES_RELACIONAMENTO, index=CLASSIFICACOES_RELACIONAMENTO.index(classificacao_atual), key=f"cli_classificacao_{edit_id}")
+        politica_atual = politica_atendimento(cliente_edicao or {})
+        p1, p2 = st.columns(2)
+        cli_nivel_atendimento = p1.selectbox("Nível de atendimento", NIVEIS_ATENDIMENTO, index=NIVEIS_ATENDIMENTO.index(politica_atual.get("nivel", "Normal")) if politica_atual.get("nivel", "Normal") in NIVEIS_ATENDIMENTO else 0, key=f"cli_nivel_atendimento_{edit_id}")
+        cli_motivo_restricao = p2.text_input("Motivo interno / alerta", value=politica_atual.get("motivo", ""), key=f"cli_motivo_restricao_{edit_id}", placeholder="Ex.: inadimplência, concorrente, alterações frequentes")
+        pp1, pp2, pp3 = st.columns(3)
+        cli_permitir_resposta = pp1.checkbox("Pode receber resposta", value=politica_atual.get("permitir_resposta", True), key=f"cli_permitir_resposta_{edit_id}")
+        cli_permitir_catalogo = pp1.checkbox("Pode receber catálogo", value=politica_atual.get("permitir_catalogo", True), key=f"cli_permitir_catalogo_{edit_id}")
+        cli_permitir_orcamento = pp2.checkbox("Pode solicitar orçamento", value=politica_atual.get("permitir_orcamento", True), key=f"cli_permitir_orcamento_{edit_id}")
+        cli_permitir_campanhas = pp2.checkbox("Pode receber campanhas", value=politica_atual.get("permitir_campanhas", True), key=f"cli_permitir_campanhas_{edit_id}")
+        cli_pagamento_antecipado = pp3.checkbox("Exigir pagamento antecipado", value=politica_atual.get("exigir_pagamento_antecipado", False), key=f"cli_pagamento_antecipado_{edit_id}")
+        cli_aprovacao_gestor = pp3.checkbox("Exigir aprovação do gestor", value=politica_atual.get("exigir_aprovacao_gestor", False), key=f"cli_aprovacao_gestor_{edit_id}")
+
+        fornecedor_atual = (cliente_edicao or {}).get("fornecedor", {}) or {}
+        if "Fornecedor" in cli_papeis:
+            st.markdown("#### 🏭 Dados de fornecedor")
+            f1, f2 = st.columns(2)
+            cli_forn_materiais = f1.text_area("Materiais / serviços fornecidos", value=fornecedor_atual.get("materiais", ""), key=f"cli_forn_materiais_{edit_id}")
+            cli_forn_contato = f2.text_input("Contato comercial", value=fornecedor_atual.get("contato_comercial", ""), key=f"cli_forn_contato_{edit_id}")
+            prioridade_atual = fornecedor_atual.get("prioridade", "Não definida")
+            if prioridade_atual not in PRIORIDADES_FORNECEDOR:
+                prioridade_atual = "Não definida"
+            ff1, ff2, ff3 = st.columns(3)
+            cli_forn_prioridade = ff1.selectbox("Prioridade", PRIORIDADES_FORNECEDOR, index=PRIORIDADES_FORNECEDOR.index(prioridade_atual), key=f"cli_forn_prioridade_{edit_id}")
+            cli_forn_prazo = ff2.text_input("Prazo médio", value=fornecedor_atual.get("prazo_medio", ""), key=f"cli_forn_prazo_{edit_id}", placeholder="Ex.: 3 dias")
+            cli_forn_avaliacao = ff3.slider("Avaliação interna", 0, 5, int(fornecedor_atual.get("avaliacao", 0) or 0), key=f"cli_forn_avaliacao_{edit_id}")
+            cli_forn_obs = st.text_area("Observações de fornecedor", value=fornecedor_atual.get("observacoes", ""), key=f"cli_forn_obs_{edit_id}")
+        else:
+            cli_forn_materiais = fornecedor_atual.get("materiais", "")
+            cli_forn_contato = fornecedor_atual.get("contato_comercial", "")
+            cli_forn_prioridade = fornecedor_atual.get("prioridade", "Não definida")
+            cli_forn_prazo = fornecedor_atual.get("prazo_medio", "")
+            cli_forn_avaliacao = int(fornecedor_atual.get("avaliacao", 0) or 0)
+            cli_forn_obs = fornecedor_atual.get("observacoes", "")
+
         cli_potencial = st.slider("Potencial comercial (opcional)", 0, 5, int(cliente_edicao.get("potencial", 0) or 0) if cliente_edicao else 0, help="0 = ainda não avaliado; 5 = alto potencial")
         opcoes_origem = ["Não informado", "WhatsApp", "Instagram", "Facebook", "TikTok", "Google", "Indicação", "Mercado Livre", "Shopee", "Loja", "Outro"]
         origem_atual = cliente_edicao.get("origem_cliente", "Não informado") if cliente_edicao else "Não informado"
@@ -6111,7 +6280,7 @@ with aba6:
             origem_atual = "Não informado"
         cli_origem = st.selectbox("Origem do cliente (opcional)", opcoes_origem, index=opcoes_origem.index(origem_atual), key=f"cli_origem_cliente_{edit_id}")
         cli_obs = st.text_area("Observações internas (opcional)", value=cliente_edicao.get("observacoes", "") if cliente_edicao else "", key=f"cli_obs_{edit_id}")
-        st.caption("Somente o nome/identificação é necessário. O cadastro pode ser enriquecido aos poucos, sem bloquear o atendimento.")
+        st.caption("Somente o nome/identificação é necessário. Papéis, políticas e dados de fornecedor podem ser completados aos poucos.")
         with st.expander("⚙️ Gerenciar perfis comerciais"):
             novo_segmento = st.text_input("Adicionar novo perfil/segmento", key=f"novo_segmento_{edit_id}")
             gs1, gs2 = st.columns(2)
@@ -6124,9 +6293,9 @@ with aba6:
                 salvar_segmentos([x for x in carregar_segmentos() if x != segmento_remover])
                 st.rerun()
         ac1, ac2 = st.columns(2)
-        if ac1.button("💾 Salvar cliente", type="primary", use_container_width=True):
+        if ac1.button("💾 Salvar relacionamento", type="primary", use_container_width=True):
             if not cli_nome.strip():
-                st.warning("Informe o nome do cliente.")
+                st.warning("Informe o nome ou a identificação do relacionamento.")
             else:
                 registro_cli = {
                     "id": cliente_edicao.get("id") if cliente_edicao else f"CLI-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
@@ -6139,6 +6308,26 @@ with aba6:
                     "segmentos": cli_segmentos,
                     "interesses": cli_interesses,
                     "campanhas_interesse": cli_campanhas,
+                    "papeis": cli_papeis or ["Cliente"],
+                    "classificacao_relacionamento": cli_classificacao,
+                    "politica_atendimento": {
+                        "nivel": cli_nivel_atendimento,
+                        "motivo": cli_motivo_restricao.strip(),
+                        "permitir_resposta": cli_permitir_resposta,
+                        "permitir_catalogo": cli_permitir_catalogo,
+                        "permitir_orcamento": cli_permitir_orcamento,
+                        "permitir_campanhas": cli_permitir_campanhas,
+                        "exigir_pagamento_antecipado": cli_pagamento_antecipado,
+                        "exigir_aprovacao_gestor": cli_aprovacao_gestor,
+                    },
+                    "fornecedor": {
+                        "materiais": cli_forn_materiais.strip(),
+                        "contato_comercial": cli_forn_contato.strip(),
+                        "prioridade": cli_forn_prioridade,
+                        "prazo_medio": cli_forn_prazo.strip(),
+                        "avaliacao": cli_forn_avaliacao,
+                        "observacoes": cli_forn_obs.strip(),
+                    },
                     "potencial": cli_potencial,
                     "origem_cliente": "" if cli_origem == "Não informado" else cli_origem,
                     "observacoes": cli_obs.strip(),
@@ -6155,7 +6344,7 @@ with aba6:
                     clientes.append(registro_cli)
                 salvar_clientes(clientes)
                 st.session_state.cliente_edit_id = None
-                st.success("Cliente salvo.")
+                st.success("Relacionamento salvo.")
                 st.rerun()
         if cliente_edicao and ac2.button("Cancelar edição", use_container_width=True):
             st.session_state.cliente_edit_id = None
