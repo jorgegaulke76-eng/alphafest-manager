@@ -5348,9 +5348,9 @@ with aba0:
             st.write(f"**Pedido:** {prioridade.get('numero_proposta', '—')}  •  **Entrega:** {prioridade.get('data_entrega', 'A combinar')}")
             st.write(f"**Motivo:** {motivo}")
             st.write(f"**Valor:** R$ {total_prioridade:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            if st.button("📋 Selecionar no Histórico", key="central_abrir_prioridade", type="primary"):
+            if st.button("📋 Abrir e atualizar agora", key="central_abrir_prioridade", type="primary"):
                 st.session_state.alerta_proposta_numero = prioridade.get("numero_proposta")
-                st.info("Pedido selecionado. Abra a aba Histórico para consultar os detalhes.")
+                st.rerun()
     else:
         st.success("Nenhuma prioridade crítica neste momento. Tudo em dia!")
 
@@ -5364,10 +5364,74 @@ with aba0:
     for t in aguardando_aprovacao_central[:5]:
         alertas_central.append(("🟡", t.get("numero_proposta"), t.get("cliente_nome"), "Aguardando aprovação"))
     if alertas_central:
-        for icone, numero, cliente, texto in alertas_central[:10]:
-            st.write(f"{icone} **{numero} — {cliente}** · {texto}")
+        for idx_alerta, (icone, numero, cliente, texto) in enumerate(alertas_central[:10]):
+            al1, al2 = st.columns([7, 2])
+            al1.write(f"{icone} **{numero} — {cliente}** · {texto}")
+            if al2.button("Abrir e atualizar", key=f"central_alerta_abrir_{idx_alerta}_{numero}", use_container_width=True):
+                st.session_state.alerta_proposta_numero = numero
+                st.rerun()
     else:
         st.info("Nenhum alerta importante agora.")
+
+    # Editor operacional rápido: permite à Anna dar andamento sem procurar a proposta em outra aba.
+    numero_central_selecionado = st.session_state.get("alerta_proposta_numero")
+    if numero_central_selecionado:
+        proposta_central_selecionada = next(
+            (p for p in carregar_historico() if str(p.get("numero_proposta")) == str(numero_central_selecionado)),
+            None,
+        )
+        if proposta_central_selecionada:
+            _, _, total_central_sel = calcular_valores_proposta(proposta_central_selecionada)
+            with st.container(border=True):
+                st.markdown(f"### 📋 {html.escape(str(proposta_central_selecionada.get('numero_proposta', 'Proposta')))} — {html.escape(str(proposta_central_selecionada.get('cliente_nome', 'Cliente')))}")
+                det1, det2, det3 = st.columns(3)
+                det1.metric("Entrega", proposta_central_selecionada.get("data_entrega", "A combinar"))
+                det2.metric("Valor", f"R$ {total_central_sel:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                det3.metric("WhatsApp", proposta_central_selecionada.get("whatsapp") or proposta_central_selecionada.get("cliente_wa") or "Não informado")
+
+                st.write("**Itens do pedido**")
+                for item_central_sel in proposta_central_selecionada.get("itens", []) or []:
+                    st.write(f"• {item_central_sel.get('produto', 'Produto')} · Qtd.: {item_central_sel.get('quantidade', 0)}")
+
+                st.markdown("**Atualização rápida**")
+                up1, up2, up3 = st.columns(3)
+                aprovado_central = up1.checkbox("✅ Aprovado", value=bool(proposta_central_selecionada.get("aprovado")), key=f"central_aprov_{numero_central_selecionado}")
+                pago_central = up2.checkbox("💰 Pago", value=bool(proposta_central_selecionada.get("pago")), key=f"central_pago_{numero_central_selecionado}")
+                entregue_central = up3.checkbox("📦 Entregue", value=bool(proposta_central_selecionada.get("entregue")), key=f"central_entregue_{numero_central_selecionado}")
+                observacao_central = st.text_area(
+                    "Observação operacional",
+                    value=str(proposta_central_selecionada.get("observacao_operacional", "")),
+                    key=f"central_obs_{numero_central_selecionado}",
+                    placeholder="Ex.: cliente confirmou retirada às 16h; falta comprovante; arte enviada...",
+                    height=80,
+                )
+                op1, op2, op3 = st.columns(3)
+                if op1.button("💾 Salvar andamento", key=f"central_salvar_{numero_central_selecionado}", type="primary", use_container_width=True):
+                    historico_atual_central = carregar_historico()
+                    for proposta_atualizar in historico_atual_central:
+                        if str(proposta_atualizar.get("numero_proposta")) == str(numero_central_selecionado):
+                            proposta_atualizar["aprovado"] = bool(aprovado_central)
+                            proposta_atualizar["pago"] = bool(pago_central)
+                            proposta_atualizar["entregue"] = bool(entregue_central)
+                            proposta_atualizar["observacao_operacional"] = observacao_central.strip()
+                            proposta_atualizar["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                            if entregue_central and not proposta_atualizar.get("entregue_em"):
+                                proposta_atualizar["entregue_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                            break
+                    salvar_historico_completo(historico_atual_central)
+                    st.session_state["_mensagem_sucesso_pendente"] = "Andamento da proposta atualizado com sucesso."
+                    st.session_state.alerta_proposta_numero = None
+                    st.rerun()
+                if op2.button("✏️ Editar proposta completa", key=f"central_editar_{numero_central_selecionado}", use_container_width=True):
+                    carregar_proposta_no_formulario(proposta_central_selecionada, duplicar=False)
+                    st.session_state.alerta_proposta_numero = None
+                    st.session_state["_mensagem_sucesso_pendente"] = "Proposta carregada para edição. Abra a aba Novo Orçamento."
+                    st.rerun()
+                if op3.button("✖ Fechar", key=f"central_fechar_{numero_central_selecionado}", use_container_width=True):
+                    st.session_state.alerta_proposta_numero = None
+                    st.rerun()
+        else:
+            st.session_state.alerta_proposta_numero = None
 
     st.divider()
     st.subheader("🎯 Oportunidades comerciais")
@@ -5751,13 +5815,14 @@ with aba_atendimento:
                 return ""
 
         meta_app_secret = _segredo_local("META_APP_ID")
+        meta_app_id_suspeito = bool(meta_app_secret and ("googleusercontent.com" in meta_app_secret.lower() or ".apps.google" in meta_app_secret.lower()))
         meta_token_ok = bool(_segredo_local("META_ACCESS_TOKEN"))
         meta_page_ok = bool(_segredo_local("META_PAGE_ID"))
         instagram_id_ok = bool(_segredo_local("INSTAGRAM_ACCOUNT_ID"))
         whatsapp_phone_ok = bool(_segredo_local("WHATSAPP_PHONE_NUMBER_ID"))
         whatsapp_business_ok = bool(_segredo_local("WHATSAPP_BUSINESS_ACCOUNT_ID"))
 
-        cred_fb = bool(meta_app_secret and meta_token_ok and meta_page_ok)
+        cred_fb = bool(meta_app_secret and not meta_app_id_suspeito and meta_token_ok and meta_page_ok)
         cred_ig = bool(meta_token_ok and instagram_id_ok)
         cred_wa = bool(meta_token_ok and whatsapp_phone_ok and whatsapp_business_ok)
 
@@ -5774,11 +5839,15 @@ with aba_atendimento:
         c3.metric("Facebook", _rotulo_conexao(cred_fb, bool(cfg.get("integracao_facebook"))))
 
         st.info("🟡 Credenciais configuradas permitem testar a API. O estado verde exige também o webhook publicado, cadastrado na Meta e validado com entrada real.")
+        if meta_app_id_suspeito:
+            st.error("⚠️ O valor salvo em META_APP_ID parece ser um Client ID do Google (`apps.googleusercontent.com`). Substitua pelo **ID numérico do aplicativo Meta** em Streamlit Secrets. Isso impede a conexão real com Facebook, Instagram e WhatsApp.")
 
+        supabase_url_meta = _segredo_local("SUPABASE_URL").rstrip("/")
+        webhook_sugerido = f"{supabase_url_meta}/functions/v1/meta-webhook" if supabase_url_meta else ""
         i1, i2 = st.columns(2)
         meta_app_id = i1.text_input("Meta App ID", value=str(cfg.get("meta_app_id") or meta_app_secret or ""), help="Identificador do aplicativo criado no Meta for Developers.")
         meta_business_id = i2.text_input("Business Manager ID", value=str(cfg.get("meta_business_id", "")))
-        webhook_url = st.text_input("URL pública do webhook", value=str(cfg.get("webhook_url", "")), placeholder="https://SEU-PROJETO.supabase.co/functions/v1/meta-webhook")
+        webhook_url = st.text_input("URL pública do webhook", value=str(cfg.get("webhook_url") or webhook_sugerido or ""), placeholder="https://SEU-PROJETO.supabase.co/functions/v1/meta-webhook")
         token_atual = str(cfg.get("meta_verify_token", ""))
         if not token_atual:
             token_atual = "alphafest-" + secrets.token_urlsafe(18)
@@ -5787,7 +5856,30 @@ with aba_atendimento:
         int_wa = a1.toggle("Webhook WhatsApp validado", value=bool(cfg.get("integracao_whatsapp")), disabled=not cred_wa)
         int_ig = a2.toggle("Webhook Instagram validado", value=bool(cfg.get("integracao_instagram")), disabled=not cred_ig)
         int_fb = a3.toggle("Webhook Facebook validado", value=bool(cfg.get("integracao_facebook")), disabled=not cred_fb)
-        if st.button("💾 Salvar configuração das integrações", type="primary", use_container_width=True):
+        teste_webhook_col, salvar_webhook_col = st.columns([1, 2])
+        if teste_webhook_col.button("🧪 Testar endpoint", use_container_width=True, disabled=not bool(webhook_url.strip() and verify_token.strip())):
+            try:
+                desafio = "ALPHAFEST_OK"
+                resposta_webhook = requests.get(
+                    webhook_url.strip(),
+                    params={"hub.mode": "subscribe", "hub.verify_token": verify_token.strip(), "hub.challenge": desafio},
+                    timeout=12,
+                )
+                if resposta_webhook.status_code == 200 and resposta_webhook.text.strip() == desafio:
+                    cfg["webhook_ultimo_teste"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                    cfg["webhook_endpoint_ok"] = True
+                    salvar_atendimentos(dados_at)
+                    st.success("Endpoint publicado e token de verificação confirmados. Agora cadastre esta URL nos Webhooks da Meta e envie uma mensagem real.")
+                else:
+                    cfg["webhook_endpoint_ok"] = False
+                    salvar_atendimentos(dados_at)
+                    st.error(f"Endpoint respondeu {resposta_webhook.status_code}, mas não confirmou o desafio da Meta.")
+            except Exception as erro_teste_webhook:
+                cfg["webhook_endpoint_ok"] = False
+                salvar_atendimentos(dados_at)
+                st.error(f"Não foi possível alcançar o endpoint: {erro_teste_webhook.__class__.__name__}")
+
+        if salvar_webhook_col.button("💾 Salvar configuração das integrações", type="primary", use_container_width=True):
             cfg.update({
                 "meta_app_id": meta_app_id.strip(),
                 "meta_business_id": meta_business_id.strip(),
@@ -5800,6 +5892,11 @@ with aba_atendimento:
             salvar_atendimentos(dados_at)
             st.success("Configuração salva. O canal fica verde somente depois da validação real do webhook.")
             st.rerun()
+
+        if cfg.get("webhook_endpoint_ok"):
+            st.success(f"🌐 Endpoint do webhook acessível · último teste: {cfg.get('webhook_ultimo_teste', 'agora')}")
+        elif webhook_url.strip():
+            st.caption("🌐 URL informada, mas o endpoint ainda não foi validado por este painel.")
 
         st.markdown("#### Teste de entrada multicanal")
         st.caption("Use este teste antes da conexão oficial para confirmar que uma oportunidade entra corretamente na caixa unificada.")
