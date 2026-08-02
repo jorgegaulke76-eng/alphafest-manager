@@ -18,6 +18,11 @@ import hashlib
 import time
 import copy
 
+try:
+    from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
+except Exception:
+    Image = ImageOps = ImageDraw = ImageFont = ImageFilter = None
+
 # Importação resiliente da camada de dados.
 # Evita que uma atualização parcial de cloud_db.py derrube todo o aplicativo.
 try:
@@ -145,7 +150,7 @@ ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
 ARQUIVO_MARKETING = "marketing_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
-VERSAO_APP = "8.1.0"
+VERSAO_APP = "8.2.0"
 VERSAO_DADOS = 5
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
@@ -1683,6 +1688,161 @@ def consolidar_vinculos_relacionamentos(salvar=True):
     return {"vinculadas": vinculadas, "ambiguas": ambiguas, "sem_correspondencia": sem_correspondencia, "total_propostas": len(historico)}
 
 
+
+CANAL_MIDIA_CONFIG = {
+    "Instagram Feed": {"size": (1080, 1350), "tipo": "imagem", "rotulo": "Instagram • Feed 4:5"},
+    "Instagram Story": {"size": (1080, 1920), "tipo": "imagem", "rotulo": "Instagram • Story 9:16"},
+    "Facebook": {"size": (1080, 1080), "tipo": "imagem", "rotulo": "Facebook • Publicação 1:1"},
+    "Status WhatsApp": {"size": (1080, 1920), "tipo": "imagem", "rotulo": "WhatsApp • Status 9:16"},
+    "Carrossel": {"size": (1080, 1350), "tipo": "imagem", "rotulo": "Instagram • Carrossel 4:5"},
+    "Reel": {"size": (1080, 1920), "tipo": "video", "rotulo": "Instagram • Reel 9:16"},
+    "TikTok": {"size": (1080, 1920), "tipo": "video", "rotulo": "TikTok • Vídeo 9:16"},
+    "YouTube Shorts": {"size": (1080, 1920), "tipo": "video", "rotulo": "YouTube • Shorts 9:16"},
+}
+
+def _ler_bytes_midia(origem):
+    if origem is None:
+        return b""
+    if hasattr(origem, "getbuffer"):
+        return bytes(origem.getbuffer())
+    texto = str(origem).strip()
+    if not texto:
+        return b""
+    try:
+        if texto.startswith(("http://", "https://")):
+            resposta = requests.get(texto, timeout=15)
+            resposta.raise_for_status()
+            return resposta.content
+        caminho = Path(texto)
+        if caminho.exists() and caminho.is_file():
+            return caminho.read_bytes()
+    except Exception:
+        return b""
+    return b""
+
+def converter_imagem_para_png(origem):
+    """Aceita imagem enviada ou URL/caminho e devolve PNG em bytes, preservando o original."""
+    if Image is None:
+        raise RuntimeError("Pillow não está instalado.")
+    bruto = _ler_bytes_midia(origem)
+    if not bruto:
+        raise ValueError("Não foi possível ler a imagem selecionada.")
+    with Image.open(io.BytesIO(bruto)) as img:
+        img = ImageOps.exif_transpose(img).convert("RGBA")
+        saida = io.BytesIO()
+        img.save(saida, format="PNG", optimize=True)
+        return saida.getvalue()
+
+def _fonte_segura(tamanho=42, negrito=False):
+    if ImageFont is None:
+        return None
+    candidatos = [
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if negrito else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if negrito else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+    ]
+    for caminho in candidatos:
+        try:
+            if Path(caminho).exists():
+                return ImageFont.truetype(caminho, tamanho)
+        except Exception:
+            pass
+    return ImageFont.load_default()
+
+def _quebrar_texto(draw, texto, fonte, largura_max, limite_linhas=4):
+    palavras = str(texto or "").split()
+    linhas, atual = [], ""
+    for palavra in palavras:
+        teste = (atual + " " + palavra).strip()
+        try:
+            largura = draw.textbbox((0, 0), teste, font=fonte)[2]
+        except Exception:
+            largura = len(teste) * 12
+        if largura <= largura_max or not atual:
+            atual = teste
+        else:
+            linhas.append(atual)
+            atual = palavra
+            if len(linhas) >= limite_linhas:
+                break
+    if atual and len(linhas) < limite_linhas:
+        linhas.append(atual)
+    if len(linhas) == limite_linhas and len(" ".join(linhas)) < len(str(texto or "")):
+        linhas[-1] = linhas[-1].rstrip(".,;:") + "…"
+    return linhas
+
+def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no WhatsApp"):
+    """Gera uma arte PNG universal no tamanho do canal, sem sobrescrever o original."""
+    if Image is None:
+        raise RuntimeError("Pillow não está instalado.")
+    config = CANAL_MIDIA_CONFIG.get(canal, CANAL_MIDIA_CONFIG["Instagram Feed"])
+    largura, altura = config["size"]
+    bruto = _ler_bytes_midia(origem)
+    if not bruto:
+        raise ValueError("Selecione uma imagem válida.")
+    with Image.open(io.BytesIO(bruto)) as img:
+        img = ImageOps.exif_transpose(img).convert("RGB")
+        # Mantém o produto inteiro sempre que possível e usa fundo desfocado para completar o formato.
+        fundo = ImageOps.fit(img, (largura, altura), method=Image.Resampling.LANCZOS)
+        fundo = fundo.filter(ImageFilter.GaussianBlur(radius=18))
+        fundo = Image.blend(fundo, Image.new("RGB", (largura, altura), "white"), 0.16)
+        principal = ImageOps.contain(img, (int(largura * .92), int(altura * .72)), method=Image.Resampling.LANCZOS)
+        canvas = fundo.copy()
+        px = (largura - principal.width) // 2
+        py = max(40, int(altura * .05))
+        canvas.paste(principal, (px, py))
+        draw = ImageDraw.Draw(canvas, "RGBA")
+        painel_y = int(altura * .73)
+        draw.rounded_rectangle((40, painel_y, largura-40, altura-45), radius=34, fill=(255,255,255,238))
+        f_titulo = _fonte_segura(max(34, int(largura*.050)), True)
+        f_sub = _fonte_segura(max(24, int(largura*.031)), False)
+        f_preco = _fonte_segura(max(34, int(largura*.046)), True)
+        f_cta = _fonte_segura(max(24, int(largura*.030)), True)
+        x = 82; y = painel_y + 52
+        for linha in _quebrar_texto(draw, titulo, f_titulo, largura-164, 2):
+            draw.text((x,y), linha, font=f_titulo, fill=(17,24,39,255)); y += int(largura*.062)
+        if subtitulo:
+            for linha in _quebrar_texto(draw, subtitulo, f_sub, largura-164, 2):
+                draw.text((x,y+8), linha, font=f_sub, fill=(75,85,99,255)); y += int(largura*.043)
+        if preco:
+            draw.text((x, altura-170), preco, font=f_preco, fill=(220,38,38,255))
+        cta_box=(largura-500, altura-178, largura-82, altura-82)
+        draw.rounded_rectangle(cta_box, radius=26, fill=(29,78,216,255))
+        bbox=draw.textbbox((0,0), cta, font=f_cta)
+        tx=cta_box[0]+(cta_box[2]-cta_box[0]-(bbox[2]-bbox[0]))//2
+        ty=cta_box[1]+(cta_box[3]-cta_box[1]-(bbox[3]-bbox[1]))//2-3
+        draw.text((tx,ty), cta, font=f_cta, fill="white")
+        saida=io.BytesIO(); canvas.save(saida, format="PNG", optimize=True)
+        return saida.getvalue()
+
+def gerar_copy_comercial(produto, objetivo, campanha, canal, observacoes="", tom="Venda direta"):
+    nome = str(produto.get("Nome", "Produto personalizado")).strip()
+    descricao = re.sub(r"\s+", " ", str(produto.get("Descricao", "")).strip())
+    campanha_txt = str(campanha or "").strip()
+    obs = str(observacoes or "").strip()
+    contexto = f" para {campanha_txt}" if campanha_txt else ""
+    ganchos = {
+        "Venda direta": f"🔥 Seu pedido personalizado começa aqui: {nome}{contexto}.",
+        "Emocional": f"✨ Transforme um momento especial em uma lembrança inesquecível com {nome}{contexto}.",
+        "Urgência": f"⏰ Garanta agora o seu {nome}{contexto} antes que a agenda feche.",
+        "Premium": f"✨ Exclusividade em cada detalhe: conheça {nome}{contexto}.",
+        "Corporativo": f"💼 Valorize sua marca e seu evento com {nome}{contexto}.",
+        "Promoção": f"🔥 Condição especial por tempo limitado para {nome}{contexto}.",
+    }
+    gancho = ganchos.get(tom, ganchos["Venda direta"])
+    beneficio = descricao or "Produção personalizada, feita de acordo com a sua necessidade e na quantidade que você precisa."
+    diferencial = "Na Alphafest, cada detalhe é pensado para transformar sua ideia em realidade — sem quantidade mínima."
+    oferta = f"\n\n🎯 {obs}" if obs else ""
+    ctas = ["Chame agora no WhatsApp e solicite seu orçamento.", "Reserve sua data pelo WhatsApp.", "Fale com a Alphafest e monte sua ideia conosco."]
+    cta = ctas[int(hashlib.md5((nome+canal+campanha_txt).encode()).hexdigest(),16) % len(ctas)]
+    hashtags = "#AlphaFest #Personalizados #Itatiba #FeitoSobMedida #Orçamento #FestasPersonalizadas"
+    if canal in ("Instagram Story", "Status WhatsApp"):
+        return f"{gancho}\n\n✅ Sem quantidade mínima\n✅ Feito para sua necessidade{oferta}\n\n📲 {cta}"
+    if canal in ("Reel", "TikTok", "YouTube Shorts"):
+        return f"GANCHO: {gancho}\nCENA 1: Mostre o produto em destaque.\nCENA 2: Aproxime nos detalhes e personalização.\nCENA 3: Mostre a variedade/resultado final.\nENCERRAMENTO: {cta}\n\nLegenda: {beneficio}{oferta}\n{hashtags}"
+    if canal == "Facebook":
+        return f"{gancho}\n\n{beneficio}\n\n{diferencial}{oferta}\n\n📲 {cta}"
+    return f"{gancho}\n\n{beneficio}\n\n{diferencial}{oferta}\n\n📲 {cta}\n\n{hashtags}"
+
 def carregar_marketing():
     dados = load_document("marketing_db", ARQUIVO_MARKETING, {"conteudos": [], "config": {}})
     if not isinstance(dados, dict): dados = {"conteudos": [], "config": {}}
@@ -1695,61 +1855,8 @@ def salvar_marketing(dados):
     save_document("marketing_db", dados, ARQUIVO_MARKETING)
 
 
-def gerar_conteudo_marketing(produto, objetivo, campanha, canais, observacoes=""):
-    nome = str(produto.get("Nome", "Produto personalizado")).strip()
-    categoria = str(produto.get("Categoria", "Personalizados")).strip()
-    descricao = re.sub(r"\s+", " ", str(produto.get("Descricao", "")).strip())
-    campanha_txt = str(campanha or "").strip()
-    foco = {"Vender": "feito especialmente para a sua necessidade", "Engajar": "uma ideia para inspirar sua próxima comemoração", "Lançamento": "uma novidade da Alphafest", "Promoção": "uma oportunidade especial por tempo limitado"}.get(objetivo, "feito especialmente para você")
-    contexto = f" para {campanha_txt}" if campanha_txt else ""
-    base = f"✨ {nome}{contexto}\n\n{descricao or foco.capitalize()}. Na Alphafest, cada detalhe é personalizado e fazemos na quantidade que você precisa.\n\n📲 Chame no WhatsApp e solicite seu orçamento."
-    hashtags = "#AlphaFest #Personalizados #Festas #Baloes #GraficaRapida #Lembrancinhas #Orcamento"
-    saidas = {}
-    for canal in canais:
-        if canal == "Instagram":
-            saidas[canal] = base + "\n\n" + hashtags
-        elif canal == "Facebook":
-            saidas[canal] = base + "\n\nConte sua ideia para a gente transformar em realidade."
-        elif canal in ("Story", "Status WhatsApp"):
-            saidas[canal] = f"{nome}\n{foco.capitalize()}!\n✅ Sem quantidade mínima\n📲 Peça seu orçamento"
-        elif canal in ("Reel", "TikTok", "YouTube Shorts"):
-            saidas[canal] = f"ROTEIRO 20–30s\n1. Gancho: ‘Olha como um pedido personalizado ganha vida!’\n2. Mostre detalhes de {nome}.\n3. Mostre o resultado final.\n4. Texto na tela: ‘Fazemos na quantidade que você precisa’.\n5. CTA: ‘Chame a Alphafest no WhatsApp e peça seu orçamento’."
-        elif canal == "Carrossel":
-            saidas[canal] = f"Slide 1: {nome}\nSlide 2: Detalhes personalizados\nSlide 3: Escolha cores, tema e acabamento\nSlide 4: Fazemos na quantidade que você precisa\nSlide 5: Peça seu orçamento no WhatsApp"
-    if observacoes.strip():
-        saidas["Observações da campanha"] = observacoes.strip()
-    return saidas
-
-
-# --- FLUXO DE PEDIDOS (VERSÃO 3.2.1) ---
-STATUS_FLUXO = [
-    "Pedido recebido",
-    "Arte pendente",
-    "Arte em desenvolvimento",
-    "Aguardando aprovação",
-    "Arte aprovada",
-    "Pronto para produzir",
-    "Em produção",
-    "Montagem/acabamento",
-    "Pronto",
-    "Entregue",
-]
-
-PROCESSOS_FLUXO = [
-    "Criação/ajuste de arte",
-    "Impressão papelaria",
-    "Papel de arroz",
-    "Corte/laser",
-    "Impressão 3D",
-    "Balões",
-    "Montagem",
-    "Acabamento",
-    "Separação",
-    "Entrega/instalação",
-    "Outro",
-]
-
-PRIORIDADES_FLUXO = ["Normal", "Alta", "Urgente"]
+def gerar_conteudo_marketing(produto, objetivo, campanha, canais, observacoes="", tom="Venda direta"):
+    return {canal: gerar_copy_comercial(produto, objetivo, campanha, canal, observacoes, tom) for canal in canais}
 
 
 def carregar_producao():
@@ -5155,11 +5262,11 @@ with aba_alpha:
 
 
 with aba_crescimento:
-    st.header("🚀 Central de Crescimento")
-    st.caption("Transforme as fotos e produtos já cadastrados em conteúdo pronto para gerar orçamentos hoje.")
+    st.header("🚀 Alpha Creative Studio")
+    st.caption("Envie uma imagem da campanha, gere textos comerciais e aprove cada canal antes de publicar. Artes saem sempre em PNG.")
     marketing = carregar_marketing()
     conteudos = marketing.get("conteudos", [])
-    t1, t2, t3 = st.tabs(["🎨 Marketing Studio", "📚 Fila de conteúdo", "🔗 Consolidar relacionamentos"])
+    t1, t2, t3 = st.tabs(["🎨 Criar campanha", "📚 Fila e aprovações", "🔗 Consolidar relacionamentos"])
     with t1:
         catalogo_mkt = carregar_catalogo()
         if not catalogo_mkt:
@@ -5169,52 +5276,109 @@ with aba_crescimento:
             escolhido = st.selectbox("Produto / trabalho", nomes, key="mkt_produto")
             produto_mkt = catalogo_mkt[nomes.index(escolhido)]
             imagens_mkt = produto_mkt.get("Imagens", []) or []
-            if imagens_mkt:
-                try: st.image(imagens_mkt[0], width=320)
-                except Exception: pass
-            c1, c2 = st.columns(2)
-            objetivo = c1.selectbox("Objetivo", ["Vender", "Engajar", "Lançamento", "Promoção"], key="mkt_objetivo")
-            campanha = c2.text_input("Campanha / data (opcional)", placeholder="Ex.: Dia dos Pais, Volta às Aulas", key="mkt_campanha")
-            canais = st.multiselect("Gerar para", ["Instagram", "Facebook", "Story", "Status WhatsApp", "Carrossel", "Reel", "TikTok", "YouTube Shorts"], default=["Instagram", "Facebook", "Story", "Status WhatsApp"], key="mkt_canais")
-            observacoes = st.text_area("Detalhes que precisam aparecer (opcional)", placeholder="Preço, prazo, cores, promoção, cidade...", key="mkt_obs")
-            if st.button("🚀 Gerar campanha agora", type="primary", use_container_width=True):
+            fonte_imagem = st.radio("Fonte da imagem", ["Enviar imagem desta campanha", "Usar imagem do catálogo"], horizontal=True)
+            upload_mkt = None
+            imagem_ref = ""
+            if fonte_imagem == "Enviar imagem desta campanha":
+                upload_mkt = st.file_uploader("Imagem do produto", type=["png","jpg","jpeg","webp","bmp","tif","tiff"], key="mkt_upload_imagem")
+                if upload_mkt:
+                    st.image(upload_mkt, width=360, caption="Imagem enviada — o original será preservado")
+            else:
+                if imagens_mkt:
+                    imagem_ref = st.selectbox("Imagem do catálogo", imagens_mkt, format_func=lambda x: Path(str(x)).name or "Imagem")
+                    try: st.image(imagem_ref, width=360)
+                    except Exception: st.warning("Não foi possível abrir esta imagem do catálogo.")
+                else:
+                    st.warning("Este produto ainda não possui imagem no catálogo.")
+            c1, c2, c3 = st.columns(3)
+            objetivo = c1.selectbox("Objetivo", ["Vender", "Promoção", "Lançamento", "Engajar"], key="mkt_objetivo")
+            tom = c2.selectbox("Linha de venda", ["Venda direta", "Emocional", "Urgência", "Premium", "Corporativo", "Promoção"], key="mkt_tom")
+            campanha = c3.text_input("Campanha / data", placeholder="Ex.: Dia dos Pais", key="mkt_campanha")
+            canais = st.multiselect("Canais", list(CANAL_MIDIA_CONFIG), default=["Instagram Feed", "Instagram Story", "Facebook", "Status WhatsApp"], key="mkt_canais")
+            observacoes = st.text_area("Oferta e detalhes obrigatórios", placeholder="Ex.: Até sexta, R$ 90, entrega em Itatiba...", key="mkt_obs")
+            p1,p2,p3 = st.columns(3)
+            preco_arte = p1.text_input("Preço na arte (opcional)", placeholder="R$ 90,00")
+            subtitulo_arte = p2.text_input("Chamada curta na arte", value="Personalizado do seu jeito")
+            cta_arte = p3.text_input("Botão / CTA", value="Chame no WhatsApp")
+            if st.button("🚀 Gerar campanha e previews", type="primary", use_container_width=True):
                 if not canais:
                     st.warning("Selecione pelo menos um canal.")
+                elif upload_mkt is None and not imagem_ref:
+                    st.warning("Envie ou selecione uma imagem.")
                 else:
-                    saidas = gerar_conteudo_marketing(produto_mkt, objetivo, campanha, canais, observacoes)
-                    registro = {"id": f"MKT-{agora_local().strftime('%Y%m%d%H%M%S%f')}", "criado_em": agora_local().isoformat(), "produto": produto_mkt.get("Nome", ""), "categoria": produto_mkt.get("Categoria", ""), "imagem": imagens_mkt[0] if imagens_mkt else "", "objetivo": objetivo, "campanha": campanha, "canais": canais, "conteudos": saidas, "status": "Pendente"}
-                    conteudos.insert(0, registro)
-                    marketing["conteudos"] = conteudos
-                    salvar_marketing(marketing)
-                    registrar_auditoria("Gerar conteúdo", "Marketing", registro["id"], {"produto": registro["produto"], "canais": canais})
-                    st.session_state.mkt_ultimo_id = registro["id"]
-                    st.success("Campanha gerada e salva na fila.")
-                    st.rerun()
+                    try:
+                        origem = upload_mkt if upload_mkt is not None else imagem_ref
+                        imagem_original_salva = ""
+                        if upload_mkt is not None:
+                            imagem_original_salva = upload_library_file(upload_mkt, produto_nome=produto_mkt.get("Nome", "produto"), local_upload_dir="marketing_originais")
+                            origem = upload_mkt
+                        png_original = converter_imagem_para_png(origem)
+                        saidas = gerar_conteudo_marketing(produto_mkt, objetivo, campanha, canais, observacoes, tom)
+                        artes = {}
+                        for canal in canais:
+                            config = CANAL_MIDIA_CONFIG[canal]
+                            if config["tipo"] == "imagem":
+                                artes[canal] = base64.b64encode(gerar_arte_png(origem, canal, produto_mkt.get("Nome", "Produto"), subtitulo_arte, preco_arte, cta_arte)).decode("ascii")
+                        registro = {
+                            "id": f"MKT-{agora_local().strftime('%Y%m%d%H%M%S%f')}", "criado_em": agora_local().isoformat(),
+                            "produto": produto_mkt.get("Nome", ""), "categoria": produto_mkt.get("Categoria", ""),
+                            "imagem_original": imagem_original_salva or imagem_ref, "imagem_png_base64": base64.b64encode(png_original).decode("ascii"),
+                            "objetivo": objetivo, "tom": tom, "campanha": campanha, "canais": canais, "conteudos": saidas,
+                            "artes_png": artes, "aprovacoes": {canal: False for canal in canais}, "status": "Em revisão"
+                        }
+                        conteudos.insert(0, registro); marketing["conteudos"] = conteudos; salvar_marketing(marketing)
+                        registrar_auditoria("Gerar campanha", "Marketing", registro["id"], {"produto": registro["produto"], "canais": canais})
+                        st.session_state.mkt_ultimo_id = registro["id"]
+                        st.success("Campanha criada. Revise e aprove cada canal abaixo."); st.rerun()
+                    except Exception as exc:
+                        st.error(f"Não foi possível gerar a campanha: {exc}")
             ultimo_id = st.session_state.get("mkt_ultimo_id")
             ultimo = next((x for x in conteudos if x.get("id") == ultimo_id), None)
             if ultimo:
-                st.markdown("### Conteúdo pronto")
-                for canal, texto in ultimo.get("conteudos", {}).items():
-                    with st.expander(canal, expanded=True):
-                        st.text_area("Copiar e publicar", value=texto, height=180, key=f"mkt_out_{ultimo_id}_{canal}")
+                st.markdown("### Preview e aprovação por canal")
+                alterou = False
+                for canal in ultimo.get("canais", []):
+                    with st.container(border=True):
+                        st.subheader(CANAL_MIDIA_CONFIG.get(canal, {}).get("rotulo", canal))
+                        cols = st.columns([1.05, 1])
+                        with cols[0]:
+                            arte_b64 = ultimo.get("artes_png", {}).get(canal)
+                            if arte_b64:
+                                arte_bytes = base64.b64decode(arte_b64)
+                                st.image(arte_bytes, use_container_width=True)
+                                st.download_button("⬇️ Baixar PNG", arte_bytes, file_name=f"{re.sub(r'[^A-Za-z0-9_-]','_',ultimo.get('produto','campanha'))}_{re.sub(r'[^A-Za-z0-9_-]','_',canal)}.png", mime="image/png", key=f"baixar_{ultimo_id}_{canal}", use_container_width=True)
+                            else:
+                                st.info("Canal de vídeo: nesta etapa foi gerado o roteiro. O processamento MP4 entra no Video Studio.")
+                        with cols[1]:
+                            texto = st.text_area("Descrição / roteiro comercial", value=ultimo.get("conteudos", {}).get(canal, ""), height=260, key=f"texto_{ultimo_id}_{canal}")
+                            if texto != ultimo.get("conteudos", {}).get(canal, ""):
+                                ultimo.setdefault("conteudos", {})[canal] = texto; alterou = True
+                            aprovado = st.checkbox("✅ Aprovar este canal", value=bool(ultimo.get("aprovacoes", {}).get(canal)), key=f"aprovar_{ultimo_id}_{canal}")
+                            if aprovado != bool(ultimo.get("aprovacoes", {}).get(canal)):
+                                ultimo.setdefault("aprovacoes", {})[canal] = aprovado; alterou = True
+                if alterou:
+                    ultimo["status"] = "Aprovado" if all(ultimo.get("aprovacoes", {}).get(c) for c in ultimo.get("canais", [])) else "Em revisão"
+                    salvar_marketing(marketing)
+                if st.button("💾 Salvar textos e aprovações", use_container_width=True):
+                    salvar_marketing(marketing); st.success("Campanha atualizada.")
     with t2:
-        pendentes = [x for x in conteudos if x.get("status") != "Publicado"]
         a,b,c = st.columns(3)
-        a.metric("Conteúdos criados", len(conteudos)); b.metric("Pendentes", len(pendentes)); c.metric("Publicados", len(conteudos)-len(pendentes))
-        if not conteudos:
-            st.info("A fila será preenchida quando você gerar a primeira campanha.")
+        a.metric("Campanhas", len(conteudos)); b.metric("Em revisão", sum(1 for x in conteudos if x.get("status") == "Em revisão")); c.metric("Aprovadas/publicadas", sum(1 for x in conteudos if x.get("status") in ("Aprovado","Publicado")))
+        if not conteudos: st.info("A fila será preenchida quando você gerar a primeira campanha.")
         for item in conteudos[:50]:
-            with st.expander(f"{item.get('produto','Produto')} • {item.get('campanha') or item.get('objetivo')} • {item.get('status','Pendente')}"):
-                if item.get("imagem"):
-                    try: st.image(item.get("imagem"), width=240)
-                    except Exception: pass
-                for canal, texto in item.get("conteudos", {}).items():
-                    st.markdown(f"**{canal}**")
-                    st.code(texto, language=None)
-                x1,x2 = st.columns(2)
+            aprovados = sum(1 for canal in item.get("canais", []) if item.get("aprovacoes", {}).get(canal))
+            with st.expander(f"{item.get('produto','Produto')} • {item.get('campanha') or item.get('objetivo')} • {item.get('status','Em revisão')} ({aprovados}/{len(item.get('canais',[]))} canais)"):
+                for canal in item.get("canais", []):
+                    st.markdown(f"**{canal}** — {'✅ aprovado' if item.get('aprovacoes',{}).get(canal) else '⏳ revisão'}")
+                    arte_b64=item.get("artes_png",{}).get(canal)
+                    if arte_b64:
+                        arte_bytes=base64.b64decode(arte_b64); st.image(arte_bytes, width=260)
+                        st.download_button(f"Baixar {canal} PNG", arte_bytes, file_name=f"{item.get('id')}_{re.sub(r'[^A-Za-z0-9_-]','_',canal)}.png", mime="image/png", key=f"fila_dl_{item.get('id')}_{canal}")
+                    st.code(item.get("conteudos",{}).get(canal,""), language=None)
+                x1,x2=st.columns(2)
                 if x1.button("✅ Marcar publicado", key=f"mkt_pub_{item.get('id')}", use_container_width=True):
                     item["status"]="Publicado"; item["publicado_em"]=agora_local().isoformat(); salvar_marketing(marketing); st.rerun()
-                if x2.button("🗑️ Remover da fila", key=f"mkt_del_{item.get('id')}", use_container_width=True):
+                if x2.button("🗑️ Remover", key=f"mkt_del_{item.get('id')}", use_container_width=True):
                     marketing["conteudos"]=[x for x in conteudos if x.get("id") != item.get("id")]; salvar_marketing(marketing); st.rerun()
     with t3:
         st.subheader("Consolidação segura de propostas")
@@ -5224,8 +5388,7 @@ with aba_crescimento:
             st.success(f"{resultado['vinculadas']} proposta(s) vinculada(s).")
             st.metric("Propostas verificadas", resultado["total_propostas"])
             if resultado["ambiguas"]:
-                st.warning(f"{len(resultado['ambiguas'])} caso(s) precisam de confirmação manual.")
-                st.dataframe(resultado["ambiguas"], use_container_width=True)
+                st.warning(f"{len(resultado['ambiguas'])} caso(s) precisam de confirmação manual."); st.dataframe(resultado["ambiguas"], use_container_width=True)
             if resultado["sem_correspondencia"]:
                 st.info(f"{len(resultado['sem_correspondencia'])} proposta(s) ainda não possuem relacionamento correspondente.")
 

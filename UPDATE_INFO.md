@@ -1,13 +1,12 @@
-# FestManager 8.1.0 — Crescimento imediato
+# FestManager 8.2.0 — Alpha Creative Studio
 
-Versão anterior: 7.0.0
-Nova versão: 8.1.0
-Versão dos dados: 5
-
-## Entregas
-- Central de Crescimento e Marketing Studio.
-- Conteúdo para Instagram, Facebook, Story, Status WhatsApp, Carrossel, Reel, TikTok e Shorts.
-- Fila de conteúdo com status pendente/publicado.
-- Consolidação segura das propostas pelo relacionamento_id.
-- Migração aditiva v5; nenhum histórico é apagado.
-- marketing_db incluído no backup completo.
+- upload de imagem específica por campanha;
+- preservação do arquivo original;
+- conversão e exportação universal em PNG;
+- formatos próprios para Instagram Feed, Story, Facebook, WhatsApp Status e Carrossel;
+- preview individual por canal;
+- copy comercial adaptada por canal e linha de venda;
+- aprovação separada por canal;
+- fila com download das artes PNG;
+- roteiros comerciais para Reel, TikTok e YouTube Shorts;
+- consolidação segura de relacionamentos mantida.
