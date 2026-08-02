@@ -252,3 +252,10 @@ hangelog
 - Funil comercial, Índice Alpha, temperatura, próxima ação e priorização de oportunidades.
 - Atualização rápida de etapa e responsável.
 - Correção do filtro por canal na caixa multicanal.
+
+## 6.1.0 — Alpha Assistente Comercial
+- Criada a aba Alpha para organizar mensagens recebidas.
+- Adicionada interpretação local e explicável do pedido.
+- Adicionado checklist dinâmico de perguntas faltantes.
+- Adicionadas respostas assistidas e pesquisa de referências internas.
+- Integração com Jornada e Projeto Personalizado.

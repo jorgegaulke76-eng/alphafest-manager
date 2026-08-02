@@ -144,7 +144,7 @@ ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
-VERSAO_APP = "5.7.0"
+VERSAO_APP = "6.1.0"
 VERSAO_DADOS = 3
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
@@ -2442,6 +2442,293 @@ def renderizar_base_conhecimento():
             st.info("Digite uma característica para localizar produções semelhantes.")
 
 
+
+# --- ALPHA ASSISTENTE COMERCIAL (6.1) ---
+def _texto_sem_acentos(valor):
+    import unicodedata
+    texto = unicodedata.normalize("NFKD", str(valor or ""))
+    return "".join(c for c in texto if not unicodedata.combining(c)).lower()
+
+
+def analisar_mensagem_alpha(mensagem):
+    """Interpretação local e explicável do pedido, sem custo de API externa.
+
+    A análise é propositalmente assistida: organiza o texto e sugere perguntas,
+    mas a equipe confirma tudo antes de criar projeto ou orçamento.
+    """
+    original = str(mensagem or "").strip()
+    texto = _texto_sem_acentos(original)
+    familias = {
+        "Bubble": ["bubble", "buble", "balao transparente"],
+        "Topo de bolo": ["topo", "topper", "topo de bolo"],
+        "Papel de arroz": ["papel de arroz", "papel arroz"],
+        "Balões / decoração": ["balao", "baloes", "decoracao", "arco de baloes"],
+        "Camiseta": ["camiseta", "camisa", "uniforme", "polo"],
+        "Caneca": ["caneca", "copo", "squeeze"],
+        "Chaveiro": ["chaveiro", "chaveiros"],
+        "Medalha": ["medalha", "medalhas"],
+        "Troféu": ["trofeu", "trofeus"],
+        "Banner / faixa": ["banner", "faixa", "painel"],
+        "Caixa / lembrancinha": ["caixa", "caixinha", "lembrancinha", "lembranca"],
+        "Impressão 3D": ["3d", "impressao 3d", "peca 3d"],
+    }
+    detectados = []
+    for familia, termos in familias.items():
+        if any(t in texto for t in termos):
+            detectados.append(familia)
+
+    ocasioes = {
+        "Aniversário": ["aniversario", "anos", "festa infantil"],
+        "Casamento": ["casamento", "noivado", "bodas"],
+        "Chá revelação / bebê": ["cha revelacao", "cha de bebe", "bebe"],
+        "Empresa / evento corporativo": ["empresa", "corporativo", "sipat", "inauguracao"],
+        "Escola": ["escola", "formatura", "volta as aulas", "professor"],
+        "Esporte": ["campeonato", "torneio", "beach tennis", "futebol", "basquete", "volei", "tenis"],
+        "Campanha": ["outubro rosa", "novembro azul", "campanha", "acao promocional"],
+    }
+    ocasiao = next((nome for nome, termos in ocasioes.items() if any(t in texto for t in termos)), "")
+
+    cores_lista = ["rosa", "azul", "dourado", "prata", "vermelho", "verde", "amarelo", "lilas", "roxo", "preto", "branco", "laranja", "marrom", "bege", "colorido"]
+    cores = [c for c in cores_lista if c in texto]
+
+    idade = ""
+    m = re.search(r"(?:idade\s*)?(\d{1,2})\s*(?:anos|ano)", texto)
+    if m:
+        idade = f"{m.group(1)} anos"
+
+    quantidade = ""
+    padroes_qtd = [r"(\d+)\s*(?:unidades|unidade|pecas|peca|camisas|camisetas|medalhas|chaveiros|pessoas|criancas|convidados)", r"quantidade\s*[:=-]?\s*(\d+)"]
+    for padrao in padroes_qtd:
+        mq = re.search(padrao, texto)
+        if mq:
+            quantidade = mq.group(0)
+            break
+
+    prazo = ""
+    if "urgente" in texto or "para hoje" in texto:
+        prazo = "Urgente / hoje"
+    elif "amanha" in texto:
+        prazo = "Amanhã"
+    elif "sabado" in texto:
+        prazo = "Sábado"
+    elif "domingo" in texto:
+        prazo = "Domingo"
+    else:
+        md = re.search(r"\b(\d{1,2}/\d{1,2}(?:/\d{2,4})?)\b", texto)
+        if md:
+            prazo = md.group(1)
+
+    # Tema é uma sugestão, nunca uma confirmação automática.
+    tema = ""
+    padroes_tema = [
+        r"tema\s+(?:do|da|de)?\s*([a-z0-9][a-z0-9 ]{1,35})",
+        r"(?:do|da)\s+([a-z][a-z0-9 -]{2,25})\s+(?:para|com|de|,|\.)",
+    ]
+    for padrao in padroes_tema:
+        mt = re.search(padrao, texto)
+        if mt:
+            candidato = mt.group(1).strip(" ,.-")
+            candidato = re.split(r"\b(?:para|com|em|e|que|uma|um)\b", candidato)[0].strip()
+            if candidato and candidato not in {"cliente", "menina", "menino", "empresa"}:
+                tema = candidato.title()
+                break
+
+    detalhes_encontrados = []
+    detalhes_termos = {
+        "LED": ["led", "luz"], "Confete": ["confete"], "Metalizado": ["metalizado"],
+        "Fosco": ["fosco"], "Coração": ["coracao"], "Estrela": ["estrela"],
+        "Lua": ["lua"], "Pelúcia": ["pelucia"], "Glitter": ["glitter"],
+        "Base de balões": ["base de baloes"], "Entrega": ["entrega", "entregar"],
+        "Retirada": ["retirada", "retirar"],
+    }
+    for nome, termos in detalhes_termos.items():
+        if any(t in texto for t in termos):
+            detalhes_encontrados.append(nome)
+
+    perguntas = []
+    produto_principal = detectados[0] if detectados else ""
+    if not produto_principal:
+        perguntas.append("Qual produto ou solução o cliente imagina?")
+    if not tema and produto_principal not in ("Empresa / evento corporativo",):
+        perguntas.append("Qual é o tema, personagem ou identidade visual?")
+    if not prazo:
+        perguntas.append("Qual é a data ou o prazo de entrega?")
+    if not quantidade:
+        perguntas.append("Qual é a quantidade necessária?")
+    if "Entrega" not in detalhes_encontrados and "Retirada" not in detalhes_encontrados:
+        perguntas.append("Será retirada ou entrega?")
+
+    especificas = {
+        "Bubble": ["Qual tamanho do Bubble?", "Vai com LED?", "Qual tipo, formato e cor do confete?", "Terá base, laço, pelúcia ou outro acessório?"],
+        "Topo de bolo": ["Qual nome e idade?", "Quantas camadas e qual acabamento?", "Tem preferência de cores ou materiais?"],
+        "Papel de arroz": ["Qual tamanho e formato?", "O cliente enviará foto ou arte?"],
+        "Camiseta": ["Qual modelo, cor e tamanhos?", "A arte ou logotipo já está pronto?", "Terá nomes ou numeração individual?"],
+        "Medalha": ["Qual modalidade e tamanho?", "Qual texto ou gravação?", "Precisa de fita e embalagem?"],
+        "Troféu": ["Qual modalidade, altura e material?", "Qual texto ou gravação?"],
+        "Chaveiro": ["Qual material, formato e tamanho?", "Precisa de embalagem ou etiqueta?"],
+    }
+    for pergunta in especificas.get(produto_principal, []):
+        termo_chave = _texto_sem_acentos(pergunta).split()[1:3]
+        if not any(t in texto for t in termo_chave):
+            perguntas.append(pergunta)
+
+    return {
+        "texto_original": original,
+        "produtos": detectados,
+        "produto_principal": produto_principal,
+        "ocasiao": ocasiao,
+        "tema": tema,
+        "idade": idade,
+        "cores": cores,
+        "quantidade": quantidade,
+        "prazo": prazo,
+        "detalhes": detalhes_encontrados,
+        "perguntas": list(dict.fromkeys(perguntas))[:8],
+    }
+
+
+def buscar_referencias_alpha(analise, limite=6):
+    termos = []
+    for valor in [analise.get("produto_principal"), analise.get("tema"), analise.get("ocasiao")]:
+        if valor:
+            termos.extend(_texto_sem_acentos(valor).split())
+    termos.extend(_texto_sem_acentos(" ".join(analise.get("cores", []))).split())
+    termos = [t for t in termos if len(t) >= 3]
+    projetos = []
+    for projeto in carregar_projetos():
+        base = _texto_sem_acentos(" ".join(str(projeto.get(k, "")) for k in ["tema", "produtos", "necessidade", "detalhes", "caracteristicas_livres", "observacoes", "cliente_nome"]))
+        pontos = sum(1 for t in termos if t in base)
+        if pontos:
+            projetos.append((pontos, projeto))
+    produtos = []
+    for produto in carregar_catalogo():
+        base = _texto_sem_acentos(" ".join(str(produto.get(k, "")) for k in ["nome", "categoria", "descricao", "descricao_curta", "palavras_chave", "tema"]))
+        pontos = sum(1 for t in termos if t in base)
+        if pontos:
+            produtos.append((pontos, produto))
+    projetos.sort(key=lambda x: x[0], reverse=True)
+    produtos.sort(key=lambda x: x[0], reverse=True)
+    return [p for _, p in projetos[:limite]], [p for _, p in produtos[:limite]]
+
+
+def resposta_assistida_alpha(analise):
+    produto = analise.get("produto_principal") or "personalizado"
+    abertura = f"Olá! 😊 Trabalhamos sim com {produto}."
+    conhecidos = []
+    if analise.get("tema"):
+        conhecidos.append(f"tema {analise['tema']}")
+    if analise.get("idade"):
+        conhecidos.append(analise["idade"])
+    if analise.get("cores"):
+        conhecidos.append("cores " + ", ".join(analise["cores"]))
+    meio = (" Entendi que você procura " + ", ".join(conhecidos) + ".") if conhecidos else ""
+    perguntas = analise.get("perguntas", [])[:3]
+    fim = " Para preparar o orçamento, poderia me informar: " + " ".join(f"• {p}" for p in perguntas) if perguntas else " Vou preparar as opções para você."
+    return abertura + meio + fim
+
+
+def preencher_jornada_com_alpha(analise, cliente="", whatsapp=""):
+    st.session_state["jornada_cliente"] = str(cliente or "")
+    st.session_state["jornada_whatsapp"] = str(whatsapp or "")
+    st.session_state["jornada_necessidade"] = analise.get("texto_original", "")
+    st.session_state["jornada_ocasiao"] = analise.get("ocasiao", "")
+    st.session_state["jornada_tema"] = analise.get("tema", "")
+    st.session_state["jornada_quantidade"] = analise.get("quantidade", "")
+    st.session_state["jornada_prazo"] = analise.get("prazo", "")
+    detalhes = ", ".join([*(analise.get("cores") or []), *(analise.get("detalhes") or [])])
+    st.session_state["jornada_detalhes"] = detalhes
+    st.session_state["jornada_observacoes"] = "Perguntas pendentes: " + " | ".join(analise.get("perguntas", []))
+
+
+def renderizar_alpha_assistente_comercial():
+    st.header("🤖 Alpha Assistente Comercial")
+    st.caption("Cole a mensagem do cliente. O Alpha organiza o pedido, mostra o que falta perguntar e procura referências da própria Alphafest. Nada é enviado automaticamente.")
+
+    dados = carregar_atendimentos()
+    abertos = [x for x in dados.get("itens", []) if x.get("status") not in ("Entregue", "Pós-venda", "Arquivado")]
+    opcoes = {f"{x.get('cliente') or 'Contato'} · {x.get('canal') or x.get('origem') or 'Canal'} · {str(x.get('mensagem') or '')[:55]}": x for x in abertos}
+    origem = st.radio("Origem da análise", ["Mensagem livre", "Oportunidade da Central Multicanal"], horizontal=True)
+    cliente = ""
+    whatsapp = ""
+    atendimento_id = ""
+    mensagem = ""
+    if origem == "Oportunidade da Central Multicanal" and opcoes:
+        escolha = st.selectbox("Selecione a oportunidade", list(opcoes.keys()))
+        item = opcoes[escolha]
+        cliente = str(item.get("cliente") or "")
+        whatsapp = str(item.get("telefone") or "")
+        atendimento_id = str(item.get("id") or "")
+        mensagem = st.text_area("Mensagem recebida", value=str(item.get("mensagem") or ""), height=120)
+    else:
+        c1, c2 = st.columns(2)
+        cliente = c1.text_input("Cliente / identificação (opcional)", key="alpha_cliente")
+        whatsapp = c2.text_input("WhatsApp (opcional)", key="alpha_whatsapp")
+        mensagem = st.text_area("Digite ou cole exatamente como o cliente falou", key="alpha_mensagem", height=140, placeholder="Ex.: Quero um Bubble do Stitch para uma menina de 6 anos, rosa e dourado, para sábado.")
+
+    if not mensagem.strip():
+        st.info("Digite uma mensagem para o Alpha preparar o atendimento.")
+        return
+
+    analise = analisar_mensagem_alpha(mensagem)
+    projetos, produtos = buscar_referencias_alpha(analise)
+    st.markdown("### Entendimento do pedido")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Produto principal", analise.get("produto_principal") or "A confirmar")
+    c2.metric("Tema", analise.get("tema") or "A confirmar")
+    c3.metric("Ocasião", analise.get("ocasiao") or "A confirmar")
+    c4.metric("Prazo", analise.get("prazo") or "A confirmar")
+    if analise.get("cores") or analise.get("idade") or analise.get("quantidade") or analise.get("detalhes"):
+        st.write("**Detalhes identificados:**", " · ".join(filter(None, [analise.get("idade"), analise.get("quantidade"), ", ".join(analise.get("cores", [])), ", ".join(analise.get("detalhes", []))])))
+
+    st.markdown("### Próximas perguntas sugeridas")
+    if analise.get("perguntas"):
+        for pergunta in analise["perguntas"]:
+            st.checkbox(pergunta, key=f"alpha_pergunta_{abs(hash(pergunta))}")
+    else:
+        st.success("O pedido já possui as informações essenciais para iniciar o orçamento.")
+
+    st.markdown("### Resposta assistida")
+    resposta = st.text_area("Revise antes de enviar", value=resposta_assistida_alpha(analise), height=130, key=f"alpha_resposta_{abs(hash(mensagem))}")
+    telefone = _telefone_chave(whatsapp)
+    a1, a2, a3 = st.columns(3)
+    if telefone:
+        numero = telefone if telefone.startswith("55") else "55" + telefone
+        a1.link_button("📱 Abrir WhatsApp", f"https://wa.me/{numero}?text={quote(resposta)}", use_container_width=True)
+    else:
+        a1.button("📱 Informe o WhatsApp", disabled=True, use_container_width=True)
+    if a2.button("🚀 Levar para Jornada", type="primary", use_container_width=True):
+        preencher_jornada_com_alpha(analise, cliente, whatsapp)
+        if atendimento_id:
+            st.session_state["alpha_atendimento_origem"] = atendimento_id
+        st.success("Dados preparados. Abra a aba Jornada para continuar sem redigitar.")
+    if a3.button("🧩 Preparar Projeto", use_container_width=True):
+        st.session_state["_projeto_prefill"] = {"cliente": cliente, "whatsapp": whatsapp, "necessidade": mensagem, "origem": "Alpha Assistente Comercial", "atendimento_id": atendimento_id}
+        st.success("Projeto preparado. Abra Projeto Personalizado.")
+
+    st.markdown("### Referências encontradas na Alphafest")
+    rp, rc = st.columns(2)
+    with rp:
+        st.write(f"**Projetos semelhantes ({len(projetos)})**")
+        if not projetos:
+            st.caption("Nenhum projeto semelhante encontrado ainda.")
+        for projeto in projetos:
+            with st.container(border=True):
+                st.write(f"**{projeto.get('tema') or projeto.get('necessidade') or projeto.get('id', 'Projeto')}**")
+                st.caption(" · ".join(str(x) for x in (projeto.get("produtos") or [])[:4]) if isinstance(projeto.get("produtos"), list) else str(projeto.get("produtos") or ""))
+                if projeto.get("numero_proposta"):
+                    st.caption(f"Proposta: {projeto.get('numero_proposta')}")
+    with rc:
+        st.write(f"**Produtos do catálogo ({len(produtos)})**")
+        if not produtos:
+            st.caption("Nenhum produto relacionado encontrado ainda.")
+        for produto in produtos:
+            with st.container(border=True):
+                st.write(f"**{produto.get('nome', 'Produto')}**")
+                preco = valor_float(produto.get("preco", produto.get("valor", 0)))
+                if preco:
+                    st.caption(f"Referência cadastrada: R$ {preco:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                st.caption(str(produto.get("categoria") or ""))
+
 def carregar_projetos():
     dados = load_document("projetos_db", ARQUIVO_PROJETOS, [])
     return dados if isinstance(dados, list) else []
@@ -3918,10 +4205,11 @@ _dados_atendimento_badge = carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
 _rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Multicanal"
 
-aba0, aba_atendimento, aba_crm, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
+aba0, aba_atendimento, aba_crm, aba_alpha, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
     _rotulo_atendimento,
     "🎯 CRM Inteligente",
+    "🤖 Alpha",
     "🚀 Jornada",
     "🧩 Projeto Personalizado",
     "➕ Novo Orçamento",
@@ -4622,6 +4910,9 @@ with aba_crm:
                 salvar_atendimentos(dados_crm)
                 st.success("Oportunidade atualizada.")
                 st.rerun()
+
+with aba_alpha:
+    renderizar_alpha_assistente_comercial()
 
 with aba_jornada:
     renderizar_jornada_atendimento()
