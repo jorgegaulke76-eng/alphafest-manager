@@ -1,3 +1,8 @@
+# 9.2.0
+- Cadastro Mestre e Alpha Connect Pro.
+- IDs permanentes e vínculos intermodulares.
+- Diagnóstico seguro das integrações.
+
 # 9.1.1
 
 - Corrige geração de campanhas com imagens do catálogo armazenadas por URL, caminho, bytes ou Base64.

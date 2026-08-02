@@ -1,0 +1,11 @@
+FESTMANAGER 9.2.0
+
+1. Faça backup no sistema.
+2. Substitua os arquivos deste pacote na raiz do repositório GitHub.
+3. Não apague seus arquivos JSON de dados existentes.
+4. Reinicie/Reboot o aplicativo no Streamlit.
+5. Confirme no rodapé: Versão 9.2.0.
+6. Abra Relacionamentos > Cadastro Mestre e clique em Sincronizar Cadastro Mestre agora.
+7. Abra Configurações > Alpha Connect e teste somente integrações marcadas como Configurado.
+
+Os testes do Alpha Connect não publicam, não enviam mensagens e não exibem chaves.

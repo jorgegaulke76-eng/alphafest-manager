@@ -156,6 +156,7 @@ ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
 ARQUIVO_MARKETING = "marketing_db.json"
+ARQUIVO_INTEGRACOES = "integracoes_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -1663,6 +1664,139 @@ def sincronizar_clientes_do_historico():
         salvar_historico_completo(historico)
     return clientes
 
+
+
+
+def _digitos(valor):
+    return re.sub(r"\D", "", str(valor or ""))
+
+
+def _campos_identidade_registro(registro):
+    """Extrai os campos de identidade usados para ligar qualquer módulo ao cadastro mestre."""
+    return {
+        "id": str(registro.get("relacionamento_id", registro.get("cliente_id", "")) or "").strip(),
+        "nome": normalizar_texto_cliente(registro.get("cliente_nome", registro.get("cliente", registro.get("nome_cliente", registro.get("nome", ""))))).casefold(),
+        "documento": _digitos(registro.get("documento", registro.get("cliente_cpf_cnpj", registro.get("cpf_cnpj", "")))),
+        "whatsapp": _telefone_chave(registro.get("whatsapp", registro.get("cliente_wa", registro.get("telefone", "")))),
+    }
+
+
+def _indices_cadastro_mestre(clientes):
+    por_id, por_doc, por_wa, por_nome = {}, {}, {}, {}
+    for cli in clientes:
+        garantir_id_relacionamento(cli)
+        cid = str(cli.get("id", "")).strip()
+        nome = normalizar_texto_cliente(cli.get("nome", "")).casefold()
+        doc = _digitos(cli.get("documento", ""))
+        wa = _telefone_chave(cli.get("whatsapp", ""))
+        if cid:
+            por_id[cid] = cli
+        if doc:
+            por_doc.setdefault(doc, []).append(cli)
+        if wa:
+            por_wa.setdefault(wa, []).append(cli)
+        if nome:
+            por_nome.setdefault(nome, []).append(cli)
+    return por_id, por_doc, por_wa, por_nome
+
+
+def _localizar_no_cadastro_mestre(registro, indices):
+    por_id, por_doc, por_wa, por_nome = indices
+    ident = _campos_identidade_registro(registro)
+    if ident["id"] and ident["id"] in por_id:
+        return por_id[ident["id"]]
+    for chave, mapa in ((ident["documento"], por_doc), (ident["whatsapp"], por_wa), (ident["nome"], por_nome)):
+        if chave and len(mapa.get(chave, [])) == 1:
+            return mapa[chave][0]
+    return None
+
+
+def _vincular_lista_cadastro_mestre(itens, indices):
+    alterados = 0
+    sem_vinculo = 0
+    for item in itens or []:
+        if not isinstance(item, dict):
+            continue
+        cli = _localizar_no_cadastro_mestre(item, indices)
+        if cli:
+            cid = str(cli.get("id", "")).strip()
+            if cid and str(item.get("relacionamento_id", "")).strip() != cid:
+                item["relacionamento_id"] = cid
+                alterados += 1
+        elif any(_campos_identidade_registro(item).values()):
+            sem_vinculo += 1
+    return alterados, sem_vinculo
+
+
+def sincronizar_cadastro_mestre(salvar=True):
+    """Vincula os módulos ao relacionamento mestre sem apagar dados históricos.
+
+    Os dados pessoais continuam preservados dentro dos documentos antigos para auditoria,
+    porém todas as telas podem consultar o cadastro atual pelo relacionamento_id.
+    """
+    clientes = carregar_clientes()
+    historico = carregar_historico()
+    clientes, historico, consolidacao = consolidar_cadastros_duplicados_relacionamentos(clientes, historico, salvar=False)
+    indices = _indices_cadastro_mestre(clientes)
+    total_ids = sum(1 for c in clientes if c.get("id"))
+
+    resultados = {
+        "relacionamentos": len(clientes),
+        "ids_validos": total_ids,
+        "duplicidades_consolidadas": consolidacao.get("consolidados", 0),
+        "modulos": {},
+        "alteracoes": 0,
+        "sem_vinculo": 0,
+    }
+
+    docs = [
+        ("Orçamentos", historico, lambda v: salvar_historico_completo(v)),
+        ("Projetos", carregar_projetos(), lambda v: salvar_projetos(v)),
+        ("Produção", carregar_producao(), lambda v: salvar_producao(v)),
+        ("Campanhas", load_document("campanhas_db", ARQUIVO_CAMPANHAS, []), lambda v: save_document("campanhas_db", v, ARQUIVO_CAMPANHAS)),
+    ]
+    atendimentos = carregar_atendimentos()
+    docs.append(("Atendimentos", atendimentos.get("itens", []), None))
+
+    for nome, itens, salvador in docs:
+        if not isinstance(itens, list):
+            itens = []
+        alterados, sem_vinculo = _vincular_lista_cadastro_mestre(itens, indices)
+        resultados["modulos"][nome] = {"registros": len(itens), "vinculados_agora": alterados, "sem_vinculo": sem_vinculo}
+        resultados["alteracoes"] += alterados
+        resultados["sem_vinculo"] += sem_vinculo
+        if salvar and alterados:
+            if nome == "Atendimentos":
+                atendimentos["itens"] = itens
+                salvar_atendimentos(atendimentos)
+            elif salvador:
+                salvador(itens)
+
+    if salvar:
+        salvar_clientes(clientes)
+        if consolidacao.get("historico_alterado") and not resultados["modulos"]["Orçamentos"]["vinculados_agora"]:
+            salvar_historico_completo(historico)
+    return resultados
+
+
+def dados_atuais_cadastro_mestre(registro):
+    """Retorna identidade atual, mantendo o documento operacional original intacto."""
+    cli = _localizar_no_cadastro_mestre(registro, _indices_cadastro_mestre(carregar_clientes()))
+    if not cli:
+        return dict(registro)
+    visao = dict(registro)
+    mapa = {
+        "cliente_nome": "nome",
+        "whatsapp": "whatsapp",
+        "documento": "documento",
+        "email": "email",
+        "cidade": "cidade",
+    }
+    for destino, origem in mapa.items():
+        if cli.get(origem):
+            visao[destino] = cli.get(origem)
+    visao["relacionamento_id"] = cli.get("id")
+    return visao
 
 PAPEIS_RELACIONAMENTO = [
     "Cliente", "Fornecedor", "Parceiro comercial", "Prestador de serviço",
@@ -4440,6 +4574,7 @@ DOCUMENTOS_BACKUP = [
     ("config_empresa", ARQUIVO_EMPRESA, CONFIG_EMPRESA_PADRAO),
     ("projetos_db", ARQUIVO_PROJETOS, []),
     ("campanhas_db", ARQUIVO_CAMPANHAS, []),
+    ("integracoes_db", ARQUIVO_INTEGRACOES, {}),
     ("atendimentos_db", ARQUIVO_ATENDIMENTOS, {"config": {}, "itens": []}),
     ("segmentos_db", ARQUIVO_SEGMENTOS, []),
     ("auditoria_db", ARQUIVO_AUDITORIA, []),
@@ -6839,6 +6974,23 @@ with aba6:
     st.caption("Um único cadastro para clientes, fornecedores, parceiros e contatos que exigem regras especiais de atendimento.")
 
     clientes = sincronizar_clientes_do_historico()
+    with st.expander("🧬 Cadastro Mestre e integridade dos vínculos", expanded=False):
+        st.caption("Relacionamentos são a fonte oficial dos dados pessoais. Orçamentos, projetos, produção, atendimentos e campanhas guardam o vínculo pelo ID permanente.")
+        ids_ok = sum(1 for c in clientes if str(c.get("id", "")).strip())
+        hist_atual = carregar_historico()
+        hist_vinc = sum(1 for p in hist_atual if str(p.get("relacionamento_id", "")).strip())
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Relacionamentos com ID", f"{ids_ok}/{len(clientes)}")
+        c2.metric("Orçamentos vinculados", f"{hist_vinc}/{len(hist_atual)}")
+        c3.metric("Fonte oficial", "Relacionamentos")
+        if st.button("🔄 Sincronizar Cadastro Mestre agora", type="primary", use_container_width=True):
+            with st.spinner("Consolidando IDs e vínculos sem apagar históricos..."):
+                resumo_master = sincronizar_cadastro_mestre(salvar=True)
+            st.success(f"Sincronização concluída: {resumo_master['alteracoes']} vínculo(s) criado(s) e {resumo_master['duplicidades_consolidadas']} duplicidade(s) segura(s) consolidada(s).")
+            if resumo_master["sem_vinculo"]:
+                st.warning(f"{resumo_master['sem_vinculo']} registro(s) ainda precisam de identificação manual.")
+            st.session_state["ultimo_resumo_master"] = resumo_master
+            st.rerun()
     if "cliente_edit_id" not in st.session_state:
         st.session_state.cliente_edit_id = None
 
@@ -7322,36 +7474,98 @@ with aba9:
 
 
 
-def _secret_configurado(nome):
+
+def _secret_valor(nome):
     try:
         valor = st.secrets.get(nome, "")
     except Exception:
         valor = os.getenv(nome, "")
-    return bool(str(valor or "").strip())
+    return str(valor or "").strip()
 
 
-def _status_integracao(nome, obrigatorios, observacao=""):
+def _secret_configurado(nome):
+    return bool(_secret_valor(nome))
+
+
+def carregar_status_integracoes():
+    dados = load_document("integracoes_db", ARQUIVO_INTEGRACOES, {})
+    return dados if isinstance(dados, dict) else {}
+
+
+def salvar_status_integracoes(dados):
+    save_document("integracoes_db", dados if isinstance(dados, dict) else {}, ARQUIVO_INTEGRACOES)
+
+
+def _status_integracao(chave, nome, obrigatorios, observacao="", opcionais=None):
     presentes = [campo for campo in obrigatorios if _secret_configurado(campo)]
+    opcionais = opcionais or []
     total = len(obrigatorios)
     if total and len(presentes) == total:
-        return {"nome": nome, "status": "Configurado", "icone": "🟢", "detalhe": observacao or "Credenciais principais encontradas.", "faltando": []}
-    if presentes:
-        faltando = [campo for campo in obrigatorios if campo not in presentes]
-        return {"nome": nome, "status": "Incompleto", "icone": "🟡", "detalhe": observacao or "Algumas credenciais ainda faltam.", "faltando": faltando}
-    return {"nome": nome, "status": "Não configurado", "icone": "⚪", "detalhe": observacao or "Nenhuma credencial encontrada.", "faltando": list(obrigatorios)}
+        status, icone = "Configurado", "🟢"
+    elif presentes:
+        status, icone = "Incompleto", "🟡"
+    else:
+        status, icone = "Não configurado", "⚪"
+    return {
+        "chave": chave, "nome": nome, "status": status, "icone": icone,
+        "detalhe": observacao, "faltando": [c for c in obrigatorios if c not in presentes],
+        "opcionais_faltando": [c for c in opcionais if not _secret_configurado(c)],
+    }
+
+
+def _testar_integracao(chave):
+    """Executa um teste leve, sem publicar, enviar mensagens ou alterar dados externos."""
+    try:
+        if chave == "openai":
+            if OpenAI is None:
+                return False, "Biblioteca OpenAI não instalada."
+            client = OpenAI(api_key=_secret_valor("OPENAI_API_KEY"))
+            modelos = client.models.list()
+            return True, f"Conexão confirmada. {len(list(modelos.data))} modelo(s) acessível(is)."
+        if chave == "meta":
+            page_id, token = _secret_valor("META_PAGE_ID"), _secret_valor("META_ACCESS_TOKEN")
+            r = requests.get(f"https://graph.facebook.com/v21.0/{page_id}", params={"fields":"id,name", "access_token":token}, timeout=15)
+            r.raise_for_status(); data=r.json()
+            return True, f"Página conectada: {data.get('name', data.get('id','Meta'))}."
+        if chave == "instagram":
+            account, token = _secret_valor("INSTAGRAM_ACCOUNT_ID"), _secret_valor("META_ACCESS_TOKEN")
+            r = requests.get(f"https://graph.facebook.com/v21.0/{account}", params={"fields":"id,username,name", "access_token":token}, timeout=15)
+            r.raise_for_status(); data=r.json()
+            return True, f"Instagram conectado: @{data.get('username','conta profissional')}."
+        if chave == "whatsapp":
+            phone_id, token = _secret_valor("WHATSAPP_PHONE_NUMBER_ID"), _secret_valor("META_ACCESS_TOKEN")
+            r = requests.get(f"https://graph.facebook.com/v21.0/{phone_id}", params={"fields":"display_phone_number,verified_name", "access_token":token}, timeout=15)
+            r.raise_for_status(); data=r.json()
+            return True, f"WhatsApp conectado: {data.get('verified_name','')} {data.get('display_phone_number','')}.".strip()
+        if chave == "youtube":
+            if not _secret_configurado("YOUTUBE_REFRESH_TOKEN"):
+                return False, "Cliente OAuth criado, mas ainda falta autorizar o canal e salvar YOUTUBE_REFRESH_TOKEN."
+            payload = {"client_id":_secret_valor("YOUTUBE_CLIENT_ID"), "client_secret":_secret_valor("YOUTUBE_CLIENT_SECRET"), "refresh_token":_secret_valor("YOUTUBE_REFRESH_TOKEN"), "grant_type":"refresh_token"}
+            r = requests.post("https://oauth2.googleapis.com/token", data=payload, timeout=15)
+            r.raise_for_status()
+            return True, "OAuth do YouTube renovado com sucesso."
+        if chave == "tiktok":
+            return False, "Credenciais básicas presentes; teste completo ficará disponível após a revisão do aplicativo TikTok."
+        return False, "Integração desconhecida."
+    except Exception as exc:
+        mensagem = str(exc)
+        if len(mensagem) > 240:
+            mensagem = mensagem[:237] + "..."
+        return False, mensagem
 
 
 def renderizar_alpha_connect():
-    st.subheader("🔗 Alpha Connect")
-    st.caption("Diagnóstico seguro das integrações. Os valores secretos nunca são exibidos na tela.")
+    st.subheader("🔗 Alpha Connect Pro")
+    st.caption("Diagnóstico seguro das integrações. Nenhuma chave secreta é exibida e os testes não publicam conteúdo.")
     integracoes = [
-        _status_integracao("OpenAI", ["OPENAI_API_KEY"], "Geração de textos e análise visual por IA."),
-        _status_integracao("Meta / Facebook", ["META_APP_ID", "META_APP_SECRET", "META_ACCESS_TOKEN", "META_PAGE_ID"], "Publicação e conexão com a Página da Alphafest."),
-        _status_integracao("Instagram", ["META_ACCESS_TOKEN", "INSTAGRAM_ACCOUNT_ID"], "Publicação na conta profissional vinculada à Página."),
-        _status_integracao("WhatsApp Business", ["META_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_BUSINESS_ACCOUNT_ID"], "Mensagens e atendimento pela plataforma oficial."),
-        _status_integracao("YouTube", ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"], "OAuth configurado; a autorização do canal gera o refresh token."),
-        _status_integracao("TikTok", ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"], "Pode permanecer pendente até concluir a revisão do aplicativo."),
+        _status_integracao("openai", "OpenAI", ["OPENAI_API_KEY"], "Textos comerciais e análise visual.", ["OPENAI_MODEL"]),
+        _status_integracao("meta", "Meta / Facebook", ["META_APP_ID", "META_APP_SECRET", "META_ACCESS_TOKEN", "META_PAGE_ID"], "Página e publicação pela Meta Graph API."),
+        _status_integracao("instagram", "Instagram", ["META_ACCESS_TOKEN", "INSTAGRAM_ACCOUNT_ID"], "Conta profissional vinculada à Página."),
+        _status_integracao("whatsapp", "WhatsApp Business", ["META_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_BUSINESS_ACCOUNT_ID"], "Mensagens pela plataforma oficial."),
+        _status_integracao("youtube", "YouTube", ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"], "OAuth do canal para vídeos e Shorts.", ["YOUTUBE_REFRESH_TOKEN", "YOUTUBE_CHANNEL_ID"]),
+        _status_integracao("tiktok", "TikTok", ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"], "Pendente até concluir a revisão do aplicativo."),
     ]
+    historico = carregar_status_integracoes()
     cols = st.columns(2)
     for indice, item in enumerate(integracoes):
         with cols[indice % 2].container(border=True):
@@ -7360,7 +7574,19 @@ def renderizar_alpha_connect():
             st.caption(item["detalhe"])
             if item["faltando"]:
                 st.caption("Faltando: " + ", ".join(item["faltando"]))
-    st.info("A presença das credenciais confirma a configuração básica. A publicação real será habilitada após o fluxo OAuth e os testes específicos de cada plataforma.")
+            ultimo = historico.get(item["chave"], {}) if isinstance(historico, dict) else {}
+            if ultimo:
+                selo = "✅" if ultimo.get("ok") else "⚠️"
+                st.caption(f"{selo} Último teste: {ultimo.get('quando','—')} — {ultimo.get('mensagem','')}")
+            pode_testar = item["status"] == "Configurado"
+            if st.button("🧪 Testar conexão", key=f"teste_connect_{item['chave']}", use_container_width=True, disabled=not pode_testar):
+                with st.spinner(f"Testando {item['nome']}..."):
+                    ok, mensagem = _testar_integracao(item["chave"])
+                historico[item["chave"]] = {"ok": ok, "mensagem": mensagem, "quando": agora_local().strftime("%d/%m/%Y %H:%M"), "usuario": obter_usuario_atual().get("nome", "Equipe")}
+                salvar_status_integracoes(historico)
+                (st.success if ok else st.warning)(mensagem)
+                st.rerun()
+    st.info("Credencial configurada não significa permissão de publicação. A publicação será habilitada somente após OAuth, permissões e teste específico do canal.")
 
 
 with aba7:
