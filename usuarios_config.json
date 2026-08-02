@@ -1,0 +1,25 @@
+{
+  "usuarios": {
+    "jorgegaulke76@gmail.com": {
+      "nome": "Jorge",
+      "perfil": "Administrador",
+      "abas": ["central","atendimento","crm","alpha","intelligence","crescimento","jornada","projeto","novo_orcamento","historico","fluxo","relatorios","executivo","catalogo","relacionamentos","memoria","conhecimento","calendario","configuracoes"],
+      "acoes": {},
+      "favoritos": ["executivo","intelligence","crescimento"]
+    },
+    "alphafesti@gmail.com": {
+      "nome": "Anna",
+      "perfil": "Operacional",
+      "abas": ["central","atendimento","crm","jornada","projeto","novo_orcamento","historico","fluxo","catalogo","relacionamentos"],
+      "acoes": {},
+      "favoritos": ["atendimento","novo_orcamento","catalogo"]
+    },
+    "annazepelini@gmail.com": {
+      "nome": "Anna",
+      "perfil": "Operacional",
+      "abas": ["central","atendimento","crm","jornada","projeto","novo_orcamento","historico","fluxo","catalogo","relacionamentos"],
+      "acoes": {},
+      "favoritos": ["atendimento","novo_orcamento","catalogo"]
+    }
+  }
+}

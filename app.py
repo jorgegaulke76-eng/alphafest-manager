@@ -164,6 +164,7 @@ ARQUIVO_COMPONENTES = "componentes_db.json"
 ARQUIVO_MARKETING = "marketing_db.json"
 ARQUIVO_INTEGRACOES = "integracoes_db.json"
 ARQUIVO_INTELIGENCIA = "alpha_intelligence_db.json"
+ARQUIVO_USUARIOS = "usuarios_config.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -275,6 +276,106 @@ USUARIOS_ADMIN = {
     "annazepelini@gmail.com": {"nome": "Anna", "perfil": "Administradora"},
 }
 
+
+ABAS_SISTEMA = [
+    ("central", "🏠 Central do Dia"),
+    ("atendimento", "📥 Multicanal"),
+    ("crm", "🎯 CRM Inteligente"),
+    ("alpha", "🤖 Alpha"),
+    ("intelligence", "🧠 Intelligence"),
+    ("crescimento", "🚀 Crescimento"),
+    ("jornada", "🚀 Jornada"),
+    ("projeto", "🧩 Projeto Personalizado"),
+    ("novo_orcamento", "➕ Novo Orçamento"),
+    ("historico", "📋 Histórico"),
+    ("fluxo", "🎯 Fluxo de Pedidos"),
+    ("relatorios", "📊 Relatórios"),
+    ("executivo", "📈 Executivo"),
+    ("catalogo", "📦 Catálogo"),
+    ("relacionamentos", "🌐 Relacionamentos"),
+    ("memoria", "🧠 Memória"),
+    ("conhecimento", "🧩 Conhecimento"),
+    ("calendario", "📅 Calendário Comercial"),
+    ("configuracoes", "⚙️ Configurações"),
+]
+
+PERMISSOES_PADRAO_ANNA = {
+    "central", "atendimento", "crm", "jornada", "projeto", "novo_orcamento",
+    "historico", "fluxo", "catalogo", "relacionamentos"
+}
+
+ACOES_PADRAO = ["visualizar", "criar", "editar", "aprovar", "exportar", "excluir", "configurar", "publicar"]
+
+
+def configuracao_usuarios_padrao():
+    todas = [chave for chave, _ in ABAS_SISTEMA]
+    return {
+        "usuarios": {
+            "jorgegaulke76@gmail.com": {
+                "nome": "Jorge", "perfil": "Administrador", "abas": todas,
+                "acoes": {chave: ACOES_PADRAO for chave in todas}, "favoritos": ["executivo", "intelligence", "crescimento"]
+            },
+            "alphafesti@gmail.com": {
+                "nome": "Anna", "perfil": "Operacional", "abas": sorted(PERMISSOES_PADRAO_ANNA),
+                "acoes": {chave: ["visualizar", "criar", "editar", "aprovar", "exportar"] for chave in PERMISSOES_PADRAO_ANNA},
+                "favoritos": ["atendimento", "novo_orcamento", "catalogo"]
+            },
+            "annazepelini@gmail.com": {
+                "nome": "Anna", "perfil": "Operacional", "abas": sorted(PERMISSOES_PADRAO_ANNA),
+                "acoes": {chave: ["visualizar", "criar", "editar", "aprovar", "exportar"] for chave in PERMISSOES_PADRAO_ANNA},
+                "favoritos": ["atendimento", "novo_orcamento", "catalogo"]
+            },
+        }
+    }
+
+
+def carregar_config_usuarios():
+    dados = load_document("usuarios_config", ARQUIVO_USUARIOS, configuracao_usuarios_padrao())
+    if not isinstance(dados, dict) or not isinstance(dados.get("usuarios"), dict):
+        return configuracao_usuarios_padrao()
+    padrao = configuracao_usuarios_padrao()
+    for email, cfg in padrao["usuarios"].items():
+        dados["usuarios"].setdefault(email, cfg)
+    return dados
+
+
+def salvar_config_usuarios(dados):
+    save_document("usuarios_config", dados, ARQUIVO_USUARIOS)
+
+
+def obter_perfil_configurado(usuario=None):
+    usuario = usuario or obter_usuario_atual()
+    email = str(usuario.get("email", "")).lower()
+    dados = carregar_config_usuarios().get("usuarios", {})
+    cfg = dados.get(email)
+    if cfg:
+        return cfg
+    nome = str(usuario.get("nome", "")).casefold()
+    if nome == "jorge":
+        return configuracao_usuarios_padrao()["usuarios"]["jorgegaulke76@gmail.com"]
+    return configuracao_usuarios_padrao()["usuarios"]["alphafesti@gmail.com"]
+
+
+def usuario_pode_ver_aba(chave, usuario=None):
+    return chave in set(obter_perfil_configurado(usuario).get("abas", []))
+
+
+def usuario_pode_acao(chave_aba, acao, usuario=None):
+    cfg = obter_perfil_configurado(usuario)
+    return acao in set((cfg.get("acoes") or {}).get(chave_aba, []))
+
+
+def aplicar_visibilidade_abas(usuario=None):
+    """Oculta visualmente abas não liberadas sem alterar o fluxo operacional existente."""
+    usuario = usuario or obter_usuario_atual()
+    permitidas = set(obter_perfil_configurado(usuario).get("abas", []))
+    regras = []
+    prefixo = 'div[data-testid="stElementContainer"]:has(#fest-main-tabs-marker) + div[data-testid="stElementContainer"] div[data-baseweb="tab-list"]'
+    for indice, (chave, _) in enumerate(ABAS_SISTEMA, start=1):
+        if chave not in permitidas:
+            regras.append(f'{prefixo} > button:nth-child({indice}) {{ display:none !important; }}')
+    st.markdown("<div id='fest-main-tabs-marker'></div><style>" + "".join(regras) + "</style>", unsafe_allow_html=True)
+
 def obter_email_usuario_autenticado():
     """Tenta obter o e-mail do login OIDC do Streamlit, quando configurado."""
     try:
@@ -294,6 +395,13 @@ def obter_usuario_atual():
         dados = dict(USUARIOS_ADMIN[email])
         dados["email"] = email
         dados["automatico"] = True
+        try:
+            cfg = carregar_config_usuarios().get("usuarios", {}).get(email, {})
+            if cfg:
+                dados["perfil"] = cfg.get("perfil", dados.get("perfil"))
+                dados["nome"] = cfg.get("nome", dados.get("nome"))
+        except Exception:
+            pass
         return dados
 
     nome_fallback = st.session_state.get("usuario_atual_fallback", "Anna")
@@ -301,6 +409,13 @@ def obter_usuario_atual():
     dados = dict(USUARIOS_ADMIN[email_fallback])
     dados["email"] = email_fallback
     dados["automatico"] = False
+    try:
+        cfg = carregar_config_usuarios().get("usuarios", {}).get(email_fallback, {})
+        if cfg:
+            dados["perfil"] = cfg.get("perfil", dados.get("perfil"))
+            dados["nome"] = cfg.get("nome", dados.get("nome"))
+    except Exception:
+        pass
     return dados
 
 def usuario_em_operacao_protegida(usuario=None):
@@ -4793,7 +4908,7 @@ with st.sidebar:
             key="usuario_atual_fallback",
             help="A identificação automática funciona quando o login Google/OIDC está configurado no Streamlit.",
         )
-        st.caption("Acesso administrativo completo")
+        st.caption("Ambiente personalizado conforme as permissões do usuário")
 
     _usuario_sidebar_atual = obter_usuario_atual()
     if usuario_em_operacao_protegida(_usuario_sidebar_atual):
@@ -4991,6 +5106,9 @@ _dados_atendimento_badge = carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
 _rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Multicanal"
 
+# O conjunto de abas continua estável no código; a exibição é personalizada por usuário.
+aplicar_visibilidade_abas(obter_usuario_atual())
+
 aba0, aba_atendimento, aba_crm, aba_alpha, aba_inteligencia, aba_crescimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
     _rotulo_atendimento,
@@ -5029,6 +5147,17 @@ with aba0:
     )
     if not usuario_atual.get("automatico"):
         st.caption("A saudação está usando o usuário selecionado na barra lateral. Para identificação automática por e-mail, configure o login Google/OIDC do Streamlit.")
+
+    perfil_central = obter_perfil_configurado(usuario_atual)
+    if str(usuario_atual.get("nome", "")).casefold() == "anna":
+        st.info("👩‍💼 **Central Operacional da Anna** — Atendimento multicanal, orçamentos, artes/projetos, controle de pedidos, entregas, pagamentos e catálogo. O canal de origem permanece identificado em cada atendimento.")
+    else:
+        st.info("👨‍💼 **Central de Gestão do Jorge** — visão completa da operação, inteligência, conexões, marketing, indicadores e configurações.")
+    favoritos_central = perfil_central.get("favoritos", []) or []
+    if favoritos_central:
+        nomes_favoritos = [dict(ABAS_SISTEMA).get(ch, ch) for ch in favoritos_central if ch in dict(ABAS_SISTEMA)]
+        if nomes_favoritos:
+            st.caption("⭐ Favoritos: " + " · ".join(nomes_favoritos))
 
     st.markdown("#### ⚡ Ações rápidas")
     ac1, ac2, ac3, ac4, ac5 = st.columns(5)
@@ -7638,9 +7767,88 @@ def renderizar_alpha_connect():
 
 with aba7:
     st.header("⚙️ Configurações e Integrações")
-    aba_cfg_empresa, aba_cfg_connect = st.tabs(["🏢 Empresa", "🔗 Alpha Connect"])
+    aba_cfg_empresa, aba_cfg_connect, aba_cfg_usuarios = st.tabs(["🏢 Empresa", "🔗 Alpha Connect", "👥 Usuários e permissões"])
     with aba_cfg_connect:
         renderizar_alpha_connect()
+    with aba_cfg_usuarios:
+        if not pode_executar_acoes_tecnicas():
+            st.warning("Somente o Jorge pode alterar usuários e permissões.")
+        else:
+            st.subheader("👥 Ambiente de trabalho por usuário")
+            st.caption("O perfil define o ponto de partida. Você pode acrescentar ou retirar abas e ações sem apagar dados nem alterar o sistema da outra pessoa.")
+            dados_usuarios = carregar_config_usuarios()
+            usuarios_cfg = dados_usuarios.setdefault("usuarios", {})
+            opcoes_email = list(usuarios_cfg.keys())
+            email_edicao = st.selectbox(
+                "Usuário",
+                opcoes_email,
+                format_func=lambda e: f"{usuarios_cfg[e].get('nome', e)} — {e}",
+                key="permissoes_usuario_email",
+            )
+            cfg_usuario = usuarios_cfg[email_edicao]
+            p1, p2 = st.columns(2)
+            nome_perfil = p1.text_input("Nome", value=str(cfg_usuario.get("nome", "")), key="permissoes_nome")
+            perfil_nome = p2.selectbox("Perfil base", ["Operacional", "Administrador", "Produção", "Financeiro", "Personalizado"], index=["Operacional", "Administrador", "Produção", "Financeiro", "Personalizado"].index(cfg_usuario.get("perfil", "Personalizado")) if cfg_usuario.get("perfil") in ["Operacional", "Administrador", "Produção", "Financeiro", "Personalizado"] else 4, key="permissoes_perfil")
+
+            st.markdown("#### Abas visíveis")
+            abas_atuais = set(cfg_usuario.get("abas", []))
+            selecionadas = []
+            cols = st.columns(3)
+            for idx, (chave, rotulo) in enumerate(ABAS_SISTEMA):
+                if cols[idx % 3].checkbox(rotulo, value=chave in abas_atuais, key=f"perm_aba_{email_edicao}_{chave}"):
+                    selecionadas.append(chave)
+
+            st.markdown("#### Favoritos da tela inicial")
+            favoritos = st.multiselect(
+                "Aparecem em destaque no painel do usuário",
+                options=selecionadas,
+                default=[x for x in cfg_usuario.get("favoritos", []) if x in selecionadas],
+                format_func=lambda ch: dict(ABAS_SISTEMA).get(ch, ch),
+                key=f"perm_favoritos_{email_edicao}",
+            )
+
+            st.markdown("#### Ações permitidas por aba")
+            st.caption("Visualizar é o mínimo. Para acesso somente de acompanhamento, marque apenas Visualizar.")
+            acoes_novas = {}
+            for chave in selecionadas:
+                with st.expander(dict(ABAS_SISTEMA).get(chave, chave), expanded=chave in ("atendimento", "novo_orcamento", "catalogo")):
+                    atuais = set((cfg_usuario.get("acoes") or {}).get(chave, []))
+                    escolhidas = st.multiselect(
+                        "Permissões",
+                        options=ACOES_PADRAO,
+                        default=[a for a in ACOES_PADRAO if a in atuais] or ["visualizar"],
+                        key=f"perm_acoes_{email_edicao}_{chave}",
+                    )
+                    acoes_novas[chave] = escolhidas
+
+            if st.button("💾 Salvar ambiente deste usuário", type="primary", use_container_width=True, key="salvar_permissoes_usuario"):
+                cfg_usuario.update({"nome": nome_perfil.strip() or cfg_usuario.get("nome", "Usuário"), "perfil": perfil_nome, "abas": selecionadas, "acoes": acoes_novas, "favoritos": favoritos})
+                usuarios_cfg[email_edicao] = cfg_usuario
+                salvar_config_usuarios(dados_usuarios)
+                st.success("Permissões salvas. O menu será atualizado no próximo acesso ou após recarregar a página.")
+                st.rerun()
+
+            st.divider()
+            st.markdown("#### Adicionar outro colaborador")
+            n1, n2 = st.columns(2)
+            novo_email = n1.text_input("E-mail do novo usuário", key="novo_usuario_email").strip().lower()
+            novo_nome = n2.text_input("Nome do novo usuário", key="novo_usuario_nome").strip()
+            if st.button("➕ Criar usuário operacional", use_container_width=True, key="criar_novo_usuario"):
+                if not novo_email or "@" not in novo_email:
+                    st.warning("Informe um e-mail válido.")
+                elif novo_email in usuarios_cfg:
+                    st.warning("Esse e-mail já está cadastrado.")
+                else:
+                    usuarios_cfg[novo_email] = {
+                        "nome": novo_nome or novo_email.split("@")[0].title(),
+                        "perfil": "Operacional",
+                        "abas": sorted(PERMISSOES_PADRAO_ANNA),
+                        "acoes": {ch: ["visualizar", "criar", "editar"] for ch in PERMISSOES_PADRAO_ANNA},
+                        "favoritos": ["atendimento", "novo_orcamento"],
+                    }
+                    salvar_config_usuarios(dados_usuarios)
+                    st.success("Usuário criado. Depois configure o login/OIDC para esse e-mail.")
+                    st.rerun()
     with aba_cfg_empresa:
         st.caption("Os dados salvos aqui são usados no painel, WhatsApp, HTML da proposta e catálogo do cliente.")
         config_atual = carregar_config_empresa()
