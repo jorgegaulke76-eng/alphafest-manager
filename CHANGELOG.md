@@ -283,3 +283,9 @@ hangelog
 - Propostas antigas passam a receber relacionamento_id por correspondência segura de documento, WhatsApp ou nome exato.
 - Indicadores dos relacionamentos passam a considerar todas as propostas vinculadas.
 - Migração de dados aditiva para v5.
+
+## 9.0.0 — Base Modular Estável
+- Corrigidas constantes ausentes do Fluxo de Pedidos.
+- Corrigidas referências da configuração da empresa no Creative Studio.
+- Versão e configurações estáveis movidas para `config.py`.
+- Iniciada a arquitetura `services/` e `modules/`.

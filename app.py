@@ -18,7 +18,8 @@ import hashlib
 import time
 import copy
 
-from constants import STATUS_FLUXO, PRIORIDADES_FLUXO
+from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
+from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
 
 try:
     from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
@@ -49,8 +50,6 @@ def _write_json_fallback(path, value):
     except Exception:
         return False
 
-DOCUMENT_CACHE_TTL_SECONDS = 20
-CONNECTION_CACHE_TTL_SECONDS = 30
 
 def _document_cache():
     if "_document_cache" not in st.session_state:
@@ -152,12 +151,12 @@ ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
 ARQUIVO_MARKETING = "marketing_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
-VERSAO_APP = "8.2.1"
-VERSAO_DADOS = 5
+VERSAO_APP = APP_VERSION
+VERSAO_DADOS = DATA_VERSION
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
-FUSO_PADRAO = "America/Sao_Paulo"
+FUSO_PADRAO = DEFAULT_TIMEZONE
 
 def agora_local():
     """Data e hora oficiais do sistema, independentes do fuso do servidor."""
@@ -2046,7 +2045,7 @@ def gerar_conteudo_catalogo_gratuito(nome, categoria, subcategoria="", ideias=""
     producao_txt = f" Produção com {processo_txt.lower()}, conforme a necessidade do pedido." if processo_txt else ""
 
     descricao_curta = (
-        f"{produto} personalizado pela {CONFIG_EMPRESA.get('nome', 'Alphafest')}, "
+        f"{produto} personalizado pela {carregar_config_empresa().get('nome', 'Alphafest')}, "
         f"ideal para festas, presentes e ocasiões especiais.{detalhe}"
     ).strip()
 
@@ -2059,7 +2058,7 @@ def gerar_conteudo_catalogo_gratuito(nome, categoria, subcategoria="", ideias=""
         "as opções de personalização e a data desejada."
     ).strip()
 
-    termos = [produto, categoria, subcategoria, "personalizado", "festa", "presente", CONFIG_EMPRESA.get("cidade", "")]
+    termos = [produto, categoria, subcategoria, "personalizado", "festa", "presente", carregar_config_empresa().get("cidade", "")]
     if ideias:
         termos += re.findall(r"[A-Za-zÀ-ÿ0-9]{4,}", ideias)[:6]
     palavras = []
@@ -2073,7 +2072,7 @@ def gerar_conteudo_catalogo_gratuito(nome, categoria, subcategoria="", ideias=""
         texto = re.sub(r"[^A-Za-zÀ-ÿ0-9]", "", str(texto).title())
         return f"#{texto}" if texto else ""
 
-    tags_base = [produto, categoria, subcategoria, CONFIG_EMPRESA.get("nome", "Alphafest"), "Personalizados", "Festa", CONFIG_EMPRESA.get("cidade", "Itatiba")]
+    tags_base = [produto, categoria, subcategoria, carregar_config_empresa().get("nome", "Alphafest"), "Personalizados", "Festa", carregar_config_empresa().get("cidade", "Itatiba")]
     hashtags_lista = []
     for item in tags_base:
         tag = hashtag(item)
@@ -2083,7 +2082,7 @@ def gerar_conteudo_catalogo_gratuito(nome, categoria, subcategoria="", ideias=""
 
     preco_txt = str(preco or "").strip()
     chamada_preco = f" Valor sugerido: R$ {preco_txt}." if preco_txt else ""
-    whatsapp = CONFIG_EMPRESA.get("celular", "")
+    whatsapp = carregar_config_empresa().get("celular", "")
     legenda = (
         f"✨ {produto} personalizado para tornar cada comemoração ainda mais especial!\n\n"
         f"{descricao_curta}\n\n"

@@ -1,7 +1,6 @@
 """Constantes compartilhadas do FestManager.
 
-Este arquivo inicia a modularização segura do aplicativo. Manter listas de
-status e prioridades aqui evita NameError e divergências entre telas.
+Centralizar listas de domínio evita NameError e divergências entre telas.
 """
 
 STATUS_FLUXO = [
@@ -12,6 +11,19 @@ STATUS_FLUXO = [
     "Em produção",
     "Pronto",
     "Entregue",
+]
+
+PROCESSOS_FLUXO = [
+    "Criação/ajuste de arte",
+    "Papel de arroz",
+    "Impressão 3D",
+    "Corte/laser",
+    "Balões",
+    "Impressão papelaria",
+    "Montagem",
+    "Acabamento",
+    "Conferência",
+    "Embalagem",
 ]
 
 PRIORIDADES_FLUXO = [
