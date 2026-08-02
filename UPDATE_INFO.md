@@ -1,17 +1,12 @@
-# FestManager 5.6.0 — Central Multicanal
+# FestManager 5.7.0 — CRM Inteligente
 
-Base anterior: 5.5.0
-
-## Incluído
-- Caixa unificada por canal: WhatsApp, Instagram, Facebook, Site/Catálogo e atendimento manual.
-- Filtro e identificação visual do canal de origem.
-- Tela de configuração das integrações oficiais Meta.
-- Teste de entrada multicanal sem depender das credenciais da Meta.
-- Edge Function do Supabase pronta para receber webhooks da Meta e registrar oportunidades no documento `atendimentos_db`.
-- Deduplicação por identificador externo de mensagem.
-
-## Importante
-A atualização prepara toda a estrutura, mas os canais só passam a receber mensagens reais após configurar as credenciais e publicar o webhook conforme `META_INTEGRACAO.md`.
-
-Migração destrutiva: não.
-Arquivos de dados substituídos: não.
+- Base anterior: 5.6.0
+- Nova aba CRM Inteligente
+- Funil comercial em tempo real
+- Índice Alpha de 0 a 100, com motivos explicáveis
+- Temperatura da oportunidade
+- Próxima ação recomendada
+- Filtros por etapa, canal e temperatura
+- Atualização rápida de status e responsável
+- Correção do filtro de canal da Central Multicanal
+- Sem migração destrutiva e sem substituição de dados

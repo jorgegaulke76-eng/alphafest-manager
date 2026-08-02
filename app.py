@@ -144,7 +144,7 @@ ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
-VERSAO_APP = "5.6.0"
+VERSAO_APP = "5.7.0"
 VERSAO_DADOS = 3
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
@@ -1934,6 +1934,135 @@ def carregar_atendimentos():
 
 def salvar_atendimentos(dados):
     save_document("atendimentos_db", dados, ARQUIVO_ATENDIMENTOS)
+
+
+def _telefone_chave(valor):
+    """Normaliza telefone para cruzar atendimento, cliente e proposta."""
+    digitos = re.sub(r"\D", "", str(valor or ""))
+    return digitos[-11:] if len(digitos) >= 11 else digitos
+
+
+def estagio_funil_atendimento(item):
+    status = str(item.get("status", "Novo contato"))
+    mapa = {
+        "Novo contato": "Novos leads",
+        "Catálogo solicitado": "Em atendimento",
+        "Catálogo enviado": "Em atendimento",
+        "Orçamento solicitado": "Orçamento",
+        "Orçamento em elaboração": "Orçamento",
+        "Aguardando cliente": "Aguardando resposta",
+        "Pedido aprovado": "Fechados",
+        "Comprovante recebido": "Fechados",
+        "Arte aprovada": "Fechados",
+        "Em produção": "Fechados",
+        "Pronto": "Fechados",
+        "Entregue": "Fechados",
+        "Pós-venda": "Fechados",
+        "Arquivado": "Perdidos / arquivados",
+    }
+    return mapa.get(status, "Em atendimento")
+
+
+def proxima_acao_crm(item):
+    status = str(item.get("status", "Novo contato"))
+    mapa = {
+        "Novo contato": "Responder e entender a necessidade",
+        "Catálogo solicitado": "Enviar o catálogo adequado",
+        "Catálogo enviado": "Perguntar o que mais interessou",
+        "Orçamento solicitado": "Preparar orçamento",
+        "Orçamento em elaboração": "Finalizar e enviar orçamento",
+        "Aguardando cliente": "Fazer acompanhamento",
+        "Pedido aprovado": "Confirmar dados e enviar à produção",
+        "Comprovante recebido": "Conferir pagamento",
+        "Arte aprovada": "Iniciar produção",
+        "Em produção": "Acompanhar prazo",
+        "Pronto": "Avisar cliente",
+        "Entregue": "Fazer pós-venda",
+        "Pós-venda": "Registrar retorno e oportunidade futura",
+        "Arquivado": "Sem ação",
+    }
+    return mapa.get(status, proxima_acao_atendimento(item))
+
+
+def calcular_indice_alpha(item, historico=None, clientes=None):
+    """Pontuação explicável de 0 a 100 para ordenar oportunidades."""
+    historico = historico or []
+    clientes = clientes or []
+    status = str(item.get("status", "Novo contato"))
+    mensagem = str(item.get("mensagem", "")).lower()
+    prioridade = str(item.get("prioridade", "Normal"))
+    pontos = {
+        "Novo contato": 35, "Catálogo solicitado": 42, "Catálogo enviado": 48,
+        "Orçamento solicitado": 72, "Orçamento em elaboração": 78,
+        "Aguardando cliente": 58, "Pedido aprovado": 96,
+        "Comprovante recebido": 98, "Arte aprovada": 95, "Em produção": 92,
+        "Pronto": 90, "Entregue": 25, "Pós-venda": 30, "Arquivado": 5,
+    }.get(status, 35)
+    motivos = [f"Etapa: {status}"]
+
+    bonus_prioridade = {"Urgente": 15, "Alta": 10, "Normal": 4, "Baixa": 0}.get(prioridade, 4)
+    pontos += bonus_prioridade
+    if bonus_prioridade:
+        motivos.append(f"Prioridade {prioridade.lower()}")
+
+    minutos = minutos_aguardando(item)
+    if 0 <= minutos <= 15:
+        pontos += 7
+        motivos.append("Interação recente")
+    elif minutos >= 60 and status not in ("Aguardando cliente", "Arquivado", "Entregue", "Pós-venda"):
+        pontos += 5
+        motivos.append("Resposta da equipe atrasada")
+    elif status == "Aguardando cliente" and minutos >= 4320:
+        pontos -= 8
+        motivos.append("Cliente sem retorno há vários dias")
+
+    palavras_quentes = ["orçamento", "orcamento", "fechar", "prazo", "urgente", "para hoje", "para amanhã", "valor", "quanto fica", "pode fazer"]
+    qtd_quentes = sum(1 for termo in palavras_quentes if termo in mensagem)
+    if qtd_quentes:
+        pontos += min(14, qtd_quentes * 4)
+        motivos.append("Mensagem com intenção de compra")
+
+    tel = _telefone_chave(item.get("telefone"))
+    nome = str(item.get("cliente", "")).strip().lower()
+    cliente_existente = any(
+        (tel and _telefone_chave(c.get("whatsapp") or c.get("telefone")) == tel)
+        or (nome and str(c.get("nome", "")).strip().lower() == nome)
+        for c in clientes
+    )
+    if cliente_existente:
+        pontos += 8
+        motivos.append("Cliente já cadastrado")
+
+    compras = 0
+    valor_historico = 0.0
+    for proposta in historico:
+        prop_tel = _telefone_chave(proposta.get("cliente_whatsapp") or proposta.get("whatsapp") or proposta.get("telefone"))
+        prop_nome = str(proposta.get("cliente_nome", "")).strip().lower()
+        if (tel and prop_tel == tel) or (nome and prop_nome == nome):
+            if proposta.get("aprovado") or proposta.get("pago"):
+                compras += 1
+                try:
+                    valor_historico += calcular_valores_proposta(proposta)[2]
+                except Exception:
+                    pass
+    if compras:
+        pontos += min(12, 5 + compras * 2)
+        motivos.append(f"Cliente recorrente ({compras} pedido(s))")
+    if valor_historico >= 1000:
+        pontos += 5
+        motivos.append("Histórico comercial relevante")
+
+    return max(0, min(100, int(round(pontos)))), motivos[:4]
+
+
+def temperatura_indice_alpha(indice):
+    if indice >= 80:
+        return "🔥 Quente"
+    if indice >= 55:
+        return "🟠 Morno"
+    if indice >= 30:
+        return "🟡 Em descoberta"
+    return "🔵 Frio"
 
 def carregar_segmentos():
     dados = load_document("segmentos_db", ARQUIVO_SEGMENTOS, SEGMENTOS_PADRAO)
@@ -3789,9 +3918,10 @@ _dados_atendimento_badge = carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
 _rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Multicanal"
 
-aba0, aba_atendimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
+aba0, aba_atendimento, aba_crm, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
     _rotulo_atendimento,
+    "🎯 CRM Inteligente",
     "🚀 Jornada",
     "🧩 Projeto Personalizado",
     "➕ Novo Orçamento",
@@ -4132,6 +4262,8 @@ with aba_atendimento:
             resp_item = str(item.get("responsavel", "")).strip() or "Sem responsável"
             if responsavel_filtro != "Todos" and resp_item != responsavel_filtro:
                 continue
+            if canal_filtro != "Todos" and str(item.get("canal") or item.get("origem") or "Outro") != canal_filtro:
+                continue
             filtrados.append(item)
 
         # Primeiro aparecem os itens com SLA mais crítico; depois, os mais antigos.
@@ -4380,6 +4512,116 @@ with aba_atendimento:
 6. Assinar os eventos de mensagens dos canais utilizados.
 7. Enviar uma mensagem real, conferir a entrada na Caixa unificada e só então marcar o canal como conectado.
             """)
+
+
+with aba_crm:
+    st.header("🎯 CRM Inteligente")
+    st.caption("Priorize oportunidades, acompanhe o funil e evite que clientes interessados sejam esquecidos.")
+
+    dados_crm = carregar_atendimentos()
+    itens_crm = dados_crm.get("itens", [])
+    historico_crm = carregar_historico()
+    clientes_crm = carregar_clientes()
+
+    oportunidades = []
+    for item in itens_crm:
+        indice, motivos = calcular_indice_alpha(item, historico_crm, clientes_crm)
+        enriquecido = dict(item)
+        enriquecido["indice_alpha"] = indice
+        enriquecido["motivos_alpha"] = motivos
+        enriquecido["temperatura"] = temperatura_indice_alpha(indice)
+        enriquecido["estagio_funil"] = estagio_funil_atendimento(item)
+        oportunidades.append(enriquecido)
+
+    estagios = ["Novos leads", "Em atendimento", "Orçamento", "Aguardando resposta", "Fechados", "Perdidos / arquivados"]
+    contagem_funil = {e: sum(1 for o in oportunidades if o["estagio_funil"] == e) for e in estagios}
+    abertas_crm = [o for o in oportunidades if o.get("status") not in ("Entregue", "Pós-venda", "Arquivado")]
+    quentes_crm = [o for o in abertas_crm if o["indice_alpha"] >= 80]
+    sem_retorno_crm = [o for o in abertas_crm if o.get("status") == "Aguardando cliente" and minutos_aguardando(o) >= 1440]
+    media_indice = sum(o["indice_alpha"] for o in abertas_crm) / len(abertas_crm) if abertas_crm else 0
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Oportunidades abertas", len(abertas_crm))
+    c2.metric("🔥 Quentes", len(quentes_crm))
+    c3.metric("Sem retorno +24h", len(sem_retorno_crm))
+    c4.metric("Índice Alpha médio", f"{media_indice:.0f}/100")
+
+    st.markdown("#### Funil comercial")
+    cols_funil = st.columns(len(estagios))
+    icones_funil = ["🆕", "💬", "📝", "⏳", "✅", "⚫"]
+    for col, estagio, icone in zip(cols_funil, estagios, icones_funil):
+        col.metric(f"{icone} {estagio}", contagem_funil[estagio])
+
+    st.divider()
+    fcrm1, fcrm2, fcrm3, fcrm4 = st.columns([2, 1, 1, 1])
+    busca_crm = fcrm1.text_input("Pesquisar cliente, telefone ou mensagem", key="crm_busca").strip().lower()
+    filtro_temp = fcrm2.selectbox("Temperatura", ["Todas", "🔥 Quente", "🟠 Morno", "🟡 Em descoberta", "🔵 Frio"], key="crm_temp")
+    filtro_estagio = fcrm3.selectbox("Etapa", ["Todas"] + estagios, key="crm_estagio")
+    filtro_canal_crm = fcrm4.selectbox("Canal", ["Todos"] + CANAIS_ATENDIMENTO, key="crm_canal")
+
+    lista_crm = []
+    for op in oportunidades:
+        base = " ".join(str(op.get(k, "")) for k in ("cliente", "telefone", "mensagem", "status", "canal", "origem")).lower()
+        if busca_crm and busca_crm not in base:
+            continue
+        if filtro_temp != "Todas" and op["temperatura"] != filtro_temp:
+            continue
+        if filtro_estagio != "Todas" and op["estagio_funil"] != filtro_estagio:
+            continue
+        canal_op = str(op.get("canal") or op.get("origem") or "Outro")
+        if filtro_canal_crm != "Todos" and canal_op != filtro_canal_crm:
+            continue
+        lista_crm.append(op)
+    lista_crm.sort(key=lambda x: (-x["indice_alpha"], -minutos_aguardando(x)))
+
+    st.markdown("#### Quem precisa de atenção")
+    if not lista_crm:
+        st.info("Nenhuma oportunidade encontrada com os filtros selecionados.")
+    for op in lista_crm[:50]:
+        op_id = op.get("id")
+        canal_op = str(op.get("canal") or op.get("origem") or "Outro")
+        with st.container(border=True):
+            a, b, c = st.columns([4, 1.2, 1.5])
+            a.markdown(f"**{html.escape(str(op.get('cliente') or 'Contato sem nome'))}** · {html.escape(canal_op)}")
+            a.caption(f"{op.get('status', 'Novo contato')} · {tempo_aguardando_formatado(op)} · Próxima ação: {proxima_acao_crm(op)}")
+            if op.get("mensagem"):
+                a.write(str(op.get("mensagem"))[:280])
+            b.metric("Índice Alpha", f"{op['indice_alpha']}/100")
+            b.caption(op["temperatura"])
+            c.write("**Por que está aqui**")
+            for motivo in op.get("motivos_alpha", []):
+                c.caption(f"• {motivo}")
+
+            ac1, ac2, ac3, ac4 = st.columns([1.3, 1.4, 1.5, 1.2])
+            telefone_op = _telefone_chave(op.get("telefone"))
+            if telefone_op:
+                numero_op = telefone_op
+                if not numero_op.startswith("55"):
+                    numero_op = "55" + numero_op
+                ac1.link_button("📱 WhatsApp", f"https://wa.me/{numero_op}", use_container_width=True)
+            else:
+                ac1.button("📱 Sem telefone", disabled=True, use_container_width=True, key=f"crm_sem_tel_{op_id}")
+            novo_status_crm = ac2.selectbox(
+                "Etapa / status", STATUS_ATENDIMENTO,
+                index=STATUS_ATENDIMENTO.index(op.get("status")) if op.get("status") in STATUS_ATENDIMENTO else 0,
+                key=f"crm_status_{op_id}", label_visibility="collapsed",
+            )
+            novo_resp_crm = ac3.selectbox(
+                "Responsável", ["Sem responsável", "Anna", "Jorge"],
+                index=["Sem responsável", "Anna", "Jorge"].index(str(op.get("responsavel") or "Sem responsável")) if str(op.get("responsavel") or "Sem responsável") in ["Sem responsável", "Anna", "Jorge"] else 0,
+                key=f"crm_resp_{op_id}", label_visibility="collapsed",
+            )
+            if ac4.button("💾 Atualizar", key=f"crm_salvar_{op_id}", use_container_width=True):
+                for original in dados_crm.get("itens", []):
+                    if original.get("id") == op_id:
+                        original["status"] = novo_status_crm
+                        original["responsavel"] = "" if novo_resp_crm == "Sem responsável" else novo_resp_crm
+                        original["atualizado_em"] = agora_local().isoformat()
+                        adicionar_evento_timeline(original, f"CRM atualizado: {novo_status_crm}", obter_usuario_atual().get("nome", "Equipe"))
+                        break
+                salvar_atendimentos(dados_crm)
+                st.success("Oportunidade atualizada.")
+                st.rerun()
 
 with aba_jornada:
     renderizar_jornada_atendimento()

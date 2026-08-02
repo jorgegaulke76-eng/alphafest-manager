@@ -246,3 +246,9 @@ hangelog
 - Incluídos semáforos de saúde da empresa e alertas gerenciais.
 - Incluídos gráficos mensais de orçamentos e produtos mais solicitados.
 - Mantida a versão de dados 3, sem migração ou alteração destrutiva.
+
+
+## 5.7.0 — CRM Inteligente
+- Funil comercial, Índice Alpha, temperatura, próxima ação e priorização de oportunidades.
+- Atualização rápida de etapa e responsável.
+- Correção do filtro por canal na caixa multicanal.
