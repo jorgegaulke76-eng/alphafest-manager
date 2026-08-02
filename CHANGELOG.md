@@ -294,3 +294,13 @@ hangelog
 - Corrigida duplicidade segura de relacionamentos originada por propostas antigas sem telefone/documento.
 - Relacionamentos passaram a ser a fonte atual de dados pessoais nas propostas.
 - Histórico, HTML e WhatsApp usam os dados atuais sem alterar o conteúdo comercial histórico.
+
+## 9.1.0 — Creative Studio Premium
+- Upload livre totalmente separado do catálogo, sem reaproveitar produto ou descrição anterior.
+- Nome e descrição da imagem obrigatórios no modo livre.
+- Geração opcional de copy por IA via OpenAI, com fallback local seguro.
+- Identidade Alphafest aplicada automaticamente nas artes PNG.
+- Cards por canal com logotipos das plataformas, resolução, formato e status.
+- Upload opcional de vídeo curto preservado para Reels, TikTok e Shorts.
+- Aprovação individual mantida e envio em lote de todos os canais aprovados para a fila de publicação.
+- Registro explícito de que publicação automática depende das credenciais oficiais das redes.
