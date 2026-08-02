@@ -17,6 +17,7 @@ import zipfile
 import hashlib
 import time
 import copy
+import requests
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
@@ -1869,19 +1870,71 @@ PLATFORM_ICON_FILES = {
 }
 
 def _ler_bytes_midia(origem):
+    """Converte uploads, bytes, caminhos, data URLs e URLs remotas em bytes.
+
+    As imagens do catálogo podem estar salvas como caminho local, URL pública do
+    Supabase ou data URL. O preview do Streamlit aceita todos esses formatos,
+    mas o Pillow precisa receber os bytes reais do arquivo.
+    """
     if origem is None:
         return b""
+    if isinstance(origem, (bytes, bytearray, memoryview)):
+        return bytes(origem)
     if hasattr(origem, "getbuffer"):
-        return bytes(origem.getbuffer())
+        try:
+            return bytes(origem.getbuffer())
+        except Exception:
+            pass
+    if hasattr(origem, "read"):
+        try:
+            posicao = origem.tell() if hasattr(origem, "tell") else None
+            if hasattr(origem, "seek"):
+                origem.seek(0)
+            dados = origem.read()
+            if posicao is not None and hasattr(origem, "seek"):
+                origem.seek(posicao)
+            if dados:
+                return bytes(dados)
+        except Exception:
+            pass
+
     texto = str(origem).strip()
     if not texto:
         return b""
+
+    if texto.startswith("data:image/") and "," in texto:
+        try:
+            cabecalho, conteudo = texto.split(",", 1)
+            return base64.b64decode(conteudo) if ";base64" in cabecalho else urllib.parse.unquote_to_bytes(conteudo)
+        except Exception:
+            return b""
+
+    if texto.lower().startswith(("http://", "https://")):
+        try:
+            resposta = requests.get(
+                texto,
+                timeout=20,
+                allow_redirects=True,
+                headers={"User-Agent": "FestManager/9.1 (+https://www.alphafest.com.br)"},
+            )
+            resposta.raise_for_status()
+            tipo = str(resposta.headers.get("content-type", "")).lower()
+            if tipo and not (tipo.startswith("image/") or "octet-stream" in tipo):
+                return b""
+            return resposta.content
+        except Exception:
+            return b""
+
     try:
         caminho = Path(texto)
-        if caminho.exists() and caminho.is_file():
-            return caminho.read_bytes()
+        candidatos = [caminho]
+        if not caminho.is_absolute():
+            candidatos.extend([Path.cwd() / caminho, Path(__file__).resolve().parent / caminho])
+        for candidato in candidatos:
+            if candidato.exists() and candidato.is_file():
+                return candidato.read_bytes()
     except Exception:
-        return b""
+        pass
     return b""
 
 def converter_imagem_para_png(origem):
@@ -7269,251 +7322,296 @@ with aba9:
 
 
 
+def _secret_configurado(nome):
+    try:
+        valor = st.secrets.get(nome, "")
+    except Exception:
+        valor = os.getenv(nome, "")
+    return bool(str(valor or "").strip())
+
+
+def _status_integracao(nome, obrigatorios, observacao=""):
+    presentes = [campo for campo in obrigatorios if _secret_configurado(campo)]
+    total = len(obrigatorios)
+    if total and len(presentes) == total:
+        return {"nome": nome, "status": "Configurado", "icone": "🟢", "detalhe": observacao or "Credenciais principais encontradas.", "faltando": []}
+    if presentes:
+        faltando = [campo for campo in obrigatorios if campo not in presentes]
+        return {"nome": nome, "status": "Incompleto", "icone": "🟡", "detalhe": observacao or "Algumas credenciais ainda faltam.", "faltando": faltando}
+    return {"nome": nome, "status": "Não configurado", "icone": "⚪", "detalhe": observacao or "Nenhuma credencial encontrada.", "faltando": list(obrigatorios)}
+
+
+def renderizar_alpha_connect():
+    st.subheader("🔗 Alpha Connect")
+    st.caption("Diagnóstico seguro das integrações. Os valores secretos nunca são exibidos na tela.")
+    integracoes = [
+        _status_integracao("OpenAI", ["OPENAI_API_KEY"], "Geração de textos e análise visual por IA."),
+        _status_integracao("Meta / Facebook", ["META_APP_ID", "META_APP_SECRET", "META_ACCESS_TOKEN", "META_PAGE_ID"], "Publicação e conexão com a Página da Alphafest."),
+        _status_integracao("Instagram", ["META_ACCESS_TOKEN", "INSTAGRAM_ACCOUNT_ID"], "Publicação na conta profissional vinculada à Página."),
+        _status_integracao("WhatsApp Business", ["META_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_BUSINESS_ACCOUNT_ID"], "Mensagens e atendimento pela plataforma oficial."),
+        _status_integracao("YouTube", ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"], "OAuth configurado; a autorização do canal gera o refresh token."),
+        _status_integracao("TikTok", ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"], "Pode permanecer pendente até concluir a revisão do aplicativo."),
+    ]
+    cols = st.columns(2)
+    for indice, item in enumerate(integracoes):
+        with cols[indice % 2].container(border=True):
+            st.markdown(f"### {item['icone']} {item['nome']}")
+            st.write(f"**Status:** {item['status']}")
+            st.caption(item["detalhe"])
+            if item["faltando"]:
+                st.caption("Faltando: " + ", ".join(item["faltando"]))
+    st.info("A presença das credenciais confirma a configuração básica. A publicação real será habilitada após o fluxo OAuth e os testes específicos de cada plataforma.")
+
+
 with aba7:
-    st.header("⚙️ Configurações da Empresa")
-    st.caption("Os dados salvos aqui são usados no painel, WhatsApp, HTML da proposta e catálogo do cliente.")
-    config_atual = carregar_config_empresa()
+    st.header("⚙️ Configurações e Integrações")
+    aba_cfg_empresa, aba_cfg_connect = st.tabs(["🏢 Empresa", "🔗 Alpha Connect"])
+    with aba_cfg_connect:
+        renderizar_alpha_connect()
+    with aba_cfg_empresa:
+        st.caption("Os dados salvos aqui são usados no painel, WhatsApp, HTML da proposta e catálogo do cliente.")
+        config_atual = carregar_config_empresa()
 
-    with st.form("form_config_empresa"):
-        st.subheader("Identidade")
-        c1, c2 = st.columns(2)
-        nome_empresa = c1.text_input("Nome da empresa", value=str(config_atual.get("nome", "")))
-        nome_maiusculo = c2.text_input("Nome no painel", value=str(config_atual.get("nome_maiusculo", "")))
-        subtitulo_empresa = c1.text_input("Subtítulo", value=str(config_atual.get("subtitulo", "")))
-        slogan_empresa = c2.text_input("Slogan", value=str(config_atual.get("slogan", "")))
+        with st.form("form_config_empresa"):
+            st.subheader("Identidade")
+            c1, c2 = st.columns(2)
+            nome_empresa = c1.text_input("Nome da empresa", value=str(config_atual.get("nome", "")))
+            nome_maiusculo = c2.text_input("Nome no painel", value=str(config_atual.get("nome_maiusculo", "")))
+            subtitulo_empresa = c1.text_input("Subtítulo", value=str(config_atual.get("subtitulo", "")))
+            slogan_empresa = c2.text_input("Slogan", value=str(config_atual.get("slogan", "")))
 
-        st.subheader("Dados cadastrais")
-        c1, c2 = st.columns(2)
-        cnpj_empresa = c1.text_input("CNPJ", value=str(config_atual.get("cnpj", "")))
-        ie_empresa = c2.text_input("Inscrição Estadual", value=str(config_atual.get("ie", "")))
-        endereco_empresa = st.text_input("Endereço completo", value=str(config_atual.get("endereco", "")))
-        c1, c2, c3 = st.columns([1, 2, 1])
-        cep_empresa = c1.text_input("CEP", value=str(config_atual.get("cep", "")))
-        cidade_empresa = c2.text_input("Cidade", value=str(config_atual.get("cidade", "")))
-        uf_empresa = c3.text_input("UF", value=str(config_atual.get("uf", "")), max_chars=2)
-        c1, c2 = st.columns(2)
-        email_empresa = c1.text_input("E-mail", value=str(config_atual.get("email", "")))
-        celular_empresa = c2.text_input("Celular", value=str(config_atual.get("celular", "")))
-        whatsapp_catalogo = st.text_input("WhatsApp do catálogo (somente números)", value=str(config_atual.get("whatsapp_catalogo", "")))
+            st.subheader("Dados cadastrais")
+            c1, c2 = st.columns(2)
+            cnpj_empresa = c1.text_input("CNPJ", value=str(config_atual.get("cnpj", "")))
+            ie_empresa = c2.text_input("Inscrição Estadual", value=str(config_atual.get("ie", "")))
+            endereco_empresa = st.text_input("Endereço completo", value=str(config_atual.get("endereco", "")))
+            c1, c2, c3 = st.columns([1, 2, 1])
+            cep_empresa = c1.text_input("CEP", value=str(config_atual.get("cep", "")))
+            cidade_empresa = c2.text_input("Cidade", value=str(config_atual.get("cidade", "")))
+            uf_empresa = c3.text_input("UF", value=str(config_atual.get("uf", "")), max_chars=2)
+            c1, c2 = st.columns(2)
+            email_empresa = c1.text_input("E-mail", value=str(config_atual.get("email", "")))
+            celular_empresa = c2.text_input("Celular", value=str(config_atual.get("celular", "")))
+            whatsapp_catalogo = st.text_input("WhatsApp do catálogo (somente números)", value=str(config_atual.get("whatsapp_catalogo", "")))
 
-        st.subheader("Pagamento PIX")
-        pix_link = st.text_input("Link de pagamento PIX", value=str(config_atual.get("pix_link", "")))
-        c1, c2 = st.columns(2)
-        pix_titular = c1.text_input("Titular", value=str(config_atual.get("pix_titular", "")))
-        pix_banco = c2.text_input("Banco", value=str(config_atual.get("pix_banco", "")))
-        c1, c2 = st.columns(2)
-        pix_agencia = c1.text_input("Agência", value=str(config_atual.get("pix_agencia", "")))
-        pix_conta = c2.text_input("Conta", value=str(config_atual.get("pix_conta", "")))
-        pix_empresa = st.text_input("Empresa / favorecido", value=str(config_atual.get("pix_empresa", "")))
+            st.subheader("Pagamento PIX")
+            pix_link = st.text_input("Link de pagamento PIX", value=str(config_atual.get("pix_link", "")))
+            c1, c2 = st.columns(2)
+            pix_titular = c1.text_input("Titular", value=str(config_atual.get("pix_titular", "")))
+            pix_banco = c2.text_input("Banco", value=str(config_atual.get("pix_banco", "")))
+            c1, c2 = st.columns(2)
+            pix_agencia = c1.text_input("Agência", value=str(config_atual.get("pix_agencia", "")))
+            pix_conta = c2.text_input("Conta", value=str(config_atual.get("pix_conta", "")))
+            pix_empresa = st.text_input("Empresa / favorecido", value=str(config_atual.get("pix_empresa", "")))
 
-        st.subheader("Padrões dos novos orçamentos")
-        c1, c2, c3 = st.columns(3)
-        prazo_padrao = c1.text_input("Prazo padrão (dias úteis)", value=str(config_atual.get("prazo_padrao", "10")))
-        validade_padrao = c2.text_input("Validade padrão (dias)", value=str(config_atual.get("validade_padrao", "5")))
-        frete_padrao = c3.text_input("Frete/entrega padrão", value=str(config_atual.get("frete_padrao", "Retirada em Itatiba")))
-        fuso_horario = st.text_input(
-            "Fuso horário do sistema",
-            value=str(config_atual.get("fuso_horario", FUSO_PADRAO)),
-            help="Para Itatiba/SP, use America/Sao_Paulo.",
-        )
+            st.subheader("Padrões dos novos orçamentos")
+            c1, c2, c3 = st.columns(3)
+            prazo_padrao = c1.text_input("Prazo padrão (dias úteis)", value=str(config_atual.get("prazo_padrao", "10")))
+            validade_padrao = c2.text_input("Validade padrão (dias)", value=str(config_atual.get("validade_padrao", "5")))
+            frete_padrao = c3.text_input("Frete/entrega padrão", value=str(config_atual.get("frete_padrao", "Retirada em Itatiba")))
+            fuso_horario = st.text_input(
+                "Fuso horário do sistema",
+                value=str(config_atual.get("fuso_horario", FUSO_PADRAO)),
+                help="Para Itatiba/SP, use America/Sao_Paulo.",
+            )
 
-        salvar_config = st.form_submit_button("💾 Salvar configurações", type="primary", use_container_width=True)
+            salvar_config = st.form_submit_button("💾 Salvar configurações", type="primary", use_container_width=True)
 
-    if salvar_config:
-        nova_config = {
-            "nome": nome_empresa.strip(),
-            "nome_maiusculo": nome_maiusculo.strip() or nome_empresa.strip().upper(),
-            "subtitulo": subtitulo_empresa.strip(),
-            "slogan": slogan_empresa.strip(),
-            "cnpj": cnpj_empresa.strip(),
-            "ie": ie_empresa.strip(),
-            "endereco": endereco_empresa.strip(),
-            "cep": cep_empresa.strip(),
-            "cidade": cidade_empresa.strip(),
-            "uf": uf_empresa.strip().upper(),
-            "email": email_empresa.strip(),
-            "celular": celular_empresa.strip(),
-            "whatsapp_catalogo": re.sub(r"\D", "", whatsapp_catalogo),
-            "pix_link": pix_link.strip(),
-            "pix_titular": pix_titular.strip(),
-            "pix_banco": pix_banco.strip(),
-            "pix_agencia": pix_agencia.strip(),
-            "pix_conta": pix_conta.strip(),
-            "pix_empresa": pix_empresa.strip(),
-            "prazo_padrao": prazo_padrao.strip() or "10",
-            "validade_padrao": validade_padrao.strip() or "5",
-            "frete_padrao": frete_padrao.strip() or "Retirada em Itatiba",
-            "fuso_horario": fuso_horario.strip() or FUSO_PADRAO,
-        }
-        salvar_config_empresa(nova_config)
-        st.success("Configurações salvas. O sistema será atualizado agora.")
-        st.rerun()
-
-    st.info("A logo e o QR Code continuam sendo carregados dos arquivos logo.png e pix.png do repositório.")
-
-    st.divider()
-    st.header("🛡️ Proteção de Dados")
-    st.caption("Atualizações trocam o código, mas não substituem os dados salvos. O backup automático cria pontos de recuperação sem depender da memória da equipe.")
-    cfg_backup = carregar_config_backup()
-    with st.form("form_config_backup"):
-        b1, b2, b3 = st.columns(3)
-        backup_ativo = b1.checkbox("Backup automático ativo", value=bool(cfg_backup.get("ativo", True)))
-        horario_backup = b2.text_input("Horário diário", value=str(cfg_backup.get("horario", "22:00")), help="Formato HH:MM. Se o sistema estiver fechado, o backup será feito no primeiro acesso após esse horário.")
-        retencao_backup = b3.number_input("Backups automáticos mantidos", min_value=1, max_value=365, value=int(cfg_backup.get("retencao_automatica", 30) or 30))
-        salvar_backup_cfg = st.form_submit_button("💾 Salvar rotina de backup", use_container_width=True)
-    if salvar_backup_cfg:
-        if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", horario_backup.strip()):
-            st.warning("Informe o horário no formato HH:MM, por exemplo 22:00.")
-        else:
-            cfg_backup.update({"ativo": backup_ativo, "horario": horario_backup.strip(), "retencao_automatica": int(retencao_backup), "versao_dados": VERSAO_DADOS})
-            salvar_config_backup(cfg_backup)
-            st.success("Rotina de backup salva.")
-
-    ultimo_backup = str(cfg_backup.get("ultimo_backup_em", "")).strip()
-    if ultimo_backup:
-        try:
-            ultimo_fmt = datetime.fromisoformat(ultimo_backup).astimezone(agora_local().tzinfo).strftime("%d/%m/%Y às %H:%M")
-        except Exception:
-            ultimo_fmt = ultimo_backup
-        st.success(f"🟢 Proteção ativa — último backup: {ultimo_fmt}")
-    else:
-        st.warning("Ainda não existe backup completo registrado. Faça o primeiro backup agora.")
-
-    problemas_integridade, contagens_integridade = verificar_integridade_dados()
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Propostas", contagens_integridade.get("historico_orcamentos", 0))
-    c2.metric("Clientes", contagens_integridade.get("clientes_db", 0))
-    c3.metric("Produtos", contagens_integridade.get("catalogo_db", 0))
-    c4.metric("Atendimentos", contagens_integridade.get("atendimentos_db", 0))
-    ac1, ac2 = st.columns(2)
-    if ac1.button("🛡️ Fazer backup completo agora", type="primary", use_container_width=True):
-        try:
-            novo_backup = criar_backup_completo(tipo="manual", protegido=True, motivo="Backup manual solicitado pela equipe")
-            st.session_state._backup_download_id = novo_backup["backup_id"]
-            st.success("Backup completo criado e protegido.")
-        except Exception as exc:
-            st.error(f"Falha ao criar backup: {exc}")
-    if ac2.button("🔎 Verificar integridade dos dados", use_container_width=True):
-        if problemas_integridade:
-            for problema in problemas_integridade:
-                st.error(problema)
-        else:
-            st.success("Integridade verificada: todas as estruturas principais estão válidas.")
-
-    indice_backups = carregar_indice_backups()
-    if indice_backups:
-        st.subheader("Histórico de backups")
-        opcoes_backup = {f"{item.get('criado_em','')} — {item.get('tipo','')} — {'🔒 protegido' if item.get('protegido') else 'normal'}": item.get("backup_id") for item in indice_backups[:100]}
-        escolha_backup = st.selectbox("Selecione um backup", list(opcoes_backup.keys()), key="backup_historico_select")
-        backup_selecionado = carregar_backup_por_id(opcoes_backup[escolha_backup])
-        if backup_selecionado:
-            st.json({k: v for k, v in backup_selecionado.items() if k != "documentos"}, expanded=False)
-            d1, d2 = st.columns(2)
-            d1.download_button("⬇️ Baixar cópia ZIP", data=backup_para_zip_bytes(backup_selecionado), file_name=f"festmanager_backup_{backup_selecionado.get('backup_id','')}.zip", mime="application/zip", use_container_width=True)
-            confirmacao = d2.text_input("Para restaurar, digite RESTAURAR", key=f"confirmar_restauracao_{backup_selecionado.get('backup_id')}")
-            if st.button("♻️ Restaurar backup selecionado", disabled=confirmacao.strip().upper() != "RESTAURAR", use_container_width=True):
-                try:
-                    restaurados = restaurar_backup_payload(backup_selecionado)
-                    st.success(f"Restauração concluída. Documentos restaurados: {len(restaurados)}.")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Falha na restauração: {exc}")
-    else:
-        st.info("O histórico aparecerá depois do primeiro backup.")
-
-
-
-    st.divider()
-    st.header("🏭 Núcleo Profissional")
-    st.caption("Migrações seguras, auditoria, lixeira e diagnóstico para manter o FestManager em produção sem perder dados.")
-    tab_diag, tab_audit, tab_lix, tab_update = st.tabs(["🩺 Saúde do sistema", "🧾 Auditoria", "🗑️ Lixeira", "🔄 Atualização segura"])
-
-    with tab_diag:
-        diag = diagnostico_sistema()
-        d1, d2, d3, d4 = st.columns(4)
-        d1.metric("Supabase", "🟢 Online" if diag["supabase_ok"] else "🟡 Contingência")
-        d2.metric("Integridade", "🟢 OK" if diag["integridade_ok"] else "🔴 Atenção")
-        d3.metric("Backup", "🟢 Atual" if diag["backup_ok"] else "🟡 Verificar")
-        d4.metric("Estrutura de dados", f"v{diag['schema_version']}")
-        st.caption(diag["supabase_mensagem"])
-        if diag["backup_idade_horas"] is not None:
-            st.caption(f"Último backup há aproximadamente {diag['backup_idade_horas']:.1f} hora(s).")
-        if diag["problemas"]:
-            for problema in diag["problemas"]:
-                st.error(problema)
-        else:
-            st.success("Estruturas principais válidas.")
-        st.write(f"Registros de auditoria: **{diag['auditorias']}** • Itens recuperáveis na lixeira: **{diag['lixeira']}**")
-        if st.button("🔄 Executar diagnóstico novamente", key="health_refresh", use_container_width=True):
+        if salvar_config:
+            nova_config = {
+                "nome": nome_empresa.strip(),
+                "nome_maiusculo": nome_maiusculo.strip() or nome_empresa.strip().upper(),
+                "subtitulo": subtitulo_empresa.strip(),
+                "slogan": slogan_empresa.strip(),
+                "cnpj": cnpj_empresa.strip(),
+                "ie": ie_empresa.strip(),
+                "endereco": endereco_empresa.strip(),
+                "cep": cep_empresa.strip(),
+                "cidade": cidade_empresa.strip(),
+                "uf": uf_empresa.strip().upper(),
+                "email": email_empresa.strip(),
+                "celular": celular_empresa.strip(),
+                "whatsapp_catalogo": re.sub(r"\D", "", whatsapp_catalogo),
+                "pix_link": pix_link.strip(),
+                "pix_titular": pix_titular.strip(),
+                "pix_banco": pix_banco.strip(),
+                "pix_agencia": pix_agencia.strip(),
+                "pix_conta": pix_conta.strip(),
+                "pix_empresa": pix_empresa.strip(),
+                "prazo_padrao": prazo_padrao.strip() or "10",
+                "validade_padrao": validade_padrao.strip() or "5",
+                "frete_padrao": frete_padrao.strip() or "Retirada em Itatiba",
+                "fuso_horario": fuso_horario.strip() or FUSO_PADRAO,
+            }
+            salvar_config_empresa(nova_config)
+            st.success("Configurações salvas. O sistema será atualizado agora.")
             st.rerun()
 
-    with tab_audit:
-        auditoria = carregar_auditoria()
-        if not auditoria:
-            st.info("A auditoria começará a registrar backups, migrações, exclusões e restaurações.")
-        else:
-            filtro_acao = st.text_input("Filtrar auditoria", placeholder="Usuário, ação, entidade ou identificador", key="audit_filter").strip().casefold()
-            exibidos = []
-            for reg in auditoria:
-                texto = " ".join(str(reg.get(k, "")) for k in ["usuario", "acao", "entidade", "identificador", "resultado"]).casefold()
-                if not filtro_acao or filtro_acao in texto:
-                    exibidos.append(reg)
-            linhas = []
-            for reg in exibidos[:500]:
-                try:
-                    data_fmt = datetime.fromisoformat(reg.get("data_hora", "")).astimezone(agora_local().tzinfo).strftime("%d/%m/%Y %H:%M:%S")
-                except Exception:
-                    data_fmt = reg.get("data_hora", "")
-                linhas.append({"Data": data_fmt, "Usuário": reg.get("usuario"), "Ação": reg.get("acao"), "Entidade": reg.get("entidade"), "Identificador": reg.get("identificador"), "Resultado": reg.get("resultado")})
-            st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
-            st.download_button("⬇️ Exportar auditoria JSON", json.dumps(auditoria, ensure_ascii=False, indent=2), file_name=f"auditoria_festmanager_{hoje_local().isoformat()}.json", mime="application/json", use_container_width=True)
+        st.info("A logo e o QR Code continuam sendo carregados dos arquivos logo.png e pix.png do repositório.")
 
-    with tab_lix:
-        lixeira = carregar_lixeira()
-        if not lixeira:
-            st.success("A lixeira está vazia.")
-        else:
-            st.warning(f"{len(lixeira)} item(ns) podem ser restaurados. A remoção definitiva exige confirmação.")
-            for reg in lixeira[:200]:
-                try:
-                    dt_fmt = datetime.fromisoformat(reg.get("excluido_em", "")).astimezone(agora_local().tzinfo).strftime("%d/%m/%Y %H:%M")
-                except Exception:
-                    dt_fmt = reg.get("excluido_em", "")
-                with st.expander(f"{reg.get('tipo')} — {reg.get('identificador') or 'sem identificação'} — {dt_fmt}"):
-                    st.caption(f"Movido por: {reg.get('excluido_por', 'Não informado')}")
-                    st.json(reg.get("item", {}), expanded=False)
-                    r1, r2 = st.columns(2)
-                    if r1.button("♻️ Restaurar", key=f"lix_restore_{reg.get('id_lixeira')}", use_container_width=True):
-                        try:
-                            restaurar_item_lixeira(reg)
-                            st.success("Item restaurado.")
-                            st.rerun()
-                        except Exception as exc:
-                            st.error(f"Não foi possível restaurar: {exc}")
-                    confirm = r2.checkbox("Confirmar remoção definitiva", key=f"lix_confirm_{reg.get('id_lixeira')}")
-                    if st.button("❌ Remover definitivamente", key=f"lix_purge_{reg.get('id_lixeira')}", disabled=not confirm, use_container_width=True):
-                        remover_da_lixeira(reg.get("id_lixeira"))
-                        registrar_auditoria("Remover definitivamente", reg.get("tipo", "Item"), reg.get("identificador", ""))
-                        st.rerun()
+        st.divider()
+        st.header("🛡️ Proteção de Dados")
+        st.caption("Atualizações trocam o código, mas não substituem os dados salvos. O backup automático cria pontos de recuperação sem depender da memória da equipe.")
+        cfg_backup = carregar_config_backup()
+        with st.form("form_config_backup"):
+            b1, b2, b3 = st.columns(3)
+            backup_ativo = b1.checkbox("Backup automático ativo", value=bool(cfg_backup.get("ativo", True)))
+            horario_backup = b2.text_input("Horário diário", value=str(cfg_backup.get("horario", "22:00")), help="Formato HH:MM. Se o sistema estiver fechado, o backup será feito no primeiro acesso após esse horário.")
+            retencao_backup = b3.number_input("Backups automáticos mantidos", min_value=1, max_value=365, value=int(cfg_backup.get("retencao_automatica", 30) or 30))
+            salvar_backup_cfg = st.form_submit_button("💾 Salvar rotina de backup", use_container_width=True)
+        if salvar_backup_cfg:
+            if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", horario_backup.strip()):
+                st.warning("Informe o horário no formato HH:MM, por exemplo 22:00.")
+            else:
+                cfg_backup.update({"ativo": backup_ativo, "horario": horario_backup.strip(), "retencao_automatica": int(retencao_backup), "versao_dados": VERSAO_DADOS})
+                salvar_config_backup(cfg_backup)
+                st.success("Rotina de backup salva.")
 
-    with tab_update:
-        st.info("Antes de publicar uma nova versão, gere um ponto de restauração e anote as contagens. O pacote de atualização deve conter somente código e migrações, nunca os dados da empresa.")
-        diag_pre = diagnostico_sistema()
-        st.json({
-            "versao_app": VERSAO_APP,
-            "versao_dados": VERSAO_DADOS,
-            "contagens_antes_atualizacao": diag_pre["contagens"],
-            "supabase": diag_pre["supabase_mensagem"],
-            "integridade": "OK" if diag_pre["integridade_ok"] else diag_pre["problemas"],
-        }, expanded=False)
-        if st.button("🛡️ Preparar atualização segura", type="primary", key="preparar_update_seguro", use_container_width=True):
+        ultimo_backup = str(cfg_backup.get("ultimo_backup_em", "")).strip()
+        if ultimo_backup:
             try:
-                bk = criar_backup_completo(tipo="antes_atualizacao", protegido=True, motivo=f"Ponto de restauração antes de atualizar a partir da versão {VERSAO_APP}")
-                registrar_auditoria("Preparar atualização", "Sistema", VERSAO_APP, {"backup_id": bk.get("backup_id"), "contagens": bk.get("contagens")})
-                st.success(f"Atualização preparada. Backup protegido: {bk.get('backup_id')}")
-                st.download_button("⬇️ Baixar ponto de restauração", data=backup_para_zip_bytes(bk), file_name=f"antes_atualizacao_{bk.get('backup_id')}.zip", mime="application/zip", use_container_width=True)
+                ultimo_fmt = datetime.fromisoformat(ultimo_backup).astimezone(agora_local().tzinfo).strftime("%d/%m/%Y às %H:%M")
+            except Exception:
+                ultimo_fmt = ultimo_backup
+            st.success(f"🟢 Proteção ativa — último backup: {ultimo_fmt}")
+        else:
+            st.warning("Ainda não existe backup completo registrado. Faça o primeiro backup agora.")
+
+        problemas_integridade, contagens_integridade = verificar_integridade_dados()
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Propostas", contagens_integridade.get("historico_orcamentos", 0))
+        c2.metric("Clientes", contagens_integridade.get("clientes_db", 0))
+        c3.metric("Produtos", contagens_integridade.get("catalogo_db", 0))
+        c4.metric("Atendimentos", contagens_integridade.get("atendimentos_db", 0))
+        ac1, ac2 = st.columns(2)
+        if ac1.button("🛡️ Fazer backup completo agora", type="primary", use_container_width=True):
+            try:
+                novo_backup = criar_backup_completo(tipo="manual", protegido=True, motivo="Backup manual solicitado pela equipe")
+                st.session_state._backup_download_id = novo_backup["backup_id"]
+                st.success("Backup completo criado e protegido.")
             except Exception as exc:
-                st.error(f"Falha ao preparar atualização: {exc}")
+                st.error(f"Falha ao criar backup: {exc}")
+        if ac2.button("🔎 Verificar integridade dos dados", use_container_width=True):
+            if problemas_integridade:
+                for problema in problemas_integridade:
+                    st.error(problema)
+            else:
+                st.success("Integridade verificada: todas as estruturas principais estão válidas.")
+
+        indice_backups = carregar_indice_backups()
+        if indice_backups:
+            st.subheader("Histórico de backups")
+            opcoes_backup = {f"{item.get('criado_em','')} — {item.get('tipo','')} — {'🔒 protegido' if item.get('protegido') else 'normal'}": item.get("backup_id") for item in indice_backups[:100]}
+            escolha_backup = st.selectbox("Selecione um backup", list(opcoes_backup.keys()), key="backup_historico_select")
+            backup_selecionado = carregar_backup_por_id(opcoes_backup[escolha_backup])
+            if backup_selecionado:
+                st.json({k: v for k, v in backup_selecionado.items() if k != "documentos"}, expanded=False)
+                d1, d2 = st.columns(2)
+                d1.download_button("⬇️ Baixar cópia ZIP", data=backup_para_zip_bytes(backup_selecionado), file_name=f"festmanager_backup_{backup_selecionado.get('backup_id','')}.zip", mime="application/zip", use_container_width=True)
+                confirmacao = d2.text_input("Para restaurar, digite RESTAURAR", key=f"confirmar_restauracao_{backup_selecionado.get('backup_id')}")
+                if st.button("♻️ Restaurar backup selecionado", disabled=confirmacao.strip().upper() != "RESTAURAR", use_container_width=True):
+                    try:
+                        restaurados = restaurar_backup_payload(backup_selecionado)
+                        st.success(f"Restauração concluída. Documentos restaurados: {len(restaurados)}.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Falha na restauração: {exc}")
+        else:
+            st.info("O histórico aparecerá depois do primeiro backup.")
 
 
-    st.caption(f"Versão do aplicativo: {VERSAO_APP} • Versão dos dados: {VERSAO_DADOS}")
+
+        st.divider()
+        st.header("🏭 Núcleo Profissional")
+        st.caption("Migrações seguras, auditoria, lixeira e diagnóstico para manter o FestManager em produção sem perder dados.")
+        tab_diag, tab_audit, tab_lix, tab_update = st.tabs(["🩺 Saúde do sistema", "🧾 Auditoria", "🗑️ Lixeira", "🔄 Atualização segura"])
+
+        with tab_diag:
+            diag = diagnostico_sistema()
+            d1, d2, d3, d4 = st.columns(4)
+            d1.metric("Supabase", "🟢 Online" if diag["supabase_ok"] else "🟡 Contingência")
+            d2.metric("Integridade", "🟢 OK" if diag["integridade_ok"] else "🔴 Atenção")
+            d3.metric("Backup", "🟢 Atual" if diag["backup_ok"] else "🟡 Verificar")
+            d4.metric("Estrutura de dados", f"v{diag['schema_version']}")
+            st.caption(diag["supabase_mensagem"])
+            if diag["backup_idade_horas"] is not None:
+                st.caption(f"Último backup há aproximadamente {diag['backup_idade_horas']:.1f} hora(s).")
+            if diag["problemas"]:
+                for problema in diag["problemas"]:
+                    st.error(problema)
+            else:
+                st.success("Estruturas principais válidas.")
+            st.write(f"Registros de auditoria: **{diag['auditorias']}** • Itens recuperáveis na lixeira: **{diag['lixeira']}**")
+            if st.button("🔄 Executar diagnóstico novamente", key="health_refresh", use_container_width=True):
+                st.rerun()
+
+        with tab_audit:
+            auditoria = carregar_auditoria()
+            if not auditoria:
+                st.info("A auditoria começará a registrar backups, migrações, exclusões e restaurações.")
+            else:
+                filtro_acao = st.text_input("Filtrar auditoria", placeholder="Usuário, ação, entidade ou identificador", key="audit_filter").strip().casefold()
+                exibidos = []
+                for reg in auditoria:
+                    texto = " ".join(str(reg.get(k, "")) for k in ["usuario", "acao", "entidade", "identificador", "resultado"]).casefold()
+                    if not filtro_acao or filtro_acao in texto:
+                        exibidos.append(reg)
+                linhas = []
+                for reg in exibidos[:500]:
+                    try:
+                        data_fmt = datetime.fromisoformat(reg.get("data_hora", "")).astimezone(agora_local().tzinfo).strftime("%d/%m/%Y %H:%M:%S")
+                    except Exception:
+                        data_fmt = reg.get("data_hora", "")
+                    linhas.append({"Data": data_fmt, "Usuário": reg.get("usuario"), "Ação": reg.get("acao"), "Entidade": reg.get("entidade"), "Identificador": reg.get("identificador"), "Resultado": reg.get("resultado")})
+                st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
+                st.download_button("⬇️ Exportar auditoria JSON", json.dumps(auditoria, ensure_ascii=False, indent=2), file_name=f"auditoria_festmanager_{hoje_local().isoformat()}.json", mime="application/json", use_container_width=True)
+
+        with tab_lix:
+            lixeira = carregar_lixeira()
+            if not lixeira:
+                st.success("A lixeira está vazia.")
+            else:
+                st.warning(f"{len(lixeira)} item(ns) podem ser restaurados. A remoção definitiva exige confirmação.")
+                for reg in lixeira[:200]:
+                    try:
+                        dt_fmt = datetime.fromisoformat(reg.get("excluido_em", "")).astimezone(agora_local().tzinfo).strftime("%d/%m/%Y %H:%M")
+                    except Exception:
+                        dt_fmt = reg.get("excluido_em", "")
+                    with st.expander(f"{reg.get('tipo')} — {reg.get('identificador') or 'sem identificação'} — {dt_fmt}"):
+                        st.caption(f"Movido por: {reg.get('excluido_por', 'Não informado')}")
+                        st.json(reg.get("item", {}), expanded=False)
+                        r1, r2 = st.columns(2)
+                        if r1.button("♻️ Restaurar", key=f"lix_restore_{reg.get('id_lixeira')}", use_container_width=True):
+                            try:
+                                restaurar_item_lixeira(reg)
+                                st.success("Item restaurado.")
+                                st.rerun()
+                            except Exception as exc:
+                                st.error(f"Não foi possível restaurar: {exc}")
+                        confirm = r2.checkbox("Confirmar remoção definitiva", key=f"lix_confirm_{reg.get('id_lixeira')}")
+                        if st.button("❌ Remover definitivamente", key=f"lix_purge_{reg.get('id_lixeira')}", disabled=not confirm, use_container_width=True):
+                            remover_da_lixeira(reg.get("id_lixeira"))
+                            registrar_auditoria("Remover definitivamente", reg.get("tipo", "Item"), reg.get("identificador", ""))
+                            st.rerun()
+
+        with tab_update:
+            st.info("Antes de publicar uma nova versão, gere um ponto de restauração e anote as contagens. O pacote de atualização deve conter somente código e migrações, nunca os dados da empresa.")
+            diag_pre = diagnostico_sistema()
+            st.json({
+                "versao_app": VERSAO_APP,
+                "versao_dados": VERSAO_DADOS,
+                "contagens_antes_atualizacao": diag_pre["contagens"],
+                "supabase": diag_pre["supabase_mensagem"],
+                "integridade": "OK" if diag_pre["integridade_ok"] else diag_pre["problemas"],
+            }, expanded=False)
+            if st.button("🛡️ Preparar atualização segura", type="primary", key="preparar_update_seguro", use_container_width=True):
+                try:
+                    bk = criar_backup_completo(tipo="antes_atualizacao", protegido=True, motivo=f"Ponto de restauração antes de atualizar a partir da versão {VERSAO_APP}")
+                    registrar_auditoria("Preparar atualização", "Sistema", VERSAO_APP, {"backup_id": bk.get("backup_id"), "contagens": bk.get("contagens")})
+                    st.success(f"Atualização preparada. Backup protegido: {bk.get('backup_id')}")
+                    st.download_button("⬇️ Baixar ponto de restauração", data=backup_para_zip_bytes(bk), file_name=f"antes_atualizacao_{bk.get('backup_id')}.zip", mime="application/zip", use_container_width=True)
+                except Exception as exc:
+                    st.error(f"Falha ao preparar atualização: {exc}")
+
+
+        st.caption(f"Versão do aplicativo: {VERSAO_APP} • Versão dos dados: {VERSAO_DADOS}")

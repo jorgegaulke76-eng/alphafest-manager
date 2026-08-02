@@ -1,3 +1,9 @@
+# 9.1.1
+
+- Corrige geração de campanhas com imagens do catálogo armazenadas por URL, caminho, bytes ou Base64.
+- Adiciona diagnóstico Alpha Connect em Configurações.
+- Mantém upload livre isolado dos dados do catálogo.
+
 # 8.2.1
 
 - Corrigida a falha de inicialização causada pela ausência de `STATUS_FLUXO`.
