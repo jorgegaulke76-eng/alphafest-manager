@@ -327,3 +327,8 @@ hangelog
 - Fonte da venda por canal, conteúdo, campanha e produto.
 - Funil e conversão por canal.
 - Ranking de conteúdos por contatos, orçamentos, vendas e faturamento.
+
+## 11.1.1 — 02/08/2026
+- Novo Painel da Anna com prioridades operacionais e indicadores por canal.
+- Diagnóstico das Integrações Meta unificado com os Secrets do Alpha Connect.
+- Separação visual entre credenciais configuradas e webhook realmente validado.

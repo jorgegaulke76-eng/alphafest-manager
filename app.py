@@ -5227,6 +5227,43 @@ with aba0:
         if p.get("entregue", False) and registro_eh_de_hoje(p.get("entregue_em") or p.get("atualizado_em"))
     ]
 
+    if str(usuario_atual.get("nome", "")).strip().casefold() == "anna":
+        st.markdown("### 🌻 Painel da Anna")
+        st.caption("Tudo que precisa de atenção hoje, reunido em um só lugar.")
+
+        canais_anna = {"WhatsApp": 0, "Instagram": 0, "Facebook": 0, "Site / Catálogo": 0, "Outro": 0}
+        for item_anna in minha_fila_central:
+            canal_anna = str(item_anna.get("canal_atendimento") or item_anna.get("canal") or item_anna.get("canal_origem") or "Outro").strip()
+            if canal_anna not in canais_anna:
+                canal_anna = "Outro"
+            canais_anna[canal_anna] += 1
+
+        pa1, pa2, pa3, pa4 = st.columns(4)
+        pa1.metric("💬 Atendimentos", len(minha_fila_central), help="Fila atribuída à Anna ou ainda sem responsável.")
+        pa2.metric("📋 Orçamentos", len(orcamentos_whatsapp_central), help="Solicitados ou em elaboração.")
+        pa3.metric("🎨 Artes / projetos", len(aguardando_aprovacao_central), help="Aguardando aprovação do cliente.")
+        pa4.metric("📚 Catálogos", len(catalogos_whatsapp_central), help="Solicitações de catálogo ainda abertas.")
+
+        pb1, pb2, pb3, pb4 = st.columns(4)
+        pb1.metric("🚚 Entregas hoje", len(entregas_hoje_central))
+        pb2.metric("💰 Pagamentos pendentes", len(pendentes_pagamento_central))
+        pb3.metric("⚠️ Aguardando +30 min", len(aguardando_resposta_central))
+        pb4.metric("📦 Em produção", len(em_producao_central))
+
+        st.markdown("#### 📲 De onde estão vindo os atendimentos")
+        pc1, pc2, pc3, pc4 = st.columns(4)
+        pc1.metric("🟢 WhatsApp", canais_anna.get("WhatsApp", 0))
+        pc2.metric("📸 Instagram", canais_anna.get("Instagram", 0))
+        pc3.metric("📘 Facebook", canais_anna.get("Facebook", 0))
+        pc4.metric("🌐 Site / catálogo", canais_anna.get("Site / Catálogo", 0))
+
+        total_prioridades_anna = len(minha_fila_central) + len(entregas_hoje_central) + len(pendentes_pagamento_central)
+        if total_prioridades_anna:
+            st.success(f"🎯 **Missão do dia:** organizar {len(minha_fila_central)} atendimento(s), acompanhar {len(entregas_hoje_central)} entrega(s) e confirmar {len(pendentes_pagamento_central)} pagamento(s) pendente(s).")
+        else:
+            st.success("🎉 Sua fila está organizada. Aproveite para revisar catálogos, artes e retornos de clientes.")
+        st.divider()
+
     st.markdown("#### 📊 Resumo de hoje")
     rs1, rs2, rs3, rs4 = st.columns(4)
     rs1.metric("Orçamentos criados", len(propostas_criadas_hoje))
@@ -5703,15 +5740,43 @@ with aba_atendimento:
 
     with tab_integracoes:
         st.subheader("Conexões oficiais da Meta")
-        st.caption("Esta tela prepara a conexão. Para receber mensagens automaticamente, publique a Edge Function incluída no pacote e configure os webhooks no Meta Business.")
+        st.caption("As credenciais vêm do Alpha Connect. Aqui você acompanha separadamente se o webhook já está recebendo eventos reais.")
         cfg = dados_at["config"]
+
+        def _segredo_local(nome):
+            try:
+                valor = st.secrets.get(nome, "")
+                return str(valor or "").strip()
+            except Exception:
+                return ""
+
+        meta_app_secret = _segredo_local("META_APP_ID")
+        meta_token_ok = bool(_segredo_local("META_ACCESS_TOKEN"))
+        meta_page_ok = bool(_segredo_local("META_PAGE_ID"))
+        instagram_id_ok = bool(_segredo_local("INSTAGRAM_ACCOUNT_ID"))
+        whatsapp_phone_ok = bool(_segredo_local("WHATSAPP_PHONE_NUMBER_ID"))
+        whatsapp_business_ok = bool(_segredo_local("WHATSAPP_BUSINESS_ACCOUNT_ID"))
+
+        cred_fb = bool(meta_app_secret and meta_token_ok and meta_page_ok)
+        cred_ig = bool(meta_token_ok and instagram_id_ok)
+        cred_wa = bool(meta_token_ok and whatsapp_phone_ok and whatsapp_business_ok)
+
+        def _rotulo_conexao(credenciais, webhook_ativo):
+            if credenciais and webhook_ativo:
+                return "🟢 Conectado"
+            if credenciais:
+                return "🟡 Credenciais OK · webhook pendente"
+            return "⚪ Credenciais incompletas"
+
         c1, c2, c3 = st.columns(3)
-        c1.metric("WhatsApp", "🟢 Ativo" if cfg.get("integracao_whatsapp") else "⚪ Não conectado")
-        c2.metric("Instagram", "🟢 Ativo" if cfg.get("integracao_instagram") else "⚪ Não conectado")
-        c3.metric("Facebook", "🟢 Ativo" if cfg.get("integracao_facebook") else "⚪ Não conectado")
+        c1.metric("WhatsApp", _rotulo_conexao(cred_wa, bool(cfg.get("integracao_whatsapp"))))
+        c2.metric("Instagram", _rotulo_conexao(cred_ig, bool(cfg.get("integracao_instagram"))))
+        c3.metric("Facebook", _rotulo_conexao(cred_fb, bool(cfg.get("integracao_facebook"))))
+
+        st.info("🟡 Credenciais configuradas permitem testar a API. O estado verde exige também o webhook publicado, cadastrado na Meta e validado com entrada real.")
 
         i1, i2 = st.columns(2)
-        meta_app_id = i1.text_input("Meta App ID", value=str(cfg.get("meta_app_id", "")), help="Identificador do aplicativo criado no Meta for Developers.")
+        meta_app_id = i1.text_input("Meta App ID", value=str(cfg.get("meta_app_id") or meta_app_secret or ""), help="Identificador do aplicativo criado no Meta for Developers.")
         meta_business_id = i2.text_input("Business Manager ID", value=str(cfg.get("meta_business_id", "")))
         webhook_url = st.text_input("URL pública do webhook", value=str(cfg.get("webhook_url", "")), placeholder="https://SEU-PROJETO.supabase.co/functions/v1/meta-webhook")
         token_atual = str(cfg.get("meta_verify_token", ""))
@@ -5719,9 +5784,9 @@ with aba_atendimento:
             token_atual = "alphafest-" + secrets.token_urlsafe(18)
         verify_token = st.text_input("Token de verificação do webhook", value=token_atual, type="password")
         a1, a2, a3 = st.columns(3)
-        int_wa = a1.toggle("WhatsApp conectado", value=bool(cfg.get("integracao_whatsapp")))
-        int_ig = a2.toggle("Instagram conectado", value=bool(cfg.get("integracao_instagram")))
-        int_fb = a3.toggle("Facebook conectado", value=bool(cfg.get("integracao_facebook")))
+        int_wa = a1.toggle("Webhook WhatsApp validado", value=bool(cfg.get("integracao_whatsapp")), disabled=not cred_wa)
+        int_ig = a2.toggle("Webhook Instagram validado", value=bool(cfg.get("integracao_instagram")), disabled=not cred_ig)
+        int_fb = a3.toggle("Webhook Facebook validado", value=bool(cfg.get("integracao_facebook")), disabled=not cred_fb)
         if st.button("💾 Salvar configuração das integrações", type="primary", use_container_width=True):
             cfg.update({
                 "meta_app_id": meta_app_id.strip(),
@@ -5733,7 +5798,7 @@ with aba_atendimento:
                 "integracao_facebook": bool(int_fb),
             })
             salvar_atendimentos(dados_at)
-            st.success("Configuração salva. Marque um canal como conectado somente depois de concluir o teste do webhook.")
+            st.success("Configuração salva. O canal fica verde somente depois da validação real do webhook.")
             st.rerun()
 
         st.markdown("#### Teste de entrada multicanal")
