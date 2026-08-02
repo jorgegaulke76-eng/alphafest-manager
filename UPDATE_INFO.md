@@ -1,8 +1,8 @@
-# FestManager 5.3.0 — Jornada Única de Atendimento
+# FestManager 5.4.0 — Assistente Operacional
 
 ## Base
-- Versão anterior: 5.2.0
-- Nova versão: 5.3.0
+- Versão anterior: 5.3.0
+- Nova versão: 5.4.0
 - Versão dos dados: permanece 3
 - Migração: não necessária
 
@@ -13,13 +13,13 @@
 - `UPDATE_INFO.md`
 
 ## O que mudou
-- Nova aba **🚀 Jornada**.
-- Cliente, necessidade, solução e proposta ficam na mesma tela.
-- Rascunho pode ser salvo na Memória da Empresa.
-- Itens podem ser livres ou escolhidos do catálogo.
-- Projeto e proposta são criados e vinculados em uma única ação.
-- Linha do tempo e auditoria são atualizadas automaticamente.
-- Nenhum arquivo de dados faz parte do pacote de atualização.
+- Nova seção **Assistente operacional** na Central do Dia.
+- As cinco prioridades mais importantes são ordenadas por SLA, prazo e etapa da operação.
+- Atendimentos com telefone ganham atalho direto para o WhatsApp.
+- Cartão do cliente passa a mostrar ticket médio, última proposta, itens mais solicitados, temas recorrentes e próxima ação sugerida.
+- As novas informações são calculadas a partir dos registros existentes; nenhum cadastro é modificado.
 
 ## Segurança
-Esta atualização não substitui clientes, catálogo, fotos, propostas, campanhas ou projetos existentes.
+- Nenhum arquivo de dados faz parte do pacote.
+- Clientes, catálogo, fotos, propostas, projetos e campanhas permanecem no Supabase.
+- Não há migração de banco nesta versão.

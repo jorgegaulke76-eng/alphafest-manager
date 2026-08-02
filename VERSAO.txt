@@ -1,4 +1,4 @@
 FestManager
-Versão 5.3.0
-Jornada Única de Atendimento
-Data: 01/08/2026
+Versão 5.4.0
+Assistente Operacional
+Data: 02/08/2026

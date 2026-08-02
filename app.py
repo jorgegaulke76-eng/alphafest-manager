@@ -142,7 +142,7 @@ ARQUIVO_AUDITORIA = "auditoria_db.json"
 ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
-VERSAO_APP = "5.3.0"
+VERSAO_APP = "5.4.0"
 VERSAO_DADOS = 3
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
@@ -3031,6 +3031,73 @@ def montar_fila_operacional(historico, tarefas, atendimentos, limite=10):
     return itens[:limite]
 
 
+def proxima_acao_proposta(proposta):
+    """Retorna a ação operacional mais útil para uma proposta."""
+    if proposta.get("entregue", False):
+        return "Registrar pós-venda"
+    if proposta.get("aprovado", False):
+        if not proposta.get("pago", False):
+            return "Confirmar pagamento e acompanhar produção"
+        return "Acompanhar produção e entrega"
+    if proposta.get("enviado", False):
+        return "Aguardar ou registrar aprovação do cliente"
+    return "Revisar e enviar orçamento"
+
+
+def resumo_cliente_operacional(cliente, propostas):
+    """Calcula um cartão operacional sem alterar nenhum dado do cliente."""
+    propostas = propostas or []
+    totais = [calcular_valores_proposta(p)[2] for p in propostas]
+    total = sum(totais)
+    ticket = total / len(totais) if totais else 0.0
+    ordenadas = sorted(
+        propostas,
+        key=lambda p: data_entrega_segura(p.get("data_geracao")) or date.min,
+        reverse=True,
+    )
+    ultima = ordenadas[0] if ordenadas else None
+    produtos = {}
+    temas = {}
+    for proposta in propostas:
+        for item in proposta.get("itens", []) if isinstance(proposta.get("itens"), list) else []:
+            nome = str(item.get("produto") or item.get("nome") or item.get("descricao") or "").strip()
+            if nome:
+                produtos[nome] = produtos.get(nome, 0) + 1
+            especificacoes = str(item.get("especificacoes") or "")
+            tema = ""
+            for trecho in especificacoes.replace("\n", ";").split(";"):
+                if "tema" in trecho.lower() and ":" in trecho:
+                    tema = trecho.split(":", 1)[1].strip()
+                    break
+            if tema:
+                temas[tema] = temas.get(tema, 0) + 1
+    favoritos_produtos = [k for k, _ in sorted(produtos.items(), key=lambda kv: (-kv[1], kv[0].lower()))[:3]]
+    favoritos_temas = [k for k, _ in sorted(temas.items(), key=lambda kv: (-kv[1], kv[0].lower()))[:3]]
+    return {
+        "quantidade": len(propostas),
+        "total": total,
+        "ticket": ticket,
+        "ultima_data": ultima.get("data_geracao", "—") if ultima else "—",
+        "ultima_proposta": ultima.get("numero_proposta", "—") if ultima else "—",
+        "produtos": favoritos_produtos,
+        "temas": favoritos_temas,
+    }
+
+
+def montar_assistente_do_dia(fila, limite=5):
+    """Transforma a fila operacional em recomendações curtas e objetivas."""
+    recomendacoes = []
+    for item in (fila or [])[:limite]:
+        recomendacoes.append({
+            "titulo": item.get("titulo", "Pendência"),
+            "motivo": item.get("detalhe", "Requer atenção"),
+            "acao": item.get("acao", "Verificar"),
+            "tipo": item.get("tipo", "Operação"),
+            "referencia": item.get("referencia", ""),
+        })
+    return recomendacoes
+
+
 def formatar_preco_catalogo(valor):
     texto = str(valor or "").strip().replace("R$", "").strip()
     try:
@@ -3946,13 +4013,39 @@ with aba0:
         st.info("Nenhuma campanha próxima. Use o Calendário Comercial para cadastrar novas oportunidades.")
 
     st.divider()
-    st.subheader("📌 Fila operacional")
     fila_operacional = montar_fila_operacional(
         historico_central,
         tarefas_ativas_central,
         dados_atendimento_central,
         limite=10,
     )
+    st.subheader("🧭 Assistente operacional")
+    recomendacoes_dia = montar_assistente_do_dia(fila_operacional, limite=5)
+    if recomendacoes_dia:
+        st.caption("As prioridades abaixo são ordenadas automaticamente por SLA, prazo e etapa da operação.")
+        for indice_rec, rec in enumerate(recomendacoes_dia, start=1):
+            icone_rec = "📥" if rec["tipo"] == "Atendimento" else "📦" if rec["tipo"] == "Pedido" else "⚙️"
+            with st.container(border=True):
+                rc1, rc2 = st.columns([5, 2])
+                rc1.markdown(f"**{indice_rec}. {icone_rec} {html.escape(str(rec['titulo']))}**")
+                rc1.caption(f"{rec['motivo']} · Próxima ação: {rec['acao']}")
+                if rec["tipo"] == "Atendimento":
+                    atendimento_rec = next((a for a in dados_atendimento_central.get("itens", []) if a.get("id") == rec.get("referencia")), None)
+                    telefone_rec = str((atendimento_rec or {}).get("telefone", "")).strip()
+                    if telefone_rec:
+                        numero_rec = re.sub(r"\D", "", telefone_rec)
+                        if numero_rec and not numero_rec.startswith("55"):
+                            numero_rec = "55" + numero_rec
+                        rc2.link_button("📱 Abrir WhatsApp", f"https://wa.me/{numero_rec}", use_container_width=True)
+                    else:
+                        rc2.info(rec["acao"])
+                else:
+                    rc2.info(rec["acao"])
+    else:
+        st.success("Nenhuma prioridade crítica no momento.")
+
+    st.divider()
+    st.subheader("📌 Fila operacional")
     if fila_operacional:
         for posicao, item_fila in enumerate(fila_operacional, start=1):
             icone = "📥" if item_fila["tipo"] == "Atendimento" else "📦" if item_fila["tipo"] == "Pedido" else "⚙️"
@@ -5150,9 +5243,19 @@ with aba6:
                     if cli.get("observacoes"):
                         st.write(f"**Observações:** {cli.get('observacoes')}")
                 with cstats:
+                    resumo_cli = resumo_cliente_operacional(cli, propostas_cli)
                     st.metric("Total orçado", f"R$ {total_orcado_cli:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                     st.metric("Total recebido", f"R$ {total_pago_cli:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-                    st.caption(f"Última proposta: {ultima_data}")
+                    st.metric("Ticket médio", f"R$ {resumo_cli['ticket']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                    st.caption(f"Última proposta: {resumo_cli['ultima_proposta']} · {resumo_cli['ultima_data']}")
+                    if resumo_cli["produtos"]:
+                        st.write("**Mais solicitados:** " + ", ".join(resumo_cli["produtos"]))
+                    if resumo_cli["temas"]:
+                        st.write("**Temas recorrentes:** " + ", ".join(resumo_cli["temas"]))
+                    if propostas_cli:
+                        st.info(f"🎯 Próxima ação sugerida: {proxima_acao_proposta(sorted(propostas_cli, key=lambda p: data_entrega_segura(p.get('data_geracao')) or date.min, reverse=True)[0])}")
+                    else:
+                        st.info("🎯 Próxima ação sugerida: iniciar relacionamento ou registrar primeiro orçamento")
 
                 b1, b2, b3 = st.columns(3)
                 if b1.button("➕ Novo orçamento", key=f"cli_orc_{cli.get('id')}", use_container_width=True):

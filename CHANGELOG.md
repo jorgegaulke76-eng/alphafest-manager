@@ -1,3 +1,11 @@
+# FestManager 5.4.0 — Assistente Operacional
+
+- Central do Dia com as cinco prioridades mais importantes.
+- Ordenação por SLA, prazo e etapa operacional.
+- Atalho para WhatsApp em atendimentos priorizados.
+- Cartão do cliente com ticket médio, itens mais solicitados, temas recorrentes e próxima ação.
+- Nenhuma migração e nenhum arquivo de dados incluído.
+
 # FestManager 4.2.1 — Desempenho e Cache Inteligente
 
 - Cache temporário por sessão para documentos do Supabase.
