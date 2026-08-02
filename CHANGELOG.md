@@ -1,3 +1,8 @@
+# 5.6.0
+- Central Multicanal e preparação oficial dos webhooks Meta.
+- Caixa unificada e filtros por origem.
+- Teste de entrada e configuração segura.
+
 # FestManager 5.4.0 — Assistente Operacional
 
 - Central do Dia com as cinco prioridades mais importantes.

@@ -1,20 +1,17 @@
-# Atualização FestManager 5.5.0
+# FestManager 5.6.0 — Central Multicanal
 
-## Base
-- Versão anterior: 5.4.0
-- Nova versão: 5.5.0
-- Versão dos dados: 3 (sem alteração)
+Base anterior: 5.5.0
 
-## Novidades
-- Nova aba **Executivo**.
-- Indicadores de valores orçados, confirmados, recebidos e a receber.
-- Resumo da produção: pedidos ativos, atrasados, urgentes, em produção e prontos.
-- Indicadores de atendimento, conversão e ticket médio aprovado.
-- Semáforos de saúde para atendimento, produção, financeiro e backup.
-- Gráficos de orçamentos e produtos mais solicitados no mês.
-- Alertas automáticos para o gestor.
+## Incluído
+- Caixa unificada por canal: WhatsApp, Instagram, Facebook, Site/Catálogo e atendimento manual.
+- Filtro e identificação visual do canal de origem.
+- Tela de configuração das integrações oficiais Meta.
+- Teste de entrada multicanal sem depender das credenciais da Meta.
+- Edge Function do Supabase pronta para receber webhooks da Meta e registrar oportunidades no documento `atendimentos_db`.
+- Deduplicação por identificador externo de mensagem.
 
-## Segurança
-- Nenhuma migração de banco.
-- Nenhum arquivo de clientes, catálogo, fotos, propostas ou projetos incluído.
-- Atualização somente de código e documentação.
+## Importante
+A atualização prepara toda a estrutura, mas os canais só passam a receber mensagens reais após configurar as credenciais e publicar o webhook conforme `META_INTEGRACAO.md`.
+
+Migração destrutiva: não.
+Arquivos de dados substituídos: não.

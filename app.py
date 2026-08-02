@@ -4,6 +4,7 @@ import json
 import os
 import html
 import re
+import secrets
 import urllib.parse
 from urllib.parse import quote
 from datetime import datetime, date, timedelta
@@ -142,7 +143,8 @@ ARQUIVO_AUDITORIA = "auditoria_db.json"
 ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
-VERSAO_APP = "5.5.0"
+CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
+VERSAO_APP = "5.6.0"
 VERSAO_DADOS = 3
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
@@ -1911,6 +1913,12 @@ CONFIG_ATENDIMENTO_PADRAO = {
     "aprovacao_arte": "Manual",
     "duvidas_negociacao": "Manual",
     "integracao_whatsapp": False,
+    "integracao_instagram": False,
+    "integracao_facebook": False,
+    "meta_app_id": "",
+    "meta_business_id": "",
+    "meta_verify_token": "",
+    "webhook_url": "",
     "sla_atencao_min": 30,
     "sla_urgente_min": 60,
 }
@@ -3779,7 +3787,7 @@ if erro_migracao:
 
 _dados_atendimento_badge = carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
-_rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Atendimento"
+_rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Multicanal"
 
 aba0, aba_atendimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
@@ -4097,20 +4105,21 @@ with aba0:
             st.info("Nenhum resultado encontrado.")
 
 with aba_atendimento:
-    st.header("📥 Central de Atendimento")
-    st.caption("Organize contatos do WhatsApp em modo manual, assistido ou automático. A integração oficial poderá ser conectada depois sem alterar este fluxo.")
+    st.header("📥 Central Multicanal")
+    st.caption("Reúna oportunidades do WhatsApp, Instagram, Facebook, site e atendimento manual em uma única fila.")
     dados_at = carregar_atendimentos()
     config_at = dados_at["config"]
     itens_at = dados_at["itens"]
 
-    tab_fila, tab_novo, tab_config = st.tabs(["📋 Fila de atendimento", "➕ Registrar contato", "⚙️ Modos e automações"])
+    tab_fila, tab_novo, tab_config, tab_integracoes = st.tabs(["📋 Caixa unificada", "➕ Registrar oportunidade", "⚙️ Modos e automações", "🔌 Integrações Meta"])
 
     with tab_fila:
-        f1, f2, f3, f4 = st.columns([2, 1, 1, 1])
+        f1, f2, f3, f4, f5 = st.columns([2, 1, 1, 1, 1])
         busca_at = f1.text_input("Pesquisar cliente, telefone ou mensagem", key="busca_atendimento").strip().lower()
         status_filtro = f2.selectbox("Status", ["Todos"] + STATUS_ATENDIMENTO, key="filtro_status_at")
         prioridade_filtro = f3.selectbox("Prioridade", ["Todas", "Urgente", "Alta", "Normal", "Baixa"], key="filtro_prior_at")
         responsavel_filtro = f4.selectbox("Responsável", ["Todos", "Anna", "Jorge", "Sem responsável"], key="filtro_resp_at")
+        canal_filtro = f5.selectbox("Canal", ["Todos"] + CANAIS_ATENDIMENTO, key="filtro_canal_at")
         filtrados = []
         for item in itens_at:
             base = " ".join(str(item.get(k, "")) for k in ["cliente", "telefone", "mensagem", "status", "assunto", "responsavel"]).lower()
@@ -4240,9 +4249,10 @@ with aba_atendimento:
 
     with tab_novo:
         st.subheader("Registrar mensagem ou contato")
-        n1, n2 = st.columns(2)
+        n1, n2, ncanal = st.columns([2, 2, 1])
         nome_at = n1.text_input("Nome / identificação", key="novo_at_nome")
-        telefone_at = n2.text_input("WhatsApp", key="novo_at_telefone")
+        telefone_at = n2.text_input("Telefone / WhatsApp (opcional)", key="novo_at_telefone")
+        canal_at = ncanal.selectbox("Canal", CANAIS_ATENDIMENTO, key="novo_at_canal")
         mensagem_at = st.text_area("Mensagem recebida", key="novo_at_mensagem", placeholder="Ex.: Gostaria do catálogo de topos e um orçamento para sábado")
         sugestao_status = sugerir_tipo_atendimento(mensagem_at)
         n3, n4, n5 = st.columns(3)
@@ -4262,7 +4272,10 @@ with aba_atendimento:
                     "prioridade": prioridade_at,
                     "responsavel": "" if responsavel_at == "Sem responsável" else responsavel_at,
                     "modo": config_at.get("modo", "Manual"),
-                    "origem": "Registro manual",
+                    "origem": canal_at,
+                    "canal": canal_at,
+                    "perfil_externo": "",
+                    "id_mensagem_externa": "",
                     "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
                     "historico": [{"data": agora_local().strftime("%d/%m/%Y %H:%M"), "descricao": "Atendimento registrado", "usuario": "Sistema"}],
                 })
@@ -4283,13 +4296,90 @@ with aba_atendimento:
         sla1, sla2 = st.columns(2)
         sla_atencao = sla1.number_input("Amarelo após (minutos)", min_value=1, max_value=1440, value=int(config_at.get("sla_atencao_min", 30)), step=5)
         sla_urgente = sla2.number_input("Vermelho após (minutos)", min_value=int(sla_atencao) + 1, max_value=2880, value=max(int(sla_atencao) + 1, int(config_at.get("sla_urgente_min", 60))), step=5)
-        st.warning("A leitura automática do WhatsApp ainda não está conectada. Esta versão organiza a fila e os modos de atendimento; a conexão oficial exigirá WhatsApp Business Platform e webhook.")
+        st.info("Os modos abaixo valem para todos os canais. Respostas automáticas só serão enviadas depois que a integração oficial correspondente estiver ativa.")
         if st.button("💾 Salvar modos de atendimento", type="primary"):
             config_at.update({"modo": modo_geral, "sla_atencao_min": int(sla_atencao), "sla_urgente_min": int(sla_urgente), **regras})
             salvar_atendimentos(dados_at)
             st.success("Configurações salvas.")
             st.rerun()
 
+
+    with tab_integracoes:
+        st.subheader("Conexões oficiais da Meta")
+        st.caption("Esta tela prepara a conexão. Para receber mensagens automaticamente, publique a Edge Function incluída no pacote e configure os webhooks no Meta Business.")
+        cfg = dados_at["config"]
+        c1, c2, c3 = st.columns(3)
+        c1.metric("WhatsApp", "🟢 Ativo" if cfg.get("integracao_whatsapp") else "⚪ Não conectado")
+        c2.metric("Instagram", "🟢 Ativo" if cfg.get("integracao_instagram") else "⚪ Não conectado")
+        c3.metric("Facebook", "🟢 Ativo" if cfg.get("integracao_facebook") else "⚪ Não conectado")
+
+        i1, i2 = st.columns(2)
+        meta_app_id = i1.text_input("Meta App ID", value=str(cfg.get("meta_app_id", "")), help="Identificador do aplicativo criado no Meta for Developers.")
+        meta_business_id = i2.text_input("Business Manager ID", value=str(cfg.get("meta_business_id", "")))
+        webhook_url = st.text_input("URL pública do webhook", value=str(cfg.get("webhook_url", "")), placeholder="https://SEU-PROJETO.supabase.co/functions/v1/meta-webhook")
+        token_atual = str(cfg.get("meta_verify_token", ""))
+        if not token_atual:
+            token_atual = "alphafest-" + secrets.token_urlsafe(18)
+        verify_token = st.text_input("Token de verificação do webhook", value=token_atual, type="password")
+        a1, a2, a3 = st.columns(3)
+        int_wa = a1.toggle("WhatsApp conectado", value=bool(cfg.get("integracao_whatsapp")))
+        int_ig = a2.toggle("Instagram conectado", value=bool(cfg.get("integracao_instagram")))
+        int_fb = a3.toggle("Facebook conectado", value=bool(cfg.get("integracao_facebook")))
+        if st.button("💾 Salvar configuração das integrações", type="primary", use_container_width=True):
+            cfg.update({
+                "meta_app_id": meta_app_id.strip(),
+                "meta_business_id": meta_business_id.strip(),
+                "webhook_url": webhook_url.strip(),
+                "meta_verify_token": verify_token.strip(),
+                "integracao_whatsapp": bool(int_wa),
+                "integracao_instagram": bool(int_ig),
+                "integracao_facebook": bool(int_fb),
+            })
+            salvar_atendimentos(dados_at)
+            st.success("Configuração salva. Marque um canal como conectado somente depois de concluir o teste do webhook.")
+            st.rerun()
+
+        st.markdown("#### Teste de entrada multicanal")
+        st.caption("Use este teste antes da conexão oficial para confirmar que uma oportunidade entra corretamente na caixa unificada.")
+        t1, t2 = st.columns(2)
+        teste_canal = t1.selectbox("Canal do teste", ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo"], key="teste_canal_meta")
+        teste_nome = t2.text_input("Nome ou perfil", key="teste_nome_meta", placeholder="@cliente ou Maria")
+        teste_msg = st.text_area("Mensagem de teste", key="teste_msg_meta", placeholder="Vocês fazem medalhas personalizadas? Gostaria de orçamento.")
+        if st.button("📥 Inserir oportunidade de teste", use_container_width=True):
+            if not teste_msg.strip():
+                st.warning("Digite a mensagem de teste.")
+            else:
+                novo = {
+                    "id": f"AT-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
+                    "cliente": teste_nome.strip() or f"Contato do {teste_canal}",
+                    "telefone": "",
+                    "mensagem": teste_msg.strip(),
+                    "status": sugerir_tipo_atendimento(teste_msg),
+                    "prioridade": "Normal",
+                    "responsavel": "",
+                    "modo": cfg.get("modo", "Manual"),
+                    "origem": teste_canal,
+                    "canal": teste_canal,
+                    "perfil_externo": teste_nome.strip(),
+                    "id_mensagem_externa": f"TESTE-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
+                    "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
+                    "historico": [{"data": agora_local().strftime("%d/%m/%Y %H:%M"), "descricao": f"Oportunidade recebida pelo canal {teste_canal} (teste)", "usuario": "Sistema"}],
+                }
+                itens_at.append(novo)
+                salvar_atendimentos(dados_at)
+                st.success("Oportunidade incluída na caixa unificada.")
+                st.rerun()
+
+        with st.expander("Checklist para ativar WhatsApp, Instagram e Facebook"):
+            st.markdown("""
+1. Criar ou usar um aplicativo no **Meta for Developers**.
+2. Vincular a conta empresarial, a Página do Facebook e o Instagram profissional.
+3. Publicar a função `supabase/functions/meta-webhook/index.ts`.
+4. Configurar os segredos `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` e `META_VERIFY_TOKEN`.
+5. Informar a URL da função e o mesmo token no painel de Webhooks da Meta.
+6. Assinar os eventos de mensagens dos canais utilizados.
+7. Enviar uma mensagem real, conferir a entrada na Caixa unificada e só então marcar o canal como conectado.
+            """)
 
 with aba_jornada:
     renderizar_jornada_atendimento()
