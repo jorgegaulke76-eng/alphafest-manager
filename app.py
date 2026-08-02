@@ -21,6 +21,7 @@ import requests
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
+from modules.alpha_intelligence import render_alpha_intelligence
 
 try:
     from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
@@ -157,6 +158,7 @@ ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
 ARQUIVO_MARKETING = "marketing_db.json"
 ARQUIVO_INTEGRACOES = "integracoes_db.json"
+ARQUIVO_INTELIGENCIA = "alpha_intelligence_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -4575,6 +4577,7 @@ DOCUMENTOS_BACKUP = [
     ("projetos_db", ARQUIVO_PROJETOS, []),
     ("campanhas_db", ARQUIVO_CAMPANHAS, []),
     ("integracoes_db", ARQUIVO_INTEGRACOES, {}),
+    ("alpha_intelligence_db", ARQUIVO_INTELIGENCIA, {}),
     ("atendimentos_db", ARQUIVO_ATENDIMENTOS, {"config": {}, "itens": []}),
     ("segmentos_db", ARQUIVO_SEGMENTOS, []),
     ("auditoria_db", ARQUIVO_AUDITORIA, []),
@@ -4968,11 +4971,12 @@ _dados_atendimento_badge = carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
 _rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Multicanal"
 
-aba0, aba_atendimento, aba_crm, aba_alpha, aba_crescimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
+aba0, aba_atendimento, aba_crm, aba_alpha, aba_inteligencia, aba_crescimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
     _rotulo_atendimento,
     "🎯 CRM Inteligente",
     "🤖 Alpha",
+    "🧠 Intelligence",
     "🚀 Crescimento",
     "🚀 Jornada",
     "🧩 Projeto Personalizado",
@@ -5695,6 +5699,15 @@ with aba_crm:
 
 with aba_alpha:
     renderizar_alpha_assistente_comercial()
+
+
+with aba_inteligencia:
+    def _salvar_snapshot_inteligencia(snapshot):
+        save_document("alpha_intelligence_db", snapshot, ARQUIVO_INTELIGENCIA)
+    render_alpha_intelligence(
+        carregar_clientes(), carregar_historico(), carregar_catalogo(), carregar_producao(),
+        save_snapshot=_salvar_snapshot_inteligencia, today=hoje_local(),
+    )
 
 
 with aba_crescimento:
