@@ -143,9 +143,10 @@ ARQUIVO_AUDITORIA = "auditoria_db.json"
 ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
+ARQUIVO_MARKETING = "marketing_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
-VERSAO_APP = "7.0.0"
-VERSAO_DADOS = 4
+VERSAO_APP = "8.1.0"
+VERSAO_DADOS = 5
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
 
@@ -1588,9 +1589,13 @@ def resumo_restricao_relacionamento(cliente):
     return {"nivel": nivel, "motivo": politica.get("motivo", ""), "papeis": papeis, **politica}
 
 def propostas_do_cliente(cliente):
+    rel_id = str(cliente.get("id", "")).strip()
     chave = chave_cliente(cliente.get("nome"), cliente.get("documento"), cliente.get("whatsapp"))
     propostas = []
     for prop in carregar_historico():
+        if rel_id and str(prop.get("relacionamento_id", "")).strip() == rel_id:
+            propostas.append(prop)
+            continue
         pchave = chave_cliente(
             prop.get("cliente_nome", prop.get("cliente", "")),
             prop.get("documento", prop.get("cliente_cpf_cnpj", "")),
@@ -1614,6 +1619,106 @@ def carregar_cliente_no_orcamento(cliente):
         "validade_dias": "5",
     }, duplicar=True)
 
+
+
+def garantir_id_relacionamento(cliente):
+    """Garante um identificador estável sem alterar outros campos."""
+    if not cliente.get("id"):
+        cliente["id"] = f"REL-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
+    return cliente["id"]
+
+
+def consolidar_vinculos_relacionamentos(salvar=True):
+    """Vincula propostas antigas ao relacionamento atual por documento, WhatsApp ou nome exato.
+    Nunca apaga nem mescla propostas. Casos ambíguos são apenas relatados.
+    """
+    clientes = carregar_clientes()
+    historico = carregar_historico()
+    por_doc, por_wa, por_nome = {}, {}, {}
+    alterou_clientes = False
+    for cli in clientes:
+        if not cli.get("id"):
+            garantir_id_relacionamento(cli); alterou_clientes = True
+        doc = re.sub(r"\D", "", str(cli.get("documento", "")))
+        wa = re.sub(r"\D", "", str(cli.get("whatsapp", "")))
+        nome = normalizar_texto_cliente(cli.get("nome", "")).casefold()
+        if doc: por_doc.setdefault(doc, []).append(cli)
+        if wa: por_wa.setdefault(wa, []).append(cli)
+        if nome: por_nome.setdefault(nome, []).append(cli)
+    vinculadas = 0
+    ambiguas = []
+    sem_correspondencia = []
+    for prop in historico:
+        atual_id = str(prop.get("relacionamento_id", "")).strip()
+        if atual_id and any(c.get("id") == atual_id for c in clientes):
+            continue
+        doc = re.sub(r"\D", "", str(prop.get("documento", prop.get("cliente_cpf_cnpj", ""))))
+        wa = re.sub(r"\D", "", str(prop.get("whatsapp", prop.get("cliente_wa", ""))))
+        nome = normalizar_texto_cliente(prop.get("cliente_nome", prop.get("cliente", ""))).casefold()
+        candidatos = []
+        if doc and len(por_doc.get(doc, [])) == 1:
+            candidatos = por_doc[doc]
+        elif wa and len(por_wa.get(wa, [])) == 1:
+            candidatos = por_wa[wa]
+        elif nome and len(por_nome.get(nome, [])) == 1:
+            candidatos = por_nome[nome]
+        else:
+            conjunto = []
+            for lista in (por_doc.get(doc, []) if doc else [], por_wa.get(wa, []) if wa else [], por_nome.get(nome, []) if nome else []):
+                for c in lista:
+                    if c not in conjunto: conjunto.append(c)
+            if len(conjunto) == 1: candidatos = conjunto
+            elif len(conjunto) > 1:
+                ambiguas.append({"proposta": prop.get("numero_proposta", ""), "cliente": prop.get("cliente_nome", ""), "candidatos": [c.get("nome", "") for c in conjunto]})
+                continue
+        if candidatos:
+            cli = candidatos[0]
+            prop["relacionamento_id"] = cli.get("id")
+            vinculadas += 1
+        else:
+            sem_correspondencia.append({"proposta": prop.get("numero_proposta", ""), "cliente": prop.get("cliente_nome", "")})
+    if salvar:
+        if alterou_clientes: salvar_clientes(clientes)
+        if vinculadas: salvar_historico_completo(historico)
+    return {"vinculadas": vinculadas, "ambiguas": ambiguas, "sem_correspondencia": sem_correspondencia, "total_propostas": len(historico)}
+
+
+def carregar_marketing():
+    dados = load_document("marketing_db", ARQUIVO_MARKETING, {"conteudos": [], "config": {}})
+    if not isinstance(dados, dict): dados = {"conteudos": [], "config": {}}
+    dados.setdefault("conteudos", [])
+    dados.setdefault("config", {})
+    return dados
+
+
+def salvar_marketing(dados):
+    save_document("marketing_db", dados, ARQUIVO_MARKETING)
+
+
+def gerar_conteudo_marketing(produto, objetivo, campanha, canais, observacoes=""):
+    nome = str(produto.get("Nome", "Produto personalizado")).strip()
+    categoria = str(produto.get("Categoria", "Personalizados")).strip()
+    descricao = re.sub(r"\s+", " ", str(produto.get("Descricao", "")).strip())
+    campanha_txt = str(campanha or "").strip()
+    foco = {"Vender": "feito especialmente para a sua necessidade", "Engajar": "uma ideia para inspirar sua próxima comemoração", "Lançamento": "uma novidade da Alphafest", "Promoção": "uma oportunidade especial por tempo limitado"}.get(objetivo, "feito especialmente para você")
+    contexto = f" para {campanha_txt}" if campanha_txt else ""
+    base = f"✨ {nome}{contexto}\n\n{descricao or foco.capitalize()}. Na Alphafest, cada detalhe é personalizado e fazemos na quantidade que você precisa.\n\n📲 Chame no WhatsApp e solicite seu orçamento."
+    hashtags = "#AlphaFest #Personalizados #Festas #Baloes #GraficaRapida #Lembrancinhas #Orcamento"
+    saidas = {}
+    for canal in canais:
+        if canal == "Instagram":
+            saidas[canal] = base + "\n\n" + hashtags
+        elif canal == "Facebook":
+            saidas[canal] = base + "\n\nConte sua ideia para a gente transformar em realidade."
+        elif canal in ("Story", "Status WhatsApp"):
+            saidas[canal] = f"{nome}\n{foco.capitalize()}!\n✅ Sem quantidade mínima\n📲 Peça seu orçamento"
+        elif canal in ("Reel", "TikTok", "YouTube Shorts"):
+            saidas[canal] = f"ROTEIRO 20–30s\n1. Gancho: ‘Olha como um pedido personalizado ganha vida!’\n2. Mostre detalhes de {nome}.\n3. Mostre o resultado final.\n4. Texto na tela: ‘Fazemos na quantidade que você precisa’.\n5. CTA: ‘Chame a Alphafest no WhatsApp e peça seu orçamento’."
+        elif canal == "Carrossel":
+            saidas[canal] = f"Slide 1: {nome}\nSlide 2: Detalhes personalizados\nSlide 3: Escolha cores, tema e acabamento\nSlide 4: Fazemos na quantidade que você precisa\nSlide 5: Peça seu orçamento no WhatsApp"
+    if observacoes.strip():
+        saidas["Observações da campanha"] = observacoes.strip()
+    return saidas
 
 
 # --- FLUXO DE PEDIDOS (VERSÃO 3.2.1) ---
@@ -3859,6 +3964,19 @@ def executar_migracoes_seguras():
             atual = 4
             registrar_auditoria("Migração de dados", "Banco", "v4", alteracoes_v4)
 
+        if atual < 5:
+            resultado_v5 = consolidar_vinculos_relacionamentos(salvar=True)
+            marketing = load_document("marketing_db", ARQUIVO_MARKETING, {"conteudos": [], "config": {}})
+            if not isinstance(marketing, dict):
+                marketing = {"conteudos": [], "config": {}}
+            marketing.setdefault("conteudos", [])
+            marketing.setdefault("config", {})
+            save_document("marketing_db", marketing, ARQUIVO_MARKETING)
+            alteracoes_v5 = {"propostas_vinculadas": resultado_v5.get("vinculadas", 0), "casos_ambiguos": len(resultado_v5.get("ambiguas", [])), "central_marketing_inicializada": True}
+            aplicadas.append({"versao": 5, "aplicada_em": agora_local().isoformat(), "alteracoes": alteracoes_v5})
+            atual = 5
+            registrar_auditoria("Migração de dados", "Banco", "v5", alteracoes_v5)
+
         meta.update({"schema_version": atual, "ultima_migracao_em": agora_local().isoformat(), "migracoes_aplicadas": aplicadas})
         save_document("system_meta", meta, ARQUIVO_SYSTEM_META)
     except Exception as exc:
@@ -3920,6 +4038,7 @@ DOCUMENTOS_BACKUP = [
     ("lixeira_db", ARQUIVO_LIXEIRA, []),
     ("system_meta", ARQUIVO_SYSTEM_META, SYSTEM_META_PADRAO),
     ("componentes_db", ARQUIVO_COMPONENTES, COMPONENTES_PADRAO),
+    ("marketing_db", ARQUIVO_MARKETING, {"conteudos": [], "config": {}}),
 ]
 
 def carregar_config_backup():
@@ -4306,11 +4425,12 @@ _dados_atendimento_badge = carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
 _rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Multicanal"
 
-aba0, aba_atendimento, aba_crm, aba_alpha, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
+aba0, aba_atendimento, aba_crm, aba_alpha, aba_crescimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
     _rotulo_atendimento,
     "🎯 CRM Inteligente",
     "🤖 Alpha",
+    "🚀 Crescimento",
     "🚀 Jornada",
     "🧩 Projeto Personalizado",
     "➕ Novo Orçamento",
@@ -5032,6 +5152,83 @@ with aba_crm:
 
 with aba_alpha:
     renderizar_alpha_assistente_comercial()
+
+
+with aba_crescimento:
+    st.header("🚀 Central de Crescimento")
+    st.caption("Transforme as fotos e produtos já cadastrados em conteúdo pronto para gerar orçamentos hoje.")
+    marketing = carregar_marketing()
+    conteudos = marketing.get("conteudos", [])
+    t1, t2, t3 = st.tabs(["🎨 Marketing Studio", "📚 Fila de conteúdo", "🔗 Consolidar relacionamentos"])
+    with t1:
+        catalogo_mkt = carregar_catalogo()
+        if not catalogo_mkt:
+            st.info("Cadastre produtos no Catálogo para gerar conteúdo.")
+        else:
+            nomes = [p.get("Nome", "Produto") for p in catalogo_mkt]
+            escolhido = st.selectbox("Produto / trabalho", nomes, key="mkt_produto")
+            produto_mkt = catalogo_mkt[nomes.index(escolhido)]
+            imagens_mkt = produto_mkt.get("Imagens", []) or []
+            if imagens_mkt:
+                try: st.image(imagens_mkt[0], width=320)
+                except Exception: pass
+            c1, c2 = st.columns(2)
+            objetivo = c1.selectbox("Objetivo", ["Vender", "Engajar", "Lançamento", "Promoção"], key="mkt_objetivo")
+            campanha = c2.text_input("Campanha / data (opcional)", placeholder="Ex.: Dia dos Pais, Volta às Aulas", key="mkt_campanha")
+            canais = st.multiselect("Gerar para", ["Instagram", "Facebook", "Story", "Status WhatsApp", "Carrossel", "Reel", "TikTok", "YouTube Shorts"], default=["Instagram", "Facebook", "Story", "Status WhatsApp"], key="mkt_canais")
+            observacoes = st.text_area("Detalhes que precisam aparecer (opcional)", placeholder="Preço, prazo, cores, promoção, cidade...", key="mkt_obs")
+            if st.button("🚀 Gerar campanha agora", type="primary", use_container_width=True):
+                if not canais:
+                    st.warning("Selecione pelo menos um canal.")
+                else:
+                    saidas = gerar_conteudo_marketing(produto_mkt, objetivo, campanha, canais, observacoes)
+                    registro = {"id": f"MKT-{agora_local().strftime('%Y%m%d%H%M%S%f')}", "criado_em": agora_local().isoformat(), "produto": produto_mkt.get("Nome", ""), "categoria": produto_mkt.get("Categoria", ""), "imagem": imagens_mkt[0] if imagens_mkt else "", "objetivo": objetivo, "campanha": campanha, "canais": canais, "conteudos": saidas, "status": "Pendente"}
+                    conteudos.insert(0, registro)
+                    marketing["conteudos"] = conteudos
+                    salvar_marketing(marketing)
+                    registrar_auditoria("Gerar conteúdo", "Marketing", registro["id"], {"produto": registro["produto"], "canais": canais})
+                    st.session_state.mkt_ultimo_id = registro["id"]
+                    st.success("Campanha gerada e salva na fila.")
+                    st.rerun()
+            ultimo_id = st.session_state.get("mkt_ultimo_id")
+            ultimo = next((x for x in conteudos if x.get("id") == ultimo_id), None)
+            if ultimo:
+                st.markdown("### Conteúdo pronto")
+                for canal, texto in ultimo.get("conteudos", {}).items():
+                    with st.expander(canal, expanded=True):
+                        st.text_area("Copiar e publicar", value=texto, height=180, key=f"mkt_out_{ultimo_id}_{canal}")
+    with t2:
+        pendentes = [x for x in conteudos if x.get("status") != "Publicado"]
+        a,b,c = st.columns(3)
+        a.metric("Conteúdos criados", len(conteudos)); b.metric("Pendentes", len(pendentes)); c.metric("Publicados", len(conteudos)-len(pendentes))
+        if not conteudos:
+            st.info("A fila será preenchida quando você gerar a primeira campanha.")
+        for item in conteudos[:50]:
+            with st.expander(f"{item.get('produto','Produto')} • {item.get('campanha') or item.get('objetivo')} • {item.get('status','Pendente')}"):
+                if item.get("imagem"):
+                    try: st.image(item.get("imagem"), width=240)
+                    except Exception: pass
+                for canal, texto in item.get("conteudos", {}).items():
+                    st.markdown(f"**{canal}**")
+                    st.code(texto, language=None)
+                x1,x2 = st.columns(2)
+                if x1.button("✅ Marcar publicado", key=f"mkt_pub_{item.get('id')}", use_container_width=True):
+                    item["status"]="Publicado"; item["publicado_em"]=agora_local().isoformat(); salvar_marketing(marketing); st.rerun()
+                if x2.button("🗑️ Remover da fila", key=f"mkt_del_{item.get('id')}", use_container_width=True):
+                    marketing["conteudos"]=[x for x in conteudos if x.get("id") != item.get("id")]; salvar_marketing(marketing); st.rerun()
+    with t3:
+        st.subheader("Consolidação segura de propostas")
+        st.write("Vincula propostas antigas ao relacionamento atual sem apagar nem alterar o conteúdo histórico.")
+        if st.button("🔗 Verificar e consolidar agora", type="primary"):
+            resultado = consolidar_vinculos_relacionamentos(salvar=True)
+            st.success(f"{resultado['vinculadas']} proposta(s) vinculada(s).")
+            st.metric("Propostas verificadas", resultado["total_propostas"])
+            if resultado["ambiguas"]:
+                st.warning(f"{len(resultado['ambiguas'])} caso(s) precisam de confirmação manual.")
+                st.dataframe(resultado["ambiguas"], use_container_width=True)
+            if resultado["sem_correspondencia"]:
+                st.info(f"{len(resultado['sem_correspondencia'])} proposta(s) ainda não possuem relacionamento correspondente.")
+
 
 with aba_jornada:
     renderizar_jornada_atendimento()

@@ -270,3 +270,10 @@ hangelog
 - Adicionado checklist dinâmico de perguntas faltantes.
 - Adicionadas respostas assistidas e pesquisa de referências internas.
 - Integração com Jornada e Projeto Personalizado.
+
+## 8.1.0 — Central de Crescimento
+- Adicionada Central de Crescimento com geração imediata de conteúdo multicanal.
+- Adicionada fila de campanhas e histórico de publicação.
+- Propostas antigas passam a receber relacionamento_id por correspondência segura de documento, WhatsApp ou nome exato.
+- Indicadores dos relacionamentos passam a considerar todas as propostas vinculadas.
+- Migração de dados aditiva para v5.
