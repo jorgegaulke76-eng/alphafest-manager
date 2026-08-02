@@ -234,3 +234,10 @@ hangelog
 - Incluída criação conjunta e vinculada de projeto e proposta.
 - Mantidos os módulos anteriores para compatibilidade e operação gradual.
 - Nenhuma migração destrutiva e nenhum arquivo de dados incluído.
+
+## 5.5.0 — Painel Executivo
+- Adicionada a aba Executivo com visão comercial, financeira e operacional.
+- Incluídos indicadores de conversão, ticket médio, valores do dia e pendências financeiras.
+- Incluídos semáforos de saúde da empresa e alertas gerenciais.
+- Incluídos gráficos mensais de orçamentos e produtos mais solicitados.
+- Mantida a versão de dados 3, sem migração ou alteração destrutiva.

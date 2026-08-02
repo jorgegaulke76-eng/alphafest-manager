@@ -142,7 +142,7 @@ ARQUIVO_AUDITORIA = "auditoria_db.json"
 ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
-VERSAO_APP = "5.4.0"
+VERSAO_APP = "5.5.0"
 VERSAO_DADOS = 3
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
@@ -3781,7 +3781,7 @@ _dados_atendimento_badge = carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
 _rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Atendimento"
 
-aba0, aba_atendimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
+aba0, aba_atendimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
     _rotulo_atendimento,
     "🚀 Jornada",
@@ -3790,6 +3790,7 @@ aba0, aba_atendimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba5, a
     "📋 Histórico",
     "🎯 Fluxo de Pedidos",
     "📊 Relatórios",
+    "📈 Executivo",
     "📦 Catálogo",
     "👥 Clientes",
     "🧠 Memória",
@@ -4697,6 +4698,180 @@ with aba4:
             else:
                 st.info("Ainda não existem produtos em propostas marcadas como pagas.")
 
+
+
+with aba_executivo:
+    st.markdown("<h2 style='text-align:center;'>📈 Painel Executivo</h2>", unsafe_allow_html=True)
+    st.markdown(
+        "<p style='text-align:center;color:#6b7280;'>Visão rápida da operação, vendas e atendimento da Alphafest.</p>",
+        unsafe_allow_html=True,
+    )
+
+    def _moeda_exec(valor):
+        try:
+            return f"R$ {float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        except (TypeError, ValueError):
+            return "R$ 0,00"
+
+    def _data_exec(valor):
+        if not valor:
+            return None
+        texto = str(valor).strip()
+        formatos = (
+            "%d/%m/%Y %H:%M", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S.%f%z",
+            "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f",
+            "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d",
+        )
+        for formato in formatos:
+            try:
+                return datetime.strptime(texto, formato).date()
+            except (ValueError, TypeError):
+                pass
+        try:
+            return datetime.fromisoformat(texto.replace("Z", "+00:00")).date()
+        except (ValueError, TypeError):
+            return None
+
+    hoje_exec = hoje_local()
+    inicio_mes_exec = hoje_exec.replace(day=1)
+    historico_exec = carregar_historico()
+    clientes_exec = carregar_clientes()
+    atendimentos_exec = carregar_atendimentos()
+    tarefas_exec = [t for t in sincronizar_producao_com_propostas() if t.get("ativa", True)]
+
+    propostas_mes = []
+    propostas_hoje = []
+    for proposta in historico_exec:
+        d = _data_exec(proposta.get("data_geracao") or proposta.get("data") or proposta.get("criado_em"))
+        if d == hoje_exec:
+            propostas_hoje.append(proposta)
+        if d and inicio_mes_exec <= d <= hoje_exec:
+            propostas_mes.append(proposta)
+
+    orcado_hoje = sum(calcular_valores_proposta(p)[2] for p in propostas_hoje)
+    confirmado_hoje = sum(calcular_valores_proposta(p)[2] for p in propostas_hoje if p.get("aprovado", False))
+    recebido_hoje = sum(calcular_valores_proposta(p)[2] for p in historico_exec if p.get("pago", False) and registro_eh_de_hoje(p.get("atualizado_em") or p.get("pago_em") or p.get("data_geracao")))
+    a_receber_total = sum(calcular_valores_proposta(p)[2] for p in historico_exec if p.get("aprovado", False) and not p.get("pago", False))
+
+    total_mes = sum(calcular_valores_proposta(p)[2] for p in propostas_mes)
+    aprovadas_mes = [p for p in propostas_mes if p.get("aprovado", False)]
+    confirmado_mes = sum(calcular_valores_proposta(p)[2] for p in aprovadas_mes)
+    conversao_mes = (len(aprovadas_mes) / len(propostas_mes) * 100) if propostas_mes else 0
+    ticket_aprovado = (confirmado_mes / len(aprovadas_mes)) if aprovadas_mes else 0
+
+    st.markdown("#### 💰 Comercial e financeiro")
+    ef1, ef2, ef3, ef4 = st.columns(4)
+    ef1.metric("Orçado hoje", _moeda_exec(orcado_hoje))
+    ef2.metric("Confirmado hoje", _moeda_exec(confirmado_hoje))
+    ef3.metric("Recebido hoje", _moeda_exec(recebido_hoje))
+    ef4.metric("A receber", _moeda_exec(a_receber_total))
+
+    em_atraso_exec = [t for t in tarefas_exec if classe_prazo_producao(t.get("data_entrega"), t.get("status")) == "Atrasado"]
+    urgentes_exec = [t for t in tarefas_exec if str(t.get("prioridade", "")).lower() == "urgente"]
+    em_producao_exec = [t for t in tarefas_exec if normalizar_status_fluxo(t.get("status")) in ("Arte aprovada", "Pronto para produzir", "Em produção", "Montagem/acabamento")]
+    prontos_exec = [t for t in tarefas_exec if normalizar_status_fluxo(t.get("status")) == "Pronto"]
+
+    abertos_exec = [a for a in atendimentos_exec.get("itens", []) if a.get("status") not in ("Entregue", "Pós-venda", "Arquivado")]
+    aguardando_30_exec = [a for a in abertos_exec if minutos_aguardando(a) >= 30]
+    atendimentos_hoje_exec = [a for a in atendimentos_exec.get("itens", []) if registro_eh_de_hoje(a.get("criado_em") or a.get("data") or a.get("atualizado_em"))]
+
+    st.markdown("#### ⚙️ Operação de hoje")
+    eo1, eo2, eo3, eo4, eo5 = st.columns(5)
+    eo1.metric("Pedidos ativos", len(tarefas_exec))
+    eo2.metric("Atrasados", len(em_atraso_exec))
+    eo3.metric("Urgentes", len(urgentes_exec))
+    eo4.metric("Em produção", len(em_producao_exec))
+    eo5.metric("Prontos", len(prontos_exec))
+
+    st.markdown("#### 📱 Atendimento e vendas do mês")
+    ea1, ea2, ea3, ea4, ea5 = st.columns(5)
+    ea1.metric("Atendimentos hoje", len(atendimentos_hoje_exec))
+    ea2.metric("Aguardando +30 min", len(aguardando_30_exec))
+    ea3.metric("Propostas no mês", len(propostas_mes))
+    ea4.metric("Conversão", f"{conversao_mes:.1f}%".replace(".", ","))
+    ea5.metric("Ticket aprovado", _moeda_exec(ticket_aprovado))
+
+    st.divider()
+    st.markdown("#### 🚦 Saúde da empresa")
+    saude_atendimento = "🔴 Atenção" if aguardando_30_exec else "🟢 Em dia"
+    saude_producao = "🔴 Atenção" if em_atraso_exec else ("🟡 Acompanhar" if urgentes_exec else "🟢 Em dia")
+    saude_financeiro = "🟡 A receber" if a_receber_total > 0 else "🟢 Em dia"
+    cfg_backup_exec = carregar_config_backup()
+    ultimo_backup_exec = str(cfg_backup_exec.get("ultimo_backup_em", "")).strip()
+    idade_backup_exec = None
+    if ultimo_backup_exec:
+        try:
+            dt_backup_exec = datetime.fromisoformat(ultimo_backup_exec)
+            if dt_backup_exec.tzinfo is None:
+                dt_backup_exec = dt_backup_exec.replace(tzinfo=agora_local().tzinfo)
+            idade_backup_exec = max(0, (agora_local() - dt_backup_exec.astimezone(agora_local().tzinfo)).total_seconds() / 3600)
+        except Exception:
+            idade_backup_exec = None
+    saude_backup = "🔴 Sem backup" if idade_backup_exec is None else ("🔴 Atrasado" if idade_backup_exec > 30 else "🟢 Atual")
+    sh1, sh2, sh3, sh4 = st.columns(4)
+    sh1.metric("Atendimento", saude_atendimento)
+    sh2.metric("Produção", saude_producao)
+    sh3.metric("Financeiro", saude_financeiro)
+    sh4.metric("Backup", saude_backup)
+
+    st.divider()
+    col_graf1, col_graf2 = st.columns(2)
+    linhas_mes = []
+    produtos_mes = {}
+    for p in propostas_mes:
+        d = _data_exec(p.get("data_geracao") or p.get("data") or p.get("criado_em"))
+        if d:
+            linhas_mes.append({"Dia": d.strftime("%d/%m"), "Valor": calcular_valores_proposta(p)[2]})
+        for item in p.get("itens", []) or []:
+            nome = str(item.get("produto", "Não informado")).strip() or "Não informado"
+            qtd = valor_float(item.get("quantidade"))
+            produtos_mes[nome] = produtos_mes.get(nome, 0) + qtd
+
+    with col_graf1:
+        st.markdown("##### Orçamentos no mês")
+        if linhas_mes:
+            df_mes_exec = pd.DataFrame(linhas_mes).groupby("Dia", as_index=False)["Valor"].sum()
+            chart_mes = alt.Chart(df_mes_exec).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
+                x=alt.X("Dia:N", sort=None, title=None),
+                y=alt.Y("Valor:Q", title="Valor orçado"),
+                tooltip=[alt.Tooltip("Dia:N"), alt.Tooltip("Valor:Q", format=",.2f")],
+            ).properties(height=280)
+            st.altair_chart(chart_mes, use_container_width=True)
+            st.caption(f"Total do mês: {_moeda_exec(total_mes)}")
+        else:
+            st.info("Ainda não há propostas neste mês.")
+
+    with col_graf2:
+        st.markdown("##### Produtos mais solicitados no mês")
+        if produtos_mes:
+            df_prod_exec = pd.DataFrame([
+                {"Produto": nome, "Quantidade": qtd} for nome, qtd in produtos_mes.items()
+            ]).sort_values("Quantidade", ascending=False).head(8)
+            chart_prod = alt.Chart(df_prod_exec).mark_bar(cornerRadiusEnd=4).encode(
+                x=alt.X("Quantidade:Q", title=None),
+                y=alt.Y("Produto:N", sort="-x", title=None),
+                tooltip=[alt.Tooltip("Produto:N"), alt.Tooltip("Quantidade:Q", format=",.1f")],
+            ).properties(height=280)
+            st.altair_chart(chart_prod, use_container_width=True)
+        else:
+            st.info("Ainda não há itens suficientes para o ranking.")
+
+    st.divider()
+    st.markdown("#### 🎯 Atenções do gestor")
+    alertas_exec = []
+    if em_atraso_exec:
+        alertas_exec.append(f"{len(em_atraso_exec)} pedido(s) atrasado(s) precisam de revisão.")
+    if aguardando_30_exec:
+        alertas_exec.append(f"{len(aguardando_30_exec)} cliente(s) aguardam resposta há mais de 30 minutos.")
+    if a_receber_total > 0:
+        alertas_exec.append(f"Há {_moeda_exec(a_receber_total)} em pedidos aprovados ainda não pagos.")
+    if conversao_mes < 30 and len(propostas_mes) >= 3:
+        alertas_exec.append(f"A conversão do mês está em {conversao_mes:.1f}%; vale revisar os orçamentos pendentes.")
+    if not alertas_exec:
+        st.success("Nenhuma atenção crítica identificada neste momento.")
+    else:
+        for alerta in alertas_exec:
+            st.warning(alerta)
 
 
 with aba5:

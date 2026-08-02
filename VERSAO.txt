@@ -1,4 +1,5 @@
 FestManager
-Versão 5.4.0
-Assistente Operacional
-Data: 02/08/2026
+Versão 5.5.0
+Painel Executivo
+Data: 01/08/2026
+Versão dos dados: 3

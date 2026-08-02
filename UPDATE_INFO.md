@@ -1,25 +1,20 @@
-# FestManager 5.4.0 — Assistente Operacional
+# Atualização FestManager 5.5.0
 
 ## Base
-- Versão anterior: 5.3.0
-- Nova versão: 5.4.0
-- Versão dos dados: permanece 3
-- Migração: não necessária
+- Versão anterior: 5.4.0
+- Nova versão: 5.5.0
+- Versão dos dados: 3 (sem alteração)
 
-## Arquivos alterados
-- `app.py`
-- `VERSAO.txt`
-- `CHANGELOG.md`
-- `UPDATE_INFO.md`
-
-## O que mudou
-- Nova seção **Assistente operacional** na Central do Dia.
-- As cinco prioridades mais importantes são ordenadas por SLA, prazo e etapa da operação.
-- Atendimentos com telefone ganham atalho direto para o WhatsApp.
-- Cartão do cliente passa a mostrar ticket médio, última proposta, itens mais solicitados, temas recorrentes e próxima ação sugerida.
-- As novas informações são calculadas a partir dos registros existentes; nenhum cadastro é modificado.
+## Novidades
+- Nova aba **Executivo**.
+- Indicadores de valores orçados, confirmados, recebidos e a receber.
+- Resumo da produção: pedidos ativos, atrasados, urgentes, em produção e prontos.
+- Indicadores de atendimento, conversão e ticket médio aprovado.
+- Semáforos de saúde para atendimento, produção, financeiro e backup.
+- Gráficos de orçamentos e produtos mais solicitados no mês.
+- Alertas automáticos para o gestor.
 
 ## Segurança
-- Nenhum arquivo de dados faz parte do pacote.
-- Clientes, catálogo, fotos, propostas, projetos e campanhas permanecem no Supabase.
-- Não há migração de banco nesta versão.
+- Nenhuma migração de banco.
+- Nenhum arquivo de clientes, catálogo, fotos, propostas ou projetos incluído.
+- Atualização somente de código e documentação.
