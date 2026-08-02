@@ -1,3 +1,9 @@
+# 8.2.1
+
+- Corrigida a falha de inicialização causada pela ausência de `STATUS_FLUXO`.
+- Criado `constants.py` para centralizar status e prioridades do fluxo de pedidos.
+- Iniciada a modularização segura sem alterar dados ou comportamento do Creative Studio.
+
 # FestManager 7.0.0 — Relacionamentos e Política de Atendimento
 
 - Novo núcleo de Relacionamentos no lugar do cadastro isolado de clientes.

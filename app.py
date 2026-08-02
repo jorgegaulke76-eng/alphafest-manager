@@ -18,6 +18,8 @@ import hashlib
 import time
 import copy
 
+from constants import STATUS_FLUXO, PRIORIDADES_FLUXO
+
 try:
     from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
 except Exception:
@@ -150,7 +152,7 @@ ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
 ARQUIVO_MARKETING = "marketing_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
-VERSAO_APP = "8.2.0"
+VERSAO_APP = "8.2.1"
 VERSAO_DADOS = 5
 PASTA_UPLOADS = "uploads"
 os.makedirs(PASTA_UPLOADS, exist_ok=True)
