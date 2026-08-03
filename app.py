@@ -388,8 +388,8 @@ def aplicar_visibilidade_abas(usuario=None):
         # após uma atualização do Streamlit. Esta regra direta é proposital:
         # na Central da Anna não há st.tabs internos necessários, portanto
         # ocultar a lista de abas garante uma interface realmente enxuta.
-        regras.append('div[data-baseweb="tab-list"], [role="tablist"], div.stTabs [data-baseweb="tab-list"] { display:none !important; visibility:hidden !important; height:0 !important; min-height:0 !important; max-height:0 !important; margin:0 !important; padding:0 !important; overflow:hidden !important; border:0 !important; }')
-        regras.append('div[data-testid="stTabs"], div.stTabs { margin-top:0 !important; padding-top:0 !important; }')
+        regras.append('div[data-baseweb="tab-list"] { display:none !important; height:0 !important; min-height:0 !important; margin:0 !important; padding:0 !important; overflow:hidden !important; }')
+        regras.append('div[data-testid="stTabs"] { margin-top:0 !important; padding-top:0 !important; }')
         regras.append('div[data-testid="stElementContainer"]:has(#fest-main-tabs-marker) { margin:0 !important; padding:0 !important; height:0 !important; min-height:0 !important; }')
     else:
         for indice, (chave, _) in enumerate(ABAS_SISTEMA, start=1):
@@ -1556,7 +1556,7 @@ def carregar_proposta_no_formulario(prop_atual, duplicar=False):
     chave temporária e aplicamos antes da criação dos campos no próximo rerun.
     """
     st.session_state._proposta_pendente_formulario = {
-        "prop": dict(prop),
+        "prop": dict(prop_atual),
         "duplicar": bool(duplicar),
     }
 
@@ -6464,24 +6464,49 @@ with aba1:
             agendar_limpeza_formulario()
             st.rerun()
 
-    nome = st.text_input("Nome / Razão Social", key="form_cliente")
-    c1, c2 = st.columns(2)
-    doc = c1.text_input("CPF / CNPJ", key="form_documento")
-    wa = c2.text_input("WhatsApp", key="form_whatsapp")
+    ultima_salva = st.session_state.get("_ultima_proposta_salva")
+    if ultima_salva:
+        with st.container(border=True):
+            st.success(f"Proposta {ultima_salva.get('numero_proposta', '')} salva com sucesso.")
+            ac1, ac2, ac3 = st.columns([2, 2, 1])
+            numero_destino = re.sub(r"\D", "", str(ultima_salva.get("whatsapp") or ultima_salva.get("cliente_wa") or ""))
+            if numero_destino and not numero_destino.startswith("55"):
+                numero_destino = "55" + numero_destino
+            link_whatsapp = f"https://wa.me/{numero_destino}?text={quote(formatar_msg_whatsapp(ultima_salva))}" if numero_destino else f"https://wa.me/?text={quote(formatar_msg_whatsapp(ultima_salva))}"
+            ac1.link_button("📱 Enviar orçamento por WhatsApp", link_whatsapp, use_container_width=True)
+            ac2.download_button(
+                "📄 Gerar HTML",
+                gerar_html(ultima_salva),
+                file_name=f"{ultima_salva.get('numero_proposta', 'orcamento')}.html",
+                mime="text/html",
+                use_container_width=True,
+            )
+            if ac3.button("✖ Fechar", key="fechar_acoes_ultima_proposta", use_container_width=True):
+                st.session_state.pop("_ultima_proposta_salva", None)
+                st.rerun()
 
-    prod = st.text_input("Produto", key=f"produto_novo_{st.session_state.form_key}")
-    with st.expander("🎨 Personalização & Especificações", expanded=True):
+    # O formulário evita reruns enquanto a Anna digita. O processamento ocorre
+    # somente ao clicar em Adicionar Item, deixando a digitação muito mais ágil.
+    with st.form(key=f"form_item_orcamento_{st.session_state.form_key}", clear_on_submit=False):
+        nome = st.text_input("Nome / Razão Social", key="form_cliente")
         c1, c2 = st.columns(2)
-        et = c1.text_input("Tema / Ocasião", key=f"tema_{st.session_state.form_key}")
-        en = c1.text_input("Nome(s) Personalizado(s)", key=f"nome_item_{st.session_state.form_key}")
-        ec = c1.text_input("Cor / Material", key=f"cor_{st.session_state.form_key}")
-        ei = c2.text_input("Idade / Data do Evento", key=f"idade_{st.session_state.form_key}")
-        eg = c2.text_input("Outros Detalhes", key=f"obs_item_{st.session_state.form_key}")
+        doc = c1.text_input("CPF / CNPJ", key="form_documento")
+        wa = c2.text_input("WhatsApp", key="form_whatsapp")
 
-    q = st.number_input("Qtd", min_value=1, value=1, key=f"qtd_{st.session_state.form_key}")
-    v = st.number_input("Valor Unitário (R$)", value=0.0, step=0.5, key=f"valor_{st.session_state.form_key}")
+        prod = st.text_input("Produto", key=f"produto_novo_{st.session_state.form_key}")
+        with st.expander("🎨 Personalização & Especificações", expanded=True):
+            c1, c2 = st.columns(2)
+            et = c1.text_input("Tema / Ocasião", key=f"tema_{st.session_state.form_key}")
+            en = c1.text_input("Nome(s) Personalizado(s)", key=f"nome_item_{st.session_state.form_key}")
+            ec = c1.text_input("Cor / Material", key=f"cor_{st.session_state.form_key}")
+            ei = c2.text_input("Idade / Data do Evento", key=f"idade_{st.session_state.form_key}")
+            eg = c2.text_input("Outros Detalhes", key=f"obs_item_{st.session_state.form_key}")
 
-    if st.button("➕ Adicionar Item"):
+        q = st.number_input("Qtd", min_value=1, value=1, key=f"qtd_{st.session_state.form_key}")
+        v = st.number_input("Valor Unitário (R$)", value=0.0, step=0.5, key=f"valor_{st.session_state.form_key}")
+        adicionar_item = st.form_submit_button("➕ Adicionar Item", use_container_width=True)
+
+    if adicionar_item:
         if not prod.strip():
             st.warning("Informe o produto antes de adicionar.")
         else:
@@ -6578,6 +6603,9 @@ with aba1:
                         break
                 salvar_atendimentos(dados_at_link)
 
+            # Mantém uma cópia somente para exibir as ações imediatas após salvar.
+            # A mensagem e o layout padrão permanecem exatamente os mesmos.
+            st.session_state["_ultima_proposta_salva"] = dict(dados)
             agendar_limpeza_formulario()
             st.session_state._mensagem_sucesso_pendente = "Proposta salva com sucesso e operação atualizada."
             st.rerun()
