@@ -5614,20 +5614,120 @@ def dialog_catalogo_visualizar_anna():
     catalogo = carregar_catalogo()
     busca = st.text_input("Pesquisar produto ou grupo", key="anna_catalogo_busca_modal")
     termo = busca.strip().casefold()
-    filtrados = [(i,p) for i,p in enumerate(catalogo) if not termo or termo in f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')}".casefold()]
+    filtrados = [
+        (i, p) for i, p in enumerate(catalogo)
+        if not termo or termo in f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')}".casefold()
+    ]
     st.caption(f"{len(filtrados)} produto(s) encontrado(s)")
-    for i, produto in filtrados[:60]:
+
+    for i, produto in filtrados[:100]:
+        imagens_atuais = [str(x).strip() for x in (produto.get("Imagens", []) or []) if str(x).strip()]
         with st.container(border=True):
-            c1,c2,c3 = st.columns([5,1.3,1.2])
-            c1.markdown(f"**{produto.get('Nome','Produto')}**  ")
-            c1.caption(f"{produto.get('Categoria','Sem categoria')} · {formatar_preco_catalogo(produto.get('Preco'))}")
-            if c2.button("✏️ Editar", key=f"anna_cat_edit_{i}", use_container_width=True):
-                dialog_catalogo_cadastro_anna(i)
-            if c3.button("🗑️ Excluir", key=f"anna_cat_del_{i}", use_container_width=True):
-                catalogo.pop(i)
-                salvar_catalogo(catalogo)
-                st.session_state["_mensagem_sucesso_pendente"] = "Produto excluído do catálogo."
-                st.rerun()
+            topo_img, topo_info = st.columns([1.35, 4.65], vertical_alignment="center")
+            with topo_img:
+                if imagens_atuais:
+                    try:
+                        st.image(imagens_atuais[0], use_container_width=True)
+                    except Exception:
+                        st.caption("Imagem indisponível")
+                else:
+                    st.info("Sem foto")
+            with topo_info:
+                st.markdown(f"**{produto.get('Nome','Produto')}**")
+                st.caption(
+                    f"{produto.get('Categoria','Sem categoria')}"
+                    f" · {produto.get('Subcategoria','Sem subcategoria')}"
+                    f" · {formatar_preco_catalogo(produto.get('Preco'))}"
+                    f" · {len(imagens_atuais)} foto(s)"
+                )
+
+            with st.expander("✏️ Abrir campos, visualizar fotos e adicionar imagens", expanded=False):
+                if imagens_atuais:
+                    st.markdown("**Fotos cadastradas**")
+                    cols = st.columns(3)
+                    for pos, imagem in enumerate(imagens_atuais):
+                        with cols[pos % 3]:
+                            try:
+                                st.image(imagem, use_container_width=True)
+                            except Exception:
+                                st.caption(Path(imagem).name or "Imagem indisponível")
+
+                form_key = f"anna_cat_inline_{i}"
+                with st.form(form_key, clear_on_submit=False):
+                    c1, c2 = st.columns(2)
+                    nome = c1.text_input("Nome do produto", value=str(produto.get("Nome", "")), key=f"{form_key}_nome")
+                    categoria = c2.text_input("Grupo / categoria", value=str(produto.get("Categoria", "")), key=f"{form_key}_cat")
+                    c3, c4 = st.columns(2)
+                    subcategoria = c3.text_input("Subcategoria", value=str(produto.get("Subcategoria", "")), key=f"{form_key}_sub")
+                    preco = c4.text_input("Valor", value=str(produto.get("Preco", "")), key=f"{form_key}_preco")
+                    descricao = st.text_area(
+                        "Descrição para o catálogo",
+                        value=str(produto.get("DescricaoCurta", produto.get("Descricao", ""))),
+                        height=100,
+                        key=f"{form_key}_desc",
+                    )
+                    urls_existentes = [x for x in imagens_atuais if x.startswith(("http://", "https://"))]
+                    imagens_urls = st.text_area(
+                        "URLs das imagens (uma por linha)",
+                        value="\n".join(urls_existentes),
+                        height=80,
+                        key=f"{form_key}_urls",
+                    )
+                    novas_fotos = st.file_uploader(
+                        "Adicionar mais fotos deste produto",
+                        type=["png", "jpg", "jpeg", "webp"],
+                        accept_multiple_files=True,
+                        key=f"{form_key}_fotos",
+                    )
+                    manter_fotos = st.checkbox(
+                        "Manter todas as fotos já cadastradas",
+                        value=True,
+                        key=f"{form_key}_manter",
+                    )
+                    c5, c6 = st.columns(2)
+                    ativo = c5.checkbox("Produto ativo", value=bool(produto.get("Ativo", True)), key=f"{form_key}_ativo")
+                    destaque = c6.checkbox("Produto em destaque", value=bool(produto.get("Destaque", False)), key=f"{form_key}_dest")
+                    salvar = st.form_submit_button("💾 Salvar alterações e fotos", type="primary", use_container_width=True)
+
+                if salvar:
+                    if not nome.strip() or not categoria.strip():
+                        st.error("Informe o nome e o grupo/categoria.")
+                    else:
+                        imagens = list(imagens_atuais) if manter_fotos else []
+                        imagens = [x for x in imagens if not x.startswith(("http://", "https://"))]
+                        imagens.extend([u.strip() for u in imagens_urls.splitlines() if u.strip()])
+                        for foto in novas_fotos or []:
+                            caminho = salvar_upload_catalogo(foto)
+                            if caminho:
+                                imagens.insert(0, caminho)
+                        registro = dict(produto)
+                        registro.update({
+                            "Nome": nome.strip(),
+                            "Categoria": categoria.strip(),
+                            "Subcategoria": subcategoria.strip(),
+                            "Preco": preco.strip(),
+                            "Descricao": descricao.strip(),
+                            "DescricaoCurta": descricao.strip(),
+                            "Imagens": list(dict.fromkeys(imagens)),
+                            "Ativo": bool(ativo),
+                            "Destaque": bool(destaque),
+                            "AtualizadoEm": agora_local().isoformat(timespec="seconds"),
+                        })
+                        catalogo[i] = registro
+                        salvar_catalogo(catalogo)
+                        confirmado = carregar_catalogo()
+                        ok = i < len(confirmado) and str(confirmado[i].get("Nome", "")).strip() == nome.strip()
+                        if ok:
+                            st.session_state["_mensagem_sucesso_pendente"] = f"Produto {nome.strip()} e suas fotos foram atualizados."
+                            st.rerun()
+                        else:
+                            st.error("Não foi possível confirmar a atualização do produto.")
+
+                if st.button("🗑️ Excluir este produto", key=f"anna_cat_del_{i}", use_container_width=True):
+                    catalogo.pop(i)
+                    salvar_catalogo(catalogo)
+                    st.session_state["_mensagem_sucesso_pendente"] = "Produto excluído do catálogo."
+                    st.rerun()
 
 
 @st.dialog("📤 Gerar catálogos", width="large")
