@@ -5166,6 +5166,119 @@ with aba0:
         if nomes_favoritos:
             st.caption("⭐ Favoritos: " + " · ".join(nomes_favoritos))
 
+    # Anna Workspace: área operacional leve e direta, sem alterar o modelo da mensagem de orçamento.
+    if str(usuario_atual.get("nome", "")).casefold() == "anna":
+        st.markdown("### 🚀 Modo Trabalho")
+        st.caption("Atendimento, orçamento, andamento e catálogo em poucos cliques. Relatórios e integrações permanecem fora deste fluxo para manter a tela rápida.")
+        modo_trabalho_anna = st.toggle("Ativar ambiente compacto", value=True, key="modo_trabalho_anna")
+        if modo_trabalho_anna:
+            dados_ws = carregar_atendimentos()
+            itens_ws = [
+                x for x in dados_ws.get("itens", [])
+                if x.get("status") not in ("Arquivado", "Entregue", "Pós-venda")
+                and str(x.get("responsavel", "")).strip() in ("", "Anna")
+            ]
+            itens_ws = sorted(itens_ws, key=lambda x: (-faixa_sla_atendimento(x, dados_ws.get("config", {}))[2], -minutos_aguardando(x)))
+            historico_ws = carregar_historico()
+            orc_ws = [p for p in historico_ws if not p.get("entregue", False)]
+            aguardando_ws = [x for x in itens_ws if x.get("status") == "Aguardando cliente"]
+            solicitados_ws = [x for x in itens_ws if x.get("status") in ("Orçamento solicitado", "Orçamento em elaboração")]
+
+            w1, w2, w3, w4 = st.columns(4)
+            w1.metric("💬 Para atender", len([x for x in itens_ws if x.get("status") in ("Novo contato", "Catálogo solicitado")]))
+            w2.metric("📄 Orçamentos", len(solicitados_ws))
+            w3.metric("⏳ Aguardando cliente", len(aguardando_ws))
+            w4.metric("📦 Pedidos ativos", len(orc_ws))
+
+            area_ws = st.radio(
+                "Área de trabalho",
+                ["💬 Atendimento", "📄 Orçamentos", "📚 Catálogo rápido"],
+                horizontal=True,
+                key="area_trabalho_anna",
+                label_visibility="collapsed",
+            )
+
+            if area_ws == "💬 Atendimento":
+                st.markdown("#### Próximos atendimentos")
+                if not itens_ws:
+                    st.success("Nenhum atendimento pendente para a Anna.")
+                for item_ws in itens_ws[:8]:
+                    icone_ws, rotulo_ws, _ = faixa_sla_atendimento(item_ws, dados_ws.get("config", {}))
+                    with st.expander(f"{icone_ws} {item_ws.get('cliente', 'Contato')} · {item_ws.get('status', 'Novo contato')} · {tempo_aguardando_formatado(item_ws)}"):
+                        st.caption(f"{item_ws.get('origem', 'WhatsApp')} · {rotulo_ws} · {item_ws.get('telefone') or 'Telefone não informado'}")
+                        st.write(item_ws.get("mensagem") or "Sem mensagem registrada.")
+                        ra1, ra2, ra3, ra4 = st.columns(4)
+                        telefone_ws = re.sub(r"\D", "", str(item_ws.get("telefone", "")))
+                        numero_ws = telefone_ws if telefone_ws.startswith("55") else f"55{telefone_ws}"
+                        if telefone_ws:
+                            ra1.link_button("📱 Abrir WhatsApp", f"https://wa.me/{numero_ws}", use_container_width=True)
+                        if ra2.button("➕ Orçamento", key=f"ws_orc_{item_ws.get('id')}", use_container_width=True):
+                            st.session_state.form_cliente = item_ws.get("cliente", "")
+                            st.session_state.form_whatsapp = item_ws.get("telefone", "")
+                            st.session_state.form_observacoes = item_ws.get("mensagem", "")
+                            st.session_state._atendimento_origem_id = item_ws.get("id")
+                            item_ws["status"] = "Orçamento em elaboração"
+                            item_ws["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                            registrar_evento_atendimento(item_ws, "Orçamento iniciado pelo Modo Trabalho da Anna")
+                            salvar_atendimentos(dados_ws)
+                            st.session_state["_mensagem_sucesso_pendente"] = "Cliente e conversa preparados. Abra Novo Orçamento; a mensagem padrão permanece intacta."
+                            st.rerun()
+                        if ra3.button("✅ Respondido", key=f"ws_resp_{item_ws.get('id')}", use_container_width=True):
+                            status_ant = item_ws.get("status", "Novo contato")
+                            item_ws["status"] = "Aguardando cliente"
+                            item_ws["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                            registrar_evento_atendimento(item_ws, f"Status alterado de {status_ant} para Aguardando cliente")
+                            salvar_atendimentos(dados_ws)
+                            st.rerun()
+                        if ra4.button("📦 Arquivar", key=f"ws_arq_{item_ws.get('id')}", use_container_width=True):
+                            item_ws["status"] = "Arquivado"
+                            item_ws["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                            registrar_evento_atendimento(item_ws, "Atendimento arquivado no Modo Trabalho")
+                            salvar_atendimentos(dados_ws)
+                            st.rerun()
+
+            elif area_ws == "📄 Orçamentos":
+                st.markdown("#### Orçamentos e pedidos em andamento")
+                lista_ws = sorted(orc_ws, key=lambda p: data_entrega_segura(p.get("data_entrega")) or date.max)[:10]
+                if not lista_ws:
+                    st.success("Nenhum orçamento ou pedido pendente.")
+                for p_ws in lista_ws:
+                    _, _, total_ws = calcular_valores_proposta(p_ws)
+                    cws1, cws2 = st.columns([7, 2])
+                    cws1.write(f"**{p_ws.get('numero_proposta', '—')} — {p_ws.get('cliente_nome', 'Cliente')}** · Entrega: {p_ws.get('data_entrega', 'A combinar')} · R$ {total_ws:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                    if cws2.button("Abrir", key=f"ws_abrir_prop_{p_ws.get('numero_proposta')}", use_container_width=True):
+                        st.session_state.alerta_proposta_numero = p_ws.get("numero_proposta")
+                        st.rerun()
+
+            else:
+                st.markdown("#### Catálogo rápido")
+                st.caption("Pesquisa e atualização de preço/atividade sem carregar o editor completo.")
+                catalogo_ws = carregar_catalogo()
+                busca_ws = st.text_input("Pesquisar produto", key="busca_catalogo_workspace", placeholder="Digite nome ou categoria...")
+                termo_ws = busca_ws.strip().casefold()
+                encontrados_ws = [
+                    (i, prod) for i, prod in enumerate(catalogo_ws)
+                    if not termo_ws or termo_ws in str(prod.get("Nome", "")).casefold() or termo_ws in str(prod.get("Categoria", "")).casefold()
+                ][:10]
+                if not encontrados_ws:
+                    st.info("Nenhum produto encontrado.")
+                for idx_ws, prod_ws in encontrados_ws:
+                    with st.container(border=True):
+                        cp1, cp2, cp3, cp4 = st.columns([4, 2, 2, 1])
+                        cp1.markdown(f"**{prod_ws.get('Nome', 'Produto')}**")
+                        cp1.caption(prod_ws.get("Categoria", "Sem categoria"))
+                        preco_ws = cp2.text_input("Preço", value=str(prod_ws.get("Preco", "")), key=f"ws_preco_{idx_ws}")
+                        ativo_atual_ws = bool(prod_ws.get("Ativo", True))
+                        ativo_ws = cp3.checkbox("Ativo", value=ativo_atual_ws, key=f"ws_ativo_{idx_ws}")
+                        if cp4.button("Salvar", key=f"ws_salvar_cat_{idx_ws}", use_container_width=True):
+                            catalogo_ws[idx_ws]["Preco"] = preco_ws.strip()
+                            catalogo_ws[idx_ws]["Ativo"] = bool(ativo_ws)
+                            catalogo_ws[idx_ws]["AtualizadoEm"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                            salvar_catalogo(catalogo_ws)
+                            st.session_state["_mensagem_sucesso_pendente"] = f"Produto {prod_ws.get('Nome', '')} atualizado."
+                            st.rerun()
+        st.divider()
+
     st.markdown("#### ⚡ Ações rápidas")
     ac1, ac2, ac3, ac4, ac5 = st.columns(5)
     if ac1.button("📥 Novo atendimento", key="acao_rapida_atendimento", use_container_width=True):
