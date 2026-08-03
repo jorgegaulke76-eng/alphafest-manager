@@ -5448,26 +5448,115 @@ def dialog_cliente_anna():
         st.rerun()
 
 
+def salvar_andamento_proposta(numero, aprovado, pago, entregue):
+    """Atualiza os três status, confirma a gravação e preserva todos os demais campos."""
+    historico = carregar_historico()
+    proposta = next((p for p in historico if p.get("numero_proposta") == numero), None)
+    if proposta is None:
+        return False, "Proposta não encontrada no histórico."
+
+    anteriores = {
+        "aprovado": bool(proposta.get("aprovado", False)),
+        "pago": bool(proposta.get("pago", False)),
+        "entregue": bool(proposta.get("entregue", False)),
+    }
+    novos = {"aprovado": bool(aprovado), "pago": bool(pago), "entregue": bool(entregue)}
+    proposta.update(novos)
+
+    rotulos = {
+        "aprovado": "Orçamento aprovado",
+        "pago": "Pagamento confirmado",
+        "entregue": "Entrega concluída",
+    }
+    for campo, valor in novos.items():
+        if anteriores[campo] != valor:
+            texto = rotulos[campo] if valor else f"{rotulos[campo]} desmarcado"
+            registrar_evento_proposta(proposta, texto, usuario="Anna")
+
+    salvar_historico_completo(historico)
+
+    # Confirma a persistência antes de informar sucesso.
+    confirmado = next((p for p in carregar_historico() if p.get("numero_proposta") == numero), None)
+    if confirmado is None:
+        return False, "A proposta não foi localizada após a gravação."
+    if any(bool(confirmado.get(campo, False)) != valor for campo, valor in novos.items()):
+        return False, "O banco não confirmou a atualização. Tente novamente."
+
+    if novos["aprovado"] and not anteriores["aprovado"]:
+        sincronizar_producao_com_propostas()
+    return True, f"Andamento de {numero} atualizado."
+
+
 @st.dialog("📦 Fluxo de pedidos", width="large")
 def dialog_fluxo_anna():
-    historico = [p for p in carregar_historico() if not p.get("entregue", False)]
+    historico = carregar_historico()
     if not historico:
-        st.success("Nenhum pedido ativo.")
+        st.info("Nenhuma proposta cadastrada.")
         return
-    for prop in historico[:20]:
-        numero = prop.get("numero_proposta", "")
+
+    c_busca, c_status = st.columns([2, 1])
+    busca = c_busca.text_input(
+        "Pesquisar",
+        placeholder="Cliente, proposta ou telefone",
+        key="dlg_fluxo_busca",
+    ).strip().lower()
+    status = c_status.selectbox(
+        "Mostrar",
+        ["Todas", "Ativas", "Aguardando aprovação", "Aprovadas", "Pagas", "Entregues"],
+        key="dlg_fluxo_status",
+    )
+
+    def atende_filtro(prop):
+        texto = " ".join([
+            str(prop.get("numero_proposta", "")),
+            str(prop.get("cliente_nome", prop.get("cliente", ""))),
+            str(prop.get("whatsapp", prop.get("cliente_wa", ""))),
+        ]).lower()
+        if busca and busca not in texto:
+            return False
+        aprovado = bool(prop.get("aprovado", False))
+        pago = bool(prop.get("pago", False))
+        entregue = bool(prop.get("entregue", False))
+        return {
+            "Todas": True,
+            "Ativas": not entregue,
+            "Aguardando aprovação": not aprovado and not entregue,
+            "Aprovadas": aprovado,
+            "Pagas": pago,
+            "Entregues": entregue,
+        }[status]
+
+    propostas = [p for p in historico if atende_filtro(p)]
+    st.caption(f"{len(propostas)} de {len(historico)} proposta(s) exibida(s)")
+    if not propostas:
+        st.warning("Nenhuma proposta encontrada com esse filtro.")
+        return
+
+    propostas.sort(key=lambda p: str(p.get("data_entrega", "")), reverse=False)
+    for prop in propostas:
+        numero = str(prop.get("numero_proposta", "")).strip()
+        if not numero:
+            continue
+        chave_segura = "".join(ch if ch.isalnum() else "_" for ch in numero)
         with st.container(border=True):
-            st.write(f"**{numero} — {prop.get('cliente_nome', 'Cliente')}**")
-            st.caption(f"Entrega: {prop.get('data_entrega', '—')} · {_anna_fmt_moeda(prop.get('valor_total', 0))}")
-            c1, c2, c3 = st.columns(3)
-            aprovado = c1.checkbox("Aprovado", value=bool(prop.get("aprovado", False)), key=f"dlg_ap_{numero}")
-            pago = c2.checkbox("Pago", value=bool(prop.get("pago", False)), key=f"dlg_pg_{numero}")
-            entregue = c3.checkbox("Entregue", value=bool(prop.get("entregue", False)), key=f"dlg_en_{numero}")
-            if st.button("Salvar andamento", key=f"dlg_sv_{numero}", use_container_width=True):
-                prop.update({"aprovado": aprovado, "pago": pago, "entregue": entregue})
-                atualizar_proposta(numero, prop)
-                st.session_state["_mensagem_sucesso_pendente"] = f"Andamento de {numero} atualizado."
-                st.rerun()
+            st.write(f"**{numero} — {prop.get('cliente_nome', prop.get('cliente', 'Cliente'))}**")
+            st.caption(
+                f"Entrega: {prop.get('data_entrega', '—')} · "
+                f"{_anna_fmt_moeda(prop.get('valor_total', prop.get('total', 0)))}"
+            )
+            with st.form(f"dlg_fluxo_form_{chave_segura}"):
+                c1, c2, c3 = st.columns(3)
+                aprovado = c1.checkbox("Aprovado", value=bool(prop.get("aprovado", False)))
+                pago = c2.checkbox("Pago", value=bool(prop.get("pago", False)))
+                entregue = c3.checkbox("Entregue", value=bool(prop.get("entregue", False)))
+                salvar = st.form_submit_button("💾 Salvar andamento", use_container_width=True)
+            if salvar:
+                ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, entregue)
+                if ok:
+                    st.session_state["_mensagem_sucesso_pendente"] = mensagem
+                    st.rerun()
+                else:
+                    st.error(mensagem)
 
 
 @st.dialog("➕ Cadastrar produto no catálogo", width="large")
