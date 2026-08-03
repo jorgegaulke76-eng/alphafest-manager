@@ -693,10 +693,13 @@ def carregar_historico():
 
 
 def salvar_historico_completo(historico):
-    """Salva no Supabase e mantém uma cópia JSON local de contingência."""
+    """Salva no Supabase e mantém uma cópia JSON local de contingência.
+
+    Retorna True somente quando o banco online confirma a gravação.
+    """
     if not isinstance(historico, list):
         raise ValueError("O histórico precisa ser uma lista de propostas.")
-    save_document("historico_orcamentos", historico, ARQUIVO_HISTORICO)
+    return bool(save_document("historico_orcamentos", historico, ARQUIVO_HISTORICO))
 
 def registrar_evento_proposta(proposta, descricao, usuario="Sistema"):
     timeline = proposta.get("timeline") if isinstance(proposta.get("timeline"), list) else []
@@ -5239,23 +5242,48 @@ def _anna_numero_whatsapp(valor):
 
 
 def _anna_salvar_proposta(dados, numero_original=None):
-    """Salva e confirma a persistência antes de fechar o modal."""
+    """Salva e confirma a persistência antes de fechar o modal da Anna.
+
+    O formulário só é limpo depois de uma leitura de confirmação do Supabase.
+    """
+    import time
+
     numero = numero_original or dados.get("numero_proposta") or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
     dados = dict(dados)
     dados["numero_proposta"] = numero
     registrar_evento_proposta(dados, "Proposta atualizada" if numero_original else "Proposta criada", usuario="Anna")
 
+    historico = carregar_historico()
     if numero_original:
-        ok = atualizar_proposta(numero_original, dados)
+        encontrado = False
+        for indice, proposta_existente in enumerate(historico):
+            if proposta_existente.get("numero_proposta") == numero_original:
+                historico[indice] = dados
+                encontrado = True
+                break
+        if not encontrado:
+            return False, f"A proposta {numero_original} não foi encontrada. Os campos foram mantidos para você tentar novamente."
     else:
-        historico = carregar_historico()
         historico = [p for p in historico if p.get("numero_proposta") != numero]
         historico.insert(0, dados)
-        salvar_historico_completo(historico)
-        ok = any(p.get("numero_proposta") == numero for p in carregar_historico())
 
-    if not ok:
-        return False, "Não foi possível confirmar o salvamento no banco. Tente novamente sem fechar a janela."
+    gravado_online = salvar_historico_completo(historico)
+    if not gravado_online:
+        return False, "O banco online não confirmou a gravação. O orçamento continua aberto e nenhum campo foi apagado."
+
+    # Pequena repetição de leitura para evitar fechar o modal antes da confirmação.
+    confirmado = False
+    for _ in range(3):
+        time.sleep(0.35)
+        confirmado = any(
+            p.get("numero_proposta") == numero
+            for p in carregar_historico()
+        )
+        if confirmado:
+            break
+
+    if not confirmado:
+        return False, "O banco recebeu o envio, mas ainda não devolveu a confirmação. O orçamento permanece aberto para não perder os dados."
 
     st.session_state["_ultima_proposta_salva_anna"] = dict(dados)
     st.session_state["_mensagem_sucesso_pendente"] = f"Proposta {numero} salva. A Central da Anna foi atualizada."
@@ -5374,7 +5402,7 @@ def dialog_orcamento_anna(proposta=None):
             if not nome.strip():
                 st.error("Informe o nome do cliente.")
                 return
-            numero = numero_original or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S')}"
+            numero = numero_original or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
             dados = {
                 **proposta,
                 "numero_proposta": numero,
