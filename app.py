@@ -5367,7 +5367,7 @@ def dialog_orcamento_anna(proposta=None):
                 destino = "55" + destino
             link = f"https://wa.me/{destino}?text={quote(formatar_msg_whatsapp(ultima))}" if destino else f"https://wa.me/?text={quote(formatar_msg_whatsapp(ultima))}"
             a1.link_button("📱 Enviar orçamento por WhatsApp", link, use_container_width=True)
-            a2.download_button("📄 Gerar HTML", gerar_html(ultima), file_name=f"{ultima.get('numero_proposta','orcamento')}.html", mime="text/html", use_container_width=True)
+            a2.download_button("📄 Gerar HTML", gerar_html(ultima), file_name=f"{ultima.get('numero_proposta','orcamento')}.html", mime="text/html", use_container_width=True, key=f"anna_html_salvo_{ultima.get('numero_proposta','orcamento')}")
             if a3.button("✖ Fechar", key="anna_modal_fechar_sucesso", use_container_width=True):
                 st.session_state.pop("_ultima_proposta_salva_anna", None)
                 st.rerun()
@@ -5398,7 +5398,8 @@ def dialog_orcamento_anna(proposta=None):
             detalhes = f"Tema: {tema} | Nome: {nome_item} | Idade: {idade} | Cor: {cor} | Obs: {obs}"
             st.session_state["anna_modal_itens"].append({"produto": prod.strip(), "especificacoes": detalhes, "quantidade": q, "valor_unitario": v})
             st.session_state["anna_modal_item_key"] += 1
-            st.rerun()
+            # Não executar rerun global dentro do diálogo: isso fecha o popup e apaga a experiência visual.
+            # A lista abaixo já usa o session_state atualizado e mostra o item imediatamente.
 
     itens = st.session_state.get("anna_modal_itens", [])
     if itens:
@@ -5409,7 +5410,10 @@ def dialog_orcamento_anna(proposta=None):
             ci.caption(item.get("especificacoes", ""))
             if cr.button("🗑️", key=f"anna_modal_remover_{idx}", help="Remover item"):
                 itens.pop(idx)
-                st.rerun()
+                try:
+                    st.rerun(scope="fragment")
+                except Exception:
+                    pass
 
         st.divider()
         d1, d2, d3 = st.columns(3)
@@ -5799,73 +5803,6 @@ def dialog_catalogo_gerar_anna():
     c2.download_button("👥 Catálogo do cliente sem valores", html_cliente, file_name="catalogo_cliente_sem_valores.html", mime="text/html", use_container_width=True)
 
 
-def _anna_classificar_semaforo(prop):
-    aprovado = bool(prop.get("aprovado", False))
-    pago = bool(prop.get("pago", False))
-    entregue = bool(prop.get("entregue", False))
-    data_entrega = data_entrega_segura(prop.get("data_entrega"))
-    atrasado = bool(data_entrega and data_entrega < hoje_local() and not entregue)
-    return {
-        "abertos": not aprovado and not entregue,
-        "fechados": aprovado,
-        "atrasados": atrasado,
-        "pagos": pago,
-        "entregues": entregue,
-        "aguardando": not aprovado and not entregue,
-    }
-
-
-@st.dialog("🚦 Situação dos orçamentos", width="large")
-def dialog_semaforo_anna(tipo):
-    rotulos = {
-        "abertos": "Orçamentos abertos",
-        "fechados": "Fechados / aprovados",
-        "atrasados": "Pedidos atrasados",
-        "pagos": "Pedidos pagos",
-        "entregues": "Pedidos entregues",
-        "aguardando": "Aguardando aprovação",
-    }
-    historico = carregar_historico()
-    itens = [p for p in historico if _anna_classificar_semaforo(p).get(tipo, False)]
-    itens.sort(key=lambda p: data_entrega_segura(p.get("data_entrega")) or date.max)
-    st.subheader(rotulos.get(tipo, "Situação"))
-    st.caption(f"{len(itens)} proposta(s) nesta situação.")
-    busca = st.text_input("Pesquisar", placeholder="Cliente, proposta ou telefone", key=f"sem_busca_{tipo}").strip().lower()
-    if busca:
-        itens = [p for p in itens if busca in normalizar_texto_busca(p)]
-    if not itens:
-        st.info("Nenhuma proposta encontrada.")
-        return
-    for prop in itens:
-        numero = str(prop.get("numero_proposta", "")).strip()
-        if not numero:
-            continue
-        chave = "".join(ch if ch.isalnum() else "_" for ch in numero)
-        with st.container(border=True):
-            c1, c2 = st.columns([3, 1])
-            c1.write(f"**{numero} — {prop.get('cliente_nome', prop.get('cliente', 'Cliente'))}**")
-            _, _, total = calcular_valores_proposta(prop)
-            c2.write(f"**{_anna_fmt_moeda(total)}**")
-            st.caption(f"Entrega: {prop.get('data_entrega', '—')}")
-            with st.form(f"sem_form_{tipo}_{chave}"):
-                a, b, c = st.columns(3)
-                aprovado = a.checkbox("Aprovado", value=bool(prop.get("aprovado", False)))
-                pago = b.checkbox("Pago", value=bool(prop.get("pago", False)))
-                entregue = c.checkbox("Entregue", value=bool(prop.get("entregue", False)))
-                salvar = st.form_submit_button("💾 Salvar andamento", use_container_width=True)
-            if salvar:
-                ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, entregue)
-                if ok:
-                    st.success(mensagem)
-                else:
-                    st.error(mensagem)
-            w1, w2 = st.columns(2)
-            numero_wa = _anna_numero_whatsapp(prop.get("whatsapp") or prop.get("cliente_wa"))
-            link = f"https://wa.me/{numero_wa}?text={quote(formatar_msg_whatsapp(prop))}" if numero_wa else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop))}"
-            w1.link_button("📱 WhatsApp", link, use_container_width=True)
-            w2.download_button("📄 HTML", gerar_html(prop), file_name=f"{numero}.html", mime="text/html", key=f"sem_html_{tipo}_{chave}", use_container_width=True)
-
-
 def renderizar_workspace_anna_isolado():
     usuario = obter_usuario_atual()
 
@@ -5895,7 +5832,7 @@ def renderizar_workspace_anna_isolado():
             numero = _anna_numero_whatsapp(ultima.get("whatsapp") or ultima.get("cliente_wa"))
             link = f"https://wa.me/{numero}?text={quote(formatar_msg_whatsapp(ultima))}" if numero else f"https://wa.me/?text={quote(formatar_msg_whatsapp(ultima))}"
             c1.link_button("📱 Enviar por WhatsApp", link, use_container_width=True)
-            c2.download_button("📄 Gerar HTML", gerar_html(ultima), file_name=f"{ultima.get('numero_proposta','orcamento')}.html", mime="text/html", use_container_width=True)
+            c2.download_button("📄 Gerar HTML", gerar_html(ultima), file_name=f"{ultima.get('numero_proposta','orcamento')}.html", mime="text/html", use_container_width=True, key=f"html_ultima_{ultima.get('numero_proposta','orcamento')}")
             if c3.button("➕ Outro", use_container_width=True):
                 st.session_state.pop("_ultima_proposta_salva_anna", None)
                 dialog_orcamento_anna()
@@ -5920,25 +5857,6 @@ def renderizar_workspace_anna_isolado():
     m2.metric("Aguardando cliente", len([x for x in fila if x.get("status") == "Aguardando cliente"]))
     m3.metric("Pedidos ativos", len(ativos))
     m4.metric("Entregas hoje", len([p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]))
-
-    # Semáforo resumido e permanente da Anna. Cada indicador abre apenas os registros correspondentes.
-    st.markdown("### 🚦 Semáforo operacional")
-    classes = [_anna_classificar_semaforo(p) for p in historico]
-    contagens = {chave: sum(1 for item in classes if item.get(chave)) for chave in ("abertos", "fechados", "atrasados", "pagos", "entregues", "aguardando")}
-    s1, s2, s3 = st.columns(3)
-    if s1.button(f"⚪ Abertos\n\n{contagens['abertos']}", key="sem_abertos", use_container_width=True):
-        dialog_semaforo_anna("abertos")
-    if s2.button(f"🟢 Fechados\n\n{contagens['fechados']}", key="sem_fechados", use_container_width=True):
-        dialog_semaforo_anna("fechados")
-    if s3.button(f"🔴 Atrasados\n\n{contagens['atrasados']}", key="sem_atrasados", use_container_width=True):
-        dialog_semaforo_anna("atrasados")
-    s4, s5, s6 = st.columns(3)
-    if s4.button(f"🟣 Pagos\n\n{contagens['pagos']}", key="sem_pagos", use_container_width=True):
-        dialog_semaforo_anna("pagos")
-    if s5.button(f"✅ Entregues\n\n{contagens['entregues']}", key="sem_entregues", use_container_width=True):
-        dialog_semaforo_anna("entregues")
-    if s6.button(f"🟡 Aguardando aprovação\n\n{contagens['aguardando']}", key="sem_aguardando", use_container_width=True):
-        dialog_semaforo_anna("aguardando")
 
     st.markdown("### 📄 Propostas e pedidos")
     busca = st.text_input("Pesquisar", placeholder="Cliente, proposta ou telefone", key="anna_busca_rapida")
@@ -7545,7 +7463,7 @@ with aba2:
 
             c1, c2 = st.columns(2)
             c1.link_button("📱 Enviar WhatsApp", f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop_atual))}", use_container_width=True)
-            c2.download_button("📄 Gerar HTML", gerar_html(prop_atual), file_name=f"{num_p}.html", mime="text/html", use_container_width=True)
+            c2.download_button("📄 Gerar HTML", gerar_html(prop_atual), file_name=f"{num_p}.html", mime="text/html", use_container_width=True, key=f"html_historico_{num_p}")
 
             c3, c4, c5 = st.columns(3)
             if c3.button("✏️ Editar", key=f"editar_{num_p}", use_container_width=True):
