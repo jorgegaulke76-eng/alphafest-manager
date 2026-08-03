@@ -388,12 +388,10 @@ def aplicar_visibilidade_abas(usuario=None):
         # após uma atualização do Streamlit. Esta regra direta é proposital:
         # na Central da Anna não há st.tabs internos necessários, portanto
         # ocultar a lista de abas garante uma interface realmente enxuta.
-        # Seletores redundantes para as versões atuais e anteriores do Streamlit.
-        # O uso de vários seletores evita que uma alteração interna do Streamlit
-        # faça a navegação técnica reaparecer para a Anna.
-        regras.append('div[data-testid="stTabs"] > div[data-baseweb="tab-list"], .stTabs > div[data-baseweb="tab-list"], div[data-baseweb="tab-list"] { display:none !important; visibility:hidden !important; height:0 !important; min-height:0 !important; max-height:0 !important; margin:0 !important; padding:0 !important; overflow:hidden !important; border:0 !important; }')
+        regras.append('div[data-baseweb="tab-list"], .stTabs [role="tablist"], [data-testid="stTabs"] [role="tablist"] { display:none !important; visibility:hidden !important; height:0 !important; min-height:0 !important; max-height:0 !important; margin:0 !important; padding:0 !important; overflow:hidden !important; border:0 !important; }')
         regras.append('div[data-testid="stTabs"], .stTabs { margin-top:0 !important; padding-top:0 !important; }')
-        regras.append('div[data-testid="stElementContainer"]:has(#fest-main-tabs-marker) { display:none !important; margin:0 !important; padding:0 !important; height:0 !important; min-height:0 !important; }')
+        regras.append('div[data-testid="stTabs"] > div:first-child, .stTabs > div:first-child { height:0 !important; min-height:0 !important; margin:0 !important; padding:0 !important; overflow:hidden !important; }')
+        regras.append('#fest-main-tabs-marker { display:none !important; height:0 !important; margin:0 !important; padding:0 !important; }')
     else:
         for indice, (chave, _) in enumerate(ABAS_SISTEMA, start=1):
             if chave not in permitidas:
@@ -5101,19 +5099,25 @@ def renderizar_painel_alertas(prefixo):
         st.write(
             f"**Total:** R$ {total_alerta:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
-        a1, a2, a3 = st.columns(3)
-        if a1.button("✏️ Editar proposta", key=f"editar_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}"):
+        a1, a2, a3, a4 = st.columns(4)
+        if a1.button("✏️ Editar proposta", key=f"editar_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}", use_container_width=True):
             carregar_proposta_no_formulario(proposta_alerta, duplicar=False)
             st.session_state.alerta_proposta_numero = None
             st.rerun()
-        a2.download_button(
+        numero_alerta = re.sub(r"\D", "", str(proposta_alerta.get("whatsapp") or proposta_alerta.get("cliente_wa") or ""))
+        if numero_alerta and not numero_alerta.startswith("55"):
+            numero_alerta = "55" + numero_alerta
+        link_alerta = f"https://wa.me/{numero_alerta}?text={quote(formatar_msg_whatsapp(proposta_alerta))}" if numero_alerta else f"https://wa.me/?text={quote(formatar_msg_whatsapp(proposta_alerta))}"
+        a2.link_button("📱 Enviar WhatsApp", link_alerta, use_container_width=True)
+        a3.download_button(
             "📄 Baixar HTML",
             gerar_html(proposta_alerta),
             file_name=f"{proposta_alerta.get('numero_proposta', 'proposta')}.html",
             mime="text/html",
             key=f"html_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}",
+            use_container_width=True,
         )
-        if a3.button("Fechar", key=f"fechar_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}"):
+        if a4.button("Fechar", key=f"fechar_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}", use_container_width=True):
             st.session_state.alerta_proposta_numero = None
             st.rerun()
 
@@ -5155,6 +5159,29 @@ aba0, aba_atendimento, aba_crm, aba_alpha, aba_inteligencia, aba_crescimento, ab
     "📅 Calendário Comercial",
     "⚙️ Configurações",
 ])
+
+# Reforço pós-renderização: versões recentes do Streamlit recriam o cabeçalho
+# das abas depois do CSS inicial. No perfil da Anna, ocultamos novamente a
+# navegação principal sem afetar os conteúdos da Central Operacional.
+if usuario_em_operacao_protegida(obter_usuario_atual()):
+    st.markdown(
+        """<style>
+        [data-testid="stTabs"] [data-baseweb="tab-list"],
+        [data-testid="stTabs"] [role="tablist"],
+        .stTabs [data-baseweb="tab-list"],
+        .stTabs [role="tablist"] {
+            display:none !important; visibility:hidden !important;
+            height:0 !important; min-height:0 !important; max-height:0 !important;
+            margin:0 !important; padding:0 !important; overflow:hidden !important; border:0 !important;
+        }
+        [data-testid="stTabs"] > div:first-child, .stTabs > div:first-child {
+            height:0 !important; min-height:0 !important; max-height:0 !important;
+            margin:0 !important; padding:0 !important; overflow:hidden !important;
+        }
+        </style>""",
+        unsafe_allow_html=True,
+    )
+
 
 with aba0:
     usuario_atual = obter_usuario_atual()
