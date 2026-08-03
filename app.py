@@ -373,14 +373,23 @@ def usuario_pode_acao(chave_aba, acao, usuario=None):
 
 
 def aplicar_visibilidade_abas(usuario=None):
-    """Oculta visualmente abas não liberadas sem alterar o fluxo operacional existente."""
+    """Adapta a navegação principal ao perfil sem alterar os módulos existentes."""
     usuario = usuario or obter_usuario_atual()
     permitidas = set(obter_perfil_configurado(usuario).get("abas", []))
     regras = []
     prefixo = 'div[data-testid="stElementContainer"]:has(#fest-main-tabs-marker) + div[data-testid="stElementContainer"] div[data-baseweb="tab-list"]'
-    for indice, (chave, _) in enumerate(ABAS_SISTEMA, start=1):
-        if chave not in permitidas:
-            regras.append(f'{prefixo} > button:nth-child({indice}) {{ display:none !important; }}')
+
+    # A Anna trabalha exclusivamente pela Central Operacional. A barra horizontal
+    # completa fica escondida para reduzir distrações e deixar a tela mais enxuta.
+    # Os módulos continuam preservados no código e permanecem visíveis ao Jorge.
+    if usuario_em_operacao_protegida(usuario):
+        regras.append(f'{prefixo} {{ display:none !important; }}')
+        regras.append('div[data-testid="stElementContainer"]:has(#fest-main-tabs-marker) { margin:0 !important; padding:0 !important; height:0 !important; min-height:0 !important; }')
+    else:
+        for indice, (chave, _) in enumerate(ABAS_SISTEMA, start=1):
+            if chave not in permitidas:
+                regras.append(f'{prefixo} > button:nth-child({indice}) {{ display:none !important; }}')
+
     st.markdown("<div id='fest-main-tabs-marker'></div><style>" + "".join(regras) + "</style>", unsafe_allow_html=True)
 
 def obter_email_usuario_autenticado():

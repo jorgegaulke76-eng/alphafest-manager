@@ -1,3 +1,8 @@
+## 12.0.2 — Interface Lean da Anna
+- Barra horizontal de módulos removida no perfil da Anna.
+- Central Operacional mantida como ambiente único e enxuto.
+- Navegação administrativa do Jorge preservada integralmente.
+
 ## 10.0.2
 
 - Corrigida a importação do Alpha Intelligence no Streamlit Cloud.
