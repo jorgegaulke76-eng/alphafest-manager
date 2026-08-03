@@ -5173,7 +5173,234 @@ _dados_atendimento_badge = carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
 _rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Multicanal"
 
+
+# -----------------------------------------------------------------------------
+# ANNA WORKSPACE 12.0.10 — fluxo isolado, rápido e com janelas operacionais
+# -----------------------------------------------------------------------------
+def _anna_fmt_moeda(valor):
+    return f"R$ {valor_float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _anna_numero_whatsapp(valor):
+    numero = re.sub(r"\D", "", str(valor or ""))
+    if numero and not numero.startswith("55"):
+        numero = "55" + numero
+    return numero
+
+
+def _anna_salvar_proposta(dados, numero_original=None):
+    numero = numero_original or dados.get("numero_proposta") or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S')}"
+    dados["numero_proposta"] = numero
+    registrar_evento_proposta(dados, "Proposta atualizada" if numero_original else "Proposta criada")
+    if numero_original:
+        atualizar_proposta(numero_original, dados)
+    else:
+        historico = carregar_historico()
+        historico.insert(0, dados)
+        salvar_historico_completo(historico)
+    st.session_state["_ultima_proposta_salva_anna"] = dict(dados)
+    st.session_state["_mensagem_sucesso_pendente"] = "Proposta salva. A Central da Anna foi atualizada."
+
+
+@st.dialog("📄 Orçamento", width="large")
+def dialog_orcamento_anna(proposta=None):
+    proposta = dict(proposta or {})
+    numero_original = proposta.get("numero_proposta")
+    itens_antigos = list(proposta.get("itens", []) or [])
+    try:
+        entrega_padrao = datetime.strptime(str(proposta.get("data_entrega", "")), "%d/%m/%Y").date()
+    except Exception:
+        entrega_padrao = hoje_local()
+
+    st.caption("Digite tudo e salve uma única vez. A tela não recarrega enquanto você escreve.")
+    with st.form(f"anna_orcamento_{numero_original or 'novo'}", clear_on_submit=False):
+        c1, c2 = st.columns(2)
+        cliente = c1.text_input("Cliente", value=str(proposta.get("cliente_nome", proposta.get("cliente", ""))))
+        whatsapp = c2.text_input("WhatsApp", value=str(proposta.get("whatsapp", proposta.get("cliente_wa", ""))))
+        documento = st.text_input("CPF/CNPJ", value=str(proposta.get("documento", proposta.get("cliente_cpf_cnpj", ""))))
+
+        st.markdown("#### Itens")
+        linhas = max(6, min(10, len(itens_antigos) + 3))
+        itens_digitados = []
+        for i in range(linhas):
+            item = itens_antigos[i] if i < len(itens_antigos) else {}
+            a, b, c = st.columns([5, 1.3, 1.8])
+            produto = a.text_input("Produto", value=str(item.get("produto", "")), key=f"anna_prod_{numero_original}_{i}", label_visibility="collapsed", placeholder=f"Produto {i+1}")
+            qtd = b.number_input("Qtd", min_value=1, value=int(valor_float(item.get("quantidade", 1), 1)), key=f"anna_qtd_{numero_original}_{i}", label_visibility="collapsed")
+            valor = c.number_input("Valor", min_value=0.0, value=float(valor_float(item.get("valor_unitario", 0))), step=0.50, key=f"anna_val_{numero_original}_{i}", label_visibility="collapsed")
+            detalhes = st.text_input("Detalhes", value=str(item.get("especificacoes", "")), key=f"anna_det_{numero_original}_{i}", label_visibility="collapsed", placeholder="Tema, nome, idade, cor e observações")
+            if produto.strip():
+                itens_digitados.append({"produto": produto.strip(), "quantidade": qtd, "valor_unitario": valor, "especificacoes": detalhes.strip()})
+
+        d1, d2, d3 = st.columns(3)
+        desconto = d1.number_input("Desconto (R$)", min_value=0.0, value=float(valor_float(proposta.get("desconto", proposta.get("desconto_valor", 0)))), step=0.50)
+        entrega = d2.date_input("Entrega", value=entrega_padrao)
+        prazo = d3.text_input("Prazo (dias úteis)", value=str(proposta.get("prazo_dias", "10")))
+        e1, e2 = st.columns(2)
+        frete = e1.text_input("Entrega/retirada", value=str(proposta.get("frete_tipo", "Retirada em Itatiba")))
+        validade = e2.text_input("Validade (dias)", value=str(proposta.get("validade_dias", "5")))
+        aprovado = st.checkbox("Aprovado", value=bool(proposta.get("aprovado", False)))
+        pago = st.checkbox("Pago", value=bool(proposta.get("pago", False)))
+        entregue = st.checkbox("Entregue", value=bool(proposta.get("entregue", False)))
+        salvar = st.form_submit_button("💾 Salvar orçamento", type="primary", use_container_width=True)
+
+    if salvar:
+        if not cliente.strip():
+            st.error("Informe o nome do cliente.")
+            return
+        if not itens_digitados:
+            st.error("Informe pelo menos um produto.")
+            return
+        subtotal = sum(valor_float(x["quantidade"]) * valor_float(x["valor_unitario"]) for x in itens_digitados)
+        total = max(subtotal - desconto, 0.0)
+        dados = {
+            **proposta,
+            "numero_proposta": numero_original or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S')}",
+            "data_geracao": proposta.get("data_geracao", agora_local().strftime("%d/%m/%Y")),
+            "data_entrega": entrega.strftime("%d/%m/%Y"),
+            "cliente_nome": cliente.strip(), "documento": documento.strip(), "whatsapp": whatsapp.strip(),
+            "cliente_cpf_cnpj": documento.strip(), "cliente_wa": whatsapp.strip(),
+            "itens": itens_digitados, "subtotal": subtotal, "desconto": desconto, "desconto_valor": desconto,
+            "valor_total": total, "prazo_dias": prazo, "frete_tipo": frete, "validade_dias": validade,
+            "aprovado": aprovado, "pago": pago, "entregue": entregue,
+            "timeline": proposta.get("timeline", []) if isinstance(proposta.get("timeline", []), list) else [],
+        }
+        _anna_salvar_proposta(dados, numero_original)
+        st.rerun()
+
+
+@st.dialog("💬 Novo atendimento", width="large")
+def dialog_atendimento_anna():
+    with st.form("anna_novo_atendimento", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        cliente = c1.text_input("Cliente")
+        telefone = c2.text_input("Telefone/WhatsApp")
+        origem = st.selectbox("Canal de origem", ["WhatsApp", "Instagram", "Facebook", "TikTok", "YouTube", "Site", "Manual"])
+        mensagem = st.text_area("Mensagem ou solicitação")
+        prioridade = st.selectbox("Prioridade", ["Normal", "Alta", "Urgente"])
+        salvar = st.form_submit_button("Salvar atendimento", type="primary", use_container_width=True)
+    if salvar:
+        dados = carregar_atendimentos()
+        dados["itens"].insert(0, {
+            "id": f"AT-{agora_local().strftime('%Y%m%d%H%M%S%f')}", "cliente": cliente.strip() or "Contato",
+            "telefone": telefone.strip(), "mensagem": mensagem.strip(), "canal": origem, "origem": origem,
+            "canal_origem": origem, "canal_atendimento": "WhatsApp", "status": "Novo contato",
+            "responsavel": "Anna", "prioridade": prioridade, "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
+            "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M"), "historico": [],
+        })
+        salvar_atendimentos(dados)
+        st.session_state["_mensagem_sucesso_pendente"] = "Atendimento criado."
+        st.rerun()
+
+
+@st.dialog("👤 Cadastro rápido de cliente", width="large")
+def dialog_cliente_anna():
+    with st.form("anna_novo_cliente", clear_on_submit=True):
+        nome = st.text_input("Nome")
+        c1, c2 = st.columns(2)
+        whatsapp = c1.text_input("WhatsApp")
+        documento = c2.text_input("CPF/CNPJ")
+        cidade = st.text_input("Cidade")
+        observacoes = st.text_area("Observações")
+        salvar = st.form_submit_button("Salvar cliente", type="primary", use_container_width=True)
+    if salvar:
+        clientes = carregar_clientes()
+        chave = chave_cliente(nome, documento, whatsapp)
+        existente = next((x for x in clientes if chave_cliente(x.get("nome", ""), x.get("documento", ""), x.get("whatsapp", "")) == chave), None)
+        dados = {"id": (existente or {}).get("id", f"CLI-{agora_local().strftime('%Y%m%d%H%M%S%f')}"), "nome": nome.strip(), "whatsapp": whatsapp.strip(), "documento": documento.strip(), "cidade": cidade.strip(), "observacoes": observacoes.strip(), "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")}
+        if existente:
+            existente.update(dados)
+        else:
+            clientes.insert(0, dados)
+        salvar_clientes(clientes)
+        st.session_state["_mensagem_sucesso_pendente"] = "Cliente salvo."
+        st.rerun()
+
+
+@st.dialog("📦 Fluxo de pedidos", width="large")
+def dialog_fluxo_anna():
+    historico = [p for p in carregar_historico() if not p.get("entregue", False)]
+    if not historico:
+        st.success("Nenhum pedido ativo.")
+        return
+    for prop in historico[:20]:
+        numero = prop.get("numero_proposta", "")
+        with st.container(border=True):
+            st.write(f"**{numero} — {prop.get('cliente_nome', 'Cliente')}**")
+            st.caption(f"Entrega: {prop.get('data_entrega', '—')} · {_anna_fmt_moeda(prop.get('valor_total', 0))}")
+            c1, c2, c3 = st.columns(3)
+            aprovado = c1.checkbox("Aprovado", value=bool(prop.get("aprovado", False)), key=f"dlg_ap_{numero}")
+            pago = c2.checkbox("Pago", value=bool(prop.get("pago", False)), key=f"dlg_pg_{numero}")
+            entregue = c3.checkbox("Entregue", value=bool(prop.get("entregue", False)), key=f"dlg_en_{numero}")
+            if st.button("Salvar andamento", key=f"dlg_sv_{numero}", use_container_width=True):
+                prop.update({"aprovado": aprovado, "pago": pago, "entregue": entregue})
+                atualizar_proposta(numero, prop)
+                st.session_state["_mensagem_sucesso_pendente"] = f"Andamento de {numero} atualizado."
+                st.rerun()
+
+
+def renderizar_workspace_anna_isolado():
+    usuario = obter_usuario_atual()
+    st.markdown("## 🚀 Central Operacional da Anna")
+    st.caption("Atendimento, orçamento, clientes e pedidos em janelas rápidas — sem sair desta tela.")
+
+    msg = st.session_state.pop("_mensagem_sucesso_pendente", None)
+    if msg:
+        st.success(msg)
+
+    ultima = st.session_state.get("_ultima_proposta_salva_anna")
+    if ultima:
+        with st.container(border=True):
+            st.success(f"Proposta {ultima.get('numero_proposta', '')} salva.")
+            c1, c2, c3, c4 = st.columns([2,2,1,1])
+            numero = _anna_numero_whatsapp(ultima.get("whatsapp") or ultima.get("cliente_wa"))
+            link = f"https://wa.me/{numero}?text={quote(formatar_msg_whatsapp(ultima))}" if numero else f"https://wa.me/?text={quote(formatar_msg_whatsapp(ultima))}"
+            c1.link_button("📱 Enviar por WhatsApp", link, use_container_width=True)
+            c2.download_button("📄 Gerar HTML", gerar_html(ultima), file_name=f"{ultima.get('numero_proposta','orcamento')}.html", mime="text/html", use_container_width=True)
+            if c3.button("➕ Outro", use_container_width=True):
+                st.session_state.pop("_ultima_proposta_salva_anna", None)
+                dialog_orcamento_anna()
+            if c4.button("Fechar", use_container_width=True):
+                st.session_state.pop("_ultima_proposta_salva_anna", None)
+                st.rerun()
+
+    a1, a2, a3, a4 = st.columns(4)
+    if a1.button("💬 Novo atendimento", use_container_width=True): dialog_atendimento_anna()
+    if a2.button("➕ Novo orçamento", type="primary", use_container_width=True): dialog_orcamento_anna()
+    if a3.button("👤 Novo cliente", use_container_width=True): dialog_cliente_anna()
+    if a4.button("📦 Fluxo de pedidos", use_container_width=True): dialog_fluxo_anna()
+
+    atendimentos = carregar_atendimentos()
+    fila = [x for x in atendimentos.get("itens", []) if x.get("status") not in ("Arquivado", "Entregue", "Pós-venda") and str(x.get("responsavel", "")).strip() in ("", "Anna")]
+    historico = carregar_historico()
+    ativos = [p for p in historico if not p.get("entregue", False)]
+    m1,m2,m3,m4=st.columns(4)
+    m1.metric("Para atender", len([x for x in fila if x.get("status") == "Novo contato"]))
+    m2.metric("Aguardando cliente", len([x for x in fila if x.get("status") == "Aguardando cliente"]))
+    m3.metric("Pedidos ativos", len(ativos))
+    m4.metric("Entregas hoje", len([p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]))
+
+    st.markdown("### 📄 Propostas e pedidos")
+    busca = st.text_input("Pesquisar", placeholder="Cliente, proposta ou telefone", key="anna_busca_rapida")
+    termo = busca.strip().lower()
+    lista = [p for p in historico if not termo or termo in normalizar_texto_busca(p)]
+    for prop in lista[:15]:
+        numero = prop.get("numero_proposta", "")
+        _,_,total=calcular_valores_proposta(prop)
+        c1,c2,c3,c4=st.columns([4,1.4,1.4,1.2])
+        c1.write(f"**{numero} — {prop.get('cliente_nome','Cliente')}** · {_anna_fmt_moeda(total)}")
+        if c2.button("✏️ Atualizar", key=f"anna_edit_{numero}", use_container_width=True): dialog_orcamento_anna(prop)
+        numero_wa=_anna_numero_whatsapp(prop.get("whatsapp") or prop.get("cliente_wa"))
+        link=f"https://wa.me/{numero_wa}?text={quote(formatar_msg_whatsapp(prop))}" if numero_wa else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop))}"
+        c3.link_button("📱 WhatsApp", link, use_container_width=True)
+        c4.download_button("📄 HTML", gerar_html(prop), file_name=f"{numero}.html", mime="text/html", key=f"anna_html_{numero}", use_container_width=True)
+
+
 # O conjunto de abas continua estável no código; a exibição é personalizada por usuário.
+if usuario_em_operacao_protegida(obter_usuario_atual()):
+    renderizar_workspace_anna_isolado()
+    st.stop()
+
 aplicar_visibilidade_abas(obter_usuario_atual())
 
 aba0, aba_atendimento, aba_crm, aba_alpha, aba_inteligencia, aba_crescimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
