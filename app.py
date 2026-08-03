@@ -21,6 +21,7 @@ import copy
 import requests
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
+from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
 from painel_indicadores import calcular_indicadores_unificados
 try:
@@ -292,6 +293,7 @@ ABAS_SISTEMA = [
     ("crm", "🎯 CRM Inteligente"),
     ("alpha", "🤖 Alpha"),
     ("intelligence", "🧠 Intelligence"),
+    ("clientes_360", "🧠 Clientes 360"),
     ("crescimento", "🚀 Crescimento"),
     ("jornada", "🚀 Jornada"),
     ("projeto", "🧩 Projeto Personalizado"),
@@ -5881,12 +5883,13 @@ if usuario_em_operacao_protegida(obter_usuario_atual()):
 
 aplicar_visibilidade_abas(obter_usuario_atual())
 
-aba0, aba_atendimento, aba_crm, aba_alpha, aba_inteligencia, aba_crescimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
+aba0, aba_atendimento, aba_crm, aba_alpha, aba_inteligencia, aba_clientes_360, aba_crescimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
     "🏠 Central do Dia",
     _rotulo_atendimento,
     "🎯 CRM Inteligente",
     "🤖 Alpha",
     "🧠 Intelligence",
+    "🧠 Clientes 360",
     "🚀 Crescimento",
     "🚀 Jornada",
     "🧩 Projeto Personalizado",
@@ -7035,6 +7038,16 @@ with aba_inteligencia:
         except Exception as _alpha_runtime_exc:
             st.warning("O Intelligence encontrou uma falha e foi isolado. Atendimento, orçamentos e pedidos não foram interrompidos.")
             st.caption("O administrador pode consultar os logs para o diagnóstico técnico.")
+
+
+with aba_clientes_360:
+    clientes_360 = sincronizar_clientes_do_historico()
+    renderizar_inteligencia_clientes(
+        clientes=clientes_360,
+        propostas_por_cliente=propostas_do_cliente,
+        calcular_total=lambda proposta: calcular_valores_proposta(proposta)[2],
+        hoje=hoje_local(),
+    )
 
 
 with aba_crescimento:
