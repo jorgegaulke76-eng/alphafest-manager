@@ -1642,6 +1642,23 @@ def valor_float(valor, padrao=0.0):
         return float(padrao)
 
 
+def valor_bool(valor):
+    if isinstance(valor, bool):
+        return valor
+    if isinstance(valor, (int, float)):
+        return bool(valor)
+    return str(valor or "").strip().casefold() in {"1", "true", "sim", "yes", "ok", "pago", "aprovado", "entregue"}
+
+
+def proposta_encerrada(prop):
+    status = str(prop.get("status_comercial") or prop.get("situacao_comercial") or prop.get("status") or "").strip().casefold()
+    return valor_bool(prop.get("encerrado")) or status in {
+        "encerrado", "encerrada", "encerrado sem retorno", "encerrado por preço", "encerrado por preco",
+        "encerrado pelo cliente", "encerrado por prazo", "cancelado", "cancelada", "recusado", "recusada",
+        "arquivado", "arquivada", "excluído", "excluida", "excluída",
+    }
+
+
 def calcular_valores_proposta(prop):
     itens = prop.get("itens", []) or []
     subtotal = sum(valor_float(i.get("quantidade")) * valor_float(i.get("valor_unitario")) for i in itens)
@@ -6131,12 +6148,26 @@ with aba0:
     tarefas_central = sincronizar_producao_com_propostas()
     tarefas_ativas_central = [t for t in tarefas_central if t.get("ativa", True)]
 
-    entregas_hoje_central = [p for p in historico_central if data_entrega_segura(p.get("data_entrega")) == hoje_central and not p.get("entregue", False)]
-    pedidos_atrasados_central = [p for p in historico_central if (data_entrega_segura(p.get("data_entrega")) or date.max) < hoje_central and not p.get("entregue", False)]
-    aguardando_aprovacao_central = [t for t in tarefas_ativas_central if normalizar_status_fluxo(t.get("status")) == "Aguardando aprovação"]
-    em_producao_central = [t for t in tarefas_ativas_central if normalizar_status_fluxo(t.get("status")) in ["Pronto para produzir", "Em produção", "Montagem/acabamento"]]
+    propostas_operacionais_central = [p for p in historico_central if not proposta_encerrada(p)]
+    propostas_aprovadas_abertas_central = [
+        p for p in propostas_operacionais_central
+        if valor_bool(p.get("aprovado")) and not valor_bool(p.get("entregue"))
+    ]
+    entregas_hoje_central = [
+        p for p in propostas_aprovadas_abertas_central
+        if data_entrega_segura(p.get("data_entrega")) == hoje_central
+    ]
+    pedidos_atrasados_central = [
+        p for p in propostas_aprovadas_abertas_central
+        if (data_entrega_segura(p.get("data_entrega")) or date.max) < hoje_central
+    ]
+    aguardando_aprovacao_central = [
+        p for p in propostas_operacionais_central
+        if not valor_bool(p.get("aprovado")) and not valor_bool(p.get("entregue"))
+    ]
+    em_producao_central = [t for t in tarefas_ativas_central if normalizar_status_fluxo(t.get("status")) in ["Pedido recebido", "Arte pendente", "Aguardando aprovação", "Pronto para produzir", "Em produção"]]
     prontos_central = [t for t in tarefas_ativas_central if normalizar_status_fluxo(t.get("status")) == "Pronto"]
-    pendentes_pagamento_central = [p for p in historico_central if not p.get("pago", False) and not p.get("entregue", False)]
+    pendentes_pagamento_central = [p for p in propostas_aprovadas_abertas_central if not valor_bool(p.get("pago"))]
     valor_previsto_hoje = sum(calcular_valores_proposta(p)[2] for p in entregas_hoje_central)
 
     dados_atendimento_central = carregar_atendimentos()
@@ -6252,12 +6283,13 @@ with aba0:
         st.divider()
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
-    c1.metric("🚨 Atrasados", len(pedidos_atrasados_central))
-    c2.metric("📦 Entregas hoje", len(entregas_hoje_central))
-    c3.metric("🟡 Aprovação", len(aguardando_aprovacao_central))
-    c4.metric("🔵 Em produção", len(em_producao_central))
-    c5.metric("✅ Prontos", len(prontos_central))
-    c6.metric("💰 Previsto hoje", f"R$ {valor_previsto_hoje:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    c1.metric("🚨 Atrasados", indicadores_unificados_central["atrasados_operacionais"], help="Pedidos aprovados, ainda não entregues e com data de entrega vencida.")
+    c2.metric("📦 Entregas hoje", indicadores_unificados_central["entregas_hoje_abertas"], help="Pedidos aprovados e ainda não entregues com entrega marcada para hoje.")
+    c3.metric("🟡 Aprovação", indicadores_unificados_central["aguardando_aprovacao"], help="Orçamentos abertos que ainda não foram aprovados nem encerrados.")
+    c4.metric("🔵 Em produção", indicadores_unificados_central["em_producao_operacional"], help="Pedidos aprovados e ativos que ainda não estão prontos ou entregues.")
+    c5.metric("✅ Prontos", indicadores_unificados_central["prontos_operacionais"], help="Pedidos aprovados cujos itens estão marcados como Pronto.")
+    c6.metric("💰 Previsto hoje", f"R$ {valor_previsto_hoje:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), help="Soma dos pedidos aprovados, ainda não entregues, previstos para hoje.")
+    st.caption("Atrasados, entregas e valor previsto consideram somente pedidos aprovados. Aprovação considera orçamentos ainda abertos.")
 
     st.divider()
     st.subheader("🎯 O que fazer agora")
