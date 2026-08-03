@@ -310,6 +310,23 @@ ABAS_SISTEMA = [
     ("configuracoes", "⚙️ Configurações"),
 ]
 
+
+def indice_aba(chave):
+    """Retorna o índice real da aba pela chave, evitando atalhos quebrados quando novas abas são incluídas."""
+    for indice, (chave_aba, _) in enumerate(ABAS_SISTEMA):
+        if chave_aba == chave:
+            return indice
+    return 0
+
+
+def rerun_na_aba(chave, mensagem=None):
+    """Executa novamente o app e reabre a aba solicitada no mesmo fluxo de trabalho."""
+    st.session_state["_aba_principal_destino"] = indice_aba(chave)
+    if mensagem:
+        st.session_state["_mensagem_sucesso_pendente"] = mensagem
+    st.rerun()
+
+
 PERMISSOES_PADRAO_ANNA = {
     "central", "atendimento", "crm", "jornada", "projeto", "novo_orcamento",
     "historico", "fluxo", "catalogo", "relacionamentos"
@@ -1706,10 +1723,13 @@ def aplicar_limpeza_formulario_pendente():
     st.session_state.form_key += 1
 
 
-def remover_item_temp(indice):
+def remover_item_temp(indice, aba_destino=None):
     if 0 <= indice < len(st.session_state.temp_itens):
         st.session_state.temp_itens.pop(indice)
-        st.rerun()
+        if aba_destino:
+            rerun_na_aba(aba_destino)
+        else:
+            st.rerun()
 
 
 def data_entrega_segura(valor):
@@ -5957,21 +5977,25 @@ with aba0:
     if favoritos_central:
         if str(usuario_atual.get("nome", "")).casefold() == "anna":
             mapa_favoritos_anna = {
-                "atendimento": ("📥 Multicanal", 1),
-                "novo_orcamento": ("➕ Novo Orçamento", 8),
-                "catalogo": ("📦 Catálogo", 13),
+                "atendimento": "📥 Multicanal",
+                "novo_orcamento": "➕ Novo Orçamento",
+                "catalogo": "📦 Catálogo",
             }
-            favoritos_validos = [mapa_favoritos_anna[ch] for ch in favoritos_central if ch in mapa_favoritos_anna]
+            favoritos_validos = [(ch, mapa_favoritos_anna[ch]) for ch in favoritos_central if ch in mapa_favoritos_anna]
             if favoritos_validos:
                 st.caption("⭐ Favoritos")
                 cols_fav = st.columns(len(favoritos_validos))
-                for col_fav, (rotulo_fav, indice_fav) in zip(cols_fav, favoritos_validos):
-                    if col_fav.button(rotulo_fav, key=f"fav_anna_{indice_fav}", use_container_width=True):
-                        solicitar_navegacao_aba(indice_fav)
+                for col_fav, (chave_fav, rotulo_fav) in zip(cols_fav, favoritos_validos):
+                    if col_fav.button(rotulo_fav, key=f"fav_anna_{chave_fav}", use_container_width=True):
+                        solicitar_navegacao_aba(indice_aba(chave_fav))
         else:
-            nomes_favoritos = [dict(ABAS_SISTEMA).get(ch, ch) for ch in favoritos_central if ch in dict(ABAS_SISTEMA)]
-            if nomes_favoritos:
-                st.caption("⭐ Favoritos: " + " · ".join(nomes_favoritos))
+            favoritos_validos = [(ch, dict(ABAS_SISTEMA).get(ch, ch)) for ch in favoritos_central if ch in dict(ABAS_SISTEMA)]
+            if favoritos_validos:
+                st.caption("⭐ Favoritos")
+                cols_fav = st.columns(len(favoritos_validos))
+                for col_fav, (chave_fav, rotulo_fav) in zip(cols_fav, favoritos_validos):
+                    if col_fav.button(rotulo_fav, key=f"fav_jorge_{chave_fav}", use_container_width=True):
+                        solicitar_navegacao_aba(indice_aba(chave_fav))
 
     # Anna Workspace: área operacional leve e direta, sem alterar o modelo da mensagem de orçamento.
     if str(usuario_atual.get("nome", "")).casefold() == "anna":
@@ -6090,18 +6114,18 @@ with aba0:
     ac1, ac2, ac3, ac4, ac5 = st.columns(5)
     if ac1.button("📥 Novo atendimento", key="acao_rapida_atendimento", use_container_width=True):
         st.session_state["foco_novo_atendimento"] = True
-        solicitar_navegacao_aba(1)
+        solicitar_navegacao_aba(indice_aba("atendimento"))
     if ac2.button("➕ Novo orçamento", key="acao_rapida_orcamento", use_container_width=True):
         st.session_state["form_cliente"] = ""
         st.session_state["form_whatsapp"] = ""
-        solicitar_navegacao_aba(8)
+        solicitar_navegacao_aba(indice_aba("novo_orcamento"))
     if ac3.button("🧩 Novo projeto", key="acao_rapida_projeto", use_container_width=True):
-        solicitar_navegacao_aba(7)
+        solicitar_navegacao_aba(indice_aba("projeto"))
     if ac4.button("👤 Novo cliente", key="acao_rapida_cliente", use_container_width=True):
         st.session_state["cliente_edicao_id"] = None
-        solicitar_navegacao_aba(14)
+        solicitar_navegacao_aba(indice_aba("relacionamentos"))
     if ac5.button("📦 Fluxo de pedidos", key="acao_rapida_fluxo", use_container_width=True):
-        solicitar_navegacao_aba(10)
+        solicitar_navegacao_aba(indice_aba("fluxo"))
 
     historico_central = carregar_historico()
     tarefas_central = sincronizar_producao_com_propostas()
@@ -6379,8 +6403,7 @@ with aba0:
                 if op2.button("✏️ Editar proposta completa", key=f"central_editar_{numero_central_selecionado}", use_container_width=True):
                     carregar_proposta_no_formulario(proposta_central_selecionada, duplicar=False)
                     st.session_state.alerta_proposta_numero = None
-                    st.session_state["_mensagem_sucesso_pendente"] = "Proposta carregada para edição. Abra a aba Novo Orçamento."
-                    st.rerun()
+                    rerun_na_aba("novo_orcamento", "Proposta carregada para edição.")
                 if op3.button("✖ Fechar", key=f"central_fechar_{numero_central_selecionado}", use_container_width=True):
                     st.session_state.alerta_proposta_numero = None
                     st.rerun()
@@ -7301,6 +7324,7 @@ with aba1:
                 file_name=f"{ultima_salva.get('numero_proposta', 'orcamento')}.html",
                 mime="text/html",
                 use_container_width=True,
+                key=f"html_pos_salvar_{ultima_salva.get('numero_proposta', 'orcamento')}",
             )
             if ac3.button("✖ Fechar", key="fechar_acoes_ultima_proposta", use_container_width=True):
                 st.session_state.pop("_ultima_proposta_salva", None)
@@ -7334,7 +7358,7 @@ with aba1:
             detalhes = f"Tema: {et} | Nome: {en} | Idade: {ei} | Cor: {ec} | Obs: {eg}"
             st.session_state.temp_itens.append({"produto": prod, "especificacoes": detalhes, "quantidade": q, "valor_unitario": v})
             st.session_state.form_key += 1
-            st.rerun()
+            rerun_na_aba("novo_orcamento")
 
     if st.session_state.temp_itens:
         st.write("📋 **Itens da proposta:**")
@@ -7343,7 +7367,7 @@ with aba1:
             col_info.write(f"**{idx + 1}. {item.get('produto')}** — Qtd: {item.get('quantidade')} — R$ {valor_float(item.get('valor_unitario')):,.2f}")
             col_info.caption(item.get("especificacoes", ""))
             if col_remover.button("🗑️", key=f"remover_item_{idx}", help="Remover item"):
-                remover_item_temp(idx)
+                remover_item_temp(idx, "novo_orcamento")
 
         st.divider()
         c1, c2, c3 = st.columns(3)
@@ -7428,8 +7452,7 @@ with aba1:
             # A mensagem e o layout padrão permanecem exatamente os mesmos.
             st.session_state["_ultima_proposta_salva"] = dict(dados)
             agendar_limpeza_formulario()
-            st.session_state._mensagem_sucesso_pendente = "Proposta salva com sucesso e operação atualizada."
-            st.rerun()
+            rerun_na_aba("novo_orcamento", "Proposta salva com sucesso e operação atualizada.")
 
 with aba2:
     renderizar_painel_alertas("historico")
@@ -7481,10 +7504,10 @@ with aba2:
             c3, c4, c5 = st.columns(3)
             if c3.button("✏️ Editar", key=f"editar_{num_p}", use_container_width=True):
                 carregar_proposta_no_formulario(prop, duplicar=False)
-                st.rerun()
+                rerun_na_aba("novo_orcamento", "Proposta carregada para correção.")
             if c4.button("📋 Duplicar pedido", key=f"duplicar_{num_p}", use_container_width=True):
                 carregar_proposta_no_formulario(prop_atual, duplicar=True)
-                st.rerun()
+                rerun_na_aba("novo_orcamento", "Cópia carregada como novo orçamento.")
             if c5.button("🗑️ Excluir", key=f"del_{num_p}", use_container_width=True):
                 excluir_proposta(num_p)
 
