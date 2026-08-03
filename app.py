@@ -695,7 +695,9 @@ def carregar_historico():
 def salvar_historico_completo(historico):
     """Salva no Supabase e mantém uma cópia JSON local de contingência.
 
-    Retorna True somente quando o banco online confirma a gravação.
+    Retorna ``True`` somente quando o banco online confirma o upsert. O retorno
+    é usado pelos formulários para impedir que uma janela seja fechada antes da
+    persistência real dos dados.
     """
     if not isinstance(historico, list):
         raise ValueError("O histórico precisa ser uma lista de propostas.")
@@ -5242,18 +5244,26 @@ def _anna_numero_whatsapp(valor):
 
 
 def _anna_salvar_proposta(dados, numero_original=None):
-    """Salva e confirma a persistência antes de fechar o modal da Anna.
-
-    O formulário só é limpo depois de uma leitura de confirmação do Supabase.
-    """
+    """Salva e confirma no Supabase antes de liberar o fechamento do modal."""
     import time
 
-    numero = numero_original or dados.get("numero_proposta") or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
-    dados = dict(dados)
+    dados = dict(dados or {})
+    # Para novas propostas, o número é sempre gerado aqui com microssegundos.
+    # Isso evita colisões quando a Anna salva dois orçamentos rapidamente.
+    numero = numero_original or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
     dados["numero_proposta"] = numero
-    registrar_evento_proposta(dados, "Proposta atualizada" if numero_original else "Proposta criada", usuario="Anna")
+    dados["cliente_nome"] = str(dados.get("cliente_nome") or dados.get("cliente") or "").strip()
+    dados["cliente"] = dados["cliente_nome"]
+    registrar_evento_proposta(
+        dados,
+        "Proposta atualizada" if numero_original else "Proposta criada",
+        usuario="Anna",
+    )
 
     historico = carregar_historico()
+    if not isinstance(historico, list):
+        historico = []
+
     if numero_original:
         encontrado = False
         for indice, proposta_existente in enumerate(historico):
@@ -5262,31 +5272,47 @@ def _anna_salvar_proposta(dados, numero_original=None):
                 encontrado = True
                 break
         if not encontrado:
-            return False, f"A proposta {numero_original} não foi encontrada. Os campos foram mantidos para você tentar novamente."
+            return False, f"A proposta {numero_original} não foi encontrada para atualização."
     else:
-        historico = [p for p in historico if p.get("numero_proposta") != numero]
+        # Não remove uma proposta válida por engano. Como o número é único, basta inserir.
         historico.insert(0, dados)
 
-    gravado_online = salvar_historico_completo(historico)
-    if not gravado_online:
-        return False, "O banco online não confirmou a gravação. O orçamento continua aberto e nenhum campo foi apagado."
-
-    # Pequena repetição de leitura para evitar fechar o modal antes da confirmação.
-    confirmado = False
-    for _ in range(3):
-        time.sleep(0.35)
-        confirmado = any(
-            p.get("numero_proposta") == numero
-            for p in carregar_historico()
+    salvou_online = salvar_historico_completo(historico)
+    if not salvou_online:
+        return False, (
+            "O banco online não confirmou o salvamento. Os dados continuam na janela. "
+            "Verifique a conexão e clique em Salvar novamente."
         )
+
+    # Confirma o conteúdo gravado, não apenas a existência do número.
+    confirmado = False
+    for _ in range(4):
+        time.sleep(0.25)
+        historico_confirmacao = carregar_historico()
+        for proposta_confirmada in historico_confirmacao if isinstance(historico_confirmacao, list) else []:
+            if proposta_confirmada.get("numero_proposta") != numero:
+                continue
+            nome_confirmado = str(
+                proposta_confirmada.get("cliente_nome")
+                or proposta_confirmada.get("cliente")
+                or ""
+            ).strip()
+            if nome_confirmado == dados["cliente_nome"] and proposta_confirmada.get("itens"):
+                confirmado = True
+                break
         if confirmado:
             break
 
     if not confirmado:
-        return False, "O banco recebeu o envio, mas ainda não devolveu a confirmação. O orçamento permanece aberto para não perder os dados."
+        return False, (
+            f"O banco recebeu a solicitação, mas ainda não confirmou a proposta de "
+            f"{dados['cliente_nome'] or 'cliente não informado'}. A janela foi mantida aberta."
+        )
 
     st.session_state["_ultima_proposta_salva_anna"] = dict(dados)
-    st.session_state["_mensagem_sucesso_pendente"] = f"Proposta {numero} salva. A Central da Anna foi atualizada."
+    st.session_state["_mensagem_sucesso_pendente"] = (
+        f"Proposta {numero} de {dados['cliente_nome']} salva com sucesso."
+    )
     return True, numero
 
 
@@ -5402,7 +5428,7 @@ def dialog_orcamento_anna(proposta=None):
             if not nome.strip():
                 st.error("Informe o nome do cliente.")
                 return
-            numero = numero_original or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
+            numero = numero_original or ""
             dados = {
                 **proposta,
                 "numero_proposta": numero,
