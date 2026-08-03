@@ -499,6 +499,55 @@ def saudacao_por_hora(nome):
         periodo = "Boa noite"
     return f"{periodo}, {nome}!"
 
+
+def frase_motivacional_anna():
+    """Retorna uma mensagem original, firme e positiva, estável durante todo o dia."""
+    frases = [
+        "Faça o básico muito bem feito. É assim que a excelência aparece.",
+        "Constância transforma esforço em resultado. Hoje é mais um passo.",
+        "Velocidade com atenção encanta o cliente e fortalece a AlphaFest.",
+        "Organização traz leveza. Um atendimento de cada vez, sempre com qualidade.",
+        "Cada orçamento enviado abre uma nova oportunidade de realizar um sonho.",
+        "Comece pelo que precisa ser feito. O ritmo vem durante o caminho.",
+        "Pequenos avanços todos os dias constroem grandes resultados.",
+        "Quem cuida dos detalhes entrega muito mais do que um produto.",
+        "Disciplina dá direção. Carinho no atendimento cria confiança.",
+        "Hoje é um ótimo dia para fazer melhor, com calma, foco e constância.",
+        "Cliente bem atendido lembra da experiência e volta pela confiança.",
+        "Resultado é consequência de presença, organização e ação.",
+    ]
+    indice = hoje_local().toordinal() % len(frases)
+    return frases[indice]
+
+
+def renderizar_boas_vindas_anna(resumo=None):
+    """Cabeçalho leve e motivador da Central da Anna."""
+    agora = agora_local()
+    dias = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
+    meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
+    data_extenso = f"{dias[agora.weekday()]}, {agora.day:02d} de {meses[agora.month-1]} de {agora.year}"
+    saudacao = saudacao_por_hora("Anna")
+    frase = frase_motivacional_anna()
+
+    st.markdown(
+        f"""
+        <div style="padding:1.25rem 1.35rem;border-radius:18px;
+                    background:linear-gradient(135deg,#eef7ff 0%,#ffffff 60%,#f7fbff 100%);
+                    border:1px solid rgba(31,119,180,.18);box-shadow:0 8px 24px rgba(31,119,180,.08);
+                    margin-bottom:.9rem;">
+          <div style="font-size:1.55rem;font-weight:800;line-height:1.2;">☀️ {html.escape(saudacao)}</div>
+          <div style="margin-top:.25rem;color:#5b6470;font-size:.92rem;">{html.escape(data_extenso.capitalize())}</div>
+          <div style="margin-top:.85rem;font-size:1.04rem;font-weight:700;color:#1f2937;">🎯 Mensagem do dia</div>
+          <div style="margin-top:.35rem;font-size:1.02rem;line-height:1.55;color:#263442;"><em>“{html.escape(frase)}”</em></div>
+          <div style="margin-top:.8rem;color:#4a6075;font-size:.94rem;">💙 O poder de estar presente em cada presente.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if resumo:
+        st.caption(resumo)
+
 def salvar_config_empresa(config):
     if not isinstance(config, dict):
         raise ValueError("A configuração da empresa precisa ser um dicionário.")
@@ -5508,6 +5557,18 @@ def dialog_catalogo_gerar_anna():
 
 def renderizar_workspace_anna_isolado():
     usuario = obter_usuario_atual()
+
+    # Os indicadores são carregados uma única vez e também alimentam a recepção.
+    atendimentos = carregar_atendimentos()
+    fila = [x for x in atendimentos.get("itens", []) if x.get("status") not in ("Arquivado", "Entregue", "Pós-venda") and str(x.get("responsavel", "")).strip() in ("", "Anna")]
+    historico = carregar_historico()
+    ativos = [p for p in historico if not p.get("entregue", False)]
+    qtd_novos = len([x for x in fila if x.get("status") == "Novo contato"])
+    qtd_aguardando = len([x for x in fila if x.get("status") == "Aguardando cliente"])
+    qtd_entregas = len([p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()])
+    resumo = f"Hoje: {qtd_novos} novo(s) atendimento(s), {qtd_aguardando} aguardando cliente, {len(ativos)} pedido(s) ativo(s) e {qtd_entregas} entrega(s)."
+    renderizar_boas_vindas_anna(resumo)
+
     st.markdown("## 🚀 Central Operacional da Anna")
     st.caption("Atendimento, orçamento, clientes e pedidos em janelas rápidas — sem sair desta tela.")
 
@@ -5543,10 +5604,6 @@ def renderizar_workspace_anna_isolado():
     if k2.button("📋 Visualizar produtos", use_container_width=True): dialog_catalogo_visualizar_anna()
     if k3.button("📤 Gerar catálogos", use_container_width=True): dialog_catalogo_gerar_anna()
 
-    atendimentos = carregar_atendimentos()
-    fila = [x for x in atendimentos.get("itens", []) if x.get("status") not in ("Arquivado", "Entregue", "Pós-venda") and str(x.get("responsavel", "")).strip() in ("", "Anna")]
-    historico = carregar_historico()
-    ativos = [p for p in historico if not p.get("entregue", False)]
     m1,m2,m3,m4=st.columns(4)
     m1.metric("Para atender", len([x for x in fila if x.get("status") == "Novo contato"]))
     m2.metric("Aguardando cliente", len([x for x in fila if x.get("status") == "Aguardando cliente"]))
