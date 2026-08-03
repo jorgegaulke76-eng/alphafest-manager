@@ -1,0 +1,36 @@
+{
+  "ativo": true,
+  "frequencia": "Uma vez por sessão",
+  "duracao_segundos": 8,
+  "telas": {
+    "novo_orcamento": true,
+    "atualizar_orcamento": true,
+    "cadastrar_produto": true,
+    "atualizar_catalogo": true,
+    "novo_cliente": false
+  },
+  "mensagens": {
+    "novo_orcamento": [
+      "DIGITE O NOME DO CLIENTE SEMPRE EM LETRAS MAIÚSCULAS.",
+      "CONFIRA SE O TELEFONE ESTÁ IGUAL AO CADASTRADO NO WHATSAPP.",
+      "PREENCHA TEMA, COR, TAMANHO, QUANTIDADE E OBSERVAÇÕES COMPLETAMENTE.",
+      "UMA DESCRIÇÃO BEM FEITA MELHORA AS BUSCAS E O APRENDIZADO DO THU."
+    ],
+    "atualizar_orcamento": [
+      "ANTES DE SALVAR, CONFIRA NOME, TELEFONE, TEMA, COR E QUANTIDADES.",
+      "REGISTRE TODA ALTERAÇÃO PEDIDA PELO CLIENTE NAS OBSERVAÇÕES."
+    ],
+    "cadastrar_produto": [
+      "CADASTRE O NOME DO PRODUTO EM MAIÚSCULAS E ESCOLHA O GRUPO CORRETO.",
+      "INFORME DESCRIÇÃO COMPLETA, COR, TEMA, MEDIDAS E MATERIAIS.",
+      "USE FOTOS NÍTIDAS E QUE REPRESENTEM CORRETAMENTE O PRODUTO."
+    ],
+    "atualizar_catalogo": [
+      "CONFIRA SE PREÇO, DESCRIÇÃO, GRUPO E FOTOS CONTINUAM ATUAIS.",
+      "MANTENHA O PADRÃO DE NOMES E CATEGORIAS PARA FACILITAR AS BUSCAS."
+    ],
+    "novo_cliente": [
+      "CONFIRA O NOME COMPLETO E O TELEFONE EXATAMENTE COMO APARECEM NO WHATSAPP."
+    ]
+  }
+}

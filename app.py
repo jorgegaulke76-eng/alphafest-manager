@@ -175,6 +175,7 @@ ARQUIVO_MARKETING = "marketing_db.json"
 ARQUIVO_INTEGRACOES = "integracoes_db.json"
 ARQUIVO_INTELIGENCIA = "alpha_intelligence_db.json"
 ARQUIVO_USUARIOS = "usuarios_config.json"
+ARQUIVO_ORIENTACOES_THU = "orientacoes_thu.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -567,6 +568,163 @@ def renderizar_boas_vindas_anna(resumo=None):
 
     if resumo:
         st.caption(resumo)
+
+CONFIG_ORIENTACOES_THU_PADRAO = {
+    "ativo": True,
+    "frequencia": "Uma vez por sessão",
+    "duracao_segundos": 8,
+    "telas": {
+        "novo_orcamento": True,
+        "atualizar_orcamento": True,
+        "cadastrar_produto": True,
+        "atualizar_catalogo": True,
+        "novo_cliente": False,
+    },
+    "mensagens": {
+        "novo_orcamento": [
+            "DIGITE O NOME DO CLIENTE SEMPRE EM LETRAS MAIÚSCULAS.",
+            "CONFIRA SE O TELEFONE ESTÁ IGUAL AO CADASTRADO NO WHATSAPP.",
+            "PREENCHA TEMA, COR, TAMANHO, QUANTIDADE E OBSERVAÇÕES COMPLETAMENTE.",
+            "UMA DESCRIÇÃO BEM FEITA MELHORA AS BUSCAS E O APRENDIZADO DO THU.",
+        ],
+        "atualizar_orcamento": [
+            "ANTES DE SALVAR, CONFIRA NOME, TELEFONE, TEMA, COR E QUANTIDADES.",
+            "REGISTRE TODA ALTERAÇÃO PEDIDA PELO CLIENTE NAS OBSERVAÇÕES.",
+        ],
+        "cadastrar_produto": [
+            "CADASTRE O NOME DO PRODUTO EM MAIÚSCULAS E ESCOLHA O GRUPO CORRETO.",
+            "INFORME DESCRIÇÃO COMPLETA, COR, TEMA, MEDIDAS E MATERIAIS.",
+            "USE FOTOS NÍTIDAS E QUE REPRESENTEM CORRETAMENTE O PRODUTO.",
+        ],
+        "atualizar_catalogo": [
+            "CONFIRA SE PREÇO, DESCRIÇÃO, GRUPO E FOTOS CONTINUAM ATUAIS.",
+            "MANTENHA O PADRÃO DE NOMES E CATEGORIAS PARA FACILITAR AS BUSCAS.",
+        ],
+        "novo_cliente": [
+            "CONFIRA O NOME COMPLETO E O TELEFONE EXATAMENTE COMO APARECEM NO WHATSAPP.",
+        ],
+    },
+}
+
+ROTULOS_TELAS_THU = {
+    "novo_orcamento": "Novo orçamento",
+    "atualizar_orcamento": "Atualizar orçamento",
+    "cadastrar_produto": "Cadastrar produto",
+    "atualizar_catalogo": "Atualizar catálogo",
+    "novo_cliente": "Novo cliente",
+}
+
+
+def carregar_orientacoes_thu():
+    dados = load_document(
+        "orientacoes_thu",
+        ARQUIVO_ORIENTACOES_THU,
+        CONFIG_ORIENTACOES_THU_PADRAO,
+    )
+    if not isinstance(dados, dict):
+        dados = {}
+    cfg = copy.deepcopy(CONFIG_ORIENTACOES_THU_PADRAO)
+    cfg.update({k: v for k, v in dados.items() if k not in ("telas", "mensagens")})
+    cfg["telas"].update(dados.get("telas", {}) if isinstance(dados.get("telas"), dict) else {})
+    mensagens = dados.get("mensagens", {}) if isinstance(dados.get("mensagens"), dict) else {}
+    for tela, padrao in CONFIG_ORIENTACOES_THU_PADRAO["mensagens"].items():
+        recebidas = mensagens.get(tela, padrao)
+        cfg["mensagens"][tela] = [str(x).strip() for x in recebidas if str(x).strip()] if isinstance(recebidas, list) else list(padrao)
+    return cfg
+
+
+def salvar_orientacoes_thu(config):
+    return bool(save_document("orientacoes_thu", config, ARQUIVO_ORIENTACOES_THU))
+
+
+def mostrar_orientacao_thu(tela, token=None):
+    """Mostra uma dica temporária sem bloquear a digitação nem provocar rerun."""
+    cfg = carregar_orientacoes_thu()
+    if not cfg.get("ativo", True) or not cfg.get("telas", {}).get(tela, False):
+        return
+    mensagens = cfg.get("mensagens", {}).get(tela, [])
+    mensagens = [str(x).strip() for x in mensagens if str(x).strip()]
+    if not mensagens:
+        return
+
+    usuario = obter_usuario_atual()
+    email = str(usuario.get("email", "usuario")).lower()
+    frequencia = str(cfg.get("frequencia", "Uma vez por sessão"))
+    hoje = hoje_local().isoformat()
+    if frequencia == "Uma vez por dia":
+        chave = f"thu_dica_dia_{email}_{tela}_{hoje}"
+    elif frequencia == "Sempre que abrir a tela":
+        chave = f"thu_dica_abertura_{email}_{tela}_{token or 'padrao'}"
+    else:
+        chave = f"thu_dica_sessao_{email}_{tela}"
+    if st.session_state.get(chave):
+        return
+    st.session_state[chave] = True
+
+    contador = int(st.session_state.get(f"thu_indice_{tela}", 0))
+    mensagem = mensagens[contador % len(mensagens)]
+    st.session_state[f"thu_indice_{tela}"] = contador + 1
+    texto = f"THU lembra: {mensagem}"
+    try:
+        st.toast(texto, icon="🤖")
+    except Exception:
+        st.info(f"🤖 **THU lembra:** {mensagem}")
+
+
+def renderizar_configuracoes_orientacoes_thu():
+    if not pode_executar_acoes_tecnicas():
+        st.warning("Somente o Jorge pode alterar as orientações do THU.")
+        return
+    cfg = carregar_orientacoes_thu()
+    st.subheader("🎓 Orientações do THU")
+    st.caption("Controle os lembretes temporários exibidos para a Anna. Eles não bloqueiam campos, não salvam dados e não recarregam a página.")
+
+    with st.form("form_orientacoes_thu"):
+        c1, c2, c3 = st.columns([1, 1.2, 1])
+        ativo = c1.checkbox("Avisos ativos", value=bool(cfg.get("ativo", True)))
+        frequencias = ["Uma vez por sessão", "Uma vez por dia", "Sempre que abrir a tela"]
+        freq_atual = str(cfg.get("frequencia", frequencias[0]))
+        frequencia = c2.selectbox("Frequência", frequencias, index=frequencias.index(freq_atual) if freq_atual in frequencias else 0)
+        duracao = c3.number_input("Duração de referência (segundos)", min_value=3, max_value=30, value=int(cfg.get("duracao_segundos", 8) or 8), help="O aviso usa o balão temporário nativo do Streamlit e desaparece automaticamente.")
+
+        st.markdown("#### Telas habilitadas")
+        colunas = st.columns(3)
+        telas_novas = {}
+        for indice, (chave_tela, rotulo) in enumerate(ROTULOS_TELAS_THU.items()):
+            telas_novas[chave_tela] = colunas[indice % 3].checkbox(rotulo, value=bool(cfg.get("telas", {}).get(chave_tela, False)), key=f"thu_tela_{chave_tela}")
+
+        st.markdown("#### Mensagens dinâmicas")
+        st.caption("Digite uma mensagem por linha. O THU alternará as mensagens automaticamente.")
+        mensagens_novas = {}
+        for chave_tela, rotulo in ROTULOS_TELAS_THU.items():
+            with st.expander(rotulo, expanded=chave_tela in ("novo_orcamento", "cadastrar_produto")):
+                atual = "\n".join(cfg.get("mensagens", {}).get(chave_tela, []))
+                texto = st.text_area("Mensagens (uma por linha)", value=atual, height=130, key=f"thu_msgs_{chave_tela}")
+                mensagens_novas[chave_tela] = [linha.strip() for linha in texto.splitlines() if linha.strip()]
+
+        salvar = st.form_submit_button("💾 Salvar orientações do THU", type="primary", use_container_width=True)
+
+    if salvar:
+        nova_cfg = {
+            "ativo": bool(ativo),
+            "frequencia": frequencia,
+            "duracao_segundos": int(duracao),
+            "telas": telas_novas,
+            "mensagens": mensagens_novas,
+        }
+        if salvar_orientacoes_thu(nova_cfg):
+            st.success("Orientações do THU salvas. As novas regras valerão nas próximas aberturas.")
+        else:
+            st.error("Não foi possível salvar as orientações do THU.")
+
+    st.divider()
+    st.markdown("#### Prévia")
+    tela_previa = st.selectbox("Tela da prévia", list(ROTULOS_TELAS_THU), format_func=lambda x: ROTULOS_TELAS_THU[x], key="thu_previa_tela")
+    mensagens = cfg.get("mensagens", {}).get(tela_previa, [])
+    if mensagens:
+        st.info(f"🤖 **THU lembra:** {mensagens[0]}")
+    else:
+        st.caption("Nenhuma mensagem cadastrada para esta tela.")
 
 def salvar_config_empresa(config):
     if not isinstance(config, dict):
@@ -5363,6 +5521,10 @@ def dialog_orcamento_anna(proposta=None):
 
     # Inicializa o formulário somente uma vez por proposta/modal.
     chave_modal = f"anna_modal_iniciado_{numero_original or 'novo'}"
+    mostrar_orientacao_thu(
+        "atualizar_orcamento" if numero_original else "novo_orcamento",
+        token=chave_modal,
+    )
     if not st.session_state.get(chave_modal):
         st.session_state[chave_modal] = True
         st.session_state["anna_modal_cliente"] = str(proposta.get("cliente_nome", proposta.get("cliente", "")))
@@ -5659,6 +5821,10 @@ def dialog_fluxo_anna():
 
 @st.dialog("➕ Cadastrar produto no catálogo", width="large")
 def dialog_catalogo_cadastro_anna(produto_indice=None):
+    mostrar_orientacao_thu(
+        "atualizar_catalogo" if produto_indice is not None else "cadastrar_produto",
+        token=f"catalogo_{produto_indice if produto_indice is not None else 'novo'}",
+    )
     catalogo = carregar_catalogo()
     produto = dict(catalogo[produto_indice]) if produto_indice is not None and 0 <= produto_indice < len(catalogo) else {}
     chave = f"anna_cat_{produto_indice if produto_indice is not None else 'novo'}"
@@ -5709,6 +5875,7 @@ def dialog_catalogo_cadastro_anna(produto_indice=None):
 
 @st.dialog("📋 Visualizar e editar catálogo", width="large")
 def dialog_catalogo_visualizar_anna():
+    mostrar_orientacao_thu("atualizar_catalogo", token="catalogo_visualizar")
     catalogo = carregar_catalogo()
     busca = st.text_input("Pesquisar produto ou grupo", key="anna_catalogo_busca_modal")
     termo = busca.strip().casefold()
@@ -9029,9 +9196,11 @@ def renderizar_alpha_connect():
 
 with aba7:
     st.header("⚙️ Configurações e Integrações")
-    aba_cfg_empresa, aba_cfg_connect, aba_cfg_usuarios = st.tabs(["🏢 Empresa", "🔗 Alpha Connect", "👥 Usuários e permissões"])
+    aba_cfg_empresa, aba_cfg_connect, aba_cfg_usuarios, aba_cfg_thu = st.tabs(["🏢 Empresa", "🔗 Alpha Connect", "👥 Usuários e permissões", "🎓 Orientações do THU"])
     with aba_cfg_connect:
         renderizar_alpha_connect()
+    with aba_cfg_thu:
+        renderizar_configuracoes_orientacoes_thu()
     with aba_cfg_usuarios:
         if not pode_executar_acoes_tecnicas():
             st.warning("Somente o Jorge pode alterar usuários e permissões.")
