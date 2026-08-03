@@ -5202,71 +5202,140 @@ def _anna_salvar_proposta(dados, numero_original=None):
     st.session_state["_mensagem_sucesso_pendente"] = "Proposta salva. A Central da Anna foi atualizada."
 
 
-@st.dialog("📄 Orçamento", width="large")
+@st.dialog("📄 ORÇAMENTOS ALPHAFEST", width="large")
 def dialog_orcamento_anna(proposta=None):
+    """Orçamento da Anna em modal, preservando o mesmo layout do formulário principal."""
     proposta = dict(proposta or {})
     numero_original = proposta.get("numero_proposta")
-    itens_antigos = list(proposta.get("itens", []) or [])
-    try:
-        entrega_padrao = datetime.strptime(str(proposta.get("data_entrega", "")), "%d/%m/%Y").date()
-    except Exception:
-        entrega_padrao = hoje_local()
 
-    st.caption("Digite tudo e salve uma única vez. A tela não recarrega enquanto você escreve.")
-    with st.form(f"anna_orcamento_{numero_original or 'novo'}", clear_on_submit=False):
+    # Inicializa o formulário somente uma vez por proposta/modal.
+    chave_modal = f"anna_modal_iniciado_{numero_original or 'novo'}"
+    if not st.session_state.get(chave_modal):
+        st.session_state[chave_modal] = True
+        st.session_state["anna_modal_cliente"] = str(proposta.get("cliente_nome", proposta.get("cliente", "")))
+        st.session_state["anna_modal_documento"] = str(proposta.get("documento", proposta.get("cliente_cpf_cnpj", "")))
+        st.session_state["anna_modal_whatsapp"] = str(proposta.get("whatsapp", proposta.get("cliente_wa", "")))
+        st.session_state["anna_modal_itens"] = [dict(x) for x in proposta.get("itens", []) or []]
+        st.session_state["anna_modal_item_key"] = int(st.session_state.get("anna_modal_item_key", 0)) + 1
+        st.session_state["anna_modal_desconto"] = float(valor_float(proposta.get("desconto", proposta.get("desconto_valor", 0))))
+        try:
+            st.session_state["anna_modal_entrega"] = datetime.strptime(str(proposta.get("data_entrega", "")), "%d/%m/%Y").date()
+        except Exception:
+            st.session_state["anna_modal_entrega"] = hoje_local()
+        st.session_state["anna_modal_prazo"] = str(proposta.get("prazo_dias", "10"))
+        st.session_state["anna_modal_frete"] = str(proposta.get("frete_tipo", "Retirada em Itatiba"))
+        st.session_state["anna_modal_validade"] = str(proposta.get("validade_dias", "5"))
+
+    logo_b64, _ = encontrar_logo_base64()
+    if logo_b64:
+        le, lc, ld = st.columns([1, 1, 1])
+        with lc:
+            try:
+                st.image(base64.b64decode(logo_b64), use_container_width=True)
+            except Exception:
+                pass
+    st.markdown(
+        "<p style='text-align:center; margin-top:-8px; color:#6b7280;'>"
+        "Personalizados • Impressão 3D • Papelaria</p>",
+        unsafe_allow_html=True,
+    )
+
+    if numero_original:
+        st.info(f"✏️ Editando a proposta {numero_original}")
+
+    ultima = st.session_state.get("_ultima_proposta_salva_anna")
+    if ultima:
+        with st.container(border=True):
+            st.success(f"Proposta {ultima.get('numero_proposta', '')} salva com sucesso.")
+            a1, a2, a3 = st.columns([2, 2, 1])
+            destino = re.sub(r"\D", "", str(ultima.get("whatsapp") or ultima.get("cliente_wa") or ""))
+            if destino and not destino.startswith("55"):
+                destino = "55" + destino
+            link = f"https://wa.me/{destino}?text={quote(formatar_msg_whatsapp(ultima))}" if destino else f"https://wa.me/?text={quote(formatar_msg_whatsapp(ultima))}"
+            a1.link_button("📱 Enviar orçamento por WhatsApp", link, use_container_width=True)
+            a2.download_button("📄 Gerar HTML", gerar_html(ultima), file_name=f"{ultima.get('numero_proposta','orcamento')}.html", mime="text/html", use_container_width=True)
+            if a3.button("✖ Fechar", key="anna_modal_fechar_sucesso", use_container_width=True):
+                st.session_state.pop("_ultima_proposta_salva_anna", None)
+                st.rerun()
+
+    # Mesmo desenho do orçamento principal: cliente + um item por vez.
+    with st.form(key=f"anna_modal_item_{st.session_state.get('anna_modal_item_key', 0)}", clear_on_submit=False):
+        nome = st.text_input("Nome / Razão Social", key="anna_modal_cliente")
         c1, c2 = st.columns(2)
-        cliente = c1.text_input("Cliente", value=str(proposta.get("cliente_nome", proposta.get("cliente", ""))))
-        whatsapp = c2.text_input("WhatsApp", value=str(proposta.get("whatsapp", proposta.get("cliente_wa", ""))))
-        documento = st.text_input("CPF/CNPJ", value=str(proposta.get("documento", proposta.get("cliente_cpf_cnpj", ""))))
+        doc = c1.text_input("CPF / CNPJ", key="anna_modal_documento")
+        wa = c2.text_input("WhatsApp", key="anna_modal_whatsapp")
 
-        st.markdown("#### Itens")
-        linhas = max(6, min(10, len(itens_antigos) + 3))
-        itens_digitados = []
-        for i in range(linhas):
-            item = itens_antigos[i] if i < len(itens_antigos) else {}
-            a, b, c = st.columns([5, 1.3, 1.8])
-            produto = a.text_input("Produto", value=str(item.get("produto", "")), key=f"anna_prod_{numero_original}_{i}", label_visibility="collapsed", placeholder=f"Produto {i+1}")
-            qtd = b.number_input("Qtd", min_value=1, value=int(valor_float(item.get("quantidade", 1), 1)), key=f"anna_qtd_{numero_original}_{i}", label_visibility="collapsed")
-            valor = c.number_input("Valor", min_value=0.0, value=float(valor_float(item.get("valor_unitario", 0))), step=0.50, key=f"anna_val_{numero_original}_{i}", label_visibility="collapsed")
-            detalhes = st.text_input("Detalhes", value=str(item.get("especificacoes", "")), key=f"anna_det_{numero_original}_{i}", label_visibility="collapsed", placeholder="Tema, nome, idade, cor e observações")
-            if produto.strip():
-                itens_digitados.append({"produto": produto.strip(), "quantidade": qtd, "valor_unitario": valor, "especificacoes": detalhes.strip()})
+        prod = st.text_input("Produto", key=f"anna_modal_prod_{st.session_state.get('anna_modal_item_key', 0)}")
+        with st.expander("🎨 Personalização & Especificações", expanded=True):
+            e1, e2 = st.columns(2)
+            tema = e1.text_input("Tema / Ocasião", key=f"anna_modal_tema_{st.session_state.get('anna_modal_item_key', 0)}")
+            nome_item = e1.text_input("Nome(s) Personalizado(s)", key=f"anna_modal_nome_item_{st.session_state.get('anna_modal_item_key', 0)}")
+            cor = e1.text_input("Cor / Material", key=f"anna_modal_cor_{st.session_state.get('anna_modal_item_key', 0)}")
+            idade = e2.text_input("Idade / Data do Evento", key=f"anna_modal_idade_{st.session_state.get('anna_modal_item_key', 0)}")
+            obs = e2.text_input("Outros Detalhes", key=f"anna_modal_obs_{st.session_state.get('anna_modal_item_key', 0)}")
+        q = st.number_input("Qtd", min_value=1, value=1, key=f"anna_modal_qtd_{st.session_state.get('anna_modal_item_key', 0)}")
+        v = st.number_input("Valor Unitário (R$)", min_value=0.0, value=0.0, step=0.5, key=f"anna_modal_valor_{st.session_state.get('anna_modal_item_key', 0)}")
+        adicionar = st.form_submit_button("➕ Adicionar Item", use_container_width=True)
 
+    if adicionar:
+        if not prod.strip():
+            st.warning("Informe o produto antes de adicionar.")
+        else:
+            detalhes = f"Tema: {tema} | Nome: {nome_item} | Idade: {idade} | Cor: {cor} | Obs: {obs}"
+            st.session_state["anna_modal_itens"].append({"produto": prod.strip(), "especificacoes": detalhes, "quantidade": q, "valor_unitario": v})
+            st.session_state["anna_modal_item_key"] += 1
+            st.rerun()
+
+    itens = st.session_state.get("anna_modal_itens", [])
+    if itens:
+        st.write("📋 **Itens da proposta:**")
+        for idx, item in enumerate(itens):
+            ci, cr = st.columns([8, 1])
+            ci.write(f"**{idx + 1}. {item.get('produto')}** — Qtd: {item.get('quantidade')} — R$ {valor_float(item.get('valor_unitario')):,.2f}")
+            ci.caption(item.get("especificacoes", ""))
+            if cr.button("🗑️", key=f"anna_modal_remover_{idx}", help="Remover item"):
+                itens.pop(idx)
+                st.rerun()
+
+        st.divider()
         d1, d2, d3 = st.columns(3)
-        desconto = d1.number_input("Desconto (R$)", min_value=0.0, value=float(valor_float(proposta.get("desconto", proposta.get("desconto_valor", 0)))), step=0.50)
-        entrega = d2.date_input("Entrega", value=entrega_padrao)
-        prazo = d3.text_input("Prazo (dias úteis)", value=str(proposta.get("prazo_dias", "10")))
-        e1, e2 = st.columns(2)
-        frete = e1.text_input("Entrega/retirada", value=str(proposta.get("frete_tipo", "Retirada em Itatiba")))
-        validade = e2.text_input("Validade (dias)", value=str(proposta.get("validade_dias", "5")))
-        aprovado = st.checkbox("Aprovado", value=bool(proposta.get("aprovado", False)))
-        pago = st.checkbox("Pago", value=bool(proposta.get("pago", False)))
-        entregue = st.checkbox("Entregue", value=bool(proposta.get("entregue", False)))
-        salvar = st.form_submit_button("💾 Salvar orçamento", type="primary", use_container_width=True)
-
-    if salvar:
-        if not cliente.strip():
-            st.error("Informe o nome do cliente.")
-            return
-        if not itens_digitados:
-            st.error("Informe pelo menos um produto.")
-            return
-        subtotal = sum(valor_float(x["quantidade"]) * valor_float(x["valor_unitario"]) for x in itens_digitados)
+        desconto = d1.number_input("Desconto (R$)", min_value=0.0, step=0.5, key="anna_modal_desconto")
+        entrega = d2.date_input("📅 Data Entrega", key="anna_modal_entrega")
+        prazo = d3.text_input("Prazo de Produção (dias úteis)", key="anna_modal_prazo")
+        f1, f2 = st.columns(2)
+        frete = f1.text_input("Frete/Entrega", key="anna_modal_frete")
+        validade = f2.text_input("Validade (dias corridos)", key="anna_modal_validade")
+        subtotal = sum(valor_float(i.get("quantidade")) * valor_float(i.get("valor_unitario")) for i in itens)
         total = max(subtotal - desconto, 0.0)
-        dados = {
-            **proposta,
-            "numero_proposta": numero_original or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S')}",
-            "data_geracao": proposta.get("data_geracao", agora_local().strftime("%d/%m/%Y")),
-            "data_entrega": entrega.strftime("%d/%m/%Y"),
-            "cliente_nome": cliente.strip(), "documento": documento.strip(), "whatsapp": whatsapp.strip(),
-            "cliente_cpf_cnpj": documento.strip(), "cliente_wa": whatsapp.strip(),
-            "itens": itens_digitados, "subtotal": subtotal, "desconto": desconto, "desconto_valor": desconto,
-            "valor_total": total, "prazo_dias": prazo, "frete_tipo": frete, "validade_dias": validade,
-            "aprovado": aprovado, "pago": pago, "entregue": entregue,
-            "timeline": proposta.get("timeline", []) if isinstance(proposta.get("timeline", []), list) else [],
-        }
-        _anna_salvar_proposta(dados, numero_original)
-        st.rerun()
+        st.metric("Valor total", f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+        salvar_rotulo = "💾 SALVAR ALTERAÇÕES" if numero_original else "🚀 SALVAR PROPOSTA"
+        if st.button(salvar_rotulo, type="primary", use_container_width=True, key="anna_modal_salvar_orcamento"):
+            if not nome.strip():
+                st.error("Informe o nome do cliente.")
+                return
+            numero = numero_original or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S')}"
+            dados = {
+                **proposta,
+                "numero_proposta": numero,
+                "data_geracao": proposta.get("data_geracao", agora_local().strftime("%d/%m/%Y")),
+                "data_entrega": entrega.strftime("%d/%m/%Y"),
+                "cliente_nome": nome.strip(), "documento": doc.strip(), "whatsapp": wa.strip(),
+                "cliente_cpf_cnpj": doc.strip(), "cliente_wa": wa.strip(),
+                "itens": list(itens), "subtotal": subtotal, "desconto": desconto, "desconto_valor": desconto,
+                "valor_total": total, "prazo_dias": prazo, "frete_tipo": frete, "validade_dias": validade,
+                "pago": proposta.get("pago", False), "entregue": proposta.get("entregue", False),
+                "aprovado": proposta.get("aprovado", False),
+                "timeline": proposta.get("timeline", []) if isinstance(proposta.get("timeline", []), list) else [],
+                "atendimento_id": proposta.get("atendimento_id") or st.session_state.get("_atendimento_origem_id", ""),
+                "projeto_id": proposta.get("projeto_id") or st.session_state.get("_projeto_origem_id", ""),
+            }
+            _anna_salvar_proposta(dados, numero_original)
+            st.session_state["anna_modal_itens"] = []
+            st.session_state[chave_modal] = False
+            st.rerun()
+    else:
+        st.info("Adicione pelo menos um item para concluir o orçamento.")
 
 
 @st.dialog("💬 Novo atendimento", width="large")
