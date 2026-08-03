@@ -22,6 +22,7 @@ import requests
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
+from painel_indicadores import calcular_indicadores_unificados
 try:
     from alpha_intelligence import render_alpha_intelligence
     ALPHA_INTELLIGENCE_IMPORT_ERROR = ""
@@ -6059,6 +6060,13 @@ with aba0:
     catalogos_whatsapp_central = [a for a in atendimentos_abertos_central if a.get("status") == "Catálogo solicitado"]
     aguardando_resposta_central = [a for a in atendimentos_abertos_central if minutos_aguardando(a) >= 30]
 
+    indicadores_unificados_central = calcular_indicadores_unificados(
+        historico_central,
+        dados_atendimento_central.get("itens", []),
+        tarefas_ativas_central,
+        hoje_central,
+    )
+
     nome_usuario_central = str(usuario_atual.get("nome", "")).strip()
     minha_fila_central = [
         a for a in atendimentos_abertos_central
@@ -6124,10 +6132,11 @@ with aba0:
 
     st.markdown("#### 📊 Resumo de hoje")
     rs1, rs2, rs3, rs4 = st.columns(4)
-    rs1.metric("Orçamentos criados", len(propostas_criadas_hoje))
-    rs2.metric("Pedidos aprovados", len(pedidos_aprovados_hoje))
-    rs3.metric("Entregas concluídas", len(entregues_hoje_resumo))
+    rs1.metric("Orçamentos criados", indicadores_unificados_central["propostas_hoje"])
+    rs2.metric("Pedidos aprovados", indicadores_unificados_central["aprovadas_hoje"])
+    rs3.metric("Entregas concluídas", indicadores_unificados_central["entregues_hoje"])
     rs4.metric("Minha fila", len(minha_fila_central))
+    st.caption("Indicadores calculados pela fonte única da Central, CRM e THU.")
 
     if minha_fila_central:
         with st.expander(f"👤 Minha fila — {nome_usuario_central} ({len(minha_fila_central)})", expanded=False):
@@ -6833,6 +6842,10 @@ with aba_crm:
     itens_crm = dados_crm.get("itens", [])
     historico_crm = carregar_historico()
     clientes_crm = carregar_clientes()
+    tarefas_crm = sincronizar_producao_com_propostas()
+    indicadores_unificados_crm = calcular_indicadores_unificados(
+        historico_crm, itens_crm, tarefas_crm, agora_local().date()
+    )
 
     oportunidades = []
     for item in itens_crm:
@@ -6845,19 +6858,26 @@ with aba_crm:
         oportunidades.append(enriquecido)
 
     estagios = ["Novos leads", "Em atendimento", "Orçamento", "Aguardando resposta", "Fechados", "Perdidos / arquivados"]
-    contagem_funil = {e: sum(1 for o in oportunidades if o["estagio_funil"] == e) for e in estagios}
+    contagem_funil = {e: indicadores_unificados_crm["funil"].get(e, 0) for e in estagios}
     abertas_crm = [o for o in oportunidades if o.get("status") not in ("Entregue", "Pós-venda", "Arquivado")]
     quentes_crm = [o for o in abertas_crm if o["indice_alpha"] >= 80]
     sem_retorno_crm = [o for o in abertas_crm if o.get("status") == "Aguardando cliente" and minutos_aguardando(o) >= 1440]
     media_indice = sum(o["indice_alpha"] for o in abertas_crm) / len(abertas_crm) if abertas_crm else 0
 
+    st.markdown("#### Visão geral comercial — mesma fonte da Central")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Oportunidades abertas", len(abertas_crm))
-    c2.metric("🔥 Quentes", len(quentes_crm))
-    c3.metric("Sem retorno +24h", len(sem_retorno_crm))
-    c4.metric("Índice Alpha médio", f"{media_indice:.0f}/100")
+    c1.metric("Orçamentos criados hoje", indicadores_unificados_crm["propostas_hoje"])
+    c2.metric("Pedidos aprovados hoje", indicadores_unificados_crm["aprovadas_hoje"])
+    c3.metric("Entregas concluídas hoje", indicadores_unificados_crm["entregues_hoje"])
+    c4.metric("Oportunidades abertas", indicadores_unificados_crm["atendimentos_abertos"])
 
-    st.markdown("#### Funil comercial")
+    d1, d2, d3 = st.columns(3)
+    d1.metric("🔥 Quentes", len(quentes_crm))
+    d2.metric("Sem retorno +24h", len(sem_retorno_crm))
+    d3.metric("Índice Alpha médio", f"{media_indice:.0f}/100")
+    st.caption("Central, CRM e THU utilizam o mesmo cálculo e a mesma data de referência.")
+
+    st.markdown("#### Funil comercial unificado")
     cols_funil = st.columns(len(estagios))
     icones_funil = ["🆕", "💬", "📝", "⏳", "✅", "⚫"]
     for col, estagio, icone in zip(cols_funil, estagios, icones_funil):
