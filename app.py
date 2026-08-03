@@ -695,9 +695,7 @@ def carregar_historico():
 def salvar_historico_completo(historico):
     """Salva no Supabase e mantém uma cópia JSON local de contingência.
 
-    Retorna ``True`` somente quando o banco online confirma o upsert. O retorno
-    é usado pelos formulários para impedir que uma janela seja fechada antes da
-    persistência real dos dados.
+    Retorna True somente quando o banco online confirma a gravação.
     """
     if not isinstance(historico, list):
         raise ValueError("O histórico precisa ser uma lista de propostas.")
@@ -5244,26 +5242,18 @@ def _anna_numero_whatsapp(valor):
 
 
 def _anna_salvar_proposta(dados, numero_original=None):
-    """Salva e confirma no Supabase antes de liberar o fechamento do modal."""
+    """Salva e confirma a persistência antes de fechar o modal da Anna.
+
+    O formulário só é limpo depois de uma leitura de confirmação do Supabase.
+    """
     import time
 
-    dados = dict(dados or {})
-    # Para novas propostas, o número é sempre gerado aqui com microssegundos.
-    # Isso evita colisões quando a Anna salva dois orçamentos rapidamente.
-    numero = numero_original or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
+    numero = numero_original or dados.get("numero_proposta") or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
+    dados = dict(dados)
     dados["numero_proposta"] = numero
-    dados["cliente_nome"] = str(dados.get("cliente_nome") or dados.get("cliente") or "").strip()
-    dados["cliente"] = dados["cliente_nome"]
-    registrar_evento_proposta(
-        dados,
-        "Proposta atualizada" if numero_original else "Proposta criada",
-        usuario="Anna",
-    )
+    registrar_evento_proposta(dados, "Proposta atualizada" if numero_original else "Proposta criada", usuario="Anna")
 
     historico = carregar_historico()
-    if not isinstance(historico, list):
-        historico = []
-
     if numero_original:
         encontrado = False
         for indice, proposta_existente in enumerate(historico):
@@ -5272,48 +5262,46 @@ def _anna_salvar_proposta(dados, numero_original=None):
                 encontrado = True
                 break
         if not encontrado:
-            return False, f"A proposta {numero_original} não foi encontrada para atualização."
+            return False, f"A proposta {numero_original} não foi encontrada. Os campos foram mantidos para você tentar novamente."
     else:
-        # Não remove uma proposta válida por engano. Como o número é único, basta inserir.
+        historico = [p for p in historico if p.get("numero_proposta") != numero]
         historico.insert(0, dados)
 
-    salvou_online = salvar_historico_completo(historico)
-    if not salvou_online:
-        return False, (
-            "O banco online não confirmou o salvamento. Os dados continuam na janela. "
-            "Verifique a conexão e clique em Salvar novamente."
-        )
+    gravado_online = salvar_historico_completo(historico)
+    if not gravado_online:
+        return False, "O banco online não confirmou a gravação. O orçamento continua aberto e nenhum campo foi apagado."
 
-    # Confirma o conteúdo gravado, não apenas a existência do número.
+    # Pequena repetição de leitura para evitar fechar o modal antes da confirmação.
     confirmado = False
-    for _ in range(4):
-        time.sleep(0.25)
-        historico_confirmacao = carregar_historico()
-        for proposta_confirmada in historico_confirmacao if isinstance(historico_confirmacao, list) else []:
-            if proposta_confirmada.get("numero_proposta") != numero:
-                continue
-            nome_confirmado = str(
-                proposta_confirmada.get("cliente_nome")
-                or proposta_confirmada.get("cliente")
-                or ""
-            ).strip()
-            if nome_confirmado == dados["cliente_nome"] and proposta_confirmada.get("itens"):
-                confirmado = True
-                break
+    for _ in range(3):
+        time.sleep(0.35)
+        confirmado = any(
+            p.get("numero_proposta") == numero
+            for p in carregar_historico()
+        )
         if confirmado:
             break
 
     if not confirmado:
-        return False, (
-            f"O banco recebeu a solicitação, mas ainda não confirmou a proposta de "
-            f"{dados['cliente_nome'] or 'cliente não informado'}. A janela foi mantida aberta."
-        )
+        return False, "O banco recebeu o envio, mas ainda não devolveu a confirmação. O orçamento permanece aberto para não perder os dados."
 
     st.session_state["_ultima_proposta_salva_anna"] = dict(dados)
-    st.session_state["_mensagem_sucesso_pendente"] = (
-        f"Proposta {numero} de {dados['cliente_nome']} salva com sucesso."
-    )
+    st.session_state["_mensagem_sucesso_pendente"] = f"Proposta {numero} salva. A Central da Anna foi atualizada."
     return True, numero
+
+
+def _anna_rerun_modal():
+    """Atualiza somente o conteúdo do modal, sem fechá-lo.
+
+    st.dialog executa como fragmento. Um st.rerun() comum reinicia a aplicação
+    inteira e fecha a janela; esse foi o motivo de o formulário desaparecer ao
+    adicionar um item.
+    """
+    try:
+        st.rerun(scope="fragment")
+    except TypeError:
+        # Compatibilidade com versões antigas do Streamlit.
+        st.rerun()
 
 
 @st.dialog("📄 ORÇAMENTOS ALPHAFEST", width="large")
@@ -5398,7 +5386,7 @@ def dialog_orcamento_anna(proposta=None):
             detalhes = f"Tema: {tema} | Nome: {nome_item} | Idade: {idade} | Cor: {cor} | Obs: {obs}"
             st.session_state["anna_modal_itens"].append({"produto": prod.strip(), "especificacoes": detalhes, "quantidade": q, "valor_unitario": v})
             st.session_state["anna_modal_item_key"] += 1
-            st.rerun()
+            _anna_rerun_modal()
 
     itens = st.session_state.get("anna_modal_itens", [])
     if itens:
@@ -5409,7 +5397,8 @@ def dialog_orcamento_anna(proposta=None):
             ci.caption(item.get("especificacoes", ""))
             if cr.button("🗑️", key=f"anna_modal_remover_{idx}", help="Remover item"):
                 itens.pop(idx)
-                st.rerun()
+                st.session_state["anna_modal_itens"] = itens
+                _anna_rerun_modal()
 
         st.divider()
         d1, d2, d3 = st.columns(3)
@@ -5428,7 +5417,7 @@ def dialog_orcamento_anna(proposta=None):
             if not nome.strip():
                 st.error("Informe o nome do cliente.")
                 return
-            numero = numero_original or ""
+            numero = numero_original or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
             dados = {
                 **proposta,
                 "numero_proposta": numero,
@@ -5446,9 +5435,12 @@ def dialog_orcamento_anna(proposta=None):
             }
             ok_salvar, retorno_salvar = _anna_salvar_proposta(dados, numero_original)
             if ok_salvar:
+                # Mantém o modal aberto na confirmação. Assim a Anna enxerga
+                # imediatamente os botões de WhatsApp e HTML e o formulário só
+                # é limpo depois que a gravação foi confirmada.
                 st.session_state["anna_modal_itens"] = []
                 st.session_state[chave_modal] = False
-                st.rerun()
+                _anna_rerun_modal()
             else:
                 st.error(retorno_salvar)
     else:
