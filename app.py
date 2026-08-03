@@ -695,7 +695,9 @@ def carregar_historico():
 def salvar_historico_completo(historico):
     """Salva no Supabase e mantém uma cópia JSON local de contingência.
 
-    Retorna True somente quando o banco online confirma a gravação.
+    Retorna ``True`` somente quando o banco online confirma o upsert. O retorno
+    é usado pelos formulários para impedir que uma janela seja fechada antes da
+    persistência real dos dados.
     """
     if not isinstance(historico, list):
         raise ValueError("O histórico precisa ser uma lista de propostas.")
@@ -5242,18 +5244,26 @@ def _anna_numero_whatsapp(valor):
 
 
 def _anna_salvar_proposta(dados, numero_original=None):
-    """Salva e confirma a persistência antes de fechar o modal da Anna.
-
-    O formulário só é limpo depois de uma leitura de confirmação do Supabase.
-    """
+    """Salva e confirma no Supabase antes de liberar o fechamento do modal."""
     import time
 
-    numero = numero_original or dados.get("numero_proposta") or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
-    dados = dict(dados)
+    dados = dict(dados or {})
+    # Para novas propostas, o número é sempre gerado aqui com microssegundos.
+    # Isso evita colisões quando a Anna salva dois orçamentos rapidamente.
+    numero = numero_original or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
     dados["numero_proposta"] = numero
-    registrar_evento_proposta(dados, "Proposta atualizada" if numero_original else "Proposta criada", usuario="Anna")
+    dados["cliente_nome"] = str(dados.get("cliente_nome") or dados.get("cliente") or "").strip()
+    dados["cliente"] = dados["cliente_nome"]
+    registrar_evento_proposta(
+        dados,
+        "Proposta atualizada" if numero_original else "Proposta criada",
+        usuario="Anna",
+    )
 
     historico = carregar_historico()
+    if not isinstance(historico, list):
+        historico = []
+
     if numero_original:
         encontrado = False
         for indice, proposta_existente in enumerate(historico):
@@ -5262,46 +5272,48 @@ def _anna_salvar_proposta(dados, numero_original=None):
                 encontrado = True
                 break
         if not encontrado:
-            return False, f"A proposta {numero_original} não foi encontrada. Os campos foram mantidos para você tentar novamente."
+            return False, f"A proposta {numero_original} não foi encontrada para atualização."
     else:
-        historico = [p for p in historico if p.get("numero_proposta") != numero]
+        # Não remove uma proposta válida por engano. Como o número é único, basta inserir.
         historico.insert(0, dados)
 
-    gravado_online = salvar_historico_completo(historico)
-    if not gravado_online:
-        return False, "O banco online não confirmou a gravação. O orçamento continua aberto e nenhum campo foi apagado."
-
-    # Pequena repetição de leitura para evitar fechar o modal antes da confirmação.
-    confirmado = False
-    for _ in range(3):
-        time.sleep(0.35)
-        confirmado = any(
-            p.get("numero_proposta") == numero
-            for p in carregar_historico()
+    salvou_online = salvar_historico_completo(historico)
+    if not salvou_online:
+        return False, (
+            "O banco online não confirmou o salvamento. Os dados continuam na janela. "
+            "Verifique a conexão e clique em Salvar novamente."
         )
+
+    # Confirma o conteúdo gravado, não apenas a existência do número.
+    confirmado = False
+    for _ in range(4):
+        time.sleep(0.25)
+        historico_confirmacao = carregar_historico()
+        for proposta_confirmada in historico_confirmacao if isinstance(historico_confirmacao, list) else []:
+            if proposta_confirmada.get("numero_proposta") != numero:
+                continue
+            nome_confirmado = str(
+                proposta_confirmada.get("cliente_nome")
+                or proposta_confirmada.get("cliente")
+                or ""
+            ).strip()
+            if nome_confirmado == dados["cliente_nome"] and proposta_confirmada.get("itens"):
+                confirmado = True
+                break
         if confirmado:
             break
 
     if not confirmado:
-        return False, "O banco recebeu o envio, mas ainda não devolveu a confirmação. O orçamento permanece aberto para não perder os dados."
+        return False, (
+            f"O banco recebeu a solicitação, mas ainda não confirmou a proposta de "
+            f"{dados['cliente_nome'] or 'cliente não informado'}. A janela foi mantida aberta."
+        )
 
     st.session_state["_ultima_proposta_salva_anna"] = dict(dados)
-    st.session_state["_mensagem_sucesso_pendente"] = f"Proposta {numero} salva. A Central da Anna foi atualizada."
+    st.session_state["_mensagem_sucesso_pendente"] = (
+        f"Proposta {numero} de {dados['cliente_nome']} salva com sucesso."
+    )
     return True, numero
-
-
-def _anna_rerun_modal():
-    """Atualiza somente o conteúdo do modal, sem fechá-lo.
-
-    st.dialog executa como fragmento. Um st.rerun() comum reinicia a aplicação
-    inteira e fecha a janela; esse foi o motivo de o formulário desaparecer ao
-    adicionar um item.
-    """
-    try:
-        st.rerun(scope="fragment")
-    except TypeError:
-        # Compatibilidade com versões antigas do Streamlit.
-        st.rerun()
 
 
 @st.dialog("📄 ORÇAMENTOS ALPHAFEST", width="large")
@@ -5386,7 +5398,7 @@ def dialog_orcamento_anna(proposta=None):
             detalhes = f"Tema: {tema} | Nome: {nome_item} | Idade: {idade} | Cor: {cor} | Obs: {obs}"
             st.session_state["anna_modal_itens"].append({"produto": prod.strip(), "especificacoes": detalhes, "quantidade": q, "valor_unitario": v})
             st.session_state["anna_modal_item_key"] += 1
-            _anna_rerun_modal()
+            st.rerun()
 
     itens = st.session_state.get("anna_modal_itens", [])
     if itens:
@@ -5397,8 +5409,7 @@ def dialog_orcamento_anna(proposta=None):
             ci.caption(item.get("especificacoes", ""))
             if cr.button("🗑️", key=f"anna_modal_remover_{idx}", help="Remover item"):
                 itens.pop(idx)
-                st.session_state["anna_modal_itens"] = itens
-                _anna_rerun_modal()
+                st.rerun()
 
         st.divider()
         d1, d2, d3 = st.columns(3)
@@ -5417,7 +5428,7 @@ def dialog_orcamento_anna(proposta=None):
             if not nome.strip():
                 st.error("Informe o nome do cliente.")
                 return
-            numero = numero_original or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
+            numero = numero_original or ""
             dados = {
                 **proposta,
                 "numero_proposta": numero,
@@ -5435,12 +5446,9 @@ def dialog_orcamento_anna(proposta=None):
             }
             ok_salvar, retorno_salvar = _anna_salvar_proposta(dados, numero_original)
             if ok_salvar:
-                # Mantém o modal aberto na confirmação. Assim a Anna enxerga
-                # imediatamente os botões de WhatsApp e HTML e o formulário só
-                # é limpo depois que a gravação foi confirmada.
                 st.session_state["anna_modal_itens"] = []
                 st.session_state[chave_modal] = False
-                _anna_rerun_modal()
+                st.rerun()
             else:
                 st.error(retorno_salvar)
     else:
@@ -5791,6 +5799,73 @@ def dialog_catalogo_gerar_anna():
     c2.download_button("👥 Catálogo do cliente sem valores", html_cliente, file_name="catalogo_cliente_sem_valores.html", mime="text/html", use_container_width=True)
 
 
+def _anna_classificar_semaforo(prop):
+    aprovado = bool(prop.get("aprovado", False))
+    pago = bool(prop.get("pago", False))
+    entregue = bool(prop.get("entregue", False))
+    data_entrega = data_entrega_segura(prop.get("data_entrega"))
+    atrasado = bool(data_entrega and data_entrega < hoje_local() and not entregue)
+    return {
+        "abertos": not aprovado and not entregue,
+        "fechados": aprovado,
+        "atrasados": atrasado,
+        "pagos": pago,
+        "entregues": entregue,
+        "aguardando": not aprovado and not entregue,
+    }
+
+
+@st.dialog("🚦 Situação dos orçamentos", width="large")
+def dialog_semaforo_anna(tipo):
+    rotulos = {
+        "abertos": "Orçamentos abertos",
+        "fechados": "Fechados / aprovados",
+        "atrasados": "Pedidos atrasados",
+        "pagos": "Pedidos pagos",
+        "entregues": "Pedidos entregues",
+        "aguardando": "Aguardando aprovação",
+    }
+    historico = carregar_historico()
+    itens = [p for p in historico if _anna_classificar_semaforo(p).get(tipo, False)]
+    itens.sort(key=lambda p: data_entrega_segura(p.get("data_entrega")) or date.max)
+    st.subheader(rotulos.get(tipo, "Situação"))
+    st.caption(f"{len(itens)} proposta(s) nesta situação.")
+    busca = st.text_input("Pesquisar", placeholder="Cliente, proposta ou telefone", key=f"sem_busca_{tipo}").strip().lower()
+    if busca:
+        itens = [p for p in itens if busca in normalizar_texto_busca(p)]
+    if not itens:
+        st.info("Nenhuma proposta encontrada.")
+        return
+    for prop in itens:
+        numero = str(prop.get("numero_proposta", "")).strip()
+        if not numero:
+            continue
+        chave = "".join(ch if ch.isalnum() else "_" for ch in numero)
+        with st.container(border=True):
+            c1, c2 = st.columns([3, 1])
+            c1.write(f"**{numero} — {prop.get('cliente_nome', prop.get('cliente', 'Cliente'))}**")
+            _, _, total = calcular_valores_proposta(prop)
+            c2.write(f"**{_anna_fmt_moeda(total)}**")
+            st.caption(f"Entrega: {prop.get('data_entrega', '—')}")
+            with st.form(f"sem_form_{tipo}_{chave}"):
+                a, b, c = st.columns(3)
+                aprovado = a.checkbox("Aprovado", value=bool(prop.get("aprovado", False)))
+                pago = b.checkbox("Pago", value=bool(prop.get("pago", False)))
+                entregue = c.checkbox("Entregue", value=bool(prop.get("entregue", False)))
+                salvar = st.form_submit_button("💾 Salvar andamento", use_container_width=True)
+            if salvar:
+                ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, entregue)
+                if ok:
+                    st.success(mensagem)
+                else:
+                    st.error(mensagem)
+            w1, w2 = st.columns(2)
+            numero_wa = _anna_numero_whatsapp(prop.get("whatsapp") or prop.get("cliente_wa"))
+            link = f"https://wa.me/{numero_wa}?text={quote(formatar_msg_whatsapp(prop))}" if numero_wa else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop))}"
+            w1.link_button("📱 WhatsApp", link, use_container_width=True)
+            w2.download_button("📄 HTML", gerar_html(prop), file_name=f"{numero}.html", mime="text/html", key=f"sem_html_{tipo}_{chave}", use_container_width=True)
+
+
 def renderizar_workspace_anna_isolado():
     usuario = obter_usuario_atual()
 
@@ -5845,6 +5920,25 @@ def renderizar_workspace_anna_isolado():
     m2.metric("Aguardando cliente", len([x for x in fila if x.get("status") == "Aguardando cliente"]))
     m3.metric("Pedidos ativos", len(ativos))
     m4.metric("Entregas hoje", len([p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]))
+
+    # Semáforo resumido e permanente da Anna. Cada indicador abre apenas os registros correspondentes.
+    st.markdown("### 🚦 Semáforo operacional")
+    classes = [_anna_classificar_semaforo(p) for p in historico]
+    contagens = {chave: sum(1 for item in classes if item.get(chave)) for chave in ("abertos", "fechados", "atrasados", "pagos", "entregues", "aguardando")}
+    s1, s2, s3 = st.columns(3)
+    if s1.button(f"⚪ Abertos\n\n{contagens['abertos']}", key="sem_abertos", use_container_width=True):
+        dialog_semaforo_anna("abertos")
+    if s2.button(f"🟢 Fechados\n\n{contagens['fechados']}", key="sem_fechados", use_container_width=True):
+        dialog_semaforo_anna("fechados")
+    if s3.button(f"🔴 Atrasados\n\n{contagens['atrasados']}", key="sem_atrasados", use_container_width=True):
+        dialog_semaforo_anna("atrasados")
+    s4, s5, s6 = st.columns(3)
+    if s4.button(f"🟣 Pagos\n\n{contagens['pagos']}", key="sem_pagos", use_container_width=True):
+        dialog_semaforo_anna("pagos")
+    if s5.button(f"✅ Entregues\n\n{contagens['entregues']}", key="sem_entregues", use_container_width=True):
+        dialog_semaforo_anna("entregues")
+    if s6.button(f"🟡 Aguardando aprovação\n\n{contagens['aguardando']}", key="sem_aguardando", use_container_width=True):
+        dialog_semaforo_anna("aguardando")
 
     st.markdown("### 📄 Propostas e pedidos")
     busca = st.text_input("Pesquisar", placeholder="Cliente, proposta ou telefone", key="anna_busca_rapida")
