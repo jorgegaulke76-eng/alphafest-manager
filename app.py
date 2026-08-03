@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import json
 import os
@@ -398,6 +399,43 @@ def aplicar_visibilidade_abas(usuario=None):
                 regras.append(f'{prefixo} > button:nth-child({indice}) {{ display:none !important; }}')
 
     st.markdown("<div id='fest-main-tabs-marker'></div><style>" + "".join(regras) + "</style>", unsafe_allow_html=True)
+
+def solicitar_navegacao_aba(indice, mensagem=None):
+    """Agenda a abertura de uma aba principal no próximo rerun."""
+    st.session_state["_aba_principal_destino"] = int(indice)
+    if mensagem:
+        st.session_state["_mensagem_sucesso_pendente"] = mensagem
+    st.rerun()
+
+
+def executar_navegacao_aba_pendente():
+    """Clica programaticamente na aba principal solicitada, inclusive quando oculta no perfil da Anna."""
+    indice = st.session_state.pop("_aba_principal_destino", None)
+    if indice is None:
+        return
+    components.html(
+        f"""<script>
+        (function() {{
+          const idx = {int(indice)};
+          let tentativas = 0;
+          function abrir() {{
+            const doc = window.parent.document;
+            const tabs = doc.querySelectorAll('[data-baseweb="tab"]');
+            if (tabs && tabs[idx]) {{
+              tabs[idx].click();
+              tabs[idx].dispatchEvent(new MouseEvent('click', {{bubbles:true, cancelable:true, view:window.parent}}));
+              return;
+            }}
+            tentativas += 1;
+            if (tentativas < 20) setTimeout(abrir, 150);
+          }}
+          setTimeout(abrir, 120);
+        }})();
+        </script>""",
+        height=0,
+        width=0,
+    )
+
 
 def obter_email_usuario_autenticado():
     """Tenta obter o e-mail do login OIDC do Streamlit, quando configurado."""
@@ -5183,6 +5221,8 @@ if usuario_em_operacao_protegida(obter_usuario_atual()):
     )
 
 
+executar_navegacao_aba_pendente()
+
 with aba0:
     usuario_atual = obter_usuario_atual()
     empresa_central = carregar_config_empresa()
@@ -5207,9 +5247,23 @@ with aba0:
         st.info("👨‍💼 **Central de Gestão do Jorge** — visão completa da operação, inteligência, conexões, marketing, indicadores e configurações.")
     favoritos_central = perfil_central.get("favoritos", []) or []
     if favoritos_central:
-        nomes_favoritos = [dict(ABAS_SISTEMA).get(ch, ch) for ch in favoritos_central if ch in dict(ABAS_SISTEMA)]
-        if nomes_favoritos:
-            st.caption("⭐ Favoritos: " + " · ".join(nomes_favoritos))
+        if str(usuario_atual.get("nome", "")).casefold() == "anna":
+            mapa_favoritos_anna = {
+                "atendimento": ("📥 Multicanal", 1),
+                "novo_orcamento": ("➕ Novo Orçamento", 8),
+                "catalogo": ("📦 Catálogo", 13),
+            }
+            favoritos_validos = [mapa_favoritos_anna[ch] for ch in favoritos_central if ch in mapa_favoritos_anna]
+            if favoritos_validos:
+                st.caption("⭐ Favoritos")
+                cols_fav = st.columns(len(favoritos_validos))
+                for col_fav, (rotulo_fav, indice_fav) in zip(cols_fav, favoritos_validos):
+                    if col_fav.button(rotulo_fav, key=f"fav_anna_{indice_fav}", use_container_width=True):
+                        solicitar_navegacao_aba(indice_fav)
+        else:
+            nomes_favoritos = [dict(ABAS_SISTEMA).get(ch, ch) for ch in favoritos_central if ch in dict(ABAS_SISTEMA)]
+            if nomes_favoritos:
+                st.caption("⭐ Favoritos: " + " · ".join(nomes_favoritos))
 
     # Anna Workspace: área operacional leve e direta, sem alterar o modelo da mensagem de orçamento.
     if str(usuario_atual.get("nome", "")).casefold() == "anna":
@@ -5328,18 +5382,18 @@ with aba0:
     ac1, ac2, ac3, ac4, ac5 = st.columns(5)
     if ac1.button("📥 Novo atendimento", key="acao_rapida_atendimento", use_container_width=True):
         st.session_state["foco_novo_atendimento"] = True
-        st.info("Abra Atendimento → Registrar contato. A tela está pronta para um novo atendimento.")
+        solicitar_navegacao_aba(1)
     if ac2.button("➕ Novo orçamento", key="acao_rapida_orcamento", use_container_width=True):
         st.session_state["form_cliente"] = ""
         st.session_state["form_whatsapp"] = ""
-        st.info("Abra Novo Orçamento para iniciar.")
+        solicitar_navegacao_aba(8)
     if ac3.button("🧩 Novo projeto", key="acao_rapida_projeto", use_container_width=True):
-        st.info("Abra Projeto Personalizado para registrar a necessidade do cliente.")
+        solicitar_navegacao_aba(7)
     if ac4.button("👤 Novo cliente", key="acao_rapida_cliente", use_container_width=True):
         st.session_state["cliente_edicao_id"] = None
-        st.info("Abra Clientes → Cadastrar / Editar.")
+        solicitar_navegacao_aba(14)
     if ac5.button("📦 Fluxo de pedidos", key="acao_rapida_fluxo", use_container_width=True):
-        st.info("Abra Fluxo de Pedidos para acompanhar a produção.")
+        solicitar_navegacao_aba(10)
 
     historico_central = carregar_historico()
     tarefas_central = sincronizar_producao_com_propostas()
