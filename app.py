@@ -5532,8 +5532,34 @@ with aba0:
                                 proposta_atualizar["entregue_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
                             break
                     salvar_historico_completo(historico_atual_central)
-                    st.session_state["_mensagem_sucesso_pendente"] = "Andamento da proposta atualizado com sucesso."
+
+                    # Limpa somente o estado do editor salvo. Isso força a Central do Dia
+                    # a reconstruir todos os resumos, alertas e filas com os dados novos,
+                    # sem reaproveitar checkboxes ou campos da proposta anterior.
+                    for chave_editor in (
+                        f"central_aprov_{numero_central_selecionado}",
+                        f"central_pago_{numero_central_selecionado}",
+                        f"central_entregue_{numero_central_selecionado}",
+                        f"central_obs_{numero_central_selecionado}",
+                    ):
+                        st.session_state.pop(chave_editor, None)
+
                     st.session_state.alerta_proposta_numero = None
+                    st.session_state["_central_atualizada_em"] = agora_local().isoformat()
+                    st.session_state["_mensagem_sucesso_pendente"] = (
+                        "Andamento salvo. A Central do Dia foi atualizada por completo."
+                    )
+
+                    # Limpa caches de leitura eventualmente usados por outros módulos e
+                    # executa novamente o aplicativo inteiro, não apenas o formulário.
+                    try:
+                        st.cache_data.clear()
+                    except Exception:
+                        pass
+                    try:
+                        st.cache_resource.clear()
+                    except Exception:
+                        pass
                     st.rerun()
                 if op2.button("✏️ Editar proposta completa", key=f"central_editar_{numero_central_selecionado}", use_container_width=True):
                     carregar_proposta_no_formulario(proposta_central_selecionada, duplicar=False)

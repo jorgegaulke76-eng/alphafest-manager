@@ -332,3 +332,8 @@ hangelog
 - Novo Painel da Anna com prioridades operacionais e indicadores por canal.
 - Diagnóstico das Integrações Meta unificado com os Secrets do Alpha Connect.
 - Separação visual entre credenciais configuradas e webhook realmente validado.
+
+
+## 12.0.1
+- Atualização completa da Central do Dia após salvar andamento de proposta.
+- Limpeza do estado do editor anterior para impedir dados repetidos na proposta seguinte.
