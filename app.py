@@ -383,7 +383,13 @@ def aplicar_visibilidade_abas(usuario=None):
     # completa fica escondida para reduzir distrações e deixar a tela mais enxuta.
     # Os módulos continuam preservados no código e permanecem visíveis ao Jorge.
     if usuario_em_operacao_protegida(usuario):
-        regras.append(f'{prefixo} {{ display:none !important; }}')
+        # No perfil operacional da Anna não existe navegação por abas. A regra
+        # anterior dependia da posição do marcador no DOM e deixou de funcionar
+        # após uma atualização do Streamlit. Esta regra direta é proposital:
+        # na Central da Anna não há st.tabs internos necessários, portanto
+        # ocultar a lista de abas garante uma interface realmente enxuta.
+        regras.append('div[data-baseweb="tab-list"] { display:none !important; height:0 !important; min-height:0 !important; margin:0 !important; padding:0 !important; overflow:hidden !important; }')
+        regras.append('div[data-testid="stTabs"] { margin-top:0 !important; padding-top:0 !important; }')
         regras.append('div[data-testid="stElementContainer"]:has(#fest-main-tabs-marker) { margin:0 !important; padding:0 !important; height:0 !important; min-height:0 !important; }')
     else:
         for indice, (chave, _) in enumerate(ABAS_SISTEMA, start=1):
