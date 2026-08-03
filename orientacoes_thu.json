@@ -1,7 +1,7 @@
 {
   "ativo": true,
   "frequencia": "Uma vez por sessão",
-  "duracao_segundos": 8,
+  "duracao_segundos": 10,
   "telas": {
     "novo_orcamento": true,
     "atualizar_orcamento": true,
@@ -32,5 +32,7 @@
     "novo_cliente": [
       "CONFIRA O NOME COMPLETO E O TELEFONE EXATAMENTE COMO APARECEM NO WHATSAPP."
     ]
-  }
+  },
+  "posicao": "Centro",
+  "tamanho": "Grande"
 }

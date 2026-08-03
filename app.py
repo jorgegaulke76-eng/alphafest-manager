@@ -572,7 +572,9 @@ def renderizar_boas_vindas_anna(resumo=None):
 CONFIG_ORIENTACOES_THU_PADRAO = {
     "ativo": True,
     "frequencia": "Uma vez por sessão",
-    "duracao_segundos": 8,
+    "duracao_segundos": 10,
+    "posicao": "Centro",
+    "tamanho": "Grande",
     "telas": {
         "novo_orcamento": True,
         "atualizar_orcamento": True,
@@ -637,8 +639,19 @@ def salvar_orientacoes_thu(config):
     return bool(save_document("orientacoes_thu", config, ARQUIVO_ORIENTACOES_THU))
 
 
+def _imagem_thu_base64():
+    """Carrega o mascote oficial do THU em formato embutido e leve."""
+    caminho = Path("assets/thu/thu_oficial.webp")
+    if not caminho.exists():
+        return ""
+    try:
+        return base64.b64encode(caminho.read_bytes()).decode("ascii")
+    except Exception:
+        return ""
+
+
 def mostrar_orientacao_thu(tela, token=None):
-    """Mostra uma dica temporária sem bloquear a digitação nem provocar rerun."""
+    """Exibe o THU oficial em um aviso visual, temporário e sem rerun."""
     cfg = carregar_orientacoes_thu()
     if not cfg.get("ativo", True) or not cfg.get("telas", {}).get(tela, False):
         return
@@ -664,11 +677,92 @@ def mostrar_orientacao_thu(tela, token=None):
     contador = int(st.session_state.get(f"thu_indice_{tela}", 0))
     mensagem = mensagens[contador % len(mensagens)]
     st.session_state[f"thu_indice_{tela}"] = contador + 1
-    texto = f"THU lembra: {mensagem}"
-    try:
-        st.toast(texto, icon="🤖")
-    except Exception:
-        st.info(f"🤖 **THU lembra:** {mensagem}")
+
+    duracao = max(4, min(30, int(cfg.get("duracao_segundos", 10) or 10)))
+    posicao = str(cfg.get("posicao", "Centro"))
+    tamanho = str(cfg.get("tamanho", "Grande"))
+    largura = {"Médio": "560px", "Grande": "700px", "Extra grande": "820px"}.get(tamanho, "700px")
+    if posicao == "Esquerda":
+        alinhamento = "left:24px;right:auto;transform:none;"
+    elif posicao == "Direita":
+        alinhamento = "right:24px;left:auto;transform:none;"
+    else:
+        alinhamento = "left:50%;right:auto;transform:translateX(-50%);"
+
+    imagem = _imagem_thu_base64()
+    imagem_html = (
+        f'<img src="data:image/webp;base64,{imagem}" alt="Mascote oficial THU" class="thu-live-avatar">'
+        if imagem else '<div class="thu-live-fallback">THU</div>'
+    )
+    mensagem_segura = html.escape(mensagem)
+    nome_usuario = html.escape(str(usuario.get("nome") or "Anna").split()[0].title())
+    animacao_saida = max(3, duracao - 1)
+
+    st.markdown(
+        f"""
+        <style>
+        @keyframes thuLiveEntrar {{
+          0% {{ opacity:0; margin-top:-26px; }}
+          100% {{ opacity:1; margin-top:0; }}
+        }}
+        @keyframes thuLiveSair {{
+          0%, 84% {{ opacity:1; visibility:visible; }}
+          100% {{ opacity:0; visibility:hidden; pointer-events:none; }}
+        }}
+        .thu-live-card {{
+          position:fixed; top:76px; {alinhamento}
+          z-index:999999; width:min({largura}, calc(100vw - 32px));
+          display:flex; align-items:center; gap:22px;
+          padding:20px 24px; border-radius:24px;
+          background:linear-gradient(135deg,#ffffff 0%,#edf7ff 58%,#dcefff 100%);
+          border:3px solid #1687d9;
+          box-shadow:0 18px 55px rgba(0,72,130,.32), 0 0 0 6px rgba(22,135,217,.10);
+          color:#102a43;
+          animation:thuLiveEntrar .45s ease-out both, thuLiveSair 1s ease-in {animacao_saida}s forwards;
+        }}
+        .thu-live-avatar {{
+          width:150px; height:150px; object-fit:contain; flex:0 0 150px;
+          border-radius:22px; background:white; border:2px solid rgba(22,135,217,.22);
+        }}
+        .thu-live-fallback {{
+          width:132px;height:132px;border-radius:50%;display:grid;place-items:center;
+          background:#1687d9;color:white;font-size:2rem;font-weight:900;
+        }}
+        .thu-live-content {{ flex:1; min-width:0; }}
+        .thu-live-kicker {{
+          display:inline-block; padding:5px 12px; border-radius:999px;
+          background:#1687d9; color:#fff; font-weight:900; font-size:.82rem;
+          letter-spacing:.05em; text-transform:uppercase;
+        }}
+        .thu-live-title {{ margin:9px 0 5px; font-size:1.55rem; font-weight:900; color:#074f88; }}
+        .thu-live-message {{ font-size:1.14rem; line-height:1.48; font-weight:800; color:#142f45; }}
+        .thu-live-signature {{ margin-top:10px; color:#42647e; font-size:.88rem; font-weight:700; }}
+        .thu-live-progress {{ height:5px; margin-top:14px; background:rgba(22,135,217,.15); border-radius:99px; overflow:hidden; }}
+        .thu-live-progress::after {{
+          content:""; display:block; height:100%; width:100%; background:#1687d9;
+          transform-origin:left; animation:thuTempo {duracao}s linear forwards;
+        }}
+        @keyframes thuTempo {{ from {{ transform:scaleX(1); }} to {{ transform:scaleX(0); }} }}
+        @media (max-width:680px) {{
+          .thu-live-card {{ top:58px; padding:14px; gap:12px; align-items:flex-start; }}
+          .thu-live-avatar {{ width:92px;height:92px;flex-basis:92px; }}
+          .thu-live-title {{ font-size:1.15rem; }}
+          .thu-live-message {{ font-size:.96rem; }}
+        }}
+        </style>
+        <div class="thu-live-card" role="status" aria-live="polite">
+          {imagem_html}
+          <div class="thu-live-content">
+            <span class="thu-live-kicker">THU TEM UM RECADO</span>
+            <div class="thu-live-title">Olá, {nome_usuario}! 👋</div>
+            <div class="thu-live-message">{mensagem_segura}</div>
+            <div class="thu-live-signature">💙 THU — Assistente da AlphaFest</div>
+            <div class="thu-live-progress"></div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def renderizar_configuracoes_orientacoes_thu():
@@ -685,7 +779,15 @@ def renderizar_configuracoes_orientacoes_thu():
         frequencias = ["Uma vez por sessão", "Uma vez por dia", "Sempre que abrir a tela"]
         freq_atual = str(cfg.get("frequencia", frequencias[0]))
         frequencia = c2.selectbox("Frequência", frequencias, index=frequencias.index(freq_atual) if freq_atual in frequencias else 0)
-        duracao = c3.number_input("Duração de referência (segundos)", min_value=3, max_value=30, value=int(cfg.get("duracao_segundos", 8) or 8), help="O aviso usa o balão temporário nativo do Streamlit e desaparece automaticamente.")
+        duracao = c3.number_input("Tempo na tela (segundos)", min_value=4, max_value=30, value=int(cfg.get("duracao_segundos", 10) or 10), help="O cartão do THU desaparece sozinho e não interrompe a digitação.")
+
+        v1, v2 = st.columns(2)
+        opcoes_posicao = ["Centro", "Esquerda", "Direita"]
+        pos_atual = str(cfg.get("posicao", "Centro"))
+        posicao = v1.selectbox("Posição do THU", opcoes_posicao, index=opcoes_posicao.index(pos_atual) if pos_atual in opcoes_posicao else 0)
+        opcoes_tamanho = ["Médio", "Grande", "Extra grande"]
+        tam_atual = str(cfg.get("tamanho", "Grande"))
+        tamanho = v2.selectbox("Tamanho do aviso", opcoes_tamanho, index=opcoes_tamanho.index(tam_atual) if tam_atual in opcoes_tamanho else 1)
 
         st.markdown("#### Telas habilitadas")
         colunas = st.columns(3)
@@ -709,6 +811,8 @@ def renderizar_configuracoes_orientacoes_thu():
             "ativo": bool(ativo),
             "frequencia": frequencia,
             "duracao_segundos": int(duracao),
+            "posicao": posicao,
+            "tamanho": tamanho,
             "telas": telas_novas,
             "mensagens": mensagens_novas,
         }
@@ -722,7 +826,15 @@ def renderizar_configuracoes_orientacoes_thu():
     tela_previa = st.selectbox("Tela da prévia", list(ROTULOS_TELAS_THU), format_func=lambda x: ROTULOS_TELAS_THU[x], key="thu_previa_tela")
     mensagens = cfg.get("mensagens", {}).get(tela_previa, [])
     if mensagens:
-        st.info(f"🤖 **THU lembra:** {mensagens[0]}")
+        imagem = _imagem_thu_base64()
+        img = f'<img src="data:image/webp;base64,{imagem}" style="width:110px;height:110px;object-fit:contain;border-radius:16px;background:white">' if imagem else ""
+        st.markdown(f"""
+        <div style="display:flex;gap:18px;align-items:center;padding:18px;border-radius:22px;border:3px solid #1687d9;background:linear-gradient(135deg,#fff,#e9f6ff);box-shadow:0 12px 30px rgba(0,72,130,.18)">
+          {img}<div><div style="font-weight:900;color:#1687d9;font-size:.82rem">THU TEM UM RECADO</div>
+          <div style="font-size:1.15rem;font-weight:900;margin:.3rem 0">Olá! 👋</div>
+          <div style="font-weight:800">{html.escape(mensagens[0])}</div></div>
+        </div>
+        """, unsafe_allow_html=True)
     else:
         st.caption("Nenhuma mensagem cadastrada para esta tela.")
 
