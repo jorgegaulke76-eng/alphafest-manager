@@ -5189,17 +5189,27 @@ def _anna_numero_whatsapp(valor):
 
 
 def _anna_salvar_proposta(dados, numero_original=None):
-    numero = numero_original or dados.get("numero_proposta") or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S')}"
+    """Salva e confirma a persistência antes de fechar o modal."""
+    numero = numero_original or dados.get("numero_proposta") or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
+    dados = dict(dados)
     dados["numero_proposta"] = numero
-    registrar_evento_proposta(dados, "Proposta atualizada" if numero_original else "Proposta criada")
+    registrar_evento_proposta(dados, "Proposta atualizada" if numero_original else "Proposta criada", usuario="Anna")
+
     if numero_original:
-        atualizar_proposta(numero_original, dados)
+        ok = atualizar_proposta(numero_original, dados)
     else:
         historico = carregar_historico()
+        historico = [p for p in historico if p.get("numero_proposta") != numero]
         historico.insert(0, dados)
         salvar_historico_completo(historico)
+        ok = any(p.get("numero_proposta") == numero for p in carregar_historico())
+
+    if not ok:
+        return False, "Não foi possível confirmar o salvamento no banco. Tente novamente sem fechar a janela."
+
     st.session_state["_ultima_proposta_salva_anna"] = dict(dados)
-    st.session_state["_mensagem_sucesso_pendente"] = "Proposta salva. A Central da Anna foi atualizada."
+    st.session_state["_mensagem_sucesso_pendente"] = f"Proposta {numero} salva. A Central da Anna foi atualizada."
+    return True, numero
 
 
 @st.dialog("📄 ORÇAMENTOS ALPHAFEST", width="large")
@@ -5330,10 +5340,13 @@ def dialog_orcamento_anna(proposta=None):
                 "atendimento_id": proposta.get("atendimento_id") or st.session_state.get("_atendimento_origem_id", ""),
                 "projeto_id": proposta.get("projeto_id") or st.session_state.get("_projeto_origem_id", ""),
             }
-            _anna_salvar_proposta(dados, numero_original)
-            st.session_state["anna_modal_itens"] = []
-            st.session_state[chave_modal] = False
-            st.rerun()
+            ok_salvar, retorno_salvar = _anna_salvar_proposta(dados, numero_original)
+            if ok_salvar:
+                st.session_state["anna_modal_itens"] = []
+                st.session_state[chave_modal] = False
+                st.rerun()
+            else:
+                st.error(retorno_salvar)
     else:
         st.info("Adicione pelo menos um item para concluir o orçamento.")
 
@@ -5408,6 +5421,91 @@ def dialog_fluxo_anna():
                 st.rerun()
 
 
+@st.dialog("➕ Cadastrar produto no catálogo", width="large")
+def dialog_catalogo_cadastro_anna(produto_indice=None):
+    catalogo = carregar_catalogo()
+    produto = dict(catalogo[produto_indice]) if produto_indice is not None and 0 <= produto_indice < len(catalogo) else {}
+    chave = f"anna_cat_{produto_indice if produto_indice is not None else 'novo'}"
+    with st.form(chave, clear_on_submit=False):
+        c1, c2 = st.columns(2)
+        nome = c1.text_input("Nome do produto", value=str(produto.get("Nome", "")))
+        categoria = c2.text_input("Grupo / categoria", value=str(produto.get("Categoria", "")))
+        c3, c4 = st.columns(2)
+        subcategoria = c3.text_input("Subcategoria", value=str(produto.get("Subcategoria", "")))
+        preco = c4.text_input("Valor", value=str(produto.get("Preco", "")), placeholder="Ex.: 25,00")
+        descricao = st.text_area("Descrição para o catálogo", value=str(produto.get("DescricaoCurta", produto.get("Descricao", ""))), height=110)
+        imagens_urls = st.text_area("URLs das imagens (uma por linha)", value="\n".join([x for x in (produto.get("Imagens", []) or []) if str(x).startswith("http")]), height=90)
+        fotos = st.file_uploader("Adicionar fotos", type=["png","jpg","jpeg","webp"], accept_multiple_files=True)
+        c5, c6 = st.columns(2)
+        ativo = c5.checkbox("Produto ativo", value=bool(produto.get("Ativo", True)))
+        destaque = c6.checkbox("Produto em destaque", value=bool(produto.get("Destaque", False)))
+        salvar = st.form_submit_button("💾 Salvar produto", type="primary", use_container_width=True)
+    if salvar:
+        if not nome.strip() or not categoria.strip():
+            st.error("Informe o nome e o grupo/categoria.")
+            return
+        imagens = [u.strip() for u in imagens_urls.splitlines() if u.strip()]
+        imagens.extend([x for x in (produto.get("Imagens", []) or []) if not str(x).startswith("http")])
+        for foto in fotos or []:
+            caminho = salvar_upload_catalogo(foto)
+            if caminho:
+                imagens.insert(0, caminho)
+        registro = dict(produto)
+        registro.update({
+            "Nome": nome.strip(), "Categoria": categoria.strip(), "Subcategoria": subcategoria.strip(),
+            "Preco": preco.strip(), "Descricao": descricao.strip(), "DescricaoCurta": descricao.strip(),
+            "Imagens": list(dict.fromkeys(imagens)), "Ativo": bool(ativo), "Destaque": bool(destaque),
+            "AtualizadoEm": agora_local().isoformat(timespec="seconds"),
+        })
+        if produto_indice is None:
+            registro.setdefault("CriadoEm", agora_local().isoformat(timespec="seconds"))
+            catalogo.insert(0, registro)
+        else:
+            catalogo[produto_indice] = registro
+        salvar_catalogo(catalogo)
+        confirmado = any(str(x.get("Nome", "")).strip() == nome.strip() for x in carregar_catalogo())
+        if confirmado:
+            st.session_state["_mensagem_sucesso_pendente"] = f"Produto {nome.strip()} salvo no catálogo."
+            st.rerun()
+        else:
+            st.error("Não foi possível confirmar o salvamento do produto.")
+
+
+@st.dialog("📋 Visualizar e editar catálogo", width="large")
+def dialog_catalogo_visualizar_anna():
+    catalogo = carregar_catalogo()
+    busca = st.text_input("Pesquisar produto ou grupo", key="anna_catalogo_busca_modal")
+    termo = busca.strip().casefold()
+    filtrados = [(i,p) for i,p in enumerate(catalogo) if not termo or termo in f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')}".casefold()]
+    st.caption(f"{len(filtrados)} produto(s) encontrado(s)")
+    for i, produto in filtrados[:60]:
+        with st.container(border=True):
+            c1,c2,c3 = st.columns([5,1.3,1.2])
+            c1.markdown(f"**{produto.get('Nome','Produto')}**  ")
+            c1.caption(f"{produto.get('Categoria','Sem categoria')} · {formatar_preco_catalogo(produto.get('Preco'))}")
+            if c2.button("✏️ Editar", key=f"anna_cat_edit_{i}", use_container_width=True):
+                dialog_catalogo_cadastro_anna(i)
+            if c3.button("🗑️ Excluir", key=f"anna_cat_del_{i}", use_container_width=True):
+                catalogo.pop(i)
+                salvar_catalogo(catalogo)
+                st.session_state["_mensagem_sucesso_pendente"] = "Produto excluído do catálogo."
+                st.rerun()
+
+
+@st.dialog("📤 Gerar catálogos", width="large")
+def dialog_catalogo_gerar_anna():
+    catalogo = [p for p in carregar_catalogo() if p.get("Ativo", True)]
+    grupos = sorted({str(p.get("Categoria", "Sem categoria")).strip() or "Sem categoria" for p in catalogo})
+    escolhidos = st.multiselect("Grupos incluídos", grupos, default=grupos)
+    produtos = [p for p in catalogo if (str(p.get("Categoria", "Sem categoria")).strip() or "Sem categoria") in escolhidos]
+    st.info(f"Serão incluídos {len(produtos)} produto(s), organizados por seus respectivos grupos.")
+    html_interno = gerar_html_catalogo(produtos, titulo="Catálogo Geral Alphafest", mostrar_precos=True)
+    html_cliente = gerar_html_catalogo(produtos, titulo="Catálogo Alphafest", mostrar_precos=False)
+    c1,c2 = st.columns(2)
+    c1.download_button("💰 Catálogo geral com valores", html_interno, file_name="catalogo_geral_com_valores.html", mime="text/html", use_container_width=True)
+    c2.download_button("👥 Catálogo do cliente sem valores", html_cliente, file_name="catalogo_cliente_sem_valores.html", mime="text/html", use_container_width=True)
+
+
 def renderizar_workspace_anna_isolado():
     usuario = obter_usuario_atual()
     st.markdown("## 🚀 Central Operacional da Anna")
@@ -5438,6 +5536,12 @@ def renderizar_workspace_anna_isolado():
     if a2.button("➕ Novo orçamento", type="primary", use_container_width=True): dialog_orcamento_anna()
     if a3.button("👤 Novo cliente", use_container_width=True): dialog_cliente_anna()
     if a4.button("📦 Fluxo de pedidos", use_container_width=True): dialog_fluxo_anna()
+
+    st.markdown("### 📚 Catálogo")
+    k1, k2, k3 = st.columns(3)
+    if k1.button("➕ Cadastrar produto", use_container_width=True): dialog_catalogo_cadastro_anna()
+    if k2.button("📋 Visualizar produtos", use_container_width=True): dialog_catalogo_visualizar_anna()
+    if k3.button("📤 Gerar catálogos", use_container_width=True): dialog_catalogo_gerar_anna()
 
     atendimentos = carregar_atendimentos()
     fila = [x for x in atendimentos.get("itens", []) if x.get("status") not in ("Arquivado", "Entregue", "Pós-venda") and str(x.get("responsavel", "")).strip() in ("", "Anna")]
