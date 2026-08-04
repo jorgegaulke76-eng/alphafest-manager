@@ -692,14 +692,26 @@ def salvar_orientacoes_thu(config):
     return bool(save_document("orientacoes_thu", config, ARQUIVO_ORIENTACOES_THU))
 
 
-def _imagem_thu_base64():
+def _imagem_thu_base64(tela=None):
     """Carrega o mascote oficial do THU com fallback embutido no código.
 
     O fallback evita o círculo azul mesmo quando uma ferramenta de publicação
     ignora subpastas de assets durante a atualização do Streamlit Cloud.
     """
     pasta_projeto = Path(__file__).resolve().parent
+    mapa_pose = {
+        "novo_orcamento": "thu_joinha.png",
+        "atualizar_orcamento": "thu_dica.png",
+        "cadastrar_produto": "thu_dica.png",
+        "atualizar_catalogo": "thu_dica.png",
+        "novo_cliente": "thu_joinha.png",
+        "entrega": "thu_entrega.png",
+        "comemoracao": "thu_comemorando.png",
+    }
+    pose = mapa_pose.get(str(tela or ""), "thu_joinha.png")
     candidatos = [
+        pasta_projeto / "assets" / "thu" / pose,
+        pasta_projeto / "assets" / "thu" / "thu_joinha.png",
         pasta_projeto / "assets" / "thu" / "thu_avatar.jpg",
         pasta_projeto / "assets" / "thu" / "thu_oficial.png",
         pasta_projeto / "Mascote Alphafest.png",
@@ -761,7 +773,7 @@ def mostrar_orientacao_thu(tela, token=None):
     else:
         alinhamento = "left:50%;right:auto;transform:translateX(-50%);"
 
-    imagem, formato_imagem = _imagem_thu_base64()
+    imagem, formato_imagem = _imagem_thu_base64(tela)
     imagem_html = (
         f'<img src="data:image/{formato_imagem};base64,{imagem}" alt="Mascote oficial THU" class="thu-live-avatar">'
         if imagem else '<div class="thu-live-fallback">THU</div>'
@@ -793,8 +805,8 @@ def mostrar_orientacao_thu(tela, token=None):
           animation:thuLiveEntrar .45s ease-out both, thuLiveSair 1s ease-in {animacao_saida}s forwards;
         }}
         .thu-live-avatar {{
-          width:150px; height:190px; object-fit:cover; object-position:center top; flex:0 0 150px;
-          border-radius:20px; background:white; border:2px solid rgba(22,135,217,.22);
+          width:165px; height:205px; object-fit:contain; object-position:center bottom; flex:0 0 165px;
+          border-radius:20px; background:transparent; border:none;
         }}
         .thu-live-fallback {{
           width:132px;height:132px;border-radius:50%;display:grid;place-items:center;
@@ -898,7 +910,7 @@ def renderizar_configuracoes_orientacoes_thu():
     tela_previa = st.selectbox("Tela da prévia", list(ROTULOS_TELAS_THU), format_func=lambda x: ROTULOS_TELAS_THU[x], key="thu_previa_tela")
     mensagens = cfg.get("mensagens", {}).get(tela_previa, [])
     if mensagens:
-        imagem, formato_imagem = _imagem_thu_base64()
+        imagem, formato_imagem = _imagem_thu_base64(tela)
         img = f'<img src="data:image/{formato_imagem};base64,{imagem}" style="width:110px;height:110px;object-fit:cover;object-position:center 20%;border-radius:16px;background:white">' if imagem else ""
         st.markdown(f"""
         <div style="display:flex;gap:18px;align-items:center;padding:18px;border-radius:22px;border:3px solid #1687d9;background:linear-gradient(135deg,#fff,#e9f6ff);box-shadow:0 12px 30px rgba(0,72,130,.18)">
