@@ -115,6 +115,15 @@ def obter_operacao_online(expira_segundos: int = 180) -> tuple[list[dict[str, An
                 online.append(copia)
         except Exception:
             continue
+    # Uma pessoa pode estar com várias abas ou computadores abertos.
+    # Para o painel executivo exibimos somente a atividade mais recente de cada usuário.
+    mais_recente: dict[str, dict[str, Any]] = {}
+    for item in online:
+        identidade = str(item.get("email") or item.get("nome") or "usuario").strip().casefold()
+        atual = mais_recente.get(identidade)
+        if atual is None or int(item.get("segundos", 0)) < int(atual.get("segundos", 0)):
+            mais_recente[identidade] = item
+    online = list(mais_recente.values())
     online.sort(key=lambda x: (str(x.get("nome")), int(x.get("segundos", 0))))
     eventos = list(dados.get("eventos", []))[:20]
     return online, eventos

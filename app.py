@@ -31,6 +31,10 @@ try:
 except Exception:
     THU_AVATAR_B64 = ""
 try:
+    from thu_poses_embedded import THU_JOINHA_B64, THU_DICA_B64, THU_COMEMORANDO_B64, THU_ENTREGA_B64
+except Exception:
+    THU_JOINHA_B64 = THU_DICA_B64 = THU_COMEMORANDO_B64 = THU_ENTREGA_B64 = ""
+try:
     from alpha_intelligence import render_alpha_intelligence
     ALPHA_INTELLIGENCE_IMPORT_ERROR = ""
 except Exception as _alpha_import_exc:
@@ -728,7 +732,16 @@ def _imagem_thu_base64(tela=None):
                 return conteudo, extensao
         except OSError:
             continue
-    # Garantia final: o avatar viaja dentro de thu_embedded.py.
+    # Garantia final: cada pose oficial também viaja embutida no código.
+    poses_embutidas = {
+        "thu_joinha.png": THU_JOINHA_B64,
+        "thu_dica.png": THU_DICA_B64,
+        "thu_comemorando.png": THU_COMEMORANDO_B64,
+        "thu_entrega.png": THU_ENTREGA_B64,
+    }
+    pose_b64 = poses_embutidas.get(pose) or THU_JOINHA_B64
+    if pose_b64:
+        return pose_b64, "png"
     if THU_AVATAR_B64:
         return THU_AVATAR_B64, "jpeg"
     return "", "png"
@@ -6712,11 +6725,11 @@ with aba0:
     ]
     pedidos_aprovados_hoje = [
         p for p in historico_central
-        if p.get("aprovado", False) and registro_eh_de_hoje(p.get("atualizado_em") or p.get("data_geracao") or p.get("data"))
+        if valor_bool(p.get("aprovado")) and registro_eh_de_hoje(p.get("atualizado_em") or p.get("data_geracao") or p.get("data"))
     ]
     entregues_hoje_resumo = [
         p for p in historico_central
-        if p.get("entregue", False) and registro_eh_de_hoje(p.get("entregue_em") or p.get("atualizado_em"))
+        if valor_bool(p.get("entregue")) and registro_eh_de_hoje(p.get("entregue_em") or p.get("atualizado_em"))
     ]
 
     if str(usuario_atual.get("nome", "")).strip().casefold() == "anna":

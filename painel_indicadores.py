@@ -163,6 +163,7 @@ def calcular_indicadores_unificados(
         "aprovadas_total": len(aprovadas_total),
         "aprovadas_hoje": len(aprovadas_hoje),
         "aprovadas_em_andamento": len(aprovadas_em_andamento),
+        "pedidos_ativos": len(propostas_abertas),
         "pagas_total": len(pagas_total),
         "pagamentos_pendentes": len(pagamentos_pendentes),
         "entregues_total": len(entregues_total),

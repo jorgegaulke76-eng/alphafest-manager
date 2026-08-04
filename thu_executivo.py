@@ -87,7 +87,7 @@ def calcular_briefing(
         "previsto_aberto": previsto_aberto,
         "entregas_hoje": len(entregas_hoje),
         "atrasados": len(atrasados),
-        "pedidos_ativos": int(indicadores.get("aprovadas_em_andamento", 0)),
+        "pedidos_ativos": int(indicadores.get("pedidos_ativos", indicadores.get("propostas_abertas", 0))),
         "aguardando_aprovacao": int(indicadores.get("aguardando_aprovacao", 0)),
         "propostas_hoje": int(indicadores.get("propostas_hoje", 0)),
         "alertas": alertas,
