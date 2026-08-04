@@ -6132,6 +6132,87 @@ def dialog_catalogo_gerar_anna():
     c2.download_button("👥 Catálogo do cliente sem valores", html_cliente, file_name="catalogo_cliente_sem_valores.html", mime="text/html", use_container_width=True)
 
 
+@st.dialog("🚚 Entregas de hoje", width="large")
+def dialog_entregas_hoje_anna():
+    hoje = hoje_local()
+    historico = carregar_historico()
+    entregas = [
+        p for p in historico
+        if not valor_bool(p.get("entregue"))
+        and data_entrega_segura(p.get("data_entrega")) == hoje
+    ]
+
+    if not entregas:
+        st.success("Não há entregas pendentes marcadas para hoje.")
+        return
+
+    st.info(f"{len(entregas)} proposta(s) com entrega prevista para hoje.")
+    busca = st.text_input(
+        "Pesquisar nas entregas de hoje",
+        placeholder="Cliente, proposta, telefone ou produto",
+        key="anna_busca_entregas_hoje",
+    )
+    termo = busca.strip().lower()
+    if termo:
+        entregas = [p for p in entregas if termo in normalizar_texto_busca(p)]
+
+    for prop in entregas:
+        numero = str(prop.get("numero_proposta", "")).strip()
+        cliente = str(prop.get("cliente_nome") or prop.get("cliente") or "Cliente").strip()
+        itens = prop.get("itens") or []
+        produto = "Produto não informado"
+        if itens and isinstance(itens, list):
+            primeiro = itens[0] if isinstance(itens[0], dict) else {}
+            produto = str(
+                primeiro.get("produto")
+                or primeiro.get("nome")
+                or primeiro.get("descricao")
+                or "Produto não informado"
+            ).strip()
+            if len(itens) > 1:
+                produto += f" + {len(itens) - 1} item(ns)"
+
+        _, _, total = calcular_valores_proposta(prop)
+        pago = "Sim" if valor_bool(prop.get("pago")) else "Não"
+        etapa = str(
+            prop.get("etapa_producao")
+            or prop.get("status_producao")
+            or prop.get("status")
+            or ("Pronto" if valor_bool(prop.get("pronto")) else "Não informado")
+        ).strip()
+
+        with st.container(border=True):
+            st.markdown(f"### {cliente}")
+            st.write(f"**Proposta:** {numero or 'Sem número'}")
+            st.write(f"**Produto:** {produto}")
+            st.write(f"**Valor:** {_anna_fmt_moeda(total)}")
+            st.write(f"**Pagamento:** {pago}  •  **Produção:** {etapa}")
+
+            c1, c2, c3 = st.columns(3)
+            if c1.button(
+                "✏️ Atualizar",
+                key=f"anna_entrega_edit_{numero}",
+                use_container_width=True,
+            ):
+                dialog_orcamento_anna(prop)
+
+            numero_wa = _anna_numero_whatsapp(prop.get("whatsapp") or prop.get("cliente_wa"))
+            link = (
+                f"https://wa.me/{numero_wa}?text={quote(formatar_msg_whatsapp(prop))}"
+                if numero_wa
+                else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop))}"
+            )
+            c2.link_button("📱 WhatsApp", link, use_container_width=True)
+            c3.download_button(
+                "📄 HTML",
+                gerar_html(prop),
+                file_name=f"{numero or 'orcamento'}.html",
+                mime="text/html",
+                key=f"anna_entrega_html_{numero}",
+                use_container_width=True,
+            )
+
+
 def renderizar_workspace_anna_isolado():
     usuario = obter_usuario_atual()
 
@@ -6181,11 +6262,19 @@ def renderizar_workspace_anna_isolado():
     if k2.button("📋 Visualizar produtos", use_container_width=True): dialog_catalogo_visualizar_anna()
     if k3.button("📤 Gerar catálogos", use_container_width=True): dialog_catalogo_gerar_anna()
 
+    entregas_hoje_anna = [p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]
     m1,m2,m3,m4=st.columns(4)
     m1.metric("Para atender", len([x for x in fila if x.get("status") == "Novo contato"]))
     m2.metric("Aguardando cliente", len([x for x in fila if x.get("status") == "Aguardando cliente"]))
     m3.metric("Pedidos ativos", len(ativos))
-    m4.metric("Entregas hoje", len([p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]))
+    m4.metric("Entregas hoje", len(entregas_hoje_anna))
+    if m4.button(
+        f"🔎 Ver entregas de hoje ({len(entregas_hoje_anna)})",
+        key="anna_abrir_entregas_hoje",
+        use_container_width=True,
+        disabled=not entregas_hoje_anna,
+    ):
+        dialog_entregas_hoje_anna()
 
     st.markdown("### 📄 Propostas e pedidos")
     busca = st.text_input("Pesquisar", placeholder="Cliente, proposta ou telefone", key="anna_busca_rapida")
