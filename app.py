@@ -6309,17 +6309,20 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
 
 
 @st.dialog("📦 Entregas de hoje", width="large")
-def dialog_entregas_hoje_anna(propostas):
-    entregas = [
-        p for p in propostas
-        if not valor_bool(p.get("entregue"))
-        and data_entrega_segura(p.get("data_entrega")) == hoje_local()
-    ]
-    entregas = _ordenar_propostas_recentes(entregas)
+def dialog_entregas_hoje_anna(propostas, tipo="previstas"):
+    indicadores = calcular_indicadores_unificados(propostas, [], [], hoje_local())
+    configuracoes = {
+        "previstas": ("📅 Previstas para hoje", "lista_entregas_previstas_hoje", "Nenhuma entrega prevista para hoje."),
+        "pendentes": ("🚚 Pendentes de entrega hoje", "lista_entregas_pendentes_hoje", "Nenhuma entrega aprovada está pendente para hoje."),
+        "entregues": ("✅ Entregues hoje", "lista_entregues_hoje", "Nenhuma entrega foi concluída hoje."),
+    }
+    titulo, chave, vazio = configuracoes.get(tipo, configuracoes["previstas"])
+    entregas = _ordenar_propostas_recentes(indicadores.get(chave, []))
+    st.subheader(titulo)
     if not entregas:
-        st.success("Não há entregas pendentes para hoje.")
+        st.success(vazio)
         return
-    st.info(f"{len(entregas)} entrega(s) prevista(s) para hoje.")
+    st.info(f"{len(entregas)} proposta(s) nesta situação.")
     for idx, prop in enumerate(entregas):
         numero = str(prop.get("numero_proposta", ""))
         itens = prop.get("itens", []) or []
@@ -6331,8 +6334,14 @@ def dialog_entregas_hoje_anna(propostas):
             d1, d2, d3 = st.columns(3)
             d1.metric("Valor", _anna_fmt_moeda(total))
             d2.metric("Pagamento", "Pago" if valor_bool(prop.get("pago")) else "Pendente")
-            d3.metric("Situação", "Entregue" if valor_bool(prop.get("entregue")) else "Entrega hoje")
-            _renderizar_linha_proposta_anna(prop, f"entrega_hoje_{idx}")
+            if valor_bool(prop.get("entregue")):
+                situacao = "Entregue hoje"
+            elif valor_bool(prop.get("aprovado")):
+                situacao = "Pendente de entrega"
+            else:
+                situacao = "Prevista — aguarda aprovação"
+            d3.metric("Situação", situacao)
+            _renderizar_linha_proposta_anna(prop, f"entrega_{tipo}_{idx}")
 
 
 @st.dialog("🗓️ Orçamentos lançados hoje", width="large")
@@ -6395,17 +6404,25 @@ def renderizar_workspace_anna_isolado():
     if k2.button("📋 Visualizar produtos", use_container_width=True): dialog_catalogo_visualizar_anna()
     if k3.button("📤 Gerar catálogos", use_container_width=True): dialog_catalogo_gerar_anna()
 
-    entregas_hoje = [p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]
+    indicadores_anna = calcular_indicadores_unificados(historico, fila, [], hoje_local())
     propostas_hoje = _ordenar_propostas_recentes([p for p in historico if proposta_ativa_operacional(p) and _proposta_eh_de_hoje(p)])
 
-    m1,m2,m3,m4=st.columns(4)
+    m1, m2, m3 = st.columns(3)
     m1.metric("Para atender", len([x for x in fila if x.get("status") == "Novo contato"]))
     m2.metric("Aguardando cliente", len([x for x in fila if x.get("status") == "Aguardando cliente"]))
-    m3.metric("Pedidos ativos", len(ativos))
-    m4.metric("Entregas hoje", len(entregas_hoje))
-    if entregas_hoje:
-        if m4.button("🔎 Ver quais são", key="anna_ver_entregas_hoje", use_container_width=True):
-            dialog_entregas_hoje_anna(historico)
+    m3.metric("Pedidos ativos", indicadores_anna["pedidos_ativos"])
+
+    e1, e2, e3 = st.columns(3)
+    e1.metric("📅 Previstas para hoje", indicadores_anna["entregas_previstas_hoje"], help="Propostas operacionais com data prevista de entrega hoje.")
+    e2.metric("🚚 Pendentes hoje", indicadores_anna["entregas_pendentes_hoje"], help="Aprovadas, ainda não entregues e previstas para hoje.")
+    e3.metric("✅ Entregues hoje", indicadores_anna["entregues_hoje"], help="Marcadas como entregues na data de hoje.")
+    b1, b2, b3 = st.columns(3)
+    if b1.button("🔎 Ver previstas", key="anna_ver_previstas_hoje", disabled=not indicadores_anna["entregas_previstas_hoje"], use_container_width=True):
+        dialog_entregas_hoje_anna(historico, "previstas")
+    if b2.button("🔎 Ver pendentes", key="anna_ver_pendentes_hoje", disabled=not indicadores_anna["entregas_pendentes_hoje"], use_container_width=True):
+        dialog_entregas_hoje_anna(historico, "pendentes")
+    if b3.button("🔎 Ver entregues", key="anna_ver_entregues_hoje", disabled=not indicadores_anna["entregues_hoje"], use_container_width=True):
+        dialog_entregas_hoje_anna(historico, "entregues")
 
     st.markdown("### 🗓️ Orçamentos lançados hoje")
     if propostas_hoje:
@@ -6807,12 +6824,12 @@ with aba0:
 
     c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("🚨 Atrasados", indicadores_unificados_central["atrasados_operacionais"], help="Pedidos aprovados, ainda não entregues e com data de entrega vencida.")
-    c2.metric("📦 Entregas hoje", indicadores_unificados_central["entregas_hoje_abertas"], help="Pedidos aprovados e ainda não entregues com entrega marcada para hoje.")
+    c2.metric("🚚 Pendentes hoje", indicadores_unificados_central["entregas_pendentes_hoje"], help="Pedidos aprovados, ainda não entregues e com entrega marcada para hoje.")
     c3.metric("🟡 Aprovação", indicadores_unificados_central["aguardando_aprovacao"], help="Orçamentos abertos que ainda não foram aprovados nem encerrados.")
     c4.metric("🔵 Em produção", indicadores_unificados_central["em_producao_operacional"], help="Pedidos aprovados e ativos que ainda não estão prontos ou entregues.")
     c5.metric("✅ Prontos", indicadores_unificados_central["prontos_operacionais"], help="Pedidos aprovados cujos itens estão marcados como Pronto.")
     c6.metric("💰 Previsto hoje", f"R$ {valor_previsto_hoje:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), help="Soma dos pedidos aprovados, ainda não entregues, previstos para hoje.")
-    st.caption("Atrasados, entregas e valor previsto consideram somente pedidos aprovados. Aprovação considera orçamentos ainda abertos.")
+    st.caption("Pendentes e valor previsto consideram pedidos aprovados ainda não entregues. Entregues hoje usa a data real de conclusão.")
 
     st.divider()
     st.subheader("🎯 O que fazer agora")

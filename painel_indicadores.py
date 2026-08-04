@@ -112,7 +112,15 @@ def calcular_indicadores_unificados(
     aprovadas_em_andamento = [p for p in propostas_abertas if _bool(p.get("aprovado")) and not _bool(p.get("entregue"))]
     pagamentos_pendentes = [p for p in aprovadas_em_andamento if not _bool(p.get("pago"))]
 
-    entregas_hoje_abertas = [
+    # Entregas do dia são separadas em três conceitos para evitar números ambíguos:
+    # 1) previstas: propostas operacionais com data prevista para hoje;
+    # 2) pendentes: aprovadas, ainda não entregues, com data prevista para hoje;
+    # 3) concluídas: efetivamente marcadas como entregues hoje.
+    entregas_previstas_hoje = [
+        p for p in propostas_abertas
+        if _parse_date(p.get("data_entrega")) == hoje
+    ]
+    entregas_pendentes_hoje = [
         p for p in aprovadas_em_andamento
         if _parse_date(p.get("data_entrega")) == hoje
     ]
@@ -168,11 +176,17 @@ def calcular_indicadores_unificados(
         "pagamentos_pendentes": len(pagamentos_pendentes),
         "entregues_total": len(entregues_total),
         "entregues_hoje": len(entregues_hoje),
+        "entregas_previstas_hoje": len(entregas_previstas_hoje),
+        "entregas_pendentes_hoje": len(entregas_pendentes_hoje),
         "atendimentos_total": len(contatos),
         "atendimentos_abertos": len(atendimentos_abertos),
         "tarefas_ativas": len(tarefas_ativas),
         "atrasados_operacionais": len(atrasadas),
-        "entregas_hoje_abertas": len(entregas_hoje_abertas),
+        # Compatibilidade: o nome antigo passa a significar pendentes de entrega hoje.
+        "entregas_hoje_abertas": len(entregas_pendentes_hoje),
+        "lista_entregas_previstas_hoje": entregas_previstas_hoje,
+        "lista_entregas_pendentes_hoje": entregas_pendentes_hoje,
+        "lista_entregues_hoje": entregues_hoje,
         "em_producao_operacional": len(em_producao_ids),
         "prontos_operacionais": len(prontos_ids),
         "numeros_em_producao": sorted(em_producao_ids),

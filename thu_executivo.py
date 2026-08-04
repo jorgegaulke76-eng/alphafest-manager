@@ -69,7 +69,9 @@ def calcular_briefing(
     aprovados_abertos = [p for p in propostas if _bool(p.get("aprovado")) and not _bool(p.get("entregue"))]
     previsto_aberto = sum(_valor_total(p, calcular_valores) for p in aprovados_abertos)
 
-    entregas_hoje = [p for p in aprovados_abertos if _data(p.get("data_entrega")) == hoje]
+    entregas_previstas = int(indicadores.get("entregas_previstas_hoje", 0))
+    entregas_pendentes = int(indicadores.get("entregas_pendentes_hoje", indicadores.get("entregas_hoje_abertas", 0)))
+    entregues_no_dia = int(indicadores.get("entregues_hoje", 0))
     atrasados = [p for p in aprovados_abertos if (_data(p.get("data_entrega")) or date.max) < hoje]
 
     alertas: list[str] = []
@@ -85,7 +87,9 @@ def calcular_briefing(
     return {
         "recebido_hoje": recebido_hoje,
         "previsto_aberto": previsto_aberto,
-        "entregas_hoje": len(entregas_hoje),
+        "entregas_hoje": entregas_previstas,
+        "entregas_pendentes_hoje": entregas_pendentes,
+        "entregues_hoje": entregues_no_dia,
         "atrasados": len(atrasados),
         "pedidos_ativos": int(indicadores.get("pedidos_ativos", indicadores.get("propostas_abertas", 0))),
         "aguardando_aprovacao": int(indicadores.get("aguardando_aprovacao", 0)),
@@ -106,11 +110,12 @@ def renderizar_briefing_thu(nome: str, briefing: dict[str, Any]) -> None:
         """,
         unsafe_allow_html=True,
     )
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("📄 Orçamentos hoje", briefing["propostas_hoje"])
     c2.metric("📦 Pedidos ativos", briefing["pedidos_ativos"])
-    c3.metric("🚚 Entregas hoje", briefing["entregas_hoje"])
-    c4.metric("💵 Recebido hoje", f"R$ {briefing['recebido_hoje']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    c3.metric("📅 Previstas hoje", briefing["entregas_hoje"])
+    c4.metric("🚚 Pendentes hoje", briefing["entregas_pendentes_hoje"])
+    c5.metric("💵 Recebido hoje", f"R$ {briefing['recebido_hoje']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
     a1, a2, a3 = st.columns(3)
     a1.metric("🟡 Aguardando aprovação", briefing["aguardando_aprovacao"])
