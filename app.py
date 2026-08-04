@@ -640,14 +640,29 @@ def salvar_orientacoes_thu(config):
 
 
 def _imagem_thu_base64():
-    """Carrega o mascote oficial do THU em formato embutido e leve."""
-    caminho = Path("assets/thu/thu_oficial.webp")
-    if not caminho.exists():
-        return ""
-    try:
-        return base64.b64encode(caminho.read_bytes()).decode("ascii")
-    except Exception:
-        return ""
+    """Carrega o mascote oficial do THU com caminho absoluto do projeto.
+
+    O Streamlit pode iniciar a aplicação com um diretório de trabalho diferente.
+    Por isso o asset é localizado a partir do próprio app.py, evitando o fallback
+    com o círculo escrito THU quando o arquivo existe no pacote publicado.
+    """
+    raiz = Path(__file__).resolve().parent
+    candidatos = [
+        raiz / "assets" / "thu" / "thu_oficial.webp",
+        raiz / "assets" / "thu" / "thu_oficial.png",
+        raiz / "assets" / "thu" / "thu_oficial.jpg",
+    ]
+    for caminho in candidatos:
+        if not caminho.exists():
+            continue
+        try:
+            sufixo = caminho.suffix.lower().lstrip(".")
+            mime = "jpeg" if sufixo in {"jpg", "jpeg"} else sufixo
+            conteudo = base64.b64encode(caminho.read_bytes()).decode("ascii")
+            return conteudo, mime
+        except Exception:
+            continue
+    return "", ""
 
 
 def mostrar_orientacao_thu(tela, token=None):
@@ -689,9 +704,9 @@ def mostrar_orientacao_thu(tela, token=None):
     else:
         alinhamento = "left:50%;right:auto;transform:translateX(-50%);"
 
-    imagem = _imagem_thu_base64()
+    imagem, imagem_mime = _imagem_thu_base64()
     imagem_html = (
-        f'<img src="data:image/webp;base64,{imagem}" alt="Mascote oficial THU" class="thu-live-avatar">'
+        f'<img src="data:image/{imagem_mime};base64,{imagem}" alt="Mascote oficial THU" class="thu-live-avatar">'
         if imagem else '<div class="thu-live-fallback">THU</div>'
     )
     mensagem_segura = html.escape(mensagem)
@@ -721,8 +736,9 @@ def mostrar_orientacao_thu(tela, token=None):
           animation:thuLiveEntrar .45s ease-out both, thuLiveSair 1s ease-in {animacao_saida}s forwards;
         }}
         .thu-live-avatar {{
-          width:150px; height:150px; object-fit:contain; flex:0 0 150px;
+          width:170px; height:190px; object-fit:cover; object-position:50% 18%; flex:0 0 170px;
           border-radius:22px; background:white; border:2px solid rgba(22,135,217,.22);
+          box-shadow:0 10px 24px rgba(0,72,130,.18);
         }}
         .thu-live-fallback {{
           width:132px;height:132px;border-radius:50%;display:grid;place-items:center;
@@ -745,7 +761,7 @@ def mostrar_orientacao_thu(tela, token=None):
         @keyframes thuTempo {{ from {{ transform:scaleX(1); }} to {{ transform:scaleX(0); }} }}
         @media (max-width:680px) {{
           .thu-live-card {{ top:58px; padding:14px; gap:12px; align-items:flex-start; }}
-          .thu-live-avatar {{ width:92px;height:92px;flex-basis:92px; }}
+          .thu-live-avatar {{ width:100px;height:116px;flex-basis:100px;object-position:50% 16%; }}
           .thu-live-title {{ font-size:1.15rem; }}
           .thu-live-message {{ font-size:.96rem; }}
         }}
@@ -826,8 +842,8 @@ def renderizar_configuracoes_orientacoes_thu():
     tela_previa = st.selectbox("Tela da prévia", list(ROTULOS_TELAS_THU), format_func=lambda x: ROTULOS_TELAS_THU[x], key="thu_previa_tela")
     mensagens = cfg.get("mensagens", {}).get(tela_previa, [])
     if mensagens:
-        imagem = _imagem_thu_base64()
-        img = f'<img src="data:image/webp;base64,{imagem}" style="width:110px;height:110px;object-fit:contain;border-radius:16px;background:white">' if imagem else ""
+        imagem, imagem_mime = _imagem_thu_base64()
+        img = f'<img src="data:image/{imagem_mime};base64,{imagem}" style="width:120px;height:145px;object-fit:cover;object-position:50% 18%;border-radius:16px;background:white">' if imagem else ""
         st.markdown(f"""
         <div style="display:flex;gap:18px;align-items:center;padding:18px;border-radius:22px;border:3px solid #1687d9;background:linear-gradient(135deg,#fff,#e9f6ff);box-shadow:0 12px 30px rgba(0,72,130,.18)">
           {img}<div><div style="font-weight:900;color:#1687d9;font-size:.82rem">THU TEM UM RECADO</div>
