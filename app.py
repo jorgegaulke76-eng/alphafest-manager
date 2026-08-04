@@ -24,6 +24,7 @@ from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_T
 from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
 from painel_indicadores import calcular_indicadores_unificados
+from alpha_live import registrar_atividade, obter_operacao_online
 try:
     from thu_embedded import THU_AVATAR_B64
 except Exception:
@@ -523,6 +524,42 @@ def saudacao_por_hora(nome):
     else:
         periodo = "Boa noite"
     return f"{periodo}, {nome}!"
+
+def _renderizar_alpha_live_conteudo():
+    online, eventos = obter_operacao_online()
+    st.markdown("### 🟢 AlphaFest Live")
+    st.caption("Visão colaborativa em tempo real. O painel mostra somente a tela/ação — nunca o conteúdo digitado.")
+    anna_online = [x for x in online if str(x.get("nome", "")).casefold() == "anna"]
+    if anna_online:
+        for atividade in anna_online:
+            acao = html.escape(str(atividade.get("acao") or "Online"))
+            modulo = html.escape(str(atividade.get("modulo") or "Central"))
+            detalhe = html.escape(str(atividade.get("detalhe") or ""))
+            tempo = int(atividade.get("segundos", 0))
+            texto_tempo = "agora" if tempo < 10 else f"há {tempo}s"
+            st.success(f"👩 **Anna está online** — {acao}  ·  {modulo}  ·  {texto_tempo}" + (f"\n\n{detalhe}" if detalhe else ""))
+    else:
+        st.info("⚪ Anna não possui atividade recente nesta janela de 2 minutos.")
+
+    with st.expander("🕘 Atividades recentes da equipe", expanded=False):
+        if not eventos:
+            st.caption("Ainda não há eventos registrados.")
+        for evento in eventos[:10]:
+            try:
+                horario = datetime.fromisoformat(str(evento.get("em", ""))).strftime("%H:%M")
+            except Exception:
+                horario = "--:--"
+            detalhe = f" — {evento.get('detalhe')}" if evento.get("detalhe") else ""
+            st.write(f"**{horario}** · {evento.get('nome', 'Equipe')} · {evento.get('acao', '')}{detalhe}")
+
+def renderizar_alpha_live():
+    """Atualiza o painel sem recarregar o restante do perfil Jorge."""
+    _renderizar_alpha_live_conteudo()
+
+try:
+    renderizar_alpha_live_auto = st.fragment(run_every="5s")(renderizar_alpha_live)
+except Exception:
+    renderizar_alpha_live_auto = renderizar_alpha_live
 
 
 def frase_motivacional_anna():
@@ -5651,6 +5688,7 @@ def _anna_salvar_proposta(dados, numero_original=None):
 @st.dialog("📄 ORÇAMENTOS ALPHAFEST", width="large")
 def dialog_orcamento_anna(proposta=None):
     """Orçamento da Anna em modal, preservando o mesmo layout do formulário principal."""
+    registrar_atividade(obter_usuario_atual(), "Corrigindo um orçamento" if proposta else "Digitando novo orçamento", "Orçamentos")
     proposta = dict(proposta or {})
     numero_original = proposta.get("numero_proposta")
 
@@ -5728,6 +5766,7 @@ def dialog_orcamento_anna(proposta=None):
         adicionar = st.form_submit_button("➕ Adicionar Item", use_container_width=True)
 
     if adicionar:
+        registrar_atividade(obter_usuario_atual(), "Adicionando item ao orçamento", "Orçamentos")
         if not prod.strip():
             st.warning("Informe o produto antes de adicionar.")
         else:
@@ -5786,6 +5825,7 @@ def dialog_orcamento_anna(proposta=None):
             }
             ok_salvar, retorno_salvar = _anna_salvar_proposta(dados, numero_original)
             if ok_salvar:
+                registrar_atividade(obter_usuario_atual(), "Orçamento salvo", "Orçamentos", detalhe=str(retorno_salvar), evento=True)
                 st.session_state["anna_modal_itens"] = []
                 st.session_state[chave_modal] = False
                 st.rerun()
@@ -5797,6 +5837,7 @@ def dialog_orcamento_anna(proposta=None):
 
 @st.dialog("💬 Novo atendimento", width="large")
 def dialog_atendimento_anna():
+    registrar_atividade(obter_usuario_atual(), "Cadastrando novo atendimento", "Atendimento")
     with st.form("anna_novo_atendimento", clear_on_submit=True):
         c1, c2 = st.columns(2)
         cliente = c1.text_input("Cliente")
@@ -5821,6 +5862,7 @@ def dialog_atendimento_anna():
 
 @st.dialog("👤 Cadastro rápido de cliente", width="large")
 def dialog_cliente_anna():
+    registrar_atividade(obter_usuario_atual(), "Cadastrando novo cliente", "Clientes")
     with st.form("anna_novo_cliente", clear_on_submit=True):
         nome = st.text_input("Nome")
         c1, c2 = st.columns(2)
@@ -5884,6 +5926,7 @@ def salvar_andamento_proposta(numero, aprovado, pago, entregue):
 
 @st.dialog("📦 Fluxo de pedidos", width="large")
 def dialog_fluxo_anna():
+    registrar_atividade(obter_usuario_atual(), "Atualizando fluxo de pedidos", "Fluxo de Pedidos")
     historico = carregar_historico()
     if not historico:
         st.info("Nenhuma proposta cadastrada.")
@@ -5956,6 +5999,7 @@ def dialog_fluxo_anna():
 
 @st.dialog("➕ Cadastrar produto no catálogo", width="large")
 def dialog_catalogo_cadastro_anna(produto_indice=None):
+    registrar_atividade(obter_usuario_atual(), "Atualizando produto" if produto_indice is not None else "Cadastrando produto no catálogo", "Catálogo")
     mostrar_orientacao_thu(
         "atualizar_catalogo" if produto_indice is not None else "cadastrar_produto",
         token=f"catalogo_{produto_indice if produto_indice is not None else 'novo'}",
@@ -6010,6 +6054,7 @@ def dialog_catalogo_cadastro_anna(produto_indice=None):
 
 @st.dialog("📋 Visualizar e editar catálogo", width="large")
 def dialog_catalogo_visualizar_anna():
+    registrar_atividade(obter_usuario_atual(), "Consultando e corrigindo o catálogo", "Catálogo")
     mostrar_orientacao_thu("atualizar_catalogo", token="catalogo_visualizar")
     catalogo = carregar_catalogo()
     busca = st.text_input("Pesquisar produto ou grupo", key="anna_catalogo_busca_modal")
@@ -6132,6 +6177,7 @@ def dialog_catalogo_visualizar_anna():
 
 @st.dialog("📤 Gerar catálogos", width="large")
 def dialog_catalogo_gerar_anna():
+    registrar_atividade(obter_usuario_atual(), "Gerando catálogo para divulgação", "Catálogo")
     catalogo = [p for p in carregar_catalogo() if p.get("Ativo", True)]
     grupos = sorted({str(p.get("Categoria", "Sem categoria")).strip() or "Sem categoria" for p in catalogo})
     escolhidos = st.multiselect("Grupos incluídos", grupos, default=grupos)
@@ -6215,6 +6261,7 @@ def dialog_propostas_hoje_anna(propostas):
         _renderizar_linha_proposta_anna(prop, f"orc_hoje_dialog_{idx}")
 
 def renderizar_workspace_anna_isolado():
+    registrar_atividade(obter_usuario_atual(), "Na Central Operacional", "Central da Anna")
     usuario = obter_usuario_atual()
 
     # Os indicadores são carregados uma única vez e também alimentam a recepção.
@@ -6370,6 +6417,7 @@ with aba0:
         st.info("👩‍💼 **Central Operacional da Anna** — Atendimento multicanal, orçamentos, artes/projetos, controle de pedidos, entregas, pagamentos e catálogo. O canal de origem permanece identificado em cada atendimento.")
     else:
         st.info("👨‍💼 **Central de Gestão do Jorge** — visão completa da operação, inteligência, conexões, marketing, indicadores e configurações.")
+        renderizar_alpha_live_auto()
     favoritos_central = perfil_central.get("favoritos", []) or []
     if favoritos_central:
         if str(usuario_atual.get("nome", "")).casefold() == "anna":
