@@ -99,7 +99,7 @@ def registrar_atividade(usuario: dict[str, Any] | str, acao: str, modulo: str = 
     _salvar(dados)
 
 
-def obter_operacao_online(expira_segundos: int = 150) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def obter_operacao_online(expira_segundos: int = 180) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     dados = _carregar()
     agora = _agora()
     limite = agora - timedelta(seconds=max(30, int(expira_segundos)))

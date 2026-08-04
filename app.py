@@ -25,6 +25,7 @@ from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
 from painel_indicadores import calcular_indicadores_unificados
 from alpha_live import registrar_atividade, obter_operacao_online
+from thu_executivo import calcular_briefing, renderizar_briefing_thu
 try:
     from thu_embedded import THU_AVATAR_B64
 except Exception:
@@ -528,29 +529,40 @@ def saudacao_por_hora(nome):
 def _renderizar_alpha_live_conteudo():
     online, eventos = obter_operacao_online()
     st.markdown("### 🟢 AlphaFest Live")
-    st.caption("Visão colaborativa em tempo real. O painel mostra somente a tela/ação — nunca o conteúdo digitado.")
-    anna_online = [x for x in online if str(x.get("nome", "")).casefold() == "anna"]
-    if anna_online:
-        for atividade in anna_online:
+    st.caption("Equipe e atividades em tempo real. O painel mostra somente o contexto operacional, nunca o conteúdo digitado.")
+
+    if online:
+        colunas = st.columns(min(3, len(online)))
+        for idx, atividade in enumerate(online):
+            nome = html.escape(str(atividade.get("nome") or "Equipe"))
             acao = html.escape(str(atividade.get("acao") or "Online"))
             modulo = html.escape(str(atividade.get("modulo") or "Central"))
-            detalhe = html.escape(str(atividade.get("detalhe") or ""))
             tempo = int(atividade.get("segundos", 0))
-            texto_tempo = "agora" if tempo < 10 else f"há {tempo}s"
-            st.success(f"👩 **Anna está online** — {acao}  ·  {modulo}  ·  {texto_tempo}" + (f"\n\n{detalhe}" if detalhe else ""))
+            texto_tempo = "agora" if tempo < 10 else (f"há {tempo}s" if tempo < 60 else f"há {max(1, tempo // 60)} min")
+            icone = "👩" if nome.casefold() == "anna" else ("👨" if nome.casefold() == "jorge" else "👤")
+            card_html = (
+                f"<div style='border:1px solid #bbf7d0;border-left:6px solid #16a34a;border-radius:14px;padding:12px 14px;background:#f0fdf4;min-height:120px;'>"
+                f"<div style='font-weight:800;font-size:1.05rem;'>🟢 {icone} {nome}</div>"
+                f"<div style='margin-top:8px;font-weight:700;'>{acao}</div>"
+                f"<div style='color:#52606d;font-size:.9rem;'>{modulo}</div>"
+                f"<div style='color:#15803d;font-size:.82rem;margin-top:8px;'>Atualizado {texto_tempo}</div>"
+                "</div>"
+            )
+            with colunas[idx % len(colunas)]:
+                st.markdown(card_html, unsafe_allow_html=True)
     else:
-        st.info("⚪ Anna não possui atividade recente nesta janela de 2 minutos.")
+        st.info("⚪ Nenhum colaborador possui atividade recente nesta janela de 3 minutos.")
 
-    with st.expander("🕘 Atividades recentes da equipe", expanded=False):
+    with st.expander("🕘 Linha do tempo da equipe", expanded=False):
         if not eventos:
-            st.caption("Ainda não há eventos registrados.")
-        for evento in eventos[:10]:
+            st.caption("Ainda não há eventos concluídos registrados.")
+        for evento in eventos[:15]:
             try:
                 horario = datetime.fromisoformat(str(evento.get("em", ""))).strftime("%H:%M")
             except Exception:
                 horario = "--:--"
             detalhe = f" — {evento.get('detalhe')}" if evento.get("detalhe") else ""
-            st.write(f"**{horario}** · {evento.get('nome', 'Equipe')} · {evento.get('acao', '')}{detalhe}")
+            st.markdown(f"**{horario}** · **{evento.get('nome', 'Equipe')}** · {evento.get('acao', '')}{detalhe}")
 
 def renderizar_alpha_live():
     """Atualiza o painel sem recarregar o restante do perfil Jorge."""
@@ -6610,6 +6622,16 @@ with aba0:
         tarefas_ativas_central,
         hoje_central,
     )
+
+    if str(usuario_atual.get("nome", "")).strip().casefold() == "jorge":
+        briefing_thu_central = calcular_briefing(
+            historico_central,
+            indicadores_unificados_central,
+            hoje_central,
+            calcular_valores_proposta,
+        )
+        renderizar_briefing_thu(str(usuario_atual.get("nome") or "Jorge"), briefing_thu_central)
+
 
     nome_usuario_central = str(usuario_atual.get("nome", "")).strip()
     minha_fila_central = [
