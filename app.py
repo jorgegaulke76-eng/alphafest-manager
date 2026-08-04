@@ -25,6 +25,10 @@ from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
 from painel_indicadores import calcular_indicadores_unificados
 try:
+    from thu_embedded import THU_AVATAR_B64
+except Exception:
+    THU_AVATAR_B64 = ""
+try:
     from alpha_intelligence import render_alpha_intelligence
     ALPHA_INTELLIGENCE_IMPORT_ERROR = ""
 except Exception as _alpha_import_exc:
@@ -640,26 +644,32 @@ def salvar_orientacoes_thu(config):
 
 
 def _imagem_thu_base64():
-    """Carrega o mascote oficial do THU usando caminho absoluto do projeto."""
+    """Carrega o mascote oficial do THU com fallback embutido no código.
+
+    O fallback evita o círculo azul mesmo quando uma ferramenta de publicação
+    ignora subpastas de assets durante a atualização do Streamlit Cloud.
+    """
     pasta_projeto = Path(__file__).resolve().parent
     candidatos = [
         pasta_projeto / "assets" / "thu" / "thu_avatar.jpg",
-        pasta_projeto / "assets" / "thu" / "thu_oficial.jpg",
         pasta_projeto / "assets" / "thu" / "thu_oficial.png",
-        pasta_projeto / "assets" / "thu" / "thu_oficial.webp",
         pasta_projeto / "Mascote Alphafest.png",
     ]
     for caminho in candidatos:
-        if not caminho.exists():
+        if not caminho.is_file():
             continue
         try:
             extensao = caminho.suffix.lower().lstrip(".") or "png"
             if extensao == "jpg":
                 extensao = "jpeg"
             conteudo = base64.b64encode(caminho.read_bytes()).decode("ascii")
-            return conteudo, extensao
-        except Exception:
+            if conteudo:
+                return conteudo, extensao
+        except OSError:
             continue
+    # Garantia final: o avatar viaja dentro de thu_embedded.py.
+    if THU_AVATAR_B64:
+        return THU_AVATAR_B64, "jpeg"
     return "", "png"
 
 
@@ -734,8 +744,8 @@ def mostrar_orientacao_thu(tela, token=None):
           animation:thuLiveEntrar .45s ease-out both, thuLiveSair 1s ease-in {animacao_saida}s forwards;
         }}
         .thu-live-avatar {{
-          width:160px; height:160px; object-fit:cover; object-position:center 18%; flex:0 0 160px;
-          border-radius:22px; background:white; border:2px solid rgba(22,135,217,.22);
+          width:150px; height:190px; object-fit:cover; object-position:center top; flex:0 0 150px;
+          border-radius:20px; background:white; border:2px solid rgba(22,135,217,.22);
         }}
         .thu-live-fallback {{
           width:132px;height:132px;border-radius:50%;display:grid;place-items:center;
@@ -988,9 +998,9 @@ def encontrar_logo_base64():
         return get_image_base64(nome), os.path.splitext(nome)[1].lower()
     return "", ""
 
-def carregar_historico():
+def carregar_historico(force_refresh=False):
     """Carrega propostas do Supabase, com fallback automático para JSON local."""
-    dados = load_document("historico_orcamentos", ARQUIVO_HISTORICO, [])
+    dados = load_document("historico_orcamentos", ARQUIVO_HISTORICO, [], force_refresh=force_refresh)
     return dados if isinstance(dados, list) else []
 
 
@@ -6134,14 +6144,84 @@ def dialog_catalogo_gerar_anna():
     c2.download_button("👥 Catálogo do cliente sem valores", html_cliente, file_name="catalogo_cliente_sem_valores.html", mime="text/html", use_container_width=True)
 
 
+
+def _proposta_eh_de_hoje(prop):
+    return any(
+        registro_eh_de_hoje(prop.get(campo))
+        for campo in ("data_geracao", "data", "criado_em", "created_at")
+    )
+
+
+def _ordenar_propostas_recentes(propostas):
+    def chave(prop):
+        texto = str(prop.get("data_geracao") or prop.get("criado_em") or prop.get("created_at") or prop.get("data") or "")
+        for formato in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S.%f%z", "%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(texto, formato)
+            except (ValueError, TypeError):
+                continue
+        return datetime.min
+    return sorted(propostas, key=chave, reverse=True)
+
+
+def _renderizar_linha_proposta_anna(prop, prefixo):
+    numero = str(prop.get("numero_proposta", ""))
+    _, _, total = calcular_valores_proposta(prop)
+    c1, c2, c3, c4 = st.columns([4, 1.4, 1.4, 1.2])
+    c1.write(f"**{numero} — {prop.get('cliente_nome','Cliente')}** · {_anna_fmt_moeda(total)}")
+    if c2.button("✏️ Atualizar", key=f"{prefixo}_edit_{numero}", use_container_width=True):
+        dialog_orcamento_anna(prop)
+    numero_wa = _anna_numero_whatsapp(prop.get("whatsapp") or prop.get("cliente_wa"))
+    link = f"https://wa.me/{numero_wa}?text={quote(formatar_msg_whatsapp(prop))}" if numero_wa else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop))}"
+    c3.link_button("📱 WhatsApp", link, use_container_width=True)
+    c4.download_button("📄 HTML", gerar_html(prop), file_name=f"{numero}.html", mime="text/html", key=f"{prefixo}_html_{numero}", use_container_width=True)
+
+
+@st.dialog("📦 Entregas de hoje", width="large")
+def dialog_entregas_hoje_anna(propostas):
+    entregas = [
+        p for p in propostas
+        if not valor_bool(p.get("entregue"))
+        and data_entrega_segura(p.get("data_entrega")) == hoje_local()
+    ]
+    entregas = _ordenar_propostas_recentes(entregas)
+    if not entregas:
+        st.success("Não há entregas pendentes para hoje.")
+        return
+    st.info(f"{len(entregas)} entrega(s) prevista(s) para hoje.")
+    for idx, prop in enumerate(entregas):
+        numero = str(prop.get("numero_proposta", ""))
+        itens = prop.get("itens", []) or []
+        principal = itens[0].get("produto", "Produto não informado") if itens else "Produto não informado"
+        _, _, total = calcular_valores_proposta(prop)
+        with st.container(border=True):
+            st.markdown(f"### {prop.get('cliente_nome', 'Cliente')}")
+            st.caption(f"{numero} · {principal}")
+            d1, d2, d3 = st.columns(3)
+            d1.metric("Valor", _anna_fmt_moeda(total))
+            d2.metric("Pagamento", "Pago" if valor_bool(prop.get("pago")) else "Pendente")
+            d3.metric("Situação", "Entregue" if valor_bool(prop.get("entregue")) else "Entrega hoje")
+            _renderizar_linha_proposta_anna(prop, f"entrega_hoje_{idx}")
+
+
+@st.dialog("🗓️ Orçamentos lançados hoje", width="large")
+def dialog_propostas_hoje_anna(propostas):
+    hoje = _ordenar_propostas_recentes([p for p in propostas if _proposta_eh_de_hoje(p)])
+    if not hoje:
+        st.info("Nenhum orçamento lançado hoje foi localizado.")
+        return
+    st.success(f"{len(hoje)} orçamento(s) lançado(s) hoje.")
+    for idx, prop in enumerate(hoje):
+        _renderizar_linha_proposta_anna(prop, f"orc_hoje_dialog_{idx}")
+
 def renderizar_workspace_anna_isolado():
     usuario = obter_usuario_atual()
 
     # Os indicadores são carregados uma única vez e também alimentam a recepção.
     atendimentos = carregar_atendimentos()
     fila = [x for x in atendimentos.get("itens", []) if x.get("status") not in ("Arquivado", "Entregue", "Pós-venda") and str(x.get("responsavel", "")).strip() in ("", "Anna")]
-    historico = carregar_historico()
-    ativos = [p for p in historico if not p.get("entregue", False)]
+    historico = carregar_historico(force_refresh=True)
+    ativos = [p for p in historico if not valor_bool(p.get("entregue")) and not proposta_encerrada(p)]
     qtd_novos = len([x for x in fila if x.get("status") == "Novo contato"])
     qtd_aguardando = len([x for x in fila if x.get("status") == "Aguardando cliente"])
     qtd_entregas = len([p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()])
@@ -6183,26 +6263,34 @@ def renderizar_workspace_anna_isolado():
     if k2.button("📋 Visualizar produtos", use_container_width=True): dialog_catalogo_visualizar_anna()
     if k3.button("📤 Gerar catálogos", use_container_width=True): dialog_catalogo_gerar_anna()
 
+    entregas_hoje = [p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]
+    propostas_hoje = _ordenar_propostas_recentes([p for p in historico if _proposta_eh_de_hoje(p)])
+
     m1,m2,m3,m4=st.columns(4)
     m1.metric("Para atender", len([x for x in fila if x.get("status") == "Novo contato"]))
     m2.metric("Aguardando cliente", len([x for x in fila if x.get("status") == "Aguardando cliente"]))
     m3.metric("Pedidos ativos", len(ativos))
-    m4.metric("Entregas hoje", len([p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]))
+    m4.metric("Entregas hoje", len(entregas_hoje))
+    if entregas_hoje:
+        if m4.button("🔎 Ver quais são", key="anna_ver_entregas_hoje", use_container_width=True):
+            dialog_entregas_hoje_anna(historico)
 
-    st.markdown("### 📄 Propostas e pedidos")
+    st.markdown("### 🗓️ Orçamentos lançados hoje")
+    if propostas_hoje:
+        st.caption(f"{len(propostas_hoje)} orçamento(s) encontrado(s) hoje. Os mais recentes ficam sempre no topo.")
+        for idx, prop in enumerate(propostas_hoje[:5]):
+            _renderizar_linha_proposta_anna(prop, f"anna_hoje_{idx}")
+        if len(propostas_hoje) > 5 and st.button(f"Ver todos os {len(propostas_hoje)} orçamentos de hoje", key="anna_ver_todos_hoje", use_container_width=True):
+            dialog_propostas_hoje_anna(historico)
+    else:
+        st.info("Nenhum orçamento lançado hoje foi localizado. Use Atualizar dados para consultar o banco novamente.")
+
+    st.markdown("### 📄 Todas as propostas e pedidos")
     busca = st.text_input("Pesquisar", placeholder="Cliente, proposta ou telefone", key="anna_busca_rapida")
     termo = busca.strip().lower()
-    lista = [p for p in historico if not termo or termo in normalizar_texto_busca(p)]
-    for prop in lista[:15]:
-        numero = prop.get("numero_proposta", "")
-        _,_,total=calcular_valores_proposta(prop)
-        c1,c2,c3,c4=st.columns([4,1.4,1.4,1.2])
-        c1.write(f"**{numero} — {prop.get('cliente_nome','Cliente')}** · {_anna_fmt_moeda(total)}")
-        if c2.button("✏️ Atualizar", key=f"anna_edit_{numero}", use_container_width=True): dialog_orcamento_anna(prop)
-        numero_wa=_anna_numero_whatsapp(prop.get("whatsapp") or prop.get("cliente_wa"))
-        link=f"https://wa.me/{numero_wa}?text={quote(formatar_msg_whatsapp(prop))}" if numero_wa else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop))}"
-        c3.link_button("📱 WhatsApp", link, use_container_width=True)
-        c4.download_button("📄 HTML", gerar_html(prop), file_name=f"{numero}.html", mime="text/html", key=f"anna_html_{numero}", use_container_width=True)
+    lista = _ordenar_propostas_recentes([p for p in historico if not termo or termo in normalizar_texto_busca(p)])
+    for idx, prop in enumerate(lista[:20]):
+        _renderizar_linha_proposta_anna(prop, f"anna_lista_{idx}")
 
 
 # O conjunto de abas continua estável no código; a exibição é personalizada por usuário.
