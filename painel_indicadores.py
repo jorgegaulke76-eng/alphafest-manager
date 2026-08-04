@@ -60,6 +60,10 @@ def _encerrada(record: dict[str, Any]) -> bool:
     }
 
 
+def _concluida(record: dict[str, Any]) -> bool:
+    return _bool(record.get("aprovado")) and _bool(record.get("pago")) and _bool(record.get("entregue"))
+
+
 def _numero(record: dict[str, Any]) -> str:
     return str(record.get("numero_proposta") or record.get("proposta") or record.get("id") or "").strip()
 
@@ -103,9 +107,9 @@ def calcular_indicadores_unificados(
     ]
     pagas_total = [p for p in propostas_validas if _bool(p.get("pago"))]
 
-    propostas_abertas = [p for p in propostas_validas if not _bool(p.get("entregue"))]
+    propostas_abertas = [p for p in propostas_validas if not _concluida(p)]
     aguardando_aprovacao = [p for p in propostas_abertas if not _bool(p.get("aprovado"))]
-    aprovadas_em_andamento = [p for p in propostas_abertas if _bool(p.get("aprovado"))]
+    aprovadas_em_andamento = [p for p in propostas_abertas if _bool(p.get("aprovado")) and not _bool(p.get("entregue"))]
     pagamentos_pendentes = [p for p in aprovadas_em_andamento if not _bool(p.get("pago"))]
 
     entregas_hoje_abertas = [

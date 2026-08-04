@@ -2001,6 +2001,20 @@ def proposta_encerrada(prop):
     }
 
 
+def proposta_concluida(prop):
+    """Uma proposta só deixa a operação quando os três marcos estão confirmados."""
+    return (
+        valor_bool(prop.get("aprovado"))
+        and valor_bool(prop.get("pago"))
+        and valor_bool(prop.get("entregue"))
+    )
+
+
+def proposta_ativa_operacional(prop):
+    """Fonte única para listas e contadores operacionais da Anna, Jorge e THU."""
+    return not proposta_encerrada(prop) and not proposta_concluida(prop)
+
+
 def calcular_valores_proposta(prop):
     itens = prop.get("itens", []) or []
     subtotal = sum(valor_float(i.get("quantidade")) * valor_float(i.get("valor_unitario")) for i in itens)
@@ -5905,12 +5919,18 @@ def salvar_andamento_proposta(numero, aprovado, pago, entregue):
         return False, "Proposta não encontrada no histórico."
 
     anteriores = {
-        "aprovado": bool(proposta.get("aprovado", False)),
-        "pago": bool(proposta.get("pago", False)),
-        "entregue": bool(proposta.get("entregue", False)),
+        "aprovado": valor_bool(proposta.get("aprovado", False)),
+        "pago": valor_bool(proposta.get("pago", False)),
+        "entregue": valor_bool(proposta.get("entregue", False)),
     }
-    novos = {"aprovado": bool(aprovado), "pago": bool(pago), "entregue": bool(entregue)}
+    novos = {"aprovado": valor_bool(aprovado), "pago": valor_bool(pago), "entregue": valor_bool(entregue)}
     proposta.update(novos)
+    agora_status = agora_local().strftime("%d/%m/%Y %H:%M")
+    for campo, campo_data in (("aprovado", "aprovado_em"), ("pago", "pago_em"), ("entregue", "entregue_em")):
+        if novos[campo] and not anteriores[campo] and not proposta.get(campo_data):
+            proposta[campo_data] = agora_status
+        elif not novos[campo] and anteriores[campo]:
+            proposta.pop(campo_data, None)
 
     rotulos = {
         "aprovado": "Orçamento aprovado",
@@ -5928,11 +5948,20 @@ def salvar_andamento_proposta(numero, aprovado, pago, entregue):
     confirmado = next((p for p in carregar_historico() if p.get("numero_proposta") == numero), None)
     if confirmado is None:
         return False, "A proposta não foi localizada após a gravação."
-    if any(bool(confirmado.get(campo, False)) != valor for campo, valor in novos.items()):
+    if any(valor_bool(confirmado.get(campo, False)) != valor for campo, valor in novos.items()):
         return False, "O banco não confirmou a atualização. Tente novamente."
 
     if novos["aprovado"] and not anteriores["aprovado"]:
         sincronizar_producao_com_propostas()
+    if proposta_concluida(confirmado):
+        if not proposta_concluida({**confirmado, **anteriores}):
+            # Registra uma única vez a conclusão operacional.
+            historico_final = carregar_historico()
+            alvo = next((p for p in historico_final if p.get("numero_proposta") == numero), None)
+            if alvo is not None:
+                registrar_evento_proposta(alvo, "Aprovado, pago e entregue — proposta movida para o Histórico", usuario="Sistema")
+                salvar_historico_completo(historico_final)
+        return True, f"{numero} concluída e movida para o Histórico."
     return True, f"Andamento de {numero} atualizado."
 
 
@@ -5964,16 +5993,17 @@ def dialog_fluxo_anna():
         ]).lower()
         if busca and busca not in texto:
             return False
-        aprovado = bool(prop.get("aprovado", False))
-        pago = bool(prop.get("pago", False))
-        entregue = bool(prop.get("entregue", False))
+        aprovado = valor_bool(prop.get("aprovado", False))
+        pago = valor_bool(prop.get("pago", False))
+        entregue = valor_bool(prop.get("entregue", False))
+        ativa = proposta_ativa_operacional(prop)
         return {
-            "Todas": True,
-            "Ativas": not entregue,
-            "Aguardando aprovação": not aprovado and not entregue,
-            "Aprovadas": aprovado,
-            "Pagas": pago,
-            "Entregues": entregue,
+            "Todas": ativa,
+            "Ativas": ativa,
+            "Aguardando aprovação": ativa and not aprovado,
+            "Aprovadas": ativa and aprovado,
+            "Pagas": ativa and pago,
+            "Entregues": ativa and entregue,
         }[status]
 
     propostas = [p for p in historico if atende_filtro(p)]
@@ -5996,9 +6026,9 @@ def dialog_fluxo_anna():
             )
             with st.form(f"dlg_fluxo_form_{chave_segura}"):
                 c1, c2, c3 = st.columns(3)
-                aprovado = c1.checkbox("Aprovado", value=bool(prop.get("aprovado", False)))
-                pago = c2.checkbox("Pago", value=bool(prop.get("pago", False)))
-                entregue = c3.checkbox("Entregue", value=bool(prop.get("entregue", False)))
+                aprovado = c1.checkbox("Aprovado", value=valor_bool(prop.get("aprovado", False)))
+                pago = c2.checkbox("Pago", value=valor_bool(prop.get("pago", False)))
+                entregue = c3.checkbox("Entregue", value=valor_bool(prop.get("entregue", False)))
                 salvar = st.form_submit_button("💾 Salvar andamento", use_container_width=True)
             if salvar:
                 ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, entregue)
@@ -6233,6 +6263,24 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
     link = f"https://wa.me/{numero_wa}?text={quote(formatar_msg_whatsapp(prop))}" if numero_wa else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop))}"
     c3.link_button("📱 WhatsApp", link, use_container_width=True)
     c4.download_button("📄 HTML", gerar_html(prop), file_name=f"{numero}.html", mime="text/html", key=f"{prefixo}_html_{numero}", use_container_width=True)
+    with st.expander("✅ Atualizar aprovação, pagamento e entrega", expanded=False):
+        with st.form(f"{prefixo}_status_form_{numero}"):
+            s1, s2, s3 = st.columns(3)
+            aprovado = s1.checkbox("✅ Aprovado", value=valor_bool(prop.get("aprovado")))
+            pago = s2.checkbox("💰 Pago", value=valor_bool(prop.get("pago")))
+            entregue = s3.checkbox("📦 Entregue", value=valor_bool(prop.get("entregue")))
+            salvar_status = st.form_submit_button("💾 Salvar andamento", type="primary", use_container_width=True)
+        if salvar_status:
+            ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, entregue)
+            if ok:
+                st.session_state["_mensagem_sucesso_pendente"] = mensagem
+                try:
+                    st.cache_data.clear()
+                except Exception:
+                    pass
+                st.rerun()
+            else:
+                st.error(mensagem)
 
 
 @st.dialog("📦 Entregas de hoje", width="large")
@@ -6264,7 +6312,7 @@ def dialog_entregas_hoje_anna(propostas):
 
 @st.dialog("🗓️ Orçamentos lançados hoje", width="large")
 def dialog_propostas_hoje_anna(propostas):
-    hoje = _ordenar_propostas_recentes([p for p in propostas if _proposta_eh_de_hoje(p)])
+    hoje = _ordenar_propostas_recentes([p for p in propostas if proposta_ativa_operacional(p) and _proposta_eh_de_hoje(p)])
     if not hoje:
         st.info("Nenhum orçamento lançado hoje foi localizado.")
         return
@@ -6280,7 +6328,7 @@ def renderizar_workspace_anna_isolado():
     atendimentos = carregar_atendimentos()
     fila = [x for x in atendimentos.get("itens", []) if x.get("status") not in ("Arquivado", "Entregue", "Pós-venda") and str(x.get("responsavel", "")).strip() in ("", "Anna")]
     historico = carregar_historico(force_refresh=True)
-    ativos = [p for p in historico if not valor_bool(p.get("entregue")) and not proposta_encerrada(p)]
+    ativos = [p for p in historico if proposta_ativa_operacional(p)]
     qtd_novos = len([x for x in fila if x.get("status") == "Novo contato"])
     qtd_aguardando = len([x for x in fila if x.get("status") == "Aguardando cliente"])
     qtd_entregas = len([p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()])
@@ -6323,7 +6371,7 @@ def renderizar_workspace_anna_isolado():
     if k3.button("📤 Gerar catálogos", use_container_width=True): dialog_catalogo_gerar_anna()
 
     entregas_hoje = [p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]
-    propostas_hoje = _ordenar_propostas_recentes([p for p in historico if _proposta_eh_de_hoje(p)])
+    propostas_hoje = _ordenar_propostas_recentes([p for p in historico if proposta_ativa_operacional(p) and _proposta_eh_de_hoje(p)])
 
     m1,m2,m3,m4=st.columns(4)
     m1.metric("Para atender", len([x for x in fila if x.get("status") == "Novo contato"]))
@@ -6347,7 +6395,7 @@ def renderizar_workspace_anna_isolado():
     st.markdown("### 📄 Todas as propostas e pedidos")
     busca = st.text_input("Pesquisar", placeholder="Cliente, proposta ou telefone", key="anna_busca_rapida")
     termo = busca.strip().lower()
-    lista = _ordenar_propostas_recentes([p for p in historico if not termo or termo in normalizar_texto_busca(p)])
+    lista = _ordenar_propostas_recentes([p for p in historico if proposta_ativa_operacional(p) and (not termo or termo in normalizar_texto_busca(p))])
     for idx, prop in enumerate(lista[:20]):
         _renderizar_linha_proposta_anna(prop, f"anna_lista_{idx}")
 
@@ -6468,7 +6516,7 @@ with aba0:
             ]
             itens_ws = sorted(itens_ws, key=lambda x: (-faixa_sla_atendimento(x, dados_ws.get("config", {}))[2], -minutos_aguardando(x)))
             historico_ws = carregar_historico()
-            orc_ws = [p for p in historico_ws if not p.get("entregue", False)]
+            orc_ws = [p for p in historico_ws if proposta_ativa_operacional(p)]
             aguardando_ws = [x for x in itens_ws if x.get("status") == "Aguardando cliente"]
             solicitados_ws = [x for x in itens_ws if x.get("status") in ("Orçamento solicitado", "Orçamento em elaboração")]
 
@@ -6829,9 +6877,9 @@ with aba0:
 
                 st.markdown("**Atualização rápida**")
                 up1, up2, up3 = st.columns(3)
-                aprovado_central = up1.checkbox("✅ Aprovado", value=bool(proposta_central_selecionada.get("aprovado")), key=f"central_aprov_{numero_central_selecionado}")
-                pago_central = up2.checkbox("💰 Pago", value=bool(proposta_central_selecionada.get("pago")), key=f"central_pago_{numero_central_selecionado}")
-                entregue_central = up3.checkbox("📦 Entregue", value=bool(proposta_central_selecionada.get("entregue")), key=f"central_entregue_{numero_central_selecionado}")
+                aprovado_central = up1.checkbox("✅ Aprovado", value=valor_bool(proposta_central_selecionada.get("aprovado")), key=f"central_aprov_{numero_central_selecionado}")
+                pago_central = up2.checkbox("💰 Pago", value=valor_bool(proposta_central_selecionada.get("pago")), key=f"central_pago_{numero_central_selecionado}")
+                entregue_central = up3.checkbox("📦 Entregue", value=valor_bool(proposta_central_selecionada.get("entregue")), key=f"central_entregue_{numero_central_selecionado}")
                 observacao_central = st.text_area(
                     "Observação operacional",
                     value=str(proposta_central_selecionada.get("observacao_operacional", "")),
@@ -6841,16 +6889,17 @@ with aba0:
                 )
                 op1, op2, op3 = st.columns(3)
                 if op1.button("💾 Salvar andamento", key=f"central_salvar_{numero_central_selecionado}", type="primary", use_container_width=True):
+                    ok_andamento, msg_andamento = salvar_andamento_proposta(
+                        numero_central_selecionado, aprovado_central, pago_central, entregue_central
+                    )
+                    if not ok_andamento:
+                        st.error(msg_andamento)
+                        st.stop()
                     historico_atual_central = carregar_historico()
                     for proposta_atualizar in historico_atual_central:
                         if str(proposta_atualizar.get("numero_proposta")) == str(numero_central_selecionado):
-                            proposta_atualizar["aprovado"] = bool(aprovado_central)
-                            proposta_atualizar["pago"] = bool(pago_central)
-                            proposta_atualizar["entregue"] = bool(entregue_central)
                             proposta_atualizar["observacao_operacional"] = observacao_central.strip()
                             proposta_atualizar["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
-                            if entregue_central and not proposta_atualizar.get("entregue_em"):
-                                proposta_atualizar["entregue_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
                             break
                     salvar_historico_completo(historico_atual_central)
 
@@ -6867,9 +6916,7 @@ with aba0:
 
                     st.session_state.alerta_proposta_numero = None
                     st.session_state["_central_atualizada_em"] = agora_local().isoformat()
-                    st.session_state["_mensagem_sucesso_pendente"] = (
-                        "Andamento salvo. A Central do Dia foi atualizada por completo."
-                    )
+                    st.session_state["_mensagem_sucesso_pendente"] = msg_andamento
 
                     # Limpa caches de leitura eventualmente usados por outros módulos e
                     # executa novamente o aplicativo inteiro, não apenas o formulário.
