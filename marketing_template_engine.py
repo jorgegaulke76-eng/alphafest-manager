@@ -1,6 +1,6 @@
 """Engine de templates visuais do Alpha Marketing Studio.
 
-Versão 15.2.1: Template Mestre AlphaFest v3, com hierarquia publicitária
+Versão 16.0.0: Alpha Designer Engine v1, com hierarquia publicitária
 inspirada nas peças oficiais da marca. O motor permanece independente da
 interface Streamlit e recebe somente conteúdo da campanha.
 """
@@ -199,6 +199,46 @@ def _draw_phone(draw, cx: int, cy: int, radius: int, fill, line=(255,255,255,255
     draw.line((cx-radius//3, cy-radius//3, cx-radius//2, cy-radius//2), fill=line, width=max(3, width))
     draw.line((cx+radius//3, cy+radius//3, cx+radius//2, cy+radius//2), fill=line, width=max(3, width))
 
+def _draw_splash(draw: ImageDraw.ImageDraw, cx: int, cy: int, rx: int, ry: int, fill):
+    """Desenha uma mancha orgânica simples, leve e reutilizável."""
+    draw.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=fill)
+    for ox, oy, rr in [(-rx, -ry//4, ry//3), (rx, -ry//5, ry//3), (-rx//2, ry, ry//4), (rx//2, ry, ry//4)]:
+        draw.ellipse((cx+ox-rr, cy+oy-rr, cx+ox+rr, cy+oy+rr), fill=fill)
+
+
+def _title_block(draw: ImageDraw.ImageDraw, title: str, box: tuple[int, int, int, int], dark, blue):
+    """Título publicitário em até três linhas, sem reduzir a ponto de perder impacto."""
+    x1, y1, x2, y2 = box
+    clean = re.sub(r"\([^)]*\)", "", str(title or "Produto AlphaFest"))
+    clean = re.sub(r"^[^\wÀ-ÿ]+", "", clean).strip()
+    words = clean.split()
+    if not words:
+        words = ["PRODUTO", "ALPHAFEST"]
+
+    # Divide semanticamente, privilegiando a primeira palavra como protagonista.
+    first = words[0].upper()
+    remaining = words[1:]
+    second = " ".join(remaining[:3]).title()
+    third = " ".join(remaining[3:6]).title()
+
+    max_w = x2 - x1
+    f1 = _fit_font(draw, first, max_w, 126, 78, bold=True)
+    draw.text((x1, y1), first, font=f1, fill=dark, stroke_width=2, stroke_fill=(255,255,255,220))
+    b1 = draw.textbbox((x1, y1), first, font=f1, stroke_width=2)
+    y = b1[3] + 10
+
+    if second:
+        f2 = _fit_font(draw, second, max_w, 72, 48, bold=True, serif=True, italic=True)
+        draw.text((x1+6, y), second, font=f2, fill=blue)
+        b2 = draw.textbbox((x1+6, y), second, font=f2)
+        y = b2[3] + 8
+    if third and y < y2 - 52:
+        f3 = _fit_font(draw, third, max_w, 54, 38, bold=True)
+        draw.text((x1+8, y), third, font=f3, fill=dark)
+        y += draw.textbbox((0, 0), third, font=f3)[3]
+    return y
+
+
 def render_template(
     image_bytes: bytes,
     size: tuple[int, int],
@@ -212,118 +252,137 @@ def render_template(
     phone: str = "11 97294-9533",
     logo_path: str | Path | None = None,
 ) -> bytes:
+    """Renderiza a peça completa no Alpha Designer Engine v1.
+
+    A composição usa um canvas base 1080x1350 e é escalada para todos os
+    formatos. O template prioriza leitura no celular: título, foto e contato.
+    """
     cfg = carregar_template(template_id)
     p = cfg["paleta"]
     W, H = size
     sx, sy = W / 1080.0, H / 1350.0
-    S = lambda n: int(n * min(sx, sy))
+    scale = min(sx, sy)
+    S = lambda n: max(1, int(n * scale))
     X = lambda n: int(n * sx)
     Y = lambda n: int(n * sy)
-    blue, dark, pale, pink, yellow, textc = (_hex(p[k]) for k in ("azul", "azul_escuro", "azul_claro", "rosa", "amarelo", "texto"))
+
+    blue = _hex(p["azul"])
+    dark = _hex(p["azul_escuro"])
+    pale = _hex(p["azul_claro"])
+    pink = _hex(p["rosa"])
+    yellow = _hex(p["amarelo"])
+    textc = _hex(p["texto"])
     white = (255, 255, 255, 255)
 
     canvas = Image.new("RGBA", (W, H), white)
     draw = ImageDraw.Draw(canvas, "RGBA")
 
-    # Moldura líquida superior e detalhes orgânicos.
-    draw.ellipse((X(-220), Y(-170), X(470), Y(170)), fill=blue)
-    draw.ellipse((X(760), Y(-190), X(1310), Y(160)), fill=dark)
-    draw.arc((X(-100), Y(-40), X(1180), Y(300)), 4, 176, fill=_hex("#56D6FF"), width=max(5, S(13)))
-    draw.arc((X(-55), Y(-18), X(1130), Y(260)), 7, 173, fill=white, width=max(4, S(10)))
-    for x, y, r, color in [(108, 198, 7, pink), (175, 160, 5, yellow), (922, 196, 7, pink), (986, 152, 5, yellow), (452, 342, 5, blue)]:
+    # Fundo com moldura líquida AlphaFest, sem ocupar a área útil.
+    draw.rounded_rectangle((X(10), Y(10), X(1070), Y(1340)), radius=S(36), fill=white, outline=pale, width=S(4))
+    _draw_splash(draw, X(160), Y(26), X(280), Y(115), blue)
+    _draw_splash(draw, X(925), Y(15), X(250), Y(105), dark)
+    draw.arc((X(-80), Y(-25), X(1160), Y(330)), 8, 172, fill=_hex("#52D6FF"), width=S(14))
+    draw.arc((X(-55), Y(-5), X(1135), Y(290)), 8, 172, fill=white, width=S(8))
+
+    # Confetes discretos, mantendo o DNA da referência.
+    for x, y, r, color in [
+        (95, 205, 8, pink), (160, 165, 6, yellow), (225, 215, 5, blue),
+        (875, 195, 7, pink), (945, 160, 6, yellow), (1005, 215, 5, blue),
+        (515, 318, 5, blue), (560, 335, 5, pink),
+    ]:
         draw.ellipse((X(x-r), Y(y-r), X(x+r), Y(y+r)), fill=color)
 
-    # Logo realmente protagonista, sem quadro branco.
-    logo = _transparent_logo(Path(logo_path or BASE_DIR / "logo.png"), (X(390), Y(260)))
+    # Logo grande e livre, centralizado.
+    logo = _transparent_logo(Path(logo_path or BASE_DIR / "logo.png"), (X(430), Y(255)))
     if logo:
-        canvas.alpha_composite(logo, ((W - logo.width) // 2, Y(4)))
+        canvas.alpha_composite(logo, ((W - logo.width) // 2, Y(0)))
 
-    # Título em duas linhas, como nas peças da Anna.
-    line1, line2 = _headline_lines(title)
-    max_title_w = X(500)
-    f1 = _fit_font(draw, line1, max_title_w, S(104), S(62), bold=True)
-    draw.text((X(44), Y(250)), line1, font=f1, fill=dark, stroke_width=max(1, S(1)), stroke_fill=dark)
-    title_bottom = Y(250) + (draw.textbbox((0, 0), line1, font=f1)[3])
-    if line2:
-        f2 = _fit_font(draw, line2, max_title_w, S(74), S(44), bold=True, serif=True, italic=True)
-        draw.text((X(48), title_bottom - Y(8)), line2, font=f2, fill=blue)
-        title_bottom += draw.textbbox((0, 0), line2, font=f2)[3] - Y(8)
+    # Título protagonista no lado esquerdo.
+    title_bottom = _title_block(draw, title, (X(48), Y(245), X(590), Y(500)), dark, blue)
 
-    # Faixa de chamada forte.
+    # Faixa promocional forte.
     subtitle_text = re.sub(r"\s+", " ", str(subtitle or "Personalizado do seu jeito")).strip()
-    sf = _fit_font(draw, subtitle_text, X(480), S(31), S(22), bold=True)
-    ribbon_top = max(Y(470), title_bottom + Y(12))
-    draw.rounded_rectangle((X(42), ribbon_top, X(550), ribbon_top + Y(72)), radius=S(14), fill=dark)
-    # pequenas pontas da faixa
-    draw.polygon([(X(42), ribbon_top+Y(16)), (X(18), ribbon_top+Y(36)), (X(42), ribbon_top+Y(56))], fill=blue)
-    draw.text((X(65), ribbon_top + Y(16)), subtitle_text, font=sf, fill=white)
+    ribbon_y = max(Y(455), title_bottom + Y(12))
+    draw.polygon([(X(34), ribbon_y+Y(13)), (X(8), ribbon_y+Y(43)), (X(34), ribbon_y+Y(72))], fill=blue)
+    draw.rounded_rectangle((X(34), ribbon_y, X(590), ribbon_y+Y(86)), radius=S(18), fill=dark)
+    sf = _fit_font(draw, subtitle_text, X(505), S(36), S(25), bold=True)
+    for i, line in enumerate(_wrap(draw, subtitle_text, sf, X(505), 2)):
+        bb = draw.textbbox((0,0), line, font=sf)
+        draw.text((X(312)-(bb[2]-bb[0])//2, ribbon_y+Y(14+i*34)), line, font=sf, fill=white)
 
-    # Foto protagonista, maior e mais integrada.
+    # Fotografia invade a composição e domina o lado direito.
     source = Image.open(io.BytesIO(image_bytes))
     source = ImageOps.exif_transpose(source).convert("RGB")
-    photo_box = (X(575), Y(360), X(1035), Y(890))
-    _paste_rounded(canvas, source, photo_box, S(34), shadow=True)
-    draw.rounded_rectangle(photo_box, radius=S(34), outline=white, width=max(2, S(5)))
+    photo_box = (X(560), Y(300), X(1038), Y(915))
+    _paste_rounded(canvas, source, photo_box, S(38), shadow=True)
+    draw.rounded_rectangle(photo_box, radius=S(38), outline=white, width=S(7))
 
-    # Benefícios grandes, com ícones e separadores.
+    # Selo superior direito, como elemento publicitário real.
+    seal_cx, seal_cy, seal_r = X(936), Y(245), S(82)
+    draw.ellipse((seal_cx-seal_r, seal_cy-seal_r, seal_cx+seal_r, seal_cy+seal_r), fill=dark, outline=white, width=S(5))
+    seal_font = _font(S(24), bold=True)
+    for idx, txt in enumerate(["TESTADO E", "APROVADO!"]):
+        bb = draw.textbbox((0,0), txt, font=seal_font)
+        draw.text((seal_cx-(bb[2]-bb[0])//2, seal_cy-S(31)+idx*S(29)), txt, font=seal_font, fill=white)
+
+    # Benefícios visíveis e com hierarquia, no estilo da referência.
     benefits = _parse_benefits(description, cfg["beneficios_padrao"])
-    y = max(Y(590), ribbon_top + Y(110))
-    benefit_title_font = _font(S(27), bold=True)
-    benefit_detail_font = _font(S(20), bold=False)
-    detail_defaults = [
-        "Visual que encanta e valoriza o produto.",
+    benefit_y = max(Y(620), ribbon_y+Y(118))
+    details = [
+        "Valoriza o produto e chama atenção.",
         "Prático, rápido e pronto para usar.",
-        "Acabamento resistente e bem produzido.",
-        "Ideal para diferentes ocasiões e presentes.",
+        "Acabamento bonito e resistente.",
+        "Ideal para presentes e ocasiões especiais.",
     ]
     for i, item in enumerate(benefits):
-        cy = y + Y(i * 105)
-        _draw_check(draw, X(77), cy + Y(29), S(29), blue, width=S(5))
-        title_text = item.upper()
-        tf = _fit_font(draw, title_text, X(390), S(27), S(20), bold=True)
-        draw.text((X(122), cy - Y(2)), title_text, font=tf, fill=dark)
-        for j, ln in enumerate(_wrap(draw, detail_defaults[i], benefit_detail_font, X(390), 2)):
-            draw.text((X(122), cy + Y(32 + j * 24)), ln, font=benefit_detail_font, fill=textc)
-        draw.line((X(122), cy + Y(86), X(520), cy + Y(86)), fill=_hex("#74BDF0"), width=max(1, S(2)))
+        cy = benefit_y + Y(i*112)
+        icon_x = X(78)
+        _draw_check(draw, icon_x, cy+Y(28), S(30), dark, width=S(5))
+        tf = _fit_font(draw, item.upper(), X(405), S(31), S(23), bold=True)
+        draw.text((X(125), cy-Y(4)), item.upper(), font=tf, fill=dark)
+        df = _font(S(21), bold=False)
+        for j, line in enumerate(_wrap(draw, details[i], df, X(405), 2)):
+            draw.text((X(125), cy+Y(34+j*25)), line, font=df, fill=textc)
+        draw.line((X(125), cy+Y(91), X(535), cy+Y(91)), fill=_hex("#78BFEF"), width=S(2))
 
-    # Selo de preço/oferta com presença visual.
+    # Preço opcional em selo, sem competir com o WhatsApp.
     if str(price).strip():
-        cx, cy, rr = X(455), Y(990), S(88)
-        draw.ellipse((cx-rr, cy-rr, cx+rr, cy+rr), fill=white, outline=blue, width=max(3, S(5)))
-        pf = _fit_font(draw, str(price), rr*2-S(20), S(35), S(23), bold=True)
-        label = _font(S(16), bold=True)
-        draw.text((cx-S(53), cy-S(42)), "A PARTIR DE", font=label, fill=dark)
-        bb = draw.textbbox((0, 0), str(price), font=pf)
-        draw.text((cx-(bb[2]-bb[0])//2, cy-S(5)), str(price), font=pf, fill=pink)
+        cx, cy, rr = X(455), Y(1040), S(90)
+        draw.ellipse((cx-rr, cy-rr, cx+rr, cy+rr), fill=white, outline=blue, width=S(5))
+        label = _font(S(17), bold=True)
+        draw.text((cx-S(52), cy-S(47)), "A PARTIR DE", font=label, fill=dark)
+        pf = _fit_font(draw, str(price), rr*2-S(18), S(39), S(25), bold=True)
+        bb = draw.textbbox((0,0), str(price), font=pf)
+        draw.text((cx-(bb[2]-bb[0])//2, cy-S(7)), str(price), font=pf, fill=pink)
 
-    # CTA grande como na referência, em bloco branco sobre o rodapé azul.
-    footer_top = Y(935)
-    draw.rounded_rectangle((X(560), footer_top, X(1035), Y(1125)), radius=S(25), fill=white, outline=_hex("#D9ECFA"), width=max(2, S(3)))
+    # CTA é o segundo protagonista da peça.
     cta_text = str(cta or "FAÇA SEU PEDIDO!").upper()
-    cf = _fit_font(draw, cta_text, X(430), S(45), S(30), bold=True)
-    cb = draw.textbbox((0, 0), cta_text, font=cf)
-    draw.text((X(797)-(cb[2]-cb[0])//2, Y(963)), cta_text, font=cf, fill=dark)
+    cf = _fit_font(draw, cta_text, X(430), S(52), S(34), bold=True)
+    cb = draw.textbbox((0,0), cta_text, font=cf)
+    draw.text((X(805)-(cb[2]-cb[0])//2, Y(950)), cta_text, font=cf, fill=dark)
+
+    # Bloco WhatsApp grande, com alto contraste.
+    draw.rounded_rectangle((X(565), Y(1012), X(1035), Y(1138)), radius=S(28), fill=dark)
+    _draw_phone(draw, X(625), Y(1075), S(38), blue, width=S(6))
     phone_text = str(phone or "11 97294-9533")
-    phone_font = _fit_font(draw, phone_text, X(390), S(53), S(38), bold=True)
-    # ícone telefone simples
-    _draw_phone(draw, X(625), Y(1058), S(35), blue, width=S(5))
-    draw.text((X(680), Y(1027)), phone_text, font=phone_font, fill=dark)
+    phone_font = _fit_font(draw, phone_text, X(360), S(58), S(40), bold=True)
+    draw.text((X(680), Y(1041)), phone_text, font=phone_font, fill=white)
 
-    # Pincel rosa com frase curta.
-    draw.rounded_rectangle((X(600), Y(1140), X(1015), Y(1215)), radius=S(15), fill=pink)
-    tag = "Pequenos detalhes que fazem toda a diferença!"
-    tagf = _fit_font(draw, tag, X(385), S(22), S(16), bold=True, serif=True, italic=True)
-    tb = draw.textbbox((0, 0), tag, font=tagf)
-    draw.text((X(807)-(tb[2]-tb[0])//2, Y(1160)), tag, font=tagf, fill=white)
+    # Faixa rosa e rodapé informativo.
+    draw.rounded_rectangle((X(605), Y(1162), X(1018), Y(1234)), radius=S(15), fill=pink)
+    tag_lines = ["Pequenos detalhes que", "fazem toda a diferença!"]
+    tagf = _font(S(19), bold=True, serif=True, italic=True)
+    for i, tag in enumerate(tag_lines):
+        tb = draw.textbbox((0,0), tag, font=tagf)
+        draw.text((X(811)-(tb[2]-tb[0])//2, Y(1172+i*27)), tag, font=tagf, fill=white)
 
-    # Rodapé institucional com benefícios rápidos.
     draw.rectangle((0, Y(1250), W, H), fill=dark)
     footer_items = ["PRÁTICO", "CRIATIVO", "VALORIZA SEU PRODUTO", "AUMENTA SUAS VENDAS"]
-    ff = _font(S(18), bold=True)
-    positions = [55, 275, 500, 805]
+    ff = _font(S(19), bold=True)
+    positions = [48, 270, 500, 805]
     for pos, txt in zip(positions, footer_items):
-        _draw_check(draw, X(pos+14), Y(1296), S(14), white, check=blue, width=S(3))
-        draw.text((X(pos+38), Y(1282)), txt, font=ff, fill=white)
+        _draw_check(draw, X(pos+15), Y(1297), S(14), white, check=blue, width=S(3))
+        draw.text((X(pos+40), Y(1283)), txt, font=ff, fill=white)
 
     output = io.BytesIO()
     canvas.convert("RGB").save(output, "PNG", optimize=True)
