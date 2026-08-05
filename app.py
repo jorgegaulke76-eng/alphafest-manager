@@ -183,7 +183,7 @@ def upload_library_file(upload, produto_nome="produto", local_upload_dir="biblio
 # --- BLINDAGEM 14.2.4: BOOT MANAGER, FEATURE FLAGS E DIAGNÓSTICO ---
 DEFAULT_FEATURE_FLAGS = {
     "marketing_studio": True,
-    "marketing_preview": False,
+    "marketing_preview": True,
     "marketing_ai": False,
     "campanha_mestre": False,
     "diagnostico_avancado": True,
@@ -7989,6 +7989,75 @@ if pagina_atual == "crescimento":
         preco_arte = p1.text_input("Preço na arte (opcional)", placeholder="R$ 90,00")
         subtitulo_arte = p2.text_input("Chamada curta na arte", value="Personalizado do seu jeito")
         cta_arte = p3.text_input("Botão / CTA", value="Chame no WhatsApp")
+
+        # Sprint 14.2.6 — Preview ao vivo isolado e exclusivo da Central do Jorge.
+        preview_liberado = (
+            feature_enabled("marketing_preview", False)
+            and str(obter_usuario_atual().get("nome", "")).casefold() == "jorge"
+        )
+        if preview_liberado:
+            st.markdown("### 👁️ Preview em tempo real")
+            st.caption("Pré-visualização local. Nenhum arquivo é salvo e nenhuma postagem é realizada nesta etapa.")
+
+            origem_preview = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
+            campos_preview = {
+                "Imagem": bool(origem_preview),
+                "Produto": bool(str(produto_mkt.get("Nome", "")).strip()),
+                "Descrição": bool(str(produto_mkt.get("Descricao", "")).strip()),
+                "Oferta": bool(str(observacoes).strip() or str(preco_arte).strip()),
+                "Chamada": bool(str(subtitulo_arte).strip()),
+                "CTA": bool(str(cta_arte).strip()),
+                "Canal": bool(canais),
+            }
+            pontos = sum(1 for ok in campos_preview.values() if ok)
+            qualidade = round((pontos / len(campos_preview)) * 100) if campos_preview else 0
+            q1, q2 = st.columns([1, 2])
+            q1.metric("Qualidade da campanha", f"{qualidade}%")
+            q2.progress(qualidade / 100)
+            pendencias = [nome for nome, ok in campos_preview.items() if not ok]
+            if pendencias:
+                st.caption("Para melhorar: " + ", ".join(pendencias) + ".")
+            else:
+                st.success("Campanha pronta para geração.")
+
+            canais_preview = [c for c in canais if CANAL_MIDIA_CONFIG.get(c, {}).get("tipo") == "imagem"]
+            if origem_preview and canais_preview and produto_mkt.get("Nome"):
+                canal_preview = st.selectbox(
+                    "Formato do preview",
+                    canais_preview,
+                    key="mkt_preview_canal_1426",
+                )
+                try:
+                    arte_preview = gerar_arte_png(
+                        origem_preview,
+                        canal_preview,
+                        produto_mkt.get("Nome", "Produto"),
+                        subtitulo_arte,
+                        preco_arte,
+                        cta_arte,
+                    )
+                    pv1, pv2 = st.columns([1.08, 0.92])
+                    with pv1:
+                        st.image(arte_preview, use_container_width=True, caption=f"Prévia — {canal_preview}")
+                    with pv2:
+                        st.markdown("#### Texto de apoio")
+                        st.markdown(f"**{produto_mkt.get('Nome', 'Produto')}**")
+                        if campanha:
+                            st.caption(campanha)
+                        if produto_mkt.get("Descricao"):
+                            st.write(produto_mkt.get("Descricao"))
+                        if observacoes:
+                            st.info(observacoes)
+                        st.markdown(f"**{cta_arte or 'Chame no WhatsApp'}**")
+                        st.caption("A música será adicionada manualmente na rede social.")
+                except Exception as exc:
+                    st.warning(f"O preview foi isolado e não pôde ser exibido: {exc}")
+            elif not origem_preview:
+                st.info("Envie ou selecione uma imagem para visualizar a campanha.")
+            elif not canais_preview:
+                st.info("Selecione ao menos um formato de imagem para visualizar a campanha.")
+            elif not produto_mkt.get("Nome"):
+                st.info("Informe o nome do produto ou serviço para montar o preview.")
 
         if st.button("🚀 Gerar campanha profissional", type="primary", use_container_width=True):
             origem = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
