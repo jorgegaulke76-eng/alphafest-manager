@@ -24,6 +24,7 @@ _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
+from marketing_template_engine import DEFAULT_TEMPLATE as MARKETING_DEFAULT_TEMPLATE, listar_templates as listar_templates_marketing, render_template as renderizar_template_marketing
 from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
 from painel_indicadores import calcular_indicadores_unificados
@@ -2919,117 +2920,23 @@ def _desenhar_texto_centralizado(draw, texto, fonte, caixa, cor):
     draw.text((x1 + (x2 - x1 - tw) // 2, y1 + (y2 - y1 - th) // 2 - bbox[1]), texto, font=fonte, fill=cor)
 
 
-def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no WhatsApp"):
-    """Gera uma propaganda AlphaFest com leitura forte, fundo claro e tipografia comercial."""
-    if Image is None:
-        raise RuntimeError("Pillow não está instalado.")
+def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no WhatsApp", descricao="", template_id=MARKETING_DEFAULT_TEMPLATE):
+    """Renderiza uma peça usando a Engine de Templates AlphaFest."""
     config = CANAL_MIDIA_CONFIG.get(canal, CANAL_MIDIA_CONFIG["Instagram Feed"])
-    largura, altura = config["size"]
     bruto = _ler_bytes_midia(origem)
     if not bruto:
         raise ValueError("Selecione uma imagem válida.")
-
-    with Image.open(io.BytesIO(bruto)) as img:
-        img = ImageOps.exif_transpose(img).convert("RGB")
-        canvas = Image.new("RGBA", (largura, altura), (250, 253, 255, 255))
-        draw = ImageDraw.Draw(canvas, "RGBA")
-
-        # Fundo branco com grandes movimentos azuis, inspirado nas peças oficiais.
-        azul = (8, 101, 226, 255)
-        azul_escuro = (5, 55, 132, 255)
-        rosa = (239, 43, 145, 255)
-        draw.ellipse((-int(largura*.38), -int(altura*.18), int(largura*.62), int(altura*.23)), fill=(0,132,255,255))
-        draw.ellipse((int(largura*.58), -int(altura*.15), int(largura*1.18), int(altura*.20)), fill=(3,92,211,255))
-        draw.arc((-80, -80, int(largura*.78), int(altura*.30)), 5, 170, fill=(90,215,255,255), width=max(10, largura//70))
-        for bx, by, br, bc in [(.08,.25,10,azul),(.17,.11,7,rosa),(.90,.28,8,rosa),(.78,.12,6,(255,185,0,255)),(.47,.19,5,azul)]:
-            draw.ellipse((int(largura*bx-br), int(altura*by-br), int(largura*bx+br), int(altura*by+br)), fill=bc)
-
-        # Logo flutuante, sem caixa branca.
-        logo = _carregar_logo_alphafest(max_width=max(250, int(largura*.31)))
-        if logo is not None:
-            lx = (largura - logo.width) // 2
-            ly = max(18, int(altura*.015))
-            canvas.alpha_composite(logo, (lx, ly))
-
-        # Foto principal grande, com enquadramento limpo.
-        foto_x1 = int(largura * .43)
-        foto_y1 = int(altura * .25)
-        foto_x2 = largura - int(largura * .045)
-        foto_y2 = int(altura * .72)
-        fw, fh = foto_x2 - foto_x1, foto_y2 - foto_y1
-        foto = ImageOps.fit(img, (fw, fh), method=Image.Resampling.LANCZOS)
-        sombra = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-        sd = ImageDraw.Draw(sombra, "RGBA")
-        sd.rounded_rectangle((foto_x1+12, foto_y1+16, foto_x2+12, foto_y2+16), radius=34, fill=(0,45,110,55))
-        sombra = sombra.filter(ImageFilter.GaussianBlur(18))
-        canvas.alpha_composite(sombra)
-        mask = Image.new("L", (fw, fh), 0)
-        ImageDraw.Draw(mask).rounded_rectangle((0,0,fw,fh), radius=34, fill=255)
-        canvas.paste(foto.convert("RGBA"), (foto_x1, foto_y1), mask)
-
-        # Título comercial grande no lado esquerdo.
-        titulo_limpo = str(titulo or "Produto AlphaFest").strip()
-        palavras = titulo_limpo.split()
-        if len(palavras) > 5:
-            titulo_exibicao = " ".join(palavras[:5])
-        else:
-            titulo_exibicao = titulo_limpo
-        f_titulo = _fonte_segura(max(64, int(largura*.079)), True)
-        f_sub = _fonte_segura(max(30, int(largura*.039)), True)
-        f_beneficio = _fonte_segura(max(22, int(largura*.026)), True)
-        f_corpo = _fonte_segura(max(23, int(largura*.027)), False)
-        f_cta = _fonte_segura(max(34, int(largura*.041)), True)
-        f_tel = _fonte_segura(max(37, int(largura*.045)), True)
-
-        tx = int(largura*.055)
-        ty = int(altura*.285)
-        area_titulo = int(largura*.34)
-        linhas = _quebrar_texto(draw, titulo_exibicao, f_titulo, area_titulo, 3)
-        for i, linha in enumerate(linhas):
-            cor = azul_escuro if i == 0 else azul
-            draw.text((tx, ty), linha, font=f_titulo, fill=cor)
-            ty += int(largura*.088)
-
-        # Faixa curta de promessa, com texto grande.
-        chamada = str(subtitulo or "Personalizado do seu jeito").strip()
-        faixa_y1 = int(altura*.575)
-        faixa_y2 = faixa_y1 + int(altura*.085)
-        draw.rounded_rectangle((tx, faixa_y1, int(largura*.405), faixa_y2), radius=22, fill=azul)
-        chamada_linhas = _quebrar_texto(draw, chamada, f_sub, int(largura*.31), 2)
-        cy = faixa_y1 + 12
-        for linha in chamada_linhas:
-            draw.text((tx+24, cy), linha, font=f_sub, fill=(255,255,255,255))
-            cy += int(largura*.044)
-
-        # Benefícios em linguagem visual curta, sem textos minúsculos.
-        beneficios = ["DESIGN EXCLUSIVO", "ALTA QUALIDADE", "FEITO PARA ENCANTAR"]
-        base_y = int(altura*.755)
-        bloco_w = int((largura - 2*tx - 28) / 3)
-        for i, beneficio in enumerate(beneficios):
-            x1 = tx + i*(bloco_w+14)
-            x2 = x1 + bloco_w
-            draw.rounded_rectangle((x1, base_y, x2, base_y+int(altura*.09)), radius=22, fill=(235,246,255,255), outline=(48,142,235,255), width=3)
-            draw.ellipse((x1+16, base_y+18, x1+52, base_y+54), fill=azul)
-            draw.text((x1+27, base_y+17), "✓", font=f_corpo, fill=(255,255,255,255))
-            linhas_beneficio = _quebrar_texto(draw, beneficio, f_beneficio, bloco_w-78, 2)
-            by = base_y + 14
-            for linha_beneficio in linhas_beneficio:
-                draw.text((x1+62, by), linha_beneficio, font=f_beneficio, fill=azul_escuro)
-                by += int(largura*.030)
-
-        # Rodapé comercial forte.
-        rodape_y = int(altura*.875)
-        if preco:
-            draw.rounded_rectangle((tx, rodape_y, int(largura*.38), altura-38), radius=25, fill=(255,236,247,255))
-            draw.text((tx+24, rodape_y+18), str(preco), font=f_tel, fill=rosa)
-        cta_x1 = int(largura*.42)
-        draw.rounded_rectangle((cta_x1, rodape_y, largura-38, altura-38), radius=26, fill=azul_escuro)
-        draw.text((cta_x1+28, rodape_y+16), str(cta or "FAÇA SEU PEDIDO"), font=f_cta, fill=(255,255,255,255))
-        draw.text((cta_x1+28, rodape_y+62), "11 97294-9533", font=f_tel, fill=(255,255,255,255))
-
-        saida = io.BytesIO()
-        canvas.convert("RGB").save(saida, format="PNG", optimize=True, quality=95)
-        return saida.getvalue()
+    return renderizar_template_marketing(
+        bruto,
+        config["size"],
+        template_id=template_id,
+        title=titulo,
+        subtitle=subtitulo or "Personalize seus momentos",
+        description=descricao,
+        price=preco,
+        cta=cta or "FAÇA SEU PEDIDO!",
+        logo_path=Path("logo.png"),
+    )
 
 def _openai_api_key():
     try:
@@ -8011,6 +7918,15 @@ if pagina_atual == "crescimento":
 
         with editor_col:
             af_section_title("Dados da campanha", "Preencha somente as informações necessárias para a criação.")
+            templates_disponiveis = listar_templates_marketing()
+            mapa_templates = {item["nome"]: item["id"] for item in templates_disponiveis} or {"AlphaFest Clássico": MARKETING_DEFAULT_TEMPLATE}
+            template_nome = st.selectbox(
+                "Template da arte",
+                list(mapa_templates.keys()),
+                key="mkt_template_visual",
+                help="O template controla posições, cores, tipografia e identidade visual da propaganda.",
+            )
+            template_id = mapa_templates[template_nome]
             fonte_imagem = st.radio(
                 "Origem do trabalho",
                 ["Upload livre", "Produto do catálogo"],
@@ -8115,6 +8031,8 @@ if pagina_atual == "crescimento":
                         subtitulo_arte,
                         preco_arte,
                         cta_arte,
+                        produto_mkt.get("Descricao", ""),
+                        template_id,
                     )
                     st.image(arte_preview, use_container_width=True)
                     st.markdown(f'<div class="af-card-title">{html.escape(str(produto_mkt.get("Nome", "Produto")))}</div>', unsafe_allow_html=True)
@@ -8159,7 +8077,7 @@ if pagina_atual == "crescimento":
                     for canal in canais:
                         config_canal = CANAL_MIDIA_CONFIG[canal]
                         if config_canal["tipo"] == "imagem":
-                            artes[canal] = base64.b64encode(gerar_arte_png(origem, canal, produto_mkt.get("Nome", "Produto"), subtitulo_arte, preco_arte, cta_arte)).decode("ascii")
+                            artes[canal] = base64.b64encode(gerar_arte_png(origem, canal, produto_mkt.get("Nome", "Produto"), subtitulo_arte, preco_arte, cta_arte, produto_mkt.get("Descricao", ""), template_id)).decode("ascii")
                     registro = {
                         "id": f"MKT-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
                         "criado_em": agora_local().isoformat(),
@@ -8171,6 +8089,7 @@ if pagina_atual == "crescimento":
                         "video_original": video_original_salvo,
                         "imagem_png_base64": base64.b64encode(png_original).decode("ascii"),
                         "objetivo": objetivo, "tom": tom, "campanha": campanha, "canais": canais,
+                        "template_id": template_id, "template_nome": template_nome,
                         "conteudos": saidas, "motor_copy": motor_copy,
                         "artes_png": artes, "aprovacoes": {canal: False for canal in canais},
                         "fila_publicacao": {}, "status": "Em revisão",
