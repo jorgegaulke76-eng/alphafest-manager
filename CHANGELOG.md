@@ -349,3 +349,10 @@ hangelog
 - Alpha Marketing restaurado com Instagram como canal principal.
 - Facebook removido da geração separada; replicação pela Meta.
 - Central da Anna preservada.
+
+## 14.2.3 — Alpha Marketing Studio Inteligente
+- Preview ao vivo por canal antes da geração.
+- Pontuação de qualidade e indicação de pendências.
+- Assistente Alpha local para chamada, CTA, oferta e legenda.
+- Campanha Mestre com os formatos principais.
+- Desenvolvimento restrito à Central do Jorge; Central da Anna preservada.

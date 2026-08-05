@@ -3083,6 +3083,81 @@ def gerar_zip_campanha(item):
     return pacote.getvalue()
 
 
+def sugerir_campanha_alphafest(produto, descricao="", objetivo="Vender", campanha="", observacoes="", tom="Venda direta"):
+    """Cria sugestões comerciais locais sem depender de publicação ou API externa."""
+    nome = str(produto or "Produto personalizado").strip()
+    descricao = str(descricao or "").strip()
+    campanha = str(campanha or "").strip()
+    observacoes = str(observacoes or "").strip()
+    contexto = f" para {campanha}" if campanha else ""
+    chamadas = {
+        "Vender": f"{nome}: personalizado do seu jeito",
+        "Promoção": f"Oferta especial de {nome}",
+        "Lançamento": f"Novidade AlphaFest: {nome}",
+        "Engajar": f"Qual detalhe você escolheria para seu {nome}?",
+    }
+    subtitulo = chamadas.get(objetivo, chamadas["Vender"])
+    if tom == "Urgência":
+        subtitulo = f"Últimas vagas{contexto}"
+    elif tom == "Premium":
+        subtitulo = f"Detalhes exclusivos em {nome}"
+    elif tom == "Corporativo":
+        subtitulo = f"Personalização profissional para sua marca"
+    elif tom == "Emocional":
+        subtitulo = f"Um presente feito para emocionar"
+    beneficio = descricao or f"Produção personalizada, atendimento próximo e acabamento feito com carinho pela AlphaFest."
+    oferta = f" {observacoes}" if observacoes else ""
+    legenda = (
+        f"✨ {subtitulo}!\n\n{beneficio}\n\n"
+        f"Na AlphaFest, cada detalhe é preparado conforme a sua necessidade, sem quantidade mínima.{oferta}\n\n"
+        "📲 Chame no WhatsApp e solicite seu orçamento.\n\n"
+        "#AlphaFest #Personalizados #Itatiba #FestasPersonalizadas #FeitoSobMedida #Orçamento"
+    )
+    return {
+        "subtitulo": subtitulo[:90],
+        "cta": "Chame no WhatsApp",
+        "observacoes": observacoes or "Consulte valores, disponibilidade e prazo pelo WhatsApp.",
+        "legenda": legenda,
+    }
+
+
+def calcular_qualidade_campanha(origem, produto, descricao, campanha, canais, observacoes, preco, subtitulo, cta):
+    criterios = [
+        (bool(origem), "Imagem selecionada", 20),
+        (bool(str(produto or "").strip()), "Produto informado", 15),
+        (len(str(descricao or "").strip()) >= 20, "Descrição com benefícios", 15),
+        (bool(str(campanha or "").strip()), "Campanha ou data", 10),
+        (bool(canais), "Canais selecionados", 10),
+        (len(str(observacoes or "").strip()) >= 12, "Oferta e detalhes", 10),
+        (bool(str(subtitulo or "").strip()), "Chamada da arte", 8),
+        (bool(str(cta or "").strip()), "CTA", 7),
+        (bool(str(preco or "").strip()), "Preço na arte", 5),
+    ]
+    pontos = sum(peso for ok, _, peso in criterios if ok)
+    return pontos, criterios
+
+
+def renderizar_qualidade_campanha(pontos, criterios):
+    if pontos >= 85:
+        nivel, icone = "Excelente", "🟢"
+    elif pontos >= 65:
+        nivel, icone = "Boa", "🔵"
+    elif pontos >= 40:
+        nivel, icone = "Incompleta", "🟠"
+    else:
+        nivel, icone = "Precisa de atenção", "🔴"
+    st.markdown(f"#### {icone} Qualidade da campanha — {pontos}% ({nivel})")
+    st.progress(pontos / 100)
+    pendencias = [rotulo for ok, rotulo, _ in criterios if not ok]
+    concluidos = [rotulo for ok, rotulo, _ in criterios if ok]
+    if concluidos:
+        st.caption("✅ " + " • ".join(concluidos))
+    if pendencias:
+        st.warning("Para melhorar: " + "; ".join(pendencias) + ".")
+    else:
+        st.success("Campanha completa e pronta para geração.")
+
+
 def renderizar_cartao_studio(titulo, descricao, icone):
     st.markdown(
         f"<div style='padding:16px;border:1px solid #dbeafe;border-radius:16px;background:#fff;min-height:115px;box-shadow:0 3px 12px rgba(15,23,42,.05)'>"
@@ -7867,18 +7942,76 @@ if pagina_atual == "crescimento":
         canais_instagram = ["Instagram Feed", "Instagram Story", "Carrossel", "Reel", "TikTok", "YouTube Shorts", "YouTube Horizontal"]
         opcoes_canais = canais_instagram + (["Status WhatsApp"] if incluir_whatsapp else [])
         canais_padrao = ["Instagram Feed", "Instagram Story"] + (["Status WhatsApp"] if incluir_whatsapp else [])
-        canais = st.multiselect(
-            "Canais e formatos que deseja preparar",
-            opcoes_canais,
-            default=[c for c in canais_padrao if c in opcoes_canais],
-            key="mkt_canais_instagram",
-            help="O Facebook não é gerado como publicação separada: a Meta replica o post do Instagram quando essa opção está ativa na conta.",
+        campanha_mestre = st.toggle(
+            "⚡ Campanha Mestre — preparar automaticamente os principais formatos",
+            key="mkt_campanha_mestre",
+            help="Seleciona Feed, Story, Status, Reel, TikTok e YouTube Shorts. A publicação continua manual.",
         )
+        canais_mestre = ["Instagram Feed", "Instagram Story", "Reel", "TikTok", "YouTube Shorts"] + (["Status WhatsApp"] if incluir_whatsapp else [])
+        if campanha_mestre:
+            canais = [c for c in canais_mestre if c in opcoes_canais]
+            st.info("Campanha Mestre ativa: o Studio preparará automaticamente os formatos principais.")
+        else:
+            canais = st.multiselect(
+                "Canais e formatos que deseja preparar",
+                opcoes_canais,
+                default=[c for c in canais_padrao if c in opcoes_canais],
+                key="mkt_canais_instagram",
+                help="O Facebook não é gerado como publicação separada: a Meta replica o post do Instagram quando essa opção está ativa na conta.",
+            )
+        # Aplica sugestões antes de instanciar os widgets, evitando alterar o estado de um widget já renderizado.
+        sugestao_pendente = st.session_state.pop("mkt_sugestao_pendente", None)
+        if sugestao_pendente:
+            st.session_state["mkt_subtitulo_arte"] = sugestao_pendente.get("subtitulo", "Personalizado do seu jeito")
+            st.session_state["mkt_cta_arte"] = sugestao_pendente.get("cta", "Chame no WhatsApp")
+            if not str(st.session_state.get("mkt_obs", "")).strip():
+                st.session_state["mkt_obs"] = sugestao_pendente.get("observacoes", "")
+            st.session_state["mkt_sugestao_legenda"] = sugestao_pendente.get("legenda", "")
+
         observacoes = st.text_area("Oferta e detalhes obrigatórios", placeholder="Ex.: Até sexta, R$ 90, entrega em Itatiba...", key="mkt_obs")
         p1,p2,p3 = st.columns(3)
-        preco_arte = p1.text_input("Preço na arte (opcional)", placeholder="R$ 90,00")
-        subtitulo_arte = p2.text_input("Chamada curta na arte", value="Personalizado do seu jeito")
-        cta_arte = p3.text_input("Botão / CTA", value="Chame no WhatsApp")
+        preco_arte = p1.text_input("Preço na arte (opcional)", placeholder="R$ 90,00", key="mkt_preco_arte")
+        subtitulo_arte = p2.text_input("Chamada curta na arte", value="Personalizado do seu jeito", key="mkt_subtitulo_arte")
+        cta_arte = p3.text_input("Botão / CTA", value="Chame no WhatsApp", key="mkt_cta_arte")
+
+        origem_preview = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
+        pontos_mkt, criterios_mkt = calcular_qualidade_campanha(
+            origem_preview, produto_mkt.get("Nome"), produto_mkt.get("Descricao"), campanha, canais,
+            observacoes, preco_arte, subtitulo_arte, cta_arte,
+        )
+        with st.container(border=True):
+            renderizar_qualidade_campanha(pontos_mkt, criterios_mkt)
+
+        acao1, acao2 = st.columns([1, 2])
+        if acao1.button("✨ Melhorar campanha", use_container_width=True, key="mkt_melhorar_campanha"):
+            sugestao = sugerir_campanha_alphafest(
+                produto_mkt.get("Nome"), produto_mkt.get("Descricao"), objetivo, campanha, observacoes, tom
+            )
+            st.session_state["mkt_sugestao_pendente"] = sugestao
+            st.rerun()
+        acao2.caption("O Assistente Alpha melhora chamada, CTA e oferta com o padrão comercial da AlphaFest. Nada é publicado automaticamente.")
+
+        st.markdown("### 👁️ Preview ao vivo")
+        preview_canais = canais or ["Instagram Feed"]
+        canal_preview = st.selectbox("Visualizar formato", preview_canais, key="mkt_preview_canal")
+        pv1, pv2 = st.columns([1, 1])
+        with pv1:
+            if origem_preview and CANAL_MIDIA_CONFIG.get(canal_preview, {}).get("tipo") == "imagem":
+                try:
+                    arte_preview = gerar_arte_png(origem_preview, canal_preview, produto_mkt.get("Nome", "Produto"), subtitulo_arte, preco_arte, cta_arte)
+                    st.image(arte_preview, use_container_width=True, caption=f"{canal_preview} • {CANAL_MIDIA_CONFIG[canal_preview]['size'][0]} × {CANAL_MIDIA_CONFIG[canal_preview]['size'][1]}")
+                except Exception as exc:
+                    st.info(f"O preview será exibido após uma imagem válida ser selecionada. ({exc})")
+            elif CANAL_MIDIA_CONFIG.get(canal_preview, {}).get("tipo") == "video":
+                st.info("Formato vertical de vídeo. O Studio preserva o vídeo original e prepara o roteiro; música e edição final são manuais.")
+                if video_upload is not None:
+                    st.video(video_upload)
+            else:
+                st.info("Selecione uma imagem para visualizar a arte em tempo real.")
+        with pv2:
+            sugestao_legenda = st.session_state.get("mkt_sugestao_legenda")
+            texto_preview = sugestao_legenda or gerar_copy_comercial(produto_mkt, objetivo, campanha, canal_preview, observacoes, tom)
+            st.text_area("Texto sugerido para este formato", value=texto_preview, height=330, key=f"mkt_preview_texto_{canal_preview}", disabled=True)
 
         if st.button("🚀 Gerar campanha profissional", type="primary", use_container_width=True):
             origem = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
@@ -7915,6 +8048,8 @@ if pagina_atual == "crescimento":
                         "video_original": video_original_salvo,
                         "imagem_png_base64": base64.b64encode(png_original).decode("ascii"),
                         "objetivo": objetivo, "tom": tom, "campanha": campanha, "canais": canais,
+                        "campanha_mestre": campanha_mestre, "qualidade": pontos_mkt,
+                        "preco_arte": preco_arte, "subtitulo_arte": subtitulo_arte, "cta_arte": cta_arte,
                         "conteudos": saidas, "motor_copy": motor_copy,
                         "artes_png": artes, "aprovacoes": {canal: False for canal in canais},
                         "fila_publicacao": {}, "status": "Em revisão",
