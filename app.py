@@ -333,7 +333,8 @@ def indice_aba(chave):
 
 
 def rerun_na_aba(chave, mensagem=None):
-    """Executa novamente o app e reabre a aba solicitada no mesmo fluxo de trabalho."""
+    """Reabre somente o módulo solicitado, sem renderizar todas as páginas."""
+    st.session_state["_pagina_principal"] = str(chave)
     st.session_state["_aba_principal_destino"] = indice_aba(chave)
     if mensagem:
         st.session_state["_mensagem_sucesso_pendente"] = mensagem
@@ -434,40 +435,28 @@ def aplicar_visibilidade_abas(usuario=None):
     st.markdown("<div id='fest-main-tabs-marker'></div><style>" + "".join(regras) + "</style>", unsafe_allow_html=True)
 
 def solicitar_navegacao_aba(indice, mensagem=None):
-    """Agenda a abertura de uma aba principal no próximo rerun."""
-    st.session_state["_aba_principal_destino"] = int(indice)
+    """Agenda a abertura de um módulo principal no próximo rerun."""
+    try:
+        idx = int(indice)
+    except (TypeError, ValueError):
+        idx = 0
+    idx = max(0, min(idx, len(ABAS_SISTEMA) - 1))
+    st.session_state["_pagina_principal"] = ABAS_SISTEMA[idx][0]
+    st.session_state["_aba_principal_destino"] = idx
     if mensagem:
         st.session_state["_mensagem_sucesso_pendente"] = mensagem
     st.rerun()
 
 
 def executar_navegacao_aba_pendente():
-    """Clica programaticamente na aba principal solicitada, inclusive quando oculta no perfil da Anna."""
+    """Resolve navegação pendente sem JavaScript e sem manter todas as abas carregadas."""
     indice = st.session_state.pop("_aba_principal_destino", None)
-    if indice is None:
-        return
-    components.html(
-        f"""<script>
-        (function() {{
-          const idx = {int(indice)};
-          let tentativas = 0;
-          function abrir() {{
-            const doc = window.parent.document;
-            const tabs = doc.querySelectorAll('[data-baseweb="tab"]');
-            if (tabs && tabs[idx]) {{
-              tabs[idx].click();
-              tabs[idx].dispatchEvent(new MouseEvent('click', {{bubbles:true, cancelable:true, view:window.parent}}));
-              return;
-            }}
-            tentativas += 1;
-            if (tentativas < 20) setTimeout(abrir, 150);
-          }}
-          setTimeout(abrir, 120);
-        }})();
-        </script>""",
-        height=0,
-        width=0,
-    )
+    if indice is not None:
+        try:
+            idx = max(0, min(int(indice), len(ABAS_SISTEMA) - 1))
+            st.session_state["_pagina_principal"] = ABAS_SISTEMA[idx][0]
+        except (TypeError, ValueError):
+            pass
 
 
 def obter_email_usuario_autenticado():
@@ -925,7 +914,7 @@ def renderizar_configuracoes_orientacoes_thu():
     tela_previa = st.selectbox("Tela da prévia", list(ROTULOS_TELAS_THU), format_func=lambda x: ROTULOS_TELAS_THU[x], key="thu_previa_tela")
     mensagens = cfg.get("mensagens", {}).get(tela_previa, [])
     if mensagens:
-        imagem, formato_imagem = _imagem_thu_base64(tela)
+        imagem, formato_imagem = _imagem_thu_base64(tela_previa)
         img = f'<img src="data:image/{formato_imagem};base64,{imagem}" style="width:110px;height:110px;object-fit:cover;object-position:center 20%;border-radius:16px;background:white">' if imagem else ""
         st.markdown(f"""
         <div style="display:flex;gap:18px;align-items:center;padding:18px;border-radius:22px;border:3px solid #1687d9;background:linear-gradient(135deg,#fff,#e9f6ff);box-shadow:0 12px 30px rgba(0,72,130,.18)">
@@ -6434,55 +6423,55 @@ if usuario_em_operacao_protegida(obter_usuario_atual()):
 
 aplicar_visibilidade_abas(obter_usuario_atual())
 
-aba0, aba_atendimento, aba_crm, aba_alpha, aba_inteligencia, aba_clientes_360, aba_crescimento, aba_jornada, aba_projeto, aba1, aba2, aba3, aba4, aba_executivo, aba5, aba6, aba8, aba_conhecimento, aba9, aba7 = st.tabs([
-    "🏠 Central do Dia",
-    _rotulo_atendimento,
-    "🎯 CRM Inteligente",
-    "🤖 Alpha",
-    "🧠 Intelligence",
-    "🧠 Clientes 360",
-    "🚀 Crescimento",
-    "🚀 Jornada",
-    "🧩 Projeto Personalizado",
-    "➕ Novo Orçamento",
-    "📋 Histórico",
-    "🎯 Fluxo de Pedidos",
-    "📊 Relatórios",
-    "📈 Executivo",
-    "📦 Catálogo",
-    "🌐 Relacionamentos",
-    "🧠 Memória",
-    "🧩 Conhecimento",
-    "📅 Calendário Comercial",
-    "⚙️ Configurações",
-])
+# Navegação executiva leve: somente o módulo escolhido é renderizado.
+# Isso elimina o custo do st.tabs, que executava todos os 20 módulos a cada clique.
+GRUPOS_NAVEGACAO = {
+    "🏠 Central": ["central"],
+    "📋 Operação": ["novo_orcamento", "historico", "fluxo", "catalogo", "projeto", "jornada"],
+    "👥 Clientes": ["atendimento", "crm", "clientes_360", "relacionamentos"],
+    "🧠 Inteligência": ["alpha", "intelligence", "memoria", "conhecimento"],
+    "📈 Gestão": ["executivo", "relatorios", "crescimento", "calendario"],
+    "⚙️ Administração": ["configuracoes"],
+}
+ROTULOS_ABAS = dict(ABAS_SISTEMA)
+permitidas_exec = set(obter_perfil_configurado(obter_usuario_atual()).get("abas", []))
+pagina_pendente = st.session_state.get("_pagina_principal", "central")
+if pagina_pendente not in permitidas_exec:
+    pagina_pendente = "central"
 
-# Reforço pós-renderização: versões recentes do Streamlit recriam o cabeçalho
-# das abas depois do CSS inicial. No perfil da Anna, ocultamos novamente a
-# navegação principal sem afetar os conteúdos da Central Operacional.
-if usuario_em_operacao_protegida(obter_usuario_atual()):
-    st.markdown(
-        """<style>
-        [data-testid="stTabs"] [data-baseweb="tab-list"],
-        [data-testid="stTabs"] [role="tablist"],
-        .stTabs [data-baseweb="tab-list"],
-        .stTabs [role="tablist"] {
-            display:none !important; visibility:hidden !important;
-            height:0 !important; min-height:0 !important; max-height:0 !important;
-            margin:0 !important; padding:0 !important; overflow:hidden !important; border:0 !important;
-        }
-        [data-testid="stTabs"] > div:first-child, .stTabs > div:first-child {
-            height:0 !important; min-height:0 !important; max-height:0 !important;
-            margin:0 !important; padding:0 !important; overflow:hidden !important;
-        }
-        </style>""",
-        unsafe_allow_html=True,
-    )
+# Descobre o grupo atual e oferece dois controles compactos, sem a antiga fila de abas.
+grupo_atual = next((g for g, itens in GRUPOS_NAVEGACAO.items() if pagina_pendente in itens), "🏠 Central")
+grupos_disponiveis = [g for g, itens in GRUPOS_NAVEGACAO.items() if any(x in permitidas_exec for x in itens)]
+if grupo_atual not in grupos_disponiveis:
+    grupo_atual = grupos_disponiveis[0]
 
+nav_col1, nav_col2 = st.columns([1.15, 2.15])
+grupo_escolhido = nav_col1.selectbox(
+    "Área", grupos_disponiveis,
+    index=grupos_disponiveis.index(grupo_atual),
+    key="nav_grupo_executivo",
+    label_visibility="collapsed",
+)
+opcoes_modulo = [x for x in GRUPOS_NAVEGACAO[grupo_escolhido] if x in permitidas_exec]
+modulo_padrao = pagina_pendente if pagina_pendente in opcoes_modulo else opcoes_modulo[0]
+pagina_atual = nav_col2.selectbox(
+    "Módulo", opcoes_modulo,
+    index=opcoes_modulo.index(modulo_padrao),
+    format_func=lambda chave: ROTULOS_ABAS.get(chave, chave),
+    key=f"nav_modulo_{grupo_escolhido}",
+    label_visibility="collapsed",
+)
+if pagina_atual != st.session_state.get("_pagina_principal"):
+    st.session_state["_pagina_principal"] = pagina_atual
+
+st.caption(f"📍 {grupo_escolhido} › {ROTULOS_ABAS.get(pagina_atual, pagina_atual)}")
+
+
+# A Central da Anna já foi encerrada acima com st.stop(); nenhuma alteração visual nela.
 
 executar_navegacao_aba_pendente()
 
-with aba0:
+if pagina_atual == "central":
     usuario_atual = obter_usuario_atual()
     empresa_central = carregar_config_empresa()
     hoje_central = hoje_local()
@@ -7087,7 +7076,7 @@ with aba0:
         if not total_resultados:
             st.info("Nenhum resultado encontrado.")
 
-with aba_atendimento:
+if pagina_atual == "atendimento":
     st.header("📥 Central Multicanal")
     st.caption("Reúna oportunidades do WhatsApp, Instagram, Facebook, site e atendimento manual em uma única fila.")
     dados_at = carregar_atendimentos()
@@ -7481,7 +7470,7 @@ with aba_atendimento:
             """)
 
 
-with aba_crm:
+if pagina_atual == "crm":
     st.header("🎯 CRM Inteligente")
     st.caption("Priorize oportunidades, acompanhe o funil e evite que clientes interessados sejam esquecidos.")
 
@@ -7601,11 +7590,11 @@ with aba_crm:
                 st.success("Oportunidade atualizada.")
                 st.rerun()
 
-with aba_alpha:
+if pagina_atual == "alpha":
     renderizar_alpha_assistente_comercial()
 
 
-with aba_inteligencia:
+if pagina_atual == "intelligence":
     st.header("🧠 Alpha Intelligence")
     if usuario_em_operacao_protegida():
         st.info("🛡️ Este módulo está em modo protegido durante o atendimento da Anna. Os módulos operacionais continuam disponíveis normalmente.")
@@ -7626,7 +7615,7 @@ with aba_inteligencia:
             st.caption("O administrador pode consultar os logs para o diagnóstico técnico.")
 
 
-with aba_clientes_360:
+if pagina_atual == "clientes_360":
     clientes_360 = sincronizar_clientes_do_historico()
     renderizar_inteligencia_clientes(
         clientes=clientes_360,
@@ -7636,7 +7625,7 @@ with aba_clientes_360:
     )
 
 
-with aba_crescimento:
+if pagina_atual == "crescimento":
     st.header("🚀 Alpha Creative Studio Premium")
     st.caption("Campanhas com identidade Alphafest, descrição comercial por IA, aprovação individual e envio em lote para a fila de publicação.")
     marketing = carregar_marketing()
@@ -7840,14 +7829,14 @@ with aba_crescimento:
                 st.info(f"{len(resultado['sem_correspondencia'])} proposta(s) ainda não possuem relacionamento correspondente.")
 
 
-with aba_jornada:
+if pagina_atual == "jornada":
     renderizar_jornada_atendimento()
 
-with aba_projeto:
+if pagina_atual == "projeto":
     renderizar_assistente_projeto_personalizado()
 
 
-with aba1:
+if pagina_atual == "novo_orcamento":
     # Cabeçalho centralizado da área de orçamento.
     logo_aba1_b64, _ = encontrar_logo_base64()
     if logo_aba1_b64:
@@ -8017,7 +8006,7 @@ with aba1:
             agendar_limpeza_formulario()
             rerun_na_aba("novo_orcamento", "Proposta salva com sucesso e operação atualizada.")
 
-with aba2:
+if pagina_atual == "historico":
     renderizar_painel_alertas("historico")
 
     historico = carregar_historico()
@@ -8098,7 +8087,7 @@ with aba2:
             renderizar_caixa_projeto(prop, prefixo="hist")
 
 
-with aba3:
+if pagina_atual == "fluxo":
     st.markdown("<h2 style='text-align:center;'>🎯 Fluxo de Pedidos</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:center;color:#6b7280;'>Mostra o que precisa ser feito agora, da arte até a entrega.</p>", unsafe_allow_html=True)
 
@@ -8207,7 +8196,7 @@ with aba3:
         renderizar_cartoes_fluxo(lista_entregas, "entregas")
 
 
-with aba4:
+if pagina_atual == "relatorios":
     h = carregar_historico()
     if not h:
         st.info("📊 Ainda não existem propostas cadastradas para gerar relatórios.")
@@ -8280,7 +8269,7 @@ with aba4:
 
 
 
-with aba_executivo:
+if pagina_atual == "executivo":
     st.markdown("<h2 style='text-align:center;'>📈 Painel Executivo</h2>", unsafe_allow_html=True)
     st.markdown(
         "<p style='text-align:center;color:#6b7280;'>Visão rápida da operação, vendas e atendimento da Alphafest.</p>",
@@ -8454,7 +8443,7 @@ with aba_executivo:
             st.warning(alerta)
 
 
-with aba5:
+if pagina_atual == "catalogo":
     st.header("📦 Catálogo Alphafest")
     st.caption("Cadastro interno e geração de seleções específicas para consulta do cliente.")
     catalogo = carregar_catalogo()
@@ -8936,7 +8925,7 @@ with aba5:
                     use_container_width=True,
                 )
 
-with aba6:
+if pagina_atual == "relacionamentos":
     st.header("🌐 Relacionamentos")
     st.caption("Um único cadastro para clientes, fornecedores, parceiros e contatos que exigem regras especiais de atendimento.")
 
@@ -9207,7 +9196,7 @@ with aba6:
 
 
 
-with aba8:
+if pagina_atual == "memoria":
     st.header("🧠 Memória da Empresa")
     st.caption("Encontre projetos, temas, clientes, produtos e arquivos em poucos segundos.")
     projetos_memoria = carregar_projetos()
@@ -9285,11 +9274,11 @@ with aba8:
 
 
 
-with aba_conhecimento:
+if pagina_atual == "conhecimento":
     renderizar_base_conhecimento()
 
 
-with aba9:
+if pagina_atual == "calendario":
     st.header("📅 Calendário Comercial Inteligente")
     st.caption("Cadastre datas nacionais, locais, escolares e campanhas próprias. O sistema avisa quando é hora de começar a divulgação.")
 
@@ -9558,7 +9547,7 @@ def renderizar_alpha_connect():
     st.info("Credencial configurada não significa permissão de publicação. A publicação será habilitada somente após OAuth, permissões e teste específico do canal.")
 
 
-with aba7:
+if pagina_atual == "configuracoes":
     st.header("⚙️ Configurações e Integrações")
     aba_cfg_empresa, aba_cfg_connect, aba_cfg_usuarios, aba_cfg_thu = st.tabs(["🏢 Empresa", "🔗 Alpha Connect", "👥 Usuários e permissões", "🎓 Orientações do THU"])
     with aba_cfg_connect:
