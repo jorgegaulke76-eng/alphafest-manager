@@ -20,6 +20,8 @@ import time
 import copy
 import requests
 
+_BOOT_PROCESS_STARTED_AT = time.perf_counter()
+
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
 from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
@@ -177,6 +179,85 @@ def upload_library_file(upload, produto_nome="produto", local_upload_dir="biblio
     destino = pasta / f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{nome}"
     destino.write_bytes(bytes(upload.getbuffer()))
     return str(destino).replace("\\", "/")
+
+# --- BLINDAGEM 14.2.4: BOOT MANAGER, FEATURE FLAGS E DIAGNÓSTICO ---
+DEFAULT_FEATURE_FLAGS = {
+    "marketing_studio": True,
+    "marketing_preview": False,
+    "marketing_ai": False,
+    "campanha_mestre": False,
+    "diagnostico_avancado": True,
+}
+
+def feature_flags():
+    """Chaves locais e seguras. Recursos experimentais permanecem desligados por padrão."""
+    flags = dict(DEFAULT_FEATURE_FLAGS)
+    try:
+        cfg = _read_json_fallback("feature_flags.json", {})
+        if isinstance(cfg, dict):
+            for chave in flags:
+                if chave in cfg:
+                    flags[chave] = bool(cfg[chave])
+    except Exception:
+        pass
+    return flags
+
+def feature_enabled(nome, default=False):
+    return bool(feature_flags().get(str(nome), default))
+
+def _boot_registry():
+    if "_boot_registry_1424" not in st.session_state:
+        st.session_state["_boot_registry_1424"] = {}
+    return st.session_state["_boot_registry_1424"]
+
+def registrar_boot(etapa, status="ok", detalhe="", duracao=None):
+    _boot_registry()[str(etapa)] = {
+        "status": str(status),
+        "detalhe": str(detalhe or ""),
+        "duracao": float(duracao or 0.0),
+        "registrado_em": datetime.now().isoformat(timespec="seconds"),
+    }
+
+def executar_etapa_segura(nome, funcao, *, critico=False):
+    """Executa manutenção isolada. Uma falha não derruba a interface."""
+    inicio = time.perf_counter()
+    try:
+        resultado = funcao()
+        registrar_boot(nome, "ok", duracao=time.perf_counter() - inicio)
+        return resultado
+    except Exception as exc:
+        registrar_boot(nome, "erro", f"{type(exc).__name__}: {exc}", time.perf_counter() - inicio)
+        if critico:
+            raise
+        return None
+
+def diagnostico_boot_1424():
+    registros = dict(_boot_registry())
+    registros.setdefault("Processo Python", {
+        "status": "ok",
+        "detalhe": "Aplicação iniciou e chegou à interface.",
+        "duracao": max(0.0, time.perf_counter() - _BOOT_PROCESS_STARTED_AT),
+        "registrado_em": datetime.now().isoformat(timespec="seconds"),
+    })
+    registros.setdefault("Camada de dados", {
+        "status": "ok" if _cloud_db is not None else "contingencia",
+        "detalhe": "cloud_db disponível" if _cloud_db is not None else f"JSON local: {_cloud_import_error}",
+        "duracao": 0.0,
+        "registrado_em": datetime.now().isoformat(timespec="seconds"),
+    })
+    registros.setdefault("Alpha Intelligence", {
+        "status": "ok" if render_alpha_intelligence is not None else "isolado",
+        "detalhe": ALPHA_INTELLIGENCE_IMPORT_ERROR,
+        "duracao": 0.0,
+        "registrado_em": datetime.now().isoformat(timespec="seconds"),
+    })
+    registros.setdefault("Central de oportunidades", {
+        "status": "ok" if render_central_oportunidades is not None else "isolado",
+        "detalhe": CENTRAL_OPORTUNIDADES_IMPORT_ERROR,
+        "duracao": 0.0,
+        "registrado_em": datetime.now().isoformat(timespec="seconds"),
+    })
+    return registros
 
 # --- CONFIGURAÇÃO ---
 st.set_page_config(page_title="Orçamento Alphafest", layout="wide")
@@ -3083,81 +3164,6 @@ def gerar_zip_campanha(item):
     return pacote.getvalue()
 
 
-def sugerir_campanha_alphafest(produto, descricao="", objetivo="Vender", campanha="", observacoes="", tom="Venda direta"):
-    """Cria sugestões comerciais locais sem depender de publicação ou API externa."""
-    nome = str(produto or "Produto personalizado").strip()
-    descricao = str(descricao or "").strip()
-    campanha = str(campanha or "").strip()
-    observacoes = str(observacoes or "").strip()
-    contexto = f" para {campanha}" if campanha else ""
-    chamadas = {
-        "Vender": f"{nome}: personalizado do seu jeito",
-        "Promoção": f"Oferta especial de {nome}",
-        "Lançamento": f"Novidade AlphaFest: {nome}",
-        "Engajar": f"Qual detalhe você escolheria para seu {nome}?",
-    }
-    subtitulo = chamadas.get(objetivo, chamadas["Vender"])
-    if tom == "Urgência":
-        subtitulo = f"Últimas vagas{contexto}"
-    elif tom == "Premium":
-        subtitulo = f"Detalhes exclusivos em {nome}"
-    elif tom == "Corporativo":
-        subtitulo = f"Personalização profissional para sua marca"
-    elif tom == "Emocional":
-        subtitulo = f"Um presente feito para emocionar"
-    beneficio = descricao or f"Produção personalizada, atendimento próximo e acabamento feito com carinho pela AlphaFest."
-    oferta = f" {observacoes}" if observacoes else ""
-    legenda = (
-        f"✨ {subtitulo}!\n\n{beneficio}\n\n"
-        f"Na AlphaFest, cada detalhe é preparado conforme a sua necessidade, sem quantidade mínima.{oferta}\n\n"
-        "📲 Chame no WhatsApp e solicite seu orçamento.\n\n"
-        "#AlphaFest #Personalizados #Itatiba #FestasPersonalizadas #FeitoSobMedida #Orçamento"
-    )
-    return {
-        "subtitulo": subtitulo[:90],
-        "cta": "Chame no WhatsApp",
-        "observacoes": observacoes or "Consulte valores, disponibilidade e prazo pelo WhatsApp.",
-        "legenda": legenda,
-    }
-
-
-def calcular_qualidade_campanha(origem, produto, descricao, campanha, canais, observacoes, preco, subtitulo, cta):
-    criterios = [
-        (bool(origem), "Imagem selecionada", 20),
-        (bool(str(produto or "").strip()), "Produto informado", 15),
-        (len(str(descricao or "").strip()) >= 20, "Descrição com benefícios", 15),
-        (bool(str(campanha or "").strip()), "Campanha ou data", 10),
-        (bool(canais), "Canais selecionados", 10),
-        (len(str(observacoes or "").strip()) >= 12, "Oferta e detalhes", 10),
-        (bool(str(subtitulo or "").strip()), "Chamada da arte", 8),
-        (bool(str(cta or "").strip()), "CTA", 7),
-        (bool(str(preco or "").strip()), "Preço na arte", 5),
-    ]
-    pontos = sum(peso for ok, _, peso in criterios if ok)
-    return pontos, criterios
-
-
-def renderizar_qualidade_campanha(pontos, criterios):
-    if pontos >= 85:
-        nivel, icone = "Excelente", "🟢"
-    elif pontos >= 65:
-        nivel, icone = "Boa", "🔵"
-    elif pontos >= 40:
-        nivel, icone = "Incompleta", "🟠"
-    else:
-        nivel, icone = "Precisa de atenção", "🔴"
-    st.markdown(f"#### {icone} Qualidade da campanha — {pontos}% ({nivel})")
-    st.progress(pontos / 100)
-    pendencias = [rotulo for ok, rotulo, _ in criterios if not ok]
-    concluidos = [rotulo for ok, rotulo, _ in criterios if ok]
-    if concluidos:
-        st.caption("✅ " + " • ".join(concluidos))
-    if pendencias:
-        st.warning("Para melhorar: " + "; ".join(pendencias) + ".")
-    else:
-        st.success("Campanha completa e pronta para geração.")
-
-
 def renderizar_cartao_studio(titulo, descricao, icone):
     st.markdown(
         f"<div style='padding:16px;border:1px solid #dbeafe;border-radius:16px;background:#fff;min-height:115px;box-shadow:0 3px 12px rgba(15,23,42,.05)'>"
@@ -5596,8 +5602,11 @@ def executar_backup_automatico_se_necessario():
         except Exception as exc:
             st.session_state._erro_backup_automatico = f"Não foi possível concluir o backup automático: {exc}"
 
-executar_migracoes_seguras()
-executar_backup_automatico_se_necessario()
+# Manutenções isoladas: se uma delas falhar, a tela continua disponível.
+if not st.session_state.get("_manutencao_boot_1424_concluida"):
+    executar_etapa_segura("Migrações seguras", executar_migracoes_seguras)
+    executar_etapa_segura("Backup automático", executar_backup_automatico_se_necessario)
+    st.session_state["_manutencao_boot_1424_concluida"] = True
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -7844,6 +7853,9 @@ if pagina_atual == "clientes_360":
 
 
 if pagina_atual == "crescimento":
+    if not feature_enabled("marketing_studio", True):
+        st.warning("Alpha Marketing Studio temporariamente desativado pela chave de segurança.")
+        st.stop()
     st.header("📸 Alpha Marketing Studio")
     st.caption("Crie, organize e exporte campanhas prontas para publicação manual. A Central da Anna permanece intacta.")
     sc1, sc2, sc3, sc4 = st.columns(4)
@@ -7942,76 +7954,18 @@ if pagina_atual == "crescimento":
         canais_instagram = ["Instagram Feed", "Instagram Story", "Carrossel", "Reel", "TikTok", "YouTube Shorts", "YouTube Horizontal"]
         opcoes_canais = canais_instagram + (["Status WhatsApp"] if incluir_whatsapp else [])
         canais_padrao = ["Instagram Feed", "Instagram Story"] + (["Status WhatsApp"] if incluir_whatsapp else [])
-        campanha_mestre = st.toggle(
-            "⚡ Campanha Mestre — preparar automaticamente os principais formatos",
-            key="mkt_campanha_mestre",
-            help="Seleciona Feed, Story, Status, Reel, TikTok e YouTube Shorts. A publicação continua manual.",
+        canais = st.multiselect(
+            "Canais e formatos que deseja preparar",
+            opcoes_canais,
+            default=[c for c in canais_padrao if c in opcoes_canais],
+            key="mkt_canais_instagram",
+            help="O Facebook não é gerado como publicação separada: a Meta replica o post do Instagram quando essa opção está ativa na conta.",
         )
-        canais_mestre = ["Instagram Feed", "Instagram Story", "Reel", "TikTok", "YouTube Shorts"] + (["Status WhatsApp"] if incluir_whatsapp else [])
-        if campanha_mestre:
-            canais = [c for c in canais_mestre if c in opcoes_canais]
-            st.info("Campanha Mestre ativa: o Studio preparará automaticamente os formatos principais.")
-        else:
-            canais = st.multiselect(
-                "Canais e formatos que deseja preparar",
-                opcoes_canais,
-                default=[c for c in canais_padrao if c in opcoes_canais],
-                key="mkt_canais_instagram",
-                help="O Facebook não é gerado como publicação separada: a Meta replica o post do Instagram quando essa opção está ativa na conta.",
-            )
-        # Aplica sugestões antes de instanciar os widgets, evitando alterar o estado de um widget já renderizado.
-        sugestao_pendente = st.session_state.pop("mkt_sugestao_pendente", None)
-        if sugestao_pendente:
-            st.session_state["mkt_subtitulo_arte"] = sugestao_pendente.get("subtitulo", "Personalizado do seu jeito")
-            st.session_state["mkt_cta_arte"] = sugestao_pendente.get("cta", "Chame no WhatsApp")
-            if not str(st.session_state.get("mkt_obs", "")).strip():
-                st.session_state["mkt_obs"] = sugestao_pendente.get("observacoes", "")
-            st.session_state["mkt_sugestao_legenda"] = sugestao_pendente.get("legenda", "")
-
         observacoes = st.text_area("Oferta e detalhes obrigatórios", placeholder="Ex.: Até sexta, R$ 90, entrega em Itatiba...", key="mkt_obs")
         p1,p2,p3 = st.columns(3)
-        preco_arte = p1.text_input("Preço na arte (opcional)", placeholder="R$ 90,00", key="mkt_preco_arte")
-        subtitulo_arte = p2.text_input("Chamada curta na arte", value="Personalizado do seu jeito", key="mkt_subtitulo_arte")
-        cta_arte = p3.text_input("Botão / CTA", value="Chame no WhatsApp", key="mkt_cta_arte")
-
-        origem_preview = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
-        pontos_mkt, criterios_mkt = calcular_qualidade_campanha(
-            origem_preview, produto_mkt.get("Nome"), produto_mkt.get("Descricao"), campanha, canais,
-            observacoes, preco_arte, subtitulo_arte, cta_arte,
-        )
-        with st.container(border=True):
-            renderizar_qualidade_campanha(pontos_mkt, criterios_mkt)
-
-        acao1, acao2 = st.columns([1, 2])
-        if acao1.button("✨ Melhorar campanha", use_container_width=True, key="mkt_melhorar_campanha"):
-            sugestao = sugerir_campanha_alphafest(
-                produto_mkt.get("Nome"), produto_mkt.get("Descricao"), objetivo, campanha, observacoes, tom
-            )
-            st.session_state["mkt_sugestao_pendente"] = sugestao
-            st.rerun()
-        acao2.caption("O Assistente Alpha melhora chamada, CTA e oferta com o padrão comercial da AlphaFest. Nada é publicado automaticamente.")
-
-        st.markdown("### 👁️ Preview ao vivo")
-        preview_canais = canais or ["Instagram Feed"]
-        canal_preview = st.selectbox("Visualizar formato", preview_canais, key="mkt_preview_canal")
-        pv1, pv2 = st.columns([1, 1])
-        with pv1:
-            if origem_preview and CANAL_MIDIA_CONFIG.get(canal_preview, {}).get("tipo") == "imagem":
-                try:
-                    arte_preview = gerar_arte_png(origem_preview, canal_preview, produto_mkt.get("Nome", "Produto"), subtitulo_arte, preco_arte, cta_arte)
-                    st.image(arte_preview, use_container_width=True, caption=f"{canal_preview} • {CANAL_MIDIA_CONFIG[canal_preview]['size'][0]} × {CANAL_MIDIA_CONFIG[canal_preview]['size'][1]}")
-                except Exception as exc:
-                    st.info(f"O preview será exibido após uma imagem válida ser selecionada. ({exc})")
-            elif CANAL_MIDIA_CONFIG.get(canal_preview, {}).get("tipo") == "video":
-                st.info("Formato vertical de vídeo. O Studio preserva o vídeo original e prepara o roteiro; música e edição final são manuais.")
-                if video_upload is not None:
-                    st.video(video_upload)
-            else:
-                st.info("Selecione uma imagem para visualizar a arte em tempo real.")
-        with pv2:
-            sugestao_legenda = st.session_state.get("mkt_sugestao_legenda")
-            texto_preview = sugestao_legenda or gerar_copy_comercial(produto_mkt, objetivo, campanha, canal_preview, observacoes, tom)
-            st.text_area("Texto sugerido para este formato", value=texto_preview, height=330, key=f"mkt_preview_texto_{canal_preview}", disabled=True)
+        preco_arte = p1.text_input("Preço na arte (opcional)", placeholder="R$ 90,00")
+        subtitulo_arte = p2.text_input("Chamada curta na arte", value="Personalizado do seu jeito")
+        cta_arte = p3.text_input("Botão / CTA", value="Chame no WhatsApp")
 
         if st.button("🚀 Gerar campanha profissional", type="primary", use_container_width=True):
             origem = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
@@ -8048,8 +8002,6 @@ if pagina_atual == "crescimento":
                         "video_original": video_original_salvo,
                         "imagem_png_base64": base64.b64encode(png_original).decode("ascii"),
                         "objetivo": objetivo, "tom": tom, "campanha": campanha, "canais": canais,
-                        "campanha_mestre": campanha_mestre, "qualidade": pontos_mkt,
-                        "preco_arte": preco_arte, "subtitulo_arte": subtitulo_arte, "cta_arte": cta_arte,
                         "conteudos": saidas, "motor_copy": motor_copy,
                         "artes_png": artes, "aprovacoes": {canal: False for canal in canais},
                         "fila_publicacao": {}, "status": "Em revisão",
@@ -10151,7 +10103,7 @@ if pagina_atual == "configuracoes":
         st.divider()
         st.header("🏭 Núcleo Profissional")
         st.caption("Migrações seguras, auditoria, lixeira e diagnóstico para manter o FestManager em produção sem perder dados.")
-        tab_diag, tab_audit, tab_lix, tab_update = st.tabs(["🩺 Saúde do sistema", "🧾 Auditoria", "🗑️ Lixeira", "🔄 Atualização segura"])
+        tab_diag, tab_boot, tab_audit, tab_lix, tab_update = st.tabs(["🩺 Saúde do sistema", "🚦 Boot Manager", "🧾 Auditoria", "🗑️ Lixeira", "🔄 Atualização segura"])
 
         with tab_diag:
             diag = diagnostico_sistema()
@@ -10170,6 +10122,28 @@ if pagina_atual == "configuracoes":
                 st.success("Estruturas principais válidas.")
             st.write(f"Registros de auditoria: **{diag['auditorias']}** • Itens recuperáveis na lixeira: **{diag['lixeira']}**")
             if st.button("🔄 Executar diagnóstico novamente", key="health_refresh", use_container_width=True):
+                st.rerun()
+
+        with tab_boot:
+            st.subheader("🚦 Boot Manager 14.2.4")
+            st.caption("Diagnóstico exclusivo da Central do Jorge. Nenhuma configuração da Central da Anna é alterada.")
+            registros_boot = diagnostico_boot_1424()
+            linhas_boot = []
+            for nome_etapa, info_etapa in registros_boot.items():
+                status_etapa = str(info_etapa.get("status", "ok"))
+                icone = "🟢" if status_etapa == "ok" else ("🟡" if status_etapa in {"contingencia", "isolado"} else "🔴")
+                linhas_boot.append({
+                    "Etapa": nome_etapa,
+                    "Estado": f"{icone} {status_etapa}",
+                    "Tempo (s)": round(float(info_etapa.get("duracao", 0.0) or 0.0), 3),
+                    "Detalhe": str(info_etapa.get("detalhe", "")),
+                })
+            st.dataframe(pd.DataFrame(linhas_boot), use_container_width=True, hide_index=True)
+            flags_boot = feature_flags()
+            st.markdown("#### Chaves de segurança")
+            st.json(flags_boot, expanded=False)
+            st.info("Preview, IA e Campanha Mestre permanecem desligados até homologação na Central do Jorge.")
+            if st.button("🔄 Atualizar diagnóstico do boot", key="boot1424_refresh", use_container_width=True):
                 st.rerun()
 
         with tab_audit:

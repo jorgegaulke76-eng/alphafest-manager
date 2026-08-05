@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import os
 import re
-import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -18,30 +17,8 @@ from urllib.parse import quote
 import requests
 import streamlit as st
 
-# Hotfix 14.2.3a: falha rápida e contingência local.
-# O timeout separado limita conexão e leitura sem deixar a interface em branco.
-TIMEOUT = (2, 3)
-CIRCUIT_BREAKER_SECONDS = 120
+TIMEOUT = 10
 _SESSION = requests.Session()
-_ONLINE_SUSPENDED_UNTIL = 0.0
-_LAST_ONLINE_ERROR = ""
-
-
-def _online_temporariamente_suspenso() -> bool:
-    return time.monotonic() < _ONLINE_SUSPENDED_UNTIL
-
-
-def _suspender_online(exc: Exception | None = None) -> None:
-    global _ONLINE_SUSPENDED_UNTIL, _LAST_ONLINE_ERROR
-    _ONLINE_SUSPENDED_UNTIL = time.monotonic() + CIRCUIT_BREAKER_SECONDS
-    _LAST_ONLINE_ERROR = type(exc).__name__ if exc is not None else "Falha de conexão"
-
-
-def _reativar_online() -> None:
-    global _ONLINE_SUSPENDED_UNTIL, _LAST_ONLINE_ERROR
-    _ONLINE_SUSPENDED_UNTIL = 0.0
-    _LAST_ONLINE_ERROR = ""
-
 
 __all__ = [
     "online_configured",
@@ -98,7 +75,7 @@ def _write_local(path: str, value: Any) -> None:
 
 def load_document(document_key: str, local_path: str, default: Any) -> Any:
     """Carrega do Supabase; se vazio, importa automaticamente o JSON local."""
-    if not online_configured() or _online_temporariamente_suspenso():
+    if not online_configured():
         return _read_local(local_path, default)
 
     url, _ = _config()
@@ -110,7 +87,6 @@ def load_document(document_key: str, local_path: str, default: Any) -> Any:
             timeout=TIMEOUT,
         )
         response.raise_for_status()
-        _reativar_online()
         rows = response.json()
         if rows:
             value = rows[0].get("value", default)
@@ -119,8 +95,7 @@ def load_document(document_key: str, local_path: str, default: Any) -> Any:
         local_value = _read_local(local_path, default)
         save_document(document_key, local_value, local_path)
         return local_value
-    except (requests.RequestException, ValueError, TypeError) as exc:
-        _suspender_online(exc)
+    except (requests.RequestException, ValueError, TypeError):
         return _read_local(local_path, default)
 
 
@@ -131,7 +106,7 @@ def save_document(document_key: str, value: Any, local_path: str) -> bool:
     except OSError:
         pass
 
-    if not online_configured() or _online_temporariamente_suspenso():
+    if not online_configured():
         return False
 
     url, _ = _config()
@@ -149,19 +124,14 @@ def save_document(document_key: str, value: Any, local_path: str) -> bool:
             timeout=TIMEOUT,
         )
         response.raise_for_status()
-        _reativar_online()
         return True
-    except requests.RequestException as exc:
-        _suspender_online(exc)
+    except requests.RequestException:
         return False
 
 
 def connection_test() -> tuple[bool, str]:
     if not online_configured():
         return False, "Supabase não configurado — usando arquivos JSON locais."
-    if _online_temporariamente_suspenso():
-        detalhe = _LAST_ONLINE_ERROR or "falha recente"
-        return False, f"Modo local protegido ativo ({detalhe}). Nova tentativa automática em instantes."
     url, _ = _config()
     try:
         response = _SESSION.get(
@@ -171,11 +141,9 @@ def connection_test() -> tuple[bool, str]:
             timeout=TIMEOUT,
         )
         response.raise_for_status()
-        _reativar_online()
         return True, "Banco online conectado."
     except requests.RequestException as exc:
-        _suspender_online(exc)
-        return False, f"Modo local protegido ativo ({exc.__class__.__name__}). Os dados locais continuam disponíveis."
+        return False, f"Sem conexão com o banco online ({exc.__class__.__name__}). Usando cópia local."
 
 
 def upload_catalog_image(upload: Any, local_upload_dir: str = "uploads") -> str:
@@ -188,7 +156,7 @@ def upload_catalog_image(upload: Any, local_upload_dir: str = "uploads") -> str:
     content = bytes(upload.getbuffer())
     content_type = getattr(upload, "type", None) or "application/octet-stream"
 
-    if online_configured() and not _online_temporariamente_suspenso():
+    if online_configured():
         url, _ = _config()
         encoded_name = quote(unique_name, safe="")
         try:
@@ -204,8 +172,8 @@ def upload_catalog_image(upload: Any, local_upload_dir: str = "uploads") -> str:
             )
             response.raise_for_status()
             return f"{url}/storage/v1/object/public/catalogo/{encoded_name}"
-        except requests.RequestException as exc:
-            _suspender_online(exc)
+        except requests.RequestException:
+            pass
 
     Path(local_upload_dir).mkdir(parents=True, exist_ok=True)
     local_path = Path(local_upload_dir) / unique_name
@@ -228,7 +196,7 @@ def upload_library_file(upload: Any, produto_nome: str = "produto", local_upload
     content = bytes(upload.getbuffer())
     content_type = getattr(upload, "type", None) or "application/octet-stream"
 
-    if online_configured() and not _online_temporariamente_suspenso():
+    if online_configured():
         url, _ = _config()
         encoded_path = quote(object_path, safe="/")
         try:
@@ -244,8 +212,8 @@ def upload_library_file(upload: Any, produto_nome: str = "produto", local_upload
             )
             response.raise_for_status()
             return f"{url}/storage/v1/object/public/catalogo/{encoded_path}"
-        except requests.RequestException as exc:
-            _suspender_online(exc)
+        except requests.RequestException:
+            pass
 
     local_dir = Path(local_upload_dir) / produto_seguro
     local_dir.mkdir(parents=True, exist_ok=True)
