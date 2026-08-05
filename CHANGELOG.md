@@ -342,3 +342,10 @@ hangelog
 ## 12.0.1
 - Atualização completa da Central do Dia após salvar andamento de proposta.
 - Limpeza do estado do editor anterior para impedir dados repetidos na proposta seguinte.
+
+## 13.2.0 — THU prático e Alpha Marketing Instagram
+- Prioridades objetivas no briefing executivo do THU.
+- Indicadores executivos compactos.
+- Alpha Marketing restaurado com Instagram como canal principal.
+- Facebook removido da geração separada; replicação pela Meta.
+- Central da Anna preservada.

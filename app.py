@@ -307,7 +307,7 @@ ABAS_SISTEMA = [
     ("alpha", "🤖 Alpha"),
     ("intelligence", "🧠 Intelligence"),
     ("clientes_360", "🧠 Clientes 360"),
-    ("crescimento", "🚀 Crescimento"),
+    ("crescimento", "📸 Alpha Marketing"),
     ("jornada", "🚀 Jornada"),
     ("projeto", "🧩 Projeto Personalizado"),
     ("novo_orcamento", "➕ Novo Orçamento"),
@@ -6431,7 +6431,8 @@ GRUPOS_NAVEGACAO = {
     "📋 Operação": ["novo_orcamento", "historico", "fluxo", "catalogo", "projeto", "jornada"],
     "👥 Clientes": ["atendimento", "crm", "clientes_360", "relacionamentos"],
     "🧠 Inteligência": ["alpha", "intelligence", "memoria", "conhecimento"],
-    "📈 Gestão": ["executivo", "relatorios", "crescimento", "calendario"],
+    "📈 Gestão": ["executivo", "relatorios"],
+    "📢 Marketing": ["crescimento", "calendario"],
     "⚙️ Administração": ["configuracoes"],
 }
 ROTULOS_ABAS = dict(ABAS_SISTEMA)
@@ -7630,11 +7631,44 @@ if pagina_atual == "clientes_360":
 
 
 if pagina_atual == "crescimento":
-    st.header("🚀 Alpha Creative Studio Premium")
-    st.caption("Campanhas com identidade Alphafest, descrição comercial por IA, aprovação individual e envio em lote para a fila de publicação.")
+    st.header("📸 Alpha Marketing — Instagram")
+    st.caption("Crie o conteúdo uma única vez para o Instagram. A replicação para a Página do Facebook permanece sob responsabilidade da configuração da Meta.")
     marketing = carregar_marketing()
     conteudos = marketing.get("conteudos", [])
-    t1, t2, t3 = st.tabs(["🎨 Criar campanha", "📚 Fila e aprovações", "🔗 Consolidar relacionamentos"])
+    config_marketing = marketing.setdefault("config", {})
+
+    with st.container(border=True):
+        st.markdown("#### 🔌 Conexão e estratégia de publicação")
+        ig_conectado = bool(_segredo_local("META_ACCESS_TOKEN") and _segredo_local("INSTAGRAM_ACCOUNT_ID"))
+        page_conectada = bool(_segredo_local("META_ACCESS_TOKEN") and _segredo_local("META_PAGE_ID"))
+        c_status1, c_status2, c_status3 = st.columns(3)
+        c_status1.metric("Instagram profissional", "🟢 Conectado" if ig_conectado else "🟡 Configurar")
+        c_status2.metric("Página vinculada", "🟢 Detectada" if page_conectada else "🟡 Configurar")
+        c_status3.metric("Canal principal", "Instagram")
+        replicar_facebook = st.toggle(
+            "Replicação automática no Facebook pela Meta",
+            value=bool(config_marketing.get("replicar_facebook", True)),
+            help="O Alpha Marketing prepara e registra o Instagram como publicação oficial. A Meta pode replicar o conteúdo na Página vinculada.",
+            key="mkt_replica_facebook",
+        )
+        incluir_whatsapp = st.toggle(
+            "Preparar também uma versão para Status do WhatsApp",
+            value=bool(config_marketing.get("incluir_whatsapp", True)),
+            key="mkt_incluir_whatsapp",
+        )
+        mudou_config = (
+            config_marketing.get("replicar_facebook", True) != replicar_facebook
+            or config_marketing.get("incluir_whatsapp", True) != incluir_whatsapp
+            or config_marketing.get("canal_principal") != "Instagram"
+        )
+        if mudou_config:
+            config_marketing.update({"canal_principal": "Instagram", "replicar_facebook": replicar_facebook, "incluir_whatsapp": incluir_whatsapp})
+            marketing["config"] = config_marketing
+            salvar_marketing(marketing)
+        if not ig_conectado:
+            st.info("A criação, revisão e download das artes já funcionam. Para publicação automática, configure META_ACCESS_TOKEN e INSTAGRAM_ACCOUNT_ID em Configurações → Integrações.")
+
+    t1, t2, t3 = st.tabs(["🎨 Criar para Instagram", "📚 Fila e aprovações", "🔗 Consolidar relacionamentos"])
 
     with t1:
         catalogo_mkt = carregar_catalogo()
@@ -7688,7 +7722,16 @@ if pagina_atual == "crescimento":
         objetivo = c1.selectbox("Objetivo", ["Vender", "Promoção", "Lançamento", "Engajar"], key="mkt_objetivo")
         tom = c2.selectbox("Linha de venda", ["Venda direta", "Emocional", "Urgência", "Premium", "Corporativo", "Promoção"], key="mkt_tom")
         campanha = c3.text_input("Campanha / data", placeholder="Ex.: Dia dos Pais", key="mkt_campanha")
-        canais = st.multiselect("Canais", list(CANAL_MIDIA_CONFIG), default=["Instagram Feed", "Instagram Story", "Facebook", "Status WhatsApp"], key="mkt_canais")
+        canais_instagram = ["Instagram Feed", "Instagram Story", "Carrossel", "Reel"]
+        opcoes_canais = canais_instagram + (["Status WhatsApp"] if incluir_whatsapp else [])
+        canais_padrao = ["Instagram Feed", "Instagram Story"] + (["Status WhatsApp"] if incluir_whatsapp else [])
+        canais = st.multiselect(
+            "Formatos que deseja preparar",
+            opcoes_canais,
+            default=[c for c in canais_padrao if c in opcoes_canais],
+            key="mkt_canais_instagram",
+            help="O Facebook não é gerado como publicação separada: a Meta replica o post do Instagram quando essa opção está ativa na conta.",
+        )
         observacoes = st.text_area("Oferta e detalhes obrigatórios", placeholder="Ex.: Até sexta, R$ 90, entrega em Itatiba...", key="mkt_obs")
         p1,p2,p3 = st.columns(3)
         preco_arte = p1.text_input("Preço na arte (opcional)", placeholder="R$ 90,00")
@@ -7737,7 +7780,7 @@ if pagina_atual == "crescimento":
                     conteudos.insert(0, registro); marketing["conteudos"] = conteudos; salvar_marketing(marketing)
                     registrar_auditoria("Gerar campanha", "Marketing", registro["id"], {"produto": registro["produto"], "canais": canais, "modo": fonte_imagem, "motor": motor_copy})
                     st.session_state.mkt_ultimo_id = registro["id"]
-                    st.success(f"Campanha criada com {motor_copy}. Revise e aprove os canais.")
+                    st.success(f"Conteúdo para Instagram criado com {motor_copy}. Revise e aprove os formatos.")
                     st.rerun()
                 except Exception as exc:
                     st.error(f"Não foi possível gerar a campanha: {exc}")
@@ -7746,7 +7789,7 @@ if pagina_atual == "crescimento":
         ultimo = next((x for x in conteudos if x.get("id") == ultimo_id), None)
         if ultimo:
             aprovados_total = sum(bool(ultimo.get("aprovacoes", {}).get(c)) for c in ultimo.get("canais", []))
-            st.markdown(f"### Preview por canal • {aprovados_total}/{len(ultimo.get('canais', []))} aprovados")
+            st.markdown(f"### Preview por formato • {aprovados_total}/{len(ultimo.get('canais', []))} aprovados")
             st.caption(f"Produto confirmado: {ultimo.get('produto')} • Origem: {ultimo.get('modo_origem')} • Texto: {ultimo.get('motor_copy','Alpha local')}")
             alterou = False
             for canal in ultimo.get("canais", []):
@@ -7773,7 +7816,7 @@ if pagina_atual == "crescimento":
                         aprovado = st.checkbox("✅ Aprovar este canal", value=aprovado_atual, key=f"aprovar_{ultimo_id}_{canal}")
                         if aprovado != aprovado_atual:
                             ultimo.setdefault("aprovacoes", {})[canal] = aprovado; alterou = True
-                        st.caption("Ao aprovar, este canal poderá ser enviado junto com os demais em uma única ação.")
+                        st.caption("Ao aprovar, este formato entra no mesmo lote do Instagram.")
             if alterou:
                 ultimo["status"] = "Aprovado" if all(ultimo.get("aprovacoes", {}).get(c) for c in ultimo.get("canais", [])) else "Em revisão"
                 salvar_marketing(marketing)
@@ -7781,7 +7824,7 @@ if pagina_atual == "crescimento":
             if b1.button("💾 Salvar textos e aprovações", use_container_width=True):
                 salvar_marketing(marketing); st.success("Revisão salva.")
             aprovados = [c for c in ultimo.get("canais", []) if ultimo.get("aprovacoes", {}).get(c)]
-            if b2.button(f"🚀 Enviar {len(aprovados)} canal(is) aprovados para publicação", type="primary", disabled=not aprovados, use_container_width=True):
+            if b2.button(f"🚀 Enviar {len(aprovados)} formato(s) aprovados para a fila", type="primary", disabled=not aprovados, use_container_width=True):
                 momento = agora_local().isoformat()
                 ultimo.setdefault("fila_publicacao", {})
                 for canal in aprovados:
@@ -7790,7 +7833,7 @@ if pagina_atual == "crescimento":
                 ultimo["lote_publicacao_em"] = momento
                 salvar_marketing(marketing)
                 registrar_auditoria("Publicação em lote", "Marketing", ultimo.get("id"), {"canais": aprovados})
-                st.success("Todos os canais aprovados foram enviados juntos para a fila. A postagem automática ocorrerá quando as credenciais oficiais de cada rede estiverem conectadas.")
+                st.success("Os formatos aprovados foram enviados para a fila do Instagram. A publicação automática dependerá das credenciais oficiais da Meta; a replicação no Facebook seguirá a configuração da própria conta.")
                 st.rerun()
 
     with t2:

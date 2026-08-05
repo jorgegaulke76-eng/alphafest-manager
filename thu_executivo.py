@@ -89,6 +89,7 @@ def calcular_briefing(
         "atrasados": len(atrasados),
         "pedidos_ativos": int(indicadores.get("pedidos_ativos", indicadores.get("propostas_abertas", 0))),
         "aguardando_aprovacao": int(indicadores.get("aguardando_aprovacao", 0)),
+        "pagamentos_pendentes": int(indicadores.get("pagamentos_pendentes", 0)),
         "propostas_hoje": int(indicadores.get("propostas_hoje", 0)),
         "alertas": alertas,
     }
@@ -96,31 +97,46 @@ def calcular_briefing(
 
 def renderizar_briefing_thu(nome: str, briefing: dict[str, Any]) -> None:
     saudacao = "Bom dia" if datetime.now().hour < 12 else ("Boa tarde" if datetime.now().hour < 18 else "Boa noite")
-    st.markdown("### 🐵 Briefing do THU")
+    st.markdown("### 🐵 THU — prioridades agora")
+
+    tarefas: list[tuple[str, str]] = []
+    if briefing.get("atrasados", 0):
+        tarefas.append(("🔴", f"Resolver {briefing['atrasados']} pedido(s) atrasado(s) primeiro"))
+    if briefing.get("entregas_hoje", 0):
+        tarefas.append(("🚚", f"Conferir {briefing['entregas_hoje']} entrega(s) prevista(s) para hoje"))
+    if briefing.get("aguardando_aprovacao", 0):
+        tarefas.append(("🟡", f"Retomar {briefing['aguardando_aprovacao']} orçamento(s) aguardando aprovação"))
+    if briefing.get("pagamentos_pendentes", 0):
+        tarefas.append(("💰", f"Conferir {briefing['pagamentos_pendentes']} pagamento(s) pendente(s)"))
+    if not tarefas:
+        tarefas.append(("🟢", "Operação sem pendências críticas neste momento"))
+
+    lista = "".join(
+        f'<div style="padding:6px 0;border-bottom:1px solid #dbeafe;"><b>{icone}</b> {texto}</div>'
+        for icone, texto in tarefas[:4]
+    )
     st.markdown(
-        f"""
-        <div style="border:1px solid #b7d7ff;border-left:7px solid #0969da;border-radius:16px;padding:16px 18px;background:linear-gradient(135deg,#f7fbff,#eef7ff);margin-bottom:12px;">
-          <div style="font-size:1.08rem;font-weight:800;color:#0b3a68;">{saudacao}, {nome}!</div>
-          <div style="color:#36566f;margin-top:4px;">Preparei um resumo objetivo da operação para você começar pelas prioridades.</div>
-        </div>
-        """,
+        f'<div style="border:1px solid #b7d7ff;border-left:7px solid #0969da;border-radius:16px;padding:13px 16px;background:linear-gradient(135deg,#f7fbff,#eef7ff);margin-bottom:10px;">'
+        f'<div style="font-size:1.05rem;font-weight:800;color:#0b3a68;">{saudacao}, {nome}. Este é o melhor caminho agora:</div>'
+        f'<div style="color:#36566f;margin-top:7px;">{lista}</div></div>',
         unsafe_allow_html=True,
     )
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("📄 Orçamentos hoje", briefing["propostas_hoje"])
-    c2.metric("📦 Pedidos ativos", briefing["pedidos_ativos"])
-    c3.metric("🚚 Entregas hoje", briefing["entregas_hoje"])
-    c4.metric("💵 Recebido hoje", f"R$ {briefing['recebido_hoje']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
-    a1, a2, a3 = st.columns(3)
-    a1.metric("🟡 Aguardando aprovação", briefing["aguardando_aprovacao"])
-    a2.metric("🔴 Atrasados", briefing["atrasados"])
-    a3.metric("💰 Carteira aprovada aberta", f"R$ {briefing['previsto_aberto']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    recebido = f"R$ {briefing.get('recebido_hoje', 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    valores = [
+        ("📄", "Orçamentos hoje", briefing.get("propostas_hoje", 0)),
+        ("📦", "Pedidos ativos", briefing.get("pedidos_ativos", 0)),
+        ("🚚", "Entregas hoje", briefing.get("entregas_hoje", 0)),
+        ("💵", "Recebido hoje", recebido),
+        ("🟡", "Aprovação", briefing.get("aguardando_aprovacao", 0)),
+        ("🔴", "Atrasados", briefing.get("atrasados", 0)),
+    ]
+    cols = st.columns(6)
+    for col, (icone, rotulo, valor) in zip(cols, valores):
+        col.markdown(
+            f'<div style="border:1px solid #263244;border-radius:12px;padding:9px 8px;text-align:center;min-height:78px;">'
+            f'<div style="font-size:.78rem;opacity:.78;">{icone} {rotulo}</div>'
+            f'<div style="font-size:1.35rem;font-weight:800;margin-top:5px;">{valor}</div></div>',
+            unsafe_allow_html=True,
+        )
 
-    cor = "#fff7ed" if briefing["atrasados"] else "#f0fdf4"
-    borda = "#ea580c" if briefing["atrasados"] else "#16a34a"
-    itens = "".join(f"<li>{item}</li>" for item in briefing["alertas"])
-    st.markdown(
-        f'<div style="background:{cor};border-left:6px solid {borda};border-radius:12px;padding:12px 16px;"><b>🎯 THU recomenda atenção em:</b><ul style="margin-bottom:0;">{itens}</ul></div>',
-        unsafe_allow_html=True,
-    )
