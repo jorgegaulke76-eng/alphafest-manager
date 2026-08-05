@@ -2971,35 +2971,114 @@ def _nome_arquivo_seguro(texto):
     return limpo[:80] or "campanha"
 
 
+def _bytes_video_exportacao(referencia):
+    """Lê o vídeo vinculado quando ele estiver disponível como arquivo local."""
+    texto = str(referencia or "").strip()
+    if not texto or texto.lower().startswith(("http://", "https://")):
+        return b"", ""
+    try:
+        caminho = Path(texto)
+        candidatos = [caminho]
+        if not caminho.is_absolute():
+            candidatos.extend([Path.cwd() / caminho, Path(__file__).resolve().parent / caminho])
+        for candidato in candidatos:
+            if candidato.exists() and candidato.is_file():
+                return candidato.read_bytes(), candidato.suffix.lower() or ".mp4"
+    except Exception:
+        pass
+    return b"", ""
+
+
+def _checklist_publicacao(canal):
+    cfg = CANAL_MIDIA_CONFIG.get(canal, {})
+    largura, altura = cfg.get("size", (0, 0))
+    tipo = cfg.get("tipo", "imagem")
+    passos = [
+        f"[ ] Conferir formato: {largura} x {altura}",
+        "[ ] Revisar texto, preço, prazo e contato",
+        "[ ] Conferir margens e legibilidade no celular",
+        "[ ] Publicar manualmente no canal indicado",
+    ]
+    if tipo == "video":
+        passos.extend([
+            "[ ] Exportar em MP4 H.264, sem música",
+            "[ ] Adicionar a música manualmente dentro da rede social",
+            "[ ] Selecionar uma capa legível antes de publicar",
+        ])
+    else:
+        passos.append("[ ] Usar o arquivo PNG da pasta deste canal")
+    if canal.startswith("Instagram") or canal in ("Reel", "Carrossel"):
+        passos.append("[ ] Confirmar se a replicação no Facebook está ativada na Meta")
+    return "\n".join(passos) + "\n"
+
+
 def gerar_zip_campanha(item):
-    """Monta um kit offline pronto para publicação manual em cada canal."""
+    """Monta um kit offline organizado por canal para publicação manual."""
     pacote = io.BytesIO()
     nome_base = _nome_arquivo_seguro(item.get("produto") or item.get("id") or "campanha")
+    campanha = item.get("campanha") or item.get("objetivo") or ""
     with zipfile.ZipFile(pacote, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         manifesto = [
             "ALPHAFEST MARKETING STUDIO",
-            f"Campanha: {item.get('campanha') or item.get('objetivo') or ''}",
+            f"Campanha: {campanha}",
             f"Produto: {item.get('produto') or ''}",
             f"Criada em: {item.get('criado_em') or ''}",
+            f"Motor de texto: {item.get('motor_copy') or 'Alpha local'}",
             "",
-            "Os vídeos são exportados sem música. Adicione a trilha no momento da postagem.",
+            "PUBLICAÇÃO MANUAL",
+            "O Instagram é o canal principal. O Facebook recebe apenas a replicação configurada na Meta.",
+            "Os vídeos são entregues sem música; adicione a trilha dentro da própria rede social.",
         ]
-        zf.writestr("LEIA-ME.txt", "\n".join(manifesto))
-        for canal in item.get("canais", []):
+        zf.writestr("00_LEIA-ME.txt", "\n".join(manifesto))
+
+        for indice, canal in enumerate(item.get("canais", []), start=1):
+            cfg = CANAL_MIDIA_CONFIG.get(canal, {})
             slug = _nome_arquivo_seguro(canal)
+            pasta = f"{indice:02d}_{slug}"
+            largura, altura = cfg.get("size", (0, 0))
+            especificacao = (
+                f"Canal: {canal}\n"
+                f"Formato: {largura} x {altura}\n"
+                f"Tipo: {cfg.get('tipo', '')}\n"
+                f"Arquivo recomendado: {cfg.get('arquivo', '')}\n"
+                "Publicação: manual\n"
+                "Música: adicionar manualmente na plataforma\n"
+            )
+            zf.writestr(f"{pasta}/01_ESPECIFICACOES.txt", especificacao)
+            zf.writestr(f"{pasta}/02_CHECKLIST.txt", _checklist_publicacao(canal))
+
             arte_b64 = item.get("artes_png", {}).get(canal)
             if arte_b64:
                 try:
-                    zf.writestr(f"artes/{nome_base}_{slug}.png", base64.b64decode(arte_b64))
+                    zf.writestr(f"{pasta}/{nome_base}_{slug}.png", base64.b64decode(arte_b64))
                 except Exception:
-                    pass
-            texto_canal = item.get("conteudos", {}).get(canal, "")
+                    zf.writestr(f"{pasta}/ERRO_ARTE.txt", "A arte não pôde ser decodificada. Gere novamente este formato no Studio.")
+
+            texto_canal = str(item.get("conteudos", {}).get(canal, "")).strip()
             if texto_canal:
-                zf.writestr(f"textos/{nome_base}_{slug}.txt", texto_canal)
+                zf.writestr(f"{pasta}/03_TEXTO_PRONTO.txt", texto_canal)
+
         video_ref = str(item.get("video_original") or "").strip()
         if video_ref:
-            zf.writestr("video/ORIENTACAO.txt", "Vídeo original vinculado à campanha. Exporte em 1080x1920 para Reel, TikTok e Shorts; 1920x1080 para YouTube horizontal. Sem música.")
-        zf.writestr("formatos.txt", "Instagram Feed: 1080x1350 PNG\nInstagram Story: 1080x1920 PNG\nStatus WhatsApp: 1080x1920 PNG\nReel/TikTok/YouTube Shorts: 1080x1920 MP4 H.264, sem música\nYouTube Horizontal: 1920x1080 MP4 H.264, sem música\n")
+            video_bytes, extensao = _bytes_video_exportacao(video_ref)
+            if video_bytes:
+                zf.writestr(f"MIDIA_ORIGINAL/{nome_base}_video_original{extensao}", video_bytes)
+            else:
+                zf.writestr(
+                    "MIDIA_ORIGINAL/REFERENCIA_VIDEO.txt",
+                    "O vídeo está vinculado à campanha, mas não estava disponível como arquivo local durante a exportação.\n"
+                    f"Referência registrada: {video_ref}\n",
+                )
+
+        zf.writestr(
+            "99_FORMATOS_OFICIAIS.txt",
+            "Instagram Feed: 1080x1350 PNG\n"
+            "Instagram Story: 1080x1920 PNG\n"
+            "Status WhatsApp: 1080x1920 PNG\n"
+            "Instagram Reel: 1080x1920 MP4 H.264, sem música\n"
+            "TikTok: 1080x1920 MP4 H.264, sem música\n"
+            "YouTube Shorts: 1080x1920 MP4 H.264, sem música\n",
+        )
     pacote.seek(0)
     return pacote.getvalue()
 
