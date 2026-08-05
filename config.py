@@ -4,7 +4,7 @@ Este módulo contém somente valores estáveis de aplicação. Dados editáveis 
 empresa continuam em empresa_config.json/Supabase.
 """
 
-APP_VERSION = "14.2.4"
+APP_VERSION = "14.2.5"
 DATA_VERSION = 5
 DEFAULT_TIMEZONE = "America/Sao_Paulo"
 

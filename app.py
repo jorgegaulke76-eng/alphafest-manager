@@ -5664,6 +5664,25 @@ with st.sidebar:
         st.caption("Ambiente personalizado conforme as permissões do usuário")
 
     _usuario_sidebar_atual = obter_usuario_atual()
+
+    # Health Monitor 14.2.5: imediatamente visível para Jorge, sem consultas extras.
+    if pode_executar_acoes_tecnicas(_usuario_sidebar_atual):
+        registros_monitor = diagnostico_boot_1424()
+        total_monitor = len(registros_monitor)
+        falhas_monitor = sum(1 for item in registros_monitor.values() if str(item.get("status", "ok")) not in {"ok", "contingencia", "isolado"})
+        contingencias_monitor = sum(1 for item in registros_monitor.values() if str(item.get("status", "ok")) in {"contingencia", "isolado"})
+        tempo_monitor = sum(float(item.get("duracao", 0.0) or 0.0) for item in registros_monitor.values())
+        status_geral_monitor = "🟢 Estável" if falhas_monitor == 0 else "🔴 Atenção"
+        banco_monitor = "🟢 Online" if conectado else "🟡 Contingência"
+        st.markdown("**🩺 Health Monitor 14.2.5**")
+        cmon1, cmon2 = st.columns(2)
+        cmon1.caption(f"Sistema\n\n{status_geral_monitor}")
+        cmon2.caption(f"Banco\n\n{banco_monitor}")
+        st.caption(f"Boot: {total_monitor - falhas_monitor}/{total_monitor} etapas • {tempo_monitor:.2f}s")
+        if contingencias_monitor:
+            st.caption(f"🟡 {contingencias_monitor} módulo(s) em contingência controlada")
+        st.divider()
+
     if usuario_em_operacao_protegida(_usuario_sidebar_atual):
         st.success("🛡️ Modo Operação Protegida ativo")
         st.caption("Atendimento, orçamentos, histórico e pedidos continuam isolados das atualizações técnicas.")
@@ -5735,24 +5754,6 @@ with st.sidebar:
     st.divider()
     st.caption("📌 Sistema de Orçamentos e Catálogo")
     st.caption(f"Versão {VERSAO_APP}")
-
-    # Health Monitor compacto: visível somente ao Jorge e sem novas consultas pesadas.
-    if pode_executar_acoes_tecnicas(_usuario_sidebar_atual):
-        registros_monitor = diagnostico_boot_1424()
-        total_monitor = len(registros_monitor)
-        falhas_monitor = sum(1 for item in registros_monitor.values() if str(item.get("status", "ok")) not in {"ok", "contingencia", "isolado"})
-        contingencias_monitor = sum(1 for item in registros_monitor.values() if str(item.get("status", "ok")) in {"contingencia", "isolado"})
-        tempo_monitor = sum(float(item.get("duracao", 0.0) or 0.0) for item in registros_monitor.values())
-        status_geral_monitor = "🟢 Estável" if falhas_monitor == 0 else "🔴 Atenção"
-        banco_monitor = "🟢 Online" if conectado else "🟡 Contingência"
-        with st.expander("🩺 Health Monitor", expanded=False):
-            st.markdown(f"**Sistema:** {status_geral_monitor}")
-            st.markdown(f"**Banco:** {banco_monitor}")
-            st.markdown(f"**Boot:** {total_monitor - falhas_monitor}/{total_monitor} etapas operacionais")
-            if contingencias_monitor:
-                st.caption(f"{contingencias_monitor} módulo(s) em contingência controlada.")
-            st.caption(f"Tempo acumulado registrado: {tempo_monitor:.2f}s")
-            st.caption("Diagnóstico completo em Configurações → Núcleo Profissional.")
 
     st.caption(str(empresa_sidebar.get("slogan", "")))
 
