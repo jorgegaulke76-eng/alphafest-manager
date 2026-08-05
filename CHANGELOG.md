@@ -349,3 +349,8 @@ hangelog
 - Alpha Marketing restaurado com Instagram como canal principal.
 - Facebook removido da geração separada; replicação pela Meta.
 - Central da Anna preservada.
+
+
+## 14.2.5
+- Corrigido falso alerta de `componentes_db`.
+- Adicionado Health Monitor compacto e exclusivo da Central do Jorge.

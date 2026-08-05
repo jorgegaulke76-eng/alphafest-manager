@@ -5550,10 +5550,13 @@ def backup_para_zip_bytes(payload):
 def verificar_integridade_dados():
     documentos, contagens = coletar_dados_backup()
     problemas = []
-    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db", "componentes_db"}
+    # componentes_db é uma biblioteca categorizada e, por definição, usa objeto/dicionário.
+    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db"}
     for chave in esperados_lista:
         if not isinstance(documentos.get(chave), list):
             problemas.append(f"{chave}: estrutura inválida (esperada lista).")
+    if not isinstance(documentos.get("componentes_db"), dict):
+        problemas.append("componentes_db: estrutura inválida (esperado objeto categorizado).")
     if not isinstance(documentos.get("atendimentos_db"), dict):
         problemas.append("atendimentos_db: estrutura inválida (esperado objeto).")
     if not isinstance(documentos.get("config_empresa"), dict):
@@ -5732,6 +5735,25 @@ with st.sidebar:
     st.divider()
     st.caption("📌 Sistema de Orçamentos e Catálogo")
     st.caption(f"Versão {VERSAO_APP}")
+
+    # Health Monitor compacto: visível somente ao Jorge e sem novas consultas pesadas.
+    if pode_executar_acoes_tecnicas(_usuario_sidebar_atual):
+        registros_monitor = diagnostico_boot_1424()
+        total_monitor = len(registros_monitor)
+        falhas_monitor = sum(1 for item in registros_monitor.values() if str(item.get("status", "ok")) not in {"ok", "contingencia", "isolado"})
+        contingencias_monitor = sum(1 for item in registros_monitor.values() if str(item.get("status", "ok")) in {"contingencia", "isolado"})
+        tempo_monitor = sum(float(item.get("duracao", 0.0) or 0.0) for item in registros_monitor.values())
+        status_geral_monitor = "🟢 Estável" if falhas_monitor == 0 else "🔴 Atenção"
+        banco_monitor = "🟢 Online" if conectado else "🟡 Contingência"
+        with st.expander("🩺 Health Monitor", expanded=False):
+            st.markdown(f"**Sistema:** {status_geral_monitor}")
+            st.markdown(f"**Banco:** {banco_monitor}")
+            st.markdown(f"**Boot:** {total_monitor - falhas_monitor}/{total_monitor} etapas operacionais")
+            if contingencias_monitor:
+                st.caption(f"{contingencias_monitor} módulo(s) em contingência controlada.")
+            st.caption(f"Tempo acumulado registrado: {tempo_monitor:.2f}s")
+            st.caption("Diagnóstico completo em Configurações → Núcleo Profissional.")
+
     st.caption(str(empresa_sidebar.get("slogan", "")))
 
 # --- ESTADO DO FORMULÁRIO ---
@@ -10125,7 +10147,7 @@ if pagina_atual == "configuracoes":
                 st.rerun()
 
         with tab_boot:
-            st.subheader("🚦 Boot Manager 14.2.4")
+            st.subheader("🚦 Boot Manager 14.2.5")
             st.caption("Diagnóstico exclusivo da Central do Jorge. Nenhuma configuração da Central da Anna é alterada.")
             registros_boot = diagnostico_boot_1424()
             linhas_boot = []
