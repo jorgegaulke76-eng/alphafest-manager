@@ -6,7 +6,6 @@ ser evoluído sem alterar o fluxo de campanhas do AlphaFest Manager.
 from __future__ import annotations
 
 import io
-import json
 import re
 from pathlib import Path
 from typing import Any, Iterable
@@ -14,34 +13,56 @@ from typing import Any, Iterable
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 BASE_DIR = Path(__file__).resolve().parent
-TEMPLATES_DIR = BASE_DIR / "marketing_templates"
 
 DEFAULT_TEMPLATE = "alphafest_classico"
 
+# Registro interno dos templates oficiais. Nesta fase ele é a fonte de verdade
+# para evitar dependência de arquivos externos no Streamlit Cloud.
+EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
+    "alphafest_classico": {
+        "id": "alphafest_classico",
+        "nome": "AlphaFest Clássico",
+        "descricao": "Modelo comercial azul e branco com título forte, foto, benefícios e CTA.",
+        "paleta": {
+            "fundo": "#FFFFFF",
+            "azul": "#0873DF",
+            "azul_escuro": "#063B89",
+            "azul_claro": "#EAF6FF",
+            "rosa": "#EB2A92",
+        },
+        "beneficios_padrao": ["Design exclusivo", "Alta qualidade", "Feito para encantar", "Personalizado"],
+        "decoracoes": [
+            [115, 188, 9, "#EB2A92"],
+            [435, 82, 8, "#FFD447"],
+            [1018, 164, 7, "#FFD447"],
+            [458, 1015, 7, "#0873DF"],
+            [1005, 995, 8, "#EB2A92"],
+        ],
+    },
+}
+
 
 def listar_templates() -> list[dict[str, str]]:
-    itens: list[dict[str, str]] = []
-    if not TEMPLATES_DIR.exists():
-        return itens
-    for path in sorted(TEMPLATES_DIR.glob("*/layout.json")):
-        try:
-            cfg = json.loads(path.read_text(encoding="utf-8"))
-            itens.append({
-                "id": str(cfg.get("id") or path.parent.name),
-                "nome": str(cfg.get("nome") or path.parent.name),
-                "descricao": str(cfg.get("descricao") or ""),
-            })
-        except Exception:
-            continue
-    return itens
+    return [
+        {
+            "id": template_id,
+            "nome": str(cfg.get("nome") or template_id),
+            "descricao": str(cfg.get("descricao") or ""),
+        }
+        for template_id, cfg in EMBEDDED_TEMPLATES.items()
+    ]
 
 
 def carregar_template(template_id: str = DEFAULT_TEMPLATE) -> dict[str, Any]:
     safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", template_id or DEFAULT_TEMPLATE)
-    path = TEMPLATES_DIR / safe_id / "layout.json"
-    if not path.exists():
-        path = TEMPLATES_DIR / DEFAULT_TEMPLATE / "layout.json"
-    return json.loads(path.read_text(encoding="utf-8"))
+    cfg = EMBEDDED_TEMPLATES.get(safe_id) or EMBEDDED_TEMPLATES[DEFAULT_TEMPLATE]
+    # Cópia rasa e das estruturas mutáveis principais para impedir alterações
+    # acidentais no registro global durante uma renderização.
+    result = dict(cfg)
+    result["paleta"] = dict(cfg.get("paleta", {}))
+    result["beneficios_padrao"] = list(cfg.get("beneficios_padrao", []))
+    result["decoracoes"] = [list(item) for item in cfg.get("decoracoes", [])]
+    return result
 
 
 def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
