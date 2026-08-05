@@ -69,6 +69,17 @@ except Exception as _cloud_import_error:
 else:
     _cloud_import_error = None
 
+def _segredo_app(nome, padrao=""):
+    """Lê segredo do Streamlit ou variável de ambiente sem derrubar a tela."""
+    try:
+        valor = st.secrets.get(nome, padrao)
+        if valor not in (None, ""):
+            return str(valor)
+    except Exception:
+        pass
+    return str(os.getenv(nome, padrao) or padrao)
+
+
 def _read_json_fallback(path, default):
     try:
         with open(path, "r", encoding="utf-8") as arquivo:
@@ -2653,6 +2664,7 @@ CANAL_MIDIA_CONFIG = {
     "Reel": {"size": (1080, 1920), "tipo": "video", "rotulo": "Instagram Reel", "plataforma": "instagram", "arquivo": "MP4", "cor": "#E4405F"},
     "TikTok": {"size": (1080, 1920), "tipo": "video", "rotulo": "TikTok", "plataforma": "tiktok", "arquivo": "MP4", "cor": "#111111"},
     "YouTube Shorts": {"size": (1080, 1920), "tipo": "video", "rotulo": "YouTube Shorts", "plataforma": "youtube", "arquivo": "MP4", "cor": "#FF0000"},
+    "YouTube Horizontal": {"size": (1920, 1080), "tipo": "video", "rotulo": "YouTube Horizontal", "plataforma": "youtube", "arquivo": "MP4", "cor": "#FF0000"},
 }
 
 PLATFORM_ICON_FILES = {
@@ -2953,6 +2965,53 @@ def renderizar_cabecalho_canal(canal, aprovado=False, fila=False):
     status_cor = "#2563eb" if fila else ("#16a34a" if aprovado else "#d97706")
     logo_html = f'<img src="{uri}" style="width:36px;height:36px;object-fit:contain;">' if uri else ""
     st.markdown(f"""<div style="display:flex;align-items:center;justify-content:space-between;padding:12px 15px;border-radius:14px;background:#ffffff;border:1px solid #e5e7eb;border-left:6px solid {cfg.get('cor','#64748b')};margin-bottom:10px;box-shadow:0 2px 8px rgba(15,23,42,.05)"><div style="display:flex;align-items:center;gap:11px">{logo_html}<div><div style="font-size:1.08rem;font-weight:800;color:#111827">{html.escape(cfg.get('rotulo',canal))}</div><div style="font-size:.82rem;color:#6b7280">{largura} × {altura} • {cfg.get('arquivo','')}</div></div></div><span style="font-size:.72rem;font-weight:800;color:white;background:{status_cor};padding:6px 10px;border-radius:999px">{status}</span></div>""", unsafe_allow_html=True)
+
+def _nome_arquivo_seguro(texto):
+    limpo = re.sub(r"[^A-Za-z0-9_-]+", "_", str(texto or "campanha")).strip("_")
+    return limpo[:80] or "campanha"
+
+
+def gerar_zip_campanha(item):
+    """Monta um kit offline pronto para publicação manual em cada canal."""
+    pacote = io.BytesIO()
+    nome_base = _nome_arquivo_seguro(item.get("produto") or item.get("id") or "campanha")
+    with zipfile.ZipFile(pacote, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        manifesto = [
+            "ALPHAFEST MARKETING STUDIO",
+            f"Campanha: {item.get('campanha') or item.get('objetivo') or ''}",
+            f"Produto: {item.get('produto') or ''}",
+            f"Criada em: {item.get('criado_em') or ''}",
+            "",
+            "Os vídeos são exportados sem música. Adicione a trilha no momento da postagem.",
+        ]
+        zf.writestr("LEIA-ME.txt", "\n".join(manifesto))
+        for canal in item.get("canais", []):
+            slug = _nome_arquivo_seguro(canal)
+            arte_b64 = item.get("artes_png", {}).get(canal)
+            if arte_b64:
+                try:
+                    zf.writestr(f"artes/{nome_base}_{slug}.png", base64.b64decode(arte_b64))
+                except Exception:
+                    pass
+            texto_canal = item.get("conteudos", {}).get(canal, "")
+            if texto_canal:
+                zf.writestr(f"textos/{nome_base}_{slug}.txt", texto_canal)
+        video_ref = str(item.get("video_original") or "").strip()
+        if video_ref:
+            zf.writestr("video/ORIENTACAO.txt", "Vídeo original vinculado à campanha. Exporte em 1080x1920 para Reel, TikTok e Shorts; 1920x1080 para YouTube horizontal. Sem música.")
+        zf.writestr("formatos.txt", "Instagram Feed: 1080x1350 PNG\nInstagram Story: 1080x1920 PNG\nStatus WhatsApp: 1080x1920 PNG\nReel/TikTok/YouTube Shorts: 1080x1920 MP4 H.264, sem música\nYouTube Horizontal: 1920x1080 MP4 H.264, sem música\n")
+    pacote.seek(0)
+    return pacote.getvalue()
+
+
+def renderizar_cartao_studio(titulo, descricao, icone):
+    st.markdown(
+        f"<div style='padding:16px;border:1px solid #dbeafe;border-radius:16px;background:#fff;min-height:115px;box-shadow:0 3px 12px rgba(15,23,42,.05)'>"
+        f"<div style='font-size:1.55rem'>{icone}</div><div style='font-weight:800;color:#0f3f8c;margin-top:4px'>{html.escape(titulo)}</div>"
+        f"<div style='font-size:.86rem;color:#64748b;margin-top:5px'>{html.escape(descricao)}</div></div>",
+        unsafe_allow_html=True,
+    )
+
 
 def carregar_producao():
     dados = load_document("producao_db", ARQUIVO_PRODUCAO, [])
@@ -7350,9 +7409,9 @@ if pagina_atual == "atendimento":
 
         meta_app_secret = _segredo_local("META_APP_ID")
         meta_app_id_suspeito = bool(meta_app_secret and ("googleusercontent.com" in meta_app_secret.lower() or ".apps.google" in meta_app_secret.lower()))
-        meta_token_ok = bool(_segredo_local("META_ACCESS_TOKEN"))
-        meta_page_ok = bool(_segredo_local("META_PAGE_ID"))
-        instagram_id_ok = bool(_segredo_local("INSTAGRAM_ACCOUNT_ID"))
+        meta_token_ok = bool(_segredo_app("META_ACCESS_TOKEN"))
+        meta_page_ok = bool(_segredo_app("META_PAGE_ID"))
+        instagram_id_ok = bool(_segredo_app("INSTAGRAM_ACCOUNT_ID"))
         whatsapp_phone_ok = bool(_segredo_local("WHATSAPP_PHONE_NUMBER_ID"))
         whatsapp_business_ok = bool(_segredo_local("WHATSAPP_BUSINESS_ACCOUNT_ID"))
 
@@ -7631,19 +7690,24 @@ if pagina_atual == "clientes_360":
 
 
 if pagina_atual == "crescimento":
-    st.header("📸 Alpha Marketing — Instagram")
-    st.caption("Crie o conteúdo uma única vez para o Instagram. A replicação para a Página do Facebook permanece sob responsabilidade da configuração da Meta.")
+    st.header("📸 Alpha Marketing Studio")
+    st.caption("Crie, organize e exporte campanhas prontas para publicação manual. A Central da Anna permanece intacta.")
+    sc1, sc2, sc3, sc4 = st.columns(4)
+    with sc1: renderizar_cartao_studio("Nova campanha", "Artes, textos e roteiros por canal.", "➕")
+    with sc2: renderizar_cartao_studio("Biblioteca", "Campanhas salvas e reutilizáveis.", "📚")
+    with sc3: renderizar_cartao_studio("Banco de mídia", "Fotos, vídeos, logos e fundos.", "🖼️")
+    with sc4: renderizar_cartao_studio("Exportação", "Kit ZIP pronto para postar.", "📦")
     marketing = carregar_marketing()
     conteudos = marketing.get("conteudos", [])
     config_marketing = marketing.setdefault("config", {})
 
     with st.container(border=True):
-        st.markdown("#### 🔌 Conexão e estratégia de publicação")
-        ig_conectado = bool(_segredo_local("META_ACCESS_TOKEN") and _segredo_local("INSTAGRAM_ACCOUNT_ID"))
-        page_conectada = bool(_segredo_local("META_ACCESS_TOKEN") and _segredo_local("META_PAGE_ID"))
+        st.markdown("#### 🧰 Modo de trabalho")
+        ig_conectado = bool(_segredo_app("META_ACCESS_TOKEN") and _segredo_app("INSTAGRAM_ACCOUNT_ID"))
+        page_conectada = bool(_segredo_app("META_ACCESS_TOKEN") and _segredo_app("META_PAGE_ID"))
         c_status1, c_status2, c_status3 = st.columns(3)
-        c_status1.metric("Instagram profissional", "🟢 Conectado" if ig_conectado else "🟡 Configurar")
-        c_status2.metric("Página vinculada", "🟢 Detectada" if page_conectada else "🟡 Configurar")
+        c_status1.metric("Criação offline", "🟢 Ativa")
+        c_status2.metric("Publicação", "Manual")
         c_status3.metric("Canal principal", "Instagram")
         replicar_facebook = st.toggle(
             "Replicação automática no Facebook pela Meta",
@@ -7665,10 +7729,9 @@ if pagina_atual == "crescimento":
             config_marketing.update({"canal_principal": "Instagram", "replicar_facebook": replicar_facebook, "incluir_whatsapp": incluir_whatsapp})
             marketing["config"] = config_marketing
             salvar_marketing(marketing)
-        if not ig_conectado:
-            st.info("A criação, revisão e download das artes já funcionam. Para publicação automática, configure META_ACCESS_TOKEN e INSTAGRAM_ACCOUNT_ID em Configurações → Integrações.")
+        st.info("Nesta fase, o Studio gera e salva os arquivos no formato correto. A postagem é manual e a música é adicionada dentro de cada rede social.")
 
-    t1, t2, t3 = st.tabs(["🎨 Criar para Instagram", "📚 Fila e aprovações", "🔗 Consolidar relacionamentos"])
+    t1, t2, t3, t4 = st.tabs(["🎨 Nova campanha", "📚 Biblioteca", "🖼️ Banco de mídia", "📦 Exportações"])
 
     with t1:
         catalogo_mkt = carregar_catalogo()
@@ -7722,11 +7785,11 @@ if pagina_atual == "crescimento":
         objetivo = c1.selectbox("Objetivo", ["Vender", "Promoção", "Lançamento", "Engajar"], key="mkt_objetivo")
         tom = c2.selectbox("Linha de venda", ["Venda direta", "Emocional", "Urgência", "Premium", "Corporativo", "Promoção"], key="mkt_tom")
         campanha = c3.text_input("Campanha / data", placeholder="Ex.: Dia dos Pais", key="mkt_campanha")
-        canais_instagram = ["Instagram Feed", "Instagram Story", "Carrossel", "Reel"]
+        canais_instagram = ["Instagram Feed", "Instagram Story", "Carrossel", "Reel", "TikTok", "YouTube Shorts", "YouTube Horizontal"]
         opcoes_canais = canais_instagram + (["Status WhatsApp"] if incluir_whatsapp else [])
         canais_padrao = ["Instagram Feed", "Instagram Story"] + (["Status WhatsApp"] if incluir_whatsapp else [])
         canais = st.multiselect(
-            "Formatos que deseja preparar",
+            "Canais e formatos que deseja preparar",
             opcoes_canais,
             default=[c for c in canais_padrao if c in opcoes_canais],
             key="mkt_canais_instagram",
@@ -7780,7 +7843,7 @@ if pagina_atual == "crescimento":
                     conteudos.insert(0, registro); marketing["conteudos"] = conteudos; salvar_marketing(marketing)
                     registrar_auditoria("Gerar campanha", "Marketing", registro["id"], {"produto": registro["produto"], "canais": canais, "modo": fonte_imagem, "motor": motor_copy})
                     st.session_state.mkt_ultimo_id = registro["id"]
-                    st.success(f"Conteúdo para Instagram criado com {motor_copy}. Revise e aprove os formatos.")
+                    st.success(f"Campanha criada com {motor_copy}. Revise os formatos e baixe o kit para publicação manual.")
                     st.rerun()
                 except Exception as exc:
                     st.error(f"Não foi possível gerar a campanha: {exc}")
@@ -7824,7 +7887,16 @@ if pagina_atual == "crescimento":
             if b1.button("💾 Salvar textos e aprovações", use_container_width=True):
                 salvar_marketing(marketing); st.success("Revisão salva.")
             aprovados = [c for c in ultimo.get("canais", []) if ultimo.get("aprovacoes", {}).get(c)]
-            if b2.button(f"🚀 Enviar {len(aprovados)} formato(s) aprovados para a fila", type="primary", disabled=not aprovados, use_container_width=True):
+            kit_bytes = gerar_zip_campanha(ultimo)
+            b2.download_button(
+                f"📦 Baixar kit com {len(ultimo.get('canais', []))} formato(s)",
+                kit_bytes,
+                file_name=f"Campanha_{_nome_arquivo_seguro(ultimo.get('produto'))}_{_nome_arquivo_seguro(ultimo.get('campanha') or ultimo.get('objetivo'))}.zip",
+                mime="application/zip",
+                use_container_width=True,
+                key=f"kit_ultimo_{ultimo_id}",
+            )
+            if False:
                 momento = agora_local().isoformat()
                 ultimo.setdefault("fila_publicacao", {})
                 for canal in aprovados:
@@ -7846,6 +7918,14 @@ if pagina_atual == "crescimento":
             aprovados = sum(1 for canal in item.get("canais", []) if item.get("aprovacoes", {}).get(canal))
             with st.expander(f"{item.get('produto','Produto')} • {item.get('campanha') or item.get('objetivo')} • {item.get('status','Em revisão')} ({aprovados}/{len(item.get('canais',[]))} canais)"):
                 st.caption(f"Origem: {item.get('modo_origem','Legado')} • Motor de texto: {item.get('motor_copy','Alpha local')}")
+                st.download_button(
+                    "📦 Baixar kit completo",
+                    gerar_zip_campanha(item),
+                    file_name=f"Campanha_{_nome_arquivo_seguro(item.get('produto'))}_{_nome_arquivo_seguro(item.get('campanha') or item.get('objetivo'))}.zip",
+                    mime="application/zip",
+                    key=f"kit_biblioteca_{item.get('id')}",
+                    use_container_width=True,
+                )
                 for canal in item.get("canais", []):
                     renderizar_cabecalho_canal(canal, bool(item.get("aprovacoes",{}).get(canal)), bool(item.get("fila_publicacao",{}).get(canal)))
                     arte_b64=item.get("artes_png",{}).get(canal)
@@ -7864,16 +7944,37 @@ if pagina_atual == "crescimento":
                     marketing["conteudos"]=[x for x in conteudos if x.get("id") != item.get("id")]; salvar_marketing(marketing); st.rerun()
 
     with t3:
-        st.subheader("Consolidação segura de propostas")
-        st.write("Vincula propostas antigas ao relacionamento atual sem apagar nem alterar o conteúdo histórico.")
-        if st.button("🔗 Verificar e consolidar agora", type="primary"):
-            resultado = consolidar_vinculos_relacionamentos(salvar=True)
-            st.success(f"{resultado['vinculadas']} proposta(s) vinculada(s).")
-            st.metric("Propostas verificadas", resultado["total_propostas"])
-            if resultado["ambiguas"]:
-                st.warning(f"{len(resultado['ambiguas'])} caso(s) precisam de confirmação manual."); st.dataframe(resultado["ambiguas"], use_container_width=True)
-            if resultado["sem_correspondencia"]:
-                st.info(f"{len(resultado['sem_correspondencia'])} proposta(s) ainda não possuem relacionamento correspondente.")
+        st.subheader("🖼️ Banco de mídia AlphaFest")
+        st.caption("Cadastre referências por produto. Nesta primeira etapa, os arquivos permanecem ligados às campanhas e ao catálogo já existente.")
+        mid1, mid2, mid3 = st.columns(3)
+        mid1.metric("Fotos nas campanhas", sum(1 for x in conteudos if x.get("imagem_original") or x.get("imagem_png_base64")))
+        mid2.metric("Vídeos vinculados", sum(1 for x in conteudos if x.get("video_original")))
+        mid3.metric("Templates oficiais", 1)
+        with st.container(border=True):
+            st.markdown("#### 🎨 Template Oficial 001")
+            st.write("**Papel Arroz Institucional**")
+            st.caption("Azul e branco, logo AlphaFest, título forte, aplicações do produto, benefícios e WhatsApp no rodapé.")
+            st.success("Padrão visual aprovado e ativo para a evolução do motor de campanhas.")
+        st.info("A próxima etapa permitirá cadastrar fundos, logos, fotos e vídeos em pastas por categoria sem afetar o catálogo operacional da Anna.")
+
+    with t4:
+        st.subheader("📦 Central de exportações")
+        st.caption("Baixe kits completos para publicar manualmente no Instagram, TikTok, YouTube e WhatsApp.")
+        if not conteudos:
+            st.info("Gere uma campanha para habilitar as exportações.")
+        for item in conteudos[:30]:
+            with st.container(border=True):
+                ex1, ex2 = st.columns([3, 1])
+                ex1.markdown(f"**{item.get('produto','Campanha')}**")
+                ex1.caption(f"{item.get('campanha') or item.get('objetivo')} • {len(item.get('canais', []))} formato(s)")
+                ex2.download_button(
+                    "⬇️ Baixar ZIP",
+                    gerar_zip_campanha(item),
+                    file_name=f"Campanha_{_nome_arquivo_seguro(item.get('produto'))}_{_nome_arquivo_seguro(item.get('campanha') or item.get('objetivo'))}.zip",
+                    mime="application/zip",
+                    key=f"export_zip_{item.get('id')}",
+                    use_container_width=True,
+                )
 
 
 if pagina_atual == "jornada":
