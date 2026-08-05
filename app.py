@@ -564,7 +564,7 @@ def renderizar_alpha_live():
     _renderizar_alpha_live_conteudo()
 
 try:
-    renderizar_alpha_live_auto = st.fragment(run_every="5s")(renderizar_alpha_live)
+    renderizar_alpha_live_auto = st.fragment(run_every="15s")(renderizar_alpha_live)
 except Exception:
     renderizar_alpha_live_auto = renderizar_alpha_live
 
@@ -687,6 +687,7 @@ def salvar_orientacoes_thu(config):
     return bool(save_document("orientacoes_thu", config, ARQUIVO_ORIENTACOES_THU))
 
 
+@st.cache_data(show_spinner=False)
 def _imagem_thu_base64(tela=None):
     """Carrega o mascote oficial do THU com fallback embutido no código.
 
@@ -6343,7 +6344,7 @@ def renderizar_workspace_anna_isolado():
     # Os indicadores são carregados uma única vez e também alimentam a recepção.
     atendimentos = carregar_atendimentos()
     fila = [x for x in atendimentos.get("itens", []) if x.get("status") not in ("Arquivado", "Entregue", "Pós-venda") and str(x.get("responsavel", "")).strip() in ("", "Anna")]
-    historico = carregar_historico(force_refresh=True)
+    historico = carregar_historico()
     ativos = [p for p in historico if proposta_ativa_operacional(p)]
     qtd_novos = len([x for x in fila if x.get("status") == "Novo contato"])
     qtd_aguardando = len([x for x in fila if x.get("status") == "Aguardando cliente"])

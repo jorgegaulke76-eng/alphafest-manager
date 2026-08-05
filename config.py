@@ -4,9 +4,9 @@ Este módulo contém somente valores estáveis de aplicação. Dados editáveis 
 empresa continuam em empresa_config.json/Supabase.
 """
 
-APP_VERSION = "13.1.1"
+APP_VERSION = "13.1.2"
 DATA_VERSION = 5
 DEFAULT_TIMEZONE = "America/Sao_Paulo"
 
-DOCUMENT_CACHE_TTL_SECONDS = 20
-CONNECTION_CACHE_TTL_SECONDS = 30
+DOCUMENT_CACHE_TTL_SECONDS = 30
+CONNECTION_CACHE_TTL_SECONDS = 120
