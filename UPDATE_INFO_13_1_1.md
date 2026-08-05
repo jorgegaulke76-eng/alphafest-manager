@@ -1,9 +1,21 @@
-# AlphaFest Center Innovation 13.1.1 — Estabilidade e Navegação Leve
+# AlphaFest 13.1.1 — Estabilidade e navegação sob demanda
 
-- Corrigida a prévia das Orientações do THU em Configurações (`tela_previa`).
-- Removida a navegação principal baseada em `st.tabs` no perfil executivo.
-- Apenas o módulo selecionado é executado, reduzindo consultas, cálculos e reruns desnecessários.
-- Nova navegação compacta por Área e Módulo, substituindo a fila extensa de abas.
-- Central da Anna preservada sem alteração de layout ou fluxo.
-- Atalhos e botões internos continuam direcionando para os mesmos módulos.
-- Alpha Core continua disponível, agora sem carregar simultaneamente todos os demais módulos.
+Base consolidada: `alphafest-manager-main80`.
+
+## Perfil do Jorge
+
+- Substituição da antiga fila horizontal de módulos por dois seletores compactos: **Área** e **Módulo**.
+- Renderização sob demanda: apenas o módulo selecionado executa seu conteúdo.
+- Interrupção imediata do ciclo anterior ao trocar de módulo, reduzindo processamento desnecessário.
+- Cache de documentos mantido com TTL de 20 segundos para evitar consultas repetidas ao banco.
+- Correção da prévia das Orientações do THU em Configurações.
+
+## Perfil da Anna
+
+- Central Operacional preservada integralmente.
+- Nenhuma alteração de layout, posição de botões ou fluxo de trabalho.
+
+## Testes
+
+- Compilação sintática dos módulos Python principais.
+- Verificação da versão no rodapé: `13.1.1`.

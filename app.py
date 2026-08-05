@@ -6463,6 +6463,9 @@ pagina_atual = nav_col2.selectbox(
 )
 if pagina_atual != st.session_state.get("_pagina_principal"):
     st.session_state["_pagina_principal"] = pagina_atual
+    # Interrompe este ciclo imediatamente: evita que o módulo anterior continue
+    # processando abaixo enquanto o usuário já selecionou outro módulo.
+    st.rerun()
 
 st.caption(f"📍 {grupo_escolhido} › {ROTULOS_ABAS.get(pagina_atual, pagina_atual)}")
 
