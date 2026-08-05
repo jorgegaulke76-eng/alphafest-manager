@@ -2875,21 +2875,52 @@ def _quebrar_texto(draw, texto, fonte, largura_max, limite_linhas=4):
         linhas[-1] = linhas[-1].rstrip(".,;:") + "…"
     return linhas
 
-def _carregar_logo_alphafest(max_width=260):
+def _carregar_logo_alphafest(max_width=300):
+    """Carrega a marca sem cartão branco e suaviza o fundo escuro do arquivo legado."""
     if Image is None:
         return None
     for caminho in (Path("logo.png"), Path("assets/logo.png")):
         try:
-            if caminho.exists():
-                logo = Image.open(caminho).convert("RGBA")
-                logo.thumbnail((max_width, max_width), Image.Resampling.LANCZOS)
-                return logo
+            if not caminho.exists():
+                continue
+            logo = Image.open(caminho).convert("RGBA")
+            # O arquivo legado possui uma grande área escura ao redor da marca.
+            # Recortamos a região central e convertemos os pixels escuros em transparência.
+            w, h = logo.size
+            recorte = logo.crop((int(w * .04), int(h * .12), int(w * .96), int(h * .88)))
+            pixels = recorte.load()
+            for y in range(recorte.height):
+                for x in range(recorte.width):
+                    r, g, b, a = pixels[x, y]
+                    brilho = max(r, g, b)
+                    minimo = min(r, g, b)
+                    saturacao = brilho - minimo
+                    if brilho < 38:
+                        a = 0
+                    elif brilho < 90 and saturacao < 24:
+                        a = int(a * max(0, (brilho - 38) / 52))
+                    elif brilho < 115:
+                        a = int(a * max(.18, (brilho - 38) / 77))
+                    pixels[x, y] = (r, g, b, a)
+            bbox = recorte.getbbox()
+            if bbox:
+                recorte = recorte.crop(bbox)
+            recorte.thumbnail((max_width, max_width), Image.Resampling.LANCZOS)
+            return recorte
         except Exception:
             continue
     return None
 
+
+def _desenhar_texto_centralizado(draw, texto, fonte, caixa, cor):
+    bbox = draw.textbbox((0, 0), texto, font=fonte)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    x1, y1, x2, y2 = caixa
+    draw.text((x1 + (x2 - x1 - tw) // 2, y1 + (y2 - y1 - th) // 2 - bbox[1]), texto, font=fonte, fill=cor)
+
+
 def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no WhatsApp"):
-    """Gera arte de campanha em PNG com identidade visual discreta da Alphafest."""
+    """Gera uma propaganda AlphaFest com leitura forte, fundo claro e tipografia comercial."""
     if Image is None:
         raise RuntimeError("Pillow não está instalado.")
     config = CANAL_MIDIA_CONFIG.get(canal, CANAL_MIDIA_CONFIG["Instagram Feed"])
@@ -2897,61 +2928,107 @@ def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no 
     bruto = _ler_bytes_midia(origem)
     if not bruto:
         raise ValueError("Selecione uma imagem válida.")
+
     with Image.open(io.BytesIO(bruto)) as img:
         img = ImageOps.exif_transpose(img).convert("RGB")
-        fundo = ImageOps.fit(img, (largura, altura), method=Image.Resampling.LANCZOS)
-        fundo = fundo.filter(ImageFilter.GaussianBlur(radius=24))
-        fundo = Image.blend(fundo, Image.new("RGB", (largura, altura), "white"), 0.20)
-        principal = ImageOps.contain(img, (int(largura * .92), int(altura * .68)), method=Image.Resampling.LANCZOS)
-        canvas = fundo.copy().convert("RGBA")
-        px = (largura - principal.width) // 2
-        py = max(80, int(altura * .055))
-        sombra = Image.new("RGBA", canvas.size, (0,0,0,0))
-        sdraw = ImageDraw.Draw(sombra, "RGBA")
-        sdraw.rounded_rectangle((px+12, py+18, px+principal.width+12, py+principal.height+18), radius=28, fill=(0,0,0,70))
-        sombra = sombra.filter(ImageFilter.GaussianBlur(18))
-        canvas.alpha_composite(sombra)
-        canvas.paste(principal.convert("RGBA"), (px, py))
+        canvas = Image.new("RGBA", (largura, altura), (250, 253, 255, 255))
         draw = ImageDraw.Draw(canvas, "RGBA")
 
-        # Identidade Alphafest no topo, discreta e sempre visível.
-        logo = _carregar_logo_alphafest(max_width=max(150, int(largura*.20)))
-        if logo is not None:
-            box_w, box_h = logo.width + 34, logo.height + 24
-            bx1, by1 = largura - box_w - 42, 34
-            draw.rounded_rectangle((bx1, by1, bx1+box_w, by1+box_h), radius=20, fill=(255,255,255,220))
-            canvas.alpha_composite(logo, (bx1+17, by1+12))
-        else:
-            f_brand = _fonte_segura(max(24, int(largura*.027)), True)
-            marca = "ALPHAFEST"
-            bbox = draw.textbbox((0,0), marca, font=f_brand)
-            bx1 = largura-(bbox[2]-bbox[0])-84
-            draw.rounded_rectangle((bx1-20, 38, largura-38, 96), radius=18, fill=(255,255,255,220))
-            draw.text((bx1, 50), marca, font=f_brand, fill=(17,24,39,255))
+        # Fundo branco com grandes movimentos azuis, inspirado nas peças oficiais.
+        azul = (8, 101, 226, 255)
+        azul_escuro = (5, 55, 132, 255)
+        rosa = (239, 43, 145, 255)
+        draw.ellipse((-int(largura*.38), -int(altura*.18), int(largura*.62), int(altura*.23)), fill=(0,132,255,255))
+        draw.ellipse((int(largura*.58), -int(altura*.15), int(largura*1.18), int(altura*.20)), fill=(3,92,211,255))
+        draw.arc((-80, -80, int(largura*.78), int(altura*.30)), 5, 170, fill=(90,215,255,255), width=max(10, largura//70))
+        for bx, by, br, bc in [(.08,.25,10,azul),(.17,.11,7,rosa),(.90,.28,8,rosa),(.78,.12,6,(255,185,0,255)),(.47,.19,5,azul)]:
+            draw.ellipse((int(largura*bx-br), int(altura*by-br), int(largura*bx+br), int(altura*by+br)), fill=bc)
 
-        painel_y = int(altura * .72)
-        draw.rounded_rectangle((38, painel_y, largura-38, altura-38), radius=38, fill=(255,255,255,244), outline=(255,255,255,255), width=2)
-        f_titulo = _fonte_segura(max(34, int(largura*.050)), True)
-        f_sub = _fonte_segura(max(24, int(largura*.030)), False)
-        f_preco = _fonte_segura(max(34, int(largura*.046)), True)
-        f_cta = _fonte_segura(max(23, int(largura*.028)), True)
-        f_rodape = _fonte_segura(max(18, int(largura*.021)), False)
-        x = 78; y = painel_y + 48
-        for linha in _quebrar_texto(draw, titulo, f_titulo, largura-156, 2):
-            draw.text((x,y), linha, font=f_titulo, fill=(17,24,39,255)); y += int(largura*.060)
-        if subtitulo:
-            for linha in _quebrar_texto(draw, subtitulo, f_sub, largura-156, 2):
-                draw.text((x,y+6), linha, font=f_sub, fill=(75,85,99,255)); y += int(largura*.041)
+        # Logo flutuante, sem caixa branca.
+        logo = _carregar_logo_alphafest(max_width=max(250, int(largura*.31)))
+        if logo is not None:
+            lx = (largura - logo.width) // 2
+            ly = max(18, int(altura*.015))
+            canvas.alpha_composite(logo, (lx, ly))
+
+        # Foto principal grande, com enquadramento limpo.
+        foto_x1 = int(largura * .43)
+        foto_y1 = int(altura * .25)
+        foto_x2 = largura - int(largura * .045)
+        foto_y2 = int(altura * .72)
+        fw, fh = foto_x2 - foto_x1, foto_y2 - foto_y1
+        foto = ImageOps.fit(img, (fw, fh), method=Image.Resampling.LANCZOS)
+        sombra = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        sd = ImageDraw.Draw(sombra, "RGBA")
+        sd.rounded_rectangle((foto_x1+12, foto_y1+16, foto_x2+12, foto_y2+16), radius=34, fill=(0,45,110,55))
+        sombra = sombra.filter(ImageFilter.GaussianBlur(18))
+        canvas.alpha_composite(sombra)
+        mask = Image.new("L", (fw, fh), 0)
+        ImageDraw.Draw(mask).rounded_rectangle((0,0,fw,fh), radius=34, fill=255)
+        canvas.paste(foto.convert("RGBA"), (foto_x1, foto_y1), mask)
+
+        # Título comercial grande no lado esquerdo.
+        titulo_limpo = str(titulo or "Produto AlphaFest").strip()
+        palavras = titulo_limpo.split()
+        if len(palavras) > 5:
+            titulo_exibicao = " ".join(palavras[:5])
+        else:
+            titulo_exibicao = titulo_limpo
+        f_titulo = _fonte_segura(max(64, int(largura*.079)), True)
+        f_sub = _fonte_segura(max(30, int(largura*.039)), True)
+        f_beneficio = _fonte_segura(max(22, int(largura*.026)), True)
+        f_corpo = _fonte_segura(max(23, int(largura*.027)), False)
+        f_cta = _fonte_segura(max(34, int(largura*.041)), True)
+        f_tel = _fonte_segura(max(37, int(largura*.045)), True)
+
+        tx = int(largura*.055)
+        ty = int(altura*.285)
+        area_titulo = int(largura*.34)
+        linhas = _quebrar_texto(draw, titulo_exibicao, f_titulo, area_titulo, 3)
+        for i, linha in enumerate(linhas):
+            cor = azul_escuro if i == 0 else azul
+            draw.text((tx, ty), linha, font=f_titulo, fill=cor)
+            ty += int(largura*.088)
+
+        # Faixa curta de promessa, com texto grande.
+        chamada = str(subtitulo or "Personalizado do seu jeito").strip()
+        faixa_y1 = int(altura*.575)
+        faixa_y2 = faixa_y1 + int(altura*.085)
+        draw.rounded_rectangle((tx, faixa_y1, int(largura*.405), faixa_y2), radius=22, fill=azul)
+        chamada_linhas = _quebrar_texto(draw, chamada, f_sub, int(largura*.31), 2)
+        cy = faixa_y1 + 12
+        for linha in chamada_linhas:
+            draw.text((tx+24, cy), linha, font=f_sub, fill=(255,255,255,255))
+            cy += int(largura*.044)
+
+        # Benefícios em linguagem visual curta, sem textos minúsculos.
+        beneficios = ["DESIGN EXCLUSIVO", "ALTA QUALIDADE", "FEITO PARA ENCANTAR"]
+        base_y = int(altura*.755)
+        bloco_w = int((largura - 2*tx - 28) / 3)
+        for i, beneficio in enumerate(beneficios):
+            x1 = tx + i*(bloco_w+14)
+            x2 = x1 + bloco_w
+            draw.rounded_rectangle((x1, base_y, x2, base_y+int(altura*.09)), radius=22, fill=(235,246,255,255), outline=(48,142,235,255), width=3)
+            draw.ellipse((x1+16, base_y+18, x1+52, base_y+54), fill=azul)
+            draw.text((x1+27, base_y+17), "✓", font=f_corpo, fill=(255,255,255,255))
+            linhas_beneficio = _quebrar_texto(draw, beneficio, f_beneficio, bloco_w-78, 2)
+            by = base_y + 14
+            for linha_beneficio in linhas_beneficio:
+                draw.text((x1+62, by), linha_beneficio, font=f_beneficio, fill=azul_escuro)
+                by += int(largura*.030)
+
+        # Rodapé comercial forte.
+        rodape_y = int(altura*.875)
         if preco:
-            draw.text((x, altura-190), preco, font=f_preco, fill=(220,38,38,255))
-        cta_box=(largura-500, altura-196, largura-78, altura-94)
-        draw.rounded_rectangle(cta_box, radius=28, fill=(29,78,216,255))
-        bbox=draw.textbbox((0,0), cta, font=f_cta)
-        tx=cta_box[0]+(cta_box[2]-cta_box[0]-(bbox[2]-bbox[0]))//2
-        ty=cta_box[1]+(cta_box[3]-cta_box[1]-(bbox[3]-bbox[1]))//2-3
-        draw.text((tx,ty), cta, font=f_cta, fill="white")
-        draw.text((78, altura-75), "Alphafest • Personalizados, Balões e Gráfica Rápida", font=f_rodape, fill=(55,65,81,230))
-        saida=io.BytesIO(); canvas.convert("RGB").save(saida, format="PNG", optimize=True)
+            draw.rounded_rectangle((tx, rodape_y, int(largura*.38), altura-38), radius=25, fill=(255,236,247,255))
+            draw.text((tx+24, rodape_y+18), str(preco), font=f_tel, fill=rosa)
+        cta_x1 = int(largura*.42)
+        draw.rounded_rectangle((cta_x1, rodape_y, largura-38, altura-38), radius=26, fill=azul_escuro)
+        draw.text((cta_x1+28, rodape_y+16), str(cta or "FAÇA SEU PEDIDO"), font=f_cta, fill=(255,255,255,255))
+        draw.text((cta_x1+28, rodape_y+62), "11 97294-9533", font=f_tel, fill=(255,255,255,255))
+
+        saida = io.BytesIO()
+        canvas.convert("RGB").save(saida, format="PNG", optimize=True, quality=95)
         return saida.getvalue()
 
 def _openai_api_key():
@@ -7930,7 +8007,7 @@ if pagina_atual == "crescimento":
 
     with t1:
         catalogo_mkt = carregar_catalogo()
-        editor_col, preview_col = st.columns([1.42, 0.78], gap="large")
+        editor_col, preview_col = st.columns([1.08, 0.92], gap="large")
 
         with editor_col:
             af_section_title("Dados da campanha", "Preencha somente as informações necessárias para a criação.")
