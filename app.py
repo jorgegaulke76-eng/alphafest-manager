@@ -23,6 +23,7 @@ import requests
 _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
+from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
 from painel_indicadores import calcular_indicadores_unificados
@@ -7879,33 +7880,38 @@ if pagina_atual == "crescimento":
     if not feature_enabled("marketing_studio", True):
         st.warning("Alpha Marketing Studio temporariamente desativado pela chave de segurança.")
         st.stop()
-    st.header("📸 Alpha Marketing Studio")
-    st.caption("Crie, organize e exporte campanhas prontas para publicação manual. A Central da Anna permanece intacta.")
+
+    inject_design_system()
+    af_hero(
+        "Alpha Marketing Studio",
+        "Crie campanhas profissionais no padrão AlphaFest e exporte os arquivos para publicação manual.",
+        "DESIGN SYSTEM 15.0",
+    )
+
     sc1, sc2, sc3, sc4 = st.columns(4)
-    with sc1: renderizar_cartao_studio("Nova campanha", "Artes, textos e roteiros por canal.", "➕")
-    with sc2: renderizar_cartao_studio("Biblioteca", "Campanhas salvas e reutilizáveis.", "📚")
-    with sc3: renderizar_cartao_studio("Banco de mídia", "Fotos, vídeos, logos e fundos.", "🖼️")
-    with sc4: renderizar_cartao_studio("Exportação", "Kit ZIP pronto para postar.", "📦")
+    with sc1: af_feature_card("Nova campanha", "Artes, textos e roteiros por canal.", "✦")
+    with sc2: af_feature_card("Biblioteca", "Campanhas salvas e reutilizáveis.", "▦")
+    with sc3: af_feature_card("Banco de mídia", "Fotos, vídeos, logos e fundos.", "◫")
+    with sc4: af_feature_card("Exportação", "Kit ZIP pronto para publicar.", "⇩")
+
     marketing = carregar_marketing()
     conteudos = marketing.get("conteudos", [])
     config_marketing = marketing.setdefault("config", {})
 
     with st.container(border=True):
-        st.markdown("#### 🧰 Modo de trabalho")
-        ig_conectado = bool(_segredo_app("META_ACCESS_TOKEN") and _segredo_app("INSTAGRAM_ACCOUNT_ID"))
-        page_conectada = bool(_segredo_app("META_ACCESS_TOKEN") and _segredo_app("META_PAGE_ID"))
+        af_section_title("Modo de trabalho", "Configuração da publicação manual e dos canais principais.")
         c_status1, c_status2, c_status3 = st.columns(3)
-        c_status1.metric("Criação offline", "🟢 Ativa")
+        c_status1.metric("Criação", "Offline ativa")
         c_status2.metric("Publicação", "Manual")
         c_status3.metric("Canal principal", "Instagram")
         replicar_facebook = st.toggle(
-            "Replicação automática no Facebook pela Meta",
+            "Replicação no Facebook pela Meta",
             value=bool(config_marketing.get("replicar_facebook", True)),
-            help="O Alpha Marketing prepara e registra o Instagram como publicação oficial. A Meta pode replicar o conteúdo na Página vinculada.",
+            help="O Facebook recebe a replicação configurada na própria Meta.",
             key="mkt_replica_facebook",
         )
         incluir_whatsapp = st.toggle(
-            "Preparar também uma versão para Status do WhatsApp",
+            "Preparar versão para Status do WhatsApp",
             value=bool(config_marketing.get("incluir_whatsapp", True)),
             key="mkt_incluir_whatsapp",
         )
@@ -7918,115 +7924,112 @@ if pagina_atual == "crescimento":
             config_marketing.update({"canal_principal": "Instagram", "replicar_facebook": replicar_facebook, "incluir_whatsapp": incluir_whatsapp})
             marketing["config"] = config_marketing
             salvar_marketing(marketing)
-        st.info("Nesta fase, o Studio gera e salva os arquivos no formato correto. A postagem é manual e a música é adicionada dentro de cada rede social.")
+        st.caption("O Studio gera os arquivos nos formatos corretos. A postagem e a música continuam manuais.")
 
-    t1, t2, t3, t4 = st.tabs(["🎨 Nova campanha", "📚 Biblioteca", "🖼️ Banco de mídia", "📦 Exportações"])
+    t1, t2, t3, t4 = st.tabs(["Nova campanha", "Biblioteca", "Banco de mídia", "Exportações"])
 
     with t1:
         catalogo_mkt = carregar_catalogo()
-        fonte_imagem = st.radio(
-            "Origem do trabalho",
-            ["Upload livre", "Produto do catálogo"],
-            horizontal=True,
-            key="mkt_modo_origem",
-            help="No Upload livre nenhum dado do catálogo é reaproveitado.",
-        )
-        upload_mkt = None
-        imagem_ref = ""
-        produto_mkt = {"Nome": "", "Descricao": "", "Categoria": ""}
-        video_upload = None
+        editor_col, preview_col = st.columns([1.42, 0.78], gap="large")
 
-        if fonte_imagem == "Upload livre":
-            st.info("🔒 Modo independente: produto, descrição e preço do catálogo são ignorados.")
-            upload_mkt = st.file_uploader(
-                "Imagem desta campanha",
-                type=["png","jpg","jpeg","webp","bmp","tif","tiff"],
-                key="mkt_upload_livre_imagem",
+        with editor_col:
+            af_section_title("Dados da campanha", "Preencha somente as informações necessárias para a criação.")
+            fonte_imagem = st.radio(
+                "Origem do trabalho",
+                ["Upload livre", "Produto do catálogo"],
+                horizontal=True,
+                key="mkt_modo_origem",
+                help="No Upload livre nenhum dado do catálogo é reaproveitado.",
             )
-            video_upload = st.file_uploader(
-                "Vídeo curto (opcional — preservado para Reels, TikTok e Shorts)",
-                type=["mp4","mov","m4v","avi","mkv","webm"],
-                key="mkt_upload_livre_video",
-            )
-            nome_livre = st.text_input("Nome do produto / serviço da foto", placeholder="Ex.: Copos térmicos personalizados", key="mkt_nome_livre")
-            descricao_livre = st.text_area("O que aparece na imagem e quais benefícios destacar", placeholder="Ex.: Dois copos térmicos com nomes personalizados, ótima opção para presente...", key="mkt_descricao_livre")
-            produto_mkt = {"Nome": nome_livre.strip(), "Descricao": descricao_livre.strip(), "Categoria": "Upload livre"}
-            if upload_mkt:
-                st.image(upload_mkt, width=420, caption="Imagem livre — nenhuma descrição do catálogo será utilizada")
-            if video_upload:
-                st.video(video_upload)
-        else:
-            if not catalogo_mkt:
-                st.warning("Cadastre produtos no Catálogo ou use o modo Upload livre.")
+            upload_mkt = None
+            imagem_ref = ""
+            produto_mkt = {"Nome": "", "Descricao": "", "Categoria": ""}
+            video_upload = None
+
+            if fonte_imagem == "Upload livre":
+                upload_mkt = st.file_uploader(
+                    "Imagem da campanha",
+                    type=["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"],
+                    key="mkt_upload_livre_imagem",
+                )
+                video_upload = st.file_uploader(
+                    "Vídeo curto opcional",
+                    type=["mp4", "mov", "m4v", "avi", "mkv", "webm"],
+                    key="mkt_upload_livre_video",
+                )
+                nome_livre = st.text_input("Produto ou serviço", placeholder="Ex.: Papel arroz personalizado", key="mkt_nome_livre")
+                descricao_livre = st.text_area(
+                    "Descrição e benefícios",
+                    placeholder="Ex.: Impressão com cores vivas, pronta para aplicação...",
+                    key="mkt_descricao_livre",
+                    height=110,
+                )
+                produto_mkt = {"Nome": nome_livre.strip(), "Descricao": descricao_livre.strip(), "Categoria": "Upload livre"}
             else:
-                nomes = [p.get("Nome", "Produto") for p in catalogo_mkt]
-                escolhido = st.selectbox("Produto / trabalho", nomes, key="mkt_produto_catalogo")
-                produto_mkt = catalogo_mkt[nomes.index(escolhido)]
-                imagens_mkt = produto_mkt.get("Imagens", []) or []
-                if imagens_mkt:
-                    imagem_ref = st.selectbox("Imagem do catálogo", imagens_mkt, format_func=lambda x: Path(str(x)).name or "Imagem")
-                    try: st.image(imagem_ref, width=420)
-                    except Exception: st.warning("Não foi possível abrir esta imagem do catálogo.")
+                if not catalogo_mkt:
+                    st.warning("Cadastre produtos no Catálogo ou use o modo Upload livre.")
                 else:
-                    st.warning("Este produto ainda não possui imagem no catálogo.")
+                    nomes = [p.get("Nome", "Produto") for p in catalogo_mkt]
+                    escolhido = st.selectbox("Produto ou trabalho", nomes, key="mkt_produto_catalogo")
+                    produto_mkt = catalogo_mkt[nomes.index(escolhido)]
+                    imagens_mkt = produto_mkt.get("Imagens", []) or []
+                    if imagens_mkt:
+                        imagem_ref = st.selectbox("Imagem do catálogo", imagens_mkt, format_func=lambda x: Path(str(x)).name or "Imagem")
+                    else:
+                        st.warning("Este produto ainda não possui imagem no catálogo.")
 
-        c1, c2, c3 = st.columns(3)
-        objetivo = c1.selectbox("Objetivo", ["Vender", "Promoção", "Lançamento", "Engajar"], key="mkt_objetivo")
-        tom = c2.selectbox("Linha de venda", ["Venda direta", "Emocional", "Urgência", "Premium", "Corporativo", "Promoção"], key="mkt_tom")
-        campanha = c3.text_input("Campanha / data", placeholder="Ex.: Dia dos Pais", key="mkt_campanha")
-        canais_instagram = ["Instagram Feed", "Instagram Story", "Carrossel", "Reel", "TikTok", "YouTube Shorts", "YouTube Horizontal"]
-        opcoes_canais = canais_instagram + (["Status WhatsApp"] if incluir_whatsapp else [])
-        canais_padrao = ["Instagram Feed", "Instagram Story"] + (["Status WhatsApp"] if incluir_whatsapp else [])
-        canais = st.multiselect(
-            "Canais e formatos que deseja preparar",
-            opcoes_canais,
-            default=[c for c in canais_padrao if c in opcoes_canais],
-            key="mkt_canais_instagram",
-            help="O Facebook não é gerado como publicação separada: a Meta replica o post do Instagram quando essa opção está ativa na conta.",
-        )
-        observacoes = st.text_area("Oferta e detalhes obrigatórios", placeholder="Ex.: Até sexta, R$ 90, entrega em Itatiba...", key="mkt_obs")
-        p1,p2,p3 = st.columns(3)
-        preco_arte = p1.text_input("Preço na arte (opcional)", placeholder="R$ 90,00")
-        subtitulo_arte = p2.text_input("Chamada curta na arte", value="Personalizado do seu jeito")
-        cta_arte = p3.text_input("Botão / CTA", value="Chame no WhatsApp")
+            c1, c2 = st.columns(2)
+            objetivo = c1.selectbox("Objetivo", ["Vender", "Promoção", "Lançamento", "Engajar"], key="mkt_objetivo")
+            tom = c2.selectbox("Linha de venda", ["Venda direta", "Emocional", "Urgência", "Premium", "Corporativo", "Promoção"], key="mkt_tom")
+            campanha = st.text_input("Campanha ou data", placeholder="Ex.: Dia dos Pais", key="mkt_campanha")
 
-        # Sprint 14.2.6 — Preview ao vivo isolado e exclusivo da Central do Jorge.
+            canais_instagram = ["Instagram Feed", "Instagram Story", "Carrossel", "Reel", "TikTok", "YouTube Shorts", "YouTube Horizontal"]
+            opcoes_canais = canais_instagram + (["Status WhatsApp"] if incluir_whatsapp else [])
+            canais_padrao = ["Instagram Feed", "Instagram Story"] + (["Status WhatsApp"] if incluir_whatsapp else [])
+            canais = st.multiselect(
+                "Canais e formatos",
+                opcoes_canais,
+                default=[c for c in canais_padrao if c in opcoes_canais],
+                key="mkt_canais_instagram",
+                help="O Facebook recebe a replicação feita pela Meta.",
+            )
+            observacoes = st.text_area("Oferta e informações obrigatórias", placeholder="Ex.: Até sexta, entrega em Itatiba...", key="mkt_obs", height=90)
+            p1, p2 = st.columns(2)
+            preco_arte = p1.text_input("Preço na arte", placeholder="R$ 90,00")
+            subtitulo_arte = p2.text_input("Chamada curta", value="Personalizado do seu jeito")
+            cta_arte = st.text_input("Chamada para ação", value="Chame no WhatsApp")
+
         preview_liberado = (
             feature_enabled("marketing_preview", False)
             and str(obter_usuario_atual().get("nome", "")).casefold() == "jorge"
         )
-        if preview_liberado:
-            st.markdown("### 👁️ Preview em tempo real")
-            st.caption("Pré-visualização local. Nenhum arquivo é salvo e nenhuma postagem é realizada nesta etapa.")
+        origem_preview = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
+        campos_preview = {
+            "Imagem": bool(origem_preview),
+            "Produto": bool(str(produto_mkt.get("Nome", "")).strip()),
+            "Descrição": bool(str(produto_mkt.get("Descricao", "")).strip()),
+            "Oferta": bool(str(observacoes).strip() or str(preco_arte).strip()),
+            "Chamada": bool(str(subtitulo_arte).strip()),
+            "CTA": bool(str(cta_arte).strip()),
+            "Canal": bool(canais),
+        }
+        pontos = sum(1 for ok in campos_preview.values() if ok)
+        qualidade = round((pontos / len(campos_preview)) * 100) if campos_preview else 0
 
-            origem_preview = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
-            campos_preview = {
-                "Imagem": bool(origem_preview),
-                "Produto": bool(str(produto_mkt.get("Nome", "")).strip()),
-                "Descrição": bool(str(produto_mkt.get("Descricao", "")).strip()),
-                "Oferta": bool(str(observacoes).strip() or str(preco_arte).strip()),
-                "Chamada": bool(str(subtitulo_arte).strip()),
-                "CTA": bool(str(cta_arte).strip()),
-                "Canal": bool(canais),
-            }
-            pontos = sum(1 for ok in campos_preview.values() if ok)
-            qualidade = round((pontos / len(campos_preview)) * 100) if campos_preview else 0
-            q1, q2 = st.columns([1, 2])
-            q1.metric("Qualidade da campanha", f"{qualidade}%")
-            q2.progress(qualidade / 100)
+        with preview_col:
+            st.markdown('<div class="af-preview-shell">', unsafe_allow_html=True)
+            af_section_title("Preview", "Visualização compacta e sem gravação.")
+            st.markdown(f'<div class="af-score">{qualidade}%</div><div class="af-small">qualidade da campanha</div>', unsafe_allow_html=True)
+            st.progress(qualidade / 100)
             pendencias = [nome for nome, ok in campos_preview.items() if not ok]
             if pendencias:
-                st.caption("Para melhorar: " + ", ".join(pendencias) + ".")
+                st.caption("Falta: " + ", ".join(pendencias) + ".")
             else:
-                st.success("Campanha pronta para geração.")
+                st.success("Campanha pronta.")
 
             canais_preview = [c for c in canais if CANAL_MIDIA_CONFIG.get(c, {}).get("tipo") == "imagem"]
-            if origem_preview and canais_preview and produto_mkt.get("Nome"):
-                canal_preview = st.selectbox(
-                    "Formato do preview",
-                    canais_preview,
-                    key="mkt_preview_canal_1426",
-                )
+            if preview_liberado and origem_preview and canais_preview and produto_mkt.get("Nome"):
+                canal_preview = st.selectbox("Formato", canais_preview, key="mkt_preview_canal_1500")
                 try:
                     arte_preview = gerar_arte_png(
                         origem_preview,
@@ -8036,28 +8039,25 @@ if pagina_atual == "crescimento":
                         preco_arte,
                         cta_arte,
                     )
-                    pv1, pv2 = st.columns([1.08, 0.92])
-                    with pv1:
-                        st.image(arte_preview, use_container_width=True, caption=f"Prévia — {canal_preview}")
-                    with pv2:
-                        st.markdown("#### Texto de apoio")
-                        st.markdown(f"**{produto_mkt.get('Nome', 'Produto')}**")
-                        if campanha:
-                            st.caption(campanha)
-                        if produto_mkt.get("Descricao"):
-                            st.write(produto_mkt.get("Descricao"))
-                        if observacoes:
-                            st.info(observacoes)
-                        st.markdown(f"**{cta_arte or 'Chame no WhatsApp'}**")
-                        st.caption("A música será adicionada manualmente na rede social.")
+                    st.image(arte_preview, use_container_width=True)
+                    st.markdown(f'<div class="af-card-title">{html.escape(str(produto_mkt.get("Nome", "Produto")))}</div>', unsafe_allow_html=True)
+                    if campanha:
+                        st.caption(campanha)
+                    if observacoes:
+                        st.caption(observacoes[:180])
+                    st.markdown(f'<span class="af-badge">{html.escape(cta_arte or "Chame no WhatsApp")}</span>', unsafe_allow_html=True)
                 except Exception as exc:
-                    st.warning(f"O preview foi isolado e não pôde ser exibido: {exc}")
+                    st.warning(f"Preview isolado: {exc}")
+            elif not preview_liberado:
+                st.info("Preview disponível somente na Central do Jorge.")
             elif not origem_preview:
-                st.info("Envie ou selecione uma imagem para visualizar a campanha.")
-            elif not canais_preview:
-                st.info("Selecione ao menos um formato de imagem para visualizar a campanha.")
+                st.info("Envie ou selecione uma imagem.")
             elif not produto_mkt.get("Nome"):
-                st.info("Informe o nome do produto ou serviço para montar o preview.")
+                st.info("Informe o produto ou serviço.")
+            else:
+                st.info("Selecione um formato de imagem.")
+            st.caption("Música adicionada manualmente na rede social.")
+            st.markdown('</div>', unsafe_allow_html=True)
 
         if st.button("🚀 Gerar campanha profissional", type="primary", use_container_width=True):
             origem = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref

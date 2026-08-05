@@ -354,3 +354,10 @@ hangelog
 ## 14.2.5
 - Corrigido falso alerta de `componentes_db`.
 - Adicionado Health Monitor compacto e exclusivo da Central do Jorge.
+
+## 15.0.0 — AlphaFest Design System
+- Criada biblioteca visual `alphafest_design_system.py`.
+- Aplicada identidade oficial azul e branca ao Alpha Marketing Studio.
+- Padronizados tamanhos de títulos, textos, labels, botões e abas.
+- Reorganizada a criação de campanha em duas colunas, com preview compacto.
+- Mantidas as rotinas existentes de geração, biblioteca e exportação.
