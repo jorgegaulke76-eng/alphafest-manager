@@ -1,7 +1,8 @@
 """Engine de templates visuais do Alpha Marketing Studio.
 
-O layout fica separado da interface e das regras de negócio. Cada template pode
-ser evoluído sem alterar o fluxo de campanhas do AlphaFest Manager.
+Versão 15.2.1: Template Mestre AlphaFest v3, com hierarquia publicitária
+inspirada nas peças oficiais da marca. O motor permanece independente da
+interface Streamlit e recebe somente conteúdo da campanha.
 """
 from __future__ import annotations
 
@@ -13,90 +14,86 @@ from typing import Any, Iterable
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 BASE_DIR = Path(__file__).resolve().parent
-
 DEFAULT_TEMPLATE = "alphafest_classico"
 
-# Registro interno dos templates oficiais. Nesta fase ele é a fonte de verdade
-# para evitar dependência de arquivos externos no Streamlit Cloud.
 EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "alphafest_classico": {
         "id": "alphafest_classico",
         "nome": "AlphaFest Clássico",
-        "descricao": "Modelo comercial azul e branco com título forte, foto, benefícios e CTA.",
+        "descricao": "Template publicitário azul e branco com título gigante, foto protagonista e CTA forte.",
         "paleta": {
             "fundo": "#FFFFFF",
-            "azul": "#0873DF",
-            "azul_escuro": "#063B89",
-            "azul_claro": "#EAF6FF",
-            "rosa": "#EB2A92",
+            "azul": "#0678E8",
+            "azul_escuro": "#073C91",
+            "azul_claro": "#DDF4FF",
+            "rosa": "#EF2A92",
+            "amarelo": "#FFD335",
+            "texto": "#15324D",
         },
-        "beneficios_padrao": ["Design exclusivo", "Alta qualidade", "Feito para encantar", "Personalizado"],
-        "decoracoes": [
-            [115, 188, 9, "#EB2A92"],
-            [435, 82, 8, "#FFD447"],
-            [1018, 164, 7, "#FFD447"],
-            [458, 1015, 7, "#0873DF"],
-            [1005, 995, 8, "#EB2A92"],
-        ],
+        "beneficios_padrao": ["Design exclusivo", "Fácil de usar", "Material de qualidade", "Múltiplos usos"],
     },
 }
 
 
 def listar_templates() -> list[dict[str, str]]:
-    return [
-        {
-            "id": template_id,
-            "nome": str(cfg.get("nome") or template_id),
-            "descricao": str(cfg.get("descricao") or ""),
-        }
-        for template_id, cfg in EMBEDDED_TEMPLATES.items()
-    ]
+    return [{"id": k, "nome": str(v.get("nome") or k), "descricao": str(v.get("descricao") or "")} for k, v in EMBEDDED_TEMPLATES.items()]
 
 
 def carregar_template(template_id: str = DEFAULT_TEMPLATE) -> dict[str, Any]:
     safe_id = re.sub(r"[^a-zA-Z0-9_-]", "", template_id or DEFAULT_TEMPLATE)
     cfg = EMBEDDED_TEMPLATES.get(safe_id) or EMBEDDED_TEMPLATES[DEFAULT_TEMPLATE]
-    # Cópia rasa e das estruturas mutáveis principais para impedir alterações
-    # acidentais no registro global durante uma renderização.
-    result = dict(cfg)
-    result["paleta"] = dict(cfg.get("paleta", {}))
-    result["beneficios_padrao"] = list(cfg.get("beneficios_padrao", []))
-    result["decoracoes"] = [list(item) for item in cfg.get("decoracoes", [])]
-    return result
+    out = dict(cfg)
+    out["paleta"] = dict(cfg.get("paleta", {}))
+    out["beneficios_padrao"] = list(cfg.get("beneficios_padrao", []))
+    return out
 
 
-def _font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-        "C:/Windows/Fonts/arialbd.ttf" if bold else "C:/Windows/Fonts/arial.ttf",
-    ]
-    for candidate in candidates:
+def _font(size: int, bold: bool = False, serif: bool = False, italic: bool = False):
+    if serif:
+        candidates = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSerif-BoldItalic.ttf" if italic else "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+            "/usr/share/fonts/truetype/freefont/FreeSerifBoldItalic.ttf" if italic else "/usr/share/fonts/truetype/freefont/FreeSerifBold.ttf",
+        ]
+    else:
+        candidates = [
+            "/usr/share/fonts/truetype/lato/Lato-Heavy.ttf" if bold else "/usr/share/fonts/truetype/lato/Lato-Regular.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+        ]
+    for p in candidates:
         try:
-            return ImageFont.truetype(candidate, size=size)
+            return ImageFont.truetype(p, size=max(8, int(size)))
         except Exception:
-            continue
+            pass
     return ImageFont.load_default()
 
 
-def _hex(value: str, alpha: int = 255) -> tuple[int, int, int, int]:
+def _hex(value: str, alpha: int = 255):
     value = str(value or "#000000").lstrip("#")
     if len(value) == 3:
-        value = "".join(ch * 2 for ch in value)
+        value = "".join(c * 2 for c in value)
     try:
-        return tuple(int(value[i:i+2], 16) for i in (0, 2, 4)) + (alpha,)
+        return tuple(int(value[i:i + 2], 16) for i in (0, 2, 4)) + (alpha,)
     except Exception:
         return (0, 0, 0, alpha)
 
 
-def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_width: int, max_lines: int) -> list[str]:
-    words = str(text or "").strip().split()
+def _fit_font(draw, text: str, max_width: int, start: int, minimum: int, *, bold=True, serif=False, italic=False):
+    for size in range(int(start), int(minimum) - 1, -2):
+        f = _font(size, bold=bold, serif=serif, italic=italic)
+        box = draw.textbbox((0, 0), text, font=f, stroke_width=1)
+        if box[2] - box[0] <= max_width:
+            return f
+    return _font(minimum, bold=bold, serif=serif, italic=italic)
+
+
+def _wrap(draw, text: str, font, max_width: int, max_lines: int) -> list[str]:
+    words = str(text or "").split()
     lines: list[str] = []
     current = ""
     for word in words:
         candidate = f"{current} {word}".strip()
-        box = draw.textbbox((0, 0), candidate, font=font)
-        if (box[2] - box[0]) <= max_width or not current:
+        if draw.textbbox((0, 0), candidate, font=font)[2] <= max_width or not current:
             current = candidate
         else:
             lines.append(current)
@@ -115,18 +112,18 @@ def _transparent_logo(path: Path, max_size: tuple[int, int]) -> Image.Image | No
         return None
     try:
         logo = Image.open(path).convert("RGBA")
-        px = logo.load()
-        for y in range(logo.height):
-            for x in range(logo.width):
-                r, g, b, a = px[x, y]
-                brightness = max(r, g, b)
-                spread = brightness - min(r, g, b)
-                # Remove fundo quase preto, preservando azul, rosa e branco da marca.
-                if brightness < 42 and spread < 30:
-                    a = 0
-                elif brightness < 85 and spread < 20:
-                    a = int(a * max(0.0, (brightness - 42) / 43))
-                px[x, y] = (r, g, b, a)
+        data = []
+        for r, g, b, a in logo.getdata():
+            bright = max(r, g, b)
+            sat = bright - min(r, g, b)
+            if bright <= 25:
+                na = 0
+            elif bright < 95 and sat < 35:
+                na = int(a * ((bright - 25) / 70.0))
+            else:
+                na = a
+            data.append((r, g, b, max(0, min(255, na))))
+        logo.putdata(data)
         bbox = logo.getbbox()
         if bbox:
             logo = logo.crop(bbox)
@@ -136,47 +133,71 @@ def _transparent_logo(path: Path, max_size: tuple[int, int]) -> Image.Image | No
         return None
 
 
+def _headline_lines(title: str) -> tuple[str, str]:
+    clean = re.sub(r"\([^)]*\)", "", str(title or "Produto AlphaFest"))
+    clean = re.sub(r"\s+", " ", clean).strip(" -–—")
+    low = clean.casefold()
+    if " para " in low:
+        idx = low.index(" para ")
+        return clean[:idx].upper(), ("para " + clean[idx + 6:]).strip()
+    words = clean.split()
+    connectors = {"de", "da", "do", "das", "dos", "e", "com"}
+    significant = [w for w in words if w.casefold() not in connectors]
+    if len(significant) >= 3:
+        return significant[0].upper(), " ".join(significant[-2:]).title()
+    if len(words) >= 4:
+        return " ".join(words[:2]).upper(), " ".join(words[2:]).title()
+    if len(words) == 3:
+        return words[0].upper(), " ".join(words[1:]).title()
+    if len(words) == 2:
+        return clean.upper(), ""
+    return clean.upper(), ""
+
+
 def _parse_benefits(description: str, fallback: Iterable[str]) -> list[str]:
-    clean = re.sub(r"[•✓✔|]", ",", str(description or ""))
-    pieces = [p.strip(" .:-") for p in re.split(r"[,;\n]", clean) if p.strip(" .:-")]
-    pieces = [p for p in pieces if 2 <= len(p) <= 34]
-    result = pieces[:4]
-    for item in fallback:
-        if len(result) >= 4:
+    text = re.sub(r"[•✓✔|]", "\n", str(description or ""))
+    text = re.sub(r"\b(?:design único|acabamento impecável|versatilidade|material|estilo|uso)\s*:\s*", "\n", text, flags=re.I)
+    parts = [re.sub(r"\s+", " ", p).strip(" .,:;-") for p in re.split(r"[\n;]", text)]
+    good = [p for p in parts if 4 <= len(p) <= 55]
+    result: list[str] = []
+    for item in good:
+        if item.casefold() not in {x.casefold() for x in result}:
+            result.append(item)
+        if len(result) == 4:
             break
-        if item not in result:
+    for item in fallback:
+        if len(result) == 4:
+            break
+        if item.casefold() not in {x.casefold() for x in result}:
             result.append(item)
     return result[:4]
 
 
-def _headline_parts(title: str) -> tuple[str, str]:
-    """Transforma nomes longos de catálogo em chamada publicitária curta."""
-    clean = re.sub(r"\s+", " ", str(title or "Produto AlphaFest")).strip()
-    clean = re.sub(r"\([^)]*\)", "", clean).strip()
-    words = clean.split()
-    if len(words) <= 3:
-        return clean.upper(), ""
-    # Mantém o tipo de produto e o principal identificador no título.
-    main = " ".join(words[:3]).upper()
-    rest = " ".join(words[3:]).strip(" -–—")
-    return main, rest
+def _paste_rounded(canvas: Image.Image, photo: Image.Image, box: tuple[int, int, int, int], radius: int, shadow=True):
+    x1, y1, x2, y2 = box
+    w, h = x2 - x1, y2 - y1
+    photo = ImageOps.fit(photo.convert("RGB"), (w, h), method=Image.Resampling.LANCZOS).convert("RGBA")
+    if shadow:
+        layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(layer)
+        d.rounded_rectangle((x1 + 14, y1 + 18, x2 + 14, y2 + 18), radius=radius, fill=(0, 36, 90, 82))
+        canvas.alpha_composite(layer.filter(ImageFilter.GaussianBlur(18)))
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, w, h), radius=radius, fill=255)
+    canvas.paste(photo, (x1, y1), mask)
 
 
-def _fit_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, start_size: int, min_size: int, bold: bool = True):
-    size = start_size
-    while size > min_size:
-        font = _font(size, bold)
-        box = draw.textbbox((0, 0), text, font=font)
-        if box[2] - box[0] <= max_width:
-            return font
-        size -= 2
-    return _font(min_size, bold)
+def _draw_check(draw, cx: int, cy: int, radius: int, fill, check=(255,255,255,255), width: int = 5):
+    draw.ellipse((cx-radius, cy-radius, cx+radius, cy+radius), fill=fill)
+    draw.line((cx-radius//2, cy, cx-radius//8, cy+radius//3), fill=check, width=max(2, width))
+    draw.line((cx-radius//8, cy+radius//3, cx+radius//2, cy-radius//3), fill=check, width=max(2, width))
 
-
-def _center_x(draw: ImageDraw.ImageDraw, text: str, font, width: int) -> int:
-    box = draw.textbbox((0, 0), text, font=font)
-    return int((width - (box[2] - box[0])) / 2)
-
+def _draw_phone(draw, cx: int, cy: int, radius: int, fill, line=(255,255,255,255), width: int = 5):
+    draw.ellipse((cx-radius, cy-radius, cx+radius, cy+radius), fill=fill)
+    # handset vector, avoiding dependence on emoji fonts
+    draw.arc((cx-radius//2, cy-radius//2, cx+radius//2, cy+radius//2), 125, 315, fill=line, width=max(3, width))
+    draw.line((cx-radius//3, cy-radius//3, cx-radius//2, cy-radius//2), fill=line, width=max(3, width))
+    draw.line((cx+radius//3, cy+radius//3, cx+radius//2, cy+radius//2), fill=line, width=max(3, width))
 
 def render_template(
     image_bytes: bytes,
@@ -184,141 +205,125 @@ def render_template(
     *,
     template_id: str = DEFAULT_TEMPLATE,
     title: str,
-    subtitle: str = "Personalize seus momentos",
+    subtitle: str = "Personalizado do seu jeito",
     description: str = "",
     price: str = "",
     cta: str = "FAÇA SEU PEDIDO!",
     phone: str = "11 97294-9533",
     logo_path: str | Path | None = None,
 ) -> bytes:
-    """Renderiza o Template Mestre AlphaFest v2.
-
-    A grade é fixa e inspirada nas peças comerciais da marca: marca e chamada no
-    topo, benefícios à esquerda, produto como protagonista à direita e CTA forte
-    no rodapé. O conteúdo pode variar sem desmontar a composição.
-    """
     cfg = carregar_template(template_id)
-    width, height = size
-    sx, sy = width / 1080.0, height / 1350.0
-    palette = cfg.get("paleta", {})
-    blue = _hex(palette.get("azul", "#0873DF"))
-    dark_blue = _hex(palette.get("azul_escuro", "#063B89"))
-    pink = _hex(palette.get("rosa", "#EB2A92"))
-    pale = _hex(palette.get("azul_claro", "#EAF6FF"))
+    p = cfg["paleta"]
+    W, H = size
+    sx, sy = W / 1080.0, H / 1350.0
+    S = lambda n: int(n * min(sx, sy))
+    X = lambda n: int(n * sx)
+    Y = lambda n: int(n * sy)
+    blue, dark, pale, pink, yellow, textc = (_hex(p[k]) for k in ("azul", "azul_escuro", "azul_claro", "rosa", "amarelo", "texto"))
     white = (255, 255, 255, 255)
 
-    canvas = Image.new("RGBA", (width, height), white)
+    canvas = Image.new("RGBA", (W, H), white)
     draw = ImageDraw.Draw(canvas, "RGBA")
 
-    # Moldura orgânica superior inspirada nas campanhas oficiais.
-    draw.ellipse((-260*sx, -205*sy, 520*sx, 185*sy), fill=blue)
-    draw.ellipse((655*sx, -180*sy, 1300*sx, 190*sy), fill=dark_blue)
-    draw.arc((-120*sx, -65*sy, 1200*sx, 330*sy), 5, 175, fill=_hex("#58D2FF"), width=max(8, int(14*sx)))
-    draw.arc((-75*sx, -35*sy, 1140*sx, 285*sy), 7, 173, fill=white, width=max(7, int(11*sx)))
+    # Moldura líquida superior e detalhes orgânicos.
+    draw.ellipse((X(-220), Y(-170), X(470), Y(170)), fill=blue)
+    draw.ellipse((X(760), Y(-190), X(1310), Y(160)), fill=dark)
+    draw.arc((X(-100), Y(-40), X(1180), Y(300)), 4, 176, fill=_hex("#56D6FF"), width=max(5, S(13)))
+    draw.arc((X(-55), Y(-18), X(1130), Y(260)), 7, 173, fill=white, width=max(4, S(10)))
+    for x, y, r, color in [(108, 198, 7, pink), (175, 160, 5, yellow), (922, 196, 7, pink), (986, 152, 5, yellow), (452, 342, 5, blue)]:
+        draw.ellipse((X(x-r), Y(y-r), X(x+r), Y(y+r)), fill=color)
 
-    # Marca central, integrada à composição e sem caixa branca.
-    logo = _transparent_logo(Path(logo_path or BASE_DIR / "logo.png"), (int(360*sx), int(205*sy)))
+    # Logo realmente protagonista, sem quadro branco.
+    logo = _transparent_logo(Path(logo_path or BASE_DIR / "logo.png"), (X(390), Y(260)))
     if logo:
-        lx = int((width - logo.width) / 2)
-        canvas.alpha_composite(logo, (lx, int(24*sy)))
+        canvas.alpha_composite(logo, ((W - logo.width) // 2, Y(4)))
 
-    # Pontos e brilhos decorativos discretos.
-    for x, y, r, color in [
-        (112, 220, 7, "#EB2A92"), (170, 178, 5, "#FFD447"),
-        (925, 205, 7, "#EB2A92"), (980, 158, 5, "#FFD447"),
-        (52, 530, 5, "#0873DF"), (1025, 530, 5, "#0873DF"),
-    ]:
-        draw.ellipse(((x-r)*sx, (y-r)*sy, (x+r)*sx, (y+r)*sy), fill=_hex(color))
+    # Título em duas linhas, como nas peças da Anna.
+    line1, line2 = _headline_lines(title)
+    max_title_w = X(500)
+    f1 = _fit_font(draw, line1, max_title_w, S(104), S(62), bold=True)
+    draw.text((X(44), Y(250)), line1, font=f1, fill=dark, stroke_width=max(1, S(1)), stroke_fill=dark)
+    title_bottom = Y(250) + (draw.textbbox((0, 0), line1, font=f1)[3])
+    if line2:
+        f2 = _fit_font(draw, line2, max_title_w, S(74), S(44), bold=True, serif=True, italic=True)
+        draw.text((X(48), title_bottom - Y(8)), line2, font=f2, fill=blue)
+        title_bottom += draw.textbbox((0, 0), line2, font=f2)[3] - Y(8)
 
-    # Título publicitário: curto, centralizado e dominante.
-    headline, remainder = _headline_parts(title)
-    headline_font = _fit_font(draw, headline, int(950*sx), int(96*sx), int(54*sx), True)
-    hx = _center_x(draw, headline, headline_font, width)
-    draw.text((hx, int(210*sy)), headline, font=headline_font, fill=dark_blue)
+    # Faixa de chamada forte.
+    subtitle_text = re.sub(r"\s+", " ", str(subtitle or "Personalizado do seu jeito")).strip()
+    sf = _fit_font(draw, subtitle_text, X(480), S(31), S(22), bold=True)
+    ribbon_top = max(Y(470), title_bottom + Y(12))
+    draw.rounded_rectangle((X(42), ribbon_top, X(550), ribbon_top + Y(72)), radius=S(14), fill=dark)
+    # pequenas pontas da faixa
+    draw.polygon([(X(42), ribbon_top+Y(16)), (X(18), ribbon_top+Y(36)), (X(42), ribbon_top+Y(56))], fill=blue)
+    draw.text((X(65), ribbon_top + Y(16)), subtitle_text, font=sf, fill=white)
 
-    subtitle_text = str(subtitle or remainder or "Personalizado do seu jeito").strip()
-    if remainder and remainder.casefold() not in subtitle_text.casefold():
-        subtitle_text = f"{remainder} • {subtitle_text}"
-    subtitle_font = _fit_font(draw, subtitle_text, int(880*sx), int(38*sx), int(24*sx), True)
-    sub_box = draw.textbbox((0, 0), subtitle_text, font=subtitle_font)
-    ribbon_w = min(int(930*sx), (sub_box[2]-sub_box[0]) + int(100*sx))
-    ribbon_x = int((width-ribbon_w)/2)
-    ribbon_y = int(328*sy)
-    draw.rounded_rectangle((ribbon_x, ribbon_y, ribbon_x+ribbon_w, ribbon_y+int(66*sy)), radius=int(20*sx), fill=blue)
-    draw.text((_center_x(draw, subtitle_text, subtitle_font, width), ribbon_y+int(10*sy)), subtitle_text, font=subtitle_font, fill=white)
-
-    # Foto protagonista integrada no lado direito.
+    # Foto protagonista, maior e mais integrada.
     source = Image.open(io.BytesIO(image_bytes))
     source = ImageOps.exif_transpose(source).convert("RGB")
-    x1, y1, x2, y2 = int(485*sx), int(420*sy), int(1025*sx), int(1010*sy)
-    fw, fh = x2-x1, y2-y1
-    photo = ImageOps.fit(source, (fw, fh), method=Image.Resampling.LANCZOS)
-    radius = max(18, int(38*sx))
-    shadow = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    sd = ImageDraw.Draw(shadow, "RGBA")
-    sd.rounded_rectangle((x1+13, y1+18, x2+13, y2+18), radius=radius, fill=(0, 35, 95, 72))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(max(8, int(18*sx))))
-    canvas.alpha_composite(shadow)
-    mask = Image.new("L", (fw, fh), 0)
-    ImageDraw.Draw(mask).rounded_rectangle((0, 0, fw, fh), radius=radius, fill=255)
-    canvas.paste(photo.convert("RGBA"), (x1, y1), mask)
+    photo_box = (X(575), Y(360), X(1035), Y(890))
+    _paste_rounded(canvas, source, photo_box, S(34), shadow=True)
+    draw.rounded_rectangle(photo_box, radius=S(34), outline=white, width=max(2, S(5)))
 
-    # Coluna de benefícios com leitura grande e rápida.
-    benefits = _parse_benefits(description, cfg.get("beneficios_padrao", []))
-    section_font = _font(max(27, int(35*sx)), True)
-    draw.text((58*sx, 430*sy), "DESTAQUES", font=section_font, fill=dark_blue)
-    benefit_title_font = _font(max(23, int(30*sx)), True)
-    benefit_text_font = _font(max(18, int(23*sx)), False)
-    benefit_y = 500
-    for idx, benefit in enumerate(benefits[:4]):
-        cy = int(benefit_y*sy)
-        draw.ellipse((58*sx, cy, 114*sx, cy+56*sy), fill=blue)
-        icon_font = _font(max(22, int(29*sx)), True)
-        draw.text((74*sx, cy+5*sy), "✓", font=icon_font, fill=white)
-        short = benefit.strip().rstrip(".")
-        title_line = short.upper() if len(short) <= 24 else short[:22].rstrip()+"…"
-        draw.text((132*sx, cy-2*sy), title_line, font=benefit_title_font, fill=dark_blue)
-        detail = [
-            "Qualidade que valoriza seu produto.",
-            "Prático, bonito e pronto para encantar.",
-            "Produção cuidadosa e acabamento especial.",
-            "Feito para destacar sua ocasião.",
-        ][idx]
-        for line_no, line in enumerate(_wrap(draw, detail, benefit_text_font, int(315*sx), 2)):
-            draw.text((132*sx, cy+(34+line_no*27)*sy), line, font=benefit_text_font, fill=_hex("#24364B"))
-        benefit_y += 128
+    # Benefícios grandes, com ícones e separadores.
+    benefits = _parse_benefits(description, cfg["beneficios_padrao"])
+    y = max(Y(590), ribbon_top + Y(110))
+    benefit_title_font = _font(S(27), bold=True)
+    benefit_detail_font = _font(S(20), bold=False)
+    detail_defaults = [
+        "Visual que encanta e valoriza o produto.",
+        "Prático, rápido e pronto para usar.",
+        "Acabamento resistente e bem produzido.",
+        "Ideal para diferentes ocasiões e presentes.",
+    ]
+    for i, item in enumerate(benefits):
+        cy = y + Y(i * 105)
+        _draw_check(draw, X(77), cy + Y(29), S(29), blue, width=S(5))
+        title_text = item.upper()
+        tf = _fit_font(draw, title_text, X(390), S(27), S(20), bold=True)
+        draw.text((X(122), cy - Y(2)), title_text, font=tf, fill=dark)
+        for j, ln in enumerate(_wrap(draw, detail_defaults[i], benefit_detail_font, X(390), 2)):
+            draw.text((X(122), cy + Y(32 + j * 24)), ln, font=benefit_detail_font, fill=textc)
+        draw.line((X(122), cy + Y(86), X(520), cy + Y(86)), fill=_hex("#74BDF0"), width=max(1, S(2)))
 
-    # Selo circular de preço/oferta, quando informado.
+    # Selo de preço/oferta com presença visual.
     if str(price).strip():
-        cx, cy, rr = int(355*sx), int(965*sy), int(105*sx)
-        draw.ellipse((cx-rr, cy-rr, cx+rr, cy+rr), fill=white, outline=blue, width=max(5, int(6*sx)))
-        label_font = _font(max(17, int(22*sx)), True)
-        price_font = _fit_font(draw, str(price), int(170*sx), int(38*sx), int(23*sx), True)
-        label = "A PARTIR DE"
-        draw.text((_center_x(draw, label, label_font, rr*2)+cx-rr, cy-int(50*sy)), label, font=label_font, fill=dark_blue)
-        draw.text((_center_x(draw, str(price), price_font, rr*2)+cx-rr, cy-int(8*sy)), str(price), font=price_font, fill=pink)
+        cx, cy, rr = X(455), Y(990), S(88)
+        draw.ellipse((cx-rr, cy-rr, cx+rr, cy+rr), fill=white, outline=blue, width=max(3, S(5)))
+        pf = _fit_font(draw, str(price), rr*2-S(20), S(35), S(23), bold=True)
+        label = _font(S(16), bold=True)
+        draw.text((cx-S(53), cy-S(42)), "A PARTIR DE", font=label, fill=dark)
+        bb = draw.textbbox((0, 0), str(price), font=pf)
+        draw.text((cx-(bb[2]-bb[0])//2, cy-S(5)), str(price), font=pf, fill=pink)
 
-    # Rodapé de conversão: CTA e telefone são o segundo maior foco da peça.
-    footer_y = int(1090*sy)
-    draw.rectangle((0, footer_y, width, height), fill=dark_blue)
-    draw.rectangle((0, footer_y, width, footer_y+int(12*sy)), fill=blue)
+    # CTA grande como na referência, em bloco branco sobre o rodapé azul.
+    footer_top = Y(935)
+    draw.rounded_rectangle((X(560), footer_top, X(1035), Y(1125)), radius=S(25), fill=white, outline=_hex("#D9ECFA"), width=max(2, S(3)))
     cta_text = str(cta or "FAÇA SEU PEDIDO!").upper()
-    cta_font = _fit_font(draw, cta_text, int(900*sx), int(50*sx), int(32*sx), True)
-    draw.text((_center_x(draw, cta_text, cta_font, width), footer_y+int(30*sy)), cta_text, font=cta_font, fill=white)
-
+    cf = _fit_font(draw, cta_text, X(430), S(45), S(30), bold=True)
+    cb = draw.textbbox((0, 0), cta_text, font=cf)
+    draw.text((X(797)-(cb[2]-cb[0])//2, Y(963)), cta_text, font=cf, fill=dark)
     phone_text = str(phone or "11 97294-9533")
-    phone_font = _fit_font(draw, phone_text, int(700*sx), int(64*sx), int(40*sx), True)
-    phone_y = footer_y+int(100*sy)
-    # Ícone simples de WhatsApp em círculo para manter compatibilidade sem fonte externa.
-    circle_x = int(160*sx)
-    circle_r = int(38*sx)
-    draw.ellipse((circle_x-circle_r, phone_y, circle_x+circle_r, phone_y+2*circle_r), fill=blue, outline=white, width=max(3, int(4*sx)))
-    phone_x = int(225*sx)
-    draw.text((phone_x, phone_y-int(4*sy)), phone_text, font=phone_font, fill=white)
+    phone_font = _fit_font(draw, phone_text, X(390), S(53), S(38), bold=True)
+    # ícone telefone simples
+    _draw_phone(draw, X(625), Y(1058), S(35), blue, width=S(5))
+    draw.text((X(680), Y(1027)), phone_text, font=phone_font, fill=dark)
 
-    tagline_font = _font(max(16, int(21*sx)), True)
-    tagline = "QUALIDADE • CRIATIVIDADE • PERSONALIZAÇÃO"
-    draw.text((_center_x(draw, tagline, tagline_font, width), int(1310*sy)), tagline, font=tagline_font, fill=(255,255,255,230))
+    # Pincel rosa com frase curta.
+    draw.rounded_rectangle((X(600), Y(1140), X(1015), Y(1215)), radius=S(15), fill=pink)
+    tag = "Pequenos detalhes que fazem toda a diferença!"
+    tagf = _fit_font(draw, tag, X(385), S(22), S(16), bold=True, serif=True, italic=True)
+    tb = draw.textbbox((0, 0), tag, font=tagf)
+    draw.text((X(807)-(tb[2]-tb[0])//2, Y(1160)), tag, font=tagf, fill=white)
+
+    # Rodapé institucional com benefícios rápidos.
+    draw.rectangle((0, Y(1250), W, H), fill=dark)
+    footer_items = ["PRÁTICO", "CRIATIVO", "VALORIZA SEU PRODUTO", "AUMENTA SUAS VENDAS"]
+    ff = _font(S(18), bold=True)
+    positions = [55, 275, 500, 805]
+    for pos, txt in zip(positions, footer_items):
+        _draw_check(draw, X(pos+14), Y(1296), S(14), white, check=blue, width=S(3))
+        draw.text((X(pos+38), Y(1282)), txt, font=ff, fill=white)
 
     output = io.BytesIO()
     canvas.convert("RGB").save(output, "PNG", optimize=True)
