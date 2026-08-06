@@ -2843,19 +2843,43 @@ def converter_imagem_para_png(origem):
         return saida.getvalue()
 
 def _fonte_segura(tamanho=42, negrito=False):
+    """Carrega somente fontes TrueType escaláveis; nunca usa a bitmap padrão."""
     if ImageFont is None:
-        return None
+        raise RuntimeError("Pillow/ImageFont não está disponível.")
+    nomes = [
+        "DejaVu Sans Bold" if negrito else "DejaVu Sans",
+        "Liberation Sans Bold" if negrito else "Liberation Sans",
+        "Noto Sans Bold" if negrito else "Noto Sans",
+    ]
     candidatos = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if negrito else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if negrito else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
     ]
     for caminho in candidatos:
         try:
-            if Path(caminho).exists():
-                return ImageFont.truetype(caminho, tamanho)
+            if Path(caminho).is_file():
+                fonte = ImageFont.truetype(caminho, max(8, int(tamanho)))
+                if isinstance(fonte, ImageFont.FreeTypeFont):
+                    return fonte
         except Exception:
-            pass
-    return ImageFont.load_default()
+            continue
+    try:
+        import shutil as _shutil, subprocess as _subprocess
+        if _shutil.which("fc-match"):
+            for nome in nomes:
+                result = _subprocess.run(
+                    ["fc-match", "-f", "%{file}", nome],
+                    check=False, capture_output=True, text=True, timeout=2,
+                )
+                caminho = result.stdout.strip()
+                if caminho and Path(caminho).is_file():
+                    fonte = ImageFont.truetype(caminho, max(8, int(tamanho)))
+                    if isinstance(fonte, ImageFont.FreeTypeFont):
+                        return fonte
+    except Exception:
+        pass
+    raise RuntimeError("Nenhuma fonte escalável encontrada no servidor. Instale DejaVu Sans ou Liberation Sans.")
+
 
 def _quebrar_texto(draw, texto, fonte, largura_max, limite_linhas=4):
     palavras = str(texto or "").split()
