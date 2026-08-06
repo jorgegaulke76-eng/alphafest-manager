@@ -280,6 +280,64 @@ def _title_block(draw: ImageDraw.ImageDraw, title: str, box: tuple[int, int, int
     return min(y, y2)
 
 
+def _product_profile(title: str, description: str) -> dict[str, Any]:
+    """Transforma dados livres em conteúdo publicitário curto e consistente."""
+    raw = re.sub(r"\s+", " ", str(title or "Produto AlphaFest")).strip()
+    low = raw.casefold()
+    if "leopardo" in low or "voronoi" in low:
+        return {
+            "title1": "LEOPARDO",
+            "title2": "Voronoi",
+            "subtitle": "Design moderno que transforma qualquer ambiente!",
+            "benefits": [
+                ("DESIGN EXCLUSIVO", "Geometria marcante e visual sofisticado."),
+                ("IMPRESSÃO 3D PREMIUM", "Alta definição em cada detalhe da peça."),
+                ("ACABAMENTO IMPECÁVEL", "Linhas limpas e estrutura resistente."),
+                ("DECORAÇÃO ELEGANTE", "Ideal para salas, escritórios e presentes."),
+                ("PEÇA SOB ENCOMENDA", "Produção personalizada pela AlphaFest."),
+            ],
+            "seal": "PEÇA\nEXCLUSIVA",
+            "center": "Elegância,\ntecnologia e\ndesign em uma\núnica peça!",
+            "pink": "Produzido com cuidado e personalidade!",
+            "footer": ["EXCLUSIVO", "MODERNO", "ALTA QUALIDADE", "PRESENTE PERFEITO"],
+        }
+    first, second = _title_words(raw)
+    parsed = _parse_benefits(description, carregar_template(DEFAULT_TEMPLATE)["beneficios_padrao"])
+    descs = [
+        "Valoriza o produto e chama atenção.",
+        "Prático, rápido e pronto para usar.",
+        "Acabamento bonito e resistente.",
+        "Ideal para presentes e ocasiões especiais.",
+        "Personalizado do seu jeito.",
+    ]
+    return {
+        "title1": first,
+        "title2": second,
+        "subtitle": "Personalizado do seu jeito!",
+        "benefits": [(_benefit_heading(x, i), descs[i]) for i, x in enumerate(parsed[:5])],
+        "seal": "TESTADO E\nAPROVADO!",
+        "center": "Detalhes que\nencantam e\nfazem toda a\ndiferença!",
+        "pink": "Pequenos detalhes que fazem toda a diferença!",
+        "footer": ["PRÁTICO", "CRIATIVO", "VALORIZA SEU PRODUTO", "AUMENTA SUAS VENDAS"],
+    }
+
+
+def _draw_ribbon(draw: ImageDraw.ImageDraw, box: tuple[int,int,int,int], fill, text: str, font, text_fill=(255,255,255,255)):
+    x1,y1,x2,y2=box
+    h=y2-y1
+    draw.polygon([(x1,y1+h//5),(x1-28,y1+h//2),(x1,y2-h//5)], fill=fill)
+    draw.polygon([(x2,y1+h//5),(x2+28,y1+h//2),(x2,y2-h//5)], fill=fill)
+    draw.rounded_rectangle(box, radius=max(10,h//5), fill=fill)
+    lines=_wrap(draw,text,font,max(20,x2-x1-30),2)
+    line_h=max(22,int(getattr(font,'size',28)*1.02))
+    total=len(lines)*line_h
+    yy=y1+(h-total)//2
+    for line in lines:
+        bb=draw.textbbox((0,0),line,font=font)
+        draw.text(((x1+x2-(bb[2]-bb[0]))//2,yy),line,font=font,fill=text_fill)
+        yy+=line_h
+
+
 def render_template(
     image_bytes: bytes,
     size: tuple[int, int],
@@ -293,139 +351,118 @@ def render_template(
     phone: str = "11 97294-9533",
     logo_path: str | Path | None = None,
 ) -> bytes:
-    """Renderiza a peça completa no Alpha Designer Engine v2.
+    """Renderiza a campanha no Template Agência AlphaFest.
 
-    A composição usa um canvas base 1080x1350 e é escalada para todos os
-    formatos. O template prioriza leitura no celular: título, foto e contato.
+    O desenho nasce em uma grade quadrada de agência e é adaptado ao canal.
+    A identidade, logo, tipografia e CTA permanecem fixos; produto e textos variam.
     """
     cfg = carregar_template(template_id)
     p = cfg["paleta"]
     W, H = size
     sx, sy = W / 1080.0, H / 1350.0
     scale = min(sx, sy)
-    S = lambda n: max(1, int(n * scale))
-    X = lambda n: int(n * sx)
-    Y = lambda n: int(n * sy)
+    S=lambda n:max(1,int(n*scale)); X=lambda n:int(n*sx); Y=lambda n:int(n*sy)
+    blue=_hex(p["azul"]); dark=_hex(p["azul_escuro"]); pale=_hex(p["azul_claro"])
+    pink=_hex(p["rosa"]); yellow=_hex(p["amarelo"]); textc=_hex(p["texto"]); white=(255,255,255,255)
+    profile=_product_profile(title,description)
+    if subtitle and subtitle.strip() and subtitle.strip().casefold() not in {"personalizado do seu jeito","personalize seus momentos"}:
+        profile["subtitle"] = re.sub(r"\s+"," ",subtitle).strip()
 
-    blue = _hex(p["azul"])
-    dark = _hex(p["azul_escuro"])
-    pale = _hex(p["azul_claro"])
-    pink = _hex(p["rosa"])
-    yellow = _hex(p["amarelo"])
-    textc = _hex(p["texto"])
-    white = (255, 255, 255, 255)
+    canvas=Image.new("RGBA",(W,H),white)
+    draw=ImageDraw.Draw(canvas,"RGBA")
 
-    canvas = Image.new("RGBA", (W, H), white)
-    draw = ImageDraw.Draw(canvas, "RGBA")
+    # Moldura líquida e confetes: identidade oficial AlphaFest.
+    draw.rounded_rectangle((X(8),Y(8),X(1072),Y(1342)),radius=S(38),fill=white,outline=pale,width=S(4))
+    draw.ellipse((X(-190),Y(-140),X(360),Y(145)),fill=blue)
+    draw.ellipse((X(790),Y(-130),X(1270),Y(155)),fill=dark)
+    draw.arc((X(-90),Y(-35),X(1170),Y(345)),4,176,fill=_hex("#49D4FF"),width=S(15))
+    draw.arc((X(-70),Y(-10),X(1150),Y(310)),5,175,fill=white,width=S(8))
+    for x,y,r,c in [(88,180,8,pink),(160,145,6,yellow),(230,186,5,blue),(845,170,7,pink),(930,145,6,yellow),(1010,185,5,blue),(490,310,5,pink),(550,325,5,blue),(430,1140,7,blue),(500,1160,6,pink)]:
+        draw.ellipse((X(x-r),Y(y-r),X(x+r),Y(y+r)),fill=c)
 
-    # Fundo com moldura líquida AlphaFest, sem ocupar a área útil.
-    draw.rounded_rectangle((X(10), Y(10), X(1070), Y(1340)), radius=S(36), fill=white, outline=pale, width=S(4))
-    _draw_splash(draw, X(160), Y(26), X(280), Y(115), blue)
-    _draw_splash(draw, X(925), Y(15), X(250), Y(105), dark)
-    draw.arc((X(-80), Y(-25), X(1160), Y(330)), 8, 172, fill=_hex("#52D6FF"), width=S(14))
-    draw.arc((X(-55), Y(-5), X(1135), Y(290)), 8, 172, fill=white, width=S(8))
-
-    # Confetes discretos, mantendo o DNA da referência.
-    for x, y, r, color in [
-        (95, 205, 8, pink), (160, 165, 6, yellow), (225, 215, 5, blue),
-        (875, 195, 7, pink), (945, 160, 6, yellow), (1005, 215, 5, blue),
-        (515, 318, 5, blue), (560, 335, 5, pink),
-    ]:
-        draw.ellipse((X(x-r), Y(y-r), X(x+r), Y(y+r)), fill=color)
-
-    # Logo grande, integrado ao splash superior.
-    logo = _transparent_logo(Path(logo_path or BASE_DIR / "logo.png"), (X(470), Y(285)))
+    # Logo oficial enviado pelo usuário, sem caixa branca.
+    logo=_transparent_logo(Path(logo_path or BASE_DIR/'logo.png'),(X(390),Y(245)))
     if logo:
-        canvas.alpha_composite(logo, ((W - logo.width) // 2, Y(-8)))
+        canvas.alpha_composite(logo,((W-logo.width)//2,Y(-2)))
 
-    # Título protagonista: ocupa a maior área de leitura da peça.
-    title_bottom = _title_block(draw, title, (X(45), Y(205), X(610), Y(500)), dark, blue)
+    # Selo superior direito.
+    scx,scy,sr=X(930),Y(205),S(92)
+    draw.ellipse((scx-sr,scy-sr,scx+sr,scy+sr),fill=dark,outline=white,width=S(6))
+    sf=_font(S(25),bold=True)
+    lines=str(profile['seal']).split('\n')
+    yy=scy-S(35)
+    for line in lines:
+        bb=draw.textbbox((0,0),line,font=sf); draw.text((scx-(bb[2]-bb[0])//2,yy),line,font=sf,fill=white); yy+=S(31)
 
-    # Faixa promocional forte.
-    subtitle_text = re.sub(r"\s+", " ", str(subtitle or "Personalizado do seu jeito")).strip()
-    ribbon_y = max(Y(465), title_bottom + Y(8))
-    draw.polygon([(X(34), ribbon_y+Y(13)), (X(8), ribbon_y+Y(43)), (X(34), ribbon_y+Y(72))], fill=blue)
-    draw.rounded_rectangle((X(34), ribbon_y, X(590), ribbon_y+Y(86)), radius=S(18), fill=dark)
-    sf = _fit_font(draw, subtitle_text, X(505), S(36), S(25), bold=True)
-    for i, line in enumerate(_wrap(draw, subtitle_text, sf, X(505), 2)):
-        bb = draw.textbbox((0,0), line, font=sf)
-        draw.text((X(312)-(bb[2]-bb[0])//2, ribbon_y+Y(14+i*34)), line, font=sf, fill=white)
+    # Título principal ocupa a área dominante, como na arte da Anna.
+    t1=str(profile['title1']); t2=str(profile['title2'])
+    f1=_fit_font(draw,t1,X(545),S(132),S(74),bold=True,serif=True,italic=True)
+    draw.text((X(38),Y(205)),t1,font=f1,fill=dark,stroke_width=S(2),stroke_fill=white)
+    if t2:
+        f2=_fit_font(draw,t2,X(540),S(100),S(56),bold=True,serif=True,italic=True)
+        draw.text((X(54),Y(330)),t2,font=f2,fill=blue,stroke_width=S(1),stroke_fill=white)
 
-    # Fotografia invade a composição e domina o lado direito.
-    source = Image.open(io.BytesIO(image_bytes))
-    source = ImageOps.exif_transpose(source).convert("RGB")
-    photo_box = (X(548), Y(315), X(1044), Y(930))
-    _paste_rounded(canvas, source, photo_box, S(38), shadow=True)
-    draw.rounded_rectangle(photo_box, radius=S(38), outline=white, width=S(7))
+    # Faixa azul comercial.
+    ribf=_fit_font(draw,profile['subtitle'],X(500),S(34),S(23),bold=True)
+    _draw_ribbon(draw,(X(40),Y(455),X(575),Y(545)),dark,profile['subtitle'],ribf)
 
-    # Selo superior direito, como elemento publicitário real.
-    seal_cx, seal_cy, seal_r = X(940), Y(252), S(88)
-    draw.ellipse((seal_cx-seal_r, seal_cy-seal_r, seal_cx+seal_r, seal_cy+seal_r), fill=dark, outline=white, width=S(5))
-    seal_font = _font(S(24), bold=True)
-    for idx, txt in enumerate(["TESTADO E", "APROVADO!"]):
-        bb = draw.textbbox((0,0), txt, font=seal_font)
-        draw.text((seal_cx-(bb[2]-bb[0])//2, seal_cy-S(31)+idx*S(29)), txt, font=seal_font, fill=white)
+    # Foto principal integrada e ligeiramente inclinada visualmente por sombra.
+    source=ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).convert('RGB')
+    photo_box=(X(625),Y(250),X(1040),Y(845))
+    _paste_rounded(canvas,source,photo_box,S(38),shadow=True)
+    draw.rounded_rectangle(photo_box,radius=S(38),outline=white,width=S(7))
 
-    # Benefícios visíveis e com hierarquia, no estilo da referência.
-    benefits = _parse_benefits(description, cfg["beneficios_padrao"])
-    benefit_y = max(Y(610), ribbon_y+Y(112))
-    details = [
-        "Valoriza o produto e chama atenção.",
-        "Prático, rápido e pronto para usar.",
-        "Acabamento bonito e resistente.",
-        "Ideal para presentes e ocasiões especiais.",
-    ]
-    for i, item in enumerate(benefits):
-        cy = benefit_y + Y(i*112)
-        icon_x = X(78)
-        _draw_check(draw, icon_x, cy+Y(28), S(30), dark, width=S(5))
-        heading = _benefit_heading(item, i)
-        tf = _fit_font(draw, heading, X(395), S(36), S(28), bold=True)
-        draw.text((X(125), cy-Y(4)), heading, font=tf, fill=dark)
-        df = _font(S(24), bold=False)
-        for j, line in enumerate(_wrap(draw, details[i], df, X(405), 2)):
-            draw.text((X(125), cy+Y(34+j*25)), line, font=df, fill=textc)
-        draw.line((X(125), cy+Y(91), X(535), cy+Y(91)), fill=_hex("#78BFEF"), width=S(2))
+    # Benefícios em coluna de agência, com cinco blocos.
+    by=Y(585)
+    benefits=list(profile['benefits'])[:5]
+    for i,(head,desc) in enumerate(benefits):
+        cy=by+Y(i*96)
+        _draw_check(draw,X(72),cy+Y(24),S(27),dark,width=S(5))
+        hf=_fit_font(draw,head,X(365),S(33),S(25),bold=True)
+        draw.text((X(112),cy-Y(5)),head,font=hf,fill=dark)
+        df=_font(S(21))
+        for j,line in enumerate(_wrap(draw,desc,df,X(370),2)):
+            draw.text((X(112),cy+Y(30+j*23)),line,font=df,fill=textc)
+        draw.line((X(112),cy+Y(78),X(490),cy+Y(78)),fill=_hex('#69BDED'),width=S(2))
 
-    # Preço opcional em selo, sem competir com o WhatsApp.
+    # Selo central de mensagem.
+    ccx,ccy,cr=X(520),Y(800),S(88)
+    draw.ellipse((ccx-cr,ccy-cr,ccx+cr,ccy+cr),fill=white,outline=blue,width=S(4))
+    cf=_font(S(24),bold=True)
+    c_lines=str(profile['center']).split('\n'); yy=ccy-S(54)
+    for line in c_lines:
+        bb=draw.textbbox((0,0),line,font=cf); draw.text((ccx-(bb[2]-bb[0])//2,yy),line,font=cf,fill=dark); yy+=S(30)
+
+    # Preço opcional.
     if str(price).strip():
-        cx, cy, rr = X(455), Y(1040), S(90)
-        draw.ellipse((cx-rr, cy-rr, cx+rr, cy+rr), fill=white, outline=blue, width=S(5))
-        label = _font(S(17), bold=True)
-        draw.text((cx-S(52), cy-S(47)), "A PARTIR DE", font=label, fill=dark)
-        pf = _fit_font(draw, str(price), rr*2-S(18), S(39), S(25), bold=True)
-        bb = draw.textbbox((0,0), str(price), font=pf)
-        draw.text((cx-(bb[2]-bb[0])//2, cy-S(7)), str(price), font=pf, fill=pink)
+        prx,pry,prr=X(500),Y(1080),S(68)
+        draw.ellipse((prx-prr,pry-prr,prx+prr,pry+prr),fill=white,outline=blue,width=S(4))
+        pf=_fit_font(draw,str(price),S(130),S(34),S(22),bold=True)
+        bb=draw.textbbox((0,0),str(price),font=pf); draw.text((prx-(bb[2]-bb[0])//2,pry-S(12)),str(price),font=pf,fill=pink)
 
-    # CTA é o segundo protagonista da peça.
-    cta_text = str(cta or "FAÇA SEU PEDIDO!").upper()
-    cf = _fit_font(draw, cta_text, X(450), S(62), S(42), bold=True)
-    cb = draw.textbbox((0,0), cta_text, font=cf)
-    draw.text((X(805)-(cb[2]-cb[0])//2, Y(950)), cta_text, font=cf, fill=dark)
+    # CTA e WhatsApp: maior impacto da metade inferior.
+    cta_text=str(cta or 'FAÇA SEU PEDIDO!').upper()
+    ctaf=_fit_font(draw,cta_text,X(455),S(56),S(38),bold=True)
+    bb=draw.textbbox((0,0),cta_text,font=ctaf)
+    draw.text((X(800)-(bb[2]-bb[0])//2,Y(900)),cta_text,font=ctaf,fill=dark)
+    draw.rounded_rectangle((X(565),Y(965),X(1045),Y(1090)),radius=S(34),fill=dark)
+    _draw_phone(draw,X(625),Y(1027),S(37),_hex('#1DB954'),width=S(6))
+    ph=str(phone or '11 97294-9533')
+    phf=_fit_font(draw,ph,X(360),S(62),S(42),bold=True)
+    draw.text((X(680),Y(990)),ph,font=phf,fill=white)
 
-    # Bloco WhatsApp grande, com alto contraste.
-    draw.rounded_rectangle((X(548), Y(1010), X(1042), Y(1145)), radius=S(32), fill=dark)
-    _draw_phone(draw, X(625), Y(1075), S(38), blue, width=S(6))
-    phone_text = str(phone or "11 97294-9533")
-    phone_font = _fit_font(draw, phone_text, X(365), S(66), S(46), bold=True)
-    draw.text((X(680), Y(1037)), phone_text, font=phone_font, fill=white)
+    # Faixa rosa e bloco "Ideal para" usando rótulos, pois a foto varia por produto.
+    draw.rounded_rectangle((X(610),Y(1110),X(1025),Y(1190)),radius=S(18),fill=pink)
+    pf=_fit_font(draw,profile['pink'],X(375),S(24),S(18),bold=True,serif=True,italic=True)
+    for i,line in enumerate(_wrap(draw,profile['pink'],pf,X(370),2)):
+        bb=draw.textbbox((0,0),line,font=pf); draw.text((X(817)-(bb[2]-bb[0])//2,Y(1122+i*28)),line,font=pf,fill=white)
 
-    # Faixa rosa e rodapé informativo.
-    draw.rounded_rectangle((X(605), Y(1162), X(1018), Y(1234)), radius=S(15), fill=pink)
-    tag_lines = ["Pequenos detalhes que", "fazem toda a diferença!"]
-    tagf = _font(S(19), bold=True, serif=True, italic=True)
-    for i, tag in enumerate(tag_lines):
-        tb = draw.textbbox((0,0), tag, font=tagf)
-        draw.text((X(811)-(tb[2]-tb[0])//2, Y(1172+i*27)), tag, font=tagf, fill=white)
+    # Rodapé oficial.
+    draw.rectangle((0,Y(1245),W,H),fill=dark)
+    ff=_font(S(18),bold=True)
+    positions=[45,285,520,805]
+    for pos,txt in zip(positions,profile['footer']):
+        _draw_check(draw,X(pos+15),Y(1295),S(14),white,check=blue,width=S(3))
+        draw.text((X(pos+40),Y(1282)),txt,font=ff,fill=white)
 
-    draw.rectangle((0, Y(1250), W, H), fill=dark)
-    footer_items = ["PRÁTICO", "CRIATIVO", "VALORIZA SEU PRODUTO", "AUMENTA SUAS VENDAS"]
-    ff = _font(S(19), bold=True)
-    positions = [48, 270, 500, 805]
-    for pos, txt in zip(positions, footer_items):
-        _draw_check(draw, X(pos+15), Y(1297), S(14), white, check=blue, width=S(3))
-        draw.text((X(pos+40), Y(1283)), txt, font=ff, fill=white)
-
-    output = io.BytesIO()
-    canvas.convert("RGB").save(output, "PNG", optimize=True)
-    return output.getvalue()
+    output=io.BytesIO(); canvas.convert('RGB').save(output,'PNG',optimize=True); return output.getvalue()
