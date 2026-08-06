@@ -1,6 +1,6 @@
 """AlphaFest Marketing Template Engine.
 
-Versão 19.0.0 — Layout inteligente, foto proporcional, textos completos e cores por elemento.
+Versão 19.0.1 — Hotfix photo_mode e template padrão AlphaFest Agência — Padrão Anna.
 A arte nasce em um canvas quadrado 1080x1080, baseado na composição aprovada
 pela AlphaFest. Os canais verticais e horizontais recebem extensões decorativas,
 sem reduzir o tamanho dos textos da peça principal.
@@ -18,13 +18,13 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 from alphafest_font_manager import get_font, resolve_font_path
 
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_TEMPLATE = "alphafest_agencia"
+DEFAULT_TEMPLATE = "alphafest_agencia_anna"
 
 EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
-    "alphafest_agencia": {
-        "id": "alphafest_agencia",
-        "nome": "AlphaFest Agência",
-        "descricao": "Template oficial azul, branco e rosa, baseado na arte aprovada da AlphaFest.",
+    "alphafest_agencia_anna": {
+        "id": "alphafest_agencia_anna",
+        "nome": "AlphaFest Agência — Padrão Anna ⭐",
+        "descricao": "Template oficial inspirado na composição aprovada: título grande, benefícios à esquerda, produto protagonista, CTA forte e rodapé equilibrado.",
         "paleta": {
             "fundo": "#FFFFFF",
             "azul": "#087CE8",
@@ -48,6 +48,9 @@ def listar_templates() -> list[dict[str, str]]:
 
 def carregar_template(template_id: str = DEFAULT_TEMPLATE) -> dict[str, Any]:
     safe = re.sub(r"[^a-zA-Z0-9_-]", "", template_id or DEFAULT_TEMPLATE)
+    # Compatibilidade com campanhas salvas antes da versão 19.0.1.
+    if safe == "alphafest_agencia":
+        safe = "alphafest_agencia_anna"
     cfg = EMBEDDED_TEMPLATES.get(safe) or EMBEDDED_TEMPLATES[DEFAULT_TEMPLATE]
     return {**cfg, "paleta": dict(cfg["paleta"])}
 
