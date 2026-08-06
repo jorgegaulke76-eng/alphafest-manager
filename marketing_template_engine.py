@@ -1,6 +1,6 @@
 """AlphaFest Marketing Template Engine.
 
-Versão 18.1.2 — Fontes portáteis e produto integrado ao template.
+Versão 18.2.0 — Paletas dinâmicas, CTA refinado e produto integrado ao template.
 A arte nasce em um canvas quadrado 1080x1080, baseado na composição aprovada
 pela AlphaFest. Os canais verticais e horizontais recebem extensões decorativas,
 sem reduzir o tamanho dos textos da peça principal.
@@ -69,6 +69,35 @@ def _hex(value: str, alpha: int = 255):
         return tuple(int(raw[i:i + 2], 16) for i in (0, 2, 4)) + (alpha,)
     except Exception:
         return (0, 0, 0, alpha)
+
+
+def _shade(value: str, factor: float) -> str:
+    rgba = _hex(value)
+    factor = max(0.0, min(2.0, float(factor)))
+    rgb = tuple(max(0, min(255, int(channel * factor))) for channel in rgba[:3])
+    return "#%02X%02X%02X" % rgb
+
+
+def _template_palette_from_override(cfg: dict[str, Any], override: dict[str, str] | None) -> dict[str, str]:
+    p = dict(cfg["paleta"])
+    if not override:
+        return p
+    primary = override.get("primary", p["azul_escuro"])
+    secondary = override.get("secondary", p["azul"])
+    accent = override.get("accent", p["rosa"])
+    background = override.get("background", p["fundo"])
+    text = override.get("text", p["texto"])
+    metallic = override.get("metallic", p["amarelo"])
+    p.update({
+        "fundo": background,
+        "azul": secondary,
+        "azul_escuro": primary,
+        "azul_claro": _shade(secondary, 1.35),
+        "rosa": accent,
+        "amarelo": metallic,
+        "texto": text,
+    })
+    return p
 
 
 def _fit_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, start: int, minimum: int, *, bold=True, serif=False, italic=False):
@@ -143,12 +172,16 @@ def _draw_check(draw: ImageDraw.ImageDraw, cx: int, cy: int, radius: int, fill, 
         draw.line((cx-radius//8, cy+radius//3, cx+radius//2, cy-radius//3), fill=white, width=5)
 
 
-def _draw_phone(draw: ImageDraw.ImageDraw, cx: int, cy: int, radius: int, fill):
-    white = (255,255,255,255)
-    draw.ellipse((cx-radius,cy-radius,cx+radius,cy+radius),fill=fill)
-    draw.arc((cx-radius//2,cy-radius//2,cx+radius//2,cy+radius//2),125,315,fill=white,width=6)
-    draw.line((cx-radius//3,cy-radius//3,cx-radius//2,cy-radius//2),fill=white,width=6)
-    draw.line((cx+radius//3,cy+radius//3,cx+radius//2,cy+radius//2),fill=white,width=6)
+def _draw_whatsapp(draw: ImageDraw.ImageDraw, cx: int, cy: int, radius: int, fill):
+    """Desenha um ícone inspirado no WhatsApp: balão branco + telefone."""
+    white = (255, 255, 255, 255)
+    draw.ellipse((cx-radius, cy-radius, cx+radius, cy+radius), fill=fill)
+    bubble_r = int(radius * .66)
+    draw.ellipse((cx-bubble_r, cy-bubble_r, cx+bubble_r, cy+bubble_r), outline=white, width=max(3, radius//7))
+    draw.polygon([(cx-int(radius*.45), cy+int(radius*.42)), (cx-int(radius*.62), cy+int(radius*.67)), (cx-int(radius*.20), cy+int(radius*.55))], fill=white)
+    draw.arc((cx-int(radius*.38), cy-int(radius*.38), cx+int(radius*.38), cy+int(radius*.38)), 125, 315, fill=white, width=max(4, radius//6))
+    draw.line((cx-int(radius*.27), cy-int(radius*.27), cx-int(radius*.39), cy-int(radius*.39)), fill=white, width=max(4, radius//6))
+    draw.line((cx+int(radius*.27), cy+int(radius*.27), cx+int(radius*.39), cy+int(radius*.39)), fill=white, width=max(4, radius//6))
 
 
 def _soft_shadow(alpha: Image.Image, blur: int = 22, opacity: int = 105) -> Image.Image:
@@ -366,16 +399,16 @@ def _draw_liquid_corners(draw: ImageDraw.ImageDraw, blue, dark, pink, yellow):
         draw.ellipse((cx-rx,cy-ry,cx+rx,cy+ry),fill=color)
 
 
-def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any]) -> Image.Image:
-    p = cfg["paleta"]
+def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None) -> Image.Image:
+    p = _template_palette_from_override(cfg, palette_override)
     blue,dark,pale,pink,yellow,textc,green = (_hex(p[k]) for k in ("azul","azul_escuro","azul_claro","rosa","amarelo","texto","verde"))
     white=(255,255,255,255)
     profile = _product_profile(title,description,subtitle)
-    canvas=Image.new("RGBA",(1080,1080),white)
+    canvas=Image.new("RGBA",(1080,1080),_hex(p["fundo"]))
     draw=ImageDraw.Draw(canvas,"RGBA")
     _draw_liquid_corners(draw,blue,dark,pink,yellow)
 
-    logo=_load_logo(logo_path,(270,220))
+    logo=_load_logo(logo_path,(330,250))
     if logo:
         canvas.alpha_composite(logo,((1080-logo.width)//2,-5))
 
@@ -429,22 +462,29 @@ def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description
     # Selo central.
     cx,cy,cr=535,680,82
     draw.ellipse((cx-cr,cy-cr,cx+cr,cy+cr),fill=white,outline=blue,width=4)
-    cf=_font(22,bold=True)
-    yy=cy-52
+    cf=_font(18,bold=True)
+    yy=cy-46
     for line in profile["center"].split("\n"):
         bb=draw.textbbox((0,0),line,font=cf)
         draw.text((cx-(bb[2]-bb[0])//2,yy),line,font=cf,fill=dark)
-        yy+=27
+        yy+=23
 
     # CTA grande e WhatsApp.
     cta_text=(cta or "FAÇA SEU PEDIDO!").upper()
     ctaf=_fit_font(draw,cta_text,430,48,34,bold=True)
     bb=draw.textbbox((0,0),cta_text,font=ctaf)
     draw.text((830-(bb[2]-bb[0])//2,710),cta_text,font=ctaf,fill=dark)
-    draw.rounded_rectangle((610,770,1045,875),radius=35,fill=dark)
-    _draw_phone(draw,665,822,34,green)
-    phf=_fit_font(draw,phone or "11 97294-9533",330,52,37,bold=True)
-    draw.text((715,790),phone or "11 97294-9533",font=phf,fill=white)
+    phone_box=(610,770,1045,875)
+    draw.rounded_rectangle(phone_box,radius=35,fill=dark)
+    _draw_whatsapp(draw,665,822,36,green)
+    phone_text=phone or "11 97294-9533"
+    phf=_fit_font(draw,phone_text,320,52,37,bold=True)
+    pbb=draw.textbbox((0,0),phone_text,font=phf)
+    text_left=710
+    text_right=1030
+    text_x=text_left + (text_right-text_left-(pbb[2]-pbb[0]))//2
+    text_y=822 - (pbb[3]-pbb[1])//2 - pbb[1]
+    draw.text((text_x,text_y),phone_text,font=phf,fill=white)
 
     # Faixa rosa.
     draw.rounded_rectangle((625,890,1030,960),radius=16,fill=pink)
@@ -458,10 +498,18 @@ def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description
 
     # Preço opcional, sem roubar o CTA.
     if price.strip():
-        draw.ellipse((475,835,585,945),fill=white,outline=blue,width=4)
-        prf=_fit_font(draw,price,95,30,20,bold=True)
+        pcx,pcy,pr=530,885,68
+        draw.ellipse((pcx-pr,pcy-pr,pcx+pr,pcy+pr),fill=dark,outline=yellow,width=6)
+        small=_font(16,bold=True)
+        label="APENAS"
+        lbb=draw.textbbox((0,0),label,font=small)
+        draw.text((pcx-(lbb[2]-lbb[0])//2,pcy-48),label,font=small,fill=white)
+        prf=_fit_font(draw,price,118,34,22,bold=True)
         bb=draw.textbbox((0,0),price,font=prf)
-        draw.text((530-(bb[2]-bb[0])//2,875),price,font=prf,fill=pink)
+        draw.text((pcx-(bb[2]-bb[0])//2,pcy-18),price,font=prf,fill=yellow)
+        vista="à vista"
+        vbb=draw.textbbox((0,0),vista,font=small)
+        draw.text((pcx-(vbb[2]-vbb[0])//2,pcy+28),vista,font=small,fill=white)
 
     # Rodapé oficial.
     draw.rectangle((0,995,1080,1080),fill=dark)
@@ -474,11 +522,11 @@ def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description
     return canvas
 
 
-def _adapt_channel(square: Image.Image, size: tuple[int,int], cfg: dict[str,Any]) -> Image.Image:
+def _adapt_channel(square: Image.Image, size: tuple[int,int], cfg: dict[str,Any], palette_override: dict[str,str] | None = None) -> Image.Image:
     W,H=size
     if (W,H)==(1080,1080):
         return square
-    p=cfg["paleta"]
+    p=_template_palette_from_override(cfg, palette_override)
     blue,dark,pink,yellow=(_hex(p[k]) for k in ("azul","azul_escuro","rosa","amarelo"))
     # Mantemos a peça quadrada em tamanho máximo possível para não diminuir a
     # tipografia. O espaço excedente recebe continuação da identidade visual.
@@ -511,6 +559,7 @@ def render_template(
     cta: str="FAÇA SEU PEDIDO!",
     phone: str="11 97294-9533",
     logo_path: str|Path|None=None,
+    palette_override: dict[str,str] | None=None,
 ) -> bytes:
     cfg=carregar_template(template_id)
     square=_render_square(
@@ -523,8 +572,9 @@ def render_template(
         phone=phone,
         logo_path=Path(logo_path or BASE_DIR/"logo.png"),
         cfg=cfg,
+        palette_override=palette_override,
     )
-    final=_adapt_channel(square,size,cfg)
+    final=_adapt_channel(square,size,cfg,palette_override)
     output=io.BytesIO()
     final.convert("RGB").save(output,"PNG",optimize=True)
     return output.getvalue()

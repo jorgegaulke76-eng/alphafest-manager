@@ -26,7 +26,7 @@ from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_T
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 from marketing_template_engine import DEFAULT_TEMPLATE as MARKETING_DEFAULT_TEMPLATE, listar_templates as listar_templates_marketing, render_template as renderizar_template_marketing
 from marketing_prompt_builder import build_master_prompt
-from marketing_design_intelligence import THEME_ORDER, calendar_theme_options, detect_theme, get_theme, resolve_event_theme
+from marketing_design_intelligence import THEME_ORDER, PALETTE_ORDER, calendar_theme_options, detect_theme, get_theme, resolve_event_theme, resolve_palette
 from marketing_ai_engine import generate_premium_square, apply_official_logo, adapt_square_to_channel
 from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
@@ -2921,7 +2921,7 @@ def _desenhar_texto_centralizado(draw, texto, fonte, caixa, cor):
     draw.text((x1 + (x2 - x1 - tw) // 2, y1 + (y2 - y1 - th) // 2 - bbox[1]), texto, font=fonte, fill=cor)
 
 
-def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no WhatsApp", descricao="", template_id=MARKETING_DEFAULT_TEMPLATE):
+def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no WhatsApp", descricao="", template_id=MARKETING_DEFAULT_TEMPLATE, palette_override=None):
     """Renderiza uma peça usando a Engine de Templates AlphaFest."""
     config = CANAL_MIDIA_CONFIG.get(canal, CANAL_MIDIA_CONFIG["Instagram Feed"])
     bruto = _ler_bytes_midia(origem)
@@ -2937,6 +2937,7 @@ def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no 
         price=preco,
         cta=cta or "FAÇA SEU PEDIDO!",
         logo_path=Path("logo.png"),
+        palette_override=palette_override,
     )
 
 def _openai_api_key():
@@ -8047,6 +8048,41 @@ if pagina_atual == "crescimento":
                 + "</div>",
                 unsafe_allow_html=True,
             )
+            paleta_escolhida = st.selectbox(
+                "Paleta de cores da arte",
+                PALETTE_ORDER,
+                index=0,
+                key="mkt_paleta_1820",
+                help="Cores do tema acompanha o Calendário Mestre. Escolha outra paleta para substituir as cores antes de gerar.",
+            )
+            usar_metalico = st.toggle(
+                "Usar detalhe metálico/dourado",
+                value=paleta_escolhida in {"Cores do tema", "Dourado Luxo"},
+                key="mkt_usar_metalico_1820",
+                help="Desative para retirar o dourado e usar a cor de destaque da paleta.",
+            )
+            cores_personalizadas = None
+            if paleta_escolhida == "Personalizada":
+                cp1, cp2, cp3 = st.columns(3)
+                cp4, cp5, cp6 = st.columns(3)
+                cores_personalizadas = {
+                    "primary": cp1.color_picker("Principal", value=cores_tema.get("primary", "#123A9B"), key="mkt_cor_primary"),
+                    "secondary": cp2.color_picker("Secundária", value=cores_tema.get("secondary", "#087CE8"), key="mkt_cor_secondary"),
+                    "accent": cp3.color_picker("Destaque", value=cores_tema.get("accent", "#EF2A92"), key="mkt_cor_accent"),
+                    "background": cp4.color_picker("Fundo", value=cores_tema.get("background", "#FFFFFF"), key="mkt_cor_background"),
+                    "text": cp5.color_picker("Texto", value=cores_tema.get("text", "#102D50"), key="mkt_cor_text"),
+                    "metallic": cp6.color_picker("Metálico", value=cores_tema.get("metallic", "#D4AF37"), key="mkt_cor_metallic"),
+                }
+            paleta_final = resolve_palette(cores_tema, paleta_escolhida, cores_personalizadas, usar_metalico)
+            st.markdown(
+                "<div style='display:flex;gap:8px;margin:0 0 10px 0;'>"
+                + "".join(
+                    f"<span title='{html.escape(nome)}: {cor}' style='width:28px;height:28px;border-radius:50%;display:inline-block;border:2px solid rgba(255,255,255,.65);box-shadow:0 0 0 1px rgba(0,0,0,.2);background:{cor}'></span>"
+                    for nome, cor in paleta_final.items() if nome in {"primary", "secondary", "accent", "background", "metallic"}
+                )
+                + "</div>",
+                unsafe_allow_html=True,
+            )
 
             canais_instagram = ["Instagram Feed", "Instagram Story", "Carrossel", "Reel", "TikTok", "YouTube Shorts", "YouTube Horizontal"]
             opcoes_canais = canais_instagram + (["Status WhatsApp"] if incluir_whatsapp else [])
@@ -8132,6 +8168,7 @@ if pagina_atual == "crescimento":
                             cta_arte,
                             produto_mkt.get("Descricao", ""),
                             template_id,
+                            paleta_final,
                         )
                         st.image(arte_preview, use_container_width=True)
                         st.markdown(f'<div class="af-card-title">{html.escape(str(produto_mkt.get("Nome", "Produto")))}</div>', unsafe_allow_html=True)
@@ -8186,7 +8223,7 @@ if pagina_atual == "crescimento":
                             subtitle=subtitulo_arte,
                             cta=cta_arte or "FAÇA SEU PEDIDO",
                             channel="Instagram Feed",
-                            theme=tema_efetivo["label"],
+                            theme=f"{tema_efetivo['label']} | Paleta: {paleta_final}",
                             calendar_event=evento_calendario_mkt["name"] if evento_calendario_mkt else "",
                         )
                         prompt_mestre = prompt_info["prompt"]
@@ -8207,7 +8244,7 @@ if pagina_atual == "crescimento":
                         for canal in canais:
                             config_canal = CANAL_MIDIA_CONFIG[canal]
                             if config_canal["tipo"] == "imagem":
-                                artes[canal] = base64.b64encode(gerar_arte_png(origem, canal, produto_mkt.get("Nome", "Produto"), subtitulo_arte, preco_arte, cta_arte, produto_mkt.get("Descricao", ""), template_id)).decode("ascii")
+                                artes[canal] = base64.b64encode(gerar_arte_png(origem, canal, produto_mkt.get("Nome", "Produto"), subtitulo_arte, preco_arte, cta_arte, produto_mkt.get("Descricao", ""), template_id, paleta_final)).decode("ascii")
                     registro = {
                         "id": f"MKT-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
                         "criado_em": agora_local().isoformat(),
@@ -8222,7 +8259,7 @@ if pagina_atual == "crescimento":
                         "calendario_evento_id": evento_calendario_mkt["id"] if evento_calendario_mkt else "",
                         "calendario_evento_nome": evento_calendario_mkt["name"] if evento_calendario_mkt else "",
                         "tema_visual": tema_efetivo_id, "tema_visual_nome": tema_efetivo["label"],
-                        "paleta_visual": tema_efetivo["palette"],
+                        "paleta_visual": paleta_final, "paleta_nome": paleta_escolhida, "usar_metalico": usar_metalico,
                         "template_id": template_id, "template_nome": template_nome,
                         "modo_criacao": modo_criacao, "prompt_mestre": prompt_mestre, "perfil_visual": perfil_visual,
                         "conteudos": saidas, "motor_copy": motor_copy,

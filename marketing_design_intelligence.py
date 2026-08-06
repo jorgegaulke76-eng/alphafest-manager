@@ -99,6 +99,31 @@ THEMES: dict[str, dict[str, Any]] = {
     },
 }
 
+
+PALETTE_PRESETS: dict[str, dict[str, str]] = {
+    "Cores do tema": {},
+    "Azul Clássico": {"primary": "#123A9B", "secondary": "#087CE8", "accent": "#24C8F4", "background": "#FFFFFF", "text": "#102D50", "metallic": "#D7E7F5"},
+    "Rosa Moderno": {"primary": "#B01972", "secondary": "#EF2A92", "accent": "#FF8FC7", "background": "#FFF7FB", "text": "#6D1648", "metallic": "#F8C5DE"},
+    "Verde Elegante": {"primary": "#0B6E4F", "secondary": "#20A873", "accent": "#9ADCBF", "background": "#F6FFFB", "text": "#164C3C", "metallic": "#B8D8C8"},
+    "Roxo Premium": {"primary": "#4C2A92", "secondary": "#7654D6", "accent": "#C49BFF", "background": "#FBF8FF", "text": "#36206D", "metallic": "#D8C6F5"},
+    "Cinza Sofisticado": {"primary": "#2F3A46", "secondary": "#66727F", "accent": "#B8C0C8", "background": "#FAFBFC", "text": "#26313B", "metallic": "#D5D9DD"},
+    "Dourado Luxo": {"primary": "#113B78", "secondary": "#235FA8", "accent": "#D4AF37", "background": "#FFFDF7", "text": "#102D50", "metallic": "#D4AF37"},
+}
+PALETTE_ORDER = list(PALETTE_PRESETS.keys()) + ["Personalizada"]
+
+
+def resolve_palette(theme_palette: dict[str, str], preset: str = "Cores do tema", custom: dict[str, str] | None = None, use_metallic: bool = True) -> dict[str, str]:
+    """Combina a paleta do tema com uma escolha manual sem alterar o calendário."""
+    base = dict(theme_palette or THEMES["alphafest"]["palette"])
+    if preset in PALETTE_PRESETS and PALETTE_PRESETS[preset]:
+        base.update(PALETTE_PRESETS[preset])
+    if preset == "Personalizada" and custom:
+        base.update({k: v for k, v in custom.items() if k in {"primary", "secondary", "accent", "background", "text", "metallic"} and v})
+    if not use_metallic:
+        # Remove a aparência dourada/metálica usando o próprio acento da paleta.
+        base["metallic"] = base.get("accent") or base.get("secondary") or base.get("primary")
+    return base
+
 THEME_ORDER = ["Automático"] + [v["label"] for v in THEMES.values()]
 _LABEL_TO_ID = {v["label"]: k for k, v in THEMES.items()}
 
