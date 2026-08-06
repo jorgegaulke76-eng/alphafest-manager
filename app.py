@@ -25,6 +25,8 @@ _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 from marketing_template_engine import DEFAULT_TEMPLATE as MARKETING_DEFAULT_TEMPLATE, listar_templates as listar_templates_marketing, render_template as renderizar_template_marketing
+from marketing_prompt_builder import build_master_prompt
+from marketing_ai_engine import generate_premium_square, apply_official_logo, adapt_square_to_channel
 from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
 from painel_indicadores import calcular_indicadores_unificados
@@ -7927,6 +7929,20 @@ if pagina_atual == "crescimento":
                 help="O template controla posições, cores, tipografia e identidade visual da propaganda.",
             )
             template_id = mapa_templates[template_nome]
+            premium_liberado = (
+                feature_enabled("marketing_ai", False)
+                and str(obter_usuario_atual().get("nome", "")).casefold() == "jorge"
+            )
+            modos_criacao = ["Campanha Rápida"] + (["Campanha IA Premium"] if premium_liberado else [])
+            modo_criacao = st.radio(
+                "Modo de criação",
+                modos_criacao,
+                horizontal=True,
+                key="mkt_modo_criacao_1700",
+                help="Campanha Rápida usa o template local. IA Premium cria uma propaganda completa seguindo o Prompt Mestre AlphaFest.",
+            )
+            if modo_criacao == "Campanha IA Premium":
+                st.info("✨ A IA Premium usa a foto como referência, cria a composição completa e aplica o logo oficial AlphaFest depois. A geração utiliza a API configurada nos Secrets.")
             fonte_imagem = st.radio(
                 "Origem do trabalho",
                 ["Upload livre", "Produto do catálogo"],
@@ -8008,6 +8024,19 @@ if pagina_atual == "crescimento":
         }
         pontos = sum(1 for ok in campos_preview.values() if ok)
         qualidade = round((pontos / len(campos_preview)) * 100) if campos_preview else 0
+        prompt_premium_info = None
+        if modo_criacao == "Campanha IA Premium" and produto_mkt.get("Nome"):
+            prompt_premium_info = build_master_prompt(
+                product_name=str(produto_mkt.get("Nome", "")),
+                description=str(produto_mkt.get("Descricao", "")),
+                category=str(produto_mkt.get("Categoria", "")),
+                objective=objetivo,
+                campaign=campanha,
+                offer=observacoes,
+                subtitle=subtitulo_arte,
+                cta=cta_arte or "FAÇA SEU PEDIDO",
+                channel="Instagram Feed",
+            )
 
         with preview_col:
             st.markdown('<div class="af-preview-shell">', unsafe_allow_html=True)
@@ -8023,26 +8052,36 @@ if pagina_atual == "crescimento":
             canais_preview = [c for c in canais if CANAL_MIDIA_CONFIG.get(c, {}).get("tipo") == "imagem"]
             if preview_liberado and origem_preview and canais_preview and produto_mkt.get("Nome"):
                 canal_preview = st.selectbox("Formato", canais_preview, key="mkt_preview_canal_1500")
-                try:
-                    arte_preview = gerar_arte_png(
-                        origem_preview,
-                        canal_preview,
-                        produto_mkt.get("Nome", "Produto"),
-                        subtitulo_arte,
-                        preco_arte,
-                        cta_arte,
-                        produto_mkt.get("Descricao", ""),
-                        template_id,
-                    )
-                    st.image(arte_preview, use_container_width=True)
-                    st.markdown(f'<div class="af-card-title">{html.escape(str(produto_mkt.get("Nome", "Produto")))}</div>', unsafe_allow_html=True)
-                    if campanha:
-                        st.caption(campanha)
-                    if observacoes:
-                        st.caption(observacoes[:180])
-                    st.markdown(f'<span class="af-badge">{html.escape(cta_arte or "Chame no WhatsApp")}</span>', unsafe_allow_html=True)
-                except Exception as exc:
-                    st.warning(f"Preview isolado: {exc}")
+                if modo_criacao == "Campanha IA Premium":
+                    st.markdown("#### ✨ Campanha IA Premium")
+                    st.success("Prompt Mestre pronto para gerar a propaganda completa.")
+                    if prompt_premium_info:
+                        st.caption(f"Categoria detectada: {prompt_premium_info['profile_id'].replace('_', ' ').title()}")
+                        st.caption("Benefícios: " + " • ".join(prompt_premium_info["benefits"]))
+                        with st.expander("Ver Prompt Mestre"):
+                            st.text_area("Prompt gerado", prompt_premium_info["prompt"], height=360, disabled=True, key="mkt_prompt_preview_1700")
+                    st.info("A imagem será criada somente ao clicar em Gerar campanha, evitando custos durante o preenchimento.")
+                else:
+                    try:
+                        arte_preview = gerar_arte_png(
+                            origem_preview,
+                            canal_preview,
+                            produto_mkt.get("Nome", "Produto"),
+                            subtitulo_arte,
+                            preco_arte,
+                            cta_arte,
+                            produto_mkt.get("Descricao", ""),
+                            template_id,
+                        )
+                        st.image(arte_preview, use_container_width=True)
+                        st.markdown(f'<div class="af-card-title">{html.escape(str(produto_mkt.get("Nome", "Produto")))}</div>', unsafe_allow_html=True)
+                        if campanha:
+                            st.caption(campanha)
+                        if observacoes:
+                            st.caption(observacoes[:180])
+                        st.markdown(f'<span class="af-badge">{html.escape(cta_arte or "Chame no WhatsApp")}</span>', unsafe_allow_html=True)
+                    except Exception as exc:
+                        st.warning(f"Preview isolado: {exc}")
             elif not preview_liberado:
                 st.info("Preview disponível somente na Central do Jorge.")
             elif not origem_preview:
@@ -8054,7 +8093,7 @@ if pagina_atual == "crescimento":
             st.caption("Música adicionada manualmente na rede social.")
             st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.button("🚀 Gerar campanha profissional", type="primary", use_container_width=True):
+        if st.button("✨ Gerar campanha IA Premium" if modo_criacao == "Campanha IA Premium" else "🚀 Gerar campanha rápida", type="primary", use_container_width=True):
             origem = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
             faltas = []
             if not canais: faltas.append("selecione pelo menos um canal")
@@ -8074,10 +8113,39 @@ if pagina_atual == "crescimento":
                     png_original = converter_imagem_para_png(origem)
                     saidas, motor_copy = gerar_conteudo_marketing(produto_mkt, objetivo, campanha, canais, observacoes, tom, png_original)
                     artes = {}
-                    for canal in canais:
-                        config_canal = CANAL_MIDIA_CONFIG[canal]
-                        if config_canal["tipo"] == "imagem":
-                            artes[canal] = base64.b64encode(gerar_arte_png(origem, canal, produto_mkt.get("Nome", "Produto"), subtitulo_arte, preco_arte, cta_arte, produto_mkt.get("Descricao", ""), template_id)).decode("ascii")
+                    prompt_mestre = ""
+                    perfil_visual = "template_local"
+                    if modo_criacao == "Campanha IA Premium":
+                        prompt_info = build_master_prompt(
+                            product_name=str(produto_mkt.get("Nome", "")),
+                            description=str(produto_mkt.get("Descricao", "")),
+                            category=str(produto_mkt.get("Categoria", "")),
+                            objective=objetivo,
+                            campaign=campanha,
+                            offer=observacoes,
+                            subtitle=subtitulo_arte,
+                            cta=cta_arte or "FAÇA SEU PEDIDO",
+                            channel="Instagram Feed",
+                        )
+                        prompt_mestre = prompt_info["prompt"]
+                        perfil_visual = prompt_info["profile_id"]
+                        with st.spinner("A IA está criando a propaganda completa no padrão AlphaFest..."):
+                            arte_quadrada = generate_premium_square(
+                                prompt=prompt_mestre,
+                                product_png=png_original,
+                                api_key=_openai_api_key(),
+                            )
+                            arte_quadrada = apply_official_logo(arte_quadrada, Path("logo.png"))
+                        for canal in canais:
+                            config_canal = CANAL_MIDIA_CONFIG[canal]
+                            if config_canal["tipo"] == "imagem":
+                                artes[canal] = base64.b64encode(adapt_square_to_channel(arte_quadrada, config_canal["size"])).decode("ascii")
+                        motor_copy = motor_copy + " + Imagem IA Premium"
+                    else:
+                        for canal in canais:
+                            config_canal = CANAL_MIDIA_CONFIG[canal]
+                            if config_canal["tipo"] == "imagem":
+                                artes[canal] = base64.b64encode(gerar_arte_png(origem, canal, produto_mkt.get("Nome", "Produto"), subtitulo_arte, preco_arte, cta_arte, produto_mkt.get("Descricao", ""), template_id)).decode("ascii")
                     registro = {
                         "id": f"MKT-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
                         "criado_em": agora_local().isoformat(),
@@ -8090,6 +8158,7 @@ if pagina_atual == "crescimento":
                         "imagem_png_base64": base64.b64encode(png_original).decode("ascii"),
                         "objetivo": objetivo, "tom": tom, "campanha": campanha, "canais": canais,
                         "template_id": template_id, "template_nome": template_nome,
+                        "modo_criacao": modo_criacao, "prompt_mestre": prompt_mestre, "perfil_visual": perfil_visual,
                         "conteudos": saidas, "motor_copy": motor_copy,
                         "artes_png": artes, "aprovacoes": {canal: False for canal in canais},
                         "fila_publicacao": {}, "status": "Em revisão",

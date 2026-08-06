@@ -1,7 +1,7 @@
 {
   "marketing_studio": true,
   "marketing_preview": true,
-  "marketing_ai": false,
+  "marketing_ai": true,
   "campanha_mestre": false,
   "diagnostico_avancado": true
 }
