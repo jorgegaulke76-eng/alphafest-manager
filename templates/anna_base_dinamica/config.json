@@ -1,0 +1,18 @@
+{
+  "id": "anna_base_dinamica",
+  "nome": "Anna Base Dinâmica ⭐",
+  "descricao": "Template-base enviado pela equipe: fundo fixo e zonas dinâmicas para título, produto, benefícios, foto, selo, preço, WhatsApp, aplicações e rodapé.",
+  "version": 1,
+  "format": "feed_square",
+  "width": 1080,
+  "height": 1080,
+  "background": "fundo.png",
+  "preview": "preview.png",
+  "calendar_palette": true,
+  "colors": {
+    "primary": "#07349B",
+    "secondary": "#087CE8",
+    "accent": "#EF2A92",
+    "text": "#07349B"
+  }
+}

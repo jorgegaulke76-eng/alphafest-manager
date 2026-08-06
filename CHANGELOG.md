@@ -374,3 +374,9 @@ hangelog
 - Preço isolado em área própria, sem sobreposição.
 - Faixa de aplicações redimensionada.
 - CTA, foto e rodapé reposicionados para melhor equilíbrio.
+
+## 20.0.0 — Template Engine
+- Biblioteca de templates externos por pasta/ZIP.
+- `layout.json` com zonas normalizadas e renderização genérica.
+- Primeiro template: Anna Base Dinâmica.
+- Importar/exportar templates sem novo deploy.

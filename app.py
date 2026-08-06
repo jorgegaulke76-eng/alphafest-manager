@@ -25,6 +25,7 @@ _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 from marketing_template_engine import DEFAULT_TEMPLATE as MARKETING_DEFAULT_TEMPLATE, listar_templates as listar_templates_marketing, render_template as renderizar_template_marketing
+from template_library_engine import list_library_templates, install_template_zip, export_template_zip, hydrate_template_packages
 from marketing_prompt_builder import build_master_prompt
 import marketing_design_intelligence as mdi
 
@@ -7898,6 +7899,9 @@ if pagina_atual == "crescimento":
     marketing = carregar_marketing()
     conteudos = marketing.get("conteudos", [])
     config_marketing = marketing.setdefault("config", {})
+    # Templates importados ficam persistidos no mesmo armazenamento do Marketing Studio
+    # e são restaurados para a biblioteca temporária a cada inicialização/reboot.
+    hydrate_template_packages(config_marketing.get("template_packages", {}))
 
     with st.container(border=True):
         af_section_title("Modo de trabalho", "Configuração da publicação manual e dos canais principais.")
@@ -7927,7 +7931,7 @@ if pagina_atual == "crescimento":
             salvar_marketing(marketing)
         st.caption("O Studio gera os arquivos nos formatos corretos. A postagem e a música continuam manuais.")
 
-    t1, t2, t3, t4 = st.tabs(["Nova campanha", "Biblioteca", "Banco de mídia", "Exportações"])
+    t1, t2, t3, t4 = st.tabs(["Nova campanha", "Biblioteca", "Templates & mídia", "Exportações"])
 
     with t1:
         catalogo_mkt = carregar_catalogo()
@@ -7941,7 +7945,7 @@ if pagina_atual == "crescimento":
                 "Template da arte",
                 list(mapa_templates.keys()),
                 index=list(mapa_templates.values()).index(MARKETING_DEFAULT_TEMPLATE) if MARKETING_DEFAULT_TEMPLATE in mapa_templates.values() else 0,
-                key="mkt_template_visual_1911",
+                key="mkt_template_visual_2000",
                 help="O template controla posições, cores, tipografia e identidade visual da propaganda.",
             )
             template_id = mapa_templates[template_nome]
@@ -8414,18 +8418,52 @@ if pagina_atual == "crescimento":
                     marketing["conteudos"]=[x for x in conteudos if x.get("id") != item.get("id")]; salvar_marketing(marketing); st.rerun()
 
     with t3:
-        st.subheader("🖼️ Banco de mídia AlphaFest")
-        st.caption("Cadastre referências por produto. Nesta primeira etapa, os arquivos permanecem ligados às campanhas e ao catálogo já existente.")
+        st.subheader("🧩 Biblioteca de Templates")
+        st.caption("Templates instalados aqui entram no seletor do Marketing Studio sem alterar Python, GitHub ou deploy.")
+        templates_biblioteca = list_library_templates()
         mid1, mid2, mid3 = st.columns(3)
-        mid1.metric("Fotos nas campanhas", sum(1 for x in conteudos if x.get("imagem_original") or x.get("imagem_png_base64")))
-        mid2.metric("Vídeos vinculados", sum(1 for x in conteudos if x.get("video_original")))
-        mid3.metric("Templates oficiais", 1)
+        mid1.metric("Templates instalados", len(templates_biblioteca))
+        mid2.metric("Fotos nas campanhas", sum(1 for x in conteudos if x.get("imagem_original") or x.get("imagem_png_base64")))
+        mid3.metric("Vídeos vinculados", sum(1 for x in conteudos if x.get("video_original")))
+
         with st.container(border=True):
-            st.markdown("#### 🎨 Template Oficial 001")
-            st.write("**Papel Arroz Institucional**")
-            st.caption("Azul e branco, logo AlphaFest, título forte, aplicações do produto, benefícios e WhatsApp no rodapé.")
-            st.success("Padrão visual aprovado e ativo para a evolução do motor de campanhas.")
-        st.info("A próxima etapa permitirá cadastrar fundos, logos, fotos e vídeos em pastas por categoria sem afetar o catálogo operacional da Anna.")
+            st.markdown("#### ➕ Importar novo template")
+            st.caption("Envie um ZIP contendo fundo.png, layout.json e config.json. preview.png é opcional.")
+            tpl_zip = st.file_uploader("Pacote do template (.zip)", type=["zip"], key="mkt_template_zip_upload_2000")
+            replace_tpl = st.checkbox("Substituir se já existir", value=False, key="mkt_template_replace_2000")
+            if st.button("📥 Instalar template", use_container_width=True, disabled=tpl_zip is None, key="mkt_install_template_2000"):
+                try:
+                    pacote_bytes = tpl_zip.getvalue()
+                    instalado = install_template_zip(pacote_bytes, replace=replace_tpl)
+                    config_marketing.setdefault("template_packages", {})[instalado["id"]] = base64.b64encode(pacote_bytes).decode("ascii")
+                    marketing["config"] = config_marketing
+                    salvar_marketing(marketing)
+                    st.success(f"Template '{instalado['nome']}' instalado e salvo. Ele continuará disponível após reinícios do Streamlit.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Não foi possível instalar o template: {exc}")
+
+        if not templates_biblioteca:
+            st.info("Nenhum template externo instalado.")
+        for tpl in templates_biblioteca:
+            with st.container(border=True):
+                cprev, cinfo = st.columns([1, 2])
+                with cprev:
+                    preview_path = Path(tpl.get("preview") or "")
+                    if preview_path.exists():
+                        st.image(str(preview_path), use_container_width=True)
+                with cinfo:
+                    st.markdown(f"#### {tpl.get('nome', tpl.get('id'))}")
+                    st.caption(tpl.get("descricao") or "Template da biblioteca AlphaFest.")
+                    try:
+                        pacote_tpl = export_template_zip(tpl["id"])
+                        st.download_button("📦 Exportar template", pacote_tpl, file_name=f"{tpl['id']}.zip", mime="application/zip", key=f"mkt_export_tpl_{tpl['id']}")
+                    except Exception:
+                        pass
+
+        st.markdown("---")
+        st.subheader("🖼️ Banco de mídia AlphaFest")
+        st.caption("Fotos e vídeos continuam ligados às campanhas e ao catálogo existente.")
 
     with t4:
         st.subheader("📦 Central de exportações")

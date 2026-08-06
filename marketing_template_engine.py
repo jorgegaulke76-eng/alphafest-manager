@@ -16,9 +16,11 @@ from typing import Any, Iterable
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from alphafest_font_manager import get_font, resolve_font_path
+from template_library_engine import list_library_templates, load_library_template, render_library_square
 
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_TEMPLATE = "splash_premium_anna"
+DEFAULT_TEMPLATE = "anna_base_dinamica"
+EMBEDDED_DEFAULT_TEMPLATE = "splash_premium_anna"
 
 EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "splash_premium_anna": {
@@ -55,18 +57,30 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
 
 
 def listar_templates() -> list[dict[str, str]]:
-    return [
-        {"id": key, "nome": str(value.get("nome") or key), "descricao": str(value.get("descricao") or "")}
+    embedded = [
+        {"id": key, "nome": str(value.get("nome") or key), "descricao": str(value.get("descricao") or ""), "source": "embedded"}
         for key, value in EMBEDDED_TEMPLATES.items()
     ]
+    installed = list_library_templates()
+    # Biblioteca primeiro: templates cadastrados pela equipe aparecem em destaque.
+    return installed + embedded
 
 
 def carregar_template(template_id: str = DEFAULT_TEMPLATE) -> dict[str, Any]:
     safe = re.sub(r"[^a-zA-Z0-9_-]", "", template_id or DEFAULT_TEMPLATE)
+    external = load_library_template(safe)
+    if external:
+        # Mantém uma paleta base para compatibilidade com adaptação de canais.
+        external.setdefault("paleta", {
+            "fundo": "#FFFFFF", "azul": "#087CE8", "azul_escuro": "#07349B",
+            "azul_claro": "#DDF5FF", "rosa": "#EF2A92", "amarelo": "#FFD12B",
+            "texto": "#102D50", "verde": "#20B956",
+        })
+        return external
     # Compatibilidade com campanhas salvas antes da versão 19.0.1.
     if safe in {"alphafest_agencia", "alphafest_agencia_anna"}:
         safe = "splash_premium_anna"
-    cfg = EMBEDDED_TEMPLATES.get(safe) or EMBEDDED_TEMPLATES[DEFAULT_TEMPLATE]
+    cfg = EMBEDDED_TEMPLATES.get(safe) or EMBEDDED_TEMPLATES[EMBEDDED_DEFAULT_TEMPLATE]
     return {**cfg, "paleta": dict(cfg["paleta"])}
 
 
@@ -668,6 +682,13 @@ def _render_splash_premium_square(image_bytes: bytes, *, title: str, subtitle: s
     return canvas
 
 def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto") -> Image.Image:
+    if str(cfg.get("source")) == "library":
+        profile = _product_profile(title, description, subtitle)
+        profile["applications"] = _default_applications(profile, title)
+        return render_library_square(
+            cfg, image_bytes=image_bytes, title=title, subtitle=subtitle, description=description,
+            price=price, cta=cta, phone=phone, profile=profile, photo_mode=photo_mode, palette=palette_override,
+        )
     if str(cfg.get("id")) == "splash_premium_anna":
         return _render_splash_premium_square(image_bytes, title=title, subtitle=subtitle, description=description, price=price, cta=cta, phone=phone, logo_path=logo_path, cfg=cfg, palette_override=palette_override, photo_mode=photo_mode)
     p = _template_palette_from_override(cfg, palette_override)
