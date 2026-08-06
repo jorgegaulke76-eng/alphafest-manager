@@ -369,3 +369,8 @@ hangelog
 ## 19.1.0 — Splash Premium AlphaFest
 - Novo template oficial baseado no modelo aprovado pela AlphaFest.
 - Aplicações do produto e composição comercial premium.
+
+## 19.1.2 — Correção de composição Splash Premium
+- Preço isolado em área própria, sem sobreposição.
+- Faixa de aplicações redimensionada.
+- CTA, foto e rodapé reposicionados para melhor equilíbrio.

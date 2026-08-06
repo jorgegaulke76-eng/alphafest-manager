@@ -486,26 +486,28 @@ def _draw_liquid_corners(draw: ImageDraw.ImageDraw, blue, dark, pink, yellow):
 
 
 def _draw_application_strip(canvas: Image.Image, source: Image.Image, labels: list[str], *, y: int, blue, dark, white):
+    """Faixa de aplicações com largura fixa e espaço reservado para o preço."""
     draw = ImageDraw.Draw(canvas, "RGBA")
-    draw.rounded_rectangle((28, y, 560, y + 132), radius=20, fill=(255,255,255,245), outline=blue, width=2)
-    draw.polygon([(28,y+18),(12,y+36),(28,y+54)], fill=dark)
-    draw.rounded_rectangle((28,y-15,190,y+24), radius=10, fill=blue)
+    left, right, bottom = 24, 520, y + 136
+    draw.rounded_rectangle((left, y, right, bottom), radius=20, fill=(255,255,255,245), outline=blue, width=2)
+    draw.polygon([(left,y+18),(8,y+36),(left,y+54)], fill=dark)
+    draw.rounded_rectangle((left,y-15,186,y+24), radius=10, fill=blue)
     font = _font(19, bold=True)
-    draw.text((52,y-10), "Ideal para:", font=font, fill=white)
-    thumb = ImageOps.fit(ImageOps.exif_transpose(source).convert("RGB"), (90,90), method=Image.Resampling.LANCZOS)
+    draw.text((48,y-10), "Ideal para:", font=font, fill=white)
+    thumb = ImageOps.fit(ImageOps.exif_transpose(source).convert("RGB"), (78,78), method=Image.Resampling.LANCZOS)
     for i, label in enumerate(labels[:4]):
-        cx = 88 + i*122
-        mask = Image.new("L", (90,90), 0)
-        ImageDraw.Draw(mask).ellipse((0,0,89,89), fill=255)
-        canvas.paste(thumb.convert("RGBA"), (cx-45,y+27), mask)
-        draw.ellipse((cx-47,y+25,cx+47,y+119), outline=blue, width=3)
-        lf = _fit_font(draw, label, 108, 15, 11, bold=True)
-        lines = _wrap(draw, label, lf, 108, 2)
-        yy = y+113
+        cx = 76 + i*112
+        mask = Image.new("L", (78,78), 0)
+        ImageDraw.Draw(mask).ellipse((0,0,77,77), fill=255)
+        canvas.paste(thumb.convert("RGBA"), (cx-39,y+29), mask)
+        draw.ellipse((cx-41,y+27,cx+41,y+109), outline=blue, width=3)
+        lf = _fit_font(draw, label, 96, 14, 10, bold=True)
+        lines = _wrap(draw, label, lf, 96, 2)
+        yy = y+108
         for line in lines:
             bb=draw.textbbox((0,0),line,font=lf)
             draw.text((cx-(bb[2]-bb[0])//2,yy),line,font=lf,fill=dark)
-            yy += 14
+            yy += 13
 
 
 
@@ -588,11 +590,11 @@ def _render_splash_premium_square(image_bytes: bytes, *, title: str, subtitle: s
 
     source=Image.open(io.BytesIO(image_bytes)).convert("RGBA")
     # Foto protagonista maior, mantendo proporção.
-    _paste_photo(canvas,source,(590,205,1070,735),28,mode=photo_mode,product_title=title)
+    _paste_photo(canvas,source,(635,205,1060,705),28,mode=photo_mode,product_title=title)
 
     # Benefícios em coluna, com mais respiro.
     benefits=profile["benefits"][:5]
-    by=505; item_h=66
+    by=500; item_h=64
     for i,(head,desc,icon) in enumerate(benefits):
         cy=by+i*item_h
         _draw_check(draw,68,cy+20,23,benefits_color,icon=icon)
@@ -604,7 +606,7 @@ def _render_splash_premium_square(image_bytes: bytes, *, title: str, subtitle: s
         draw.line((105,cy+item_h-5,438,cy+item_h-5),fill=_hex(_shade(p["azul"],1.12)),width=2)
 
     # Selo central.
-    cx,cy,cr=505,675,77
+    cx,cy,cr=510,675,72
     draw.ellipse((cx-cr,cy-cr,cx+cr,cy+cr),fill=white,outline=seal_color,width=4)
     center_lines=profile["center"].split("\n")
     cf=_fit_font(draw,max(center_lines,key=len),128,18,13,bold=True)
@@ -615,46 +617,54 @@ def _render_splash_premium_square(image_bytes: bytes, *, title: str, subtitle: s
 
     # Aplicações sempre presentes no Splash Premium.
     apps=_default_applications(profile,title)
-    _draw_application_strip(canvas,source,apps,y=835,blue=blue,dark=title_color,white=white)
+    _draw_application_strip(canvas,source,apps,y=825,blue=blue,dark=title_color,white=white)
 
     # CTA grande à direita.
     cta_text=(cta or "FAÇA SEU PEDIDO!").upper()
     ctaf=_fit_font(draw,cta_text,455,43,29,bold=True)
-    bb=draw.textbbox((0,0),cta_text,font=ctaf); draw.text((820-(bb[2]-bb[0])//2,728),cta_text,font=ctaf,fill=title_color)
-    phone_box=(590,775,1048,868)
+    bb=draw.textbbox((0,0),cta_text,font=ctaf); draw.text((825-(bb[2]-bb[0])//2,716),cta_text,font=ctaf,fill=title_color)
+    phone_box=(610,760,1048,850)
     draw.rounded_rectangle(phone_box,radius=34,fill=cta_color)
-    _draw_whatsapp(draw,645,821,32,green)
+    _draw_whatsapp(draw,660,805,31,green)
     phone_text=phone or "11 97294-9533"
     phf=_fit_font(draw,phone_text,335,47,32,bold=True)
     pbb=draw.textbbox((0,0),phone_text,font=phf)
-    tx=700+(1035-700-(pbb[2]-pbb[0]))//2; ty=821-(pbb[3]-pbb[1])//2-pbb[1]
+    tx=710+(1035-710-(pbb[2]-pbb[0]))//2; ty=805-(pbb[3]-pbb[1])//2-pbb[1]
     draw.text((tx,ty),phone_text,font=phf,fill=cta_text_color)
 
     # Preço opcional em selo pequeno, sem substituir a faixa de aplicações.
     if str(price or "").strip():
-        pcx,pcy,pr=590,910,52
+        pcx,pcy,pr=565,900,44
         draw.ellipse((pcx-pr,pcy-pr,pcx+pr,pcy+pr),fill=dark,outline=yellow,width=5)
-        pf=_fit_font(draw,str(price),88,25,17,bold=True)
-        pbb=draw.textbbox((0,0),str(price),font=pf); draw.text((pcx-(pbb[2]-pbb[0])//2,pcy-(pbb[3]-pbb[1])//2-pbb[1]),str(price),font=pf,fill=yellow)
+        small=_font(11,bold=True)
+        label="APENAS"
+        lbb=draw.textbbox((0,0),label,font=small)
+        draw.text((pcx-(lbb[2]-lbb[0])//2,pcy-30),label,font=small,fill=white)
+        pf=_fit_font(draw,str(price),72,22,15,bold=True)
+        pbb=draw.textbbox((0,0),str(price),font=pf)
+        draw.text((pcx-(pbb[2]-pbb[0])//2,pcy-8),str(price),font=pf,fill=yellow)
+        vista="à vista"
+        vbb=draw.textbbox((0,0),vista,font=small)
+        draw.text((pcx-(vbb[2]-vbb[0])//2,pcy+18),vista,font=small,fill=white)
 
-    pink_box=(620,890,1045,968)
+    pink_box=(625,875,1045,950)
     draw.rounded_rectangle(pink_box,radius=15,fill=pink)
     pf=_fit_font(draw,profile["pink"],385,23,16,bold=True,serif=True,italic=True)
     plines=_wrap(draw,profile["pink"],pf,385,2); yy=903
     for line in plines:
         bb=draw.textbbox((0,0),line,font=pf); draw.text((832-(bb[2]-bb[0])//2,yy),line,font=pf,fill=white); yy+=25
 
-    footer_y=990
+    footer_y=970
     draw.rectangle((0,footer_y,1080,1080),fill=footer_color)
     labels=profile["footer"][:4]; cell_w=270
     for i,label in enumerate(labels):
         left=i*cell_w
-        _draw_check(draw,left+28,1035,14,white)
+        _draw_check(draw,left+28,1027,14,white)
         ff=_fit_font(draw,label,205,17,11,bold=True)
-        lines=_wrap(draw,label,ff,205,2); yy=1025 if len(lines)==2 else 1032
+        lines=_wrap(draw,label,ff,205,2); yy=1015 if len(lines)==2 else 1023
         for line in lines:
             draw.text((left+52,yy),line,font=ff,fill=footer_text_color); yy+=16
-        if i: draw.line((left,1008,left,1063),fill=(255,255,255,80),width=1)
+        if i: draw.line((left,992,left,1060),fill=(255,255,255,80),width=1)
     return canvas
 
 def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto") -> Image.Image:
