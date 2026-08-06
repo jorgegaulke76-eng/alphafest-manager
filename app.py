@@ -26,6 +26,7 @@ from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_T
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 from marketing_template_engine import DEFAULT_TEMPLATE as MARKETING_DEFAULT_TEMPLATE, listar_templates as listar_templates_marketing, render_template as renderizar_template_marketing
 from marketing_prompt_builder import build_master_prompt
+from marketing_design_intelligence import THEME_ORDER, calendar_theme_options, detect_theme, get_theme
 from marketing_ai_engine import generate_premium_square, apply_official_logo, adapt_square_to_channel
 from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
@@ -7992,6 +7993,58 @@ if pagina_atual == "crescimento":
             tom = c2.selectbox("Linha de venda", ["Venda direta", "Emocional", "Urgência", "Premium", "Corporativo", "Promoção"], key="mkt_tom")
             campanha = st.text_input("Campanha ou data", placeholder="Ex.: Dia dos Pais", key="mkt_campanha")
 
+            # Usa o Calendário Comercial existente como fonte única de datas e temas.
+            eventos_calendario_mkt = calendar_theme_options(carregar_campanhas(), hoje_local(), limit_days=365)
+            opcoes_eventos_mkt = ["Nenhum / campanha livre"] + [
+                f"{item['name']} · {item['start'].strftime('%d/%m/%Y')}" for item in eventos_calendario_mkt
+            ]
+            evento_calendario_label = st.selectbox(
+                "Evento do Calendário Mestre",
+                opcoes_eventos_mkt,
+                key="mkt_evento_calendario_mestre",
+                help="Esta lista consulta o Calendário Comercial existente. Nenhum segundo calendário é criado.",
+            )
+            evento_calendario_mkt = None
+            if evento_calendario_label != "Nenhum / campanha livre":
+                evento_calendario_mkt = eventos_calendario_mkt[opcoes_eventos_mkt.index(evento_calendario_label) - 1]
+                if not campanha.strip():
+                    campanha = evento_calendario_mkt["name"]
+
+            tema_sugerido_id = detect_theme(
+                campanha,
+                produto_mkt.get("Nome", ""),
+                produto_mkt.get("Categoria", ""),
+                evento_calendario_mkt["name"] if evento_calendario_mkt else "",
+                explicit=evento_calendario_mkt["theme"]["label"] if evento_calendario_mkt else None,
+            )
+            tema_sugerido_label = get_theme(tema_sugerido_id)["label"]
+            indice_tema = THEME_ORDER.index(tema_sugerido_label) if tema_sugerido_label in THEME_ORDER else 0
+            tema_visual = st.selectbox(
+                "🎨 Tema e paleta da campanha",
+                THEME_ORDER,
+                index=indice_tema,
+                key="mkt_tema_visual_1800",
+                help="Automático usa o nome da campanha e o evento selecionado no Calendário Mestre.",
+            )
+            tema_efetivo_id = detect_theme(
+                campanha,
+                evento_calendario_mkt["name"] if evento_calendario_mkt else "",
+                produto_mkt.get("Nome", ""),
+                explicit=tema_visual,
+            )
+            tema_efetivo = get_theme(tema_efetivo_id)
+            cores_tema = tema_efetivo["palette"]
+            st.markdown(
+                f"<div style='display:flex;align-items:center;gap:8px;margin:-4px 0 8px 0;'>"
+                f"<strong>{html.escape(tema_efetivo['label'])}</strong>"
+                + "".join(
+                    f"<span title='{html.escape(nome)}' style='width:22px;height:22px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.18);background:{cor}'></span>"
+                    for nome, cor in cores_tema.items() if nome in {"primary", "secondary", "accent", "background", "metallic"}
+                )
+                + "</div>",
+                unsafe_allow_html=True,
+            )
+
             canais_instagram = ["Instagram Feed", "Instagram Story", "Carrossel", "Reel", "TikTok", "YouTube Shorts", "YouTube Horizontal"]
             opcoes_canais = canais_instagram + (["Status WhatsApp"] if incluir_whatsapp else [])
             canais_padrao = ["Instagram Feed", "Instagram Story"] + (["Status WhatsApp"] if incluir_whatsapp else [])
@@ -8036,6 +8089,8 @@ if pagina_atual == "crescimento":
                 subtitle=subtitulo_arte,
                 cta=cta_arte or "FAÇA SEU PEDIDO",
                 channel="Instagram Feed",
+                theme=tema_visual,
+                calendar_event=evento_calendario_mkt["name"] if evento_calendario_mkt else "",
             )
 
         with preview_col:
@@ -8057,6 +8112,7 @@ if pagina_atual == "crescimento":
                     st.success("Prompt Mestre pronto para gerar a propaganda completa.")
                     if prompt_premium_info:
                         st.caption(f"Categoria detectada: {prompt_premium_info['profile_id'].replace('_', ' ').title()}")
+                        st.caption(f"Tema visual: {prompt_premium_info['theme']['label']}")
                         st.caption("Benefícios: " + " • ".join(prompt_premium_info["benefits"]))
                         with st.expander("Ver Prompt Mestre"):
                             st.text_area("Prompt gerado", prompt_premium_info["prompt"], height=360, disabled=True, key="mkt_prompt_preview_1700")
@@ -8126,6 +8182,8 @@ if pagina_atual == "crescimento":
                             subtitle=subtitulo_arte,
                             cta=cta_arte or "FAÇA SEU PEDIDO",
                             channel="Instagram Feed",
+                            theme=tema_visual,
+                            calendar_event=evento_calendario_mkt["name"] if evento_calendario_mkt else "",
                         )
                         prompt_mestre = prompt_info["prompt"]
                         perfil_visual = prompt_info["profile_id"]
@@ -8157,6 +8215,10 @@ if pagina_atual == "crescimento":
                         "video_original": video_original_salvo,
                         "imagem_png_base64": base64.b64encode(png_original).decode("ascii"),
                         "objetivo": objetivo, "tom": tom, "campanha": campanha, "canais": canais,
+                        "calendario_evento_id": evento_calendario_mkt["id"] if evento_calendario_mkt else "",
+                        "calendario_evento_nome": evento_calendario_mkt["name"] if evento_calendario_mkt else "",
+                        "tema_visual": tema_efetivo_id, "tema_visual_nome": tema_efetivo["label"],
+                        "paleta_visual": tema_efetivo["palette"],
                         "template_id": template_id, "template_nome": template_nome,
                         "modo_criacao": modo_criacao, "prompt_mestre": prompt_mestre, "perfil_visual": perfil_visual,
                         "conteudos": saidas, "motor_copy": motor_copy,
@@ -9789,7 +9851,9 @@ if pagina_atual == "calendario":
                 a, b = st.columns([5, 2])
                 a.markdown(f"### {campanha.get('nome', 'Campanha')}")
                 a.write(destaque)
-                a.caption(f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')} · {campanha.get('tipo')} · {campanha.get('regiao') or 'Sem região'}")
+                tema_cal_id = detect_theme(campanha.get("nome"), campanha.get("categoria"), campanha.get("observacoes"), explicit=campanha.get("tema_visual"))
+                tema_cal = get_theme(tema_cal_id)
+                a.caption(f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')} · {campanha.get('tipo')} · {campanha.get('regiao') or 'Sem região'} · 🎨 {tema_cal['label']}")
                 produtos = campanha.get("produtos", []) or []
                 if produtos:
                     a.write("**Produtos relacionados:** " + ", ".join(map(str, produtos)))
@@ -9828,6 +9892,8 @@ if pagina_atual == "calendario":
                 c1.write(f"**Região:** {campanha.get('regiao') or 'Não informada'}")
                 c2.write(f"**Antecedência:** {campanha.get('antecedencia_dias', 30)} dias")
                 c2.write(f"**Recorrência:** {campanha.get('recorrencia', 'Evento único')}")
+                tema_lista_id = detect_theme(campanha.get("nome"), campanha.get("categoria"), campanha.get("observacoes"), explicit=campanha.get("tema_visual"))
+                c2.write(f"**Tema visual:** {get_theme(tema_lista_id)['label']}")
                 if campanha.get("produtos"):
                     st.write("**Produtos:** " + ", ".join(map(str, campanha.get("produtos", []))))
                 if campanha.get("observacoes"):
@@ -9857,6 +9923,13 @@ if pagina_atual == "calendario":
             tipo = c1.selectbox("Tipo", ["Nacional", "Local", "Interna", "Personalizada"], index=["Nacional", "Local", "Interna", "Personalizada"].index(atual.get("tipo", "Personalizada")) if atual and atual.get("tipo") in ["Nacional", "Local", "Interna", "Personalizada"] else 3)
             categoria = c2.text_input("Categoria", value=str(atual.get("categoria", "Comercial")) if atual else "Comercial")
             status = c3.selectbox("Status", ["Ideia", "Planejamento", "Em produção", "Publicado", "Concluído"], index=["Ideia", "Planejamento", "Em produção", "Publicado", "Concluído"].index(atual.get("status", "Planejamento")) if atual and atual.get("status") in ["Ideia", "Planejamento", "Em produção", "Publicado", "Concluído"] else 1)
+            x1, x2 = st.columns(2)
+            tipos_evento = ["Campanha", "Data comemorativa", "Oportunidade", "Promoção", "Lançamento", "Outro"]
+            tipo_evento_atual = str(atual.get("tipo_evento", "Campanha")) if atual else "Campanha"
+            tipo_evento = x1.selectbox("Uso no Calendário Mestre", tipos_evento, index=tipos_evento.index(tipo_evento_atual) if tipo_evento_atual in tipos_evento else 0)
+            tema_atual_id = detect_theme(atual.get("nome") if atual else nome_camp, atual.get("categoria") if atual else categoria, atual.get("observacoes") if atual else "", explicit=atual.get("tema_visual") if atual else None)
+            tema_atual_label = get_theme(tema_atual_id)["label"]
+            tema_visual_cal = x2.selectbox("Tema/paleta visual", THEME_ORDER, index=THEME_ORDER.index(tema_atual_label) if tema_atual_label in THEME_ORDER else 0)
             inicio_atual = _data_iso_segura(atual.get("data_inicio")) if atual else hoje_local()
             fim_atual = _data_iso_segura(atual.get("data_fim")) if atual else hoje_local()
             d1, d2, d3 = st.columns(3)
@@ -9880,6 +9953,8 @@ if pagina_atual == "calendario":
                 registro = {
                     "id": atual.get("id") if atual else f"CAMP-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
                     "nome": nome_camp.strip(), "tipo": tipo, "categoria": categoria.strip(),
+                    "tipo_evento": tipo_evento,
+                    "tema_visual": detect_theme(nome_camp, categoria, observacoes, explicit=tema_visual_cal),
                     "data_inicio": data_inicio.isoformat(), "data_fim": data_fim.isoformat(),
                     "recorrencia": recorrencia, "antecedencia_dias": int(antecedencia),
                     "regiao": regiao.strip(), "produtos": produtos, "observacoes": observacoes.strip(),

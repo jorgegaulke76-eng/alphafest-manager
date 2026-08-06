@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from alphafest_dna import ALPHAFEST_DNA
+from marketing_design_intelligence import detect_theme, get_theme, theme_prompt_rules, typography_prompt_rules
 
 CATEGORY_PROFILES: dict[str, dict[str, Any]] = {
     "confeitaria": {
@@ -90,6 +91,8 @@ def build_master_prompt(
     channel: str = "Instagram Feed",
     benefits: list[str] | None = None,
     applications: list[str] | None = None,
+    theme: str | None = None,
+    calendar_event: str = "",
 ) -> dict[str, Any]:
     profile_id = classify_product(product_name, description, category)
     profile = CATEGORY_PROFILES[profile_id]
@@ -98,6 +101,8 @@ def build_master_prompt(
     phone = phone.strip() or ALPHAFEST_DNA["telefone"]
     subtitle = subtitle.strip() or "Transforme seu produto em uma peça ainda mais especial!"
     channel_spec = CHANNEL_SPECS.get(channel, CHANNEL_SPECS["Instagram Feed"])
+    theme_id = detect_theme(campaign, calendar_event, product_name, category, explicit=theme)
+    theme_data = get_theme(theme_id)
 
     prompt = f"""Crie uma arte publicitária {channel_spec}, extremamente profissional, moderna e colorida para divulgação de {product_name}.
 
@@ -107,7 +112,9 @@ OBJETIVO COMERCIAL
 - Informações obrigatórias: {offer or 'não há oferta específica; não invente preço ou promoção'}.
 
 IDENTIDADE VISUAL OBRIGATÓRIA ALPHAFEST
-- Paleta predominante: {', '.join(ALPHAFEST_DNA['paleta'])}.
+- DNA visual base: {', '.join(ALPHAFEST_DNA['paleta'])}.
+- {theme_prompt_rules(theme_id)}
+- {typography_prompt_rules()}
 - Estilo: {'; '.join(ALPHAFEST_DNA['estilo'])}.
 - Estrutura visual: {'; '.join(ALPHAFEST_DNA['estrutura'])}.
 - {ALPHAFEST_DNA['regras_logo']}
@@ -145,4 +152,6 @@ REGRAS DE QUALIDADE
         "benefits": benefit_list,
         "applications": application_list,
         "channel_spec": channel_spec,
+        "theme_id": theme_id,
+        "theme": theme_data,
     }
