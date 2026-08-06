@@ -26,7 +26,7 @@ from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_T
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 from marketing_template_engine import DEFAULT_TEMPLATE as MARKETING_DEFAULT_TEMPLATE, listar_templates as listar_templates_marketing, render_template as renderizar_template_marketing
 from marketing_prompt_builder import build_master_prompt
-from marketing_design_intelligence import THEME_ORDER, calendar_theme_options, detect_theme, get_theme
+from marketing_design_intelligence import THEME_ORDER, calendar_theme_options, detect_theme, get_theme, resolve_event_theme
 from marketing_ai_engine import generate_premium_square, apply_official_logo, adapt_square_to_channel
 from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
@@ -8010,12 +8010,13 @@ if pagina_atual == "crescimento":
                 if not campanha.strip():
                     campanha = evento_calendario_mkt["name"]
 
+            tema_evento_id = resolve_event_theme(evento_calendario_mkt["record"]) if evento_calendario_mkt else ""
             tema_sugerido_id = detect_theme(
                 campanha,
                 produto_mkt.get("Nome", ""),
                 produto_mkt.get("Categoria", ""),
                 evento_calendario_mkt["name"] if evento_calendario_mkt else "",
-                explicit=evento_calendario_mkt["theme"]["label"] if evento_calendario_mkt else None,
+                explicit=get_theme(tema_evento_id)["label"] if tema_evento_id and tema_evento_id != "alphafest" else None,
             )
             tema_sugerido_label = get_theme(tema_sugerido_id)["label"]
             indice_tema = THEME_ORDER.index(tema_sugerido_label) if tema_sugerido_label in THEME_ORDER else 0
@@ -8026,11 +8027,15 @@ if pagina_atual == "crescimento":
                 key="mkt_tema_visual_1800",
                 help="Automático usa o nome da campanha e o evento selecionado no Calendário Mestre.",
             )
-            tema_efetivo_id = detect_theme(
-                campanha,
-                evento_calendario_mkt["name"] if evento_calendario_mkt else "",
-                produto_mkt.get("Nome", ""),
-                explicit=tema_visual,
+            tema_efetivo_id = (
+                tema_sugerido_id
+                if tema_visual == "Automático"
+                else detect_theme(
+                    campanha,
+                    evento_calendario_mkt["name"] if evento_calendario_mkt else "",
+                    produto_mkt.get("Nome", ""),
+                    explicit=tema_visual,
+                )
             )
             tema_efetivo = get_theme(tema_efetivo_id)
             cores_tema = tema_efetivo["palette"]
@@ -8113,6 +8118,7 @@ if pagina_atual == "crescimento":
                     if prompt_premium_info:
                         st.caption(f"Categoria detectada: {prompt_premium_info['profile_id'].replace('_', ' ').title()}")
                         st.caption(f"Tema visual: {prompt_premium_info['theme']['label']}")
+                        st.caption(f"Título padronizado: {prompt_premium_info['display_title']}")
                         st.caption("Benefícios: " + " • ".join(prompt_premium_info["benefits"]))
                         with st.expander("Ver Prompt Mestre"):
                             st.text_area("Prompt gerado", prompt_premium_info["prompt"], height=360, disabled=True, key="mkt_prompt_preview_1700")
@@ -8182,7 +8188,7 @@ if pagina_atual == "crescimento":
                             subtitle=subtitulo_arte,
                             cta=cta_arte or "FAÇA SEU PEDIDO",
                             channel="Instagram Feed",
-                            theme=tema_visual,
+                            theme=tema_efetivo["label"],
                             calendar_event=evento_calendario_mkt["name"] if evento_calendario_mkt else "",
                         )
                         prompt_mestre = prompt_info["prompt"]

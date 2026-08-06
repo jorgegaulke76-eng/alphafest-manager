@@ -131,6 +131,46 @@ def get_theme(theme_id: str | None) -> dict[str, Any]:
     return {"id": theme_id or "alphafest", **selected}
 
 
+def resolve_event_theme(item: dict[str, Any]) -> str:
+    """Resolve o tema do evento sem deixar um valor genérico esconder a data real.
+
+    Eventos antigos podem ter ``tema_visual=alphafest`` por padrão. Nesse caso,
+    o nome/categoria do próprio evento continua tendo prioridade para datas como
+    Dia dos Pais, Natal, Outubro Rosa etc.
+    """
+    explicit = normalize_text(item.get("tema_visual") or item.get("tema"))
+    detected = detect_theme(item.get("nome"), item.get("categoria"), item.get("observacoes"))
+    if explicit and explicit not in {"Automático", "alphafest", "AlphaFest Clássico"}:
+        return theme_id_from_label(explicit)
+    return detected
+
+
+def compact_marketing_text(value: Any, max_words: int = 8) -> str:
+    """Encurta textos para a arte antes de reduzir o tamanho da fonte."""
+    clean = normalize_text(value).strip(" .,-:;")
+    if not clean:
+        return ""
+    words = clean.split()
+    result = " ".join(words[:max_words])
+    return result + ("…" if len(words) > max_words else "")
+
+
+def smart_title(product_name: str, max_words: int = 4) -> str:
+    """Cria um título publicitário curto, preservando as palavras principais."""
+    clean = normalize_text(product_name)
+    removable = {"elegante", "personalizado", "personalizada", "estilo", "modelo", "produto", "serviço"}
+    words = [w for w in re.split(r"\s+", clean) if w.casefold().strip("()") not in removable]
+    # Conteúdo entre parênteses costuma ser um estilo importante (ex.: Voronoi).
+    parens = re.findall(r"\(([^)]+)\)", clean)
+    base = [w.strip("(),") for w in words if not (w.startswith("(") and w.endswith(")"))]
+    if parens:
+        for term in parens:
+            for word in term.split():
+                if word.casefold() not in {x.casefold() for x in base}:
+                    base.append(word)
+    return " ".join(base[:max_words]) or clean
+
+
 def calendar_theme_options(campaigns: Iterable[dict[str, Any]], reference: date | None = None, limit_days: int = 180) -> list[dict[str, Any]]:
     """Retorna campanhas do Calendário Mestre relevantes ao Marketing.
 
@@ -165,8 +205,7 @@ def calendar_theme_options(campaigns: Iterable[dict[str, Any]], reference: date 
         anticipation = int(item.get("antecedencia_dias", 30) or 30)
         if not in_period and not (-7 <= days <= max(limit_days, anticipation)):
             continue
-        explicit_theme = item.get("tema_visual") or item.get("tema")
-        theme_id = detect_theme(item.get("nome"), item.get("categoria"), item.get("observacoes"), explicit=explicit_theme)
+        theme_id = resolve_event_theme(item)
         result.append({
             "id": item.get("id"),
             "name": item.get("nome", "Campanha"),

@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from alphafest_dna import ALPHAFEST_DNA
-from marketing_design_intelligence import detect_theme, get_theme, theme_prompt_rules, typography_prompt_rules
+from marketing_design_intelligence import detect_theme, get_theme, theme_prompt_rules, typography_prompt_rules, compact_marketing_text, smart_title
 
 CATEGORY_PROFILES: dict[str, dict[str, Any]] = {
     "confeitaria": {
@@ -103,6 +103,11 @@ def build_master_prompt(
     channel_spec = CHANNEL_SPECS.get(channel, CHANNEL_SPECS["Instagram Feed"])
     theme_id = detect_theme(campaign, calendar_event, product_name, category, explicit=theme)
     theme_data = get_theme(theme_id)
+    display_title = smart_title(product_name)
+    benefit_list = [compact_marketing_text(item, 6) for item in benefit_list if compact_marketing_text(item, 6)]
+    application_list = [compact_marketing_text(item, 3) for item in application_list if compact_marketing_text(item, 3)]
+    subtitle = compact_marketing_text(subtitle, 10)
+    palette = theme_data["palette"]
 
     prompt = f"""Crie uma arte publicitária {channel_spec}, extremamente profissional, moderna e colorida para divulgação de {product_name}.
 
@@ -114,6 +119,7 @@ OBJETIVO COMERCIAL
 IDENTIDADE VISUAL OBRIGATÓRIA ALPHAFEST
 - DNA visual base: {', '.join(ALPHAFEST_DNA['paleta'])}.
 - {theme_prompt_rules(theme_id)}
+- Cores HEX obrigatórias: principal {palette['primary']}; secundária {palette['secondary']}; destaque {palette['accent']}; fundo {palette['background']}; texto {palette['text']}; metálico {palette['metallic']}.
 - {typography_prompt_rules()}
 - Estilo: {'; '.join(ALPHAFEST_DNA['estilo'])}.
 - Estrutura visual: {'; '.join(ALPHAFEST_DNA['estrutura'])}.
@@ -129,8 +135,8 @@ PRODUTO E CENA
 - O produto deve ocupar grande parte da composição e parecer integrado ao anúncio, sem cartão branco, moldura ou retângulo atrás dele.
 
 TEXTOS DA ARTE
-- Título principal grande: “{product_name}”.
-- Banner azul: “{subtitle}”.
+- Título principal obrigatório: “{display_title}”, muito grande, dominante, em no máximo 3 linhas e com aproximadamente 30% da área visual.
+- Banner de alto contraste: “{subtitle}”.
 - Benefícios com ícones modernos: {', '.join(benefit_list)}.
 - Aplicações em pequenas imagens ou selos: {', '.join(application_list)}.
 - Selo superior direito: “Testado e Aprovado!” somente quando adequado; para peças decorativas usar “Peça Exclusiva!”.
@@ -154,4 +160,6 @@ REGRAS DE QUALIDADE
         "channel_spec": channel_spec,
         "theme_id": theme_id,
         "theme": theme_data,
+        "display_title": display_title,
+        "subtitle": subtitle,
     }
