@@ -26,7 +26,21 @@ from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_T
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 from marketing_template_engine import DEFAULT_TEMPLATE as MARKETING_DEFAULT_TEMPLATE, listar_templates as listar_templates_marketing, render_template as renderizar_template_marketing
 from marketing_prompt_builder import build_master_prompt
-from marketing_design_intelligence import THEME_ORDER, PALETTE_ORDER, calendar_theme_options, detect_theme, get_theme, resolve_event_theme, resolve_palette
+import marketing_design_intelligence as mdi
+
+# Compatibilidade entre bases antigas e novas do Design Intelligence.
+# Uma lista opcional ausente nunca deve impedir o AlphaFest Manager de iniciar.
+THEME_ORDER = getattr(mdi, "THEME_ORDER", ["Automático", "AlphaFest Clássico"])
+PALETTE_ORDER = getattr(
+    mdi,
+    "PALETTE_ORDER",
+    list(getattr(mdi, "PALETTE_PRESETS", {"Cores do tema": {}}).keys()) + ["Personalizada"],
+)
+calendar_theme_options = mdi.calendar_theme_options
+detect_theme = mdi.detect_theme
+get_theme = mdi.get_theme
+resolve_event_theme = mdi.resolve_event_theme
+resolve_palette = mdi.resolve_palette
 from marketing_ai_engine import generate_premium_square, apply_official_logo, adapt_square_to_channel
 from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
