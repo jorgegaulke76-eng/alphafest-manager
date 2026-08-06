@@ -1,6 +1,6 @@
 """Engine de templates visuais do Alpha Marketing Studio.
 
-Versão 16.0.0: Alpha Designer Engine v1, com hierarquia publicitária
+Versão 16.1.0: Alpha Designer Engine v2, com hierarquia publicitária
 inspirada nas peças oficiais da marca. O motor permanece independente da
 interface Streamlit e recebe somente conteúdo da campanha.
 """
@@ -154,6 +154,25 @@ def _headline_lines(title: str) -> tuple[str, str]:
     return clean.upper(), ""
 
 
+def _benefit_heading(text: str, index: int) -> str:
+    """Resume textos extensos em títulos publicitários curtos."""
+    value = re.sub(r"\s+", " ", str(text or "")).strip(" .,:;-")
+    low = value.casefold()
+    rules = [
+        (("voronoi", "geométrica", "geometrica"), "ESTILO VORONOI"),
+        (("decor", "interior", "ambiente"), "DECORAÇÃO ELEGANTE"),
+        (("acabamento", "resistente", "qualidade"), "ACABAMENTO PREMIUM"),
+        (("exclusivo", "único", "unico", "personal"), "DESIGN EXCLUSIVO"),
+        (("presente", "ocasi"), "PRESENTE ESPECIAL"),
+        (("prático", "pratico", "fácil", "facil"), "FÁCIL DE USAR"),
+    ]
+    for keys, label in rules:
+        if any(k in low for k in keys):
+            return label
+    words = [w for w in value.split() if len(w) > 2][:3]
+    return (" ".join(words) or f"BENEFÍCIO {index + 1}").upper()
+
+
 def _parse_benefits(description: str, fallback: Iterable[str]) -> list[str]:
     text = re.sub(r"[•✓✔|]", "\n", str(description or ""))
     text = re.sub(r"\b(?:design único|acabamento impecável|versatilidade|material|estilo|uso)\s*:\s*", "\n", text, flags=re.I)
@@ -206,37 +225,59 @@ def _draw_splash(draw: ImageDraw.ImageDraw, cx: int, cy: int, rx: int, ry: int, 
         draw.ellipse((cx+ox-rr, cy+oy-rr, cx+ox+rr, cy+oy+rr), fill=fill)
 
 
-def _title_block(draw: ImageDraw.ImageDraw, title: str, box: tuple[int, int, int, int], dark, blue):
-    """Título publicitário em até três linhas, sem reduzir a ponto de perder impacto."""
-    x1, y1, x2, y2 = box
-    clean = re.sub(r"\([^)]*\)", "", str(title or "Produto AlphaFest"))
-    clean = re.sub(r"^[^\wÀ-ÿ]+", "", clean).strip()
+def _title_words(title: str) -> tuple[str, str]:
+    """Converte nomes longos em duas linhas publicitárias de alto impacto."""
+    raw = str(title or "Produto AlphaFest")
+    parenthetical = " ".join(re.findall(r"\(([^)]*)\)", raw))
+    clean = re.sub(r"\([^)]*\)", " ", raw)
+    clean = re.sub(r"^[^\wÀ-ÿ]+", "", clean)
+    clean = re.sub(r"\s+", " ", clean).strip(" -–—")
     words = clean.split()
     if not words:
-        words = ["PRODUTO", "ALPHAFEST"]
+        return "PRODUTO", "ALPHAFEST"
 
-    # Divide semanticamente, privilegiando a primeira palavra como protagonista.
-    first = words[0].upper()
-    remaining = words[1:]
-    second = " ".join(remaining[:3]).title()
-    third = " ".join(remaining[3:6]).title()
+    low = [w.casefold() for w in words]
+    if "para" in low:
+        idx = low.index("para")
+        first = " ".join(words[:idx]).upper() or words[0].upper()
+        second = "para " + " ".join(words[idx + 1:])
+        return first, second.strip().title().replace("Para ", "para ", 1)
 
+    stop = {"de", "da", "do", "das", "dos", "e", "com", "estilo", "modelo"}
+    meaningful = [w for w in words if w.casefold() not in stop]
+    if len(meaningful) >= 3:
+        tail = [meaningful[-1]]
+        if parenthetical:
+            extra = [w for w in parenthetical.split() if w.casefold() not in stop]
+            if extra:
+                tail.append(extra[-1])
+        elif len(meaningful) >= 4:
+            tail.insert(0, meaningful[-2])
+        return meaningful[0].upper(), " ".join(tail).title()
+    if len(meaningful) == 2:
+        return meaningful[0].upper(), meaningful[1].title()
+    if len(words) >= 2:
+        return words[0].upper(), " ".join(words[1:3]).title()
+    return words[0].upper(), ""
+
+
+def _title_block(draw: ImageDraw.ImageDraw, title: str, box: tuple[int, int, int, int], dark, blue):
+    """Título publicitário grande, com leitura imediata mesmo em celular."""
+    x1, y1, x2, y2 = box
+    first, second = _title_words(title)
     max_w = x2 - x1
-    f1 = _fit_font(draw, first, max_w, 126, 78, bold=True)
-    draw.text((x1, y1), first, font=f1, fill=dark, stroke_width=2, stroke_fill=(255,255,255,220))
-    b1 = draw.textbbox((x1, y1), first, font=f1, stroke_width=2)
-    y = b1[3] + 10
+
+    f1 = _fit_font(draw, first, max_w, 162, 96, bold=True)
+    b1 = draw.textbbox((0, 0), first, font=f1, stroke_width=2)
+    draw.text((x1, y1), first, font=f1, fill=dark, stroke_width=2, stroke_fill=(255, 255, 255, 235))
+    y = y1 + (b1[3] - b1[1]) - 4
 
     if second:
-        f2 = _fit_font(draw, second, max_w, 72, 48, bold=True, serif=True, italic=True)
-        draw.text((x1+6, y), second, font=f2, fill=blue)
-        b2 = draw.textbbox((x1+6, y), second, font=f2)
-        y = b2[3] + 8
-    if third and y < y2 - 52:
-        f3 = _fit_font(draw, third, max_w, 54, 38, bold=True)
-        draw.text((x1+8, y), third, font=f3, fill=dark)
-        y += draw.textbbox((0, 0), third, font=f3)[3]
-    return y
+        f2 = _fit_font(draw, second, max_w - 8, 92, 56, bold=True, serif=True, italic=True)
+        draw.text((x1 + 6, y), second, font=f2, fill=blue, stroke_width=1, stroke_fill=(255,255,255,220))
+        b2 = draw.textbbox((0, 0), second, font=f2, stroke_width=1)
+        y += (b2[3] - b2[1]) + 6
+    return min(y, y2)
 
 
 def render_template(
@@ -252,7 +293,7 @@ def render_template(
     phone: str = "11 97294-9533",
     logo_path: str | Path | None = None,
 ) -> bytes:
-    """Renderiza a peça completa no Alpha Designer Engine v1.
+    """Renderiza a peça completa no Alpha Designer Engine v2.
 
     A composição usa um canvas base 1080x1350 e é escalada para todos os
     formatos. O template prioriza leitura no celular: título, foto e contato.
@@ -292,17 +333,17 @@ def render_template(
     ]:
         draw.ellipse((X(x-r), Y(y-r), X(x+r), Y(y+r)), fill=color)
 
-    # Logo grande e livre, centralizado.
-    logo = _transparent_logo(Path(logo_path or BASE_DIR / "logo.png"), (X(430), Y(255)))
+    # Logo grande, integrado ao splash superior.
+    logo = _transparent_logo(Path(logo_path or BASE_DIR / "logo.png"), (X(470), Y(285)))
     if logo:
-        canvas.alpha_composite(logo, ((W - logo.width) // 2, Y(0)))
+        canvas.alpha_composite(logo, ((W - logo.width) // 2, Y(-8)))
 
-    # Título protagonista no lado esquerdo.
-    title_bottom = _title_block(draw, title, (X(48), Y(245), X(590), Y(500)), dark, blue)
+    # Título protagonista: ocupa a maior área de leitura da peça.
+    title_bottom = _title_block(draw, title, (X(45), Y(205), X(610), Y(500)), dark, blue)
 
     # Faixa promocional forte.
     subtitle_text = re.sub(r"\s+", " ", str(subtitle or "Personalizado do seu jeito")).strip()
-    ribbon_y = max(Y(455), title_bottom + Y(12))
+    ribbon_y = max(Y(465), title_bottom + Y(8))
     draw.polygon([(X(34), ribbon_y+Y(13)), (X(8), ribbon_y+Y(43)), (X(34), ribbon_y+Y(72))], fill=blue)
     draw.rounded_rectangle((X(34), ribbon_y, X(590), ribbon_y+Y(86)), radius=S(18), fill=dark)
     sf = _fit_font(draw, subtitle_text, X(505), S(36), S(25), bold=True)
@@ -313,12 +354,12 @@ def render_template(
     # Fotografia invade a composição e domina o lado direito.
     source = Image.open(io.BytesIO(image_bytes))
     source = ImageOps.exif_transpose(source).convert("RGB")
-    photo_box = (X(560), Y(300), X(1038), Y(915))
+    photo_box = (X(548), Y(315), X(1044), Y(930))
     _paste_rounded(canvas, source, photo_box, S(38), shadow=True)
     draw.rounded_rectangle(photo_box, radius=S(38), outline=white, width=S(7))
 
     # Selo superior direito, como elemento publicitário real.
-    seal_cx, seal_cy, seal_r = X(936), Y(245), S(82)
+    seal_cx, seal_cy, seal_r = X(940), Y(252), S(88)
     draw.ellipse((seal_cx-seal_r, seal_cy-seal_r, seal_cx+seal_r, seal_cy+seal_r), fill=dark, outline=white, width=S(5))
     seal_font = _font(S(24), bold=True)
     for idx, txt in enumerate(["TESTADO E", "APROVADO!"]):
@@ -327,7 +368,7 @@ def render_template(
 
     # Benefícios visíveis e com hierarquia, no estilo da referência.
     benefits = _parse_benefits(description, cfg["beneficios_padrao"])
-    benefit_y = max(Y(620), ribbon_y+Y(118))
+    benefit_y = max(Y(610), ribbon_y+Y(112))
     details = [
         "Valoriza o produto e chama atenção.",
         "Prático, rápido e pronto para usar.",
@@ -338,9 +379,10 @@ def render_template(
         cy = benefit_y + Y(i*112)
         icon_x = X(78)
         _draw_check(draw, icon_x, cy+Y(28), S(30), dark, width=S(5))
-        tf = _fit_font(draw, item.upper(), X(405), S(31), S(23), bold=True)
-        draw.text((X(125), cy-Y(4)), item.upper(), font=tf, fill=dark)
-        df = _font(S(21), bold=False)
+        heading = _benefit_heading(item, i)
+        tf = _fit_font(draw, heading, X(395), S(36), S(28), bold=True)
+        draw.text((X(125), cy-Y(4)), heading, font=tf, fill=dark)
+        df = _font(S(24), bold=False)
         for j, line in enumerate(_wrap(draw, details[i], df, X(405), 2)):
             draw.text((X(125), cy+Y(34+j*25)), line, font=df, fill=textc)
         draw.line((X(125), cy+Y(91), X(535), cy+Y(91)), fill=_hex("#78BFEF"), width=S(2))
@@ -357,16 +399,16 @@ def render_template(
 
     # CTA é o segundo protagonista da peça.
     cta_text = str(cta or "FAÇA SEU PEDIDO!").upper()
-    cf = _fit_font(draw, cta_text, X(430), S(52), S(34), bold=True)
+    cf = _fit_font(draw, cta_text, X(450), S(62), S(42), bold=True)
     cb = draw.textbbox((0,0), cta_text, font=cf)
     draw.text((X(805)-(cb[2]-cb[0])//2, Y(950)), cta_text, font=cf, fill=dark)
 
     # Bloco WhatsApp grande, com alto contraste.
-    draw.rounded_rectangle((X(565), Y(1012), X(1035), Y(1138)), radius=S(28), fill=dark)
+    draw.rounded_rectangle((X(548), Y(1010), X(1042), Y(1145)), radius=S(32), fill=dark)
     _draw_phone(draw, X(625), Y(1075), S(38), blue, width=S(6))
     phone_text = str(phone or "11 97294-9533")
-    phone_font = _fit_font(draw, phone_text, X(360), S(58), S(40), bold=True)
-    draw.text((X(680), Y(1041)), phone_text, font=phone_font, fill=white)
+    phone_font = _fit_font(draw, phone_text, X(365), S(66), S(46), bold=True)
+    draw.text((X(680), Y(1037)), phone_text, font=phone_font, fill=white)
 
     # Faixa rosa e rodapé informativo.
     draw.rounded_rectangle((X(605), Y(1162), X(1018), Y(1234)), radius=S(15), fill=pink)
