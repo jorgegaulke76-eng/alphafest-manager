@@ -1,6 +1,6 @@
 """AlphaFest Marketing Template Engine.
 
-Versão 16.2.2 — Produto integrado ao template.
+Versão 18.1.2 — Fontes portáteis e produto integrado ao template.
 A arte nasce em um canvas quadrado 1080x1080, baseado na composição aprovada
 pela AlphaFest. Os canais verticais e horizontais recebem extensões decorativas,
 sem reduzir o tamanho dos textos da peça principal.
@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import io
 import re
-import shutil
-import subprocess
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+
+from alphafest_font_manager import get_font, resolve_font_path
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_TEMPLATE = "alphafest_agencia"
@@ -52,100 +52,14 @@ def carregar_template(template_id: str = DEFAULT_TEMPLATE) -> dict[str, Any]:
     return {**cfg, "paleta": dict(cfg["paleta"])}
 
 
-def _font_style_names(*, bold: bool, serif: bool, italic: bool) -> list[str]:
-    if serif:
-        if bold and italic:
-            return ["DejaVu Serif Bold Italic", "Liberation Serif Bold Italic", "Noto Serif Bold Italic"]
-        if bold:
-            return ["DejaVu Serif Bold", "Liberation Serif Bold", "Noto Serif Bold"]
-        if italic:
-            return ["DejaVu Serif Italic", "Liberation Serif Italic", "Noto Serif Italic"]
-        return ["DejaVu Serif", "Liberation Serif", "Noto Serif"]
-    if bold and italic:
-        return ["Lato Heavy Italic", "DejaVu Sans Bold Oblique", "Liberation Sans Bold Italic", "Noto Sans Bold Italic"]
-    if bold:
-        return ["Lato Heavy", "DejaVu Sans Bold", "Liberation Sans Bold", "Noto Sans Bold"]
-    if italic:
-        return ["Lato Italic", "DejaVu Sans Oblique", "Liberation Sans Italic", "Noto Sans Italic"]
-    return ["Lato", "DejaVu Sans", "Liberation Sans", "Noto Sans"]
-
-
-@lru_cache(maxsize=16)
 def _resolve_font_path(bold: bool = False, serif: bool = False, italic: bool = False) -> str:
-    """Localiza uma fonte TrueType escalável no Streamlit Cloud/Linux.
-
-    Nunca devolve a fonte bitmap minúscula do Pillow. Primeiro tenta nomes
-    conhecidos, depois consulta o fontconfig e por fim faz uma busca curta nas
-    pastas padrão do sistema.
-    """
-    names = _font_style_names(bold=bold, serif=serif, italic=italic)
-
-    explicit = {
-        "DejaVu Serif Bold Italic": ["/usr/share/fonts/truetype/dejavu/DejaVuSerif-BoldItalic.ttf"],
-        "DejaVu Serif Bold": ["/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"],
-        "DejaVu Serif Italic": ["/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf"],
-        "DejaVu Serif": ["/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf"],
-        "Lato Heavy Italic": ["/usr/share/fonts/truetype/lato/Lato-HeavyItalic.ttf"],
-        "Lato Heavy": ["/usr/share/fonts/truetype/lato/Lato-Heavy.ttf"],
-        "Lato Italic": ["/usr/share/fonts/truetype/lato/Lato-Italic.ttf"],
-        "Lato": ["/usr/share/fonts/truetype/lato/Lato-Regular.ttf"],
-        "DejaVu Sans Bold Oblique": ["/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf"],
-        "DejaVu Sans Bold": ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"],
-        "DejaVu Sans Oblique": ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf"],
-        "DejaVu Sans": ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"],
-        "Liberation Sans Bold Italic": ["/usr/share/fonts/truetype/liberation2/LiberationSans-BoldItalic.ttf"],
-        "Liberation Sans Bold": ["/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf"],
-        "Liberation Sans Italic": ["/usr/share/fonts/truetype/liberation2/LiberationSans-Italic.ttf"],
-        "Liberation Sans": ["/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"],
-    }
-    for name in names:
-        for candidate in explicit.get(name, []):
-            if Path(candidate).is_file():
-                return candidate
-
-    if shutil.which("fc-match"):
-        for name in names:
-            try:
-                result = subprocess.run(
-                    ["fc-match", "-f", "%{file}", name],
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                    timeout=2,
-                )
-                candidate = result.stdout.strip()
-                if candidate and Path(candidate).is_file() and Path(candidate).suffix.lower() in {".ttf", ".otf", ".ttc"}:
-                    return candidate
-            except Exception:
-                continue
-
-    roots = [Path("/usr/share/fonts"), Path("/usr/local/share/fonts"), Path.home() / ".fonts"]
-    preferred = ["DejaVuSans-Bold.ttf" if bold else "DejaVuSans.ttf", "LiberationSans-Bold.ttf" if bold else "LiberationSans-Regular.ttf"]
-    if serif:
-        preferred = ["DejaVuSerif-Bold.ttf" if bold else "DejaVuSerif.ttf", "LiberationSerif-Bold.ttf" if bold else "LiberationSerif-Regular.ttf"]
-    for root in roots:
-        if not root.exists():
-            continue
-        for filename in preferred:
-            matches = list(root.rglob(filename))
-            if matches:
-                return str(matches[0])
-
-    raise RuntimeError(
-        "Nenhuma fonte TrueType escalável foi encontrada. Instale DejaVu Sans ou Liberation Sans no ambiente."
-    )
+    """Compatibilidade: resolve a fonte portátil fornecida pelo matplotlib."""
+    return resolve_font_path(bold=bool(bold), serif=bool(serif), italic=bool(italic))
 
 
 def _font(size: int, *, bold: bool = False, serif: bool = False, italic: bool = False):
-    path = _resolve_font_path(bool(bold), bool(serif), bool(italic))
-    try:
-        font = ImageFont.truetype(path, max(8, int(size)))
-    except Exception as exc:
-        raise RuntimeError(f"Falha ao carregar a fonte escalável {path}: {exc}") from exc
-    if not isinstance(font, ImageFont.FreeTypeFont):
-        raise RuntimeError(f"A fonte carregada não é escalável: {path}")
-    return font
-
+    """Carrega somente fonte vetorial portátil; nunca usa bitmap minúscula."""
+    return get_font(max(8, int(size)), bold=bool(bold), serif=bool(serif), italic=bool(italic))
 
 def _hex(value: str, alpha: int = 255):
     raw = str(value or "#000000").lstrip("#")

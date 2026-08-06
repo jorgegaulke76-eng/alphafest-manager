@@ -9,3 +9,6 @@ pillow>=10.0
 openai>=1.50
 
 opencv-python-headless>=4.10
+
+# Fontes portáteis DejaVu para renderização no Streamlit Cloud
+matplotlib>=3.8
