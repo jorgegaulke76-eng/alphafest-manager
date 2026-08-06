@@ -361,3 +361,7 @@ hangelog
 - Padronizados tamanhos de títulos, textos, labels, botões e abas.
 - Reorganizada a criação de campanha em duas colunas, com preview compacto.
 - Mantidas as rotinas existentes de geração, biblioteca e exportação.
+
+## 19.0.2 — Correção de versão e deploy
+- Versão exibida agora é lida de `VERSAO.txt`.
+- Template Anna e `photo_mode` validados no fluxo real do Marketing Studio.
