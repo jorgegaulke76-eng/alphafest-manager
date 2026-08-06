@@ -18,9 +18,24 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 from alphafest_font_manager import get_font, resolve_font_path
 
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_TEMPLATE = "alphafest_agencia_anna"
+DEFAULT_TEMPLATE = "splash_premium_anna"
 
 EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
+    "splash_premium_anna": {
+        "id": "splash_premium_anna",
+        "nome": "Splash Premium AlphaFest — Padrão Anna ⭐",
+        "descricao": "Modelo oficial com título gigante, produto protagonista, benefícios, selo, aplicações e CTA forte.",
+        "paleta": {
+            "fundo": "#FFFFFF",
+            "azul": "#087CE8",
+            "azul_escuro": "#07349B",
+            "azul_claro": "#DDF5FF",
+            "rosa": "#EF2A92",
+            "amarelo": "#FFD12B",
+            "texto": "#102D50",
+            "verde": "#20B956",
+        },
+    },
     "alphafest_agencia_anna": {
         "id": "alphafest_agencia_anna",
         "nome": "AlphaFest Agência — Padrão Anna ⭐",
@@ -49,8 +64,8 @@ def listar_templates() -> list[dict[str, str]]:
 def carregar_template(template_id: str = DEFAULT_TEMPLATE) -> dict[str, Any]:
     safe = re.sub(r"[^a-zA-Z0-9_-]", "", template_id or DEFAULT_TEMPLATE)
     # Compatibilidade com campanhas salvas antes da versão 19.0.1.
-    if safe == "alphafest_agencia":
-        safe = "alphafest_agencia_anna"
+    if safe in {"alphafest_agencia", "alphafest_agencia_anna"}:
+        safe = "splash_premium_anna"
     cfg = EMBEDDED_TEMPLATES.get(safe) or EMBEDDED_TEMPLATES[DEFAULT_TEMPLATE]
     return {**cfg, "paleta": dict(cfg["paleta"])}
 
@@ -389,6 +404,25 @@ def _product_profile(title: str, description: str, subtitle: str) -> dict[str, A
             "footer": ["EXCLUSIVO", "MODERNO", "ALTA QUALIDADE", "PRESENTE PERFEITO"],
         }
 
+    if any(k in low for k in ("carimbo", "carimbos", "doces", "brigadeiro")):
+        return {
+            "title1": "Carimbos",
+            "title2": "para Doces",
+            "subtitle": subtitle or "Transforme seus doces em pequenas obras de arte!",
+            "benefits": [
+                ("DESIGN EXCLUSIVO", "Desenhos lindos que encantam e valorizam seus doces.", "star"),
+                ("FÁCIL DE USAR", "É só pressionar e pronto! Prático, rápido e perfeito.", "check"),
+                ("MATERIAL DE QUALIDADE", "Resistente, durável e fácil de limpar. Feito para durar!", "diamond"),
+                ("SEGURO E CONFIÁVEL", "Material atóxico e próprio para uso em alimentos.", "leaf"),
+                ("MÚLTIPLOS USOS", "Ideal para brigadeiros, doces finos, biscoitos e pasta americana.", "heart"),
+            ],
+            "center": "Deixe seus\nbrigadeiros,\ndoces e\nconfeitados ainda\nmais irresistíveis!",
+            "badge": "TESTADO E\nAPROVADO!",
+            "pink": "Pequenos detalhes que fazem toda a diferença!",
+            "footer": ["PRÁTICO", "CRIATIVO", "VALORIZA SEUS DOCES", "AUMENTA SUAS VENDAS"],
+            "applications": ["Brigadeiros", "Doces Finos", "Biscoitos", "Pasta Americana"],
+        }
+
     if any(k in low for k in ("balão", "balao", "balon", "cake")):
         return {
             "title1": "Balão",
@@ -451,6 +485,29 @@ def _draw_liquid_corners(draw: ImageDraw.ImageDraw, blue, dark, pink, yellow):
         draw.ellipse((cx-rx,cy-ry,cx+rx,cy+ry),fill=color)
 
 
+def _draw_application_strip(canvas: Image.Image, source: Image.Image, labels: list[str], *, y: int, blue, dark, white):
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    draw.rounded_rectangle((28, y, 560, y + 132), radius=20, fill=(255,255,255,245), outline=blue, width=2)
+    draw.polygon([(28,y+18),(12,y+36),(28,y+54)], fill=dark)
+    draw.rounded_rectangle((28,y-15,190,y+24), radius=10, fill=blue)
+    font = _font(19, bold=True)
+    draw.text((52,y-10), "Ideal para:", font=font, fill=white)
+    thumb = ImageOps.fit(ImageOps.exif_transpose(source).convert("RGB"), (90,90), method=Image.Resampling.LANCZOS)
+    for i, label in enumerate(labels[:4]):
+        cx = 88 + i*122
+        mask = Image.new("L", (90,90), 0)
+        ImageDraw.Draw(mask).ellipse((0,0,89,89), fill=255)
+        canvas.paste(thumb.convert("RGBA"), (cx-45,y+27), mask)
+        draw.ellipse((cx-47,y+25,cx+47,y+119), outline=blue, width=3)
+        lf = _fit_font(draw, label, 108, 15, 11, bold=True)
+        lines = _wrap(draw, label, lf, 108, 2)
+        yy = y+113
+        for line in lines:
+            bb=draw.textbbox((0,0),line,font=lf)
+            draw.text((cx-(bb[2]-bb[0])//2,yy),line,font=lf,fill=dark)
+            yy += 14
+
+
 def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto") -> Image.Image:
     p = _template_palette_from_override(cfg, palette_override)
     blue,dark,pale,pink,yellow,textc,green = (_hex(p[k]) for k in ("azul","azul_escuro","azul_claro","rosa","amarelo","texto","verde"))
@@ -467,6 +524,7 @@ def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description
     footer_text_color=_hex(p.get("cor_rodape_texto", "#FFFFFF"))
     white=(255,255,255,255)
     profile = _product_profile(title,description,subtitle)
+    is_splash = str(cfg.get("id")) == "splash_premium_anna"
     canvas=Image.new("RGBA",(1080,1080),_hex(p["fundo"]))
     draw=ImageDraw.Draw(canvas,"RGBA")
     _draw_liquid_corners(draw,blue,dark,pink,yellow)
@@ -513,7 +571,7 @@ def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description
 
     # Foto: preserva proporção; balões e cenários mantêm a foto inteira.
     source=Image.open(io.BytesIO(image_bytes)).convert("RGBA")
-    _paste_photo(canvas,source,(585,205,1065,720),32,mode=photo_mode,product_title=title)
+    _paste_photo(canvas,source,(575,195,1070,735),32,mode=photo_mode,product_title=title)
 
     # Benefícios com altura calculada e texto completo em até 3 linhas.
     benefits=profile["benefits"][:5]
@@ -562,29 +620,36 @@ def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description
     text_y=825-(pbb[3]-pbb[1])//2-pbb[1]
     draw.text((text_x,text_y),phone_text,font=phf,fill=cta_text_color)
 
-    # Preço: maior e mais visível, mas sem cobrir o conteúdo.
-    if price.strip():
-        pcx,pcy,pr=515,888,76
-        draw.ellipse((pcx-pr,pcy-pr,pcx+pr,pcy+pr),fill=price_bg,outline=price_color,width=7)
-        small=_font(16,bold=True)
-        label="APENAS"
-        lbb=draw.textbbox((0,0),label,font=small)
-        draw.text((pcx-(lbb[2]-lbb[0])//2,pcy-53),label,font=small,fill=white)
-        prf=_fit_font(draw,price,130,38,23,bold=True)
-        bb=draw.textbbox((0,0),price,font=prf)
-        draw.text((pcx-(bb[2]-bb[0])//2,pcy-20),price,font=prf,fill=price_color)
-        vista="à vista"
-        vbb=draw.textbbox((0,0),vista,font=small)
-        draw.text((pcx-(vbb[2]-vbb[0])//2,pcy+31),vista,font=small,fill=white)
+    applications = profile.get("applications") or []
+    if applications and is_splash:
+        _draw_application_strip(canvas, source, applications, y=842, blue=blue, dark=title_color, white=white)
+        pink_box=(620,895,1040,970)
+    else:
+        # Preço: maior e mais visível, mas sem cobrir o conteúdo.
+        if price.strip():
+            pcx,pcy,pr=515,888,76
+            draw.ellipse((pcx-pr,pcy-pr,pcx+pr,pcy+pr),fill=price_bg,outline=price_color,width=7)
+            small=_font(16,bold=True)
+            label="APENAS"
+            lbb=draw.textbbox((0,0),label,font=small)
+            draw.text((pcx-(lbb[2]-lbb[0])//2,pcy-53),label,font=small,fill=white)
+            prf=_fit_font(draw,price,130,38,23,bold=True)
+            bb=draw.textbbox((0,0),price,font=prf)
+            draw.text((pcx-(bb[2]-bb[0])//2,pcy-20),price,font=prf,fill=price_color)
+            vista="à vista"
+            vbb=draw.textbbox((0,0),vista,font=small)
+            draw.text((pcx-(vbb[2]-vbb[0])//2,pcy+31),vista,font=small,fill=white)
+        pink_box=(625,895,1030,960)
 
     # Faixa de mensagem sem cortar texto.
-    draw.rounded_rectangle((625,895,1030,960),radius=16,fill=pink)
-    pf=_fit_font(draw,profile["pink"],365,22,16,bold=True,serif=True,italic=True)
-    pink_lines=_wrap(draw,profile["pink"],pf,365,2)
-    yy=906 if len(pink_lines)==2 else 919
+    draw.rounded_rectangle(pink_box,radius=16,fill=pink)
+    pf=_fit_font(draw,profile["pink"],pink_box[2]-pink_box[0]-36,22,16,bold=True,serif=True,italic=True)
+    pink_lines=_wrap(draw,profile["pink"],pf,pink_box[2]-pink_box[0]-36,2)
+    yy=pink_box[1]+10 if len(pink_lines)==2 else pink_box[1]+22
+    center_x=(pink_box[0]+pink_box[2])//2
     for line in pink_lines:
         bb=draw.textbbox((0,0),line,font=pf)
-        draw.text((827-(bb[2]-bb[0])//2,yy),line,font=pf,fill=white)
+        draw.text((center_x-(bb[2]-bb[0])//2,yy),line,font=pf,fill=white)
         yy+=24
 
     # Rodapé em quatro células iguais, sem sobreposição e sem cortar palavras.

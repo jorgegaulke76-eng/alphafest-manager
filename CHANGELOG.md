@@ -365,3 +365,7 @@ hangelog
 ## 19.0.2 — Correção de versão e deploy
 - Versão exibida agora é lida de `VERSAO.txt`.
 - Template Anna e `photo_mode` validados no fluxo real do Marketing Studio.
+
+## 19.1.0 — Splash Premium AlphaFest
+- Novo template oficial baseado no modelo aprovado pela AlphaFest.
+- Aplicações do produto e composição comercial premium.
