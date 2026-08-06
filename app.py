@@ -2935,7 +2935,7 @@ def _desenhar_texto_centralizado(draw, texto, fonte, caixa, cor):
     draw.text((x1 + (x2 - x1 - tw) // 2, y1 + (y2 - y1 - th) // 2 - bbox[1]), texto, font=fonte, fill=cor)
 
 
-def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no WhatsApp", descricao="", template_id=MARKETING_DEFAULT_TEMPLATE, palette_override=None):
+def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no WhatsApp", descricao="", template_id=MARKETING_DEFAULT_TEMPLATE, palette_override=None, photo_mode="auto"):
     """Renderiza uma peça usando a Engine de Templates AlphaFest."""
     config = CANAL_MIDIA_CONFIG.get(canal, CANAL_MIDIA_CONFIG["Instagram Feed"])
     bruto = _ler_bytes_midia(origem)
@@ -2952,6 +2952,7 @@ def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no 
         cta=cta or "FAÇA SEU PEDIDO!",
         logo_path=Path("logo.png"),
         palette_override=palette_override,
+        photo_mode=photo_mode,
     )
 
 def _openai_api_key():
@@ -8088,6 +8089,33 @@ if pagina_atual == "crescimento":
                     "metallic": cp6.color_picker("Metálico", value=cores_tema.get("metallic", "#D4AF37"), key="mkt_cor_metallic"),
                 }
             paleta_final = resolve_palette(cores_tema, paleta_escolhida, cores_personalizadas, usar_metalico)
+
+            with st.expander("🎛️ Cores por elemento e tratamento da foto", expanded=False):
+                st.caption("Automático segue a paleta. Desmarque para escolher a cor de cada parte da arte.")
+                cor_auto = st.toggle("Usar cores automáticas da paleta", value=True, key="mkt_cores_elementos_auto_1900")
+                if not cor_auto:
+                    e1,e2,e3 = st.columns(3)
+                    e4,e5,e6 = st.columns(3)
+                    e7,e8,e9 = st.columns(3)
+                    paleta_final.update({
+                        "title_color": e1.color_picker("Título principal", paleta_final.get("primary", "#123A9B"), key="mkt_cor_titulo_1900"),
+                        "title_secondary_color": e2.color_picker("Título secundário", paleta_final.get("secondary", "#087CE8"), key="mkt_cor_titulo2_1900"),
+                        "banner_color": e3.color_picker("Banner", paleta_final.get("primary", "#123A9B"), key="mkt_cor_banner_1900"),
+                        "benefits_color": e4.color_picker("Benefícios", paleta_final.get("primary", "#123A9B"), key="mkt_cor_beneficios_1900"),
+                        "seal_color": e5.color_picker("Selos", paleta_final.get("secondary", "#087CE8"), key="mkt_cor_selos_1900"),
+                        "price_color": e6.color_picker("Texto/borda do preço", paleta_final.get("metallic", "#D7E7F5"), key="mkt_cor_preco_1900"),
+                        "price_background": e7.color_picker("Fundo do preço", paleta_final.get("primary", "#123A9B"), key="mkt_cor_preco_fundo_1900"),
+                        "cta_color": e8.color_picker("Caixa do WhatsApp", paleta_final.get("primary", "#123A9B"), key="mkt_cor_cta_1900"),
+                        "footer_color": e9.color_picker("Rodapé", paleta_final.get("primary", "#123A9B"), key="mkt_cor_rodape_1900"),
+                    })
+                photo_label = st.selectbox(
+                    "Tratamento da foto",
+                    ["Automático", "Preservar foto inteira", "Remover fundo"],
+                    key="mkt_photo_mode_1900",
+                    help="Automático preserva fotos de balões e cenários e remove o fundo de produtos isolados.",
+                )
+                photo_mode = {"Automático":"auto", "Preservar foto inteira":"preservar", "Remover fundo":"recortar"}[photo_label]
+
             st.markdown(
                 "<div style='display:flex;gap:8px;margin:0 0 10px 0;'>"
                 + "".join(
@@ -8183,6 +8211,7 @@ if pagina_atual == "crescimento":
                             produto_mkt.get("Descricao", ""),
                             template_id,
                             paleta_final,
+                            photo_mode,
                         )
                         st.image(arte_preview, use_container_width=True)
                         st.markdown(f'<div class="af-card-title">{html.escape(str(produto_mkt.get("Nome", "Produto")))}</div>', unsafe_allow_html=True)
@@ -8258,7 +8287,7 @@ if pagina_atual == "crescimento":
                         for canal in canais:
                             config_canal = CANAL_MIDIA_CONFIG[canal]
                             if config_canal["tipo"] == "imagem":
-                                artes[canal] = base64.b64encode(gerar_arte_png(origem, canal, produto_mkt.get("Nome", "Produto"), subtitulo_arte, preco_arte, cta_arte, produto_mkt.get("Descricao", ""), template_id, paleta_final)).decode("ascii")
+                                artes[canal] = base64.b64encode(gerar_arte_png(origem, canal, produto_mkt.get("Nome", "Produto"), subtitulo_arte, preco_arte, cta_arte, produto_mkt.get("Descricao", ""), template_id, paleta_final, photo_mode)).decode("ascii")
                     registro = {
                         "id": f"MKT-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
                         "criado_em": agora_local().isoformat(),
@@ -8273,7 +8302,7 @@ if pagina_atual == "crescimento":
                         "calendario_evento_id": evento_calendario_mkt["id"] if evento_calendario_mkt else "",
                         "calendario_evento_nome": evento_calendario_mkt["name"] if evento_calendario_mkt else "",
                         "tema_visual": tema_efetivo_id, "tema_visual_nome": tema_efetivo["label"],
-                        "paleta_visual": paleta_final, "paleta_nome": paleta_escolhida, "usar_metalico": usar_metalico,
+                        "paleta_visual": paleta_final, "paleta_nome": paleta_escolhida, "usar_metalico": usar_metalico, "photo_mode": photo_mode,
                         "template_id": template_id, "template_nome": template_nome,
                         "modo_criacao": modo_criacao, "prompt_mestre": prompt_mestre, "perfil_visual": perfil_visual,
                         "conteudos": saidas, "motor_copy": motor_copy,
