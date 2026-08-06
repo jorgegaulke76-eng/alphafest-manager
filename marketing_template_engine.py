@@ -1,6 +1,6 @@
 """AlphaFest Marketing Template Engine.
 
-Versão 16.2.1 — Template Mestre Agência.
+Versão 16.2.2 — Produto integrado ao template.
 A arte nasce em um canvas quadrado 1080x1080, baseado na composição aprovada
 pela AlphaFest. Os canais verticais e horizontais recebem extensões decorativas,
 sem reduzir o tamanho dos textos da peça principal.
@@ -158,18 +158,152 @@ def _draw_phone(draw: ImageDraw.ImageDraw, cx: int, cy: int, radius: int, fill):
     draw.line((cx+radius//3,cy+radius//3,cx+radius//2,cy+radius//2),fill=white,width=6)
 
 
+def _soft_shadow(alpha: Image.Image, blur: int = 22, opacity: int = 105) -> Image.Image:
+    """Cria uma sombra suave usando o canal alfa real do produto."""
+    shadow_alpha = alpha.filter(ImageFilter.GaussianBlur(max(2, blur)))
+    shadow_alpha = shadow_alpha.point(lambda value: int(value * opacity / 255))
+    shadow = Image.new("RGBA", alpha.size, (0, 31, 78, 0))
+    shadow.putalpha(shadow_alpha)
+    return shadow
+
+
+def _remove_background_fallback(source: Image.Image) -> Image.Image:
+    """Recorte local sem serviços externos, adequado a fundos simples.
+
+    O algoritmo estima a cor do fundo pelas bordas, torna transparentes os
+    pixels conectados a elas e suaviza o contorno. Ele é usado quando OpenCV
+    não está disponível ou quando o GrabCut não produz uma máscara útil.
+    """
+    image = ImageOps.exif_transpose(source).convert("RGBA")
+    # PNG já transparente: não destruir o recorte original.
+    alpha = image.getchannel("A")
+    if alpha.getextrema()[0] < 245:
+        return image
+
+    small = image.copy()
+    small.thumbnail((700, 700), Image.Resampling.LANCZOS)
+    rgb = small.convert("RGB")
+    w, h = rgb.size
+    pixels = rgb.load()
+    border = []
+    step = max(1, min(w, h) // 80)
+    for x in range(0, w, step):
+        border.extend((pixels[x, 0], pixels[x, h - 1]))
+    for y in range(0, h, step):
+        border.extend((pixels[0, y], pixels[w - 1, y]))
+    border.sort(key=lambda c: c[0] + c[1] + c[2])
+    sample = border[len(border) // 2] if border else (255, 255, 255)
+
+    mask = Image.new("L", (w, h), 255)
+    mp = mask.load()
+    visited = bytearray(w * h)
+    queue = []
+    for x in range(w):
+        queue.append((x, 0)); queue.append((x, h - 1))
+    for y in range(h):
+        queue.append((0, y)); queue.append((w - 1, y))
+
+    def similar(c):
+        dr, dg, db = c[0] - sample[0], c[1] - sample[1], c[2] - sample[2]
+        return dr * dr + dg * dg + db * db < 58 * 58
+
+    head = 0
+    while head < len(queue):
+        x, y = queue[head]; head += 1
+        idx = y * w + x
+        if visited[idx]:
+            continue
+        visited[idx] = 1
+        if not similar(pixels[x, y]):
+            continue
+        mp[x, y] = 0
+        if x: queue.append((x - 1, y))
+        if x + 1 < w: queue.append((x + 1, y))
+        if y: queue.append((x, y - 1))
+        if y + 1 < h: queue.append((x, y + 1))
+
+    mask = mask.filter(ImageFilter.GaussianBlur(1.8))
+    mask = mask.resize(image.size, Image.Resampling.LANCZOS)
+    image.putalpha(mask)
+    return image
+
+
+def _remove_background(source: Image.Image) -> Image.Image:
+    """Recorta o produto localmente; OpenCV é opcional e há fallback Pillow."""
+    image = ImageOps.exif_transpose(source).convert("RGBA")
+    alpha = image.getchannel("A")
+    if alpha.getextrema()[0] < 245:
+        return image
+    try:
+        import cv2  # type: ignore
+        import numpy as np
+
+        rgb = np.array(image.convert("RGB"))
+        bgr = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+        h, w = bgr.shape[:2]
+        if min(w, h) < 24:
+            return image
+        mask = np.zeros((h, w), np.uint8)
+        bgd = np.zeros((1, 65), np.float64)
+        fgd = np.zeros((1, 65), np.float64)
+        margin_x = max(2, int(w * 0.035))
+        margin_y = max(2, int(h * 0.035))
+        rect = (margin_x, margin_y, max(2, w - margin_x * 2), max(2, h - margin_y * 2))
+        cv2.grabCut(bgr, mask, rect, bgd, fgd, 6, cv2.GC_INIT_WITH_RECT)
+        binary = np.where((mask == 1) | (mask == 3), 255, 0).astype("uint8")
+
+        # Mantém preferencialmente componentes próximos ao centro da foto.
+        count, labels, stats, centroids = cv2.connectedComponentsWithStats(binary, 8)
+        if count > 1:
+            center = np.array([w / 2, h / 2])
+            candidates = []
+            for label in range(1, count):
+                area = stats[label, cv2.CC_STAT_AREA]
+                if area < w * h * 0.006:
+                    continue
+                distance = np.linalg.norm(centroids[label] - center)
+                score = area / (1.0 + distance * 2.0)
+                candidates.append((score, label))
+            if candidates:
+                keep = max(candidates)[1]
+                binary = np.where(labels == keep, 255, 0).astype("uint8")
+
+        coverage = float((binary > 0).mean())
+        if coverage < 0.035 or coverage > 0.92:
+            return _remove_background_fallback(image)
+        kernel = np.ones((3, 3), np.uint8)
+        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+        binary = cv2.GaussianBlur(binary, (0, 0), 1.6)
+        result = image.copy()
+        result.putalpha(Image.fromarray(binary, mode="L"))
+        return result
+    except Exception:
+        return _remove_background_fallback(image)
+
+
+def _trim_transparent(image: Image.Image) -> Image.Image:
+    bbox = image.getbbox()
+    return image.crop(bbox) if bbox else image
+
+
 def _paste_photo(canvas: Image.Image, source: Image.Image, box: tuple[int,int,int,int], radius: int = 28):
-    x1,y1,x2,y2 = box
-    w,h = x2-x1,y2-y1
-    photo = ImageOps.fit(ImageOps.exif_transpose(source).convert("RGB"),(w,h),method=Image.Resampling.LANCZOS,centering=(0.5,0.48)).convert("RGBA")
-    shadow = Image.new("RGBA", canvas.size, (0,0,0,0))
-    sd = ImageDraw.Draw(shadow)
-    sd.rounded_rectangle((x1+12,y1+15,x2+12,y2+15),radius=radius,fill=(0,35,85,85))
-    canvas.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(16)))
-    mask = Image.new("L",(w,h),0)
-    ImageDraw.Draw(mask).rounded_rectangle((0,0,w,h),radius=radius,fill=255)
-    canvas.paste(photo,(x1,y1),mask)
-    ImageDraw.Draw(canvas).rounded_rectangle(box,radius=radius,outline=(255,255,255,255),width=6)
+    """Integra o produto ao template, sem quadro ou fundo retangular."""
+    x1, y1, x2, y2 = box
+    w, h = x2 - x1, y2 - y1
+    product = _trim_transparent(_remove_background(source))
+    if not product.getbbox():
+        product = ImageOps.exif_transpose(source).convert("RGBA")
+
+    # Ocupa a área útil, preservando a forma original do produto.
+    product.thumbnail((w, h), Image.Resampling.LANCZOS)
+    px = x1 + (w - product.width) // 2
+    py = y1 + (h - product.height) // 2
+
+    # Sombra deslocada, usando a silhueta real; o fundo do template continua visível.
+    alpha = product.getchannel("A")
+    shadow = _soft_shadow(alpha, blur=max(12, int(min(product.size) * 0.045)), opacity=95)
+    canvas.alpha_composite(shadow, (px + 16, py + 20))
+    canvas.alpha_composite(product, (px, py))
 
 
 def _product_profile(title: str, description: str, subtitle: str) -> dict[str, Any]:
@@ -285,7 +419,7 @@ def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description
 
     # Foto protagonista à direita.
     source=Image.open(io.BytesIO(image_bytes)).convert("RGB")
-    _paste_photo(canvas,source,(635,205,1050,690),32)
+    _paste_photo(canvas,source,(585,190,1065,735),32)
 
     # Benefícios à esquerda.
     by=505
