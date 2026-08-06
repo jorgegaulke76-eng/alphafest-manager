@@ -508,7 +508,158 @@ def _draw_application_strip(canvas: Image.Image, source: Image.Image, labels: li
             yy += 14
 
 
+
+def _default_applications(profile: dict[str, Any], title: str) -> list[str]:
+    apps = list(profile.get("applications") or [])
+    if apps:
+        return apps[:4]
+    low = str(title or "").casefold()
+    if any(k in low for k in ("balão", "balao", "cake")):
+        return ["Aniversários", "Mesas", "Presentes", "Festas"]
+    if any(k in low for k in ("papel arroz", "papel de arroz")):
+        return ["Bolos", "Doces", "Biscoitos", "Drinks"]
+    if any(k in low for k in ("topo", "topper")):
+        return ["Bolos", "Mesas", "Fotos", "Festas"]
+    if any(k in low for k in ("leopardo", "voronoi", "escultura")):
+        return ["Salas", "Escritórios", "Presentes", "Decoração"]
+    return ["Festas", "Presentes", "Decoração", "Momentos"]
+
+
+def _render_splash_premium_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto") -> Image.Image:
+    """Renderizador próprio do Splash Premium — não reutiliza o layout legado."""
+    p = _template_palette_from_override(cfg, palette_override)
+    blue,dark,pink,yellow,textc,green = (_hex(p[k]) for k in ("azul","azul_escuro","rosa","amarelo","texto","verde"))
+    title_color=_hex(p.get("cor_titulo", p["azul_escuro"]))
+    title2_color=_hex(p.get("cor_titulo_secundario", p["azul"]))
+    banner_color=_hex(p.get("cor_banner", p["azul_escuro"]))
+    benefits_color=_hex(p.get("cor_beneficios", p["azul_escuro"]))
+    seal_color=_hex(p.get("cor_selo", p["azul"]))
+    cta_color=_hex(p.get("cor_cta", p["azul_escuro"]))
+    cta_text_color=_hex(p.get("cor_cta_texto", "#FFFFFF"))
+    footer_color=_hex(p.get("cor_rodape", p["azul_escuro"]))
+    footer_text_color=_hex(p.get("cor_rodape_texto", "#FFFFFF"))
+    white=(255,255,255,255)
+    profile=_product_profile(title, description, subtitle)
+    canvas=Image.new("RGBA",(1080,1080),_hex(p["fundo"]))
+    draw=ImageDraw.Draw(canvas,"RGBA")
+
+    # Moldura splash mais próxima da referência: ondas largas, brilhos e confetes.
+    draw.pieslice((-170,-220,470,245),0,180,fill=blue)
+    draw.pieslice((760,-210,1250,235),0,180,fill=dark)
+    draw.arc((-130,-80,1200,330),8,172,fill=_hex("#57D9FF"),width=12)
+    for cx,cy,r,c in [(76,142,9,pink),(144,102,7,yellow),(226,150,5,blue),(845,135,7,pink),(968,98,7,yellow),(1025,157,6,blue),(520,105,5,pink),(575,132,4,yellow)]:
+        draw.ellipse((cx-r,cy-r,cx+r,cy+r),fill=c)
+
+    logo=_load_logo(logo_path,(390,285))
+    if logo:
+        canvas.alpha_composite(logo,((1080-logo.width)//2,-18))
+
+    # Selo superior.
+    sx,sy,sr=935,145,79
+    draw.ellipse((sx-sr,sy-sr,sx+sr,sy+sr),fill=seal_color,outline=white,width=6)
+    draw.ellipse((sx-sr+10,sy-sr+10,sx+sr-10,sy+sr-10),outline=(255,255,255,150),width=2)
+    badge_lines=profile["badge"].split("\n")
+    sf=_fit_font(draw,max(badge_lines,key=len),116,24,17,bold=True)
+    yy=sy-(25*len(badge_lines))//2
+    for line in badge_lines:
+        bb=draw.textbbox((0,0),line,font=sf); draw.text((sx-(bb[2]-bb[0])//2,yy),line,font=sf,fill=white); yy+=25
+
+    # Título gigante, principal característica do modelo Anna.
+    t1,t2=profile["title1"],profile["title2"]
+    f1=_fit_font(draw,t1,520,132,72,bold=True,serif=True,italic=True)
+    draw.text((35,155),t1,font=f1,fill=title_color,stroke_width=2,stroke_fill=white)
+    if t2:
+        f2=_fit_font(draw,t2,520,84,48,bold=True,serif=True,italic=True)
+        lines=_wrap(draw,t2,f2,520,2)
+        for i,line in enumerate(lines):
+            draw.text((58,292+i*62),line,font=f2,fill=title2_color,stroke_width=1,stroke_fill=white)
+
+    # Faixa azul grande.
+    banner_y=405
+    banner_lines=_wrap(draw,profile["subtitle"],_font(28,bold=True),510,2)
+    bh=58 if len(banner_lines)==1 else 82
+    draw.polygon([(42,banner_y+10),(12,banner_y+bh//2),(42,banner_y+bh-10)],fill=banner_color)
+    draw.polygon([(570,banner_y+10),(604,banner_y+bh//2),(570,banner_y+bh-10)],fill=banner_color)
+    draw.rounded_rectangle((42,banner_y,570,banner_y+bh),radius=14,fill=banner_color)
+    bf=_fit_font(draw,max(banner_lines,key=len),490,30,21,bold=True)
+    yy=banner_y+(bh-30*len(banner_lines))//2
+    for line in banner_lines:
+        bb=draw.textbbox((0,0),line,font=bf); draw.text((306-(bb[2]-bb[0])//2,yy),line,font=bf,fill=white); yy+=30
+
+    source=Image.open(io.BytesIO(image_bytes)).convert("RGBA")
+    # Foto protagonista maior, mantendo proporção.
+    _paste_photo(canvas,source,(590,205,1070,735),28,mode=photo_mode,product_title=title)
+
+    # Benefícios em coluna, com mais respiro.
+    benefits=profile["benefits"][:5]
+    by=505; item_h=66
+    for i,(head,desc,icon) in enumerate(benefits):
+        cy=by+i*item_h
+        _draw_check(draw,68,cy+20,23,benefits_color,icon=icon)
+        hf=_fit_font(draw,head,325,24,18,bold=True)
+        draw.text((105,cy-4),head,font=hf,fill=benefits_color)
+        df=_fit_font(draw,desc,338,16,13,bold=False)
+        for j,line in enumerate(_wrap(draw,desc,df,338,2)):
+            draw.text((105,cy+24+j*17),line,font=df,fill=textc)
+        draw.line((105,cy+item_h-5,438,cy+item_h-5),fill=_hex(_shade(p["azul"],1.12)),width=2)
+
+    # Selo central.
+    cx,cy,cr=505,675,77
+    draw.ellipse((cx-cr,cy-cr,cx+cr,cy+cr),fill=white,outline=seal_color,width=4)
+    center_lines=profile["center"].split("\n")
+    cf=_fit_font(draw,max(center_lines,key=len),128,18,13,bold=True)
+    yy=cy-(21*len(center_lines))//2
+    for line in center_lines:
+        bb=draw.textbbox((0,0),line,font=cf); draw.text((cx-(bb[2]-bb[0])//2,yy),line,font=cf,fill=title_color); yy+=21
+    draw.ellipse((486,760,502,776),fill=blue); draw.ellipse((512,752,530,780),fill=pink); draw.ellipse((540,760,556,776),fill=blue)
+
+    # Aplicações sempre presentes no Splash Premium.
+    apps=_default_applications(profile,title)
+    _draw_application_strip(canvas,source,apps,y=835,blue=blue,dark=title_color,white=white)
+
+    # CTA grande à direita.
+    cta_text=(cta or "FAÇA SEU PEDIDO!").upper()
+    ctaf=_fit_font(draw,cta_text,455,43,29,bold=True)
+    bb=draw.textbbox((0,0),cta_text,font=ctaf); draw.text((820-(bb[2]-bb[0])//2,728),cta_text,font=ctaf,fill=title_color)
+    phone_box=(590,775,1048,868)
+    draw.rounded_rectangle(phone_box,radius=34,fill=cta_color)
+    _draw_whatsapp(draw,645,821,32,green)
+    phone_text=phone or "11 97294-9533"
+    phf=_fit_font(draw,phone_text,335,47,32,bold=True)
+    pbb=draw.textbbox((0,0),phone_text,font=phf)
+    tx=700+(1035-700-(pbb[2]-pbb[0]))//2; ty=821-(pbb[3]-pbb[1])//2-pbb[1]
+    draw.text((tx,ty),phone_text,font=phf,fill=cta_text_color)
+
+    # Preço opcional em selo pequeno, sem substituir a faixa de aplicações.
+    if str(price or "").strip():
+        pcx,pcy,pr=590,910,52
+        draw.ellipse((pcx-pr,pcy-pr,pcx+pr,pcy+pr),fill=dark,outline=yellow,width=5)
+        pf=_fit_font(draw,str(price),88,25,17,bold=True)
+        pbb=draw.textbbox((0,0),str(price),font=pf); draw.text((pcx-(pbb[2]-pbb[0])//2,pcy-(pbb[3]-pbb[1])//2-pbb[1]),str(price),font=pf,fill=yellow)
+
+    pink_box=(620,890,1045,968)
+    draw.rounded_rectangle(pink_box,radius=15,fill=pink)
+    pf=_fit_font(draw,profile["pink"],385,23,16,bold=True,serif=True,italic=True)
+    plines=_wrap(draw,profile["pink"],pf,385,2); yy=903
+    for line in plines:
+        bb=draw.textbbox((0,0),line,font=pf); draw.text((832-(bb[2]-bb[0])//2,yy),line,font=pf,fill=white); yy+=25
+
+    footer_y=990
+    draw.rectangle((0,footer_y,1080,1080),fill=footer_color)
+    labels=profile["footer"][:4]; cell_w=270
+    for i,label in enumerate(labels):
+        left=i*cell_w
+        _draw_check(draw,left+28,1035,14,white)
+        ff=_fit_font(draw,label,205,17,11,bold=True)
+        lines=_wrap(draw,label,ff,205,2); yy=1025 if len(lines)==2 else 1032
+        for line in lines:
+            draw.text((left+52,yy),line,font=ff,fill=footer_text_color); yy+=16
+        if i: draw.line((left,1008,left,1063),fill=(255,255,255,80),width=1)
+    return canvas
+
 def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto") -> Image.Image:
+    if str(cfg.get("id")) == "splash_premium_anna":
+        return _render_splash_premium_square(image_bytes, title=title, subtitle=subtitle, description=description, price=price, cta=cta, phone=phone, logo_path=logo_path, cfg=cfg, palette_override=palette_override, photo_mode=photo_mode)
     p = _template_palette_from_override(cfg, palette_override)
     blue,dark,pale,pink,yellow,textc,green = (_hex(p[k]) for k in ("azul","azul_escuro","azul_claro","rosa","amarelo","texto","verde"))
     title_color=_hex(p.get("cor_titulo", p["azul_escuro"]))

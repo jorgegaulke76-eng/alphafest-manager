@@ -7940,7 +7940,8 @@ if pagina_atual == "crescimento":
             template_nome = st.selectbox(
                 "Template da arte",
                 list(mapa_templates.keys()),
-                key="mkt_template_visual",
+                index=list(mapa_templates.values()).index(MARKETING_DEFAULT_TEMPLATE) if MARKETING_DEFAULT_TEMPLATE in mapa_templates.values() else 0,
+                key="mkt_template_visual_1911",
                 help="O template controla posições, cores, tipografia e identidade visual da propaganda.",
             )
             template_id = mapa_templates[template_nome]
