@@ -8008,95 +8008,115 @@ if pagina_atual == "crescimento":
 
             with editor_col:
                 af_section_title("Dados da campanha", "Preencha somente as informações necessárias para a criação.")
-                templates_disponiveis = listar_templates_marketing()
-                mapa_templates = {item["nome"]: item["id"] for item in templates_disponiveis} or {"AlphaFest Clássico": MARKETING_DEFAULT_TEMPLATE}
-                template_nome = st.selectbox(
-                    "Template da arte",
-                    list(mapa_templates.keys()),
-                    index=list(mapa_templates.values()).index(MARKETING_DEFAULT_TEMPLATE) if MARKETING_DEFAULT_TEMPLATE in mapa_templates.values() else 0,
-                    key="mkt_template_visual_2000",
-                    help="O template controla posições, cores, tipografia e identidade visual da propaganda.",
-                )
-                template_id = mapa_templates[template_nome]
-                premium_liberado = (
-                    feature_enabled("marketing_ai", False)
-                    and str(obter_usuario_atual().get("nome", "")).casefold() == "jorge"
-                )
-                modos_criacao = ["Campanha Rápida"] + (["Campanha IA Premium"] if premium_liberado else [])
-                modo_criacao = st.radio(
-                    "Modo de criação",
-                    modos_criacao,
+                fluxo_producao = st.radio(
+                    "Fluxo de produção",
+                    ["⚡ Produção rápida", "🎛️ Configuração avançada"],
                     horizontal=True,
-                    key="mkt_modo_criacao_1700",
-                    help="Campanha Rápida usa o template local. IA Premium cria uma propaganda completa seguindo o Prompt Mestre AlphaFest.",
+                    key="mkt_fluxo_producao_2020",
+                    help="Produção rápida preenche o padrão automaticamente. Use Configuração avançada somente quando precisar alterar detalhes.",
                 )
-                if modo_criacao == "Campanha IA Premium":
-                    st.info("✨ A IA Premium usa a foto como referência, cria a composição completa e aplica o logo oficial AlphaFest depois. A geração utiliza a API configurada nos Secrets.")
+                modo_rapido = fluxo_producao == "⚡ Produção rápida"
+
+                # 1) Produto / origem
+                fonte_padrao = "Produto do catálogo" if catalogo_mkt else "Upload livre"
                 fonte_imagem = st.radio(
-                    "Origem do trabalho",
-                    ["Upload livre", "Produto do catálogo"],
+                    "Origem",
+                    ["Produto do catálogo", "Upload livre"] if catalogo_mkt else ["Upload livre"],
+                    index=0,
                     horizontal=True,
-                    key="mkt_modo_origem",
-                    help="No Upload livre nenhum dado do catálogo é reaproveitado.",
+                    key="mkt_origem_2020",
+                    help="No catálogo, nome, descrição, foto e preço são reaproveitados automaticamente.",
                 )
                 upload_mkt = None
                 imagem_ref = ""
                 produto_mkt = {"Nome": "", "Descricao": "", "Categoria": ""}
                 video_upload = None
 
-                if fonte_imagem == "Upload livre":
+                if fonte_imagem == "Produto do catálogo":
+                    nomes = [p.get("Nome", "Produto") for p in catalogo_mkt]
+                    escolhido = st.selectbox("1. Produto", nomes, key="mkt_produto_catalogo_2020")
+                    produto_mkt = catalogo_mkt[nomes.index(escolhido)]
+                    imagens_mkt = produto_mkt.get("Imagens", []) or []
+                    if imagens_mkt:
+                        imagem_ref = st.selectbox(
+                            "Foto",
+                            imagens_mkt,
+                            format_func=lambda x: Path(str(x)).name or "Imagem",
+                            key=f"mkt_imagem_catalogo_2020_{nomes.index(escolhido)}",
+                        )
+                    else:
+                        st.warning("Este produto ainda não possui imagem no catálogo.")
+                else:
                     upload_mkt = st.file_uploader(
-                        "Imagem da campanha",
+                        "1. Foto do produto",
                         type=["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"],
-                        key="mkt_upload_livre_imagem",
+                        key="mkt_upload_livre_imagem_2020",
                     )
-                    video_upload = st.file_uploader(
-                        "Vídeo curto opcional",
-                        type=["mp4", "mov", "m4v", "avi", "mkv", "webm"],
-                        key="mkt_upload_livre_video",
-                    )
-                    nome_livre = st.text_input("Produto ou serviço", placeholder="Ex.: Papel arroz personalizado", key="mkt_nome_livre")
+                    if not modo_rapido:
+                        video_upload = st.file_uploader(
+                            "Vídeo curto opcional",
+                            type=["mp4", "mov", "m4v", "avi", "mkv", "webm"],
+                            key="mkt_upload_livre_video_2020",
+                        )
+                    nome_livre = st.text_input("Produto ou serviço", placeholder="Ex.: Papel arroz personalizado", key="mkt_nome_livre_2020")
                     descricao_livre = st.text_area(
                         "Descrição e benefícios",
                         placeholder="Ex.: Impressão com cores vivas, pronta para aplicação...",
-                        key="mkt_descricao_livre",
-                        height=110,
+                        key="mkt_descricao_livre_2020",
+                        height=90 if modo_rapido else 110,
                     )
                     produto_mkt = {"Nome": nome_livre.strip(), "Descricao": descricao_livre.strip(), "Categoria": "Upload livre"}
-                else:
-                    if not catalogo_mkt:
-                        st.warning("Cadastre produtos no Catálogo ou use o modo Upload livre.")
-                    else:
-                        nomes = [p.get("Nome", "Produto") for p in catalogo_mkt]
-                        escolhido = st.selectbox("Produto ou trabalho", nomes, key="mkt_produto_catalogo")
-                        produto_mkt = catalogo_mkt[nomes.index(escolhido)]
-                        imagens_mkt = produto_mkt.get("Imagens", []) or []
-                        if imagens_mkt:
-                            imagem_ref = st.selectbox("Imagem do catálogo", imagens_mkt, format_func=lambda x: Path(str(x)).name or "Imagem")
-                        else:
-                            st.warning("Este produto ainda não possui imagem no catálogo.")
 
-                c1, c2 = st.columns(2)
-                objetivo = c1.selectbox("Objetivo", ["Vender", "Promoção", "Lançamento", "Engajar"], key="mkt_objetivo")
-                tom = c2.selectbox("Linha de venda", ["Venda direta", "Emocional", "Urgência", "Premium", "Corporativo", "Promoção"], key="mkt_tom")
-                campanha = st.text_input("Campanha ou data", placeholder="Ex.: Dia dos Pais", key="mkt_campanha")
+                # 2) Template: biblioteca primeiro, sem alterar o template oficial salvo.
+                templates_disponiveis = listar_templates_marketing()
+                mapa_templates = {item["nome"]: item["id"] for item in templates_disponiveis} or {"AlphaFest Clássico": MARKETING_DEFAULT_TEMPLATE}
+                valores_templates = list(mapa_templates.values())
+                template_nome = st.selectbox(
+                    "2. Template",
+                    list(mapa_templates.keys()),
+                    index=valores_templates.index(MARKETING_DEFAULT_TEMPLATE) if MARKETING_DEFAULT_TEMPLATE in valores_templates else 0,
+                    key="mkt_template_visual_2020",
+                    help="Templates aprovados ficam protegidos. O modo Produção apenas preenche as zonas configuradas.",
+                )
+                template_id = mapa_templates[template_nome]
 
-                # Usa o Calendário Comercial existente como fonte única de datas e temas.
+                # 3) Campanha / Calendário Mestre
                 eventos_calendario_mkt = calendar_theme_options(carregar_campanhas(), hoje_local(), limit_days=365)
-                opcoes_eventos_mkt = ["Nenhum / campanha livre"] + [
+                opcoes_eventos_mkt = ["Campanha livre"] + [
                     f"{item['name']} · {item['start'].strftime('%d/%m/%Y')}" for item in eventos_calendario_mkt
                 ]
                 evento_calendario_label = st.selectbox(
-                    "Evento do Calendário Mestre",
+                    "3. Campanha / Calendário Mestre",
                     opcoes_eventos_mkt,
-                    key="mkt_evento_calendario_mestre",
-                    help="Esta lista consulta o Calendário Comercial existente. Nenhum segundo calendário é criado.",
+                    key="mkt_evento_calendario_2020",
+                    help="As datas vêm do Calendário Mestre existente; não é criado outro calendário.",
                 )
                 evento_calendario_mkt = None
-                if evento_calendario_label != "Nenhum / campanha livre":
+                if evento_calendario_label != "Campanha livre":
                     evento_calendario_mkt = eventos_calendario_mkt[opcoes_eventos_mkt.index(evento_calendario_label) - 1]
-                    if not campanha.strip():
-                        campanha = evento_calendario_mkt["name"]
+
+                if evento_calendario_mkt:
+                    campanha = evento_calendario_mkt["name"]
+                    st.caption(f"Campanha selecionada: **{campanha}**")
+                else:
+                    campanha = st.text_input("Nome da campanha", placeholder="Ex.: Novidade AlphaFest", key="mkt_campanha_2020")
+
+                # Valores automáticos do modo de produção.
+                objetivo = "Vender"
+                tom = "Venda direta"
+                modo_criacao = "Campanha Rápida"
+                premium_liberado = (
+                    feature_enabled("marketing_ai", False)
+                    and str(obter_usuario_atual().get("nome", "")).casefold() == "jorge"
+                )
+                if not modo_rapido:
+                    c1, c2 = st.columns(2)
+                    objetivo = c1.selectbox("Objetivo", ["Vender", "Promoção", "Lançamento", "Engajar"], key="mkt_objetivo_2020")
+                    tom = c2.selectbox("Linha de venda", ["Venda direta", "Emocional", "Urgência", "Premium", "Corporativo", "Promoção"], key="mkt_tom_2020")
+                    modos_criacao = ["Campanha Rápida"] + (["Campanha IA Premium"] if premium_liberado else [])
+                    modo_criacao = st.radio("Motor", modos_criacao, horizontal=True, key="mkt_modo_criacao_2020")
+                    if modo_criacao == "Campanha IA Premium":
+                        st.info("✨ A IA Premium cria a composição completa usando a API configurada nos Secrets.")
 
                 tema_evento_id = resolve_event_theme(evento_calendario_mkt["record"]) if evento_calendario_mkt else ""
                 tema_sugerido_id = detect_theme(
@@ -8106,115 +8126,101 @@ if pagina_atual == "crescimento":
                     evento_calendario_mkt["name"] if evento_calendario_mkt else "",
                     explicit=get_theme(tema_evento_id)["label"] if tema_evento_id and tema_evento_id != "alphafest" else None,
                 )
-                tema_sugerido_label = get_theme(tema_sugerido_id)["label"]
-                indice_tema = THEME_ORDER.index(tema_sugerido_label) if tema_sugerido_label in THEME_ORDER else 0
-                tema_visual = st.selectbox(
-                    "🎨 Tema e paleta da campanha",
-                    THEME_ORDER,
-                    index=indice_tema,
-                    key="mkt_tema_visual_1800",
-                    help="Automático usa o nome da campanha e o evento selecionado no Calendário Mestre.",
-                )
-                tema_efetivo_id = (
-                    tema_sugerido_id
-                    if tema_visual == "Automático"
-                    else detect_theme(
-                        campanha,
-                        evento_calendario_mkt["name"] if evento_calendario_mkt else "",
-                        produto_mkt.get("Nome", ""),
-                        explicit=tema_visual,
-                    )
-                )
+                tema_visual = "Automático"
+                tema_efetivo_id = tema_sugerido_id
                 tema_efetivo = get_theme(tema_efetivo_id)
                 cores_tema = tema_efetivo["palette"]
+
+                # Padrões do modo rápido.
+                paleta_escolhida = "Cores do tema"
+                usar_metalico = bool(cores_tema.get("metallic"))
+                cores_personalizadas = None
+                photo_mode = "auto"
+                observacoes = ""
+                preco_catalogo = str(produto_mkt.get("Preco") or "").strip()
+                if preco_catalogo and not preco_catalogo.upper().startswith("R$"):
+                    preco_catalogo = f"R$ {preco_catalogo}"
+                preco_arte = preco_catalogo
+                subtitulo_arte = "Personalizado do seu jeito"
+                cta_arte = "Chame no WhatsApp"
+                canais_instagram = ["Instagram Feed", "Instagram Story", "Carrossel", "Reel", "TikTok", "YouTube Shorts", "YouTube Horizontal"]
+                opcoes_canais = canais_instagram + (["Status WhatsApp"] if incluir_whatsapp else [])
+                canais = ["Instagram Feed", "Instagram Story"] + (["Status WhatsApp"] if incluir_whatsapp else [])
+
+                if modo_rapido:
+                    st.markdown(
+                        f"<div style='padding:10px 12px;border-radius:12px;background:rgba(20,120,220,.08);margin:6px 0 8px 0;'>"
+                        f"<strong>Automático:</strong> {html.escape(tema_efetivo['label'])} • Feed + Story"
+                        + (" + Status" if incluir_whatsapp else "")
+                        + "</div>", unsafe_allow_html=True,
+                    )
+                    with st.expander("✏️ Ajuste rápido (opcional)", expanded=False):
+                        q1, q2 = st.columns(2)
+                        preco_arte = q1.text_input(
+                            "Preço",
+                            value=preco_catalogo,
+                            key=f"mkt_preco_rapido_2020_{abs(hash(str(produto_mkt.get('Nome',''))))}",
+                            placeholder="R$ 90,00",
+                        )
+                        photo_label = q2.selectbox(
+                            "Foto",
+                            ["Automático", "Preservar foto inteira", "Remover fundo"],
+                            key="mkt_photo_rapido_2020",
+                        )
+                        photo_mode = {"Automático":"auto", "Preservar foto inteira":"preservar", "Remover fundo":"recortar"}[photo_label]
+                        q3, q4 = st.columns(2)
+                        subtitulo_arte = q3.text_input("Chamada curta", value="Personalizado do seu jeito", key="mkt_subtitulo_rapido_2020")
+                        cta_arte = q4.text_input("CTA", value="Chame no WhatsApp", key="mkt_cta_rapido_2020")
+                        usar_metalico = st.toggle(
+                            "Usar detalhe metálico/dourado",
+                            value=usar_metalico,
+                            key="mkt_metalico_rapido_2020",
+                            help="Desative para retirar dourado/metálico antes de gerar.",
+                        )
+                        canais = st.multiselect(
+                            "Formatos",
+                            opcoes_canais,
+                            default=[c for c in canais if c in opcoes_canais],
+                            key="mkt_canais_rapido_2020",
+                        )
+                        observacoes = st.text_area("Oferta ou informação obrigatória", key="mkt_obs_rapido_2020", height=70)
+                else:
+                    tema_sugerido_label = get_theme(tema_sugerido_id)["label"]
+                    indice_tema = THEME_ORDER.index(tema_sugerido_label) if tema_sugerido_label in THEME_ORDER else 0
+                    tema_visual = st.selectbox("🎨 Tema", THEME_ORDER, index=indice_tema, key="mkt_tema_visual_2020")
+                    tema_efetivo_id = tema_sugerido_id if tema_visual == "Automático" else detect_theme(campanha, produto_mkt.get("Nome", ""), explicit=tema_visual)
+                    tema_efetivo = get_theme(tema_efetivo_id)
+                    cores_tema = tema_efetivo["palette"]
+                    paleta_escolhida = st.selectbox("Paleta de cores", PALETTE_ORDER, index=0, key="mkt_paleta_2020")
+                    usar_metalico = st.toggle("Usar detalhe metálico/dourado", value=paleta_escolhida in {"Cores do tema", "Dourado Luxo"}, key="mkt_metalico_2020")
+                    if paleta_escolhida == "Personalizada":
+                        cp1, cp2, cp3 = st.columns(3); cp4, cp5, cp6 = st.columns(3)
+                        cores_personalizadas = {
+                            "primary": cp1.color_picker("Principal", value=cores_tema.get("primary", "#123A9B"), key="mkt_cor_primary_2020"),
+                            "secondary": cp2.color_picker("Secundária", value=cores_tema.get("secondary", "#087CE8"), key="mkt_cor_secondary_2020"),
+                            "accent": cp3.color_picker("Destaque", value=cores_tema.get("accent", "#EF2A92"), key="mkt_cor_accent_2020"),
+                            "background": cp4.color_picker("Fundo", value=cores_tema.get("background", "#FFFFFF"), key="mkt_cor_background_2020"),
+                            "text": cp5.color_picker("Texto", value=cores_tema.get("text", "#102D50"), key="mkt_cor_text_2020"),
+                            "metallic": cp6.color_picker("Metálico", value=cores_tema.get("metallic", "#D4AF37"), key="mkt_cor_metallic_2020"),
+                        }
+                    photo_label = st.selectbox("Tratamento da foto", ["Automático", "Preservar foto inteira", "Remover fundo"], key="mkt_photo_avancado_2020")
+                    photo_mode = {"Automático":"auto", "Preservar foto inteira":"preservar", "Remover fundo":"recortar"}[photo_label]
+                    canais = st.multiselect("Canais e formatos", opcoes_canais, default=[c for c in canais if c in opcoes_canais], key="mkt_canais_avancado_2020")
+                    observacoes = st.text_area("Oferta e informações obrigatórias", key="mkt_obs_avancado_2020", height=90)
+                    p1, p2 = st.columns(2)
+                    preco_arte = p1.text_input("Preço na arte", value=preco_catalogo, placeholder="R$ 90,00", key="mkt_preco_avancado_2020")
+                    subtitulo_arte = p2.text_input("Chamada curta", value="Personalizado do seu jeito", key="mkt_subtitulo_avancado_2020")
+                    cta_arte = st.text_input("Chamada para ação", value="Chame no WhatsApp", key="mkt_cta_avancado_2020")
+
+                paleta_final = resolve_palette(cores_tema, paleta_escolhida, cores_personalizadas, usar_metalico)
                 st.markdown(
-                    f"<div style='display:flex;align-items:center;gap:8px;margin:-4px 0 8px 0;'>"
+                    "<div style='display:flex;align-items:center;gap:8px;margin:4px 0 10px 0;'>"
                     f"<strong>{html.escape(tema_efetivo['label'])}</strong>"
                     + "".join(
                         f"<span title='{html.escape(nome)}' style='width:22px;height:22px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.18);background:{cor}'></span>"
-                        for nome, cor in cores_tema.items() if nome in {"primary", "secondary", "accent", "background", "metallic"}
-                    )
-                    + "</div>",
-                    unsafe_allow_html=True,
-                )
-                paleta_escolhida = st.selectbox(
-                    "Paleta de cores da arte",
-                    PALETTE_ORDER,
-                    index=0,
-                    key="mkt_paleta_1820",
-                    help="Cores do tema acompanha o Calendário Mestre. Escolha outra paleta para substituir as cores antes de gerar.",
-                )
-                usar_metalico = st.toggle(
-                    "Usar detalhe metálico/dourado",
-                    value=paleta_escolhida in {"Cores do tema", "Dourado Luxo"},
-                    key="mkt_usar_metalico_1820",
-                    help="Desative para retirar o dourado e usar a cor de destaque da paleta.",
-                )
-                cores_personalizadas = None
-                if paleta_escolhida == "Personalizada":
-                    cp1, cp2, cp3 = st.columns(3)
-                    cp4, cp5, cp6 = st.columns(3)
-                    cores_personalizadas = {
-                        "primary": cp1.color_picker("Principal", value=cores_tema.get("primary", "#123A9B"), key="mkt_cor_primary"),
-                        "secondary": cp2.color_picker("Secundária", value=cores_tema.get("secondary", "#087CE8"), key="mkt_cor_secondary"),
-                        "accent": cp3.color_picker("Destaque", value=cores_tema.get("accent", "#EF2A92"), key="mkt_cor_accent"),
-                        "background": cp4.color_picker("Fundo", value=cores_tema.get("background", "#FFFFFF"), key="mkt_cor_background"),
-                        "text": cp5.color_picker("Texto", value=cores_tema.get("text", "#102D50"), key="mkt_cor_text"),
-                        "metallic": cp6.color_picker("Metálico", value=cores_tema.get("metallic", "#D4AF37"), key="mkt_cor_metallic"),
-                    }
-                paleta_final = resolve_palette(cores_tema, paleta_escolhida, cores_personalizadas, usar_metalico)
-
-                with st.expander("🎛️ Cores por elemento e tratamento da foto", expanded=False):
-                    st.caption("Automático segue a paleta. Desmarque para escolher a cor de cada parte da arte.")
-                    cor_auto = st.toggle("Usar cores automáticas da paleta", value=True, key="mkt_cores_elementos_auto_1900")
-                    if not cor_auto:
-                        e1,e2,e3 = st.columns(3)
-                        e4,e5,e6 = st.columns(3)
-                        e7,e8,e9 = st.columns(3)
-                        paleta_final.update({
-                            "title_color": e1.color_picker("Título principal", paleta_final.get("primary", "#123A9B"), key="mkt_cor_titulo_1900"),
-                            "title_secondary_color": e2.color_picker("Título secundário", paleta_final.get("secondary", "#087CE8"), key="mkt_cor_titulo2_1900"),
-                            "banner_color": e3.color_picker("Banner", paleta_final.get("primary", "#123A9B"), key="mkt_cor_banner_1900"),
-                            "benefits_color": e4.color_picker("Benefícios", paleta_final.get("primary", "#123A9B"), key="mkt_cor_beneficios_1900"),
-                            "seal_color": e5.color_picker("Selos", paleta_final.get("secondary", "#087CE8"), key="mkt_cor_selos_1900"),
-                            "price_color": e6.color_picker("Texto/borda do preço", paleta_final.get("metallic", "#D7E7F5"), key="mkt_cor_preco_1900"),
-                            "price_background": e7.color_picker("Fundo do preço", paleta_final.get("primary", "#123A9B"), key="mkt_cor_preco_fundo_1900"),
-                            "cta_color": e8.color_picker("Caixa do WhatsApp", paleta_final.get("primary", "#123A9B"), key="mkt_cor_cta_1900"),
-                            "footer_color": e9.color_picker("Rodapé", paleta_final.get("primary", "#123A9B"), key="mkt_cor_rodape_1900"),
-                        })
-                    photo_label = st.selectbox(
-                        "Tratamento da foto",
-                        ["Automático", "Preservar foto inteira", "Remover fundo"],
-                        key="mkt_photo_mode_1900",
-                        help="Automático preserva fotos de balões e cenários e remove o fundo de produtos isolados.",
-                    )
-                    photo_mode = {"Automático":"auto", "Preservar foto inteira":"preservar", "Remover fundo":"recortar"}[photo_label]
-
-                st.markdown(
-                    "<div style='display:flex;gap:8px;margin:0 0 10px 0;'>"
-                    + "".join(
-                        f"<span title='{html.escape(nome)}: {cor}' style='width:28px;height:28px;border-radius:50%;display:inline-block;border:2px solid rgba(255,255,255,.65);box-shadow:0 0 0 1px rgba(0,0,0,.2);background:{cor}'></span>"
                         for nome, cor in paleta_final.items() if nome in {"primary", "secondary", "accent", "background", "metallic"}
-                    )
-                    + "</div>",
-                    unsafe_allow_html=True,
+                    ) + "</div>", unsafe_allow_html=True,
                 )
-
-                canais_instagram = ["Instagram Feed", "Instagram Story", "Carrossel", "Reel", "TikTok", "YouTube Shorts", "YouTube Horizontal"]
-                opcoes_canais = canais_instagram + (["Status WhatsApp"] if incluir_whatsapp else [])
-                canais_padrao = ["Instagram Feed", "Instagram Story"] + (["Status WhatsApp"] if incluir_whatsapp else [])
-                canais = st.multiselect(
-                    "Canais e formatos",
-                    opcoes_canais,
-                    default=[c for c in canais_padrao if c in opcoes_canais],
-                    key="mkt_canais_instagram",
-                    help="O Facebook recebe a replicação feita pela Meta.",
-                )
-                observacoes = st.text_area("Oferta e informações obrigatórias", placeholder="Ex.: Até sexta, entrega em Itatiba...", key="mkt_obs", height=90)
-                p1, p2 = st.columns(2)
-                preco_arte = p1.text_input("Preço na arte", placeholder="R$ 90,00")
-                subtitulo_arte = p2.text_input("Chamada curta", value="Personalizado do seu jeito")
-                cta_arte = st.text_input("Chamada para ação", value="Chame no WhatsApp")
 
             preview_liberado = (
                 feature_enabled("marketing_preview", False)
@@ -8307,7 +8313,10 @@ if pagina_atual == "crescimento":
                 st.caption("Música adicionada manualmente na rede social.")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-            if st.button("✨ Gerar campanha IA Premium" if modo_criacao == "Campanha IA Premium" else "🚀 Gerar campanha rápida", type="primary", use_container_width=True):
+            if st.button(
+                "✨ Gerar campanha IA Premium" if modo_criacao == "Campanha IA Premium" else ("⚡ GERAR ARTE" if modo_rapido else "🚀 Gerar campanha"),
+                type="primary", use_container_width=True, key="mkt_gerar_campanha_2020"
+            ):
                 origem = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
                 faltas = []
                 if not canais: faltas.append("selecione pelo menos um canal")

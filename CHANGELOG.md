@@ -390,3 +390,10 @@ hangelog
 - Corrigido `StreamlitDuplicateElementKey` na Central Operacional da Anna.
 - As caixas “Não fechado — falta de pagamento” e “Não fechado — sem retorno do cliente” agora usam chaves exclusivas por contexto e proposta.
 - Preservados Marketing 20.1.0, Template Engine 20.0.0 e templates instalados.
+
+## 20.2.0
+- Marketing: novo Modo Produção Rápida com fluxo Produto → Template → Campanha → Gerar.
+- Catálogo passa a preencher preço automaticamente no modo rápido.
+- Calendário Mestre controla tema/paleta automaticamente.
+- Ajustes opcionais concentrados em um único painel rápido.
+- Template oficial `anna_base_dinamica` preservado.
