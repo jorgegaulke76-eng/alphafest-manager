@@ -188,127 +188,283 @@ def _zone_box(zone: dict[str, Any], width: int, height: int) -> tuple[int, int, 
     return x, y, x + max(1, w), y + max(1, h)
 
 
-def _fit_font(draw: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], *, bold: bool = True, max_size: int = 72, min_size: int = 14):
-    # Usa DejaVu, presente via Pillow/matplotlib na base atual.
+def _font_for_size(size: int, *, bold: bool = True) -> ImageFont.ImageFont:
     candidates = [
         "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
     ]
-    x1, y1, x2, y2 = box
-    maxw, maxh = x2-x1, y2-y1
-    for size in range(max_size, min_size-1, -2):
-        font = None
-        for path in candidates:
-            try:
-                font = ImageFont.truetype(path, size)
-                break
-            except Exception:
-                pass
-        if font is None:
-            font = ImageFont.load_default()
-        bb = draw.multiline_textbbox((0, 0), text, font=font, spacing=max(2, size//7), align="center")
-        if bb[2]-bb[0] <= maxw and bb[3]-bb[1] <= maxh:
-            return font
-    return font
+    for path in candidates:
+        try:
+            return ImageFont.truetype(path, max(6, int(size)))
+        except Exception:
+            pass
+    return ImageFont.load_default()
+
+
+def _measure_multiline(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, *, spacing: int = 2, align: str = "left") -> tuple[int, int, tuple[int,int,int,int]]:
+    bb = draw.multiline_textbbox((0, 0), str(text or ""), font=font, spacing=spacing, align=align)
+    return bb[2]-bb[0], bb[3]-bb[1], bb
+
+
+def _wrap_lines(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_width: int, *, max_lines: int | None = None) -> list[str]:
+    """Quebra texto por largura sem cortar palavras desnecessariamente."""
+    raw = str(text or "").replace("\r", "").strip()
+    if not raw:
+        return []
+    out: list[str] = []
+    for paragraph in raw.split("\n"):
+        words = paragraph.split()
+        if not words:
+            out.append("")
+            continue
+        cur = words[0]
+        for word in words[1:]:
+            cand = f"{cur} {word}".strip()
+            if draw.textbbox((0, 0), cand, font=font)[2] <= max_width:
+                cur = cand
+            else:
+                out.append(cur)
+                cur = word
+        out.append(cur)
+    if max_lines and len(out) > max_lines:
+        out = out[:max_lines]
+        # Só usa reticências no último recurso; antes disso o auto-fit tenta uma fonte menor.
+        last = out[-1]
+        ell = "…"
+        while last and draw.textbbox((0,0), last + ell, font=font)[2] > max_width:
+            last = last[:-1].rstrip()
+        out[-1] = (last + ell) if last else ell
+    return out
+
+
+def _fit_wrapped_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    box: tuple[int,int,int,int],
+    *, bold: bool = True,
+    max_size: int = 72,
+    min_size: int = 12,
+    max_lines: int | None = None,
+    padding: int = 0,
+    align: str = "left",
+) -> tuple[ImageFont.ImageFont, str, int]:
+    x1,y1,x2,y2 = box
+    avail_w = max(1, x2-x1-(padding*2))
+    avail_h = max(1, y2-y1-(padding*2))
+    last_font = _font_for_size(min_size, bold=bold)
+    last_text = str(text or "")
+    last_spacing = 2
+    for size in range(int(max_size), int(min_size)-1, -1):
+        font = _font_for_size(size, bold=bold)
+        spacing = max(1, int(size * 0.12))
+        lines = _wrap_lines(draw, text, font, avail_w, max_lines=None)
+        if max_lines and len(lines) > max_lines:
+            continue
+        wrapped = "\n".join(lines)
+        tw, th, _ = _measure_multiline(draw, wrapped, font, spacing=spacing, align=align)
+        last_font, last_text, last_spacing = font, wrapped, spacing
+        if tw <= avail_w and th <= avail_h:
+            return font, wrapped, spacing
+    # Se nem no mínimo couber, limita linhas e garante clipping posterior.
+    lines = _wrap_lines(draw, text, last_font, avail_w, max_lines=max_lines)
+    return last_font, "\n".join(lines), last_spacing
+
+
+def _draw_text_box(
+    canvas: Image.Image,
+    box: tuple[int,int,int,int],
+    text: str,
+    color: str,
+    *,
+    max_size: int = 64,
+    min_size: int = 12,
+    bold: bool = True,
+    align: str = "center",
+    valign: str = "center",
+    max_lines: int | None = None,
+    padding: int = 4,
+) -> None:
+    """Renderiza em uma camada limitada à zona: nada pode vazar para outra área."""
+    if not str(text or "").strip():
+        return
+    x1,y1,x2,y2 = box
+    w,h = max(1,x2-x1), max(1,y2-y1)
+    layer = Image.new("RGBA", (w,h), (0,0,0,0))
+    ldraw = ImageDraw.Draw(layer, "RGBA")
+    local_box=(0,0,w,h)
+    font, wrapped, spacing = _fit_wrapped_text(
+        ldraw, str(text), local_box, bold=bold, max_size=max_size, min_size=min_size,
+        max_lines=max_lines, padding=padding, align=align,
+    )
+    tw, th, bb = _measure_multiline(ldraw, wrapped, font, spacing=spacing, align=align)
+    if align == "left":
+        tx = padding - bb[0]
+    elif align == "right":
+        tx = w - padding - tw - bb[0]
+    else:
+        tx = (w-tw)//2 - bb[0]
+    if valign == "top":
+        ty = padding - bb[1]
+    elif valign == "bottom":
+        ty = h - padding - th - bb[1]
+    else:
+        ty = (h-th)//2 - bb[1]
+    ldraw.multiline_text((tx,ty), wrapped, font=font, fill=color, spacing=spacing, align=align)
+    canvas.alpha_composite(layer, (x1,y1))
 
 
 def _draw_centered_text(draw: ImageDraw.ImageDraw, box, text: str, color: str, *, max_size=64, min_size=14, bold=True, align="center"):
+    # Compatibilidade para chamadas antigas do módulo; o renderizador 20.4 usa _draw_text_box.
     if not str(text or "").strip():
         return
-    x1, y1, x2, y2 = box
-    font = _fit_font(draw, str(text), box, bold=bold, max_size=max_size, min_size=min_size)
-    bb = draw.multiline_textbbox((0, 0), str(text), font=font, spacing=max(2, getattr(font, "size", 18)//7), align=align)
-    tw, th = bb[2]-bb[0], bb[3]-bb[1]
-    x = x1 + (x2-x1-tw)//2
-    y = y1 + (y2-y1-th)//2 - bb[1]
-    draw.multiline_text((x, y), str(text), font=font, fill=color, spacing=max(2, getattr(font, "size", 18)//7), align=align)
+    font, wrapped, spacing = _fit_wrapped_text(draw, str(text), box, bold=bold, max_size=max_size, min_size=min_size, max_lines=None, padding=0, align=align)
+    x1,y1,x2,y2=box
+    bb=draw.multiline_textbbox((0,0),wrapped,font=font,spacing=spacing,align=align)
+    tw,th=bb[2]-bb[0],bb[3]-bb[1]
+    x=x1+(x2-x1-tw)//2-bb[0]
+    y=y1+(y2-y1-th)//2-bb[1]
+    draw.multiline_text((x,y),wrapped,font=font,fill=color,spacing=spacing,align=align)
 
+
+def _fit_font(draw: ImageDraw.ImageDraw, text: str, box: tuple[int, int, int, int], *, bold: bool = True, max_size: int = 72, min_size: int = 14):
+    font, _, _ = _fit_wrapped_text(draw, text, box, bold=bold, max_size=max_size, min_size=min_size)
+    return font
+
+
+def _render_photo_in_zone(canvas: Image.Image, source: Image.Image, zone: dict[str,Any], box: tuple[int,int,int,int], *, photo_mode: str = "auto", padding: int = 8) -> None:
+    x1,y1,x2,y2 = box
+    bw,bh=max(1,x2-x1),max(1,y2-y1)
+    pad=max(0,int(zone.get("padding", padding)))
+    target=(max(1,bw-pad*2), max(1,bh-pad*2))
+    mode=str(photo_mode or "auto").lower().strip()
+    if mode == "auto":
+        mode=str(zone.get("fit") or "contain").lower().strip()
+    if mode in {"cover","crop","fill"}:
+        fitted=ImageOps.fit(source,target,method=Image.Resampling.LANCZOS,centering=(0.5,0.5))
+    else:
+        fitted=ImageOps.contain(source,target,Image.Resampling.LANCZOS)
+    px=x1+pad+(target[0]-fitted.width)//2
+    py=y1+pad+(target[1]-fitted.height)//2
+    # Limita fisicamente a composição à caixa definida no layout.
+    zone_layer=Image.new("RGBA",(bw,bh),(0,0,0,0))
+    zone_layer.alpha_composite(fitted,(px-x1,py-y1))
+    canvas.alpha_composite(zone_layer,(x1,y1))
 
 def render_library_square(
     template_cfg: dict[str, Any], *, image_bytes: bytes, title: str, subtitle: str,
     description: str, price: str, cta: str, phone: str, profile: dict[str, Any],
     photo_mode: str = "auto", palette: dict[str, str] | None = None,
 ) -> Image.Image:
-    """Renderizador genérico de zonas para templates importáveis."""
+    """Renderizador genérico de precisão para templates importáveis.
+
+    Sprint 20.4: cada elemento é composto dentro da própria zona, com auto-fit,
+    quebra de linha e clipping. O fundo do template nunca é alterado.
+    """
     bg_path: Path = template_cfg["background_path"]
     canvas = Image.open(bg_path).convert("RGBA").resize((1080, 1080), Image.Resampling.LANCZOS)
-    draw = ImageDraw.Draw(canvas, "RGBA")
     layout = template_cfg.get("layout") or {}
     colors = dict(template_cfg.get("colors") or {})
     p = palette or {}
     primary = p.get("primary") or colors.get("primary") or "#07349B"
-    secondary = p.get("secondary") or colors.get("secondary") or "#087CE8"
     accent = p.get("accent") or colors.get("accent") or "#EF2A92"
     text_color = p.get("text") or colors.get("text") or "#07349B"
 
-    # Título/subtítulo/faixas e selos.
+    # Título: máximo de 2 linhas para preservar a área nobre da composição.
     if "title" in layout:
-        title_text = "\n".join(x for x in [profile.get("title1"), profile.get("title2")] if x)
-        _draw_centered_text(draw, _zone_box(layout["title"],1080,1080), title_text, text_color, max_size=92, min_size=30, bold=True)
+        title_text = "\n".join(x for x in [profile.get("title1"), profile.get("title2")] if x) or title
+        z=layout["title"]
+        _draw_text_box(canvas, _zone_box(z,1080,1080), title_text, text_color,
+                       max_size=int(z.get("max_size",82)), min_size=int(z.get("min_size",25)),
+                       bold=True, align=str(z.get("align","center")), max_lines=int(z.get("max_lines",2)), padding=int(z.get("padding",6)))
+
     if "subtitle" in layout:
-        _draw_centered_text(draw, _zone_box(layout["subtitle"],1080,1080), profile.get("subtitle") or subtitle, "#FFFFFF", max_size=35, min_size=17, bold=True)
+        z=layout["subtitle"]
+        _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("subtitle") or subtitle,"#FFFFFF",
+                       max_size=int(z.get("max_size",34)),min_size=int(z.get("min_size",15)),bold=True,
+                       align=str(z.get("align","center")),max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",10)))
+
     if "badge" in layout:
-        _draw_centered_text(draw, _zone_box(layout["badge"],1080,1080), profile.get("badge") or "DESTAQUE", "#FFFFFF", max_size=26, min_size=13, bold=True)
+        z=layout["badge"]
+        _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("badge") or "DESTAQUE","#FFFFFF",
+                       max_size=int(z.get("max_size",23)),min_size=int(z.get("min_size",11)),bold=True,
+                       align="center",max_lines=int(z.get("max_lines",3)),padding=int(z.get("padding",12)))
+
     if "center" in layout:
-        _draw_centered_text(draw, _zone_box(layout["center"],1080,1080), profile.get("center") or "", text_color, max_size=30, min_size=14, bold=True)
+        z=layout["center"]
+        _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("center") or "",text_color,
+                       max_size=int(z.get("max_size",25)),min_size=int(z.get("min_size",11)),bold=True,
+                       align="center",max_lines=int(z.get("max_lines",6)),padding=int(z.get("padding",18)))
 
-    # Produto sem deformação.
-    if "photo" in layout and image_bytes:
-        x1,y1,x2,y2 = _zone_box(layout["photo"],1080,1080)
-        source = ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).convert("RGBA")
-        fitted = ImageOps.contain(source, (x2-x1, y2-y1), Image.Resampling.LANCZOS)
-        px = x1 + (x2-x1-fitted.width)//2
-        py = y1 + (y2-y1-fitted.height)//2
-        canvas.alpha_composite(fitted, (px, py))
-
-    # Benefícios em cinco linhas; cada item respeita sua zona.
-    benefits = list(profile.get("benefits") or [])[:5]
-    zones = layout.get("benefits") or []
-    if isinstance(zones, dict):
-        zones = zones.get("items") or []
-    for i, benefit in enumerate(benefits):
-        if i >= len(zones):
-            break
-        box = _zone_box(zones[i],1080,1080)
-        head, desc = benefit[0], benefit[1]
-        x1,y1,x2,y2 = box
-        hf = _fit_font(draw, head, (x1,y1,x2,y1+(y2-y1)//2), max_size=25, min_size=13)
-        draw.text((x1,y1), head, font=hf, fill=primary)
-        df = _fit_font(draw, desc, (x1,y1+(y2-y1)//2,x2,y2), bold=False, max_size=16, min_size=10)
-        # quebra simples por largura
-        words = str(desc).split(); lines=[]; cur=""
-        for word in words:
-            cand=(cur+" "+word).strip()
-            if draw.textbbox((0,0),cand,font=df)[2] <= x2-x1 or not cur:
-                cur=cand
-            else:
-                lines.append(cur); cur=word
-        if cur: lines.append(cur)
-        draw.multiline_text((x1,y1+(y2-y1)//2-2),"\n".join(lines[:2]),font=df,fill=text_color,spacing=1)
-
-    # Aplicações: usa a mesma foto como miniatura nas quatro zonas.
-    app_zones = layout.get("applications") or []
-    apps = list(profile.get("applications") or [])
-    if not apps:
-        apps = ["Festas", "Presentes", "Decoração", "Momentos"]
+    source = None
     if image_bytes:
-        src = ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).convert("RGBA")
-        for i, zone in enumerate(app_zones[:4]):
-            x1,y1,x2,y2 = _zone_box(zone,1080,1080)
-            thumb = ImageOps.fit(src, (x2-x1, y2-y1), method=Image.Resampling.LANCZOS)
-            mask=Image.new("L",thumb.size,0); ImageDraw.Draw(mask).ellipse((0,0,thumb.width-1,thumb.height-1),fill=255)
-            canvas.paste(thumb,(x1,y1),mask)
+        try:
+            source=ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes))).convert("RGBA")
+        except Exception:
+            source=None
+
+    if "photo" in layout and source is not None:
+        z=layout["photo"]
+        _render_photo_in_zone(canvas, source, z, _zone_box(z,1080,1080), photo_mode=photo_mode, padding=int(z.get("padding",8)))
+
+    # Benefícios: título e descrição medidos como um único bloco vertical para
+    # impedir colisão entre um item e outro.
+    benefits=list(profile.get("benefits") or [])[:5]
+    zones=layout.get("benefits") or []
+    if isinstance(zones,dict):
+        zones=zones.get("items") or []
+    for i,benefit in enumerate(benefits):
+        if i>=len(zones):
+            break
+        z=zones[i]
+        box=_zone_box(z,1080,1080)
+        x1,y1,x2,y2=box
+        bh=y2-y1
+        head=str(benefit[0] if len(benefit)>0 else "")
+        desc=str(benefit[1] if len(benefit)>1 else "")
+        # Cabeçalho ocupa ~42% da zona; descrição o restante.
+        split=y1+max(20,int(bh*0.42))
+        _draw_text_box(canvas,(x1,y1,x2,split),head,primary,max_size=int(z.get("head_max",22)),min_size=int(z.get("head_min",11)),
+                       bold=True,align="left",valign="center",max_lines=1,padding=int(z.get("padding",2)))
+        _draw_text_box(canvas,(x1,split,x2,y2),desc,text_color,max_size=int(z.get("desc_max",13)),min_size=int(z.get("desc_min",8)),
+                       bold=False,align="left",valign="top",max_lines=int(z.get("desc_lines",2)),padding=int(z.get("padding",2)))
+
+    # Aplicações: imagem limitada ao interior dos círculos, com pequeno recuo
+    # para não cobrir o contorno desenhado no fundo.
+    app_zones=layout.get("applications") or []
+    if source is not None:
+        for zone in app_zones[:4]:
+            x1,y1,x2,y2=_zone_box(zone,1080,1080)
+            inset=int(zone.get("padding",5))
+            w=max(1,x2-x1-inset*2); h=max(1,y2-y1-inset*2)
+            thumb=ImageOps.fit(source,(w,h),method=Image.Resampling.LANCZOS,centering=(0.5,0.5))
+            mask=Image.new("L",(w,h),0)
+            ImageDraw.Draw(mask).ellipse((0,0,w-1,h-1),fill=255)
+            layer=Image.new("RGBA",(w,h),(0,0,0,0)); layer.paste(thumb,(0,0),mask)
+            canvas.alpha_composite(layer,(x1+inset,y1+inset))
+
+    if "price" in layout and str(price or "").strip():
+        z=layout["price"]
+        _draw_text_box(canvas,_zone_box(z,1080,1080),price,accent,max_size=int(z.get("max_size",27)),min_size=int(z.get("min_size",13)),
+                       bold=True,align="center",max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",4)))
 
     if "phone" in layout:
-        _draw_centered_text(draw,_zone_box(layout["phone"],1080,1080),phone or "11 97294-9533","#FFFFFF",max_size=40,min_size=20,bold=True)
-    if "cta" in layout:
-        _draw_centered_text(draw,_zone_box(layout["cta"],1080,1080),cta or profile.get("pink") or "FAÇA SEU PEDIDO!","#FFFFFF",max_size=28,min_size=15,bold=True)
-    if "price" in layout and str(price or "").strip():
-        _draw_centered_text(draw,_zone_box(layout["price"],1080,1080),price,accent,max_size=34,min_size=18,bold=True)
+        z=layout["phone"]
+        _draw_text_box(canvas,_zone_box(z,1080,1080),phone or "11 97294-9533","#FFFFFF",
+                       max_size=int(z.get("max_size",31)),min_size=int(z.get("min_size",16)),bold=True,
+                       align="center",max_lines=1,padding=int(z.get("padding",3)))
 
-    footer_zones = layout.get("footer") or []
-    footer = list(profile.get("footer") or [])[:4]
-    for i, zone in enumerate(footer_zones[:4]):
-        if i < len(footer):
-            _draw_centered_text(draw,_zone_box(zone,1080,1080),footer[i],"#FFFFFF",max_size=18,min_size=10,bold=True)
+    if "cta" in layout:
+        z=layout["cta"]
+        _draw_text_box(canvas,_zone_box(z,1080,1080),cta or profile.get("pink") or "FAÇA SEU PEDIDO!","#FFFFFF",
+                       max_size=int(z.get("max_size",25)),min_size=int(z.get("min_size",12)),bold=True,
+                       align="center",max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",8)))
+
+    footer_zones=layout.get("footer") or []
+    footer=list(profile.get("footer") or [])[:4]
+    for i,zone in enumerate(footer_zones[:4]):
+        if i<len(footer):
+            _draw_text_box(canvas,_zone_box(zone,1080,1080),footer[i],"#FFFFFF",
+                           max_size=int(zone.get("max_size",14)),min_size=int(zone.get("min_size",8)),bold=True,
+                           align="center",max_lines=int(zone.get("max_lines",2)),padding=int(zone.get("padding",2)))
     return canvas
+

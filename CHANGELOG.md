@@ -421,5 +421,6 @@ hangelog
 - Correção da visualização na listagem, modal e edição do produto.
 - Catálogo HTML passa a aceitar data URLs incorporadas diretamente.
 
-## 20.3.5 - Hotfix tela Atenção
-- Botões de alertas migrados para callbacks nativos, evitando conflito de reconciliação do React/Streamlit (`removeChild`).
+## 20.4.0 - Motor de Renderização de Precisão
+- Clipping por zona, auto-fit de fontes, foto proporcional e zonas seguras para telefone/preço/CTA.
+- Anna Base Dinâmica preservada; apenas regras de posicionamento e comportamento foram refinadas.
