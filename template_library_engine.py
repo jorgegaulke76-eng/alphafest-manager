@@ -350,6 +350,25 @@ def _render_photo_in_zone(canvas: Image.Image, source: Image.Image, zone: dict[s
     zone_layer.alpha_composite(fitted,(px-x1,py-y1))
     canvas.alpha_composite(zone_layer,(x1,y1))
 
+
+def _commercial_short(text, max_chars=28):
+    """Copy curta para leitura imediata em post social."""
+    text = " ".join(str(text or "").replace("\n", " ").split()).strip()
+    if not text:
+        return ""
+    # Remove termos redundantes que já são comunicados pelo layout/foto.
+    replacements = [
+        (" Personalizado", ""), (" Personalizada", ""),
+        (" Tradicional", ""), (" Exclusivo", ""), (" Exclusiva", ""),
+    ]
+    for old, new in replacements:
+        if len(text) > max_chars:
+            text = text.replace(old, new)
+    if len(text) <= max_chars:
+        return text
+    cut = text[:max_chars].rsplit(" ", 1)[0].strip()
+    return (cut or text[:max_chars]).rstrip(" ,.;:-") + "…"
+
 def render_library_square(
     template_cfg: dict[str, Any], *, image_bytes: bytes, title: str, subtitle: str,
     description: str, price: str, cta: str, phone: str, profile: dict[str, Any],
@@ -374,13 +393,13 @@ def render_library_square(
         title_text = "\n".join(x for x in [profile.get("title1"), profile.get("title2")] if x) or title
         z=layout["title"]
         _draw_text_box(canvas, _zone_box(z,1080,1080), title_text, text_color,
-                       max_size=int(z.get("max_size",104)), min_size=max(int(z.get("min_size",34)),58),
+                       max_size=int(z.get("max_size",112)), min_size=max(int(z.get("min_size",40)),66),
                        bold=True, align=str(z.get("align","center")), max_lines=int(z.get("max_lines",2)), padding=int(z.get("padding",6)))
 
     if "subtitle" in layout:
         z=layout["subtitle"]
         _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("subtitle") or subtitle,"#FFFFFF",
-                       max_size=int(z.get("max_size",38)),min_size=max(int(z.get("min_size",20)),27),bold=True,
+                       max_size=int(z.get("max_size",42)),min_size=max(int(z.get("min_size",24)),30),bold=True,
                        align=str(z.get("align","center")),max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",10)))
 
     if "badge" in layout:
@@ -423,9 +442,7 @@ def render_library_square(
         desc=str(benefit[1] if len(benefit)>1 else "")
         # 20.4.1: prioriza leitura. Descrições longas são resumidas antes
         # de sacrificar o tamanho da fonte.
-        if len(desc) > 36:
-            corte=desc[:36].rsplit(" ",1)[0].rstrip(" ,.;:-")
-            desc=(corte or desc[:36]).rstrip()+"…"
+        desc = _commercial_short(desc, 25)
         # Cabeçalho ocupa ~42% da zona; descrição o restante.
         split=y1+max(20,int(bh*0.42))
         _draw_text_box(canvas,(x1,y1,x2,split),head,primary,max_size=int(z.get("head_max",22)),min_size=max(int(z.get("head_min",11)),20),
