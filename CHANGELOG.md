@@ -1,3 +1,13 @@
+
+## 20.3.2 — Persistência das fotos locais do catálogo
+
+- Corrigido o desaparecimento de fotos enviadas pelo computador após restart/deploy do Streamlit Cloud.
+- Upload do catálogo continua priorizando o Storage do Supabase quando disponível.
+- Se o Storage falhar, a imagem agora é otimizada e persistida como data URL dentro do registro do catálogo, em vez de apontar para arquivo temporário local.
+- Fotos de fallback são reduzidas para até 1600x1600 e convertidas para WEBP para diminuir o peso do banco.
+- Cadastro e edição informam que a imagem será incorporada ao catálogo.
+- Google Drive, Marketing, Central de Campanhas, Template Engine e propostas permanecem inalterados.
+
 ## 12.0.2 — Interface Lean da Anna
 - Barra horizontal de módulos removida no perfil da Anna.
 - Central Operacional mantida como ambiente único e enxuto.

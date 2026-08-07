@@ -6,6 +6,8 @@ historico_orcamentos.json e catalogo_db.json sem perda de campos.
 """
 from __future__ import annotations
 
+import base64
+import io
 import json
 import os
 import re
@@ -16,6 +18,12 @@ from urllib.parse import quote
 
 import requests
 import streamlit as st
+
+try:
+    from PIL import Image, ImageOps
+except Exception:
+    Image = None
+    ImageOps = None
 
 TIMEOUT = 10
 _SESSION = requests.Session()
@@ -146,6 +154,39 @@ def connection_test() -> tuple[bool, str]:
         return False, f"Sem conexão com o banco online ({exc.__class__.__name__}). Usando cópia local."
 
 
+def _catalog_image_data_url(content: bytes, content_type: str = "image/jpeg") -> str:
+    """Cria uma representação persistente e compacta para fallback do catálogo.
+
+    O filesystem do Streamlit Cloud é efêmero. Se o Storage do Supabase não
+    estiver disponível, guardar apenas um caminho local faz a foto desaparecer
+    no próximo restart/deploy. Este fallback grava a imagem dentro do documento
+    JSON do catálogo como data URL, reduzindo resolução/peso quando Pillow está
+    disponível.
+    """
+    raw = bytes(content or b"")
+    if not raw:
+        return ""
+
+    if Image is not None:
+        try:
+            with Image.open(io.BytesIO(raw)) as img:
+                if ImageOps is not None:
+                    img = ImageOps.exif_transpose(img)
+                img = img.convert("RGB")
+                img.thumbnail((1600, 1600))
+                out = io.BytesIO()
+                img.save(out, format="WEBP", quality=82, method=6)
+                raw = out.getvalue()
+                content_type = "image/webp"
+        except Exception:
+            pass
+
+    mime = str(content_type or "image/jpeg").split(";", 1)[0].strip().lower()
+    if not mime.startswith("image/"):
+        mime = "image/jpeg"
+    return f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
+
+
 def upload_catalog_image(upload: Any, local_upload_dir: str = "uploads") -> str:
     """Envia imagem ao bucket público ``catalogo``; usa arquivo local como fallback."""
     if upload is None:
@@ -175,10 +216,9 @@ def upload_catalog_image(upload: Any, local_upload_dir: str = "uploads") -> str:
         except requests.RequestException:
             pass
 
-    Path(local_upload_dir).mkdir(parents=True, exist_ok=True)
-    local_path = Path(local_upload_dir) / unique_name
-    local_path.write_bytes(content)
-    return str(local_path).replace("\\", "/")
+    # IMPORTANTE: não usar caminho local como persistência final no Streamlit
+    # Cloud. O disco é efêmero e o cadastro sobreviveria sem a foto.
+    return _catalog_image_data_url(content, content_type)
 
 
 def upload_library_file(upload: Any, produto_nome: str = "produto", local_upload_dir: str = "biblioteca_uploads") -> str:

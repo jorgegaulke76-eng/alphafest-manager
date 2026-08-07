@@ -180,11 +180,22 @@ def upload_catalog_image(upload, local_upload_dir="uploads"):
         return func(upload, local_upload_dir)
     if upload is None:
         return ""
-    Path(local_upload_dir).mkdir(parents=True, exist_ok=True)
-    nome = re.sub(r"[^A-Za-z0-9._-]", "_", str(upload.name))
-    destino = Path(local_upload_dir) / f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{nome}"
-    destino.write_bytes(bytes(upload.getbuffer()))
-    return str(destino).replace("\\", "/")
+    # Fallback persistente: caminhos locais somem em reinícios/deploys do
+    # Streamlit Cloud. Guardamos a imagem como data URL no próprio catálogo.
+    bruto = bytes(upload.getbuffer())
+    mime = str(getattr(upload, "type", "") or "image/jpeg").split(";", 1)[0]
+    try:
+        from PIL import Image as _PILImage, ImageOps as _PILImageOps
+        with _PILImage.open(io.BytesIO(bruto)) as _img:
+            _img = _PILImageOps.exif_transpose(_img).convert("RGB")
+            _img.thumbnail((1600, 1600))
+            _saida = io.BytesIO()
+            _img.save(_saida, format="WEBP", quality=82, method=6)
+            bruto = _saida.getvalue()
+            mime = "image/webp"
+    except Exception:
+        pass
+    return f"data:{mime};base64,{base64.b64encode(bruto).decode('ascii')}"
 
 def upload_library_file(upload, produto_nome="produto", local_upload_dir="biblioteca_uploads"):
     func = getattr(_cloud_db, "upload_library_file", None) if _cloud_db else None
@@ -6430,7 +6441,7 @@ def dialog_catalogo_cadastro_anna(produto_indice=None):
         preco = c4.text_input("Valor", value=str(produto.get("Preco", "")), placeholder="Ex.: 25,00")
         descricao = st.text_area("Descrição para o catálogo", value=str(produto.get("DescricaoCurta", produto.get("Descricao", ""))), height=110)
         imagens_urls = st.text_area("URLs das imagens (uma por linha)", value="\n".join([x for x in (produto.get("Imagens", []) or []) if str(x).startswith("http")]), height=90)
-        fotos = st.file_uploader("Adicionar fotos do computador", type=["png","jpg","jpeg","webp"], accept_multiple_files=True)
+        fotos = st.file_uploader("Adicionar fotos do computador", type=["png","jpg","jpeg","webp"], accept_multiple_files=True, help="A foto será incorporada ao catálogo e permanecerá disponível mesmo após reinícios do Streamlit.")
         drive_urls = st.text_area(
             "Importar fotos do Google Drive (um link por linha)",
             placeholder="Cole aqui o link compartilhado da foto no Google Drive",
@@ -6548,6 +6559,7 @@ def dialog_catalogo_visualizar_anna():
                         type=["png", "jpg", "jpeg", "webp"],
                         accept_multiple_files=True,
                         key=f"{form_key}_fotos",
+                        help="A foto será incorporada ao catálogo e permanecerá disponível mesmo após reinícios do Streamlit.",
                     )
                     drive_urls = st.text_area(
                         "Importar fotos do Google Drive (um link por linha)",
