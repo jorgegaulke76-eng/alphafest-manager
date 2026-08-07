@@ -23,6 +23,8 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
+from alphafest_font_manager import get_font
+
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 RUNTIME_TEMPLATES_DIR = Path(tempfile.gettempdir()) / "alphafest_template_library"
@@ -189,16 +191,31 @@ def _zone_box(zone: dict[str, Any], width: int, height: int) -> tuple[int, int, 
 
 
 def _font_for_size(size: int, *, bold: bool = True) -> ImageFont.ImageFont:
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-    ]
-    for path in candidates:
-        try:
-            return ImageFont.truetype(path, max(6, int(size)))
-        except Exception:
-            pass
-    return ImageFont.load_default()
+    """Fonte portátil com tamanho real no Streamlit Cloud.
+
+    Antes da 20.4.5-E, o template importável dependia de fontes em
+    /usr/share/fonts. Quando elas não existiam no servidor, Pillow usava
+    ImageFont.load_default(), uma fonte bitmap de tamanho fixo. Isso fazia
+    títulos configurados com 60–110 px aparecerem microscópicos.
+
+    O AlphaFest já possui um gerenciador portátil de fontes; usamos a mesma
+    fonte vetorial aqui para garantir que o tamanho solicitado seja respeitado
+    localmente e no Streamlit Cloud.
+    """
+    try:
+        return get_font(max(8, int(size)), bold=bool(bold), serif=False, italic=False)
+    except Exception:
+        # Último fallback ainda tenta uma fonte escalável disponível.
+        candidates = [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+        ]
+        for path in candidates:
+            try:
+                return ImageFont.truetype(path, max(8, int(size)))
+            except Exception:
+                pass
+        return ImageFont.load_default()
 
 
 def _measure_multiline(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, *, spacing: int = 2, align: str = "left") -> tuple[int, int, tuple[int,int,int,int]]:
