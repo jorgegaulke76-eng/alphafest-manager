@@ -357,7 +357,7 @@ def render_library_square(
 ) -> Image.Image:
     """Renderizador genérico de precisão para templates importáveis.
 
-    Sprint 20.4.2: calibração visual do Feed; cada elemento é composto dentro da própria zona, com auto-fit,
+    Sprint 20.4: cada elemento é composto dentro da própria zona, com auto-fit,
     quebra de linha e clipping. O fundo do template nunca é alterado.
     """
     bg_path: Path = template_cfg["background_path"]

@@ -428,3 +428,8 @@ hangelog
 
 ## 20.4.1 — Hierarquia Visual Segura
 - Ajustes tipográficos sem alterar os formatos/canais.
+
+
+## 20.4.2
+- Calibração Visual Anna.
+- VERSAO.txt e VERSAO sincronizados.

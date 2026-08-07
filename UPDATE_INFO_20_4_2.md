@@ -1,9 +1,12 @@
 # AlphaFest Manager 20.4.2 — Calibração Visual Anna
 
-Atualização incremental construída sobre a 20.4.1 funcional.
+Pacote reconstruído sobre a 20.4.1 funcional enviada pelo usuário.
 
-- Hierarquia visual do Feed reforçada.
-- Título, subtítulo, benefícios, selo, preço, WhatsApp e CTA com pisos tipográficos maiores.
-- Benefícios resumidos mais cedo para preservar legibilidade.
-- Foto, zonas, template Anna Base Dinâmica e demais módulos preservados.
-- Story e Status não recebem nova lógica responsiva nesta etapa.
+## Alterações
+- Hierarquia visual reforçada no Feed.
+- Título, subtítulo, benefícios, preço, WhatsApp, CTA e rodapé com pisos tipográficos maiores.
+- Benefícios longos são resumidos antes de reduzir excessivamente a fonte.
+- Estrutura do sistema, template Anna, catálogo, propostas e Central de Campanhas preservados.
+
+## Correção de empacotamento
+- VERSAO.txt e VERSAO sincronizados em 20.4.2.
