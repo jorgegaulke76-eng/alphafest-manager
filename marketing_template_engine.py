@@ -895,20 +895,30 @@ def render_template(
     photo_mode: str="auto",
 ) -> bytes:
     cfg=carregar_template(template_id)
-    square=_render_square(
-        image_bytes,
-        title=title,
-        subtitle=subtitle,
-        description=description,
-        price=price,
-        cta=cta,
-        phone=phone,
-        logo_path=Path(logo_path or BASE_DIR/"logo.png"),
-        cfg=cfg,
-        palette_override=palette_override,
-        photo_mode=photo_mode,
-    )
-    final=_adapt_channel(square,size,cfg,palette_override)
+    if str(cfg.get("source")) == "library":
+        profile = _product_profile(title, description, subtitle)
+        profile["applications"] = _default_applications(profile, title)
+        final = render_library_square(
+            cfg, image_bytes=image_bytes, title=title, subtitle=subtitle,
+            description=description, price=price, cta=cta, phone=phone,
+            profile=profile, photo_mode=photo_mode, palette=palette_override,
+            canvas_size=size,
+        )
+    else:
+        square=_render_square(
+            image_bytes,
+            title=title,
+            subtitle=subtitle,
+            description=description,
+            price=price,
+            cta=cta,
+            phone=phone,
+            logo_path=Path(logo_path or BASE_DIR/"logo.png"),
+            cfg=cfg,
+            palette_override=palette_override,
+            photo_mode=photo_mode,
+        )
+        final=_adapt_channel(square,size,cfg,palette_override)
     output=io.BytesIO()
     final.convert("RGB").save(output,"PNG",optimize=True)
     return output.getvalue()

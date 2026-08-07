@@ -354,6 +354,7 @@ def render_library_square(
     template_cfg: dict[str, Any], *, image_bytes: bytes, title: str, subtitle: str,
     description: str, price: str, cta: str, phone: str, profile: dict[str, Any],
     photo_mode: str = "auto", palette: dict[str, str] | None = None,
+    canvas_size: tuple[int, int] = (1080, 1080),
 ) -> Image.Image:
     """Renderizador genérico de precisão para templates importáveis.
 
@@ -361,8 +362,14 @@ def render_library_square(
     quebra de linha e clipping. O fundo do template nunca é alterado.
     """
     bg_path: Path = template_cfg["background_path"]
-    canvas = Image.open(bg_path).convert("RGBA").resize((1080, 1080), Image.Resampling.LANCZOS)
+    CW, CH = (int(canvas_size[0]), int(canvas_size[1]))
+    canvas = Image.open(bg_path).convert("RGBA").resize((CW, CH), Image.Resampling.LANCZOS)
     layout = template_cfg.get("layout") or {}
+    type_scale = min(1.30, max(1.0, (CH / 1080.0) ** 0.34))
+    def sz(value, floor=8):
+        return max(floor, int(round(float(value) * type_scale)))
+    def box(zone):
+        return _zone_box(zone, CW, CH)
     colors = dict(template_cfg.get("colors") or {})
     p = palette or {}
     primary = p.get("primary") or colors.get("primary") or "#07349B"
@@ -373,26 +380,26 @@ def render_library_square(
     if "title" in layout:
         title_text = "\n".join(x for x in [profile.get("title1"), profile.get("title2")] if x) or title
         z=layout["title"]
-        _draw_text_box(canvas, _zone_box(z,1080,1080), title_text, text_color,
-                       max_size=int(z.get("max_size",82)), min_size=int(z.get("min_size",25)),
+        _draw_text_box(canvas, box(z), title_text, text_color,
+                       max_size=sz(z.get("max_size",82)), min_size=max(sz(z.get("min_size",25)), sz(34)),
                        bold=True, align=str(z.get("align","center")), max_lines=int(z.get("max_lines",2)), padding=int(z.get("padding",6)))
 
     if "subtitle" in layout:
         z=layout["subtitle"]
-        _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("subtitle") or subtitle,"#FFFFFF",
-                       max_size=int(z.get("max_size",34)),min_size=int(z.get("min_size",15)),bold=True,
+        _draw_text_box(canvas,box(z),profile.get("subtitle") or subtitle,"#FFFFFF",
+                       max_size=sz(z.get("max_size",34)),min_size=max(sz(z.get("min_size",15)),sz(18)),bold=True,
                        align=str(z.get("align","center")),max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",10)))
 
     if "badge" in layout:
         z=layout["badge"]
-        _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("badge") or "DESTAQUE","#FFFFFF",
-                       max_size=int(z.get("max_size",23)),min_size=int(z.get("min_size",11)),bold=True,
+        _draw_text_box(canvas,box(z),profile.get("badge") or "DESTAQUE","#FFFFFF",
+                       max_size=sz(z.get("max_size",23)),min_size=max(sz(z.get("min_size",11)),sz(13)),bold=True,
                        align="center",max_lines=int(z.get("max_lines",3)),padding=int(z.get("padding",12)))
 
     if "center" in layout:
         z=layout["center"]
-        _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("center") or "",text_color,
-                       max_size=int(z.get("max_size",25)),min_size=int(z.get("min_size",11)),bold=True,
+        _draw_text_box(canvas,box(z),profile.get("center") or "",text_color,
+                       max_size=sz(z.get("max_size",25)),min_size=max(sz(z.get("min_size",11)),sz(13)),bold=True,
                        align="center",max_lines=int(z.get("max_lines",6)),padding=int(z.get("padding",18)))
 
     source = None
@@ -404,7 +411,7 @@ def render_library_square(
 
     if "photo" in layout and source is not None:
         z=layout["photo"]
-        _render_photo_in_zone(canvas, source, z, _zone_box(z,1080,1080), photo_mode=photo_mode, padding=int(z.get("padding",8)))
+        _render_photo_in_zone(canvas, source, z, box(z), photo_mode=photo_mode, padding=int(z.get("padding",8)))
 
     # Benefícios: título e descrição medidos como um único bloco vertical para
     # impedir colisão entre um item e outro.
@@ -416,16 +423,18 @@ def render_library_square(
         if i>=len(zones):
             break
         z=zones[i]
-        box=_zone_box(z,1080,1080)
+        box=box(z)
         x1,y1,x2,y2=box
         bh=y2-y1
         head=str(benefit[0] if len(benefit)>0 else "")
         desc=str(benefit[1] if len(benefit)>1 else "")
+        if len(desc) > 74:
+            desc = desc[:74].rsplit(" ", 1)[0].rstrip(" ,.;:-") + "…"
         # Cabeçalho ocupa ~42% da zona; descrição o restante.
         split=y1+max(20,int(bh*0.42))
-        _draw_text_box(canvas,(x1,y1,x2,split),head,primary,max_size=int(z.get("head_max",22)),min_size=int(z.get("head_min",11)),
+        _draw_text_box(canvas,(x1,y1,x2,split),head,primary,max_size=sz(z.get("head_max",22)),min_size=max(sz(z.get("head_min",11)),sz(14)),
                        bold=True,align="left",valign="center",max_lines=1,padding=int(z.get("padding",2)))
-        _draw_text_box(canvas,(x1,split,x2,y2),desc,text_color,max_size=int(z.get("desc_max",13)),min_size=int(z.get("desc_min",8)),
+        _draw_text_box(canvas,(x1,split,x2,y2),desc,text_color,max_size=sz(z.get("desc_max",13)),min_size=max(sz(z.get("desc_min",8)),sz(10)),
                        bold=False,align="left",valign="top",max_lines=int(z.get("desc_lines",2)),padding=int(z.get("padding",2)))
 
     # Aplicações: imagem limitada ao interior dos círculos, com pequeno recuo
@@ -433,7 +442,7 @@ def render_library_square(
     app_zones=layout.get("applications") or []
     if source is not None:
         for zone in app_zones[:4]:
-            x1,y1,x2,y2=_zone_box(zone,1080,1080)
+            x1,y1,x2,y2=box(zone)
             inset=int(zone.get("padding",5))
             w=max(1,x2-x1-inset*2); h=max(1,y2-y1-inset*2)
             thumb=ImageOps.fit(source,(w,h),method=Image.Resampling.LANCZOS,centering=(0.5,0.5))
@@ -444,27 +453,27 @@ def render_library_square(
 
     if "price" in layout and str(price or "").strip():
         z=layout["price"]
-        _draw_text_box(canvas,_zone_box(z,1080,1080),price,accent,max_size=int(z.get("max_size",27)),min_size=int(z.get("min_size",13)),
+        _draw_text_box(canvas,box(z),price,accent,max_size=sz(z.get("max_size",27)),min_size=max(sz(z.get("min_size",13)),sz(18)),
                        bold=True,align="center",max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",4)))
 
     if "phone" in layout:
         z=layout["phone"]
-        _draw_text_box(canvas,_zone_box(z,1080,1080),phone or "11 97294-9533","#FFFFFF",
-                       max_size=int(z.get("max_size",31)),min_size=int(z.get("min_size",16)),bold=True,
+        _draw_text_box(canvas,box(z),phone or "11 97294-9533","#FFFFFF",
+                       max_size=sz(z.get("max_size",31)),min_size=max(sz(z.get("min_size",16)),sz(21)),bold=True,
                        align="center",max_lines=1,padding=int(z.get("padding",3)))
 
     if "cta" in layout:
         z=layout["cta"]
-        _draw_text_box(canvas,_zone_box(z,1080,1080),cta or profile.get("pink") or "FAÇA SEU PEDIDO!","#FFFFFF",
-                       max_size=int(z.get("max_size",25)),min_size=int(z.get("min_size",12)),bold=True,
+        _draw_text_box(canvas,box(z),cta or profile.get("pink") or "FAÇA SEU PEDIDO!","#FFFFFF",
+                       max_size=sz(z.get("max_size",25)),min_size=max(sz(z.get("min_size",12)),sz(16)),bold=True,
                        align="center",max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",8)))
 
     footer_zones=layout.get("footer") or []
     footer=list(profile.get("footer") or [])[:4]
     for i,zone in enumerate(footer_zones[:4]):
         if i<len(footer):
-            _draw_text_box(canvas,_zone_box(zone,1080,1080),footer[i],"#FFFFFF",
-                           max_size=int(zone.get("max_size",14)),min_size=int(zone.get("min_size",8)),bold=True,
+            _draw_text_box(canvas,box(zone),footer[i],"#FFFFFF",
+                           max_size=sz(zone.get("max_size",14)),min_size=max(sz(zone.get("min_size",8)),sz(10)),bold=True,
                            align="center",max_lines=int(zone.get("max_lines",2)),padding=int(zone.get("padding",2)))
     return canvas
 

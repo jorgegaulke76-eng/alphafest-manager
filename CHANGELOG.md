@@ -424,3 +424,8 @@ hangelog
 ## 20.4.0 - Motor de Renderização de Precisão
 - Clipping por zona, auto-fit de fontes, foto proporcional e zonas seguras para telefone/preço/CTA.
 - Anna Base Dinâmica preservada; apenas regras de posicionamento e comportamento foram refinadas.
+
+
+## 20.4.1
+- Hierarquia visual e formatos responsivos.
+- Feed/Story/Status usam toda a área final.
