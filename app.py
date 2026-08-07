@@ -2892,6 +2892,23 @@ def _ler_bytes_midia(origem):
         pass
     return b""
 
+
+def imagem_streamlit_catalogo(origem):
+    """Normaliza a origem de uma imagem do catálogo para uso no st.image().
+
+    Data URLs persistentes são decodificadas para bytes; URLs públicas e caminhos
+    existentes continuam sendo entregues diretamente ao Streamlit.
+    """
+    if origem is None:
+        return None
+    texto = str(origem).strip() if not isinstance(origem, (bytes, bytearray, memoryview)) else ""
+    if texto.startswith("data:image/"):
+        bruto = _ler_bytes_midia(origem)
+        return bruto or None
+    if isinstance(origem, (bytes, bytearray, memoryview)):
+        return bytes(origem)
+    return origem
+
 def converter_imagem_para_png(origem):
     """Aceita imagem enviada ou caminho e devolve PNG em bytes, preservando o original."""
     if Image is None:
@@ -4945,12 +4962,17 @@ def salvar_catalogo(lista):
 
 
 def imagem_data_uri(path):
-    if not path or not os.path.exists(path):
+    if not path:
         return ""
-    ext = os.path.splitext(path)[1].lower().replace(".", "") or "png"
+    texto = str(path).strip()
+    if texto.startswith("data:image/"):
+        return texto
+    if not os.path.exists(texto):
+        return ""
+    ext = os.path.splitext(texto)[1].lower().replace(".", "") or "png"
     if ext == "jpg":
         ext = "jpeg"
-    return f"data:image/{ext};base64,{get_image_base64(path)}"
+    return f"data:image/{ext};base64,{get_image_base64(texto)}"
 
 
 def slug_html(texto):
@@ -6508,7 +6530,7 @@ def dialog_catalogo_visualizar_anna():
             with topo_img:
                 if imagens_atuais:
                     try:
-                        st.image(imagens_atuais[0], use_container_width=True)
+                        st.image(imagem_streamlit_catalogo(imagens_atuais[0]), use_container_width=True)
                     except Exception:
                         st.caption("Imagem indisponível")
                 else:
@@ -9687,7 +9709,7 @@ if pagina_atual == "catalogo":
                 for _idx_img, _img_atual in enumerate(imagens_cadastradas):
                     _ci1, _ci2 = st.columns([1, 4])
                     try:
-                        _ci1.image(_img_atual, width=110)
+                        _ci1.image(imagem_streamlit_catalogo(_img_atual), width=110)
                     except Exception:
                         _ci1.write("🖼️")
                     _origem = "Armazenamento online" if str(_img_atual).startswith("http") else "Imagem incorporada ao catálogo"
@@ -9831,7 +9853,7 @@ if pagina_atual == "catalogo":
                     imgs = produto_cat.get("Imagens", []) or []
                     if imgs:
                         try:
-                            cimg.image(imgs[0], width=100)
+                            cimg.image(imagem_streamlit_catalogo(imgs[0]), width=100)
                         except Exception:
                             cimg.write("📷")
                     else:

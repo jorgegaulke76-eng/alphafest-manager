@@ -415,3 +415,8 @@ hangelog
 - Reutilização rápida cria nova versão editável alterando preço, CTA, chamada e formatos.
 - Duplicações preservam a campanha original e registram a origem.
 - Template Engine, Anna Base Dinâmica e hotfix das propostas preservados.
+
+## 20.3.4 - Exibição das fotos persistentes do Catálogo
+- Decodificação de data URLs/base64 antes do `st.image()`.
+- Correção da visualização na listagem, modal e edição do produto.
+- Catálogo HTML passa a aceitar data URLs incorporadas diretamente.
