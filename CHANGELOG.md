@@ -433,3 +433,7 @@ hangelog
 ## 20.4.2
 - Calibração Visual Anna.
 - VERSAO.txt e VERSAO sincronizados.
+
+
+## 20.4.3
+- Recalibração conservadora das zonas do Feed no Anna Base Dinâmica.
