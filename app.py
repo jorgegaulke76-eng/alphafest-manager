@@ -7277,14 +7277,23 @@ if pagina_atual == "central":
             st.write(f"**Pedido:** {prioridade.get('numero_proposta', '—')}  •  **Entrega:** {prioridade.get('data_entrega', 'A combinar')}")
             st.write(f"**Motivo:** {motivo}")
             st.write(f"**Valor:** R$ {total_prioridade:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            if st.button("📋 Abrir e atualizar agora", key="central_abrir_prioridade", type="primary"):
-                st.session_state.alerta_proposta_numero = prioridade.get("numero_proposta")
-                st.rerun()
+            st.button(
+                "📋 Abrir e atualizar agora",
+                key="central_abrir_prioridade",
+                type="primary",
+                on_click=lambda n=prioridade.get("numero_proposta"): st.session_state.__setitem__("alerta_proposta_numero", n),
+            )
     else:
         st.success("Nenhuma prioridade crítica neste momento. Tudo em dia!")
 
     st.divider()
     st.subheader("🚨 Atenção")
+
+    def _selecionar_alerta_central(numero):
+        # Callback nativo: evita st.rerun() disparado durante a própria renderização
+        # do bloco de alertas, reduzindo conflitos de reconciliação no frontend React.
+        st.session_state.alerta_proposta_numero = numero
+
     alertas_central = []
     for p in pedidos_atrasados_central[:5]:
         alertas_central.append(("🚨", p.get("numero_proposta"), p.get("cliente_nome"), f"Atrasado desde {p.get('data_entrega', '—')}"))
@@ -7294,11 +7303,18 @@ if pagina_atual == "central":
         alertas_central.append(("🟡", t.get("numero_proposta"), t.get("cliente_nome"), "Aguardando aprovação"))
     if alertas_central:
         for idx_alerta, (icone, numero, cliente, texto) in enumerate(alertas_central[:10]):
-            al1, al2 = st.columns([7, 2])
-            al1.write(f"{icone} **{numero} — {cliente}** · {texto}")
-            if al2.button("Abrir e atualizar", key=f"central_alerta_abrir_{idx_alerta}_{numero}", use_container_width=True):
-                st.session_state.alerta_proposta_numero = numero
-                st.rerun()
+            # Container estável por alerta: evita mudanças bruscas na árvore DOM
+            # quando o editor operacional é aberto logo abaixo da lista.
+            with st.container(border=True):
+                al1, al2 = st.columns([7, 2])
+                al1.markdown(f"{icone} **{html.escape(str(numero))} — {html.escape(str(cliente or 'Cliente'))}** · {html.escape(str(texto))}")
+                al2.button(
+                    "Abrir e atualizar",
+                    key=f"central_alerta_abrir_{idx_alerta}_{numero}",
+                    use_container_width=True,
+                    on_click=_selecionar_alerta_central,
+                    args=(numero,),
+                )
     else:
         st.info("Nenhum alerta importante agora.")
 

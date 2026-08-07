@@ -420,3 +420,6 @@ hangelog
 - Decodificação de data URLs/base64 antes do `st.image()`.
 - Correção da visualização na listagem, modal e edição do produto.
 - Catálogo HTML passa a aceitar data URLs incorporadas diretamente.
+
+## 20.3.5 - Hotfix tela Atenção
+- Botões de alertas migrados para callbacks nativos, evitando conflito de reconciliação do React/Streamlit (`removeChild`).
