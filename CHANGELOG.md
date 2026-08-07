@@ -426,6 +426,5 @@ hangelog
 - Anna Base Dinâmica preservada; apenas regras de posicionamento e comportamento foram refinadas.
 
 
-## 20.4.1
-- Hierarquia visual e formatos responsivos.
-- Feed/Story/Status usam toda a área final.
+## 20.4.1 — Hierarquia Visual Segura
+- Ajustes tipográficos sem alterar os formatos/canais.

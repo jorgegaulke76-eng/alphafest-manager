@@ -1,7 +1,10 @@
-# 20.4.1 — Hierarquia Visual + Formatos Responsivos
-- Feed, Story e Status são compostos diretamente no tamanho final.
-- Story/Status deixam de usar quadrado centralizado com sobras azuis.
-- Tipografia mínima maior para título, benefícios, preço, telefone e CTA.
-- Benefícios longos são encurtados antes de sacrificar legibilidade.
-- Clipping por zonas da 20.4.0 preservado.
+# AlphaFest Manager 20.4.1 — Hierarquia Visual Segura
+
+Esta reconstrução parte diretamente da 20.4.0 estável.
+
+- Não altera Feed/Story/Status nem o adaptador de canais.
+- Aumenta o tamanho mínimo do título.
+- Reforça preço, WhatsApp e CTA.
+- Mantém clipping e zonas da 20.4.0.
+- Benefícios longos são resumidos visualmente antes de reduzir a fonte.
 - Anna Base Dinâmica preservada.
