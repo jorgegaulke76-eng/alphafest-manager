@@ -5216,6 +5216,69 @@ def salvar_upload_catalogo(upload):
     return upload_catalog_image(upload, PASTA_UPLOADS)
 
 
+class _DriveImageUpload:
+    """Adaptador mínimo para reutilizar o mesmo pipeline de upload do catálogo."""
+    def __init__(self, content, name, content_type):
+        self._content = bytes(content)
+        self.name = name
+        self.type = content_type
+
+    def getbuffer(self):
+        return memoryview(self._content)
+
+
+def _google_drive_file_id(url):
+    texto = str(url or "").strip()
+    if not texto:
+        return ""
+    padroes = [
+        r"drive\.google\.com/file/d/([A-Za-z0-9_-]+)",
+        r"drive\.google\.com/open\?id=([A-Za-z0-9_-]+)",
+        r"drive\.google\.com/uc\?(?:[^#]*&)?id=([A-Za-z0-9_-]+)",
+        r"[?&]id=([A-Za-z0-9_-]+)",
+    ]
+    for padrao in padroes:
+        achou = re.search(padrao, texto)
+        if achou:
+            return achou.group(1)
+    return ""
+
+
+def importar_imagem_google_drive(url):
+    """Baixa uma imagem compartilhada do Google Drive e a incorpora ao catálogo."""
+    file_id = _google_drive_file_id(url)
+    if not file_id:
+        return "", "Link do Google Drive não reconhecido."
+    try:
+        resposta = requests.get(
+            "https://drive.usercontent.google.com/download",
+            params={"id": file_id, "export": "download", "confirm": "t"},
+            timeout=25,
+            allow_redirects=True,
+        )
+        resposta.raise_for_status()
+        tipo = str(resposta.headers.get("Content-Type", "")).split(";")[0].strip().lower()
+        if tipo not in {"image/png", "image/jpeg", "image/webp"}:
+            return "", "O arquivo do Drive não está público ou não é PNG/JPG/WEBP."
+        extensao = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}[tipo]
+        upload = _DriveImageUpload(resposta.content, f"google_drive_{file_id}.{extensao}", tipo)
+        caminho = salvar_upload_catalogo(upload)
+        return caminho, "" if caminho else "Não foi possível salvar a imagem importada."
+    except requests.RequestException:
+        return "", "Não foi possível acessar a imagem. Confirme que o link está compartilhado como ‘Qualquer pessoa com o link’."
+
+
+def importar_imagens_google_drive(texto_urls):
+    caminhos, erros = [], []
+    for url in [x.strip() for x in str(texto_urls or "").splitlines() if x.strip()]:
+        caminho, erro = importar_imagem_google_drive(url)
+        if caminho:
+            caminhos.append(caminho)
+        elif erro:
+            erros.append(erro)
+    return caminhos, erros
+
+
 def salvar_arquivo_biblioteca(upload, produto_nome="produto"):
     """Salva um arquivo individual da memória da empresa."""
     return upload_library_file(upload, produto_nome=produto_nome, local_upload_dir="biblioteca_uploads")
@@ -6367,7 +6430,13 @@ def dialog_catalogo_cadastro_anna(produto_indice=None):
         preco = c4.text_input("Valor", value=str(produto.get("Preco", "")), placeholder="Ex.: 25,00")
         descricao = st.text_area("Descrição para o catálogo", value=str(produto.get("DescricaoCurta", produto.get("Descricao", ""))), height=110)
         imagens_urls = st.text_area("URLs das imagens (uma por linha)", value="\n".join([x for x in (produto.get("Imagens", []) or []) if str(x).startswith("http")]), height=90)
-        fotos = st.file_uploader("Adicionar fotos", type=["png","jpg","jpeg","webp"], accept_multiple_files=True)
+        fotos = st.file_uploader("Adicionar fotos do computador", type=["png","jpg","jpeg","webp"], accept_multiple_files=True)
+        drive_urls = st.text_area(
+            "Importar fotos do Google Drive (um link por linha)",
+            placeholder="Cole aqui o link compartilhado da foto no Google Drive",
+            help="No Google Drive, deixe o arquivo como ‘Qualquer pessoa com o link’. A foto será copiada para o catálogo; não dependerá do link depois.",
+            height=80,
+        )
         c5, c6 = st.columns(2)
         ativo = c5.checkbox("Produto ativo", value=bool(produto.get("Ativo", True)))
         destaque = c6.checkbox("Produto em destaque", value=bool(produto.get("Destaque", False)))
@@ -6382,6 +6451,11 @@ def dialog_catalogo_cadastro_anna(produto_indice=None):
             caminho = salvar_upload_catalogo(foto)
             if caminho:
                 imagens.insert(0, caminho)
+        drive_imagens, drive_erros = importar_imagens_google_drive(drive_urls)
+        for caminho in reversed(drive_imagens):
+            imagens.insert(0, caminho)
+        if drive_erros:
+            st.warning("Google Drive: " + " ".join(dict.fromkeys(drive_erros)))
         registro = dict(produto)
         registro.update({
             "Nome": nome.strip(), "Categoria": categoria.strip(), "Subcategoria": subcategoria.strip(),
@@ -6470,10 +6544,17 @@ def dialog_catalogo_visualizar_anna():
                         key=f"{form_key}_urls",
                     )
                     novas_fotos = st.file_uploader(
-                        "Adicionar mais fotos deste produto",
+                        "Adicionar mais fotos do computador",
                         type=["png", "jpg", "jpeg", "webp"],
                         accept_multiple_files=True,
                         key=f"{form_key}_fotos",
+                    )
+                    drive_urls = st.text_area(
+                        "Importar fotos do Google Drive (um link por linha)",
+                        placeholder="Cole aqui o link compartilhado da foto no Google Drive",
+                        help="No Google Drive, deixe o arquivo como ‘Qualquer pessoa com o link’. A foto será copiada para o catálogo.",
+                        height=80,
+                        key=f"{form_key}_drive",
                     )
                     manter_fotos = st.checkbox(
                         "Manter todas as fotos já cadastradas",
@@ -6496,6 +6577,11 @@ def dialog_catalogo_visualizar_anna():
                             caminho = salvar_upload_catalogo(foto)
                             if caminho:
                                 imagens.insert(0, caminho)
+                        drive_imagens, drive_erros = importar_imagens_google_drive(drive_urls)
+                        for caminho in reversed(drive_imagens):
+                            imagens.insert(0, caminho)
+                        if drive_erros:
+                            st.warning("Google Drive: " + " ".join(dict.fromkeys(drive_erros)))
                         registro = dict(produto)
                         registro.update({
                             "Nome": nome.strip(),
