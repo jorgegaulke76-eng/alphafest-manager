@@ -1,5 +1,9 @@
 import streamlit as st
 import streamlit.components.v1 as components
+try:
+    from streamlit_drawable_canvas import st_canvas
+except Exception:
+    st_canvas = None
 import pandas as pd
 import json
 import os
@@ -8958,13 +8962,60 @@ if pagina_atual == "crescimento":
                                 else:
                                     zone = layout_edit.setdefault("footer", [])[box_ref]
 
-                                st.caption("📐 Posição em grade de 0 a 1000. A fonte e os limites tipográficos permanecem protegidos pelo template.")
-                                bx1, bx2, bx3, bx4 = st.columns(4)
-                                new_x = bx1.number_input("X", 0, 980, int(zone.get("x", 0)), step=5, key=f"box_x_{tpl['id']}_{box_key}")
-                                new_y = bx2.number_input("Y", 0, 980, int(zone.get("y", 0)), step=5, key=f"box_y_{tpl['id']}_{box_key}")
-                                new_w = bx3.number_input("Largura", 20, 1000, int(zone.get("w", 200)), step=5, key=f"box_w_{tpl['id']}_{box_key}")
-                                new_h = bx4.number_input("Altura", 20, 1000, int(zone.get("h", 80)), step=5, key=f"box_h_{tpl['id']}_{box_key}")
-                                zone.update({"x": int(new_x), "y": int(new_y), "w": int(new_w), "h": int(new_h)})
+                                st.caption("🖱️ Arraste a caixa, puxe os cantos para redimensionar e use a alça de rotação para inclinar. Fonte e limites tipográficos continuam protegidos.")
+
+                                # 20.4.6-B — edição direta sobre a arte com Fabric.js via drawable-canvas.
+                                # O canvas trabalha em 760x760 e o layout persistido continua normalizado em 0..1000.
+                                if st_canvas is not None:
+                                    try:
+                                        bg_editor = Image.open(cfg_tpl_editor["background_path"]).convert("RGBA").resize((760, 760), Image.Resampling.LANCZOS)
+                                        sx = float(zone.get("x", 0)) * 760 / 1000
+                                        sy = float(zone.get("y", 0)) * 760 / 1000
+                                        sw = max(16.0, float(zone.get("w", 200)) * 760 / 1000)
+                                        sh = max(16.0, float(zone.get("h", 80)) * 760 / 1000)
+                                        sang = float(zone.get("angle", 0) or 0)
+                                        initial = {
+                                            "version": "4.4.0",
+                                            "objects": [{
+                                                "type": "rect", "left": sx, "top": sy,
+                                                "width": sw, "height": sh, "scaleX": 1, "scaleY": 1,
+                                                "angle": sang, "fill": "rgba(239,42,146,0.12)",
+                                                "stroke": "#ef2a92", "strokeWidth": 4,
+                                                "transparentCorners": False, "cornerColor": "#ffffff",
+                                                "cornerStrokeColor": "#ef2a92", "borderColor": "#ef2a92",
+                                                "cornerSize": 14, "padding": 2,
+                                            }]
+                                        }
+                                        canvas_result = st_canvas(
+                                            fill_color="rgba(239, 42, 146, 0.12)", stroke_width=4,
+                                            stroke_color="#ef2a92", background_image=bg_editor,
+                                            update_streamlit=True, height=760, width=760,
+                                            drawing_mode="transform", initial_drawing=initial,
+                                            display_toolbar=False, key=f"dragbox_{tpl['id']}_{box_key}",
+                                        )
+                                        if canvas_result.json_data and canvas_result.json_data.get("objects"):
+                                            obj = canvas_result.json_data["objects"][0]
+                                            ow = float(obj.get("width", sw)) * float(obj.get("scaleX", 1) or 1)
+                                            oh = float(obj.get("height", sh)) * float(obj.get("scaleY", 1) or 1)
+                                            zone.update({
+                                                "x": max(0, min(980, int(round(float(obj.get("left", sx)) * 1000 / 760)))),
+                                                "y": max(0, min(980, int(round(float(obj.get("top", sy)) * 1000 / 760)))),
+                                                "w": max(20, min(1000, int(round(ow * 1000 / 760)))),
+                                                "h": max(20, min(1000, int(round(oh * 1000 / 760)))),
+                                                "angle": round(float(obj.get("angle", 0) or 0), 1),
+                                            })
+                                        st.caption(f"📍 X {zone.get('x',0)} • Y {zone.get('y',0)} • {zone.get('w',0)}×{zone.get('h',0)} • Giro {zone.get('angle',0)}°")
+                                    except Exception as _canvas_exc:
+                                        st.warning("O editor de arrastar não pôde ser aberto; use os controles numéricos abaixo.")
+
+                                with st.expander("⌨️ Ajuste fino por números", expanded=st_canvas is None):
+                                    bx1, bx2, bx3, bx4, bx5 = st.columns(5)
+                                    new_x = bx1.number_input("X", 0, 980, int(zone.get("x", 0)), step=5, key=f"box_x_{tpl['id']}_{box_key}")
+                                    new_y = bx2.number_input("Y", 0, 980, int(zone.get("y", 0)), step=5, key=f"box_y_{tpl['id']}_{box_key}")
+                                    new_w = bx3.number_input("Largura", 20, 1000, int(zone.get("w", 200)), step=5, key=f"box_w_{tpl['id']}_{box_key}")
+                                    new_h = bx4.number_input("Altura", 20, 1000, int(zone.get("h", 80)), step=5, key=f"box_h_{tpl['id']}_{box_key}")
+                                    new_angle = bx5.number_input("Giro °", -180.0, 180.0, float(zone.get("angle", 0) or 0), step=1.0, key=f"box_angle_{tpl['id']}_{box_key}")
+                                    zone.update({"x": int(new_x), "y": int(new_y), "w": int(new_w), "h": int(new_h), "angle": float(new_angle)})
 
                                 cor1, cor2 = st.columns(2)
                                 if box_kind == "benefit":
@@ -8989,10 +9040,10 @@ if pagina_atual == "crescimento":
 
                                 pv = _mkt_preview_boxes(cfg_tpl_editor, layout_edit, box_key)
                                 if pv is not None:
-                                    st.image(pv, caption="Preview técnico — rosa = caixa selecionada", use_container_width=True)
+                                    st.image(pv, caption="Conferência do layout — rosa = caixa selecionada", use_container_width=True)
 
                                 sv1, sv2 = st.columns(2)
-                                if sv1.button("💾 Salvar posição e cor", key=f"box_save_{tpl['id']}", use_container_width=True, type="primary"):
+                                if sv1.button("💾 Salvar posição, tamanho, giro e cor", key=f"box_save_{tpl['id']}", use_container_width=True, type="primary"):
                                     overrides_all[tpl["id"]] = layout_edit
                                     config_marketing["template_layout_overrides"] = overrides_all
                                     marketing["config"] = config_marketing

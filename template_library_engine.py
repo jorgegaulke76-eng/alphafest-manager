@@ -322,6 +322,7 @@ def _draw_text_box(
     valign: str = "center",
     max_lines: int | None = None,
     padding: int = 4,
+    angle: float = 0,
 ) -> None:
     """Renderiza em uma camada limitada à zona: nada pode vazar para outra área."""
     if not str(text or "").strip():
@@ -349,7 +350,14 @@ def _draw_text_box(
     else:
         ty = (h-th)//2 - bb[1]
     ldraw.multiline_text((tx,ty), wrapped, font=font, fill=color, spacing=spacing, align=align)
-    canvas.alpha_composite(layer, (x1,y1))
+    angle = float(angle or 0)
+    if abs(angle) > 0.05:
+        rotated = layer.rotate(-angle, resample=Image.Resampling.BICUBIC, expand=True)
+        cx = x1 + w // 2
+        cy = y1 + h // 2
+        canvas.alpha_composite(rotated, (int(cx - rotated.width/2), int(cy - rotated.height/2)))
+    else:
+        canvas.alpha_composite(layer, (x1,y1))
 
 
 def _draw_centered_text(draw: ImageDraw.ImageDraw, box, text: str, color: str, *, max_size=64, min_size=14, bold=True, align="center"):
@@ -468,25 +476,25 @@ def render_library_square(
         z=layout["title"]
         _draw_text_box(canvas, _zone_box(z,1080,1080), title_text, str(z.get("color") or text_color),
                        max_size=int(z.get("max_size",112)), min_size=max(int(z.get("min_size",40)),66),
-                       bold=True, align=str(z.get("align","center")), max_lines=int(z.get("max_lines",2)), padding=int(z.get("padding",6)))
+                       bold=True, align=str(z.get("align","center")), max_lines=int(z.get("max_lines",2)), padding=int(z.get("padding",6)), angle=float(z.get("angle",0) or 0))
 
     if "subtitle" in layout:
         z=layout["subtitle"]
         _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("subtitle") or subtitle,str(z.get("color") or "#FFFFFF"),
                        max_size=int(z.get("max_size",42)),min_size=max(int(z.get("min_size",24)),30),bold=True,
-                       align=str(z.get("align","center")),max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",10)))
+                       align=str(z.get("align","center")),max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",10)), angle=float(z.get("angle",0) or 0))
 
     if "badge" in layout:
         z=layout["badge"]
         _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("badge") or "DESTAQUE",str(z.get("color") or "#FFFFFF"),
                        max_size=int(z.get("max_size",23)),min_size=max(int(z.get("min_size",11)),18),bold=True,
-                       align="center",max_lines=int(z.get("max_lines",3)),padding=int(z.get("padding",12)))
+                       align="center",max_lines=int(z.get("max_lines",3)),padding=int(z.get("padding",12)), angle=float(z.get("angle",0) or 0))
 
     if "center" in layout:
         z=layout["center"]
         _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("center") or "",str(z.get("color") or text_color),
                        max_size=int(z.get("max_size",25)),min_size=max(int(z.get("min_size",11)),18),bold=True,
-                       align="center",max_lines=int(z.get("max_lines",6)),padding=int(z.get("padding",18)))
+                       align="center",max_lines=int(z.get("max_lines",6)),padding=int(z.get("padding",18)), angle=float(z.get("angle",0) or 0))
 
     source = None
     if image_bytes:
@@ -520,9 +528,9 @@ def render_library_square(
         # Cabeçalho ocupa ~42% da zona; descrição o restante.
         split=y1+max(20,int(bh*0.42))
         _draw_text_box(canvas,(x1,y1,x2,split),head,str(z.get("head_color") or primary),max_size=int(z.get("head_max",22)),min_size=max(int(z.get("head_min",11)),20),
-                       bold=True,align="left",valign="center",max_lines=1,padding=int(z.get("padding",2)))
+                       bold=True,align="left",valign="center",max_lines=1,padding=int(z.get("padding",2)), angle=float(z.get("angle",0) or 0))
         _draw_text_box(canvas,(x1,split,x2,y2),desc,str(z.get("desc_color") or text_color),max_size=int(z.get("desc_max",13)),min_size=max(int(z.get("desc_min",8)),13),
-                       bold=False,align="left",valign="top",max_lines=int(z.get("desc_lines",2)),padding=int(z.get("padding",2)))
+                       bold=False,align="left",valign="top",max_lines=int(z.get("desc_lines",2)),padding=int(z.get("padding",2)), angle=float(z.get("angle",0) or 0))
 
     # Aplicações: imagem limitada ao interior dos círculos, com pequeno recuo
     # para não cobrir o contorno desenhado no fundo.
@@ -541,19 +549,19 @@ def render_library_square(
     if "price" in layout and str(price or "").strip():
         z=layout["price"]
         _draw_text_box(canvas,_zone_box(z,1080,1080),price,str(z.get("color") or accent),max_size=int(z.get("max_size",27)),min_size=max(int(z.get("min_size",13)),22),
-                       bold=True,align="center",max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",4)))
+                       bold=True,align="center",max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",4)), angle=float(z.get("angle",0) or 0))
 
     if "phone" in layout:
         z=layout["phone"]
         _draw_text_box(canvas,_zone_box(z,1080,1080),phone or "11 97294-9533",str(z.get("color") or "#FFFFFF"),
                        max_size=int(z.get("max_size",31)),min_size=max(int(z.get("min_size",16)),27),bold=True,
-                       align="center",max_lines=1,padding=int(z.get("padding",3)))
+                       align="center",max_lines=1,padding=int(z.get("padding",3)), angle=float(z.get("angle",0) or 0))
 
     if "cta" in layout:
         z=layout["cta"]
         _draw_text_box(canvas,_zone_box(z,1080,1080),cta or profile.get("pink") or "FAÇA SEU PEDIDO!",str(z.get("color") or "#FFFFFF"),
                        max_size=int(z.get("max_size",25)),min_size=max(int(z.get("min_size",12)),22),bold=True,
-                       align="center",max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",8)))
+                       align="center",max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",8)), angle=float(z.get("angle",0) or 0))
 
     footer_zones=layout.get("footer") or []
     footer=list(profile.get("footer") or [])[:4]
@@ -561,6 +569,6 @@ def render_library_square(
         if i<len(footer):
             _draw_text_box(canvas,_zone_box(zone,1080,1080),footer[i],str(zone.get("color") or "#FFFFFF"),
                            max_size=int(zone.get("max_size",14)),min_size=max(int(zone.get("min_size",8)),12),bold=True,
-                           align="center",max_lines=int(zone.get("max_lines",2)),padding=int(zone.get("padding",2)))
+                           align="center",max_lines=int(zone.get("max_lines",2)),padding=int(zone.get("padding",2)), angle=float(zone.get("angle",0) or 0))
     return canvas
 
