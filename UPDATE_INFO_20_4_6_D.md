@@ -1,9 +1,12 @@
-# AlphaFest Manager 20.4.6-D
+# 20.4.6-D — Editor Visual Cloud Seguro
 
-## Correção do Editor Visual Drag & Drop
+Base oficial: Atual 2046C enviada e testada.
 
-- Corrigido o carregamento do componente `alphafest_drag_box` no Streamlit Cloud.
-- O frontend agora fica em `alphafest_drag_box/index.html`, estrutura exigida por `components.declare_component(path=...)`.
-- Mantidos arrastar, redimensionar, girar e retorno das coordenadas ao Python.
-- Mantidos controles numéricos como ajuste fino e fallback.
-- Nenhuma alteração no fluxo de orçamento, catálogo, clientes ou banco.
+Correção:
+- declare_component agora aponta para components/alphafest_drag_box.
+- frontend contém index.html próprio.
+- editor não usa CDN, npm, Fabric.js ou streamlit-drawable-canvas.
+- comunicação com Streamlit é feita pelo protocolo do componente no próprio JavaScript.
+- arrastar, redimensionar e girar permanecem disponíveis.
+- ajuste numérico continua como fallback.
+- demais módulos do AlphaFest não foram alterados.
