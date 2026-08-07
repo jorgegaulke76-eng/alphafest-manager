@@ -1106,14 +1106,15 @@ def formatar_msg_whatsapp(prop):
         itens_txt = ["Nenhum item informado", ""]
 
     desconto = numero(prop.get("desconto", prop.get("desconto_valor", 0)))
+    taxa_entrega = numero(prop.get("taxa_entrega", 0))
     subtotal_salvo = prop.get("subtotal")
     subtotal = numero(subtotal_salvo, subtotal_calculado)
     if subtotal_salvo is None or subtotal <= 0:
         subtotal = subtotal_calculado
     total_salvo = prop.get("valor_total", prop.get("total"))
-    total = numero(total_salvo, max(subtotal - desconto, 0.0))
+    total = numero(total_salvo, max(subtotal - desconto, 0.0) + taxa_entrega)
     if total_salvo is None:
-        total = max(subtotal - desconto, 0.0)
+        total = max(subtotal - desconto, 0.0) + taxa_entrega
 
     unidade_prazo = "dia útil" if prazo == "1" else "dias úteis"
     unidade_validade = "dia corrido" if validade == "1" else "dias corridos"
@@ -1135,6 +1136,7 @@ def formatar_msg_whatsapp(prop):
         sep,
         f"*Subtotal:* {moeda(subtotal)}",
         f"*Desconto:* - {moeda(desconto)}",
+        f"*Taxa de Entrega:* {moeda(taxa_entrega)}",
         f"*VALOR TOTAL DO PEDIDO:* {moeda(total)}",
         sep,
         f"*Previsão de Entrega:* {entrega}",
@@ -1350,6 +1352,7 @@ def gerar_html(proposta):
     itens = proposta.get("itens", []) or []
     subtotal = proposta.get("subtotal", 0)
     desconto = proposta.get("desconto", proposta.get("desconto_valor", 0))
+    taxa_entrega = proposta.get("taxa_entrega", 0)
     total = proposta.get("valor_total", proposta.get("total", 0))
     pagamento = proposta.get("pagamento", "Pagamento via PIX: https://linkspix.app/alphafestitatiba")
     observacoes = proposta.get("observacoes", "")
@@ -1466,8 +1469,9 @@ def gerar_html(proposta):
     except (TypeError, ValueError):
         total_valor = 0
 
+    taxa_entrega_valor = valor_float(taxa_entrega)
     if total_valor == 0 and subtotal_valor:
-        total_valor = max(0, subtotal_valor - desconto_valor)
+        total_valor = max(0, subtotal_valor - desconto_valor) + taxa_entrega_valor
 
     observacoes_txt = esc(observacoes, "Nenhuma observação adicional.")
     pagamento_txt = esc(pagamento, "A combinar")
@@ -2121,6 +2125,10 @@ def gerar_html(proposta):
                         <span>Desconto</span>
                         <strong>- {moeda(desconto_valor)}</strong>
                     </div>
+                    <div class="total-row">
+                        <span>Taxa de entrega</span>
+                        <strong>{moeda(taxa_entrega_valor)}</strong>
+                    </div>
 
                     <div class="grand-total">
                         <span>Total</span>
@@ -2196,8 +2204,10 @@ def calcular_valores_proposta(prop):
     itens = prop.get("itens", []) or []
     subtotal = sum(valor_float(i.get("quantidade")) * valor_float(i.get("valor_unitario")) for i in itens)
     desconto = valor_float(prop.get("desconto", prop.get("desconto_valor", 0)))
+    taxa_entrega = valor_float(prop.get("taxa_entrega", 0))
     total = prop.get("valor_total", prop.get("total"))
-    total = valor_float(total, max(subtotal - desconto, 0)) if total is not None else max(subtotal - desconto, 0)
+    total_calculado = max(subtotal - desconto, 0) + taxa_entrega
+    total = valor_float(total, total_calculado) if total is not None else total_calculado
     return subtotal, desconto, total
 
 
@@ -2238,7 +2248,9 @@ def aplicar_proposta_pendente_no_formulario():
     st.session_state.form_whatsapp = prop.get("whatsapp", prop.get("cliente_wa", ""))
     st.session_state.form_desconto = valor_float(prop.get("desconto", prop.get("desconto_valor", 0)))
     st.session_state.form_prazo = str(prop.get("prazo_dias", "10"))
-    st.session_state.form_frete = str(prop.get("frete_tipo", "Retirada em Itatiba"))
+    frete_salvo = str(prop.get("frete_tipo", "Retirada")).strip()
+    st.session_state.form_frete = "Entrega" if "entrega" in frete_salvo.casefold() and "retirada" not in frete_salvo.casefold() else "Retirada"
+    st.session_state.form_taxa_entrega = valor_float(prop.get("taxa_entrega", 0))
     st.session_state.form_validade = str(prop.get("validade_dias", "5"))
     try:
         st.session_state.form_entrega = datetime.strptime(
@@ -2268,7 +2280,8 @@ def aplicar_limpeza_formulario_pendente():
     st.session_state.form_desconto = 0.0
     st.session_state.form_entrega = hoje_local()
     st.session_state.form_prazo = "10"
-    st.session_state.form_frete = "Retirada em Itatiba"
+    st.session_state.form_frete = "Retirada"
+    st.session_state.form_taxa_entrega = 0.0
     st.session_state.form_validade = "5"
     st.session_state.form_key += 1
 
@@ -4598,7 +4611,7 @@ def renderizar_jornada_atendimento():
             "jornada_cliente", "jornada_whatsapp", "jornada_necessidade", "jornada_ocasiao",
             "jornada_tema", "jornada_quantidade", "jornada_prazo", "jornada_limite",
             "jornada_detalhes", "jornada_observacoes", "jornada_entrega", "jornada_desconto",
-            "jornada_prazo_prod", "jornada_frete", "jornada_validade",
+            "jornada_prazo_prod", "jornada_frete", "jornada_taxa_entrega", "jornada_validade",
         ]:
             st.session_state.pop(chave, None)
         st.session_state.jornada_itens = []
@@ -4708,7 +4721,7 @@ def renderizar_jornada_atendimento():
             "jornada_cliente", "jornada_whatsapp", "jornada_necessidade", "jornada_ocasiao",
             "jornada_tema", "jornada_quantidade", "jornada_prazo", "jornada_limite",
             "jornada_detalhes", "jornada_observacoes", "jornada_entrega", "jornada_desconto",
-            "jornada_prazo_prod", "jornada_frete", "jornada_validade",
+            "jornada_prazo_prod", "jornada_frete", "jornada_taxa_entrega", "jornada_validade",
         ]:
             st.session_state.pop(chave, None)
         st.session_state.jornada_itens = []
@@ -5906,6 +5919,7 @@ iniciar_estado("form_desconto", 0.0)
 iniciar_estado("form_entrega", hoje_local())
 iniciar_estado("form_prazo", str(empresa_form.get("prazo_padrao", "10")))
 iniciar_estado("form_frete", str(empresa_form.get("frete_padrao", "Retirada em Itatiba")))
+iniciar_estado("form_taxa_entrega", 0.0)
 iniciar_estado("form_validade", str(empresa_form.get("validade_padrao", "5")))
 iniciar_estado("editar_numero", None)
 iniciar_estado("alerta_proposta_numero", None)
@@ -8945,12 +8959,19 @@ if pagina_atual == "novo_orcamento":
         dt_entrega = c2.date_input("📅 Data Entrega", key="form_entrega")
         prazo = c3.text_input("Prazo de Produção (dias úteis)", key="form_prazo")
         c4, c5 = st.columns(2)
-        frete = c4.text_input("Frete/Entrega", key="form_frete")
+        frete = c4.selectbox("Entrega / Retirada", ["Retirada", "Entrega"], key="form_frete")
         validade = c5.text_input("Validade (dias corridos)", key="form_validade")
+        taxa_entrega = 0.0
+        if frete == "Entrega":
+            taxa_entrega = st.number_input("🚚 Taxa de Entrega (R$)", min_value=0.0, step=0.50, key="form_taxa_entrega")
 
         subtotal = sum(valor_float(i['quantidade']) * valor_float(i['valor_unitario']) for i in st.session_state.temp_itens)
-        total = max(subtotal - desc, 0.0)
-        st.metric("Valor total", f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        total = max(subtotal - desc, 0.0) + valor_float(taxa_entrega)
+        r1, r2, r3, r4 = st.columns(4)
+        r1.metric("Subtotal", f"R$ {subtotal:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        r2.metric("Desconto", f"R$ {desc:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        r3.metric("Taxa de entrega", f"R$ {valor_float(taxa_entrega):,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        r4.metric("Valor total", f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
         rotulo_salvar = "💾 SALVAR ALTERAÇÕES" if st.session_state.editar_numero else "🚀 SALVAR PROPOSTA"
         if st.button(rotulo_salvar, type="primary"):
@@ -8977,6 +8998,7 @@ if pagina_atual == "novo_orcamento":
                 "valor_total": total,
                 "prazo_dias": prazo,
                 "frete_tipo": frete,
+                "taxa_entrega": valor_float(taxa_entrega) if frete == "Entrega" else 0.0,
                 "validade_dias": validade,
                 "pago": antigo.get("pago", False),
                 "entregue": antigo.get("entregue", False),
