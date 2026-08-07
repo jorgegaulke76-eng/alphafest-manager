@@ -24,9 +24,10 @@ import time
 import copy
 import requests
 
-# 20.4.6-C — componente visual nativo do projeto (sem streamlit-drawable-canvas).
+# 20.4.6-D — componente visual empacotado corretamente para Streamlit Cloud.
+# declare_component(path=...) exige que o diretório apontado contenha index.html.
 _DRAG_BOX_COMPONENT = components.declare_component(
-    "alphafest_drag_box", path=str(Path(__file__).resolve().parent)
+    "alphafest_drag_box", path=str(Path(__file__).resolve().parent / "alphafest_drag_box")
 )
 
 _BOOT_PROCESS_STARTED_AT = time.perf_counter()
@@ -8969,7 +8970,7 @@ if pagina_atual == "crescimento":
 
                                 st.caption("🖱️ Arraste a caixa, puxe os cantos para redimensionar e use a alça de rotação para inclinar. Fonte e limites tipográficos continuam protegidos.")
 
-                                # 20.4.6-C — editor visual próprio, compatível com Streamlit atual.
+                                # 20.4.6-D — editor visual próprio, empacotado em diretório de componente com index.html.
                                 # Sem dependência do streamlit-drawable-canvas/Fabric.js.
                                 try:
                                     bg_editor = Image.open(cfg_tpl_editor["background_path"]).convert("RGBA").resize((760, 760), Image.Resampling.LANCZOS)
