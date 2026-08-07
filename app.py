@@ -6579,8 +6579,8 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
             pago = s2.checkbox("💰 Pago", value=valor_bool(prop.get("pago")))
             entregue = s3.checkbox("📦 Entregue", value=valor_bool(prop.get("entregue")))
             nf1, nf2 = st.columns(2)
-            nao_pagto = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"anna_nf_pag_{prop.get('numero_proposta')}")
-            nao_retorno = nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(prop.get("nao_fechado_sem_retorno")), key=f"anna_nf_ret_{prop.get('numero_proposta')}")
+            nao_pagto = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"{prefixo}_nf_pag_{numero}")
+            nao_retorno = nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(prop.get("nao_fechado_sem_retorno")), key=f"{prefixo}_nf_ret_{numero}")
             if nao_pagto != valor_bool(prop.get("nao_fechado_pagamento")):
                 alternar_motivo_nao_fechado(prop.get("numero_proposta"), "pagamento", nao_pagto); st.rerun()
             if nao_retorno != valor_bool(prop.get("nao_fechado_sem_retorno")):

@@ -385,3 +385,8 @@ hangelog
 - Propostas: novos motivos de não fechamento por falta de pagamento e falta de retorno.
 - Marketing: separação entre Produzir Campanha e Template Studio.
 - Template Engine 20.0 preservado sem alteração dos templates instalados.
+
+## 20.1.1 — Hotfix estabilidade de propostas
+- Corrigido `StreamlitDuplicateElementKey` na Central Operacional da Anna.
+- As caixas “Não fechado — falta de pagamento” e “Não fechado — sem retorno do cliente” agora usam chaves exclusivas por contexto e proposta.
+- Preservados Marketing 20.1.0, Template Engine 20.0.0 e templates instalados.
