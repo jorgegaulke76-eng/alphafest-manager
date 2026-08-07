@@ -8968,7 +8968,7 @@ if pagina_atual == "crescimento":
                                 else:
                                     zone = layout_edit.setdefault("footer", [])[box_ref]
 
-                                st.caption("🖱️ Arraste a caixa, puxe os cantos para redimensionar e use a alça de rotação para inclinar. Fonte e limites tipográficos continuam protegidos.")
+                                st.caption("🖱️ Arraste, redimensione ou gire. ✅ Posição, tamanho e giro são salvos automaticamente. Use o ajuste numérico somente se quiser precisão.")
 
                                 # 20.4.6-D — editor visual autocontido, sem CDN ou frontend externo.
                                 # Sem dependência do streamlit-drawable-canvas/Fabric.js.
@@ -8987,25 +8987,45 @@ if pagina_atual == "crescimento":
                                         key=f"dragbox_native_{tpl['id']}_{box_key}", default=None,
                                     )
                                     if isinstance(_drag_value, dict):
-                                        zone.update({
+                                        _novo = {
                                             "x": max(0, min(980, int(_drag_value.get("x", zone.get("x", 0))))),
                                             "y": max(0, min(980, int(_drag_value.get("y", zone.get("y", 0))))),
                                             "w": max(20, min(1000, int(_drag_value.get("w", zone.get("w", 200))))),
                                             "h": max(20, min(1000, int(_drag_value.get("h", zone.get("h", 80))))),
                                             "angle": round(float(_drag_value.get("angle", zone.get("angle", 0) or 0)), 1),
-                                        })
+                                        }
+                                        _mudou_drag = any(zone.get(k) != v for k, v in _novo.items())
+                                        if _mudou_drag:
+                                            zone.update(_novo)
+                                            # Persistência imediata: o drag já salva o layout.
+                                            overrides_all[tpl["id"]] = layout_edit
+                                            config_marketing["template_layout_overrides"] = overrides_all
+                                            marketing["config"] = config_marketing
+                                            salvar_marketing(marketing)
+                                            set_layout_overrides(overrides_all)
+                                            st.session_state[f"drag_saved_{tpl['id']}_{box_key}"] = True
+                                    if st.session_state.pop(f"drag_saved_{tpl['id']}_{box_key}", False):
+                                        st.success("✅ Posição salva pelo arrasto.")
                                     st.caption(f"📍 X {zone.get('x',0)} • Y {zone.get('y',0)} • {zone.get('w',0)}×{zone.get('h',0)} • Giro {zone.get('angle',0)}°")
                                 except Exception as _drag_exc:
                                     st.warning(f"Editor visual indisponível nesta sessão. Use o ajuste fino abaixo. ({type(_drag_exc).__name__})")
 
-                                with st.expander("⌨️ Ajuste fino por números", expanded=False):
+                                with st.expander("⌨️ Ajuste fino por números (opcional)", expanded=False):
                                     bx1, bx2, bx3, bx4, bx5 = st.columns(5)
                                     new_x = bx1.number_input("X", 0, 980, int(zone.get("x", 0)), step=5, key=f"box_x_{tpl['id']}_{box_key}")
                                     new_y = bx2.number_input("Y", 0, 980, int(zone.get("y", 0)), step=5, key=f"box_y_{tpl['id']}_{box_key}")
                                     new_w = bx3.number_input("Largura", 20, 1000, int(zone.get("w", 200)), step=5, key=f"box_w_{tpl['id']}_{box_key}")
                                     new_h = bx4.number_input("Altura", 20, 1000, int(zone.get("h", 80)), step=5, key=f"box_h_{tpl['id']}_{box_key}")
                                     new_angle = bx5.number_input("Giro °", -180.0, 180.0, float(zone.get("angle", 0) or 0), step=1.0, key=f"box_angle_{tpl['id']}_{box_key}")
-                                    zone.update({"x": int(new_x), "y": int(new_y), "w": int(new_w), "h": int(new_h), "angle": float(new_angle)})
+                                    _num_novo = {"x": int(new_x), "y": int(new_y), "w": int(new_w), "h": int(new_h), "angle": float(new_angle)}
+                                    _num_mudou = any(zone.get(k) != v for k, v in _num_novo.items())
+                                    if _num_mudou:
+                                        zone.update(_num_novo)
+                                        overrides_all[tpl["id"]] = layout_edit
+                                        config_marketing["template_layout_overrides"] = overrides_all
+                                        marketing["config"] = config_marketing
+                                        salvar_marketing(marketing)
+                                        set_layout_overrides(overrides_all)
 
                                 cor1, cor2 = st.columns(2)
                                 if box_kind == "benefit":
@@ -9040,7 +9060,7 @@ if pagina_atual == "crescimento":
                                     salvar_marketing(marketing)
                                     set_layout_overrides(overrides_all)
                                     registrar_auditoria("Editar caixas do template", "Marketing", tpl["id"], {"caixa": escolha})
-                                    st.success("Caixa salva. As próximas artes já usarão esta posição e cor.")
+                                    st.success("Configuração salva. Posição/tamanho/giro já são salvos automaticamente pelo editor.")
                                     st.rerun()
 
                                 if sv2.button("↩️ Restaurar layout original", key=f"box_reset_{tpl['id']}", use_container_width=True):
