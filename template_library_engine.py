@@ -357,7 +357,7 @@ def render_library_square(
 ) -> Image.Image:
     """Renderizador genérico de precisão para templates importáveis.
 
-    Sprint 20.4: cada elemento é composto dentro da própria zona, com auto-fit,
+    Sprint 20.4.2: calibração visual do Feed; cada elemento é composto dentro da própria zona, com auto-fit,
     quebra de linha e clipping. O fundo do template nunca é alterado.
     """
     bg_path: Path = template_cfg["background_path"]
@@ -374,25 +374,25 @@ def render_library_square(
         title_text = "\n".join(x for x in [profile.get("title1"), profile.get("title2")] if x) or title
         z=layout["title"]
         _draw_text_box(canvas, _zone_box(z,1080,1080), title_text, text_color,
-                       max_size=int(z.get("max_size",82)), min_size=max(int(z.get("min_size",25)),34),
+                       max_size=int(z.get("max_size",82)), min_size=max(int(z.get("min_size",25)),46),
                        bold=True, align=str(z.get("align","center")), max_lines=int(z.get("max_lines",2)), padding=int(z.get("padding",6)))
 
     if "subtitle" in layout:
         z=layout["subtitle"]
         _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("subtitle") or subtitle,"#FFFFFF",
-                       max_size=int(z.get("max_size",34)),min_size=max(int(z.get("min_size",15)),18),bold=True,
+                       max_size=int(z.get("max_size",34)),min_size=max(int(z.get("min_size",15)),24),bold=True,
                        align=str(z.get("align","center")),max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",10)))
 
     if "badge" in layout:
         z=layout["badge"]
         _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("badge") or "DESTAQUE","#FFFFFF",
-                       max_size=int(z.get("max_size",23)),min_size=max(int(z.get("min_size",11)),14),bold=True,
+                       max_size=int(z.get("max_size",23)),min_size=max(int(z.get("min_size",11)),18),bold=True,
                        align="center",max_lines=int(z.get("max_lines",3)),padding=int(z.get("padding",12)))
 
     if "center" in layout:
         z=layout["center"]
         _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("center") or "",text_color,
-                       max_size=int(z.get("max_size",25)),min_size=max(int(z.get("min_size",11)),14),bold=True,
+                       max_size=int(z.get("max_size",25)),min_size=max(int(z.get("min_size",11)),18),bold=True,
                        align="center",max_lines=int(z.get("max_lines",6)),padding=int(z.get("padding",18)))
 
     source = None
@@ -423,14 +423,14 @@ def render_library_square(
         desc=str(benefit[1] if len(benefit)>1 else "")
         # 20.4.1: prioriza leitura. Descrições longas são resumidas antes
         # de sacrificar o tamanho da fonte.
-        if len(desc) > 66:
-            corte=desc[:66].rsplit(" ",1)[0].rstrip(" ,.;:-")
-            desc=(corte or desc[:66]).rstrip()+"…"
+        if len(desc) > 48:
+            corte=desc[:48].rsplit(" ",1)[0].rstrip(" ,.;:-")
+            desc=(corte or desc[:48]).rstrip()+"…"
         # Cabeçalho ocupa ~42% da zona; descrição o restante.
         split=y1+max(20,int(bh*0.42))
-        _draw_text_box(canvas,(x1,y1,x2,split),head,primary,max_size=int(z.get("head_max",22)),min_size=max(int(z.get("head_min",11)),14),
+        _draw_text_box(canvas,(x1,y1,x2,split),head,primary,max_size=int(z.get("head_max",22)),min_size=max(int(z.get("head_min",11)),17),
                        bold=True,align="left",valign="center",max_lines=1,padding=int(z.get("padding",2)))
-        _draw_text_box(canvas,(x1,split,x2,y2),desc,text_color,max_size=int(z.get("desc_max",13)),min_size=max(int(z.get("desc_min",8)),10),
+        _draw_text_box(canvas,(x1,split,x2,y2),desc,text_color,max_size=int(z.get("desc_max",13)),min_size=max(int(z.get("desc_min",8)),13),
                        bold=False,align="left",valign="top",max_lines=int(z.get("desc_lines",2)),padding=int(z.get("padding",2)))
 
     # Aplicações: imagem limitada ao interior dos círculos, com pequeno recuo
@@ -449,19 +449,19 @@ def render_library_square(
 
     if "price" in layout and str(price or "").strip():
         z=layout["price"]
-        _draw_text_box(canvas,_zone_box(z,1080,1080),price,accent,max_size=int(z.get("max_size",27)),min_size=max(int(z.get("min_size",13)),18),
+        _draw_text_box(canvas,_zone_box(z,1080,1080),price,accent,max_size=int(z.get("max_size",27)),min_size=max(int(z.get("min_size",13)),22),
                        bold=True,align="center",max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",4)))
 
     if "phone" in layout:
         z=layout["phone"]
         _draw_text_box(canvas,_zone_box(z,1080,1080),phone or "11 97294-9533","#FFFFFF",
-                       max_size=int(z.get("max_size",31)),min_size=max(int(z.get("min_size",16)),21),bold=True,
+                       max_size=int(z.get("max_size",31)),min_size=max(int(z.get("min_size",16)),27),bold=True,
                        align="center",max_lines=1,padding=int(z.get("padding",3)))
 
     if "cta" in layout:
         z=layout["cta"]
         _draw_text_box(canvas,_zone_box(z,1080,1080),cta or profile.get("pink") or "FAÇA SEU PEDIDO!","#FFFFFF",
-                       max_size=int(z.get("max_size",25)),min_size=max(int(z.get("min_size",12)),17),bold=True,
+                       max_size=int(z.get("max_size",25)),min_size=max(int(z.get("min_size",12)),22),bold=True,
                        align="center",max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",8)))
 
     footer_zones=layout.get("footer") or []
@@ -469,7 +469,7 @@ def render_library_square(
     for i,zone in enumerate(footer_zones[:4]):
         if i<len(footer):
             _draw_text_box(canvas,_zone_box(zone,1080,1080),footer[i],"#FFFFFF",
-                           max_size=int(zone.get("max_size",14)),min_size=max(int(zone.get("min_size",8)),10),bold=True,
+                           max_size=int(zone.get("max_size",14)),min_size=max(int(zone.get("min_size",8)),12),bold=True,
                            align="center",max_lines=int(zone.get("max_lines",2)),padding=int(zone.get("padding",2)))
     return canvas
 
