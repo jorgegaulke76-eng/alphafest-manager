@@ -6149,7 +6149,9 @@ def dialog_orcamento_anna(proposta=None):
         except Exception:
             st.session_state["anna_modal_entrega"] = hoje_local()
         st.session_state["anna_modal_prazo"] = str(proposta.get("prazo_dias", "10"))
-        st.session_state["anna_modal_frete"] = str(proposta.get("frete_tipo", "Retirada em Itatiba"))
+        _frete_modal_salvo = str(proposta.get("frete_tipo", "Retirada")).strip()
+        st.session_state["anna_modal_frete"] = "Entrega" if _frete_modal_salvo.casefold() == "entrega" else "Retirada"
+        st.session_state["anna_modal_taxa_entrega"] = valor_float(proposta.get("taxa_entrega", 0))
         st.session_state["anna_modal_validade"] = str(proposta.get("validade_dias", "5"))
 
     logo_b64, _ = encontrar_logo_base64()
@@ -6234,11 +6236,31 @@ def dialog_orcamento_anna(proposta=None):
         entrega = d2.date_input("📅 Data Entrega", key="anna_modal_entrega")
         prazo = d3.text_input("Prazo de Produção (dias úteis)", key="anna_modal_prazo")
         f1, f2 = st.columns(2)
-        frete = f1.text_input("Frete/Entrega", key="anna_modal_frete")
+        frete = f1.selectbox(
+            "Entrega / Retirada",
+            ["Retirada", "Entrega"],
+            key="anna_modal_frete",
+        )
         validade = f2.text_input("Validade (dias corridos)", key="anna_modal_validade")
+
+        taxa_entrega = 0.0
+        if frete == "Entrega":
+            taxa_entrega = st.number_input(
+                "🚚 Taxa de Entrega (R$)",
+                min_value=0.0,
+                step=0.50,
+                key="anna_modal_taxa_entrega",
+                help="Digite o valor cobrado pela entrega.",
+            )
+
         subtotal = sum(valor_float(i.get("quantidade")) * valor_float(i.get("valor_unitario")) for i in itens)
-        total = max(subtotal - desconto, 0.0)
-        st.metric("Valor total", f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        total = max(subtotal - desconto, 0.0) + valor_float(taxa_entrega)
+
+        t1, t2, t3, t4 = st.columns(4)
+        t1.metric("Subtotal", f"R$ {subtotal:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        t2.metric("Desconto", f"R$ {valor_float(desconto):,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        t3.metric("Taxa de entrega", f"R$ {valor_float(taxa_entrega):,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+        t4.metric("Valor total", f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
         salvar_rotulo = "💾 SALVAR ALTERAÇÕES" if numero_original else "🚀 SALVAR PROPOSTA"
         if st.button(salvar_rotulo, type="primary", use_container_width=True, key="anna_modal_salvar_orcamento"):
@@ -6254,7 +6276,9 @@ def dialog_orcamento_anna(proposta=None):
                 "cliente_nome": nome.strip(), "documento": doc.strip(), "whatsapp": wa.strip(),
                 "cliente_cpf_cnpj": doc.strip(), "cliente_wa": wa.strip(),
                 "itens": list(itens), "subtotal": subtotal, "desconto": desconto, "desconto_valor": desconto,
-                "valor_total": total, "prazo_dias": prazo, "frete_tipo": frete, "validade_dias": validade,
+                "valor_total": total, "prazo_dias": prazo, "frete_tipo": frete,
+                "taxa_entrega": valor_float(taxa_entrega) if frete == "Entrega" else 0.0,
+                "validade_dias": validade,
                 "pago": proposta.get("pago", False), "entregue": proposta.get("entregue", False),
                 "aprovado": proposta.get("aprovado", False),
                 "timeline": proposta.get("timeline", []) if isinstance(proposta.get("timeline", []), list) else [],
