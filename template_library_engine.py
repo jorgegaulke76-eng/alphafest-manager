@@ -374,13 +374,13 @@ def render_library_square(
         title_text = "\n".join(x for x in [profile.get("title1"), profile.get("title2")] if x) or title
         z=layout["title"]
         _draw_text_box(canvas, _zone_box(z,1080,1080), title_text, text_color,
-                       max_size=int(z.get("max_size",92)), min_size=max(int(z.get("min_size",30)),50),
+                       max_size=int(z.get("max_size",104)), min_size=max(int(z.get("min_size",34)),58),
                        bold=True, align=str(z.get("align","center")), max_lines=int(z.get("max_lines",2)), padding=int(z.get("padding",6)))
 
     if "subtitle" in layout:
         z=layout["subtitle"]
         _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("subtitle") or subtitle,"#FFFFFF",
-                       max_size=int(z.get("max_size",34)),min_size=max(int(z.get("min_size",18)),23),bold=True,
+                       max_size=int(z.get("max_size",38)),min_size=max(int(z.get("min_size",20)),27),bold=True,
                        align=str(z.get("align","center")),max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",10)))
 
     if "badge" in layout:
@@ -423,12 +423,12 @@ def render_library_square(
         desc=str(benefit[1] if len(benefit)>1 else "")
         # 20.4.1: prioriza leitura. Descrições longas são resumidas antes
         # de sacrificar o tamanho da fonte.
-        if len(desc) > 42:
-            corte=desc[:42].rsplit(" ",1)[0].rstrip(" ,.;:-")
-            desc=(corte or desc[:42]).rstrip()+"…"
+        if len(desc) > 36:
+            corte=desc[:36].rsplit(" ",1)[0].rstrip(" ,.;:-")
+            desc=(corte or desc[:36]).rstrip()+"…"
         # Cabeçalho ocupa ~42% da zona; descrição o restante.
         split=y1+max(20,int(bh*0.42))
-        _draw_text_box(canvas,(x1,y1,x2,split),head,primary,max_size=int(z.get("head_max",22)),min_size=max(int(z.get("head_min",11)),18),
+        _draw_text_box(canvas,(x1,y1,x2,split),head,primary,max_size=int(z.get("head_max",22)),min_size=max(int(z.get("head_min",11)),20),
                        bold=True,align="left",valign="center",max_lines=1,padding=int(z.get("padding",2)))
         _draw_text_box(canvas,(x1,split,x2,y2),desc,text_color,max_size=int(z.get("desc_max",13)),min_size=max(int(z.get("desc_min",8)),13),
                        bold=False,align="left",valign="top",max_lines=int(z.get("desc_lines",2)),padding=int(z.get("padding",2)))
