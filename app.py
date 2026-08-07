@@ -25,7 +25,7 @@ _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 from marketing_template_engine import DEFAULT_TEMPLATE as MARKETING_DEFAULT_TEMPLATE, listar_templates as listar_templates_marketing, render_template as renderizar_template_marketing
-from template_library_engine import list_library_templates, install_template_zip, export_template_zip, hydrate_template_packages
+from template_library_engine import list_library_templates, install_template_zip, export_template_zip, hydrate_template_packages, load_library_template, set_layout_overrides
 from marketing_prompt_builder import build_master_prompt
 import marketing_design_intelligence as mdi
 
@@ -8110,6 +8110,59 @@ if pagina_atual == "clientes_360":
     )
 
 
+
+def _mkt_box_editor_entries(layout):
+    entries = [
+        ("title", "Título", "normal", "title"),
+        ("subtitle", "Chamada / faixa", "normal", "subtitle"),
+        ("badge", "Selo superior", "normal", "badge"),
+        ("center", "Texto central", "normal", "center"),
+        ("price", "Preço", "normal", "price"),
+        ("phone", "Telefone / WhatsApp", "normal", "phone"),
+        ("cta", "CTA", "normal", "cta"),
+    ]
+    for i, _ in enumerate(layout.get("benefits") or []):
+        entries.append((f"benefit_{i}", f"Benefício {i+1}", "benefit", i))
+    for i, _ in enumerate(layout.get("footer") or []):
+        entries.append((f"footer_{i}", f"Rodapé {i+1}", "footer", i))
+    return entries
+
+def _mkt_preview_boxes(template_cfg, layout, selected_key=""):
+    """Preview técnico das caixas; não altera a arte final."""
+    if Image is None or ImageDraw is None:
+        return None
+    try:
+        bg = Image.open(template_cfg["background_path"]).convert("RGBA").resize((760, 760), Image.Resampling.LANCZOS)
+    except Exception:
+        return None
+    draw = ImageDraw.Draw(bg, "RGBA")
+    entries = _mkt_box_editor_entries(layout)
+    for key, label, kind, ref in entries:
+        if kind == "normal":
+            zone = layout.get(ref) or {}
+        elif kind == "benefit":
+            zones = layout.get("benefits") or []
+            zone = zones[ref] if ref < len(zones) else {}
+        else:
+            zones = layout.get("footer") or []
+            zone = zones[ref] if ref < len(zones) else {}
+        if not zone:
+            continue
+        x = int(float(zone.get("x", 0))*760/1000)
+        y = int(float(zone.get("y", 0))*760/1000)
+        w = int(float(zone.get("w", 0))*760/1000)
+        h = int(float(zone.get("h", 0))*760/1000)
+        active = key == selected_key
+        fill = (239,42,146,42) if active else (8,124,232,24)
+        outline = (239,42,146,255) if active else (8,124,232,190)
+        draw.rectangle((x,y,x+w,y+h), fill=fill, outline=outline, width=4 if active else 2)
+        try:
+            draw.text((x+4,y+3), label, fill=outline)
+        except Exception:
+            pass
+    return bg
+
+
 if pagina_atual == "crescimento":
     if not feature_enabled("marketing_studio", True):
         st.warning("Alpha Marketing Studio temporariamente desativado pela chave de segurança.")
@@ -8134,6 +8187,7 @@ if pagina_atual == "crescimento":
     # Templates importados ficam persistidos no mesmo armazenamento do Marketing Studio
     # e são restaurados para a biblioteca temporária a cada inicialização/reboot.
     hydrate_template_packages(config_marketing.get("template_packages", {}))
+    set_layout_overrides(config_marketing.get("template_layout_overrides", {}))
 
     with st.container(border=True):
         af_section_title("Modo de trabalho", "Configuração da publicação manual e dos canais principais.")
@@ -8878,6 +8932,84 @@ if pagina_atual == "crescimento":
                             st.download_button("📦 Exportar template", pacote_tpl, file_name=f"{tpl['id']}.zip", mime="application/zip", key=f"mkt_export_tpl_{tpl['id']}")
                         except Exception:
                             pass
+
+                        # 20.4.6-A — Editor visual das caixas de texto.
+                        with st.expander("📝 Configurar caixas de texto", expanded=False):
+                            cfg_tpl_editor = load_library_template(tpl["id"])
+                            if not cfg_tpl_editor:
+                                st.warning("Não foi possível abrir este template para edição.")
+                            else:
+                                layout_original = copy.deepcopy(cfg_tpl_editor.get("layout") or {})
+                                overrides_all = config_marketing.setdefault("template_layout_overrides", {})
+                                layout_edit = copy.deepcopy(overrides_all.get(tpl["id"]) or layout_original)
+                                entradas = _mkt_box_editor_entries(layout_edit)
+                                mapa_entradas = {label: (key, kind, ref) for key, label, kind, ref in entradas}
+                                escolha = st.selectbox(
+                                    "Caixa para posicionar",
+                                    list(mapa_entradas.keys()),
+                                    key=f"mkt_box_select_{tpl['id']}",
+                                    help="Fonte e regras de tamanho ficam protegidas. Aqui você posiciona a caixa e escolhe a cor.",
+                                )
+                                box_key, box_kind, box_ref = mapa_entradas[escolha]
+                                if box_kind == "normal":
+                                    zone = layout_edit.setdefault(box_ref, {})
+                                elif box_kind == "benefit":
+                                    zone = layout_edit.setdefault("benefits", [])[box_ref]
+                                else:
+                                    zone = layout_edit.setdefault("footer", [])[box_ref]
+
+                                st.caption("📐 Posição em grade de 0 a 1000. A fonte e os limites tipográficos permanecem protegidos pelo template.")
+                                bx1, bx2, bx3, bx4 = st.columns(4)
+                                new_x = bx1.number_input("X", 0, 980, int(zone.get("x", 0)), step=5, key=f"box_x_{tpl['id']}_{box_key}")
+                                new_y = bx2.number_input("Y", 0, 980, int(zone.get("y", 0)), step=5, key=f"box_y_{tpl['id']}_{box_key}")
+                                new_w = bx3.number_input("Largura", 20, 1000, int(zone.get("w", 200)), step=5, key=f"box_w_{tpl['id']}_{box_key}")
+                                new_h = bx4.number_input("Altura", 20, 1000, int(zone.get("h", 80)), step=5, key=f"box_h_{tpl['id']}_{box_key}")
+                                zone.update({"x": int(new_x), "y": int(new_y), "w": int(new_w), "h": int(new_h)})
+
+                                cor1, cor2 = st.columns(2)
+                                if box_kind == "benefit":
+                                    head_color = cor1.color_picker("Cor do título", value=str(zone.get("head_color") or "#07349B"), key=f"box_head_color_{tpl['id']}_{box_key}")
+                                    desc_color = cor2.color_picker("Cor da descrição", value=str(zone.get("desc_color") or "#102D50"), key=f"box_desc_color_{tpl['id']}_{box_key}")
+                                    zone["head_color"] = head_color
+                                    zone["desc_color"] = desc_color
+                                else:
+                                    defaults_cor = {
+                                        "subtitle":"#FFFFFF", "badge":"#FFFFFF", "phone":"#FFFFFF",
+                                        "cta":"#FFFFFF", "price":"#EF2A92", "title":"#07349B",
+                                        "center":"#07349B",
+                                    }
+                                    default_color = defaults_cor.get(str(box_ref), "#FFFFFF" if box_kind=="footer" else "#07349B")
+                                    zone["color"] = cor1.color_picker("Cor do texto", value=str(zone.get("color") or default_color), key=f"box_color_{tpl['id']}_{box_key}")
+                                    if box_kind == "normal":
+                                        align_opts = ["left", "center", "right"]
+                                        current_align = str(zone.get("align") or "center")
+                                        if current_align not in align_opts:
+                                            current_align = "center"
+                                        zone["align"] = cor2.selectbox("Alinhamento", align_opts, index=align_opts.index(current_align), key=f"box_align_{tpl['id']}_{box_key}")
+
+                                pv = _mkt_preview_boxes(cfg_tpl_editor, layout_edit, box_key)
+                                if pv is not None:
+                                    st.image(pv, caption="Preview técnico — rosa = caixa selecionada", use_container_width=True)
+
+                                sv1, sv2 = st.columns(2)
+                                if sv1.button("💾 Salvar posição e cor", key=f"box_save_{tpl['id']}", use_container_width=True, type="primary"):
+                                    overrides_all[tpl["id"]] = layout_edit
+                                    config_marketing["template_layout_overrides"] = overrides_all
+                                    marketing["config"] = config_marketing
+                                    salvar_marketing(marketing)
+                                    set_layout_overrides(overrides_all)
+                                    registrar_auditoria("Editar caixas do template", "Marketing", tpl["id"], {"caixa": escolha})
+                                    st.success("Caixa salva. As próximas artes já usarão esta posição e cor.")
+                                    st.rerun()
+
+                                if sv2.button("↩️ Restaurar layout original", key=f"box_reset_{tpl['id']}", use_container_width=True):
+                                    overrides_all.pop(tpl["id"], None)
+                                    config_marketing["template_layout_overrides"] = overrides_all
+                                    marketing["config"] = config_marketing
+                                    salvar_marketing(marketing)
+                                    set_layout_overrides(overrides_all)
+                                    st.success("Layout original restaurado.")
+                                    st.rerun()
 
             st.markdown("---")
             st.subheader("🖼️ Banco de mídia AlphaFest")

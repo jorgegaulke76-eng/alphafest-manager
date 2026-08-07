@@ -31,6 +31,18 @@ RUNTIME_TEMPLATES_DIR = Path(tempfile.gettempdir()) / "alphafest_template_librar
 
 REQUIRED_FILES = ("fundo.png", "layout.json", "config.json")
 
+LAYOUT_OVERRIDES: dict[str, dict[str, Any]] = {}
+
+def set_layout_overrides(overrides: dict[str, dict[str, Any]] | None) -> None:
+    """Aplica mapas de caixas persistidos pelo Marketing Studio."""
+    global LAYOUT_OVERRIDES
+    LAYOUT_OVERRIDES = dict(overrides or {}) if isinstance(overrides, dict) else {}
+
+def get_layout_override(template_id: str) -> dict[str, Any] | None:
+    value = LAYOUT_OVERRIDES.get(_safe_id(template_id))
+    return dict(value) if isinstance(value, dict) else None
+
+
 
 def _safe_id(value: str) -> str:
     value = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(value or "").strip()).strip("_")
@@ -85,6 +97,11 @@ def load_library_template(template_id: str) -> dict[str, Any] | None:
         folder = Path(item["folder"])
         cfg = _read_json(folder / "config.json")
         layout = _read_json(folder / "layout.json")
+        override = get_layout_override(safe)
+        if override:
+            # O editor salva o layout completo. Assim, a posição escolhida no
+            # Template Studio vence o layout físico sem alterar fundo.png.
+            layout = override
         cfg.update({
             "id": safe,
             "source": "library",
@@ -174,10 +191,15 @@ def export_template_zip(template_id: str) -> bytes:
         raise KeyError(template_id)
     folder: Path = cfg["folder"]
     buf = io.BytesIO()
+    override = get_layout_override(template_id)
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for p in folder.rglob("*"):
             if p.is_file():
-                zf.write(p, p.relative_to(folder).as_posix())
+                rel = p.relative_to(folder).as_posix()
+                if rel == "layout.json" and override:
+                    zf.writestr("layout.json", json.dumps(override, ensure_ascii=False, indent=2))
+                else:
+                    zf.write(p, rel)
     return buf.getvalue()
 
 
@@ -386,6 +408,41 @@ def _commercial_short(text, max_chars=28):
     cut = text[:max_chars].rsplit(" ", 1)[0].strip()
     return (cut or text[:max_chars]).rstrip(" ,.;:-") + "…"
 
+
+def _clean_product_title(text, max_words=7):
+    """Nome comercial do produto sem nomes de arquivo, hashes ou reticências."""
+    text = " ".join(str(text or "").replace("_", " ").replace("\n", " ").split()).strip()
+    if not text:
+        return ""
+    # evita usar arquivo/imagem como título
+    if re.search(r"\.(png|jpe?g|webp|gif)$", text, re.I):
+        return ""
+    # remove prefixos hexadecimais/hash típicos de uploads
+    text = re.sub(r"^[0-9a-f]{8,}[-_ ]*", "", text, flags=re.I).strip()
+    words = text.split()
+    if len(words) > max_words:
+        text = " ".join(words[:max_words])
+    return text.rstrip(" .,:;-")
+
+def _short_without_ellipsis(text, max_chars=34):
+    """Encurta apenas em limite de palavra; nunca exibe ... na arte."""
+    text = " ".join(str(text or "").replace("\n", " ").split()).strip()
+    if len(text) <= max_chars:
+        return text
+    cut = text[:max_chars+1].rsplit(" ", 1)[0].strip()
+    return (cut or text[:max_chars]).rstrip(" .,:;-")
+
+def _safe_price_text(text):
+    """Preço é campo prioritário: nunca deve virar R$..."""
+    text = " ".join(str(text or "").split()).strip()
+    if not text:
+        return ""
+    m = re.search(r"(R\$\s*)?(\d{1,6}(?:[.,]\d{1,2})?)", text)
+    if not m:
+        return text
+    value = m.group(2)
+    return "R$ " + value
+
 def render_library_square(
     template_cfg: dict[str, Any], *, image_bytes: bytes, title: str, subtitle: str,
     description: str, price: str, cta: str, phone: str, profile: dict[str, Any],
@@ -409,25 +466,25 @@ def render_library_square(
     if "title" in layout:
         title_text = "\n".join(x for x in [profile.get("title1"), profile.get("title2")] if x) or title
         z=layout["title"]
-        _draw_text_box(canvas, _zone_box(z,1080,1080), title_text, text_color,
+        _draw_text_box(canvas, _zone_box(z,1080,1080), title_text, str(z.get("color") or text_color),
                        max_size=int(z.get("max_size",112)), min_size=max(int(z.get("min_size",40)),66),
                        bold=True, align=str(z.get("align","center")), max_lines=int(z.get("max_lines",2)), padding=int(z.get("padding",6)))
 
     if "subtitle" in layout:
         z=layout["subtitle"]
-        _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("subtitle") or subtitle,"#FFFFFF",
+        _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("subtitle") or subtitle,str(z.get("color") or "#FFFFFF"),
                        max_size=int(z.get("max_size",42)),min_size=max(int(z.get("min_size",24)),30),bold=True,
                        align=str(z.get("align","center")),max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",10)))
 
     if "badge" in layout:
         z=layout["badge"]
-        _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("badge") or "DESTAQUE","#FFFFFF",
+        _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("badge") or "DESTAQUE",str(z.get("color") or "#FFFFFF"),
                        max_size=int(z.get("max_size",23)),min_size=max(int(z.get("min_size",11)),18),bold=True,
                        align="center",max_lines=int(z.get("max_lines",3)),padding=int(z.get("padding",12)))
 
     if "center" in layout:
         z=layout["center"]
-        _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("center") or "",text_color,
+        _draw_text_box(canvas,_zone_box(z,1080,1080),profile.get("center") or "",str(z.get("color") or text_color),
                        max_size=int(z.get("max_size",25)),min_size=max(int(z.get("min_size",11)),18),bold=True,
                        align="center",max_lines=int(z.get("max_lines",6)),padding=int(z.get("padding",18)))
 
@@ -459,12 +516,12 @@ def render_library_square(
         desc=str(benefit[1] if len(benefit)>1 else "")
         # 20.4.1: prioriza leitura. Descrições longas são resumidas antes
         # de sacrificar o tamanho da fonte.
-        desc = _commercial_short(desc, 25)
+        desc = _short_without_ellipsis(desc, 32)
         # Cabeçalho ocupa ~42% da zona; descrição o restante.
         split=y1+max(20,int(bh*0.42))
-        _draw_text_box(canvas,(x1,y1,x2,split),head,primary,max_size=int(z.get("head_max",22)),min_size=max(int(z.get("head_min",11)),20),
+        _draw_text_box(canvas,(x1,y1,x2,split),head,str(z.get("head_color") or primary),max_size=int(z.get("head_max",22)),min_size=max(int(z.get("head_min",11)),20),
                        bold=True,align="left",valign="center",max_lines=1,padding=int(z.get("padding",2)))
-        _draw_text_box(canvas,(x1,split,x2,y2),desc,text_color,max_size=int(z.get("desc_max",13)),min_size=max(int(z.get("desc_min",8)),13),
+        _draw_text_box(canvas,(x1,split,x2,y2),desc,str(z.get("desc_color") or text_color),max_size=int(z.get("desc_max",13)),min_size=max(int(z.get("desc_min",8)),13),
                        bold=False,align="left",valign="top",max_lines=int(z.get("desc_lines",2)),padding=int(z.get("padding",2)))
 
     # Aplicações: imagem limitada ao interior dos círculos, com pequeno recuo
@@ -483,18 +540,18 @@ def render_library_square(
 
     if "price" in layout and str(price or "").strip():
         z=layout["price"]
-        _draw_text_box(canvas,_zone_box(z,1080,1080),price,accent,max_size=int(z.get("max_size",27)),min_size=max(int(z.get("min_size",13)),22),
+        _draw_text_box(canvas,_zone_box(z,1080,1080),price,str(z.get("color") or accent),max_size=int(z.get("max_size",27)),min_size=max(int(z.get("min_size",13)),22),
                        bold=True,align="center",max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",4)))
 
     if "phone" in layout:
         z=layout["phone"]
-        _draw_text_box(canvas,_zone_box(z,1080,1080),phone or "11 97294-9533","#FFFFFF",
+        _draw_text_box(canvas,_zone_box(z,1080,1080),phone or "11 97294-9533",str(z.get("color") or "#FFFFFF"),
                        max_size=int(z.get("max_size",31)),min_size=max(int(z.get("min_size",16)),27),bold=True,
                        align="center",max_lines=1,padding=int(z.get("padding",3)))
 
     if "cta" in layout:
         z=layout["cta"]
-        _draw_text_box(canvas,_zone_box(z,1080,1080),cta or profile.get("pink") or "FAÇA SEU PEDIDO!","#FFFFFF",
+        _draw_text_box(canvas,_zone_box(z,1080,1080),cta or profile.get("pink") or "FAÇA SEU PEDIDO!",str(z.get("color") or "#FFFFFF"),
                        max_size=int(z.get("max_size",25)),min_size=max(int(z.get("min_size",12)),22),bold=True,
                        align="center",max_lines=int(z.get("max_lines",2)),padding=int(z.get("padding",8)))
 
@@ -502,7 +559,7 @@ def render_library_square(
     footer=list(profile.get("footer") or [])[:4]
     for i,zone in enumerate(footer_zones[:4]):
         if i<len(footer):
-            _draw_text_box(canvas,_zone_box(zone,1080,1080),footer[i],"#FFFFFF",
+            _draw_text_box(canvas,_zone_box(zone,1080,1080),footer[i],str(zone.get("color") or "#FFFFFF"),
                            max_size=int(zone.get("max_size",14)),min_size=max(int(zone.get("min_size",8)),12),bold=True,
                            align="center",max_lines=int(zone.get("max_lines",2)),padding=int(zone.get("padding",2)))
     return canvas
