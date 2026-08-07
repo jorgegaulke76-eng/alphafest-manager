@@ -380,3 +380,8 @@ hangelog
 - `layout.json` com zonas normalizadas e renderização genérica.
 - Primeiro template: Anna Base Dinâmica.
 - Importar/exportar templates sem novo deploy.
+
+## 20.1.0
+- Propostas: novos motivos de não fechamento por falta de pagamento e falta de retorno.
+- Marketing: separação entre Produzir Campanha e Template Studio.
+- Template Engine 20.0 preservado sem alteração dos templates instalados.

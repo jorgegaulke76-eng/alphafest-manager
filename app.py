@@ -1233,6 +1233,41 @@ def alternar_status(num_proposta, campo, novo_valor):
         if mudou:
             salvar_producao(tarefas)
 
+def alternar_motivo_nao_fechado(num_proposta, motivo, novo_valor):
+    """Marca/desmarca um motivo comercial de proposta não fechada.
+
+    Os dois motivos são mutuamente exclusivos e encerram a proposta apenas no
+    fluxo comercial, sem apagar os marcos Aprovado/Pago/Entregue já registrados.
+    """
+    historico = carregar_historico()
+    campos = {
+        "pagamento": ("nao_fechado_pagamento", "Não fechado — falta de pagamento"),
+        "sem_retorno": ("nao_fechado_sem_retorno", "Não fechado — sem retorno do cliente"),
+    }
+    if motivo not in campos:
+        return
+    campo, rotulo = campos[motivo]
+    outro_campo = "nao_fechado_sem_retorno" if campo == "nao_fechado_pagamento" else "nao_fechado_pagamento"
+    for proposta in historico:
+        if proposta.get("numero_proposta") != num_proposta:
+            continue
+        anterior = valor_bool(proposta.get(campo))
+        proposta[campo] = bool(novo_valor)
+        if novo_valor:
+            proposta[outro_campo] = False
+            proposta["status_comercial"] = "nao_fechado_pagamento" if motivo == "pagamento" else "nao_fechado_sem_retorno"
+            proposta["encerrado"] = True
+        else:
+            if not valor_bool(proposta.get(outro_campo)):
+                proposta["encerrado"] = False
+                if str(proposta.get("status_comercial", "")).startswith("nao_fechado_"):
+                    proposta["status_comercial"] = ""
+        if anterior != bool(novo_valor):
+            registrar_evento_proposta(proposta, rotulo if novo_valor else f"{rotulo} desmarcado")
+        break
+    salvar_historico_completo(historico)
+
+
 def excluir_proposta(num_proposta):
     historico_atual = carregar_historico()
     proposta = next((p for p in historico_atual if p.get("numero_proposta") == num_proposta), None)
@@ -2123,10 +2158,12 @@ def valor_bool(valor):
 
 def proposta_encerrada(prop):
     status = str(prop.get("status_comercial") or prop.get("situacao_comercial") or prop.get("status") or "").strip().casefold()
-    return valor_bool(prop.get("encerrado")) or status in {
+    motivo_nao_fechado = valor_bool(prop.get("nao_fechado_pagamento")) or valor_bool(prop.get("nao_fechado_sem_retorno"))
+    return motivo_nao_fechado or valor_bool(prop.get("encerrado")) or status in {
         "encerrado", "encerrada", "encerrado sem retorno", "encerrado por preço", "encerrado por preco",
         "encerrado pelo cliente", "encerrado por prazo", "cancelado", "cancelada", "recusado", "recusada",
-        "arquivado", "arquivada", "excluído", "excluida", "excluída",
+        "nao_fechado_pagamento", "não fechado — falta de pagamento", "nao_fechado_sem_retorno",
+        "não fechado — sem retorno do cliente", "arquivado", "arquivada", "excluído", "excluida", "excluída",
     }
 
 
@@ -6294,6 +6331,13 @@ def dialog_fluxo_anna():
                 aprovado = c1.checkbox("Aprovado", value=valor_bool(prop.get("aprovado", False)))
                 pago = c2.checkbox("Pago", value=valor_bool(prop.get("pago", False)))
                 entregue = c3.checkbox("Entregue", value=valor_bool(prop.get("entregue", False)))
+                nf1, nf2 = st.columns(2)
+                nao_pagto = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"nf_pag_{prop.get('numero_proposta')}")
+                nao_retorno = nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(prop.get("nao_fechado_sem_retorno")), key=f"nf_ret_{prop.get('numero_proposta')}")
+                if nao_pagto != valor_bool(prop.get("nao_fechado_pagamento")):
+                    alternar_motivo_nao_fechado(prop.get("numero_proposta"), "pagamento", nao_pagto); st.rerun()
+                if nao_retorno != valor_bool(prop.get("nao_fechado_sem_retorno")):
+                    alternar_motivo_nao_fechado(prop.get("numero_proposta"), "sem_retorno", nao_retorno); st.rerun()
                 salvar = st.form_submit_button("💾 Salvar andamento", use_container_width=True)
             if salvar:
                 ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, entregue)
@@ -6534,6 +6578,13 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
             aprovado = s1.checkbox("✅ Aprovado", value=valor_bool(prop.get("aprovado")))
             pago = s2.checkbox("💰 Pago", value=valor_bool(prop.get("pago")))
             entregue = s3.checkbox("📦 Entregue", value=valor_bool(prop.get("entregue")))
+            nf1, nf2 = st.columns(2)
+            nao_pagto = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"anna_nf_pag_{prop.get('numero_proposta')}")
+            nao_retorno = nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(prop.get("nao_fechado_sem_retorno")), key=f"anna_nf_ret_{prop.get('numero_proposta')}")
+            if nao_pagto != valor_bool(prop.get("nao_fechado_pagamento")):
+                alternar_motivo_nao_fechado(prop.get("numero_proposta"), "pagamento", nao_pagto); st.rerun()
+            if nao_retorno != valor_bool(prop.get("nao_fechado_sem_retorno")):
+                alternar_motivo_nao_fechado(prop.get("numero_proposta"), "sem_retorno", nao_retorno); st.rerun()
             salvar_status = st.form_submit_button("💾 Salvar andamento", type="primary", use_container_width=True)
         if salvar_status:
             ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, entregue)
@@ -7156,6 +7207,13 @@ if pagina_atual == "central":
                 aprovado_central = up1.checkbox("✅ Aprovado", value=valor_bool(proposta_central_selecionada.get("aprovado")), key=f"central_aprov_{numero_central_selecionado}")
                 pago_central = up2.checkbox("💰 Pago", value=valor_bool(proposta_central_selecionada.get("pago")), key=f"central_pago_{numero_central_selecionado}")
                 entregue_central = up3.checkbox("📦 Entregue", value=valor_bool(proposta_central_selecionada.get("entregue")), key=f"central_entregue_{numero_central_selecionado}")
+                nf1, nf2 = st.columns(2)
+                nao_pagto_central = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(proposta_central_selecionada.get("nao_fechado_pagamento")), key=f"central_nf_pag_{numero_central_selecionado}")
+                nao_retorno_central = nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(proposta_central_selecionada.get("nao_fechado_sem_retorno")), key=f"central_nf_ret_{numero_central_selecionado}")
+                if nao_pagto_central != valor_bool(proposta_central_selecionada.get("nao_fechado_pagamento")):
+                    alternar_motivo_nao_fechado(numero_central_selecionado, "pagamento", nao_pagto_central); st.rerun()
+                if nao_retorno_central != valor_bool(proposta_central_selecionada.get("nao_fechado_sem_retorno")):
+                    alternar_motivo_nao_fechado(numero_central_selecionado, "sem_retorno", nao_retorno_central); st.rerun()
                 observacao_central = st.text_area(
                     "Observação operacional",
                     value=str(proposta_central_selecionada.get("observacao_operacional", "")),
@@ -7931,558 +7989,573 @@ if pagina_atual == "crescimento":
             salvar_marketing(marketing)
         st.caption("O Studio gera os arquivos nos formatos corretos. A postagem e a música continuam manuais.")
 
-    t1, t2, t3, t4 = st.tabs(["Nova campanha", "Biblioteca", "Templates & mídia", "Exportações"])
+    st.markdown("### Área de trabalho")
+    modo_marketing_principal = st.radio(
+        "Escolha o que deseja fazer",
+        ["🎨 Produzir Campanha", "⚙️ Template Studio"],
+        horizontal=True,
+        key="mkt_area_principal_2010",
+        help="Produzir Campanha é o modo rápido do dia a dia. Template Studio é usado somente para instalar e manter layouts.",
+    )
 
-    with t1:
-        catalogo_mkt = carregar_catalogo()
-        editor_col, preview_col = st.columns([1.08, 0.92], gap="large")
+    if modo_marketing_principal == "🎨 Produzir Campanha":
+        st.caption("Fluxo rápido: escolha o produto, o template e a campanha. O layout aprovado fica protegido.")
+        t1, t2, t4 = st.tabs(["Nova campanha", "Biblioteca", "Exportações"])
 
-        with editor_col:
-            af_section_title("Dados da campanha", "Preencha somente as informações necessárias para a criação.")
-            templates_disponiveis = listar_templates_marketing()
-            mapa_templates = {item["nome"]: item["id"] for item in templates_disponiveis} or {"AlphaFest Clássico": MARKETING_DEFAULT_TEMPLATE}
-            template_nome = st.selectbox(
-                "Template da arte",
-                list(mapa_templates.keys()),
-                index=list(mapa_templates.values()).index(MARKETING_DEFAULT_TEMPLATE) if MARKETING_DEFAULT_TEMPLATE in mapa_templates.values() else 0,
-                key="mkt_template_visual_2000",
-                help="O template controla posições, cores, tipografia e identidade visual da propaganda.",
-            )
-            template_id = mapa_templates[template_nome]
-            premium_liberado = (
-                feature_enabled("marketing_ai", False)
+        with t1:
+            catalogo_mkt = carregar_catalogo()
+            editor_col, preview_col = st.columns([1.08, 0.92], gap="large")
+
+            with editor_col:
+                af_section_title("Dados da campanha", "Preencha somente as informações necessárias para a criação.")
+                templates_disponiveis = listar_templates_marketing()
+                mapa_templates = {item["nome"]: item["id"] for item in templates_disponiveis} or {"AlphaFest Clássico": MARKETING_DEFAULT_TEMPLATE}
+                template_nome = st.selectbox(
+                    "Template da arte",
+                    list(mapa_templates.keys()),
+                    index=list(mapa_templates.values()).index(MARKETING_DEFAULT_TEMPLATE) if MARKETING_DEFAULT_TEMPLATE in mapa_templates.values() else 0,
+                    key="mkt_template_visual_2000",
+                    help="O template controla posições, cores, tipografia e identidade visual da propaganda.",
+                )
+                template_id = mapa_templates[template_nome]
+                premium_liberado = (
+                    feature_enabled("marketing_ai", False)
+                    and str(obter_usuario_atual().get("nome", "")).casefold() == "jorge"
+                )
+                modos_criacao = ["Campanha Rápida"] + (["Campanha IA Premium"] if premium_liberado else [])
+                modo_criacao = st.radio(
+                    "Modo de criação",
+                    modos_criacao,
+                    horizontal=True,
+                    key="mkt_modo_criacao_1700",
+                    help="Campanha Rápida usa o template local. IA Premium cria uma propaganda completa seguindo o Prompt Mestre AlphaFest.",
+                )
+                if modo_criacao == "Campanha IA Premium":
+                    st.info("✨ A IA Premium usa a foto como referência, cria a composição completa e aplica o logo oficial AlphaFest depois. A geração utiliza a API configurada nos Secrets.")
+                fonte_imagem = st.radio(
+                    "Origem do trabalho",
+                    ["Upload livre", "Produto do catálogo"],
+                    horizontal=True,
+                    key="mkt_modo_origem",
+                    help="No Upload livre nenhum dado do catálogo é reaproveitado.",
+                )
+                upload_mkt = None
+                imagem_ref = ""
+                produto_mkt = {"Nome": "", "Descricao": "", "Categoria": ""}
+                video_upload = None
+
+                if fonte_imagem == "Upload livre":
+                    upload_mkt = st.file_uploader(
+                        "Imagem da campanha",
+                        type=["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"],
+                        key="mkt_upload_livre_imagem",
+                    )
+                    video_upload = st.file_uploader(
+                        "Vídeo curto opcional",
+                        type=["mp4", "mov", "m4v", "avi", "mkv", "webm"],
+                        key="mkt_upload_livre_video",
+                    )
+                    nome_livre = st.text_input("Produto ou serviço", placeholder="Ex.: Papel arroz personalizado", key="mkt_nome_livre")
+                    descricao_livre = st.text_area(
+                        "Descrição e benefícios",
+                        placeholder="Ex.: Impressão com cores vivas, pronta para aplicação...",
+                        key="mkt_descricao_livre",
+                        height=110,
+                    )
+                    produto_mkt = {"Nome": nome_livre.strip(), "Descricao": descricao_livre.strip(), "Categoria": "Upload livre"}
+                else:
+                    if not catalogo_mkt:
+                        st.warning("Cadastre produtos no Catálogo ou use o modo Upload livre.")
+                    else:
+                        nomes = [p.get("Nome", "Produto") for p in catalogo_mkt]
+                        escolhido = st.selectbox("Produto ou trabalho", nomes, key="mkt_produto_catalogo")
+                        produto_mkt = catalogo_mkt[nomes.index(escolhido)]
+                        imagens_mkt = produto_mkt.get("Imagens", []) or []
+                        if imagens_mkt:
+                            imagem_ref = st.selectbox("Imagem do catálogo", imagens_mkt, format_func=lambda x: Path(str(x)).name or "Imagem")
+                        else:
+                            st.warning("Este produto ainda não possui imagem no catálogo.")
+
+                c1, c2 = st.columns(2)
+                objetivo = c1.selectbox("Objetivo", ["Vender", "Promoção", "Lançamento", "Engajar"], key="mkt_objetivo")
+                tom = c2.selectbox("Linha de venda", ["Venda direta", "Emocional", "Urgência", "Premium", "Corporativo", "Promoção"], key="mkt_tom")
+                campanha = st.text_input("Campanha ou data", placeholder="Ex.: Dia dos Pais", key="mkt_campanha")
+
+                # Usa o Calendário Comercial existente como fonte única de datas e temas.
+                eventos_calendario_mkt = calendar_theme_options(carregar_campanhas(), hoje_local(), limit_days=365)
+                opcoes_eventos_mkt = ["Nenhum / campanha livre"] + [
+                    f"{item['name']} · {item['start'].strftime('%d/%m/%Y')}" for item in eventos_calendario_mkt
+                ]
+                evento_calendario_label = st.selectbox(
+                    "Evento do Calendário Mestre",
+                    opcoes_eventos_mkt,
+                    key="mkt_evento_calendario_mestre",
+                    help="Esta lista consulta o Calendário Comercial existente. Nenhum segundo calendário é criado.",
+                )
+                evento_calendario_mkt = None
+                if evento_calendario_label != "Nenhum / campanha livre":
+                    evento_calendario_mkt = eventos_calendario_mkt[opcoes_eventos_mkt.index(evento_calendario_label) - 1]
+                    if not campanha.strip():
+                        campanha = evento_calendario_mkt["name"]
+
+                tema_evento_id = resolve_event_theme(evento_calendario_mkt["record"]) if evento_calendario_mkt else ""
+                tema_sugerido_id = detect_theme(
+                    campanha,
+                    produto_mkt.get("Nome", ""),
+                    produto_mkt.get("Categoria", ""),
+                    evento_calendario_mkt["name"] if evento_calendario_mkt else "",
+                    explicit=get_theme(tema_evento_id)["label"] if tema_evento_id and tema_evento_id != "alphafest" else None,
+                )
+                tema_sugerido_label = get_theme(tema_sugerido_id)["label"]
+                indice_tema = THEME_ORDER.index(tema_sugerido_label) if tema_sugerido_label in THEME_ORDER else 0
+                tema_visual = st.selectbox(
+                    "🎨 Tema e paleta da campanha",
+                    THEME_ORDER,
+                    index=indice_tema,
+                    key="mkt_tema_visual_1800",
+                    help="Automático usa o nome da campanha e o evento selecionado no Calendário Mestre.",
+                )
+                tema_efetivo_id = (
+                    tema_sugerido_id
+                    if tema_visual == "Automático"
+                    else detect_theme(
+                        campanha,
+                        evento_calendario_mkt["name"] if evento_calendario_mkt else "",
+                        produto_mkt.get("Nome", ""),
+                        explicit=tema_visual,
+                    )
+                )
+                tema_efetivo = get_theme(tema_efetivo_id)
+                cores_tema = tema_efetivo["palette"]
+                st.markdown(
+                    f"<div style='display:flex;align-items:center;gap:8px;margin:-4px 0 8px 0;'>"
+                    f"<strong>{html.escape(tema_efetivo['label'])}</strong>"
+                    + "".join(
+                        f"<span title='{html.escape(nome)}' style='width:22px;height:22px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.18);background:{cor}'></span>"
+                        for nome, cor in cores_tema.items() if nome in {"primary", "secondary", "accent", "background", "metallic"}
+                    )
+                    + "</div>",
+                    unsafe_allow_html=True,
+                )
+                paleta_escolhida = st.selectbox(
+                    "Paleta de cores da arte",
+                    PALETTE_ORDER,
+                    index=0,
+                    key="mkt_paleta_1820",
+                    help="Cores do tema acompanha o Calendário Mestre. Escolha outra paleta para substituir as cores antes de gerar.",
+                )
+                usar_metalico = st.toggle(
+                    "Usar detalhe metálico/dourado",
+                    value=paleta_escolhida in {"Cores do tema", "Dourado Luxo"},
+                    key="mkt_usar_metalico_1820",
+                    help="Desative para retirar o dourado e usar a cor de destaque da paleta.",
+                )
+                cores_personalizadas = None
+                if paleta_escolhida == "Personalizada":
+                    cp1, cp2, cp3 = st.columns(3)
+                    cp4, cp5, cp6 = st.columns(3)
+                    cores_personalizadas = {
+                        "primary": cp1.color_picker("Principal", value=cores_tema.get("primary", "#123A9B"), key="mkt_cor_primary"),
+                        "secondary": cp2.color_picker("Secundária", value=cores_tema.get("secondary", "#087CE8"), key="mkt_cor_secondary"),
+                        "accent": cp3.color_picker("Destaque", value=cores_tema.get("accent", "#EF2A92"), key="mkt_cor_accent"),
+                        "background": cp4.color_picker("Fundo", value=cores_tema.get("background", "#FFFFFF"), key="mkt_cor_background"),
+                        "text": cp5.color_picker("Texto", value=cores_tema.get("text", "#102D50"), key="mkt_cor_text"),
+                        "metallic": cp6.color_picker("Metálico", value=cores_tema.get("metallic", "#D4AF37"), key="mkt_cor_metallic"),
+                    }
+                paleta_final = resolve_palette(cores_tema, paleta_escolhida, cores_personalizadas, usar_metalico)
+
+                with st.expander("🎛️ Cores por elemento e tratamento da foto", expanded=False):
+                    st.caption("Automático segue a paleta. Desmarque para escolher a cor de cada parte da arte.")
+                    cor_auto = st.toggle("Usar cores automáticas da paleta", value=True, key="mkt_cores_elementos_auto_1900")
+                    if not cor_auto:
+                        e1,e2,e3 = st.columns(3)
+                        e4,e5,e6 = st.columns(3)
+                        e7,e8,e9 = st.columns(3)
+                        paleta_final.update({
+                            "title_color": e1.color_picker("Título principal", paleta_final.get("primary", "#123A9B"), key="mkt_cor_titulo_1900"),
+                            "title_secondary_color": e2.color_picker("Título secundário", paleta_final.get("secondary", "#087CE8"), key="mkt_cor_titulo2_1900"),
+                            "banner_color": e3.color_picker("Banner", paleta_final.get("primary", "#123A9B"), key="mkt_cor_banner_1900"),
+                            "benefits_color": e4.color_picker("Benefícios", paleta_final.get("primary", "#123A9B"), key="mkt_cor_beneficios_1900"),
+                            "seal_color": e5.color_picker("Selos", paleta_final.get("secondary", "#087CE8"), key="mkt_cor_selos_1900"),
+                            "price_color": e6.color_picker("Texto/borda do preço", paleta_final.get("metallic", "#D7E7F5"), key="mkt_cor_preco_1900"),
+                            "price_background": e7.color_picker("Fundo do preço", paleta_final.get("primary", "#123A9B"), key="mkt_cor_preco_fundo_1900"),
+                            "cta_color": e8.color_picker("Caixa do WhatsApp", paleta_final.get("primary", "#123A9B"), key="mkt_cor_cta_1900"),
+                            "footer_color": e9.color_picker("Rodapé", paleta_final.get("primary", "#123A9B"), key="mkt_cor_rodape_1900"),
+                        })
+                    photo_label = st.selectbox(
+                        "Tratamento da foto",
+                        ["Automático", "Preservar foto inteira", "Remover fundo"],
+                        key="mkt_photo_mode_1900",
+                        help="Automático preserva fotos de balões e cenários e remove o fundo de produtos isolados.",
+                    )
+                    photo_mode = {"Automático":"auto", "Preservar foto inteira":"preservar", "Remover fundo":"recortar"}[photo_label]
+
+                st.markdown(
+                    "<div style='display:flex;gap:8px;margin:0 0 10px 0;'>"
+                    + "".join(
+                        f"<span title='{html.escape(nome)}: {cor}' style='width:28px;height:28px;border-radius:50%;display:inline-block;border:2px solid rgba(255,255,255,.65);box-shadow:0 0 0 1px rgba(0,0,0,.2);background:{cor}'></span>"
+                        for nome, cor in paleta_final.items() if nome in {"primary", "secondary", "accent", "background", "metallic"}
+                    )
+                    + "</div>",
+                    unsafe_allow_html=True,
+                )
+
+                canais_instagram = ["Instagram Feed", "Instagram Story", "Carrossel", "Reel", "TikTok", "YouTube Shorts", "YouTube Horizontal"]
+                opcoes_canais = canais_instagram + (["Status WhatsApp"] if incluir_whatsapp else [])
+                canais_padrao = ["Instagram Feed", "Instagram Story"] + (["Status WhatsApp"] if incluir_whatsapp else [])
+                canais = st.multiselect(
+                    "Canais e formatos",
+                    opcoes_canais,
+                    default=[c for c in canais_padrao if c in opcoes_canais],
+                    key="mkt_canais_instagram",
+                    help="O Facebook recebe a replicação feita pela Meta.",
+                )
+                observacoes = st.text_area("Oferta e informações obrigatórias", placeholder="Ex.: Até sexta, entrega em Itatiba...", key="mkt_obs", height=90)
+                p1, p2 = st.columns(2)
+                preco_arte = p1.text_input("Preço na arte", placeholder="R$ 90,00")
+                subtitulo_arte = p2.text_input("Chamada curta", value="Personalizado do seu jeito")
+                cta_arte = st.text_input("Chamada para ação", value="Chame no WhatsApp")
+
+            preview_liberado = (
+                feature_enabled("marketing_preview", False)
                 and str(obter_usuario_atual().get("nome", "")).casefold() == "jorge"
             )
-            modos_criacao = ["Campanha Rápida"] + (["Campanha IA Premium"] if premium_liberado else [])
-            modo_criacao = st.radio(
-                "Modo de criação",
-                modos_criacao,
-                horizontal=True,
-                key="mkt_modo_criacao_1700",
-                help="Campanha Rápida usa o template local. IA Premium cria uma propaganda completa seguindo o Prompt Mestre AlphaFest.",
-            )
-            if modo_criacao == "Campanha IA Premium":
-                st.info("✨ A IA Premium usa a foto como referência, cria a composição completa e aplica o logo oficial AlphaFest depois. A geração utiliza a API configurada nos Secrets.")
-            fonte_imagem = st.radio(
-                "Origem do trabalho",
-                ["Upload livre", "Produto do catálogo"],
-                horizontal=True,
-                key="mkt_modo_origem",
-                help="No Upload livre nenhum dado do catálogo é reaproveitado.",
-            )
-            upload_mkt = None
-            imagem_ref = ""
-            produto_mkt = {"Nome": "", "Descricao": "", "Categoria": ""}
-            video_upload = None
+            origem_preview = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
+            campos_preview = {
+                "Imagem": bool(origem_preview),
+                "Produto": bool(str(produto_mkt.get("Nome", "")).strip()),
+                "Descrição": bool(str(produto_mkt.get("Descricao", "")).strip()),
+                "Oferta": bool(str(observacoes).strip() or str(preco_arte).strip()),
+                "Chamada": bool(str(subtitulo_arte).strip()),
+                "CTA": bool(str(cta_arte).strip()),
+                "Canal": bool(canais),
+            }
+            pontos = sum(1 for ok in campos_preview.values() if ok)
+            qualidade = round((pontos / len(campos_preview)) * 100) if campos_preview else 0
+            prompt_premium_info = None
+            if modo_criacao == "Campanha IA Premium" and produto_mkt.get("Nome"):
+                prompt_premium_info = build_master_prompt(
+                    product_name=str(produto_mkt.get("Nome", "")),
+                    description=str(produto_mkt.get("Descricao", "")),
+                    category=str(produto_mkt.get("Categoria", "")),
+                    objective=objetivo,
+                    campaign=campanha,
+                    offer=observacoes,
+                    subtitle=subtitulo_arte,
+                    cta=cta_arte or "FAÇA SEU PEDIDO",
+                    channel="Instagram Feed",
+                    theme=tema_visual,
+                    calendar_event=evento_calendario_mkt["name"] if evento_calendario_mkt else "",
+                )
 
-            if fonte_imagem == "Upload livre":
-                upload_mkt = st.file_uploader(
-                    "Imagem da campanha",
-                    type=["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff"],
-                    key="mkt_upload_livre_imagem",
-                )
-                video_upload = st.file_uploader(
-                    "Vídeo curto opcional",
-                    type=["mp4", "mov", "m4v", "avi", "mkv", "webm"],
-                    key="mkt_upload_livre_video",
-                )
-                nome_livre = st.text_input("Produto ou serviço", placeholder="Ex.: Papel arroz personalizado", key="mkt_nome_livre")
-                descricao_livre = st.text_area(
-                    "Descrição e benefícios",
-                    placeholder="Ex.: Impressão com cores vivas, pronta para aplicação...",
-                    key="mkt_descricao_livre",
-                    height=110,
-                )
-                produto_mkt = {"Nome": nome_livre.strip(), "Descricao": descricao_livre.strip(), "Categoria": "Upload livre"}
-            else:
-                if not catalogo_mkt:
-                    st.warning("Cadastre produtos no Catálogo ou use o modo Upload livre.")
+            with preview_col:
+                st.markdown('<div class="af-preview-shell">', unsafe_allow_html=True)
+                af_section_title("Preview", "Visualização compacta e sem gravação.")
+                st.markdown(f'<div class="af-score">{qualidade}%</div><div class="af-small">qualidade da campanha</div>', unsafe_allow_html=True)
+                st.progress(qualidade / 100)
+                pendencias = [nome for nome, ok in campos_preview.items() if not ok]
+                if pendencias:
+                    st.caption("Falta: " + ", ".join(pendencias) + ".")
                 else:
-                    nomes = [p.get("Nome", "Produto") for p in catalogo_mkt]
-                    escolhido = st.selectbox("Produto ou trabalho", nomes, key="mkt_produto_catalogo")
-                    produto_mkt = catalogo_mkt[nomes.index(escolhido)]
-                    imagens_mkt = produto_mkt.get("Imagens", []) or []
-                    if imagens_mkt:
-                        imagem_ref = st.selectbox("Imagem do catálogo", imagens_mkt, format_func=lambda x: Path(str(x)).name or "Imagem")
-                    else:
-                        st.warning("Este produto ainda não possui imagem no catálogo.")
+                    st.success("Campanha pronta.")
 
-            c1, c2 = st.columns(2)
-            objetivo = c1.selectbox("Objetivo", ["Vender", "Promoção", "Lançamento", "Engajar"], key="mkt_objetivo")
-            tom = c2.selectbox("Linha de venda", ["Venda direta", "Emocional", "Urgência", "Premium", "Corporativo", "Promoção"], key="mkt_tom")
-            campanha = st.text_input("Campanha ou data", placeholder="Ex.: Dia dos Pais", key="mkt_campanha")
-
-            # Usa o Calendário Comercial existente como fonte única de datas e temas.
-            eventos_calendario_mkt = calendar_theme_options(carregar_campanhas(), hoje_local(), limit_days=365)
-            opcoes_eventos_mkt = ["Nenhum / campanha livre"] + [
-                f"{item['name']} · {item['start'].strftime('%d/%m/%Y')}" for item in eventos_calendario_mkt
-            ]
-            evento_calendario_label = st.selectbox(
-                "Evento do Calendário Mestre",
-                opcoes_eventos_mkt,
-                key="mkt_evento_calendario_mestre",
-                help="Esta lista consulta o Calendário Comercial existente. Nenhum segundo calendário é criado.",
-            )
-            evento_calendario_mkt = None
-            if evento_calendario_label != "Nenhum / campanha livre":
-                evento_calendario_mkt = eventos_calendario_mkt[opcoes_eventos_mkt.index(evento_calendario_label) - 1]
-                if not campanha.strip():
-                    campanha = evento_calendario_mkt["name"]
-
-            tema_evento_id = resolve_event_theme(evento_calendario_mkt["record"]) if evento_calendario_mkt else ""
-            tema_sugerido_id = detect_theme(
-                campanha,
-                produto_mkt.get("Nome", ""),
-                produto_mkt.get("Categoria", ""),
-                evento_calendario_mkt["name"] if evento_calendario_mkt else "",
-                explicit=get_theme(tema_evento_id)["label"] if tema_evento_id and tema_evento_id != "alphafest" else None,
-            )
-            tema_sugerido_label = get_theme(tema_sugerido_id)["label"]
-            indice_tema = THEME_ORDER.index(tema_sugerido_label) if tema_sugerido_label in THEME_ORDER else 0
-            tema_visual = st.selectbox(
-                "🎨 Tema e paleta da campanha",
-                THEME_ORDER,
-                index=indice_tema,
-                key="mkt_tema_visual_1800",
-                help="Automático usa o nome da campanha e o evento selecionado no Calendário Mestre.",
-            )
-            tema_efetivo_id = (
-                tema_sugerido_id
-                if tema_visual == "Automático"
-                else detect_theme(
-                    campanha,
-                    evento_calendario_mkt["name"] if evento_calendario_mkt else "",
-                    produto_mkt.get("Nome", ""),
-                    explicit=tema_visual,
-                )
-            )
-            tema_efetivo = get_theme(tema_efetivo_id)
-            cores_tema = tema_efetivo["palette"]
-            st.markdown(
-                f"<div style='display:flex;align-items:center;gap:8px;margin:-4px 0 8px 0;'>"
-                f"<strong>{html.escape(tema_efetivo['label'])}</strong>"
-                + "".join(
-                    f"<span title='{html.escape(nome)}' style='width:22px;height:22px;border-radius:50%;display:inline-block;border:1px solid rgba(0,0,0,.18);background:{cor}'></span>"
-                    for nome, cor in cores_tema.items() if nome in {"primary", "secondary", "accent", "background", "metallic"}
-                )
-                + "</div>",
-                unsafe_allow_html=True,
-            )
-            paleta_escolhida = st.selectbox(
-                "Paleta de cores da arte",
-                PALETTE_ORDER,
-                index=0,
-                key="mkt_paleta_1820",
-                help="Cores do tema acompanha o Calendário Mestre. Escolha outra paleta para substituir as cores antes de gerar.",
-            )
-            usar_metalico = st.toggle(
-                "Usar detalhe metálico/dourado",
-                value=paleta_escolhida in {"Cores do tema", "Dourado Luxo"},
-                key="mkt_usar_metalico_1820",
-                help="Desative para retirar o dourado e usar a cor de destaque da paleta.",
-            )
-            cores_personalizadas = None
-            if paleta_escolhida == "Personalizada":
-                cp1, cp2, cp3 = st.columns(3)
-                cp4, cp5, cp6 = st.columns(3)
-                cores_personalizadas = {
-                    "primary": cp1.color_picker("Principal", value=cores_tema.get("primary", "#123A9B"), key="mkt_cor_primary"),
-                    "secondary": cp2.color_picker("Secundária", value=cores_tema.get("secondary", "#087CE8"), key="mkt_cor_secondary"),
-                    "accent": cp3.color_picker("Destaque", value=cores_tema.get("accent", "#EF2A92"), key="mkt_cor_accent"),
-                    "background": cp4.color_picker("Fundo", value=cores_tema.get("background", "#FFFFFF"), key="mkt_cor_background"),
-                    "text": cp5.color_picker("Texto", value=cores_tema.get("text", "#102D50"), key="mkt_cor_text"),
-                    "metallic": cp6.color_picker("Metálico", value=cores_tema.get("metallic", "#D4AF37"), key="mkt_cor_metallic"),
-                }
-            paleta_final = resolve_palette(cores_tema, paleta_escolhida, cores_personalizadas, usar_metalico)
-
-            with st.expander("🎛️ Cores por elemento e tratamento da foto", expanded=False):
-                st.caption("Automático segue a paleta. Desmarque para escolher a cor de cada parte da arte.")
-                cor_auto = st.toggle("Usar cores automáticas da paleta", value=True, key="mkt_cores_elementos_auto_1900")
-                if not cor_auto:
-                    e1,e2,e3 = st.columns(3)
-                    e4,e5,e6 = st.columns(3)
-                    e7,e8,e9 = st.columns(3)
-                    paleta_final.update({
-                        "title_color": e1.color_picker("Título principal", paleta_final.get("primary", "#123A9B"), key="mkt_cor_titulo_1900"),
-                        "title_secondary_color": e2.color_picker("Título secundário", paleta_final.get("secondary", "#087CE8"), key="mkt_cor_titulo2_1900"),
-                        "banner_color": e3.color_picker("Banner", paleta_final.get("primary", "#123A9B"), key="mkt_cor_banner_1900"),
-                        "benefits_color": e4.color_picker("Benefícios", paleta_final.get("primary", "#123A9B"), key="mkt_cor_beneficios_1900"),
-                        "seal_color": e5.color_picker("Selos", paleta_final.get("secondary", "#087CE8"), key="mkt_cor_selos_1900"),
-                        "price_color": e6.color_picker("Texto/borda do preço", paleta_final.get("metallic", "#D7E7F5"), key="mkt_cor_preco_1900"),
-                        "price_background": e7.color_picker("Fundo do preço", paleta_final.get("primary", "#123A9B"), key="mkt_cor_preco_fundo_1900"),
-                        "cta_color": e8.color_picker("Caixa do WhatsApp", paleta_final.get("primary", "#123A9B"), key="mkt_cor_cta_1900"),
-                        "footer_color": e9.color_picker("Rodapé", paleta_final.get("primary", "#123A9B"), key="mkt_cor_rodape_1900"),
-                    })
-                photo_label = st.selectbox(
-                    "Tratamento da foto",
-                    ["Automático", "Preservar foto inteira", "Remover fundo"],
-                    key="mkt_photo_mode_1900",
-                    help="Automático preserva fotos de balões e cenários e remove o fundo de produtos isolados.",
-                )
-                photo_mode = {"Automático":"auto", "Preservar foto inteira":"preservar", "Remover fundo":"recortar"}[photo_label]
-
-            st.markdown(
-                "<div style='display:flex;gap:8px;margin:0 0 10px 0;'>"
-                + "".join(
-                    f"<span title='{html.escape(nome)}: {cor}' style='width:28px;height:28px;border-radius:50%;display:inline-block;border:2px solid rgba(255,255,255,.65);box-shadow:0 0 0 1px rgba(0,0,0,.2);background:{cor}'></span>"
-                    for nome, cor in paleta_final.items() if nome in {"primary", "secondary", "accent", "background", "metallic"}
-                )
-                + "</div>",
-                unsafe_allow_html=True,
-            )
-
-            canais_instagram = ["Instagram Feed", "Instagram Story", "Carrossel", "Reel", "TikTok", "YouTube Shorts", "YouTube Horizontal"]
-            opcoes_canais = canais_instagram + (["Status WhatsApp"] if incluir_whatsapp else [])
-            canais_padrao = ["Instagram Feed", "Instagram Story"] + (["Status WhatsApp"] if incluir_whatsapp else [])
-            canais = st.multiselect(
-                "Canais e formatos",
-                opcoes_canais,
-                default=[c for c in canais_padrao if c in opcoes_canais],
-                key="mkt_canais_instagram",
-                help="O Facebook recebe a replicação feita pela Meta.",
-            )
-            observacoes = st.text_area("Oferta e informações obrigatórias", placeholder="Ex.: Até sexta, entrega em Itatiba...", key="mkt_obs", height=90)
-            p1, p2 = st.columns(2)
-            preco_arte = p1.text_input("Preço na arte", placeholder="R$ 90,00")
-            subtitulo_arte = p2.text_input("Chamada curta", value="Personalizado do seu jeito")
-            cta_arte = st.text_input("Chamada para ação", value="Chame no WhatsApp")
-
-        preview_liberado = (
-            feature_enabled("marketing_preview", False)
-            and str(obter_usuario_atual().get("nome", "")).casefold() == "jorge"
-        )
-        origem_preview = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
-        campos_preview = {
-            "Imagem": bool(origem_preview),
-            "Produto": bool(str(produto_mkt.get("Nome", "")).strip()),
-            "Descrição": bool(str(produto_mkt.get("Descricao", "")).strip()),
-            "Oferta": bool(str(observacoes).strip() or str(preco_arte).strip()),
-            "Chamada": bool(str(subtitulo_arte).strip()),
-            "CTA": bool(str(cta_arte).strip()),
-            "Canal": bool(canais),
-        }
-        pontos = sum(1 for ok in campos_preview.values() if ok)
-        qualidade = round((pontos / len(campos_preview)) * 100) if campos_preview else 0
-        prompt_premium_info = None
-        if modo_criacao == "Campanha IA Premium" and produto_mkt.get("Nome"):
-            prompt_premium_info = build_master_prompt(
-                product_name=str(produto_mkt.get("Nome", "")),
-                description=str(produto_mkt.get("Descricao", "")),
-                category=str(produto_mkt.get("Categoria", "")),
-                objective=objetivo,
-                campaign=campanha,
-                offer=observacoes,
-                subtitle=subtitulo_arte,
-                cta=cta_arte or "FAÇA SEU PEDIDO",
-                channel="Instagram Feed",
-                theme=tema_visual,
-                calendar_event=evento_calendario_mkt["name"] if evento_calendario_mkt else "",
-            )
-
-        with preview_col:
-            st.markdown('<div class="af-preview-shell">', unsafe_allow_html=True)
-            af_section_title("Preview", "Visualização compacta e sem gravação.")
-            st.markdown(f'<div class="af-score">{qualidade}%</div><div class="af-small">qualidade da campanha</div>', unsafe_allow_html=True)
-            st.progress(qualidade / 100)
-            pendencias = [nome for nome, ok in campos_preview.items() if not ok]
-            if pendencias:
-                st.caption("Falta: " + ", ".join(pendencias) + ".")
-            else:
-                st.success("Campanha pronta.")
-
-            canais_preview = [c for c in canais if CANAL_MIDIA_CONFIG.get(c, {}).get("tipo") == "imagem"]
-            if preview_liberado and origem_preview and canais_preview and produto_mkt.get("Nome"):
-                canal_preview = st.selectbox("Formato", canais_preview, key="mkt_preview_canal_1500")
-                if modo_criacao == "Campanha IA Premium":
-                    st.markdown("#### ✨ Campanha IA Premium")
-                    st.success("Prompt Mestre pronto para gerar a propaganda completa.")
-                    if prompt_premium_info:
-                        st.caption(f"Categoria detectada: {prompt_premium_info['profile_id'].replace('_', ' ').title()}")
-                        st.caption(f"Tema visual: {prompt_premium_info['theme']['label']}")
-                        st.caption(f"Título padronizado: {prompt_premium_info['display_title']}")
-                        st.caption("Benefícios: " + " • ".join(prompt_premium_info["benefits"]))
-                        with st.expander("Ver Prompt Mestre"):
-                            st.text_area("Prompt gerado", prompt_premium_info["prompt"], height=360, disabled=True, key="mkt_prompt_preview_1700")
-                    st.info("A imagem será criada somente ao clicar em Gerar campanha, evitando custos durante o preenchimento.")
-                else:
-                    try:
-                        arte_preview = gerar_arte_png(
-                            origem_preview,
-                            canal_preview,
-                            produto_mkt.get("Nome", "Produto"),
-                            subtitulo_arte,
-                            preco_arte,
-                            cta_arte,
-                            produto_mkt.get("Descricao", ""),
-                            template_id,
-                            paleta_final,
-                            photo_mode,
-                        )
-                        st.image(arte_preview, use_container_width=True)
-                        st.markdown(f'<div class="af-card-title">{html.escape(str(produto_mkt.get("Nome", "Produto")))}</div>', unsafe_allow_html=True)
-                        if campanha:
-                            st.caption(campanha)
-                        if observacoes:
-                            st.caption(observacoes[:180])
-                        st.markdown(f'<span class="af-badge">{html.escape(cta_arte or "Chame no WhatsApp")}</span>', unsafe_allow_html=True)
-                    except Exception as exc:
-                        st.warning(f"Preview isolado: {exc}")
-            elif not preview_liberado:
-                st.info("Preview disponível somente na Central do Jorge.")
-            elif not origem_preview:
-                st.info("Envie ou selecione uma imagem.")
-            elif not produto_mkt.get("Nome"):
-                st.info("Informe o produto ou serviço.")
-            else:
-                st.info("Selecione um formato de imagem.")
-            st.caption("Música adicionada manualmente na rede social.")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        if st.button("✨ Gerar campanha IA Premium" if modo_criacao == "Campanha IA Premium" else "🚀 Gerar campanha rápida", type="primary", use_container_width=True):
-            origem = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
-            faltas = []
-            if not canais: faltas.append("selecione pelo menos um canal")
-            if not origem: faltas.append("envie ou selecione uma imagem")
-            if not produto_mkt.get("Nome"): faltas.append("informe o nome do produto/serviço")
-            if fonte_imagem == "Upload livre" and not produto_mkt.get("Descricao"): faltas.append("descreva o que aparece na imagem")
-            if faltas:
-                st.warning("Para continuar, " + "; ".join(faltas) + ".")
-            else:
-                try:
-                    imagem_original_salva = ""
-                    video_original_salvo = ""
-                    if upload_mkt is not None:
-                        imagem_original_salva = upload_library_file(upload_mkt, produto_nome=produto_mkt.get("Nome", "produto"), local_upload_dir="marketing_originais")
-                    if video_upload is not None:
-                        video_original_salvo = upload_library_file(video_upload, produto_nome=produto_mkt.get("Nome", "produto"), local_upload_dir="marketing_videos_originais")
-                    png_original = converter_imagem_para_png(origem)
-                    saidas, motor_copy = gerar_conteudo_marketing(produto_mkt, objetivo, campanha, canais, observacoes, tom, png_original)
-                    artes = {}
-                    prompt_mestre = ""
-                    perfil_visual = "template_local"
+                canais_preview = [c for c in canais if CANAL_MIDIA_CONFIG.get(c, {}).get("tipo") == "imagem"]
+                if preview_liberado and origem_preview and canais_preview and produto_mkt.get("Nome"):
+                    canal_preview = st.selectbox("Formato", canais_preview, key="mkt_preview_canal_1500")
                     if modo_criacao == "Campanha IA Premium":
-                        prompt_info = build_master_prompt(
-                            product_name=str(produto_mkt.get("Nome", "")),
-                            description=str(produto_mkt.get("Descricao", "")),
-                            category=str(produto_mkt.get("Categoria", "")),
-                            objective=objetivo,
-                            campaign=campanha,
-                            offer=observacoes,
-                            subtitle=subtitulo_arte,
-                            cta=cta_arte or "FAÇA SEU PEDIDO",
-                            channel="Instagram Feed",
-                            theme=f"{tema_efetivo['label']} | Paleta: {paleta_final}",
-                            calendar_event=evento_calendario_mkt["name"] if evento_calendario_mkt else "",
-                        )
-                        prompt_mestre = prompt_info["prompt"]
-                        perfil_visual = prompt_info["profile_id"]
-                        with st.spinner("A IA está criando a propaganda completa no padrão AlphaFest..."):
-                            arte_quadrada = generate_premium_square(
-                                prompt=prompt_mestre,
-                                product_png=png_original,
-                                api_key=_openai_api_key(),
-                            )
-                            arte_quadrada = apply_official_logo(arte_quadrada, Path("logo.png"))
-                        for canal in canais:
-                            config_canal = CANAL_MIDIA_CONFIG[canal]
-                            if config_canal["tipo"] == "imagem":
-                                artes[canal] = base64.b64encode(adapt_square_to_channel(arte_quadrada, config_canal["size"])).decode("ascii")
-                        motor_copy = motor_copy + " + Imagem IA Premium"
+                        st.markdown("#### ✨ Campanha IA Premium")
+                        st.success("Prompt Mestre pronto para gerar a propaganda completa.")
+                        if prompt_premium_info:
+                            st.caption(f"Categoria detectada: {prompt_premium_info['profile_id'].replace('_', ' ').title()}")
+                            st.caption(f"Tema visual: {prompt_premium_info['theme']['label']}")
+                            st.caption(f"Título padronizado: {prompt_premium_info['display_title']}")
+                            st.caption("Benefícios: " + " • ".join(prompt_premium_info["benefits"]))
+                            with st.expander("Ver Prompt Mestre"):
+                                st.text_area("Prompt gerado", prompt_premium_info["prompt"], height=360, disabled=True, key="mkt_prompt_preview_1700")
+                        st.info("A imagem será criada somente ao clicar em Gerar campanha, evitando custos durante o preenchimento.")
                     else:
-                        for canal in canais:
-                            config_canal = CANAL_MIDIA_CONFIG[canal]
-                            if config_canal["tipo"] == "imagem":
-                                artes[canal] = base64.b64encode(gerar_arte_png(origem, canal, produto_mkt.get("Nome", "Produto"), subtitulo_arte, preco_arte, cta_arte, produto_mkt.get("Descricao", ""), template_id, paleta_final, photo_mode)).decode("ascii")
-                    registro = {
-                        "id": f"MKT-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
-                        "criado_em": agora_local().isoformat(),
-                        "modo_origem": fonte_imagem,
-                        "produto": produto_mkt.get("Nome", ""),
-                        "descricao_confirmada": produto_mkt.get("Descricao", ""),
-                        "categoria": produto_mkt.get("Categoria", ""),
-                        "imagem_original": imagem_original_salva or imagem_ref,
-                        "video_original": video_original_salvo,
-                        "imagem_png_base64": base64.b64encode(png_original).decode("ascii"),
-                        "objetivo": objetivo, "tom": tom, "campanha": campanha, "canais": canais,
-                        "calendario_evento_id": evento_calendario_mkt["id"] if evento_calendario_mkt else "",
-                        "calendario_evento_nome": evento_calendario_mkt["name"] if evento_calendario_mkt else "",
-                        "tema_visual": tema_efetivo_id, "tema_visual_nome": tema_efetivo["label"],
-                        "paleta_visual": paleta_final, "paleta_nome": paleta_escolhida, "usar_metalico": usar_metalico, "photo_mode": photo_mode,
-                        "template_id": template_id, "template_nome": template_nome,
-                        "modo_criacao": modo_criacao, "prompt_mestre": prompt_mestre, "perfil_visual": perfil_visual,
-                        "conteudos": saidas, "motor_copy": motor_copy,
-                        "artes_png": artes, "aprovacoes": {canal: False for canal in canais},
-                        "fila_publicacao": {}, "status": "Em revisão",
-                    }
-                    conteudos.insert(0, registro); marketing["conteudos"] = conteudos; salvar_marketing(marketing)
-                    registrar_auditoria("Gerar campanha", "Marketing", registro["id"], {"produto": registro["produto"], "canais": canais, "modo": fonte_imagem, "motor": motor_copy})
-                    st.session_state.mkt_ultimo_id = registro["id"]
-                    st.success(f"Campanha criada com {motor_copy}. Revise os formatos e baixe o kit para publicação manual.")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Não foi possível gerar a campanha: {exc}")
+                        try:
+                            arte_preview = gerar_arte_png(
+                                origem_preview,
+                                canal_preview,
+                                produto_mkt.get("Nome", "Produto"),
+                                subtitulo_arte,
+                                preco_arte,
+                                cta_arte,
+                                produto_mkt.get("Descricao", ""),
+                                template_id,
+                                paleta_final,
+                                photo_mode,
+                            )
+                            st.image(arte_preview, use_container_width=True)
+                            st.markdown(f'<div class="af-card-title">{html.escape(str(produto_mkt.get("Nome", "Produto")))}</div>', unsafe_allow_html=True)
+                            if campanha:
+                                st.caption(campanha)
+                            if observacoes:
+                                st.caption(observacoes[:180])
+                            st.markdown(f'<span class="af-badge">{html.escape(cta_arte or "Chame no WhatsApp")}</span>', unsafe_allow_html=True)
+                        except Exception as exc:
+                            st.warning(f"Preview isolado: {exc}")
+                elif not preview_liberado:
+                    st.info("Preview disponível somente na Central do Jorge.")
+                elif not origem_preview:
+                    st.info("Envie ou selecione uma imagem.")
+                elif not produto_mkt.get("Nome"):
+                    st.info("Informe o produto ou serviço.")
+                else:
+                    st.info("Selecione um formato de imagem.")
+                st.caption("Música adicionada manualmente na rede social.")
+                st.markdown('</div>', unsafe_allow_html=True)
 
-        ultimo_id = st.session_state.get("mkt_ultimo_id")
-        ultimo = next((x for x in conteudos if x.get("id") == ultimo_id), None)
-        if ultimo:
-            aprovados_total = sum(bool(ultimo.get("aprovacoes", {}).get(c)) for c in ultimo.get("canais", []))
-            st.markdown(f"### Preview por formato • {aprovados_total}/{len(ultimo.get('canais', []))} aprovados")
-            st.caption(f"Produto confirmado: {ultimo.get('produto')} • Origem: {ultimo.get('modo_origem')} • Texto: {ultimo.get('motor_copy','Alpha local')}")
-            alterou = False
-            for canal in ultimo.get("canais", []):
-                aprovado_atual = bool(ultimo.get("aprovacoes", {}).get(canal))
-                fila_atual = bool(ultimo.get("fila_publicacao", {}).get(canal))
-                with st.container(border=True):
-                    renderizar_cabecalho_canal(canal, aprovado_atual, fila_atual)
-                    cols = st.columns([1.05, 1])
-                    with cols[0]:
-                        arte_b64 = ultimo.get("artes_png", {}).get(canal)
-                        if arte_b64:
-                            arte_bytes = base64.b64decode(arte_b64)
-                            st.image(arte_bytes, use_container_width=True)
-                            st.download_button("⬇️ Baixar PNG", arte_bytes, file_name=f"{re.sub(r'[^A-Za-z0-9_-]','_',ultimo.get('produto','campanha'))}_{re.sub(r'[^A-Za-z0-9_-]','_',canal)}.png", mime="image/png", key=f"baixar_{ultimo_id}_{canal}", use_container_width=True)
-                        elif ultimo.get("video_original"):
-                            st.video(ultimo.get("video_original"))
-                            st.info("O vídeo original foi preservado. O roteiro abaixo está pronto para o canal; a edição MP4 automática será habilitada no Video Studio.")
-                        else:
-                            st.info("Canal de vídeo: foi gerado o roteiro comercial. Envie um vídeo no modo Upload livre para anexá-lo à campanha.")
-                    with cols[1]:
-                        texto = st.text_area("Descrição / roteiro comercial", value=ultimo.get("conteudos", {}).get(canal, ""), height=270, key=f"texto_{ultimo_id}_{canal}")
-                        if texto != ultimo.get("conteudos", {}).get(canal, ""):
-                            ultimo.setdefault("conteudos", {})[canal] = texto; alterou = True
-                        aprovado = st.checkbox("✅ Aprovar este canal", value=aprovado_atual, key=f"aprovar_{ultimo_id}_{canal}")
-                        if aprovado != aprovado_atual:
-                            ultimo.setdefault("aprovacoes", {})[canal] = aprovado; alterou = True
-                        st.caption("Ao aprovar, este formato entra no mesmo lote do Instagram.")
-            if alterou:
-                ultimo["status"] = "Aprovado" if all(ultimo.get("aprovacoes", {}).get(c) for c in ultimo.get("canais", [])) else "Em revisão"
-                salvar_marketing(marketing)
-            b1, b2 = st.columns([1, 1])
-            if b1.button("💾 Salvar textos e aprovações", use_container_width=True):
-                salvar_marketing(marketing); st.success("Revisão salva.")
-            aprovados = [c for c in ultimo.get("canais", []) if ultimo.get("aprovacoes", {}).get(c)]
-            kit_bytes = gerar_zip_campanha(ultimo)
-            b2.download_button(
-                f"📦 Baixar kit com {len(ultimo.get('canais', []))} formato(s)",
-                kit_bytes,
-                file_name=f"Campanha_{_nome_arquivo_seguro(ultimo.get('produto'))}_{_nome_arquivo_seguro(ultimo.get('campanha') or ultimo.get('objetivo'))}.zip",
-                mime="application/zip",
-                use_container_width=True,
-                key=f"kit_ultimo_{ultimo_id}",
-            )
-            if False:
-                momento = agora_local().isoformat()
-                ultimo.setdefault("fila_publicacao", {})
-                for canal in aprovados:
-                    ultimo["fila_publicacao"][canal] = {"status": "Na fila", "adicionado_em": momento}
-                ultimo["status"] = "Na fila de publicação"
-                ultimo["lote_publicacao_em"] = momento
-                salvar_marketing(marketing)
-                registrar_auditoria("Publicação em lote", "Marketing", ultimo.get("id"), {"canais": aprovados})
-                st.success("Os formatos aprovados foram enviados para a fila do Instagram. A publicação automática dependerá das credenciais oficiais da Meta; a replicação no Facebook seguirá a configuração da própria conta.")
-                st.rerun()
-
-    with t2:
-        a,b,c = st.columns(3)
-        a.metric("Campanhas", len(conteudos))
-        b.metric("Em revisão", sum(1 for x in conteudos if x.get("status") == "Em revisão"))
-        c.metric("Na fila/publicadas", sum(1 for x in conteudos if x.get("status") in ("Aprovado","Na fila de publicação","Publicado")))
-        if not conteudos: st.info("A fila será preenchida quando você gerar a primeira campanha.")
-        for item in conteudos[:50]:
-            aprovados = sum(1 for canal in item.get("canais", []) if item.get("aprovacoes", {}).get(canal))
-            with st.expander(f"{item.get('produto','Produto')} • {item.get('campanha') or item.get('objetivo')} • {item.get('status','Em revisão')} ({aprovados}/{len(item.get('canais',[]))} canais)"):
-                st.caption(f"Origem: {item.get('modo_origem','Legado')} • Motor de texto: {item.get('motor_copy','Alpha local')}")
-                st.download_button(
-                    "📦 Baixar kit completo",
-                    gerar_zip_campanha(item),
-                    file_name=f"Campanha_{_nome_arquivo_seguro(item.get('produto'))}_{_nome_arquivo_seguro(item.get('campanha') or item.get('objetivo'))}.zip",
-                    mime="application/zip",
-                    key=f"kit_biblioteca_{item.get('id')}",
-                    use_container_width=True,
-                )
-                for canal in item.get("canais", []):
-                    renderizar_cabecalho_canal(canal, bool(item.get("aprovacoes",{}).get(canal)), bool(item.get("fila_publicacao",{}).get(canal)))
-                    arte_b64=item.get("artes_png",{}).get(canal)
-                    if arte_b64:
-                        arte_bytes=base64.b64decode(arte_b64); st.image(arte_bytes, width=280)
-                        st.download_button(f"Baixar {canal} PNG", arte_bytes, file_name=f"{item.get('id')}_{re.sub(r'[^A-Za-z0-9_-]','_',canal)}.png", mime="image/png", key=f"fila_dl_{item.get('id')}_{canal}")
-                    st.code(item.get("conteudos",{}).get(canal,""), language=None)
-                x1,x2=st.columns(2)
-                if x1.button("✅ Marcar lote como publicado", key=f"mkt_pub_{item.get('id')}", use_container_width=True):
-                    item["status"]="Publicado"; item["publicado_em"]=agora_local().isoformat()
-                    for canal in item.get("canais", []):
-                        if item.get("aprovacoes",{}).get(canal):
-                            item.setdefault("fila_publicacao", {})[canal] = {"status":"Publicado", "publicado_em":item["publicado_em"]}
-                    salvar_marketing(marketing); st.rerun()
-                if x2.button("🗑️ Remover", key=f"mkt_del_{item.get('id')}", use_container_width=True):
-                    marketing["conteudos"]=[x for x in conteudos if x.get("id") != item.get("id")]; salvar_marketing(marketing); st.rerun()
-
-    with t3:
-        st.subheader("🧩 Biblioteca de Templates")
-        st.caption("Templates instalados aqui entram no seletor do Marketing Studio sem alterar Python, GitHub ou deploy.")
-        templates_biblioteca = list_library_templates()
-        mid1, mid2, mid3 = st.columns(3)
-        mid1.metric("Templates instalados", len(templates_biblioteca))
-        mid2.metric("Fotos nas campanhas", sum(1 for x in conteudos if x.get("imagem_original") or x.get("imagem_png_base64")))
-        mid3.metric("Vídeos vinculados", sum(1 for x in conteudos if x.get("video_original")))
-
-        with st.container(border=True):
-            st.markdown("#### ➕ Importar novo template")
-            st.caption("Envie um ZIP contendo fundo.png, layout.json e config.json. preview.png é opcional.")
-            tpl_zip = st.file_uploader("Pacote do template (.zip)", type=["zip"], key="mkt_template_zip_upload_2000")
-            replace_tpl = st.checkbox("Substituir se já existir", value=False, key="mkt_template_replace_2000")
-            if st.button("📥 Instalar template", use_container_width=True, disabled=tpl_zip is None, key="mkt_install_template_2000"):
-                try:
-                    pacote_bytes = tpl_zip.getvalue()
-                    instalado = install_template_zip(pacote_bytes, replace=replace_tpl)
-                    config_marketing.setdefault("template_packages", {})[instalado["id"]] = base64.b64encode(pacote_bytes).decode("ascii")
-                    marketing["config"] = config_marketing
-                    salvar_marketing(marketing)
-                    st.success(f"Template '{instalado['nome']}' instalado e salvo. Ele continuará disponível após reinícios do Streamlit.")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Não foi possível instalar o template: {exc}")
-
-        if not templates_biblioteca:
-            st.info("Nenhum template externo instalado.")
-        for tpl in templates_biblioteca:
-            with st.container(border=True):
-                cprev, cinfo = st.columns([1, 2])
-                with cprev:
-                    preview_path = Path(tpl.get("preview") or "")
-                    if preview_path.exists():
-                        st.image(str(preview_path), use_container_width=True)
-                with cinfo:
-                    st.markdown(f"#### {tpl.get('nome', tpl.get('id'))}")
-                    st.caption(tpl.get("descricao") or "Template da biblioteca AlphaFest.")
+            if st.button("✨ Gerar campanha IA Premium" if modo_criacao == "Campanha IA Premium" else "🚀 Gerar campanha rápida", type="primary", use_container_width=True):
+                origem = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
+                faltas = []
+                if not canais: faltas.append("selecione pelo menos um canal")
+                if not origem: faltas.append("envie ou selecione uma imagem")
+                if not produto_mkt.get("Nome"): faltas.append("informe o nome do produto/serviço")
+                if fonte_imagem == "Upload livre" and not produto_mkt.get("Descricao"): faltas.append("descreva o que aparece na imagem")
+                if faltas:
+                    st.warning("Para continuar, " + "; ".join(faltas) + ".")
+                else:
                     try:
-                        pacote_tpl = export_template_zip(tpl["id"])
-                        st.download_button("📦 Exportar template", pacote_tpl, file_name=f"{tpl['id']}.zip", mime="application/zip", key=f"mkt_export_tpl_{tpl['id']}")
-                    except Exception:
-                        pass
+                        imagem_original_salva = ""
+                        video_original_salvo = ""
+                        if upload_mkt is not None:
+                            imagem_original_salva = upload_library_file(upload_mkt, produto_nome=produto_mkt.get("Nome", "produto"), local_upload_dir="marketing_originais")
+                        if video_upload is not None:
+                            video_original_salvo = upload_library_file(video_upload, produto_nome=produto_mkt.get("Nome", "produto"), local_upload_dir="marketing_videos_originais")
+                        png_original = converter_imagem_para_png(origem)
+                        saidas, motor_copy = gerar_conteudo_marketing(produto_mkt, objetivo, campanha, canais, observacoes, tom, png_original)
+                        artes = {}
+                        prompt_mestre = ""
+                        perfil_visual = "template_local"
+                        if modo_criacao == "Campanha IA Premium":
+                            prompt_info = build_master_prompt(
+                                product_name=str(produto_mkt.get("Nome", "")),
+                                description=str(produto_mkt.get("Descricao", "")),
+                                category=str(produto_mkt.get("Categoria", "")),
+                                objective=objetivo,
+                                campaign=campanha,
+                                offer=observacoes,
+                                subtitle=subtitulo_arte,
+                                cta=cta_arte or "FAÇA SEU PEDIDO",
+                                channel="Instagram Feed",
+                                theme=f"{tema_efetivo['label']} | Paleta: {paleta_final}",
+                                calendar_event=evento_calendario_mkt["name"] if evento_calendario_mkt else "",
+                            )
+                            prompt_mestre = prompt_info["prompt"]
+                            perfil_visual = prompt_info["profile_id"]
+                            with st.spinner("A IA está criando a propaganda completa no padrão AlphaFest..."):
+                                arte_quadrada = generate_premium_square(
+                                    prompt=prompt_mestre,
+                                    product_png=png_original,
+                                    api_key=_openai_api_key(),
+                                )
+                                arte_quadrada = apply_official_logo(arte_quadrada, Path("logo.png"))
+                            for canal in canais:
+                                config_canal = CANAL_MIDIA_CONFIG[canal]
+                                if config_canal["tipo"] == "imagem":
+                                    artes[canal] = base64.b64encode(adapt_square_to_channel(arte_quadrada, config_canal["size"])).decode("ascii")
+                            motor_copy = motor_copy + " + Imagem IA Premium"
+                        else:
+                            for canal in canais:
+                                config_canal = CANAL_MIDIA_CONFIG[canal]
+                                if config_canal["tipo"] == "imagem":
+                                    artes[canal] = base64.b64encode(gerar_arte_png(origem, canal, produto_mkt.get("Nome", "Produto"), subtitulo_arte, preco_arte, cta_arte, produto_mkt.get("Descricao", ""), template_id, paleta_final, photo_mode)).decode("ascii")
+                        registro = {
+                            "id": f"MKT-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
+                            "criado_em": agora_local().isoformat(),
+                            "modo_origem": fonte_imagem,
+                            "produto": produto_mkt.get("Nome", ""),
+                            "descricao_confirmada": produto_mkt.get("Descricao", ""),
+                            "categoria": produto_mkt.get("Categoria", ""),
+                            "imagem_original": imagem_original_salva or imagem_ref,
+                            "video_original": video_original_salvo,
+                            "imagem_png_base64": base64.b64encode(png_original).decode("ascii"),
+                            "objetivo": objetivo, "tom": tom, "campanha": campanha, "canais": canais,
+                            "calendario_evento_id": evento_calendario_mkt["id"] if evento_calendario_mkt else "",
+                            "calendario_evento_nome": evento_calendario_mkt["name"] if evento_calendario_mkt else "",
+                            "tema_visual": tema_efetivo_id, "tema_visual_nome": tema_efetivo["label"],
+                            "paleta_visual": paleta_final, "paleta_nome": paleta_escolhida, "usar_metalico": usar_metalico, "photo_mode": photo_mode,
+                            "template_id": template_id, "template_nome": template_nome,
+                            "modo_criacao": modo_criacao, "prompt_mestre": prompt_mestre, "perfil_visual": perfil_visual,
+                            "conteudos": saidas, "motor_copy": motor_copy,
+                            "artes_png": artes, "aprovacoes": {canal: False for canal in canais},
+                            "fila_publicacao": {}, "status": "Em revisão",
+                        }
+                        conteudos.insert(0, registro); marketing["conteudos"] = conteudos; salvar_marketing(marketing)
+                        registrar_auditoria("Gerar campanha", "Marketing", registro["id"], {"produto": registro["produto"], "canais": canais, "modo": fonte_imagem, "motor": motor_copy})
+                        st.session_state.mkt_ultimo_id = registro["id"]
+                        st.success(f"Campanha criada com {motor_copy}. Revise os formatos e baixe o kit para publicação manual.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Não foi possível gerar a campanha: {exc}")
 
-        st.markdown("---")
-        st.subheader("🖼️ Banco de mídia AlphaFest")
-        st.caption("Fotos e vídeos continuam ligados às campanhas e ao catálogo existente.")
-
-    with t4:
-        st.subheader("📦 Central de exportações")
-        st.caption("Baixe kits completos para publicar manualmente no Instagram, TikTok, YouTube e WhatsApp.")
-        if not conteudos:
-            st.info("Gere uma campanha para habilitar as exportações.")
-        for item in conteudos[:30]:
-            with st.container(border=True):
-                ex1, ex2 = st.columns([3, 1])
-                ex1.markdown(f"**{item.get('produto','Campanha')}**")
-                ex1.caption(f"{item.get('campanha') or item.get('objetivo')} • {len(item.get('canais', []))} formato(s)")
-                ex2.download_button(
-                    "⬇️ Baixar ZIP",
-                    gerar_zip_campanha(item),
-                    file_name=f"Campanha_{_nome_arquivo_seguro(item.get('produto'))}_{_nome_arquivo_seguro(item.get('campanha') or item.get('objetivo'))}.zip",
+            ultimo_id = st.session_state.get("mkt_ultimo_id")
+            ultimo = next((x for x in conteudos if x.get("id") == ultimo_id), None)
+            if ultimo:
+                aprovados_total = sum(bool(ultimo.get("aprovacoes", {}).get(c)) for c in ultimo.get("canais", []))
+                st.markdown(f"### Preview por formato • {aprovados_total}/{len(ultimo.get('canais', []))} aprovados")
+                st.caption(f"Produto confirmado: {ultimo.get('produto')} • Origem: {ultimo.get('modo_origem')} • Texto: {ultimo.get('motor_copy','Alpha local')}")
+                alterou = False
+                for canal in ultimo.get("canais", []):
+                    aprovado_atual = bool(ultimo.get("aprovacoes", {}).get(canal))
+                    fila_atual = bool(ultimo.get("fila_publicacao", {}).get(canal))
+                    with st.container(border=True):
+                        renderizar_cabecalho_canal(canal, aprovado_atual, fila_atual)
+                        cols = st.columns([1.05, 1])
+                        with cols[0]:
+                            arte_b64 = ultimo.get("artes_png", {}).get(canal)
+                            if arte_b64:
+                                arte_bytes = base64.b64decode(arte_b64)
+                                st.image(arte_bytes, use_container_width=True)
+                                st.download_button("⬇️ Baixar PNG", arte_bytes, file_name=f"{re.sub(r'[^A-Za-z0-9_-]','_',ultimo.get('produto','campanha'))}_{re.sub(r'[^A-Za-z0-9_-]','_',canal)}.png", mime="image/png", key=f"baixar_{ultimo_id}_{canal}", use_container_width=True)
+                            elif ultimo.get("video_original"):
+                                st.video(ultimo.get("video_original"))
+                                st.info("O vídeo original foi preservado. O roteiro abaixo está pronto para o canal; a edição MP4 automática será habilitada no Video Studio.")
+                            else:
+                                st.info("Canal de vídeo: foi gerado o roteiro comercial. Envie um vídeo no modo Upload livre para anexá-lo à campanha.")
+                        with cols[1]:
+                            texto = st.text_area("Descrição / roteiro comercial", value=ultimo.get("conteudos", {}).get(canal, ""), height=270, key=f"texto_{ultimo_id}_{canal}")
+                            if texto != ultimo.get("conteudos", {}).get(canal, ""):
+                                ultimo.setdefault("conteudos", {})[canal] = texto; alterou = True
+                            aprovado = st.checkbox("✅ Aprovar este canal", value=aprovado_atual, key=f"aprovar_{ultimo_id}_{canal}")
+                            if aprovado != aprovado_atual:
+                                ultimo.setdefault("aprovacoes", {})[canal] = aprovado; alterou = True
+                            st.caption("Ao aprovar, este formato entra no mesmo lote do Instagram.")
+                if alterou:
+                    ultimo["status"] = "Aprovado" if all(ultimo.get("aprovacoes", {}).get(c) for c in ultimo.get("canais", [])) else "Em revisão"
+                    salvar_marketing(marketing)
+                b1, b2 = st.columns([1, 1])
+                if b1.button("💾 Salvar textos e aprovações", use_container_width=True):
+                    salvar_marketing(marketing); st.success("Revisão salva.")
+                aprovados = [c for c in ultimo.get("canais", []) if ultimo.get("aprovacoes", {}).get(c)]
+                kit_bytes = gerar_zip_campanha(ultimo)
+                b2.download_button(
+                    f"📦 Baixar kit com {len(ultimo.get('canais', []))} formato(s)",
+                    kit_bytes,
+                    file_name=f"Campanha_{_nome_arquivo_seguro(ultimo.get('produto'))}_{_nome_arquivo_seguro(ultimo.get('campanha') or ultimo.get('objetivo'))}.zip",
                     mime="application/zip",
-                    key=f"export_zip_{item.get('id')}",
                     use_container_width=True,
+                    key=f"kit_ultimo_{ultimo_id}",
                 )
+                if False:
+                    momento = agora_local().isoformat()
+                    ultimo.setdefault("fila_publicacao", {})
+                    for canal in aprovados:
+                        ultimo["fila_publicacao"][canal] = {"status": "Na fila", "adicionado_em": momento}
+                    ultimo["status"] = "Na fila de publicação"
+                    ultimo["lote_publicacao_em"] = momento
+                    salvar_marketing(marketing)
+                    registrar_auditoria("Publicação em lote", "Marketing", ultimo.get("id"), {"canais": aprovados})
+                    st.success("Os formatos aprovados foram enviados para a fila do Instagram. A publicação automática dependerá das credenciais oficiais da Meta; a replicação no Facebook seguirá a configuração da própria conta.")
+                    st.rerun()
+
+        with t2:
+            a,b,c = st.columns(3)
+            a.metric("Campanhas", len(conteudos))
+            b.metric("Em revisão", sum(1 for x in conteudos if x.get("status") == "Em revisão"))
+            c.metric("Na fila/publicadas", sum(1 for x in conteudos if x.get("status") in ("Aprovado","Na fila de publicação","Publicado")))
+            if not conteudos: st.info("A fila será preenchida quando você gerar a primeira campanha.")
+            for item in conteudos[:50]:
+                aprovados = sum(1 for canal in item.get("canais", []) if item.get("aprovacoes", {}).get(canal))
+                with st.expander(f"{item.get('produto','Produto')} • {item.get('campanha') or item.get('objetivo')} • {item.get('status','Em revisão')} ({aprovados}/{len(item.get('canais',[]))} canais)"):
+                    st.caption(f"Origem: {item.get('modo_origem','Legado')} • Motor de texto: {item.get('motor_copy','Alpha local')}")
+                    st.download_button(
+                        "📦 Baixar kit completo",
+                        gerar_zip_campanha(item),
+                        file_name=f"Campanha_{_nome_arquivo_seguro(item.get('produto'))}_{_nome_arquivo_seguro(item.get('campanha') or item.get('objetivo'))}.zip",
+                        mime="application/zip",
+                        key=f"kit_biblioteca_{item.get('id')}",
+                        use_container_width=True,
+                    )
+                    for canal in item.get("canais", []):
+                        renderizar_cabecalho_canal(canal, bool(item.get("aprovacoes",{}).get(canal)), bool(item.get("fila_publicacao",{}).get(canal)))
+                        arte_b64=item.get("artes_png",{}).get(canal)
+                        if arte_b64:
+                            arte_bytes=base64.b64decode(arte_b64); st.image(arte_bytes, width=280)
+                            st.download_button(f"Baixar {canal} PNG", arte_bytes, file_name=f"{item.get('id')}_{re.sub(r'[^A-Za-z0-9_-]','_',canal)}.png", mime="image/png", key=f"fila_dl_{item.get('id')}_{canal}")
+                        st.code(item.get("conteudos",{}).get(canal,""), language=None)
+                    x1,x2=st.columns(2)
+                    if x1.button("✅ Marcar lote como publicado", key=f"mkt_pub_{item.get('id')}", use_container_width=True):
+                        item["status"]="Publicado"; item["publicado_em"]=agora_local().isoformat()
+                        for canal in item.get("canais", []):
+                            if item.get("aprovacoes",{}).get(canal):
+                                item.setdefault("fila_publicacao", {})[canal] = {"status":"Publicado", "publicado_em":item["publicado_em"]}
+                        salvar_marketing(marketing); st.rerun()
+                    if x2.button("🗑️ Remover", key=f"mkt_del_{item.get('id')}", use_container_width=True):
+                        marketing["conteudos"]=[x for x in conteudos if x.get("id") != item.get("id")]; salvar_marketing(marketing); st.rerun()
+
+        with t4:
+            st.subheader("📦 Central de exportações")
+            st.caption("Baixe kits completos para publicar manualmente no Instagram, TikTok, YouTube e WhatsApp.")
+            if not conteudos:
+                st.info("Gere uma campanha para habilitar as exportações.")
+            for item in conteudos[:30]:
+                with st.container(border=True):
+                    ex1, ex2 = st.columns([3, 1])
+                    ex1.markdown(f"**{item.get('produto','Campanha')}**")
+                    ex1.caption(f"{item.get('campanha') or item.get('objetivo')} • {len(item.get('canais', []))} formato(s)")
+                    ex2.download_button(
+                        "⬇️ Baixar ZIP",
+                        gerar_zip_campanha(item),
+                        file_name=f"Campanha_{_nome_arquivo_seguro(item.get('produto'))}_{_nome_arquivo_seguro(item.get('campanha') or item.get('objetivo'))}.zip",
+                        mime="application/zip",
+                        key=f"export_zip_{item.get('id')}",
+                        use_container_width=True,
+                    )
+
+
+    else:
+        st.caption("Área técnica: instale, exporte e mantenha templates sem alterar o fluxo de produção.")
+        with st.container(border=True):
+            st.subheader("🧩 Biblioteca de Templates")
+            st.caption("Templates instalados aqui entram no seletor do Marketing Studio sem alterar Python, GitHub ou deploy.")
+            templates_biblioteca = list_library_templates()
+            mid1, mid2, mid3 = st.columns(3)
+            mid1.metric("Templates instalados", len(templates_biblioteca))
+            mid2.metric("Fotos nas campanhas", sum(1 for x in conteudos if x.get("imagem_original") or x.get("imagem_png_base64")))
+            mid3.metric("Vídeos vinculados", sum(1 for x in conteudos if x.get("video_original")))
+
+            with st.container(border=True):
+                st.markdown("#### ➕ Importar novo template")
+                st.caption("Envie um ZIP contendo fundo.png, layout.json e config.json. preview.png é opcional.")
+                tpl_zip = st.file_uploader("Pacote do template (.zip)", type=["zip"], key="mkt_template_zip_upload_2000")
+                replace_tpl = st.checkbox("Substituir se já existir", value=False, key="mkt_template_replace_2000")
+                if st.button("📥 Instalar template", use_container_width=True, disabled=tpl_zip is None, key="mkt_install_template_2000"):
+                    try:
+                        pacote_bytes = tpl_zip.getvalue()
+                        instalado = install_template_zip(pacote_bytes, replace=replace_tpl)
+                        config_marketing.setdefault("template_packages", {})[instalado["id"]] = base64.b64encode(pacote_bytes).decode("ascii")
+                        marketing["config"] = config_marketing
+                        salvar_marketing(marketing)
+                        st.success(f"Template '{instalado['nome']}' instalado e salvo. Ele continuará disponível após reinícios do Streamlit.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Não foi possível instalar o template: {exc}")
+
+            if not templates_biblioteca:
+                st.info("Nenhum template externo instalado.")
+            for tpl in templates_biblioteca:
+                with st.container(border=True):
+                    cprev, cinfo = st.columns([1, 2])
+                    with cprev:
+                        preview_path = Path(tpl.get("preview") or "")
+                        if preview_path.exists():
+                            st.image(str(preview_path), use_container_width=True)
+                    with cinfo:
+                        st.markdown(f"#### {tpl.get('nome', tpl.get('id'))}")
+                        st.caption(tpl.get("descricao") or "Template da biblioteca AlphaFest.")
+                        try:
+                            pacote_tpl = export_template_zip(tpl["id"])
+                            st.download_button("📦 Exportar template", pacote_tpl, file_name=f"{tpl['id']}.zip", mime="application/zip", key=f"mkt_export_tpl_{tpl['id']}")
+                        except Exception:
+                            pass
+
+            st.markdown("---")
+            st.subheader("🖼️ Banco de mídia AlphaFest")
+            st.caption("Fotos e vídeos continuam ligados às campanhas e ao catálogo existente.")
+
 
 
 if pagina_atual == "jornada":
@@ -8723,6 +8796,9 @@ if pagina_atual == "historico":
             s1.checkbox("Aprovado", value=prop.get("aprovado", False), key=f"a_{num_p}", on_change=alternar_status, args=(num_p, "aprovado", not prop.get("aprovado", False)))
             s2.checkbox("Pago", value=prop.get("pago", False), key=f"p_{num_p}", on_change=alternar_status, args=(num_p, "pago", not prop.get("pago", False)))
             s3.checkbox("Entregue", value=prop.get("entregue", False), key=f"e_{num_p}", on_change=alternar_status, args=(num_p, "entregue", not prop.get("entregue", False)))
+            nf1, nf2 = st.columns(2)
+            nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"legacy_nf_pag_{num_p}", on_change=alternar_motivo_nao_fechado, args=(num_p, "pagamento", not valor_bool(prop.get("nao_fechado_pagamento"))))
+            nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(prop.get("nao_fechado_sem_retorno")), key=f"legacy_nf_ret_{num_p}", on_change=alternar_motivo_nao_fechado, args=(num_p, "sem_retorno", not valor_bool(prop.get("nao_fechado_sem_retorno"))))
 
             if entregue_p:
                 proxima_acao = "Registrar pós-venda"
