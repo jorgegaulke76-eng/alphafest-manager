@@ -9678,14 +9678,43 @@ if pagina_atual == "catalogo":
 
             st.divider()
             st.markdown("#### 🖼️ Galeria e publicação")
-            urls_existentes = [x for x in (item_edicao.get("Imagens", []) or []) if str(x).startswith("http")]
+            imagens_cadastradas = list(item_edicao.get("Imagens", []) or [])
+
+            remover_indices = []
+            if item_edicao and imagens_cadastradas:
+                st.markdown("##### Fotos atuais")
+                st.caption("Você pode manter, remover ou substituir as fotos do produto durante a edição.")
+                for _idx_img, _img_atual in enumerate(imagens_cadastradas):
+                    _ci1, _ci2 = st.columns([1, 4])
+                    try:
+                        _ci1.image(_img_atual, width=110)
+                    except Exception:
+                        _ci1.write("🖼️")
+                    _origem = "Armazenamento online" if str(_img_atual).startswith("http") else "Imagem incorporada ao catálogo"
+                    _ci2.caption(f"Foto {_idx_img + 1} • {_origem}")
+                    if _ci2.checkbox("Remover esta foto ao salvar", key=f"cat_remover_foto_{sufixo}_{_idx_img}"):
+                        remover_indices.append(_idx_img)
+
+            urls_existentes = [x for x in imagens_cadastradas if str(x).startswith("http")]
             urls_cat = st.text_area(
                 "URLs de imagens (uma por linha)", value="\n".join(urls_existentes),
                 key=f"cat_urls_{sufixo}"
             )
             fotos_cat = st.file_uploader(
-                "Enviar uma ou mais fotos", type=["png", "jpg", "jpeg", "webp"],
-                accept_multiple_files=True, key=f"cat_fotos_{sufixo}"
+                "Adicionar / atualizar fotos do computador", type=["png", "jpg", "jpeg", "webp"],
+                accept_multiple_files=True, key=f"cat_fotos_{sufixo}",
+                help="As novas fotos serão gravadas de forma persistente no catálogo."
+            )
+            drive_fotos_cat = st.text_area(
+                "Adicionar fotos do Google Drive (um link por linha)",
+                placeholder="Cole aqui os links compartilhados do Google Drive",
+                key=f"cat_drive_fotos_{sufixo}",
+                help="No Drive, deixe cada arquivo como ‘Qualquer pessoa com o link’."
+            )
+            substituir_fotos_cat = st.checkbox(
+                "🔄 Substituir TODAS as fotos atuais pelas novas", value=False,
+                key=f"cat_substituir_fotos_{sufixo}",
+                help="Use esta opção quando quiser trocar completamente a galeria do produto."
             )
             publicar_site = st.checkbox(
                 "Publicar no site/catálogo online", value=bool(item_edicao.get("PublicarSite", False)),
@@ -9712,12 +9741,27 @@ if pagina_atual == "catalogo":
             if not nome_cat.strip() or not categoria_cat.strip():
                 st.warning("Informe pelo menos o nome e a categoria.")
             else:
-                imagens = [u.strip() for u in urls_cat.splitlines() if u.strip()]
-                imagens.extend([x for x in item_edicao.get("Imagens", []) if not str(x).startswith("http")])
+                if substituir_fotos_cat:
+                    imagens = []
+                else:
+                    imagens = [x for _i, x in enumerate(item_edicao.get("Imagens", []) or []) if _i not in set(remover_indices)]
+
+                urls_digitadas = [u.strip() for u in urls_cat.splitlines() if u.strip()]
+                imagens = [x for x in imagens if not str(x).startswith("http")]
+                imagens.extend(urls_digitadas)
+
                 for foto in fotos_cat or []:
                     caminho_novo = salvar_upload_catalogo(foto)
                     if caminho_novo:
                         imagens.insert(0, caminho_novo)
+
+                drive_imagens, drive_erros = importar_imagens_google_drive(drive_fotos_cat)
+                for caminho_novo in reversed(drive_imagens):
+                    imagens.insert(0, caminho_novo)
+                if drive_erros:
+                    st.warning("Google Drive: " + " ".join(dict.fromkeys(drive_erros)))
+
+                imagens = list(dict.fromkeys(imagens))
                 # Mantém campos futuros/desconhecidos existentes ao editar.
                 registro = dict(item_edicao)
                 registro.update({
