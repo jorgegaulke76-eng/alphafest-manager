@@ -8000,7 +8000,7 @@ if pagina_atual == "crescimento":
 
     if modo_marketing_principal == "🎨 Produzir Campanha":
         st.caption("Fluxo rápido: escolha o produto, o template e a campanha. O layout aprovado fica protegido.")
-        t1, t2, t4 = st.tabs(["Nova campanha", "Biblioteca", "Exportações"])
+        t1, t2, t4 = st.tabs(["Nova campanha", "📚 Central de Campanhas", "Exportações"])
 
         with t1:
             catalogo_mkt = carregar_catalogo()
@@ -8388,6 +8388,9 @@ if pagina_atual == "crescimento":
                             "paleta_visual": paleta_final, "paleta_nome": paleta_escolhida, "usar_metalico": usar_metalico, "photo_mode": photo_mode,
                             "template_id": template_id, "template_nome": template_nome,
                             "modo_criacao": modo_criacao, "prompt_mestre": prompt_mestre, "perfil_visual": perfil_visual,
+                            "preco_arte": preco_arte, "subtitulo_arte": subtitulo_arte, "cta_arte": cta_arte,
+                            "observacoes": observacoes, "favorita": False, "origem_criativa": "Gerada no AlphaFest",
+                            "tipo_registro": "projeto_editavel",
                             "conteudos": saidas, "motor_copy": motor_copy,
                             "artes_png": artes, "aprovacoes": {canal: False for canal in canais},
                             "fila_publicacao": {}, "status": "Em revisão",
@@ -8461,39 +8464,180 @@ if pagina_atual == "crescimento":
                     st.rerun()
 
         with t2:
-            a,b,c = st.columns(3)
-            a.metric("Campanhas", len(conteudos))
-            b.metric("Em revisão", sum(1 for x in conteudos if x.get("status") == "Em revisão"))
-            c.metric("Na fila/publicadas", sum(1 for x in conteudos if x.get("status") in ("Aprovado","Na fila de publicação","Publicado")))
-            if not conteudos: st.info("A fila será preenchida quando você gerar a primeira campanha.")
-            for item in conteudos[:50]:
-                aprovados = sum(1 for canal in item.get("canais", []) if item.get("aprovacoes", {}).get(canal))
-                with st.expander(f"{item.get('produto','Produto')} • {item.get('campanha') or item.get('objetivo')} • {item.get('status','Em revisão')} ({aprovados}/{len(item.get('canais',[]))} canais)"):
-                    st.caption(f"Origem: {item.get('modo_origem','Legado')} • Motor de texto: {item.get('motor_copy','Alpha local')}")
-                    st.download_button(
-                        "📦 Baixar kit completo",
-                        gerar_zip_campanha(item),
-                        file_name=f"Campanha_{_nome_arquivo_seguro(item.get('produto'))}_{_nome_arquivo_seguro(item.get('campanha') or item.get('objetivo'))}.zip",
-                        mime="application/zip",
-                        key=f"kit_biblioteca_{item.get('id')}",
-                        use_container_width=True,
+            st.subheader("📚 Central de Campanhas")
+            st.caption("Reutilize campanhas prontas, altere somente o que mudou e mantenha o padrão visual aprovado.")
+
+            # Importação de artes já prontas para postagem. Essas peças entram como referência/repostagem,
+            # enquanto campanhas criadas pelo AlphaFest continuam totalmente editáveis e regeneráveis.
+            with st.expander("➕ Adicionar arte pronta para postagem", expanded=False):
+                imp1, imp2 = st.columns([1.2, 1])
+                arte_pronta_upload = imp1.file_uploader(
+                    "Arte pronta (PNG/JPG)", type=["png", "jpg", "jpeg", "webp"], key="central_camp_arte_pronta_2030"
+                )
+                arte_pronta_nome = imp2.text_input("Nome da campanha", placeholder="Ex.: Carimbos Premium", key="central_camp_nome_2030")
+                imp3, imp4, imp5 = st.columns(3)
+                arte_pronta_categoria = imp3.text_input("Categoria", placeholder="Carimbos", key="central_camp_categoria_2030")
+                arte_pronta_tema = imp4.text_input("Tema / ocasião", placeholder="Permanente, Natal...", key="central_camp_tema_2030")
+                arte_pronta_preco = imp5.text_input("Preço registrado (opcional)", placeholder="R$ 19,90", key="central_camp_preco_2030")
+                arte_pronta_oficial = st.checkbox("⭐ Marcar como referência oficial AlphaFest", key="central_camp_oficial_2030")
+                if st.button("💾 Salvar arte na Central", use_container_width=True, disabled=arte_pronta_upload is None, key="central_camp_salvar_pronta_2030"):
+                    try:
+                        pronto_bytes = converter_imagem_para_png(arte_pronta_upload)
+                        novo_id = f"MKT-REF-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
+                        registro_pronto = {
+                            "id": novo_id, "criado_em": agora_local().isoformat(),
+                            "produto": arte_pronta_nome.strip() or Path(getattr(arte_pronta_upload, 'name', 'Arte pronta')).stem,
+                            "categoria": arte_pronta_categoria.strip() or "Arte pronta",
+                            "campanha": arte_pronta_tema.strip() or "Permanente",
+                            "preco_arte": arte_pronta_preco.strip(), "favorita": bool(arte_pronta_oficial),
+                            "origem_criativa": "Arte pronta importada", "tipo_registro": "arte_pronta_flat",
+                            "canais": ["Instagram Feed"],
+                            "artes_png": {"Instagram Feed": base64.b64encode(pronto_bytes).decode("ascii")},
+                            "imagem_png_base64": base64.b64encode(pronto_bytes).decode("ascii"),
+                            "conteudos": {}, "aprovacoes": {"Instagram Feed": True}, "fila_publicacao": {},
+                            "status": "Pronta para postagem", "template_id": "", "template_nome": "Arte pronta",
+                        }
+                        conteudos.insert(0, registro_pronto)
+                        marketing["conteudos"] = conteudos
+                        salvar_marketing(marketing)
+                        registrar_auditoria("Importar arte pronta", "Marketing", novo_id, {"nome": registro_pronto["produto"]})
+                        st.success("Arte pronta adicionada à Central de Campanhas.")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Não foi possível salvar a arte: {exc}")
+
+            # Busca e filtros
+            f1, f2, f3 = st.columns([2, 1, 1])
+            busca_camp = f1.text_input("🔎 Pesquisar", placeholder="Produto, campanha, categoria ou template...", key="central_camp_busca_2030").strip().casefold()
+            categorias_camp = sorted({str(x.get("categoria") or "Sem categoria") for x in conteudos})
+            filtro_categoria = f2.selectbox("Categoria", ["Todas"] + categorias_camp, key="central_camp_filtro_categoria_2030")
+            so_favoritas = f3.toggle("⭐ Só favoritas", value=False, key="central_camp_favoritas_2030")
+
+            def _campanha_visivel(item):
+                if so_favoritas and not bool(item.get("favorita")):
+                    return False
+                if filtro_categoria != "Todas" and str(item.get("categoria") or "Sem categoria") != filtro_categoria:
+                    return False
+                if busca_camp:
+                    texto_busca = " ".join(str(item.get(k, "")) for k in ("produto", "campanha", "categoria", "template_nome", "origem_criativa")).casefold()
+                    if busca_camp not in texto_busca:
+                        return False
+                return True
+
+            campanhas_filtradas = [x for x in conteudos if _campanha_visivel(x)]
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Campanhas", len(conteudos))
+            m2.metric("Encontradas", len(campanhas_filtradas))
+            m3.metric("Favoritas", sum(1 for x in conteudos if x.get("favorita")))
+            m4.metric("Artes prontas", sum(1 for x in conteudos if x.get("tipo_registro") == "arte_pronta_flat"))
+
+            if not campanhas_filtradas:
+                st.info("Nenhuma campanha encontrada com esses filtros.")
+
+            for item in campanhas_filtradas[:80]:
+                item_id = str(item.get("id") or "sem_id")
+                produto_item = item.get("produto") or "Campanha"
+                campanha_item = item.get("campanha") or item.get("objetivo") or "Permanente"
+                tipo_item = item.get("tipo_registro", "projeto_editavel")
+                titulo_card = ("⭐ " if item.get("favorita") else "") + f"{produto_item} • {campanha_item}"
+                with st.expander(titulo_card):
+                    cab1, cab2, cab3 = st.columns([1.1, 1.4, 1])
+                    # thumbnail principal
+                    arte_thumb_b64 = next((item.get("artes_png", {}).get(c) for c in item.get("canais", []) if item.get("artes_png", {}).get(c)), None)
+                    if arte_thumb_b64:
+                        try:
+                            cab1.image(base64.b64decode(arte_thumb_b64), use_container_width=True)
+                        except Exception:
+                            pass
+                    with cab2:
+                        st.markdown(f"**{produto_item}**")
+                        st.caption(f"{item.get('categoria') or 'Sem categoria'} • {campanha_item}")
+                        st.caption(f"Origem: {item.get('origem_criativa') or item.get('modo_origem') or 'Legado'}")
+                        if item.get("template_nome"):
+                            st.caption(f"Template: {item.get('template_nome')}")
+                        if item.get("preco_arte"):
+                            st.markdown(f"**Preço salvo:** {item.get('preco_arte')}")
+                    with cab3:
+                        fav_atual = bool(item.get("favorita"))
+                        fav_novo = st.checkbox("⭐ Favorita", value=fav_atual, key=f"central_fav_{item_id}")
+                        if fav_novo != fav_atual:
+                            item["favorita"] = fav_novo
+                            salvar_marketing(marketing)
+                        st.caption("Editável" if tipo_item == "projeto_editavel" else "Arte pronta / flat")
+
+                    ac1, ac2, ac3 = st.columns(3)
+                    ac1.download_button(
+                        "⬇️ Baixar kit", gerar_zip_campanha(item),
+                        file_name=f"Campanha_{_nome_arquivo_seguro(produto_item)}_{_nome_arquivo_seguro(campanha_item)}.zip",
+                        mime="application/zip", key=f"central_zip_{item_id}", use_container_width=True,
                     )
-                    for canal in item.get("canais", []):
-                        renderizar_cabecalho_canal(canal, bool(item.get("aprovacoes",{}).get(canal)), bool(item.get("fila_publicacao",{}).get(canal)))
-                        arte_b64=item.get("artes_png",{}).get(canal)
-                        if arte_b64:
-                            arte_bytes=base64.b64decode(arte_b64); st.image(arte_bytes, width=280)
-                            st.download_button(f"Baixar {canal} PNG", arte_bytes, file_name=f"{item.get('id')}_{re.sub(r'[^A-Za-z0-9_-]','_',canal)}.png", mime="image/png", key=f"fila_dl_{item.get('id')}_{canal}")
-                        st.code(item.get("conteudos",{}).get(canal,""), language=None)
-                    x1,x2=st.columns(2)
-                    if x1.button("✅ Marcar lote como publicado", key=f"mkt_pub_{item.get('id')}", use_container_width=True):
-                        item["status"]="Publicado"; item["publicado_em"]=agora_local().isoformat()
-                        for canal in item.get("canais", []):
-                            if item.get("aprovacoes",{}).get(canal):
-                                item.setdefault("fila_publicacao", {})[canal] = {"status":"Publicado", "publicado_em":item["publicado_em"]}
-                        salvar_marketing(marketing); st.rerun()
-                    if x2.button("🗑️ Remover", key=f"mkt_del_{item.get('id')}", use_container_width=True):
-                        marketing["conteudos"]=[x for x in conteudos if x.get("id") != item.get("id")]; salvar_marketing(marketing); st.rerun()
+                    if ac2.button("📋 Reutilizar", key=f"central_reutilizar_{item_id}", use_container_width=True):
+                        st.session_state["central_reutilizar_id_2030"] = item_id
+                        st.rerun()
+                    if ac3.button("🗑️ Remover", key=f"central_remover_{item_id}", use_container_width=True):
+                        marketing["conteudos"] = [x for x in conteudos if str(x.get("id")) != item_id]
+                        salvar_marketing(marketing)
+                        st.rerun()
+
+                    if st.session_state.get("central_reutilizar_id_2030") == item_id:
+                        st.markdown("#### ⚡ Reutilização rápida")
+                        if tipo_item != "projeto_editavel":
+                            st.info("Esta é uma arte pronta importada. Ela pode ser repostada e usada como referência. Para trocar preço/textos dentro da imagem, cadastre o fundo como template editável.")
+                            if st.button("Fechar", key=f"central_fechar_flat_{item_id}"):
+                                st.session_state.pop("central_reutilizar_id_2030", None); st.rerun()
+                        else:
+                            r1, r2 = st.columns(2)
+                            novo_nome = r1.text_input("Nova campanha", value=f"{campanha_item} - nova versão", key=f"central_nova_camp_{item_id}")
+                            novo_preco = r2.text_input("Preço", value=str(item.get("preco_arte") or ""), key=f"central_novo_preco_{item_id}")
+                            r3, r4 = st.columns(2)
+                            novo_subtitulo = r3.text_input("Chamada curta", value=str(item.get("subtitulo_arte") or "Personalizado do seu jeito"), key=f"central_novo_sub_{item_id}")
+                            novo_cta = r4.text_input("CTA", value=str(item.get("cta_arte") or "Chame no WhatsApp"), key=f"central_novo_cta_{item_id}")
+                            canais_reuso = st.multiselect(
+                                "Formatos", [c for c, cfg in CANAL_MIDIA_CONFIG.items() if cfg.get("tipo") == "imagem"],
+                                default=[c for c in item.get("canais", []) if c in CANAL_MIDIA_CONFIG and CANAL_MIDIA_CONFIG[c].get("tipo") == "imagem"],
+                                key=f"central_canais_reuso_{item_id}",
+                            )
+                            rr1, rr2 = st.columns(2)
+                            if rr1.button("⚡ Gerar nova versão", type="primary", use_container_width=True, key=f"central_gerar_reuso_{item_id}"):
+                                try:
+                                    origem_b64 = item.get("imagem_png_base64")
+                                    if not origem_b64:
+                                        raise ValueError("A campanha antiga não possui a foto-fonte necessária para regeneração.")
+                                    origem_bytes = base64.b64decode(origem_b64)
+                                    artes_novas = {}
+                                    for canal in canais_reuso:
+                                        artes_novas[canal] = base64.b64encode(gerar_arte_png(
+                                            origem_bytes, canal, produto_item, novo_subtitulo, novo_preco, novo_cta,
+                                            item.get("descricao_confirmada", ""), item.get("template_id") or MARKETING_DEFAULT_TEMPLATE,
+                                            item.get("paleta_visual"), item.get("photo_mode", "auto")
+                                        )).decode("ascii")
+                                    novo = dict(item)
+                                    novo["id"] = f"MKT-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
+                                    novo["criado_em"] = agora_local().isoformat()
+                                    novo["campanha"] = novo_nome.strip() or campanha_item
+                                    novo["preco_arte"] = novo_preco.strip()
+                                    novo["subtitulo_arte"] = novo_subtitulo.strip()
+                                    novo["cta_arte"] = novo_cta.strip()
+                                    novo["canais"] = canais_reuso
+                                    novo["artes_png"] = artes_novas
+                                    novo["aprovacoes"] = {c: False for c in canais_reuso}
+                                    novo["fila_publicacao"] = {}
+                                    novo["status"] = "Em revisão"
+                                    novo["favorita"] = False
+                                    novo["origem_criativa"] = f"Duplicada de {item_id}"
+                                    novo["duplicada_de"] = item_id
+                                    conteudos.insert(0, novo)
+                                    marketing["conteudos"] = conteudos
+                                    salvar_marketing(marketing)
+                                    registrar_auditoria("Duplicar campanha", "Marketing", novo["id"], {"origem": item_id, "preco": novo_preco})
+                                    st.session_state["mkt_ultimo_id"] = novo["id"]
+                                    st.session_state.pop("central_reutilizar_id_2030", None)
+                                    st.success("Nova versão criada. Você pode baixar ou revisar normalmente.")
+                                    st.rerun()
+                                except Exception as exc:
+                                    st.error(f"Não foi possível gerar a nova versão: {exc}")
+                            if rr2.button("Cancelar", use_container_width=True, key=f"central_cancelar_reuso_{item_id}"):
+                                st.session_state.pop("central_reutilizar_id_2030", None); st.rerun()
 
         with t4:
             st.subheader("📦 Central de exportações")

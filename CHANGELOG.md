@@ -397,3 +397,11 @@ hangelog
 - Calendário Mestre controla tema/paleta automaticamente.
 - Ajustes opcionais concentrados em um único painel rápido.
 - Template oficial `anna_base_dinamica` preservado.
+
+## 20.3.0 — Central de Campanhas
+- Nova Central de Campanhas com busca, filtros, favoritas e miniaturas.
+- Upload de artes prontas para postagem como referências reutilizáveis.
+- Campanhas criadas pelo AlphaFest agora guardam preço, CTA, chamada e origem criativa.
+- Reutilização rápida cria nova versão editável alterando preço, CTA, chamada e formatos.
+- Duplicações preservam a campanha original e registram a origem.
+- Template Engine, Anna Base Dinâmica e hotfix das propostas preservados.
