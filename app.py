@@ -24,6 +24,11 @@ import time
 import copy
 import requests
 
+# 20.4.6-C — componente visual nativo do projeto (sem streamlit-drawable-canvas).
+_DRAG_BOX_COMPONENT = components.declare_component(
+    "alphafest_drag_box", path=str(Path(__file__).resolve().parent)
+)
+
 _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
@@ -8964,51 +8969,35 @@ if pagina_atual == "crescimento":
 
                                 st.caption("🖱️ Arraste a caixa, puxe os cantos para redimensionar e use a alça de rotação para inclinar. Fonte e limites tipográficos continuam protegidos.")
 
-                                # 20.4.6-B — edição direta sobre a arte com Fabric.js via drawable-canvas.
-                                # O canvas trabalha em 760x760 e o layout persistido continua normalizado em 0..1000.
-                                if st_canvas is not None:
-                                    try:
-                                        bg_editor = Image.open(cfg_tpl_editor["background_path"]).convert("RGBA").resize((760, 760), Image.Resampling.LANCZOS)
-                                        sx = float(zone.get("x", 0)) * 760 / 1000
-                                        sy = float(zone.get("y", 0)) * 760 / 1000
-                                        sw = max(16.0, float(zone.get("w", 200)) * 760 / 1000)
-                                        sh = max(16.0, float(zone.get("h", 80)) * 760 / 1000)
-                                        sang = float(zone.get("angle", 0) or 0)
-                                        initial = {
-                                            "version": "4.4.0",
-                                            "objects": [{
-                                                "type": "rect", "left": sx, "top": sy,
-                                                "width": sw, "height": sh, "scaleX": 1, "scaleY": 1,
-                                                "angle": sang, "fill": "rgba(239,42,146,0.12)",
-                                                "stroke": "#ef2a92", "strokeWidth": 4,
-                                                "transparentCorners": False, "cornerColor": "#ffffff",
-                                                "cornerStrokeColor": "#ef2a92", "borderColor": "#ef2a92",
-                                                "cornerSize": 14, "padding": 2,
-                                            }]
-                                        }
-                                        canvas_result = st_canvas(
-                                            fill_color="rgba(239, 42, 146, 0.12)", stroke_width=4,
-                                            stroke_color="#ef2a92", background_image=bg_editor,
-                                            update_streamlit=True, height=760, width=760,
-                                            drawing_mode="transform", initial_drawing=initial,
-                                            display_toolbar=False, key=f"dragbox_{tpl['id']}_{box_key}",
-                                        )
-                                        if canvas_result.json_data and canvas_result.json_data.get("objects"):
-                                            obj = canvas_result.json_data["objects"][0]
-                                            ow = float(obj.get("width", sw)) * float(obj.get("scaleX", 1) or 1)
-                                            oh = float(obj.get("height", sh)) * float(obj.get("scaleY", 1) or 1)
-                                            zone.update({
-                                                "x": max(0, min(980, int(round(float(obj.get("left", sx)) * 1000 / 760)))),
-                                                "y": max(0, min(980, int(round(float(obj.get("top", sy)) * 1000 / 760)))),
-                                                "w": max(20, min(1000, int(round(ow * 1000 / 760)))),
-                                                "h": max(20, min(1000, int(round(oh * 1000 / 760)))),
-                                                "angle": round(float(obj.get("angle", 0) or 0), 1),
-                                            })
-                                        st.caption(f"📍 X {zone.get('x',0)} • Y {zone.get('y',0)} • {zone.get('w',0)}×{zone.get('h',0)} • Giro {zone.get('angle',0)}°")
-                                    except Exception as _canvas_exc:
-                                        st.warning("O editor de arrastar não pôde ser aberto; use os controles numéricos abaixo.")
+                                # 20.4.6-C — editor visual próprio, compatível com Streamlit atual.
+                                # Sem dependência do streamlit-drawable-canvas/Fabric.js.
+                                try:
+                                    bg_editor = Image.open(cfg_tpl_editor["background_path"]).convert("RGBA").resize((760, 760), Image.Resampling.LANCZOS)
+                                    _buf_drag = io.BytesIO()
+                                    bg_editor.save(_buf_drag, format="PNG")
+                                    _bg_data_uri = "data:image/png;base64," + base64.b64encode(_buf_drag.getvalue()).decode("ascii")
+                                    _zone_payload = {
+                                        "x": int(zone.get("x", 0)), "y": int(zone.get("y", 0)),
+                                        "w": int(zone.get("w", 200)), "h": int(zone.get("h", 80)),
+                                        "angle": float(zone.get("angle", 0) or 0),
+                                    }
+                                    _drag_value = _DRAG_BOX_COMPONENT(
+                                        background=_bg_data_uri, zone=_zone_payload, label=escolha,
+                                        key=f"dragbox_native_{tpl['id']}_{box_key}", default=None,
+                                    )
+                                    if isinstance(_drag_value, dict):
+                                        zone.update({
+                                            "x": max(0, min(980, int(_drag_value.get("x", zone.get("x", 0))))),
+                                            "y": max(0, min(980, int(_drag_value.get("y", zone.get("y", 0))))),
+                                            "w": max(20, min(1000, int(_drag_value.get("w", zone.get("w", 200))))),
+                                            "h": max(20, min(1000, int(_drag_value.get("h", zone.get("h", 80))))),
+                                            "angle": round(float(_drag_value.get("angle", zone.get("angle", 0) or 0)), 1),
+                                        })
+                                    st.caption(f"📍 X {zone.get('x',0)} • Y {zone.get('y',0)} • {zone.get('w',0)}×{zone.get('h',0)} • Giro {zone.get('angle',0)}°")
+                                except Exception as _drag_exc:
+                                    st.warning(f"Editor visual indisponível nesta sessão. Use o ajuste fino abaixo. ({type(_drag_exc).__name__})")
 
-                                with st.expander("⌨️ Ajuste fino por números", expanded=st_canvas is None):
+                                with st.expander("⌨️ Ajuste fino por números", expanded=False):
                                     bx1, bx2, bx3, bx4, bx5 = st.columns(5)
                                     new_x = bx1.number_input("X", 0, 980, int(zone.get("x", 0)), step=5, key=f"box_x_{tpl['id']}_{box_key}")
                                     new_y = bx2.number_input("Y", 0, 980, int(zone.get("y", 0)), step=5, key=f"box_y_{tpl['id']}_{box_key}")
