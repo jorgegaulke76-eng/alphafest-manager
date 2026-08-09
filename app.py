@@ -8681,29 +8681,52 @@ if pagina_atual == "crescimento":
                     except Exception as exc:
                         st.error(f"Não foi possível salvar a arte: {exc}")
 
-            # Busca e filtros
-            f1, f2, f3 = st.columns([2, 1, 1])
-            busca_camp = f1.text_input("🔎 Pesquisar", placeholder="Produto, campanha, categoria ou template...", key="central_camp_busca_2030").strip().casefold()
+            # 20.4.7-B — Biblioteca Inteligente: busca + filtros comerciais.
+            f1, f2, f3, f4 = st.columns([2.1, 1.15, 1.15, 1])
+            busca_camp = f1.text_input("🔎 Pesquisar", placeholder="Produto, categoria, tema ou campanha...", key="central_camp_busca_2030").strip().casefold()
             categorias_camp = sorted({str(x.get("categoria") or "Sem categoria") for x in conteudos})
             filtro_categoria = f2.selectbox("Categoria", ["Todas"] + categorias_camp, key="central_camp_filtro_categoria_2030")
-            so_favoritas = f3.toggle("⭐ Só favoritas", value=False, key="central_camp_favoritas_2030")
+            temas_camp = sorted({str(x.get("tema_reuso") or x.get("campanha") or "Permanente") for x in conteudos})
+            filtro_tema = f3.selectbox("Tema / ocasião", ["Todos"] + temas_camp, key="central_camp_filtro_tema_2047b")
+            filtro_tipo = f4.selectbox("Tipo", ["Todos", "Artes prontas", "Campanhas editáveis"], key="central_camp_tipo_2047b")
+
+            ff1, ff2 = st.columns([1, 2])
+            so_favoritas = ff1.toggle("⭐ Só oficiais/favoritas", value=False, key="central_camp_favoritas_2030")
+            ordem_camp = ff2.selectbox("Ordenar", ["Mais recentes", "Nome A–Z", "Categoria", "Oficiais primeiro"], key="central_camp_ordem_2047b")
 
             def _campanha_visivel(item):
                 if so_favoritas and not bool(item.get("favorita")):
                     return False
                 if filtro_categoria != "Todas" and str(item.get("categoria") or "Sem categoria") != filtro_categoria:
                     return False
+                tema_item = str(item.get("tema_reuso") or item.get("campanha") or "Permanente")
+                if filtro_tema != "Todos" and tema_item != filtro_tema:
+                    return False
+                tipo_item_f = item.get("tipo_registro", "projeto_editavel")
+                if filtro_tipo == "Artes prontas" and tipo_item_f != "arte_pronta_flat":
+                    return False
+                if filtro_tipo == "Campanhas editáveis" and tipo_item_f == "arte_pronta_flat":
+                    return False
                 if busca_camp:
-                    texto_busca = " ".join(str(item.get(k, "")) for k in ("produto", "campanha", "categoria", "template_nome", "origem_criativa")).casefold()
+                    texto_busca = " ".join(str(item.get(k, "")) for k in ("produto", "campanha", "tema_reuso", "categoria", "template_nome", "origem_criativa")).casefold()
                     if busca_camp not in texto_busca:
                         return False
                 return True
 
             campanhas_filtradas = [x for x in conteudos if _campanha_visivel(x)]
+            if ordem_camp == "Nome A–Z":
+                campanhas_filtradas.sort(key=lambda x: str(x.get("produto") or "").casefold())
+            elif ordem_camp == "Categoria":
+                campanhas_filtradas.sort(key=lambda x: (str(x.get("categoria") or "").casefold(), str(x.get("produto") or "").casefold()))
+            elif ordem_camp == "Oficiais primeiro":
+                campanhas_filtradas.sort(key=lambda x: (not bool(x.get("favorita")), str(x.get("produto") or "").casefold()))
+            else:
+                campanhas_filtradas.sort(key=lambda x: str(x.get("criado_em") or ""), reverse=True)
+
             m1, m2, m3, m4 = st.columns(4)
             m1.metric("Campanhas", len(conteudos))
             m2.metric("Encontradas", len(campanhas_filtradas))
-            m3.metric("Favoritas", sum(1 for x in conteudos if x.get("favorita")))
+            m3.metric("Oficiais / favoritas", sum(1 for x in conteudos if x.get("favorita")))
             m4.metric("Artes prontas", sum(1 for x in conteudos if x.get("tipo_registro") == "arte_pronta_flat"))
 
             if not campanhas_filtradas:
@@ -8725,13 +8748,19 @@ if pagina_atual == "crescimento":
                         except Exception:
                             pass
                     with cab2:
+                        if item.get("favorita"):
+                            st.markdown("⭐ **ARTE OFICIAL ALPHAFEST**")
                         st.markdown(f"**{produto_item}**")
-                        st.caption(f"{item.get('categoria') or 'Sem categoria'} • {campanha_item}")
+                        tema_card = item.get("tema_reuso") or campanha_item
+                        st.caption(f"{item.get('categoria') or 'Sem categoria'} • {tema_card}")
                         st.caption(f"Origem: {item.get('origem_criativa') or item.get('modo_origem') or 'Legado'}")
                         if item.get("template_nome"):
                             st.caption(f"Template: {item.get('template_nome')}")
                         if item.get("preco_arte"):
                             st.markdown(f"**Preço salvo:** {item.get('preco_arte')}")
+                        criado_txt = str(item.get("criado_em") or "")[:10]
+                        if criado_txt:
+                            st.caption(f"Adicionada em {criado_txt} • ID {item_id[-10:]}")
                     with cab3:
                         fav_atual = bool(item.get("favorita"))
                         fav_novo = st.checkbox("⭐ Favorita", value=fav_atual, key=f"central_fav_{item_id}")
