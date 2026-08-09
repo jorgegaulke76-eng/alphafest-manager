@@ -8640,7 +8640,7 @@ if pagina_atual == "crescimento":
 
         with t2:
             st.subheader("📚 Central de Campanhas")
-            st.caption("Reutilize campanhas prontas, altere somente o que mudou e mantenha o padrão visual aprovado.")
+            st.caption("Sua biblioteca de artes finais aprovadas. Reutilize sem reconstruir o design e mantenha o histórico de campanha, categoria e preço.")
 
             # Importação de artes já prontas para postagem. Essas peças entram como referência/repostagem,
             # enquanto campanhas criadas pelo AlphaFest continuam totalmente editáveis e regeneráveis.
@@ -8757,8 +8757,36 @@ if pagina_atual == "crescimento":
                     if st.session_state.get("central_reutilizar_id_2030") == item_id:
                         st.markdown("#### ⚡ Reutilização rápida")
                         if tipo_item != "projeto_editavel":
-                            st.info("Esta é uma arte pronta importada. Ela pode ser repostada e usada como referência. Para trocar preço/textos dentro da imagem, cadastre o fundo como template editável.")
-                            if st.button("Fechar", key=f"central_fechar_flat_{item_id}"):
+                            st.caption("Arte final aprovada: a imagem é preservada exatamente como foi enviada. Você pode criar uma nova campanha a partir dela e atualizar os dados de controle.")
+                            fr1, fr2 = st.columns(2)
+                            flat_nome = fr1.text_input("Nova campanha", value=f"{campanha_item} - reutilização", key=f"central_flat_nome_{item_id}")
+                            flat_preco = fr2.text_input("Novo preço de controle", value=str(item.get("preco_arte") or ""), key=f"central_flat_preco_{item_id}", help="Atualiza o preço registrado na Central. A imagem pronta não é redesenhada.")
+                            fr3, fr4 = st.columns(2)
+                            flat_categoria = fr3.text_input("Categoria", value=str(item.get("categoria") or "Arte pronta"), key=f"central_flat_cat_{item_id}")
+                            flat_tema = fr4.text_input("Tema / ocasião", value=str(item.get("campanha") or "Permanente"), key=f"central_flat_tema_{item_id}")
+                            st.info("💡 Se o preço estiver escrito dentro da própria imagem, ele continuará igual. Como esta é uma arte final/flat, o sistema não altera pixels nem refaz o design.")
+                            fa1, fa2 = st.columns(2)
+                            if fa1.button("♻️ Criar reutilização", type="primary", use_container_width=True, key=f"central_flat_reuse_{item_id}"):
+                                novo = copy.deepcopy(item)
+                                novo["id"] = f"MKT-REF-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
+                                novo["criado_em"] = agora_local().isoformat()
+                                novo["campanha"] = flat_nome.strip() or campanha_item
+                                novo["categoria"] = flat_categoria.strip() or str(item.get("categoria") or "Arte pronta")
+                                novo["tema_reuso"] = flat_tema.strip() or "Permanente"
+                                novo["preco_arte"] = flat_preco.strip()
+                                novo["favorita"] = False
+                                novo["status"] = "Pronta para postagem"
+                                novo["origem_criativa"] = f"Reutilizada de {item_id}"
+                                novo["reutilizada_de"] = item_id
+                                novo["ultima_reutilizacao_em"] = agora_local().isoformat()
+                                conteudos.insert(0, novo)
+                                marketing["conteudos"] = conteudos
+                                salvar_marketing(marketing)
+                                registrar_auditoria("Reutilizar arte pronta", "Marketing", novo["id"], {"origem": item_id, "preco_controle": flat_preco})
+                                st.session_state.pop("central_reutilizar_id_2030", None)
+                                st.success("Reutilização criada sem alterar a arte original.")
+                                st.rerun()
+                            if fa2.button("Cancelar", use_container_width=True, key=f"central_flat_cancel_{item_id}"):
                                 st.session_state.pop("central_reutilizar_id_2030", None); st.rerun()
                         else:
                             r1, r2 = st.columns(2)
