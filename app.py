@@ -401,7 +401,7 @@ CONFIG_EMPRESA_PADRAO = {
     "pix_banco": "Cora SCD (403)",
     "pix_agencia": "0001",
     "pix_conta": "2515972-5",
-    "pix_empresa": "ANA LUCIA VIEIRA ZEPELINI 29480359880",
+    "pix_empresa": "ANA LUCIA VIEIRA ZEPELINI",
     "prazo_padrao": "10",
     "validade_padrao": "5",
     "frete_padrao": "Retirada em Itatiba",
