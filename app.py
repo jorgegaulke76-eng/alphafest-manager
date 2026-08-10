@@ -8692,7 +8692,7 @@ if pagina_atual == "crescimento":
 
             ff1, ff2 = st.columns([1, 2])
             so_favoritas = ff1.toggle("⭐ Só oficiais/favoritas", value=False, key="central_camp_favoritas_2030")
-            ordem_camp = ff2.selectbox("Ordenar", ["Mais recentes", "Nome A–Z", "Categoria", "Oficiais primeiro"], key="central_camp_ordem_2047b")
+            ordem_camp = ff2.selectbox("Ordenar", ["Mais recentes", "Mais reutilizadas", "Nome A–Z", "Categoria", "Oficiais primeiro"], key="central_camp_ordem_2047b")
 
             def _campanha_visivel(item):
                 if so_favoritas and not bool(item.get("favorita")):
@@ -8714,7 +8714,9 @@ if pagina_atual == "crescimento":
                 return True
 
             campanhas_filtradas = [x for x in conteudos if _campanha_visivel(x)]
-            if ordem_camp == "Nome A–Z":
+            if ordem_camp == "Mais reutilizadas":
+                campanhas_filtradas.sort(key=lambda x: int(x.get("quantidade_reutilizacoes") or len(x.get("historico_reutilizacoes") or [])), reverse=True)
+            elif ordem_camp == "Nome A–Z":
                 campanhas_filtradas.sort(key=lambda x: str(x.get("produto") or "").casefold())
             elif ordem_camp == "Categoria":
                 campanhas_filtradas.sort(key=lambda x: (str(x.get("categoria") or "").casefold(), str(x.get("produto") or "").casefold()))
@@ -8761,6 +8763,11 @@ if pagina_atual == "crescimento":
                         criado_txt = str(item.get("criado_em") or "")[:10]
                         if criado_txt:
                             st.caption(f"Adicionada em {criado_txt} • ID {item_id[-10:]}")
+                        hist_item = item.get("historico_reutilizacoes") or []
+                        qtd_reuso = int(item.get("quantidade_reutilizacoes") or len(hist_item))
+                        if qtd_reuso:
+                            ultima_txt = str(item.get("ultima_reutilizacao_em") or "")[:10]
+                            st.markdown(f"♻️ **Reutilizada {qtd_reuso}x**" + (f" • última em {ultima_txt}" if ultima_txt else ""))
                     with cab3:
                         fav_atual = bool(item.get("favorita"))
                         fav_novo = st.checkbox("⭐ Favorita", value=fav_atual, key=f"central_fav_{item_id}")
@@ -8769,6 +8776,13 @@ if pagina_atual == "crescimento":
                             salvar_marketing(marketing)
                         st.caption("Editável" if tipo_item == "projeto_editavel" else "Arte pronta / flat")
 
+                    hist_item = item.get("historico_reutilizacoes") or []
+                    if hist_item:
+                        with st.expander(f"🕘 Histórico de uso ({len(hist_item)})", expanded=False):
+                            for h in reversed(hist_item[-20:]):
+                                data_h = str(h.get("criado_em") or "")[:16].replace("T", " ")
+                                st.markdown(f"**{h.get('campanha') or 'Reutilização'}** — {h.get('preco') or 'sem preço registrado'}")
+                                st.caption(f"{data_h} • ID {str(h.get('id') or '')[-10:]}")
                     ac1, ac2, ac3 = st.columns(3)
                     ac1.download_button(
                         "⬇️ Baixar kit", gerar_zip_campanha(item),
@@ -8807,7 +8821,12 @@ if pagina_atual == "crescimento":
                                 novo["status"] = "Pronta para postagem"
                                 novo["origem_criativa"] = f"Reutilizada de {item_id}"
                                 novo["reutilizada_de"] = item_id
-                                novo["ultima_reutilizacao_em"] = agora_local().isoformat()
+                                momento_reuso = agora_local().isoformat()
+                                novo["ultima_reutilizacao_em"] = momento_reuso
+                                hist = item.setdefault("historico_reutilizacoes", [])
+                                hist.append({"id": novo["id"], "campanha": novo.get("campanha") or "", "preco": novo.get("preco_arte") or "", "criado_em": momento_reuso})
+                                item["quantidade_reutilizacoes"] = len(hist)
+                                item["ultima_reutilizacao_em"] = momento_reuso
                                 conteudos.insert(0, novo)
                                 marketing["conteudos"] = conteudos
                                 salvar_marketing(marketing)
@@ -8858,6 +8877,12 @@ if pagina_atual == "crescimento":
                                     novo["favorita"] = False
                                     novo["origem_criativa"] = f"Duplicada de {item_id}"
                                     novo["duplicada_de"] = item_id
+                                    momento_reuso = agora_local().isoformat()
+                                    novo["ultima_reutilizacao_em"] = momento_reuso
+                                    hist = item.setdefault("historico_reutilizacoes", [])
+                                    hist.append({"id": novo["id"], "campanha": novo.get("campanha") or "", "preco": novo.get("preco_arte") or "", "criado_em": momento_reuso})
+                                    item["quantidade_reutilizacoes"] = len(hist)
+                                    item["ultima_reutilizacao_em"] = momento_reuso
                                     conteudos.insert(0, novo)
                                     marketing["conteudos"] = conteudos
                                     salvar_marketing(marketing)
