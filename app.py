@@ -401,7 +401,7 @@ CONFIG_EMPRESA_PADRAO = {
     "pix_banco": "Cora SCD (403)",
     "pix_agencia": "0001",
     "pix_conta": "2515972-5",
-    "pix_empresa": "ANA LUCIA VIEIRA ZEPELINI 29480359880",
+    "pix_empresa": "ANA LUCIA VIEIRA ZEPELINI",
     "prazo_padrao": "10",
     "validade_padrao": "5",
     "frete_padrao": "Retirada em Itatiba",
@@ -8123,8 +8123,8 @@ if pagina_atual == "crescimento":
     )
 
     sc1, sc2, sc3, sc4 = st.columns(4)
-    with sc1: af_feature_card("Nova campanha", "Artes, textos e roteiros por canal.", "✦")
-    with sc2: af_feature_card("Biblioteca", "Campanhas salvas e reutilizáveis.", "▦")
+    with sc1: af_feature_card("Central de Campanhas", "Artes aprovadas, histórico e reutilização.", "▦")
+    with sc2: af_feature_card("Histórico de uso", "Acompanhe reutilizações das artes.", "♻")
     with sc3: af_feature_card("Banco de mídia", "Fotos, vídeos, logos e fundos.", "◫")
     with sc4: af_feature_card("Exportação", "Kit ZIP pronto para publicar.", "⇩")
 
@@ -8174,10 +8174,10 @@ if pagina_atual == "crescimento":
     )
 
     if modo_marketing_principal == "🎨 Produzir Campanha":
-        st.caption("Fluxo rápido: escolha o produto, o template e a campanha. O layout aprovado fica protegido.")
-        t1, t2, t4 = st.tabs(["Nova campanha", "📚 Central de Campanhas", "Exportações"])
+        st.caption("Biblioteca operacional AlphaFest: encontre, organize e reutilize artes finais já aprovadas.")
+        t2, t4 = st.tabs(["📚 Central de Campanhas", "Exportações"])
 
-        with t1:
+        if False:  # 20.4.7-D: fluxo legado Nova campanha desativado
             catalogo_mkt = carregar_catalogo()
             editor_col, preview_col = st.columns([1.08, 0.92], gap="large")
 
@@ -8639,7 +8639,7 @@ if pagina_atual == "crescimento":
                     st.rerun()
 
         with t2:
-            st.subheader("📚 Central de Campanhas")
+            st.subheader("📚 Central de Campanhas — Biblioteca AlphaFest")
             st.caption("Sua biblioteca de artes finais aprovadas. Reutilize sem reconstruir o design e mantenha o histórico de campanha, categoria e preço.")
 
             # Importação de artes já prontas para postagem. Essas peças entram como referência/repostagem,
