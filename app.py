@@ -6831,11 +6831,13 @@ def renderizar_workspace_anna_isolado():
                 st.session_state.pop("_ultima_proposta_salva_anna", None)
                 st.rerun()
 
-    a1, a2, a3, a4 = st.columns(4)
+    a1, a2, a3, a4, a5 = st.columns(5)
     if a1.button("💬 Novo atendimento", use_container_width=True): dialog_atendimento_anna()
     if a2.button("➕ Novo orçamento", type="primary", use_container_width=True): dialog_orcamento_anna()
     if a3.button("👤 Novo cliente", use_container_width=True): dialog_cliente_anna()
     if a4.button("📦 Fluxo de pedidos", use_container_width=True): dialog_fluxo_anna()
+    if a5.button("📋 Histórico", use_container_width=True):
+        rerun_na_aba("historico")
 
     st.markdown("### 📚 Catálogo")
     k1, k2, k3 = st.columns(3)
@@ -6874,7 +6876,7 @@ def renderizar_workspace_anna_isolado():
 
 
 # O conjunto de abas continua estável no código; a exibição é personalizada por usuário.
-if usuario_em_operacao_protegida(obter_usuario_atual()):
+if usuario_em_operacao_protegida(obter_usuario_atual()) and st.session_state.get("_pagina_principal", "central") != "historico":
     renderizar_workspace_anna_isolado()
     st.stop()
 
@@ -9154,6 +9156,9 @@ if pagina_atual == "novo_orcamento":
             rerun_na_aba("novo_orcamento", "Proposta salva com sucesso e operação atualizada.")
 
 if pagina_atual == "historico":
+    if usuario_em_operacao_protegida(obter_usuario_atual()):
+        if st.button("⬅️ Voltar para Central da Anna", key="anna_voltar_central_historico"):
+            rerun_na_aba("central")
     renderizar_painel_alertas("historico")
 
     historico = carregar_historico()
