@@ -463,6 +463,28 @@ def rerun_na_aba(chave, mensagem=None):
     st.rerun()
 
 
+CAMPANHAS_PRODUTO_OPCOES = [
+    "Permanente / Todas as épocas",
+    "Aniversário",
+    "Casamento",
+    "Batizado",
+    "1ª Comunhão",
+    "Chá Revelação",
+    "Dia das Mulheres",
+    "Páscoa",
+    "Dia das Mães",
+    "Festa Junina",
+    "Dia dos Pais",
+    "Dia das Crianças",
+    "Outubro Rosa",
+    "Halloween",
+    "Black Friday",
+    "Natal",
+    "Ano Novo",
+    "Formatura",
+    "Corporativo",
+]
+
 PERMISSOES_PADRAO_ANNA = {
     "central", "atendimento", "crm", "jornada", "projeto", "novo_orcamento",
     "historico", "fluxo", "catalogo", "relacionamentos"
@@ -3103,6 +3125,68 @@ def carregar_marketing():
 
 def salvar_marketing(dados):
     save_document("marketing_db", dados, ARQUIVO_MARKETING)
+
+def _thu_normalizar_campanha(valor):
+    texto=str(valor or "").strip().casefold()
+    mapa={
+        "dia dos pais":"Dia dos Pais", "pais":"Dia dos Pais",
+        "dia das mães":"Dia das Mães", "dia das maes":"Dia das Mães", "mães":"Dia das Mães", "maes":"Dia das Mães",
+        "outubro rosa":"Outubro Rosa", "natal":"Natal", "páscoa":"Páscoa", "pascoa":"Páscoa",
+        "dia das crianças":"Dia das Crianças", "dia das criancas":"Dia das Crianças",
+        "halloween":"Halloween", "ano novo":"Ano Novo", "festa junina":"Festa Junina",
+        "black friday":"Black Friday", "aniversário":"Aniversário", "aniversario":"Aniversário",
+        "casamento":"Casamento", "batizado":"Batizado", "formatura":"Formatura",
+    }
+    for chave, oficial in mapa.items():
+        if chave in texto:
+            return oficial
+    for opcao in CAMPANHAS_PRODUTO_OPCOES:
+        if opcao.casefold()==texto:
+            return opcao
+    return str(valor or "").strip()
+
+def thu_consultar_catalogo_produto(catalogo, consulta="", campanha=""):
+    """Fonte oficial do THU: produto cadastrado + elegibilidade de campanha."""
+    q=str(consulta or "").strip().casefold()
+    termos=[t for t in re.findall(r"[\wÀ-ÿ]+", q) if len(t)>=2]
+    campanha_oficial=_thu_normalizar_campanha(campanha)
+    encontrados=[]
+    for produto in catalogo or []:
+        if produto.get("Ativo") is False:
+            continue
+        texto=" ".join(str(produto.get(k) or "") for k in ("Nome","Categoria","Subcategoria","Descricao","DescricaoCurta","DescricaoCompleta","PalavrasChave")).casefold()
+        acertos=sum(1 for t in termos if t in texto)
+        if termos and acertos==0:
+            continue
+        permitidas=produto.get("CampanhasPermitidas", []) or []
+        permanente="Permanente / Todas as épocas" in permitidas
+        elegivel=True
+        if campanha_oficial:
+            elegivel=permanente or campanha_oficial in permitidas
+        pontos=acertos*100
+        if produto.get("Destaque"): pontos+=20
+        if permanente: pontos+=5
+        encontrados.append((pontos, produto, elegivel, campanha_oficial))
+    encontrados.sort(key=lambda x:(x[2],x[0]), reverse=True)
+    return encontrados
+
+def thu_correlacionar_catalogo_biblioteca(produto_catalogo, conteudos):
+    """Procura artes usando somente o produto oficial escolhido no catálogo."""
+    nome=str(produto_catalogo.get("Nome") or "").strip()
+    categoria=str(produto_catalogo.get("Categoria") or "").strip()
+    termos=[t for t in re.findall(r"[\wÀ-ÿ]+", nome.casefold()) if len(t)>=3]
+    ranking=[]
+    for arte in conteudos or []:
+        texto=f"{arte.get('produto','')} {arte.get('categoria','')} {arte.get('campanha','')} {arte.get('tema_reuso','')}".casefold()
+        acertos=sum(1 for t in termos if t in texto)
+        cat_match=bool(categoria and categoria.casefold() in texto)
+        if acertos==0 and not cat_match:
+            continue
+        pontos=acertos*100+(35 if cat_match else 0)+(25 if arte.get("favorita") else 0)
+        pontos+=min(int(arte.get("quantidade_reutilizacoes") or len(arte.get("historico_reutilizacoes") or []))*4,20)
+        ranking.append((pontos,arte))
+    ranking.sort(key=lambda x:x[0], reverse=True)
+    return [a for _,a in ranking[:5]]
 
 def thu_recomendar_artes_biblioteca(conteudos, consulta="", categoria="", tema="", limite=5):
     """20.4.8-A: relevancia obrigatoria antes de favorita/reuso."""
@@ -6589,7 +6673,15 @@ def dialog_catalogo_cadastro_anna(produto_indice=None):
         c3, c4 = st.columns(2)
         subcategoria = c3.text_input("Subcategoria", value=str(produto.get("Subcategoria", "")))
         preco = c4.text_input("Valor", value=str(produto.get("Preco", "")), placeholder="Ex.: 25,00")
+        material = st.text_input("Material / composição", value=str(produto.get("Material", "")), placeholder="Ex.: papel arroz, PLA, acrílico, papel fotográfico...")
         descricao = st.text_area("Descrição para o catálogo", value=str(produto.get("DescricaoCurta", produto.get("Descricao", ""))), height=110)
+        campanhas_atuais = produto.get("CampanhasPermitidas", []) or []
+        campanhas_permitidas = st.multiselect(
+            "📅 Campanhas / datas em que este produto pode ser divulgado",
+            CAMPANHAS_PRODUTO_OPCOES,
+            default=[x for x in campanhas_atuais if x in CAMPANHAS_PRODUTO_OPCOES],
+            help="Marque Permanente para produtos genéricos. Produtos temáticos devem receber somente as campanhas realmente permitidas.",
+        )
         imagens_urls = st.text_area("URLs das imagens (uma por linha)", value="\n".join([x for x in (produto.get("Imagens", []) or []) if str(x).startswith("http")]), height=90)
         fotos = st.file_uploader("Adicionar fotos do computador", type=["png","jpg","jpeg","webp"], accept_multiple_files=True, help="A foto será incorporada ao catálogo e permanecerá disponível mesmo após reinícios do Streamlit.")
         drive_urls = st.text_area(
@@ -6620,7 +6712,9 @@ def dialog_catalogo_cadastro_anna(produto_indice=None):
         registro = dict(produto)
         registro.update({
             "Nome": nome.strip(), "Categoria": categoria.strip(), "Subcategoria": subcategoria.strip(),
-            "Preco": preco.strip(), "Descricao": descricao.strip(), "DescricaoCurta": descricao.strip(),
+            "Preco": preco.strip(), "Material": material.strip(),
+            "CampanhasPermitidas": list(dict.fromkeys(campanhas_permitidas)),
+            "Descricao": descricao.strip(), "DescricaoCurta": descricao.strip(),
             "Imagens": list(dict.fromkeys(imagens)), "Ativo": bool(ativo), "Destaque": bool(destaque),
             "AtualizadoEm": agora_local().isoformat(timespec="seconds"),
         })
@@ -8217,7 +8311,7 @@ if pagina_atual == "crescimento":
 
     sc1, sc2, sc3, sc4 = st.columns(4)
     with sc1: af_feature_card("Central de Campanhas", "Artes aprovadas, histórico e reutilização.", "▦")
-    with sc2: af_feature_card("THU + Biblioteca", "Encontra primeiro o que a AlphaFest já aprovou.", "💙")
+    with sc2: af_feature_card("THU + Catálogo", "Cruza produto oficial, campanha e arte aprovada.", "💙")
     with sc3: af_feature_card("Banco de mídia", "Fotos, vídeos, logos e fundos.", "◫")
     with sc4: af_feature_card("Exportação", "Kit ZIP pronto para publicar.", "⇩")
 
@@ -8785,33 +8879,76 @@ if pagina_atual == "crescimento":
                 st.session_state["central_camp_tipo_2047b"] = "Todos"
                 st.session_state["central_camp_favoritas_2030"] = False
 
-            with st.expander("💙 THU • Encontrar arte no acervo AlphaFest", expanded=True):
-                st.caption("O THU consulta somente as artes cadastradas na Biblioteca e prioriza referências oficiais e mais reutilizadas. Nenhuma imagem é alterada.")
-                th1,th2,th3=st.columns([1.8,1,1])
-                thu_busca=th1.text_input("O que vamos divulgar?",placeholder="Ex.: carimbos para doces, Dia dos Pais...",key="thu_busca_biblioteca_2048")
-                thu_cats=["Todas"]+sorted({str(x.get("categoria") or "Sem categoria") for x in conteudos})
-                thu_cat=th2.selectbox("Categoria",thu_cats,key="thu_cat_biblioteca_2048")
-                thu_temas=["Todos"]+sorted({str(x.get("tema_reuso") or x.get("campanha") or "Permanente") for x in conteudos})
-                thu_tema=th3.selectbox("Tema / ocasião",thu_temas,key="thu_tema_biblioteca_2048")
-                if st.button("🔎 THU, procurar no nosso acervo",type="primary",use_container_width=True,key="thu_procurar_biblioteca_2048"):
-                    achados=thu_recomendar_artes_biblioteca(conteudos,thu_busca,thu_cat,thu_tema,5)
-                    st.session_state["thu_resultados_biblioteca_2048"]=[{"id":str(i.get("id") or ""),"motivos":m} for _,i,m in achados]
-                    st.session_state["thu_consulta_realizada_2048"]=True
-                mapa={str(x.get("id") or ""):x for x in conteudos}
-                resultados=st.session_state.get("thu_resultados_biblioteca_2048") or []
-                if resultados:
-                    st.success(f"Encontrei {len(resultados)} opção(ões) no acervo da AlphaFest.")
-                    for pos,r in enumerate(resultados,1):
-                        arte=mapa.get(r["id"])
-                        if not arte: continue
-                        rr1,rr2=st.columns([3.2,1]); nome=arte.get("produto") or "Arte AlphaFest"; tema_r=arte.get("tema_reuso") or arte.get("campanha") or "Permanente"
-                        rr1.markdown(f"**{pos}. {nome}**"+(" ⭐" if arte.get("favorita") else ""))
-                        rr1.caption(f"{arte.get('categoria') or 'Sem categoria'} • {tema_r} • "+", ".join((r.get("motivos") or [])[:3]))
-                        if rr2.button("📌 Mostrar na Central",key=f"thu_mostrar_{r['id']}_{pos}",use_container_width=True):
-                            st.session_state["_thu_aplicar_busca_2048"] = str(nome)
+            with st.expander("💙 THU • Catálogo → Arte → Campanha", expanded=True):
+                st.caption("O Catálogo é a fonte oficial de produto, descrição, material, preço e campanhas permitidas. O THU não inventa dados que não estejam cadastrados.")
+                catalogo_thu = carregar_catalogo()
+                th1, th2 = st.columns([1.8, 1])
+                thu_busca = th1.text_input("Qual produto vamos divulgar?", placeholder="Ex.: Papel de Arroz, Chaveiro Dia dos Pais...", key="thu_catalogo_busca_2049")
+                campanha_thu = th2.selectbox("Campanha / data", ["Sem campanha específica"] + CAMPANHAS_PRODUTO_OPCOES, key="thu_catalogo_campanha_2049")
+                campanha_consulta = "" if campanha_thu == "Sem campanha específica" else campanha_thu
+
+                if st.button("🔎 THU, consultar Catálogo", type="primary", use_container_width=True, key="thu_consultar_catalogo_2049"):
+                    st.session_state["thu_catalogo_resultados_2049"] = [
+                        {"nome": p.get("Nome",""), "elegivel": elegivel, "campanha": camp}
+                        for _, p, elegivel, camp in thu_consultar_catalogo_produto(catalogo_thu, thu_busca, campanha_consulta)
+                    ][:8]
+                    st.session_state["thu_catalogo_consulta_2049"] = thu_busca
+
+                resultados_cat = st.session_state.get("thu_catalogo_resultados_2049") or []
+                mapa_cat = {str(p.get("Nome") or ""): p for p in catalogo_thu}
+                if resultados_cat:
+                    st.markdown("##### 📦 Produtos encontrados no Catálogo")
+                    for pos, rcat in enumerate(resultados_cat, 1):
+                        prod = mapa_cat.get(rcat.get("nome"))
+                        if not prod:
+                            continue
+                        elegivel = bool(rcat.get("elegivel"))
+                        pc1, pc2 = st.columns([3.3, 1])
+                        pc1.markdown(f"**{pos}. {prod.get('Nome','Produto')}** " + ("✅" if elegivel else "⛔"))
+                        detalhes = []
+                        if prod.get("Material"): detalhes.append(f"Material: {prod.get('Material')}")
+                        if prod.get("Preco"): detalhes.append(f"Valor: {formatar_preco_catalogo(prod.get('Preco'))}")
+                        permitidas = prod.get("CampanhasPermitidas", []) or []
+                        if permitidas: detalhes.append("Campanhas: " + ", ".join(permitidas))
+                        pc1.caption(" • ".join(detalhes) if detalhes else "Cadastro ainda sem detalhes suficientes.")
+                        if campanha_consulta and not elegivel:
+                            pc1.warning(f"Este produto NÃO está cadastrado para a campanha {campanha_consulta}.")
+                        if pc2.button("Usar produto", key=f"thu_usar_prod_cat_{pos}_{abs(hash(prod.get('Nome','')))}", use_container_width=True, disabled=bool(campanha_consulta and not elegivel)):
+                            st.session_state["thu_produto_escolhido_2049"] = prod.get("Nome")
                             st.rerun()
-                elif st.session_state.get("thu_consulta_realizada_2048"):
-                    st.info("Não encontrei uma arte correspondente no acervo atual.")
+
+                    nome_escolhido = st.session_state.get("thu_produto_escolhido_2049")
+                    prod_escolhido = mapa_cat.get(str(nome_escolhido or ""))
+                    if prod_escolhido:
+                        st.divider()
+                        st.markdown(f"##### 💙 THU usando: {prod_escolhido.get('Nome')}")
+                        cinfo1,cinfo2,cinfo3 = st.columns(3)
+                        cinfo1.metric("Valor cadastrado", formatar_preco_catalogo(prod_escolhido.get("Preco")) if prod_escolhido.get("Preco") else "Não cadastrado")
+                        cinfo2.metric("Material", str(prod_escolhido.get("Material") or "Não cadastrado"))
+                        cinfo3.metric("Campanhas permitidas", len(prod_escolhido.get("CampanhasPermitidas", []) or []))
+                        desc_oficial = str(prod_escolhido.get("DescricaoCompleta") or prod_escolhido.get("DescricaoCurta") or prod_escolhido.get("Descricao") or "").strip()
+                        if desc_oficial:
+                            st.caption("Descrição oficial: " + desc_oficial)
+
+                        artes_correlacionadas = thu_correlacionar_catalogo_biblioteca(prod_escolhido, conteudos)
+                        if artes_correlacionadas:
+                            st.success(f"Encontrei {len(artes_correlacionadas)} arte(s) relacionada(s) na Biblioteca AlphaFest.")
+                            for apos, arte in enumerate(artes_correlacionadas,1):
+                                ar1,ar2=st.columns([3.2,1])
+                                ar1.markdown(f"🎨 **{apos}. {arte.get('produto') or 'Arte AlphaFest'}**" + (" ⭐" if arte.get("favorita") else ""))
+                                ar1.caption(f"{arte.get('categoria') or 'Sem categoria'} • {arte.get('tema_reuso') or arte.get('campanha') or 'Permanente'}")
+                                if ar2.button("Mostrar arte", key=f"thu_cat_arte_{arte.get('id')}_{apos}", use_container_width=True):
+                                    st.session_state["_thu_aplicar_busca_2048"] = str(arte.get("produto") or "")
+                                    st.rerun()
+                        else:
+                            st.warning("Produto cadastrado, mas ainda não encontrei arte correspondente na Biblioteca. Cadastre uma arte pronta para completar o fluxo.")
+
+                elif st.session_state.get("thu_catalogo_consulta_2049") is not None:
+                    st.warning("Produto não encontrado no Catálogo. O THU não vai inventar descrição, material, valor ou campanha.")
+                    st.markdown("**Para continuar, cadastre primeiro:** Nome do produto, Categoria, Descrição, Material, Valor e Campanhas/Datas permitidas.")
+                    if st.button("📦 Ir para Cadastro de Produto", key="thu_ir_catalogo_2049", use_container_width=True):
+                        st.session_state["_thu_catalogo_prefill_nome_2049"] = st.session_state.get("thu_catalogo_consulta_2049","")
+                        rerun_na_aba("catalogo")
 
             # 20.4.7-B — Biblioteca Inteligente: busca + filtros comerciais.
             f1, f2, f3, f4 = st.columns([2.1, 1.15, 1.15, 1])
@@ -9827,8 +9964,9 @@ if pagina_atual == "catalogo":
                 codigo_cat = c1.text_input(
                     "Código interno", value=item_edicao.get("CodigoInterno", ""), key=f"cat_codigo_{sufixo}"
                 )
+                _prefill_thu = st.session_state.pop("_thu_catalogo_prefill_nome_2049", "") if not item_edicao else ""
                 nome_cat = c1.text_input(
-                    "Nome do produto *", value=item_edicao.get("Nome", ""), key=f"cat_nome_{sufixo}"
+                    "Nome do produto *", value=item_edicao.get("Nome", "") or _prefill_thu, key=f"cat_nome_{sufixo}"
                 )
                 descricao_curta_cat = c1.text_area(
                     "Descrição curta", value=item_edicao.get("DescricaoCurta", item_edicao.get("Descricao", "")),
@@ -9840,6 +9978,10 @@ if pagina_atual == "catalogo":
                 )
                 preco_cat = c2.text_input(
                     "Preço sugerido", value=str(item_edicao.get("Preco", "")), key=f"cat_preco_{sufixo}"
+                )
+                material_cat = c2.text_input(
+                    "Material / composição", value=str(item_edicao.get("Material", "")),
+                    placeholder="Ex.: papel arroz, PLA, acrílico, papel fotográfico...", key=f"cat_material_{sufixo}"
                 )
                 custo_cat = c2.text_input(
                     "Custo (opcional)", value=str(item_edicao.get("Custo", "")), key=f"cat_custo_{sufixo}"
@@ -9907,6 +10049,17 @@ if pagina_atual == "catalogo":
             )
 
         with tab_marketing:
+            st.markdown("#### 📅 Elegibilidade de campanhas")
+            campanhas_atuais_cat = item_edicao.get("CampanhasPermitidas", []) or []
+            campanhas_permitidas_cat = st.multiselect(
+                "Campanhas / datas permitidas para este produto",
+                CAMPANHAS_PRODUTO_OPCOES,
+                default=[x for x in campanhas_atuais_cat if x in CAMPANHAS_PRODUTO_OPCOES],
+                key=f"cat_campanhas_permitidas_{sufixo}",
+                help="O THU e o Calendário usarão este campo para evitar sugerir o produto em campanhas incompatíveis.",
+            )
+            st.caption("Ex.: Papel de Arroz pode ser Permanente + várias datas. Chaveiro Outubro Rosa deve ficar somente em Outubro Rosa.")
+
             palavras_chave = st.text_input(
                 "Palavras-chave (separadas por vírgula)", value=item_edicao.get("PalavrasChave", ""),
                 key=f"cat_palavras_{sufixo}"
@@ -10120,7 +10273,9 @@ if pagina_atual == "catalogo":
                     "Descricao": descricao_curta_cat.strip() or descricao_cat.strip(),
                     "DescricaoCurta": descricao_curta_cat.strip(), "DescricaoCompleta": descricao_cat.strip(),
                     "IdeiasGeracao": ideias_geracao.strip(),
-                    "Preco": preco_cat.strip(), "Custo": custo_cat.strip(), "TempoProducao": tempo_cat.strip(),
+                    "Preco": preco_cat.strip(), "Material": material_cat.strip(),
+                    "CampanhasPermitidas": list(dict.fromkeys(campanhas_permitidas_cat)),
+                    "Custo": custo_cat.strip(), "TempoProducao": tempo_cat.strip(),
                     "Processos": processos_cat, "CamposPersonalizacao": campos_personalizacao,
                     "ObservacaoInterna": observacao_interna.strip(), "PalavrasChave": palavras_chave.strip(),
                     "LegendaSocial": legenda_instagram.strip(), "Hashtags": hashtags.strip(),
@@ -10195,6 +10350,11 @@ if pagina_atual == "catalogo":
                     )
                     descricao_lista = produto_cat.get("DescricaoCurta", produto_cat.get("Descricao", ""))
                     cinfo.caption(descricao_lista)
+                    if produto_cat.get("Material"):
+                        cinfo.caption(f"Material: {produto_cat.get('Material')}")
+                    campanhas_lista = produto_cat.get("CampanhasPermitidas", []) or []
+                    if campanhas_lista:
+                        cinfo.caption("📅 Campanhas: " + " • ".join(campanhas_lista))
                     # Estatísticas calculadas a partir do histórico, sem duplicar dados no produto.
                     vendas_qtd = 0.0
                     vendas_valor = 0.0
