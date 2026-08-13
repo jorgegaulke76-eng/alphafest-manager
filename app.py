@@ -3133,8 +3133,8 @@ def thu_recomendar_artes_biblioteca(conteudos, consulta="", categoria="", tema="
     return ranking[:max(1,int(limite or 5))]
 
 
-def thu_preparar_divulgacao_arte(item):
-    """20.4.8-C — textos comerciais prontos sem alterar a imagem."""
+def thu_preparar_divulgacao_arte(item, objetivo="Vender"):
+    """20.4.8-D — THU Comercial: copy específica por produto e objetivo."""
     produto=str(item.get("produto") or "Produto personalizado").strip()
     categoria=str(item.get("categoria") or "").strip()
     tema=str(item.get("tema_reuso") or item.get("campanha") or "Permanente").strip()
@@ -3142,60 +3142,58 @@ def thu_preparar_divulgacao_arte(item):
     nome_cf=f"{produto} {categoria}".casefold()
 
     if "carimbo" in nome_cf:
-        beneficio="Transforme seus doces em pequenos detalhes que encantam e valorizam cada produção."
+        beneficio="Transforme brigadeiros, doces e biscoitos em peças ainda mais bonitas e valorizadas, com detalhes personalizados para cada tema."
     elif "papel de arroz" in nome_cf:
-        beneficio="Personalize bolos e doces com acabamento bonito, prático e cheio de identidade."
+        beneficio="Personalize bolos, doces e bolachas de forma prática, com impressão que leva seu tema e sua identidade para cada detalhe."
     elif "vela" in nome_cf:
-        beneficio="Um detalhe personalizado que deixa o parabéns ainda mais especial e memorável."
+        beneficio="Nome, idade e personagem em um detalhe personalizado que deixa o parabéns ainda mais especial."
+    elif "chaveiro" in nome_cf:
+        beneficio="Transforme logos, times, mascotes e temas em uma lembrança personalizada, criativa e marcante."
     elif "bal" in nome_cf:
-        beneficio="Uma decoração personalizada para deixar sua comemoração ainda mais marcante."
+        beneficio="Uma decoração personalizada para transformar o ambiente e deixar sua comemoração ainda mais marcante."
     elif "topo" in nome_cf:
-        beneficio="Seu tema ganha vida com um toque personalizado feito especialmente para a ocasião."
+        beneficio="Um topo personalizado para completar o tema da festa e destacar o bolo com nome, idade e detalhes especiais."
     else:
-        beneficio="Personalização pensada para valorizar cada detalhe da sua comemoração ou presente."
+        beneficio="Personalização feita para valorizar cada detalhe da sua comemoração, presente ou lembrança."
 
+    objetivo_cf=str(objetivo or "Vender").casefold()
+    if "novidade" in objetivo_cf:
+        abertura=f"🆕 Novidade na AlphaFest: {produto}!"
+        fechamento="Quer conhecer essa novidade? Chame a gente no WhatsApp 📲"
+    elif "promo" in objetivo_cf:
+        abertura=f"🔥 Destaque especial: {produto}!"
+        fechamento="Consulte as condições e faça seu pedido pelo WhatsApp 📲"
+    elif "apresent" in objetivo_cf:
+        abertura=f"✨ Conheça: {produto}"
+        fechamento="Quer saber mais? Fale com a AlphaFest pelo WhatsApp 📲"
+    elif "data" in objetivo_cf:
+        abertura=f"🎉 {produto} para deixar sua ocasião ainda mais especial!"
+        fechamento="Antecipe seu pedido e fale com a AlphaFest pelo WhatsApp 📲"
+    elif "parceria" in objetivo_cf:
+        abertura=f"🤝 {produto} em uma parceria feita para criar detalhes especiais."
+        fechamento="Fale com a AlphaFest e conheça nosso trabalho 📲"
+    else:
+        abertura=f"✨ {produto}"
+        fechamento="📲 Chame no WhatsApp e faça seu pedido!"
+
+    tema_valido=tema.casefold() not in ("","permanente","diversos temas","campanha livre","todos")
+    tema_linha=f"\n🎉 Tema: {tema}" if tema_valido else ""
     preco_linha=f"\n💰 {preco}" if preco else ""
-    tema_linha="" if tema.casefold() in ("permanente","diversos temas","campanha livre") else f"\n🎉 Tema: {tema}"
+    legenda=(f"{abertura}\n\n{beneficio}\n\nProdução personalizada AlphaFest, preparada de acordo com a sua necessidade."
+             f"{tema_linha}{preco_linha}\n\n{fechamento}")
+    story=f"{abertura}\n{beneficio}\n"+(f"💰 {preco}\n" if preco else "")+"📲 Peça pelo WhatsApp!"
+    status=f"{produto} ✨\n"+(f"{preco}\n" if preco else "")+"Personalizado do seu jeito.\nChame no WhatsApp 📲"
 
-    legenda=(
-        f"✨ {produto}\n\n"
-        f"{beneficio}\n\n"
-        f"Produção personalizada AlphaFest, feita de acordo com a sua necessidade."
-        f"{tema_linha}{preco_linha}\n\n"
-        "📲 Chame no WhatsApp e faça seu pedido!"
-    )
-
-    story=(
-        f"✨ {produto}\n"
-        f"{beneficio}\n"
-        + (f"💰 {preco}\n" if preco else "")
-        + "📲 Peça pelo WhatsApp!"
-    )
-
-    status=(
-        f"{produto} ✨\n"
-        + (f"{preco}\n" if preco else "")
-        + "Personalizado do seu jeito.\n"
-        "Chame no WhatsApp 📲"
-    )
-
-    palavras=[]
-    for pedaco in (produto+" "+categoria+" "+tema).replace("/"," ").replace("-"," ").split():
+    stop={"para","com","dos","das","uma","tema","temas","diversos","permanente","campanha","livre","arte","pronta","todos"}
+    tags=[]
+    for pedaco in (produto+" "+categoria+((" "+tema) if tema_valido else "")).replace("/"," ").replace("-"," ").split():
         limpo="".join(ch for ch in pedaco if ch.isalnum())
-        if len(limpo)>=3 and limpo.casefold() not in {"para","com","dos","das","uma","tema","diversos","permanente"}:
+        if len(limpo)>=3 and limpo.casefold() not in stop:
             tag="#"+limpo
-            if tag.casefold() not in [x.casefold() for x in palavras]:
-                palavras.append(tag)
-    hashtags=["#AlphaFest","#Personalizados","#FestasPersonalizadas"]+palavras[:7]
-
-    return {
-        "legenda": legenda,
-        "story": story,
-        "status": status,
-        "cta": "📲 Chame no WhatsApp e faça seu pedido!",
-        "hashtags": " ".join(hashtags),
-        "gerado_em": agora_local().isoformat(),
-    }
+            if tag.casefold() not in [x.casefold() for x in tags]: tags.append(tag)
+    hashtags=["#AlphaFest","#Personalizados","#FestasPersonalizadas"]+tags[:7]
+    return {"legenda":legenda,"story":story,"status":status,"cta":fechamento,
+            "hashtags":" ".join(hashtags),"objetivo":objetivo,"gerado_em":agora_local().isoformat()}
 
 def gerar_conteudo_marketing(produto, objetivo, campanha, canais, observacoes="", tom="Venda direta", imagem_png=None):
     pacote_ia, motor = _gerar_pacote_copy_ia(produto, objetivo, campanha, canais, observacoes, tom, imagem_png)
@@ -8928,7 +8926,8 @@ if pagina_atual == "crescimento":
                         st.rerun()
                     if ac3.button("💙 THU divulgar", key=f"central_thu_divulgar_{item_id}", use_container_width=True):
                         st.session_state["central_thu_divulgar_id_2048c"] = item_id
-                        st.session_state[f"thu_copy_{item_id}"] = thu_preparar_divulgacao_arte(item)
+                        st.session_state[f"thu_objetivo_{item_id}"] = "Vender"
+                        st.session_state[f"thu_copy_{item_id}"] = thu_preparar_divulgacao_arte(item, "Vender")
                         st.rerun()
                     if ac4.button("🗑️ Remover", key=f"central_remover_{item_id}", use_container_width=True):
                         marketing["conteudos"] = [x for x in conteudos if str(x.get("id")) != item_id]
@@ -8938,7 +8937,14 @@ if pagina_atual == "crescimento":
                     if st.session_state.get("central_thu_divulgar_id_2048c") == item_id:
                         st.markdown("#### 💙 THU • Divulgação pronta")
                         st.caption("A arte permanece intacta. O THU prepara somente os textos para publicação.")
-                        thu_copy = st.session_state.get(f"thu_copy_{item_id}") or thu_preparar_divulgacao_arte(item)
+                        objetivos_thu = ["Vender", "Apresentar produto", "Novidade", "Promoção", "Data comemorativa", "Parceria"]
+                        objetivo_thu = st.selectbox("🎯 Objetivo da publicação", objetivos_thu,
+                            index=(objetivos_thu.index(st.session_state.get(f"thu_objetivo_{item_id}")) if st.session_state.get(f"thu_objetivo_{item_id}") in objetivos_thu else 0),
+                            key=f"thu_objetivo_select_{item_id}")
+                        if st.session_state.get(f"thu_objetivo_{item_id}") != objetivo_thu:
+                            st.session_state[f"thu_objetivo_{item_id}"] = objetivo_thu
+                            st.session_state[f"thu_copy_{item_id}"] = thu_preparar_divulgacao_arte(item, objetivo_thu)
+                        thu_copy = st.session_state.get(f"thu_copy_{item_id}") or thu_preparar_divulgacao_arte(item, objetivo_thu)
 
                         tc1, tc2 = st.columns(2)
                         legenda_thu = tc1.text_area("📣 Legenda para Feed", value=thu_copy.get("legenda",""), height=250, key=f"thu_legenda_{item_id}")
@@ -8957,7 +8963,7 @@ if pagina_atual == "crescimento":
                             salvar_marketing(marketing)
                             st.success("Textos do THU salvos nesta campanha.")
                         if td2.button("🔄 Gerar novamente", use_container_width=True, key=f"thu_regenerar_copy_{item_id}"):
-                            st.session_state[f"thu_copy_{item_id}"] = thu_preparar_divulgacao_arte(item)
+                            st.session_state[f"thu_copy_{item_id}"] = thu_preparar_divulgacao_arte(item, objetivo_thu)
                             st.rerun()
                         if td3.button("Fechar", use_container_width=True, key=f"thu_fechar_copy_{item_id}"):
                             st.session_state.pop("central_thu_divulgar_id_2048c", None)
