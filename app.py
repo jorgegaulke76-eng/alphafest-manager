@@ -8946,13 +8946,17 @@ if pagina_atual == "crescimento":
                             st.session_state[f"thu_copy_{item_id}"] = thu_preparar_divulgacao_arte(item, objetivo_thu)
                         thu_copy = st.session_state.get(f"thu_copy_{item_id}") or thu_preparar_divulgacao_arte(item, objetivo_thu)
 
+                        # D1: a chave dos campos acompanha o objetivo. No Streamlit, `value=`
+                        # não substitui o estado de um widget já criado com a mesma key.
+                        # Assim, cada troca de objetivo abre os campos com a nova copy calculada.
+                        objetivo_key = "".join(ch if ch.isalnum() else "_" for ch in objetivo_thu.casefold())
                         tc1, tc2 = st.columns(2)
-                        legenda_thu = tc1.text_area("📣 Legenda para Feed", value=thu_copy.get("legenda",""), height=250, key=f"thu_legenda_{item_id}")
-                        story_thu = tc2.text_area("📱 Story", value=thu_copy.get("story",""), height=250, key=f"thu_story_{item_id}")
+                        legenda_thu = tc1.text_area("📣 Legenda para Feed", value=thu_copy.get("legenda",""), height=250, key=f"thu_legenda_{item_id}_{objetivo_key}")
+                        story_thu = tc2.text_area("📱 Story", value=thu_copy.get("story",""), height=250, key=f"thu_story_{item_id}_{objetivo_key}")
                         tc3, tc4 = st.columns(2)
-                        status_thu = tc3.text_area("💬 WhatsApp Status", value=thu_copy.get("status",""), height=150, key=f"thu_status_{item_id}")
-                        hashtags_thu = tc4.text_area("#️⃣ Hashtags", value=thu_copy.get("hashtags",""), height=150, key=f"thu_hashtags_{item_id}")
-                        cta_thu = st.text_input("CTA", value=thu_copy.get("cta",""), key=f"thu_cta_{item_id}")
+                        status_thu = tc3.text_area("💬 WhatsApp Status", value=thu_copy.get("status",""), height=150, key=f"thu_status_{item_id}_{objetivo_key}")
+                        hashtags_thu = tc4.text_area("#️⃣ Hashtags", value=thu_copy.get("hashtags",""), height=150, key=f"thu_hashtags_{item_id}_{objetivo_key}")
+                        cta_thu = st.text_input("CTA", value=thu_copy.get("cta",""), key=f"thu_cta_{item_id}_{objetivo_key}")
 
                         td1, td2, td3 = st.columns(3)
                         if td1.button("💾 Salvar textos na campanha", type="primary", use_container_width=True, key=f"thu_salvar_copy_{item_id}"):
@@ -8964,6 +8968,9 @@ if pagina_atual == "crescimento":
                             st.success("Textos do THU salvos nesta campanha.")
                         if td2.button("🔄 Gerar novamente", use_container_width=True, key=f"thu_regenerar_copy_{item_id}"):
                             st.session_state[f"thu_copy_{item_id}"] = thu_preparar_divulgacao_arte(item, objetivo_thu)
+                            # limpa somente os widgets do objetivo atual para refletir a nova geração
+                            for _campo in ("legenda", "story", "status", "hashtags", "cta"):
+                                st.session_state.pop(f"thu_{_campo}_{item_id}_{objetivo_key}", None)
                             st.rerun()
                         if td3.button("Fechar", use_container_width=True, key=f"thu_fechar_copy_{item_id}"):
                             st.session_state.pop("central_thu_divulgar_id_2048c", None)
