@@ -3188,6 +3188,28 @@ def thu_correlacionar_catalogo_biblioteca(produto_catalogo, conteudos):
     ranking.sort(key=lambda x:x[0], reverse=True)
     return [a for _,a in ranking[:5]]
 
+
+def thu_oportunidades_calendario(catalogo, conteudos, campanha_nome):
+    """20.4.9-B — cruza campanha do Calendário com elegibilidade do Catálogo e artes da Biblioteca."""
+    campanha=_thu_normalizar_campanha(campanha_nome)
+    saida=[]
+    for produto in catalogo or []:
+        if produto.get("Ativo") is False:
+            continue
+        permitidas=produto.get("CampanhasPermitidas", []) or []
+        elegivel=("Permanente / Todas as épocas" in permitidas) or (campanha in permitidas)
+        if not elegivel:
+            continue
+        artes=thu_correlacionar_catalogo_biblioteca(produto, conteudos)
+        saida.append({
+            "produto": produto,
+            "artes": artes,
+            "tem_arte": bool(artes),
+            "campanha": campanha,
+        })
+    saida.sort(key=lambda x:(x["tem_arte"], bool(x["produto"].get("Destaque")), str(x["produto"].get("Nome") or "")), reverse=True)
+    return saida
+
 def thu_recomendar_artes_biblioteca(conteudos, consulta="", categoria="", tema="", limite=5):
     """20.4.8-A: relevancia obrigatoria antes de favorita/reuso."""
     q=str(consulta or "").strip().casefold()
@@ -7658,8 +7680,35 @@ if pagina_atual == "central":
                     f"{oportunidade.get('tipo', 'Personalizada')}"
                 )
                 if produtos:
-                    cc1.write("Produtos sugeridos: " + ", ".join(map(str, produtos[:6])))
+                    cc1.write("Produtos sugeridos no calendário: " + ", ".join(map(str, produtos[:6])))
                 cc2.info(f"Preparar com {int(oportunidade.get('antecedencia_dias', 30) or 30)} dias")
+
+                # 20.4.9-B — o THU valida as sugestões contra o Catálogo oficial.
+                _catalogo_op = carregar_catalogo()
+                _marketing_op = carregar_marketing()
+                _conteudos_op = _marketing_op.get("conteudos", []) or []
+                _thu_ops = thu_oportunidades_calendario(_catalogo_op, _conteudos_op, oportunidade.get("nome", ""))
+                if _thu_ops:
+                    with st.expander(f"💙 THU • Produtos elegíveis para {oportunidade.get('nome','Campanha')}", expanded=False):
+                        st.caption("Somente produtos autorizados no Catálogo para esta campanha aparecem aqui.")
+                        for _n, _op in enumerate(_thu_ops[:8], 1):
+                            _p=_op["produto"]; _artes=_op["artes"]
+                            _oc1,_oc2=st.columns([4,1.3])
+                            _oc1.markdown(f"**{_n}. {_p.get('Nome','Produto')}** " + ("🎨" if _artes else "⚠️"))
+                            _det=[]
+                            if _p.get("Preco"): _det.append(f"Valor: {formatar_preco_catalogo(_p.get('Preco'))}")
+                            if _p.get("Material"): _det.append(f"Material: {_p.get('Material')}")
+                            _det.append(f"{len(_artes)} arte(s) encontrada(s)" if _artes else "sem arte na Biblioteca")
+                            _oc1.caption(" • ".join(_det))
+                            if _artes:
+                                if _oc2.button("Preparar campanha", key=f"thu_cal_prep_{oportunidade.get('id','')}_{_n}", use_container_width=True):
+                                    st.session_state["_thu_aplicar_busca_2048"] = str(_artes[0].get("produto") or "")
+                                    st.session_state["thu_produto_escolhido_2049"] = _p.get("Nome")
+                                    rerun_na_aba("marketing")
+                            else:
+                                _oc2.warning("Falta arte")
+                else:
+                    st.warning("💙 THU: ainda não há produto do Catálogo habilitado para esta campanha.")
         st.caption("Cadastre datas locais, escolares e campanhas próprias na aba Calendário Comercial.")
     else:
         st.info("Nenhuma campanha próxima. Use o Calendário Comercial para cadastrar novas oportunidades.")
@@ -8311,7 +8360,7 @@ if pagina_atual == "crescimento":
 
     sc1, sc2, sc3, sc4 = st.columns(4)
     with sc1: af_feature_card("Central de Campanhas", "Artes aprovadas, histórico e reutilização.", "▦")
-    with sc2: af_feature_card("THU + Catálogo", "Cruza produto oficial, campanha e arte aprovada.", "💙")
+    with sc2: af_feature_card("THU + Calendário", "Encontra oportunidades e cruza produto + arte.", "📅")
     with sc3: af_feature_card("Banco de mídia", "Fotos, vídeos, logos e fundos.", "◫")
     with sc4: af_feature_card("Exportação", "Kit ZIP pronto para publicar.", "⇩")
 
@@ -8878,6 +8927,41 @@ if pagina_atual == "crescimento":
                 st.session_state["central_camp_filtro_tema_2047b"] = "Todos"
                 st.session_state["central_camp_tipo_2047b"] = "Todos"
                 st.session_state["central_camp_favoritas_2030"] = False
+
+            with st.expander("📅 THU • Calendário Inteligente", expanded=False):
+                st.caption("O THU lê o Calendário Mestre existente, cruza com as campanhas permitidas no Catálogo e verifica se já existe arte na Biblioteca.")
+                _eventos_thu = calendar_theme_options(carregar_campanhas(), hoje_local(), limit_days=120)
+                if not _eventos_thu:
+                    st.info("Nenhuma campanha encontrada nos próximos 120 dias.")
+                else:
+                    _labels_thu=[f"{e['name']} · {e['start'].strftime('%d/%m/%Y')}" for e in _eventos_thu]
+                    _sel_thu=st.selectbox("Escolha uma oportunidade do Calendário", _labels_thu, key="thu_calendario_sel_2049b")
+                    _ev_thu=_eventos_thu[_labels_thu.index(_sel_thu)]
+                    _cat_thu=carregar_catalogo()
+                    _ops_thu=thu_oportunidades_calendario(_cat_thu, conteudos, _ev_thu["name"])
+                    if _ops_thu:
+                        _com_arte=sum(1 for x in _ops_thu if x["tem_arte"])
+                        ca1,ca2,ca3=st.columns(3)
+                        ca1.metric("Produtos elegíveis",len(_ops_thu))
+                        ca2.metric("Com arte pronta",_com_arte)
+                        ca3.metric("Precisam de arte",len(_ops_thu)-_com_arte)
+                        for _i,_op in enumerate(_ops_thu[:10],1):
+                            _p=_op["produto"]; _artes=_op["artes"]
+                            _r1,_r2=st.columns([3.4,1])
+                            _r1.markdown(f"**{_p.get('Nome','Produto')}** " + ("✅ Arte disponível" if _artes else "⚠️ Sem arte"))
+                            _info=[]
+                            if _p.get("Preco"): _info.append(f"Valor {formatar_preco_catalogo(_p.get('Preco'))}")
+                            if _p.get("Material"): _info.append(str(_p.get("Material")))
+                            _r1.caption(" • ".join(_info) if _info else "Dados do Catálogo")
+                            if _artes:
+                                if _r2.button("Usar arte",key=f"thu_cal_arte_2049b_{_i}_{_artes[0].get('id')}",use_container_width=True):
+                                    st.session_state["_thu_aplicar_busca_2048"]=str(_artes[0].get("produto") or "")
+                                    st.session_state["thu_produto_escolhido_2049"]=_p.get("Nome")
+                                    st.rerun()
+                            else:
+                                _r2.caption("Cadastrar arte")
+                    else:
+                        st.warning(f"Nenhum produto do Catálogo está habilitado para {_ev_thu['name']}. Revise Campanhas / Datas permitidas nos produtos.")
 
             with st.expander("💙 THU • Catálogo → Arte → Campanha", expanded=True):
                 st.caption("O Catálogo é a fonte oficial de produto, descrição, material, preço e campanhas permitidas. O THU não inventa dados que não estejam cadastrados.")
