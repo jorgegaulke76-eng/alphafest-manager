@@ -3105,21 +3105,30 @@ def salvar_marketing(dados):
     save_document("marketing_db", dados, ARQUIVO_MARKETING)
 
 def thu_recomendar_artes_biblioteca(conteudos, consulta="", categoria="", tema="", limite=5):
-    consulta_cf=str(consulta or "").strip().casefold(); categoria_cf=str(categoria or "").strip().casefold(); tema_cf=str(tema or "").strip().casefold()
-    termos=[t for t in consulta_cf.replace("/"," ").replace("-"," ").split() if len(t)>=2]; ranking=[]
+    """20.4.8-A: relevancia obrigatoria antes de favorita/reuso."""
+    q=str(consulta or "").strip().casefold()
+    catq=str(categoria or "").strip().casefold()
+    temaq=str(tema or "").strip().casefold()
+    termos=[t for t in q.replace("/"," ").replace("-"," ").split() if len(t)>=2]
+    ranking=[]
     for item in conteudos or []:
-        produto=str(item.get("produto") or ""); cat=str(item.get("categoria") or ""); tema_i=str(item.get("tema_reuso") or item.get("campanha") or "Permanente")
-        texto=f"{produto} {cat} {tema_i} {item.get('origem_criativa') or ''}".casefold(); pontos=0; motivos=[]
-        if categoria_cf not in ("","todas") and cat.casefold()==categoria_cf: pontos+=45; motivos.append("mesma categoria")
-        if tema_cf not in ("","todos") and tema_i.casefold()==tema_cf: pontos+=40; motivos.append("mesmo tema")
+        produto=str(item.get("produto") or ""); cat=str(item.get("categoria") or "")
+        tema_i=str(item.get("tema_reuso") or item.get("campanha") or "Permanente")
+        texto=f"{produto} {cat} {tema_i} {item.get('origem_criativa') or ''}".casefold()
         acertos=sum(1 for t in termos if t in texto)
-        if acertos: pontos+=acertos*18; motivos.append("combina com a busca")
+        if termos and acertos==0: continue
+        if catq not in ("","todas") and cat.casefold()!=catq: continue
+        if temaq not in ("","todos") and tema_i.casefold()!=temaq: continue
+        pontos=acertos*100; motivos=[]
+        if acertos: motivos.append("combina com a busca")
+        if catq not in ("","todas"): pontos+=45; motivos.append("mesma categoria")
+        if temaq not in ("","todos"): pontos+=40; motivos.append("mesmo tema")
         if item.get("favorita"): pontos+=28; motivos.append("oficial/favorita")
         reusos=int(item.get("quantidade_reutilizacoes") or len(item.get("historico_reutilizacoes") or []))
         if reusos: pontos+=min(reusos*4,24); motivos.append(f"reutilizada {reusos}x")
         if item.get("tipo_registro")=="arte_pronta_flat": pontos+=8
-        if not consulta_cf and categoria_cf in ("","todas") and tema_cf in ("","todos"): pontos+=1
-        if pontos>0: ranking.append((pontos,item,motivos))
+        if not termos and catq in ("","todas") and temaq in ("","todos"): pontos+=1
+        ranking.append((pontos,item,motivos))
     ranking.sort(key=lambda x:(x[0],str(x[1].get("ultima_reutilizacao_em") or x[1].get("criado_em") or "")),reverse=True)
     return ranking[:max(1,int(limite or 5))]
 
