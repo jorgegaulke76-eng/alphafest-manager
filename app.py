@@ -3104,6 +3104,25 @@ def carregar_marketing():
 def salvar_marketing(dados):
     save_document("marketing_db", dados, ARQUIVO_MARKETING)
 
+def thu_recomendar_artes_biblioteca(conteudos, consulta="", categoria="", tema="", limite=5):
+    consulta_cf=str(consulta or "").strip().casefold(); categoria_cf=str(categoria or "").strip().casefold(); tema_cf=str(tema or "").strip().casefold()
+    termos=[t for t in consulta_cf.replace("/"," ").replace("-"," ").split() if len(t)>=2]; ranking=[]
+    for item in conteudos or []:
+        produto=str(item.get("produto") or ""); cat=str(item.get("categoria") or ""); tema_i=str(item.get("tema_reuso") or item.get("campanha") or "Permanente")
+        texto=f"{produto} {cat} {tema_i} {item.get('origem_criativa') or ''}".casefold(); pontos=0; motivos=[]
+        if categoria_cf not in ("","todas") and cat.casefold()==categoria_cf: pontos+=45; motivos.append("mesma categoria")
+        if tema_cf not in ("","todos") and tema_i.casefold()==tema_cf: pontos+=40; motivos.append("mesmo tema")
+        acertos=sum(1 for t in termos if t in texto)
+        if acertos: pontos+=acertos*18; motivos.append("combina com a busca")
+        if item.get("favorita"): pontos+=28; motivos.append("oficial/favorita")
+        reusos=int(item.get("quantidade_reutilizacoes") or len(item.get("historico_reutilizacoes") or []))
+        if reusos: pontos+=min(reusos*4,24); motivos.append(f"reutilizada {reusos}x")
+        if item.get("tipo_registro")=="arte_pronta_flat": pontos+=8
+        if not consulta_cf and categoria_cf in ("","todas") and tema_cf in ("","todos"): pontos+=1
+        if pontos>0: ranking.append((pontos,item,motivos))
+    ranking.sort(key=lambda x:(x[0],str(x[1].get("ultima_reutilizacao_em") or x[1].get("criado_em") or "")),reverse=True)
+    return ranking[:max(1,int(limite or 5))]
+
 def gerar_conteudo_marketing(produto, objetivo, campanha, canais, observacoes="", tom="Venda direta", imagem_png=None):
     pacote_ia, motor = _gerar_pacote_copy_ia(produto, objetivo, campanha, canais, observacoes, tom, imagem_png)
     if pacote_ia:
@@ -8126,7 +8145,7 @@ if pagina_atual == "crescimento":
 
     sc1, sc2, sc3, sc4 = st.columns(4)
     with sc1: af_feature_card("Central de Campanhas", "Artes aprovadas, histórico e reutilização.", "▦")
-    with sc2: af_feature_card("Histórico de uso", "Acompanhe reutilizações das artes.", "♻")
+    with sc2: af_feature_card("THU + Biblioteca", "Encontra primeiro o que a AlphaFest já aprovou.", "💙")
     with sc3: af_feature_card("Banco de mídia", "Fotos, vídeos, logos e fundos.", "◫")
     with sc4: af_feature_card("Exportação", "Kit ZIP pronto para publicar.", "⇩")
 
@@ -8682,6 +8701,33 @@ if pagina_atual == "crescimento":
                         st.rerun()
                     except Exception as exc:
                         st.error(f"Não foi possível salvar a arte: {exc}")
+
+            with st.expander("💙 THU • Encontrar arte no acervo AlphaFest", expanded=True):
+                st.caption("O THU consulta somente as artes cadastradas na Biblioteca e prioriza referências oficiais e mais reutilizadas. Nenhuma imagem é alterada.")
+                th1,th2,th3=st.columns([1.8,1,1])
+                thu_busca=th1.text_input("O que vamos divulgar?",placeholder="Ex.: carimbos para doces, Dia dos Pais...",key="thu_busca_biblioteca_2048")
+                thu_cats=["Todas"]+sorted({str(x.get("categoria") or "Sem categoria") for x in conteudos})
+                thu_cat=th2.selectbox("Categoria",thu_cats,key="thu_cat_biblioteca_2048")
+                thu_temas=["Todos"]+sorted({str(x.get("tema_reuso") or x.get("campanha") or "Permanente") for x in conteudos})
+                thu_tema=th3.selectbox("Tema / ocasião",thu_temas,key="thu_tema_biblioteca_2048")
+                if st.button("🔎 THU, procurar no nosso acervo",type="primary",use_container_width=True,key="thu_procurar_biblioteca_2048"):
+                    achados=thu_recomendar_artes_biblioteca(conteudos,thu_busca,thu_cat,thu_tema,5)
+                    st.session_state["thu_resultados_biblioteca_2048"]=[{"id":str(i.get("id") or ""),"motivos":m} for _,i,m in achados]
+                    st.session_state["thu_consulta_realizada_2048"]=True
+                mapa={str(x.get("id") or ""):x for x in conteudos}
+                resultados=st.session_state.get("thu_resultados_biblioteca_2048") or []
+                if resultados:
+                    st.success(f"Encontrei {len(resultados)} opção(ões) no acervo da AlphaFest.")
+                    for pos,r in enumerate(resultados,1):
+                        arte=mapa.get(r["id"])
+                        if not arte: continue
+                        rr1,rr2=st.columns([3.2,1]); nome=arte.get("produto") or "Arte AlphaFest"; tema_r=arte.get("tema_reuso") or arte.get("campanha") or "Permanente"
+                        rr1.markdown(f"**{pos}. {nome}**"+(" ⭐" if arte.get("favorita") else ""))
+                        rr1.caption(f"{arte.get('categoria') or 'Sem categoria'} • {tema_r} • "+", ".join((r.get("motivos") or [])[:3]))
+                        if rr2.button("📌 Mostrar na Central",key=f"thu_mostrar_{r['id']}_{pos}",use_container_width=True):
+                            st.session_state["central_camp_busca_2030"]=str(nome); st.session_state["central_camp_filtro_categoria_2030"]="Todas"; st.session_state["central_camp_filtro_tema_2047b"]="Todos"; st.session_state["central_camp_tipo_2047b"]="Todos"; st.session_state["central_camp_favoritas_2030"]=False; st.rerun()
+                elif st.session_state.get("thu_consulta_realizada_2048"):
+                    st.info("Não encontrei uma arte correspondente no acervo atual.")
 
             # 20.4.7-B — Biblioteca Inteligente: busca + filtros comerciais.
             f1, f2, f3, f4 = st.columns([2.1, 1.15, 1.15, 1])
