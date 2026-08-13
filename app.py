@@ -8711,6 +8711,17 @@ if pagina_atual == "crescimento":
                     except Exception as exc:
                         st.error(f"Não foi possível salvar a arte: {exc}")
 
+            # 20.4.8-B — aplica navegação do THU antes de criar os widgets da Central.
+            # Evita alterar session_state de widgets já renderizados no mesmo ciclo,
+            # reduzindo conflitos de reconciliação do front-end do Streamlit.
+            _thu_pendente = st.session_state.pop("_thu_aplicar_busca_2048", None)
+            if _thu_pendente:
+                st.session_state["central_camp_busca_2030"] = str(_thu_pendente)
+                st.session_state["central_camp_filtro_categoria_2030"] = "Todas"
+                st.session_state["central_camp_filtro_tema_2047b"] = "Todos"
+                st.session_state["central_camp_tipo_2047b"] = "Todos"
+                st.session_state["central_camp_favoritas_2030"] = False
+
             with st.expander("💙 THU • Encontrar arte no acervo AlphaFest", expanded=True):
                 st.caption("O THU consulta somente as artes cadastradas na Biblioteca e prioriza referências oficiais e mais reutilizadas. Nenhuma imagem é alterada.")
                 th1,th2,th3=st.columns([1.8,1,1])
@@ -8734,7 +8745,8 @@ if pagina_atual == "crescimento":
                         rr1.markdown(f"**{pos}. {nome}**"+(" ⭐" if arte.get("favorita") else ""))
                         rr1.caption(f"{arte.get('categoria') or 'Sem categoria'} • {tema_r} • "+", ".join((r.get("motivos") or [])[:3]))
                         if rr2.button("📌 Mostrar na Central",key=f"thu_mostrar_{r['id']}_{pos}",use_container_width=True):
-                            st.session_state["central_camp_busca_2030"]=str(nome); st.session_state["central_camp_filtro_categoria_2030"]="Todas"; st.session_state["central_camp_filtro_tema_2047b"]="Todos"; st.session_state["central_camp_tipo_2047b"]="Todos"; st.session_state["central_camp_favoritas_2030"]=False; st.rerun()
+                            st.session_state["_thu_aplicar_busca_2048"] = str(nome)
+                            st.rerun()
                 elif st.session_state.get("thu_consulta_realizada_2048"):
                     st.info("Não encontrei uma arte correspondente no acervo atual.")
 
