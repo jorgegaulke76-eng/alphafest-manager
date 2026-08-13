@@ -3210,6 +3210,34 @@ def thu_oportunidades_calendario(catalogo, conteudos, campanha_nome):
     saida.sort(key=lambda x:(x["tem_arte"], bool(x["produto"].get("Destaque")), str(x["produto"].get("Nome") or "")), reverse=True)
     return saida
 
+
+def thu_montar_campanha_catalogo(produto, campanha_nome, arte=None, objetivo="Vender"):
+    """20.4.9-C — monta briefing/copy usando exclusivamente dados oficiais do Catálogo."""
+    nome=str(produto.get("Nome") or "Produto").strip()
+    descricao=str(produto.get("DescricaoCompleta") or produto.get("DescricaoCurta") or produto.get("Descricao") or "").strip()
+    material=str(produto.get("Material") or "").strip()
+    preco=str(produto.get("Preco") or "").strip()
+    campanha=_thu_normalizar_campanha(campanha_nome) or str(campanha_nome or "").strip()
+    partes=[f"✨ {nome}"]
+    if campanha: partes.append(f"🎉 Campanha: {campanha}")
+    if descricao: partes.append(descricao)
+    if material: partes.append(f"Material: {material}.")
+    if preco: partes.append(f"💰 {formatar_preco_catalogo(preco)}")
+    if objetivo=="Novidade": abertura=f"🆕 Novidade para {campanha}: {nome}!" if campanha else f"🆕 Novidade: {nome}!"
+    elif objetivo=="Promoção": abertura=f"🔥 {nome} em destaque para {campanha}!" if campanha else f"🔥 {nome} em destaque!"
+    elif objetivo=="Apresentar produto": abertura=f"✨ Conheça {nome}" + (f" para {campanha}" if campanha else "")
+    elif objetivo=="Data comemorativa": abertura=f"🎉 Prepare-se para {campanha} com {nome}!" if campanha else f"🎉 {nome} para sua comemoração!"
+    else: abertura=f"✨ {nome}" + (f" para {campanha}" if campanha else "")
+    corpo="\n\n".join([x for x in [abertura,descricao,(f"Material: {material}." if material else ""),(f"💰 {formatar_preco_catalogo(preco)}" if preco else "")] if x])
+    legenda=corpo+"\n\n📲 Chame a AlphaFest no WhatsApp e faça seu pedido!"
+    story=f"{abertura}\n"+(f"{formatar_preco_catalogo(preco)}\n" if preco else "")+"📲 Faça seu pedido!"
+    return {
+        "produto":nome,"campanha":campanha,"objetivo":objetivo,"descricao":descricao,"material":material,
+        "preco":preco,"arte_id":str((arte or {}).get("id") or ""),"arte_nome":str((arte or {}).get("produto") or ""),
+        "legenda":legenda,"story":story,"status":story,"cta":"📲 Chame a AlphaFest no WhatsApp e faça seu pedido!",
+        "gerado_em":agora_local().isoformat(),
+    }
+
 def thu_recomendar_artes_biblioteca(conteudos, consulta="", categoria="", tema="", limite=5):
     """20.4.8-A: relevancia obrigatoria antes de favorita/reuso."""
     q=str(consulta or "").strip().casefold()
@@ -8954,14 +8982,49 @@ if pagina_atual == "crescimento":
                             if _p.get("Material"): _info.append(str(_p.get("Material")))
                             _r1.caption(" • ".join(_info) if _info else "Dados do Catálogo")
                             if _artes:
-                                if _r2.button("Usar arte",key=f"thu_cal_arte_2049b_{_i}_{_artes[0].get('id')}",use_container_width=True):
-                                    st.session_state["_thu_aplicar_busca_2048"]=str(_artes[0].get("produto") or "")
-                                    st.session_state["thu_produto_escolhido_2049"]=_p.get("Nome")
+                                if _r2.button("Preparar campanha",key=f"thu_cal_arte_2049b_{_i}_{_artes[0].get('id')}",use_container_width=True):
+                                    st.session_state["thu_campanha_preparar_2049c"]={
+                                        "produto":_p.get("Nome"),"campanha":_ev_thu["name"],"arte_id":str(_artes[0].get("id") or "")
+                                    }
                                     st.rerun()
                             else:
                                 _r2.caption("Cadastrar arte")
                     else:
                         st.warning(f"Nenhum produto do Catálogo está habilitado para {_ev_thu['name']}. Revise Campanhas / Datas permitidas nos produtos.")
+
+            _prep_thu=st.session_state.get("thu_campanha_preparar_2049c")
+            if _prep_thu:
+                _cat_map={str(x.get("Nome") or ""):x for x in carregar_catalogo()}
+                _arte_map={str(x.get("id") or ""):x for x in conteudos}
+                _prod_prep=_cat_map.get(str(_prep_thu.get("produto") or ""))
+                _arte_prep=_arte_map.get(str(_prep_thu.get("arte_id") or ""))
+                if _prod_prep:
+                    with st.expander("💙 THU • Campanha sugerida", expanded=True):
+                        st.caption("Produto, preço, material e descrição vêm do Catálogo. A arte vem da Biblioteca. Você pode revisar os textos antes de salvar.")
+                        _obj=st.selectbox("🎯 Objetivo",["Vender","Apresentar produto","Novidade","Promoção","Data comemorativa"],key="thu_camp_obj_2049c")
+                        _camp=thu_montar_campanha_catalogo(_prod_prep,_prep_thu.get("campanha",""),_arte_prep,_obj)
+                        _m1,_m2,_m3=st.columns(3)
+                        _m1.metric("Produto",_camp["produto"])
+                        _m2.metric("Campanha",_camp["campanha"] or "Livre")
+                        _m3.metric("Valor",formatar_preco_catalogo(_camp["preco"]) if _camp["preco"] else "Não cadastrado")
+                        if _arte_prep:
+                            st.success(f"🎨 Arte vinculada: {_arte_prep.get('produto') or 'Arte AlphaFest'}")
+                        _x1,_x2=st.columns(2)
+                        _leg=_x1.text_area("📣 Legenda Feed",value=_camp["legenda"],height=260,key=f"thu_camp_leg_2049c_{_obj}")
+                        _story=_x2.text_area("📱 Story / Status",value=_camp["story"],height=260,key=f"thu_camp_story_2049c_{_obj}")
+                        _cta=st.text_input("CTA",value=_camp["cta"],key=f"thu_camp_cta_2049c_{_obj}")
+                        _b1,_b2,_b3=st.columns(3)
+                        if _b1.button("💾 Salvar campanha sugerida",type="primary",use_container_width=True,key="thu_camp_salvar_2049c"):
+                            _camp["legenda"]=_leg; _camp["story"]=_story; _camp["status"]=_story; _camp["cta"]=_cta
+                            marketing.setdefault("thu_campanhas_sugeridas",[]).insert(0,_camp)
+                            salvar_marketing(marketing)
+                            st.success("Campanha sugerida salva no Marketing.")
+                        if _b2.button("🎨 Mostrar arte na Central",use_container_width=True,key="thu_camp_mostrar_2049c",disabled=_arte_prep is None):
+                            st.session_state["_thu_aplicar_busca_2048"]=str((_arte_prep or {}).get("produto") or "")
+                            st.session_state.pop("thu_campanha_preparar_2049c",None)
+                            st.rerun()
+                        if _b3.button("Fechar",use_container_width=True,key="thu_camp_fechar_2049c"):
+                            st.session_state.pop("thu_campanha_preparar_2049c",None); st.rerun()
 
             with st.expander("💙 THU • Catálogo → Arte → Campanha", expanded=True):
                 st.caption("O Catálogo é a fonte oficial de produto, descrição, material, preço e campanhas permitidas. O THU não inventa dados que não estejam cadastrados.")
