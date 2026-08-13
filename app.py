@@ -3132,6 +3132,71 @@ def thu_recomendar_artes_biblioteca(conteudos, consulta="", categoria="", tema="
     ranking.sort(key=lambda x:(x[0],str(x[1].get("ultima_reutilizacao_em") or x[1].get("criado_em") or "")),reverse=True)
     return ranking[:max(1,int(limite or 5))]
 
+
+def thu_preparar_divulgacao_arte(item):
+    """20.4.8-C — textos comerciais prontos sem alterar a imagem."""
+    produto=str(item.get("produto") or "Produto personalizado").strip()
+    categoria=str(item.get("categoria") or "").strip()
+    tema=str(item.get("tema_reuso") or item.get("campanha") or "Permanente").strip()
+    preco=str(item.get("preco_arte") or "").strip()
+    nome_cf=f"{produto} {categoria}".casefold()
+
+    if "carimbo" in nome_cf:
+        beneficio="Transforme seus doces em pequenos detalhes que encantam e valorizam cada produção."
+    elif "papel de arroz" in nome_cf:
+        beneficio="Personalize bolos e doces com acabamento bonito, prático e cheio de identidade."
+    elif "vela" in nome_cf:
+        beneficio="Um detalhe personalizado que deixa o parabéns ainda mais especial e memorável."
+    elif "bal" in nome_cf:
+        beneficio="Uma decoração personalizada para deixar sua comemoração ainda mais marcante."
+    elif "topo" in nome_cf:
+        beneficio="Seu tema ganha vida com um toque personalizado feito especialmente para a ocasião."
+    else:
+        beneficio="Personalização pensada para valorizar cada detalhe da sua comemoração ou presente."
+
+    preco_linha=f"\n💰 {preco}" if preco else ""
+    tema_linha="" if tema.casefold() in ("permanente","diversos temas","campanha livre") else f"\n🎉 Tema: {tema}"
+
+    legenda=(
+        f"✨ {produto}\n\n"
+        f"{beneficio}\n\n"
+        f"Produção personalizada AlphaFest, feita de acordo com a sua necessidade."
+        f"{tema_linha}{preco_linha}\n\n"
+        "📲 Chame no WhatsApp e faça seu pedido!"
+    )
+
+    story=(
+        f"✨ {produto}\n"
+        f"{beneficio}\n"
+        + (f"💰 {preco}\n" if preco else "")
+        + "📲 Peça pelo WhatsApp!"
+    )
+
+    status=(
+        f"{produto} ✨\n"
+        + (f"{preco}\n" if preco else "")
+        + "Personalizado do seu jeito.\n"
+        "Chame no WhatsApp 📲"
+    )
+
+    palavras=[]
+    for pedaco in (produto+" "+categoria+" "+tema).replace("/"," ").replace("-"," ").split():
+        limpo="".join(ch for ch in pedaco if ch.isalnum())
+        if len(limpo)>=3 and limpo.casefold() not in {"para","com","dos","das","uma","tema","diversos","permanente"}:
+            tag="#"+limpo
+            if tag.casefold() not in [x.casefold() for x in palavras]:
+                palavras.append(tag)
+    hashtags=["#AlphaFest","#Personalizados","#FestasPersonalizadas"]+palavras[:7]
+
+    return {
+        "legenda": legenda,
+        "story": story,
+        "status": status,
+        "cta": "📲 Chame no WhatsApp e faça seu pedido!",
+        "hashtags": " ".join(hashtags),
+        "gerado_em": agora_local().isoformat(),
+    }
+
 def gerar_conteudo_marketing(produto, objetivo, campanha, canais, observacoes="", tom="Venda direta", imagem_png=None):
     pacote_ia, motor = _gerar_pacote_copy_ia(produto, objetivo, campanha, canais, observacoes, tom, imagem_png)
     if pacote_ia:
@@ -8852,7 +8917,7 @@ if pagina_atual == "crescimento":
                                 data_h = str(h.get("criado_em") or "")[:16].replace("T", " ")
                                 st.markdown(f"**{h.get('campanha') or 'Reutilização'}** — {h.get('preco') or 'sem preço registrado'}")
                                 st.caption(f"{data_h} • ID {str(h.get('id') or '')[-10:]}")
-                    ac1, ac2, ac3 = st.columns(3)
+                    ac1, ac2, ac3, ac4 = st.columns(4)
                     ac1.download_button(
                         "⬇️ Baixar kit", gerar_zip_campanha(item),
                         file_name=f"Campanha_{_nome_arquivo_seguro(produto_item)}_{_nome_arquivo_seguro(campanha_item)}.zip",
@@ -8861,10 +8926,42 @@ if pagina_atual == "crescimento":
                     if ac2.button("📋 Reutilizar", key=f"central_reutilizar_{item_id}", use_container_width=True):
                         st.session_state["central_reutilizar_id_2030"] = item_id
                         st.rerun()
-                    if ac3.button("🗑️ Remover", key=f"central_remover_{item_id}", use_container_width=True):
+                    if ac3.button("💙 THU divulgar", key=f"central_thu_divulgar_{item_id}", use_container_width=True):
+                        st.session_state["central_thu_divulgar_id_2048c"] = item_id
+                        st.session_state[f"thu_copy_{item_id}"] = thu_preparar_divulgacao_arte(item)
+                        st.rerun()
+                    if ac4.button("🗑️ Remover", key=f"central_remover_{item_id}", use_container_width=True):
                         marketing["conteudos"] = [x for x in conteudos if str(x.get("id")) != item_id]
                         salvar_marketing(marketing)
                         st.rerun()
+
+                    if st.session_state.get("central_thu_divulgar_id_2048c") == item_id:
+                        st.markdown("#### 💙 THU • Divulgação pronta")
+                        st.caption("A arte permanece intacta. O THU prepara somente os textos para publicação.")
+                        thu_copy = st.session_state.get(f"thu_copy_{item_id}") or thu_preparar_divulgacao_arte(item)
+
+                        tc1, tc2 = st.columns(2)
+                        legenda_thu = tc1.text_area("📣 Legenda para Feed", value=thu_copy.get("legenda",""), height=250, key=f"thu_legenda_{item_id}")
+                        story_thu = tc2.text_area("📱 Story", value=thu_copy.get("story",""), height=250, key=f"thu_story_{item_id}")
+                        tc3, tc4 = st.columns(2)
+                        status_thu = tc3.text_area("💬 WhatsApp Status", value=thu_copy.get("status",""), height=150, key=f"thu_status_{item_id}")
+                        hashtags_thu = tc4.text_area("#️⃣ Hashtags", value=thu_copy.get("hashtags",""), height=150, key=f"thu_hashtags_{item_id}")
+                        cta_thu = st.text_input("CTA", value=thu_copy.get("cta",""), key=f"thu_cta_{item_id}")
+
+                        td1, td2, td3 = st.columns(3)
+                        if td1.button("💾 Salvar textos na campanha", type="primary", use_container_width=True, key=f"thu_salvar_copy_{item_id}"):
+                            item["thu_divulgacao"] = {
+                                "legenda": legenda_thu, "story": story_thu, "status": status_thu,
+                                "hashtags": hashtags_thu, "cta": cta_thu, "gerado_em": agora_local().isoformat()
+                            }
+                            salvar_marketing(marketing)
+                            st.success("Textos do THU salvos nesta campanha.")
+                        if td2.button("🔄 Gerar novamente", use_container_width=True, key=f"thu_regenerar_copy_{item_id}"):
+                            st.session_state[f"thu_copy_{item_id}"] = thu_preparar_divulgacao_arte(item)
+                            st.rerun()
+                        if td3.button("Fechar", use_container_width=True, key=f"thu_fechar_copy_{item_id}"):
+                            st.session_state.pop("central_thu_divulgar_id_2048c", None)
+                            st.rerun()
 
                     if st.session_state.get("central_reutilizar_id_2030") == item_id:
                         st.markdown("#### ⚡ Reutilização rápida")
