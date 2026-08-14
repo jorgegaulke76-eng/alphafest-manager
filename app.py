@@ -9125,7 +9125,26 @@ if pagina_atual == "crescimento":
                     prod_escolhido = mapa_cat.get(str(nome_escolhido or ""))
                     if prod_escolhido:
                         st.divider()
-                        st.markdown(f"##### 💙 THU usando: {prod_escolhido.get('Nome')}")
+
+                        # 20.4.9-D — confirmação visual do produto escolhido pelo THU.
+                        topo_prod, foto_prod = st.columns([5.2, 1.1], vertical_alignment="center")
+                        with topo_prod:
+                            st.markdown(f"##### 💙 THU usando: {prod_escolhido.get('Nome')}")
+                            st.caption("Confirmação do produto oficial selecionado no Catálogo.")
+                        with foto_prod:
+                            _fotos_thu = list(prod_escolhido.get("Imagens", []) or [])
+                            if _fotos_thu:
+                                try:
+                                    st.image(
+                                        imagem_streamlit_catalogo(_fotos_thu[0]),
+                                        width=110,
+                                        caption="Produto",
+                                    )
+                                except Exception:
+                                    st.caption("🖼️ Foto indisponível")
+                            else:
+                                st.caption("🖼️ Sem foto cadastrada")
+
                         cinfo1,cinfo2,cinfo3 = st.columns(3)
                         cinfo1.metric("Valor cadastrado", formatar_preco_catalogo(prod_escolhido.get("Preco")) if prod_escolhido.get("Preco") else "Não cadastrado")
                         cinfo2.metric("Material", str(prod_escolhido.get("Material") or "Não cadastrado"))
