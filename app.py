@@ -3148,6 +3148,7 @@ def _thu_normalizar_campanha(valor):
 def thu_consultar_catalogo_produto(catalogo, consulta="", campanha=""):
     """20.4.9-C1 — relevância primeiro; elegibilidade de campanha depois."""
     def _norm(txt):
+        import unicodedata
         txt = str(txt or "").strip().casefold()
         txt = unicodedata.normalize("NFKD", txt)
         return "".join(ch for ch in txt if not unicodedata.combining(ch))
