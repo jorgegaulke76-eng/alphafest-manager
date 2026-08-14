@@ -5254,6 +5254,42 @@ def salvar_catalogo(lista):
     save_document("catalogo_db", lista, ARQUIVO_CATALOGO)
 
 
+def avaliar_pendencias_produto_catalogo(produto):
+    """20.4.9-E — mede se o cadastro possui os dados mínimos para o THU."""
+    produto = produto or {}
+    criticas = []
+    avisos = []
+
+    descricao = str(
+        produto.get("DescricaoCompleta")
+        or produto.get("DescricaoCurta")
+        or produto.get("Descricao")
+        or ""
+    ).strip()
+
+    if not str(produto.get("Nome") or "").strip():
+        criticas.append("Nome")
+    if not str(produto.get("Categoria") or "").strip():
+        criticas.append("Categoria")
+    if not descricao:
+        criticas.append("Descrição")
+    if not str(produto.get("Material") or "").strip():
+        criticas.append("Material")
+    if not str(produto.get("Preco") or "").strip():
+        criticas.append("Valor")
+    if not (produto.get("CampanhasPermitidas", []) or []):
+        criticas.append("Campanhas/Datas")
+    if not (produto.get("Imagens", []) or []):
+        avisos.append("Foto")
+
+    return {
+        "criticas": criticas,
+        "avisos": avisos,
+        "pronto_thu": not criticas,
+        "completo_visual": not criticas and not avisos,
+    }
+
+
 def imagem_data_uri(path):
     if not path:
         return ""
@@ -6843,11 +6879,26 @@ def dialog_catalogo_visualizar_anna():
     registrar_atividade(obter_usuario_atual(), "Consultando e corrigindo o catálogo", "Catálogo")
     mostrar_orientacao_thu("atualizar_catalogo", token="catalogo_visualizar")
     catalogo = carregar_catalogo()
+
+    revisoes_anna = [(i, p, avaliar_pendencias_produto_catalogo(p)) for i, p in enumerate(catalogo)]
+    qtd_prontos_anna = sum(1 for _, _, r in revisoes_anna if r["pronto_thu"])
+    qtd_pendentes_anna = len(revisoes_anna) - qtd_prontos_anna
+    ra1, ra2, ra3 = st.columns(3)
+    ra1.metric("Produtos", len(catalogo))
+    ra2.metric("Prontos para THU", qtd_prontos_anna)
+    ra3.metric("Precisam revisão", qtd_pendentes_anna)
+
     busca = st.text_input("Pesquisar produto ou grupo", key="anna_catalogo_busca_modal")
+    somente_pendentes = st.checkbox(
+        "⚠️ Mostrar somente produtos com cadastro incompleto",
+        value=False,
+        key="anna_catalogo_somente_pendentes_2049e",
+    )
     termo = busca.strip().casefold()
     filtrados = [
         (i, p) for i, p in enumerate(catalogo)
-        if not termo or termo in f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')}".casefold()
+        if (not termo or termo in f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')}".casefold())
+        and (not somente_pendentes or not avaliar_pendencias_produto_catalogo(p)["pronto_thu"])
     ]
     st.caption(f"{len(filtrados)} produto(s) encontrado(s)")
 
@@ -6871,6 +6922,13 @@ def dialog_catalogo_visualizar_anna():
                     f" · {formatar_preco_catalogo(produto.get('Preco'))}"
                     f" · {len(imagens_atuais)} foto(s)"
                 )
+                _rev_anna = avaliar_pendencias_produto_catalogo(produto)
+                if _rev_anna["criticas"]:
+                    st.warning("Completar: " + " • ".join(_rev_anna["criticas"]))
+                elif _rev_anna["avisos"]:
+                    st.info("Pronto para THU • opcional: " + " • ".join(_rev_anna["avisos"]))
+                else:
+                    st.success("Cadastro completo para THU")
 
             with st.expander("✏️ Abrir campos, visualizar fotos e adicionar imagens", expanded=False):
                 if imagens_atuais:
@@ -6891,6 +6949,17 @@ def dialog_catalogo_visualizar_anna():
                     c3, c4 = st.columns(2)
                     subcategoria = c3.text_input("Subcategoria", value=str(produto.get("Subcategoria", "")), key=f"{form_key}_sub")
                     preco = c4.text_input("Valor", value=str(produto.get("Preco", "")), key=f"{form_key}_preco")
+                    material = st.text_input(
+                        "Material / composição",
+                        value=str(produto.get("Material", "")),
+                        key=f"{form_key}_material",
+                    )
+                    campanhas_permitidas = st.multiselect(
+                        "📅 Campanhas / Datas permitidas",
+                        CAMPANHAS_PRODUTO_OPCOES,
+                        default=[x for x in (produto.get("CampanhasPermitidas", []) or []) if x in CAMPANHAS_PRODUTO_OPCOES],
+                        key=f"{form_key}_campanhas",
+                    )
                     descricao = st.text_area(
                         "Descrição para o catálogo",
                         value=str(produto.get("DescricaoCurta", produto.get("Descricao", ""))),
@@ -6950,6 +7019,8 @@ def dialog_catalogo_visualizar_anna():
                             "Categoria": categoria.strip(),
                             "Subcategoria": subcategoria.strip(),
                             "Preco": preco.strip(),
+                            "Material": material.strip(),
+                            "CampanhasPermitidas": list(dict.fromkeys(campanhas_permitidas)),
                             "Descricao": descricao.strip(),
                             "DescricaoCurta": descricao.strip(),
                             "Imagens": list(dict.fromkeys(imagens)),
@@ -10523,6 +10594,76 @@ if pagina_atual == "catalogo":
                 if str(chave).startswith("cat_") and str(chave).endswith(f"_{sufixo}"):
                     st.session_state.pop(chave, None)
             st.rerun()
+
+    # 20.4.9-E — auditoria do cadastro sem criar um segundo editor.
+    if st.session_state.catalogo_edit_index is None:
+        with st.expander("🩺 Revisão do Catálogo para o THU", expanded=True):
+            st.caption(
+                "O painel identifica cadastros antigos incompletos. "
+                "Ele não inventa dados e não cria outro cadastro: o botão Editar abre o formulário oficial."
+            )
+            revisoes_catalogo = [
+                (i, produto, avaliar_pendencias_produto_catalogo(produto))
+                for i, produto in enumerate(catalogo)
+            ]
+            completos_thu = sum(1 for _, _, rev in revisoes_catalogo if rev["pronto_thu"])
+            incompletos_thu = len(revisoes_catalogo) - completos_thu
+            sem_foto = sum(1 for _, _, rev in revisoes_catalogo if "Foto" in rev["avisos"])
+
+            rv1, rv2, rv3, rv4 = st.columns(4)
+            rv1.metric("Produtos", len(catalogo))
+            rv2.metric("Prontos para THU", completos_thu)
+            rv3.metric("Precisam revisão", incompletos_thu)
+            rv4.metric("Sem foto", sem_foto)
+
+            rf1, rf2 = st.columns([1.4, 2.6])
+            filtro_revisao = rf1.selectbox(
+                "Pendência",
+                ["Todas", "Material", "Campanhas/Datas", "Descrição", "Valor", "Foto"],
+                key="cat_revisao_filtro_2049e",
+            )
+            busca_revisao = rf2.text_input(
+                "Pesquisar na revisão",
+                placeholder="Nome ou categoria...",
+                key="cat_revisao_busca_2049e",
+            ).strip().casefold()
+
+            lista_revisao = []
+            for idx_rev, produto_rev, rev in revisoes_catalogo:
+                pendencias_rev = rev["criticas"] + rev["avisos"]
+                if filtro_revisao != "Todas" and filtro_revisao not in pendencias_rev:
+                    continue
+                if filtro_revisao == "Todas" and not pendencias_rev:
+                    continue
+                texto_rev = f"{produto_rev.get('Nome','')} {produto_rev.get('Categoria','')}".casefold()
+                if busca_revisao and busca_revisao not in texto_rev:
+                    continue
+                lista_revisao.append((idx_rev, produto_rev, rev))
+
+            if not lista_revisao:
+                if incompletos_thu == 0 and sem_foto == 0:
+                    st.success("Todos os produtos estão completos para uso pelo THU.")
+                else:
+                    st.info("Nenhum produto encontrado com esse filtro.")
+            else:
+                st.caption(f"{len(lista_revisao)} produto(s) precisam de atenção neste filtro.")
+                for idx_rev, produto_rev, rev in lista_revisao[:30]:
+                    rr1, rr2 = st.columns([5, 1])
+                    rr1.markdown(f"**{produto_rev.get('Nome') or 'Produto sem nome'}**")
+                    pend_txt = rev["criticas"] + rev["avisos"]
+                    rr1.caption(
+                        f"{produto_rev.get('Categoria') or 'Sem categoria'} • "
+                        + "Falta: " + " • ".join(pend_txt)
+                    )
+                    if rr2.button(
+                        "✏️ Editar",
+                        key=f"cat_revisao_editar_{idx_rev}",
+                        use_container_width=True,
+                    ):
+                        st.session_state.catalogo_edit_index = idx_rev
+                        st.rerun()
+                if len(lista_revisao) > 30:
+                    st.caption(f"Mostrando 30 de {len(lista_revisao)} pendências. Use os filtros para refinar.")
 
     # Quando o usuário clica em Editar, o formulário ocupa a tela do catálogo.
     # Isso evita o problema de o Streamlit permanecer na aba "Produtos" após o rerun.
