@@ -3146,29 +3146,84 @@ def _thu_normalizar_campanha(valor):
     return str(valor or "").strip()
 
 def thu_consultar_catalogo_produto(catalogo, consulta="", campanha=""):
-    """Fonte oficial do THU: produto cadastrado + elegibilidade de campanha."""
-    q=str(consulta or "").strip().casefold()
-    termos=[t for t in re.findall(r"[\wÀ-ÿ]+", q) if len(t)>=2]
-    campanha_oficial=_thu_normalizar_campanha(campanha)
-    encontrados=[]
+    """20.4.9-C1 — relevância primeiro; elegibilidade de campanha depois."""
+    def _norm(txt):
+        txt = str(txt or "").strip().casefold()
+        txt = unicodedata.normalize("NFKD", txt)
+        return "".join(ch for ch in txt if not unicodedata.combining(ch))
+
+    q = _norm(consulta)
+    termos = [t for t in re.findall(r"[\w]+", q) if len(t) >= 2]
+    stop = {"de", "da", "do", "das", "dos", "para", "com", "em", "e"}
+    termos_relevantes = [t for t in termos if t not in stop]
+    campanha_oficial = _thu_normalizar_campanha(campanha)
+    encontrados = []
+
     for produto in catalogo or []:
         if produto.get("Ativo") is False:
             continue
-        texto=" ".join(str(produto.get(k) or "") for k in ("Nome","Categoria","Subcategoria","Descricao","DescricaoCurta","DescricaoCompleta","PalavrasChave")).casefold()
-        acertos=sum(1 for t in termos if t in texto)
-        if termos and acertos==0:
-            continue
-        permitidas=produto.get("CampanhasPermitidas", []) or []
-        permanente="Permanente / Todas as épocas" in permitidas
-        elegivel=True
+
+        nome = _norm(produto.get("Nome"))
+        categoria = _norm(produto.get("Categoria"))
+        subcategoria = _norm(produto.get("Subcategoria"))
+        descricao = _norm(
+            " ".join(str(produto.get(k) or "") for k in ("Descricao","DescricaoCurta","DescricaoCompleta","PalavrasChave"))
+        )
+
+        # Regra de relevância:
+        # 1) nome exato é o melhor resultado;
+        # 2) nome contendo toda a frase vem logo depois;
+        # 3) para busca por várias palavras, exige todas as palavras relevantes no nome
+        #    OU maioria forte no nome + apoio em categoria/descrição.
+        exato = bool(q and nome == q)
+        frase_no_nome = bool(q and q in nome)
+        nome_hits = sum(1 for t in termos_relevantes if t in nome)
+        apoio_hits = sum(1 for t in termos_relevantes if t in f"{categoria} {subcategoria} {descricao}")
+
+        if termos_relevantes:
+            if exato:
+                classe = 3
+            elif frase_no_nome:
+                classe = 2
+            elif len(termos_relevantes) == 1:
+                classe = 1 if nome_hits == 1 else 0
+            else:
+                todos_no_nome = nome_hits == len(termos_relevantes)
+                maioria_no_nome = nome_hits >= max(1, len(termos_relevantes) - 1)
+                classe = 1 if (todos_no_nome or (maioria_no_nome and apoio_hits >= 1)) else 0
+            if classe == 0:
+                continue
+        else:
+            classe = 1
+
+        permitidas = produto.get("CampanhasPermitidas", []) or []
+        permanente = "Permanente / Todas as épocas" in permitidas
+        elegivel = True
         if campanha_oficial:
-            elegivel=permanente or campanha_oficial in permitidas
-        pontos=acertos*100
-        if produto.get("Destaque"): pontos+=20
-        if permanente: pontos+=5
-        encontrados.append((pontos, produto, elegivel, campanha_oficial))
-    encontrados.sort(key=lambda x:(x[2],x[0]), reverse=True)
-    return encontrados
+            elegivel = permanente or campanha_oficial in permitidas
+
+        pontos = classe * 1000 + nome_hits * 120 + apoio_hits * 20
+        if produto.get("Destaque"):
+            pontos += 15
+        if permanente:
+            pontos += 5
+
+        encontrados.append((pontos, produto, elegivel, campanha_oficial, classe))
+
+    # Relevância manda; elegibilidade não promove item irrelevante.
+    encontrados.sort(key=lambda x: (x[0], x[2]), reverse=True)
+
+    # Quando existe correspondência exata, ela deve ficar sozinha como melhor resposta.
+    exatos = [x for x in encontrados if x[4] == 3]
+    if exatos:
+        return [(p, prod, eleg, camp) for p, prod, eleg, camp, _ in exatos]
+
+    # Caso contrário, devolve apenas o nível de relevância mais alto encontrado.
+    if encontrados:
+        melhor_classe = max(x[4] for x in encontrados)
+        encontrados = [x for x in encontrados if x[4] == melhor_classe]
+
+    return [(p, prod, eleg, camp) for p, prod, eleg, camp, _ in encontrados]
 
 def thu_correlacionar_catalogo_biblioteca(produto_catalogo, conteudos):
     """Procura artes usando somente o produto oficial escolhido no catálogo."""
@@ -9051,7 +9106,8 @@ if pagina_atual == "crescimento":
                             continue
                         elegivel = bool(rcat.get("elegivel"))
                         pc1, pc2 = st.columns([3.3, 1])
-                        pc1.markdown(f"**{pos}. {prod.get('Nome','Produto')}** " + ("✅" if elegivel else "⛔"))
+                        pc1.markdown(f"**{pos}. {prod.get('Nome','Produto')}**")
+                        pc1.caption(("🔎 Correspondência do Catálogo" if not campanha_consulta else ("✅ Elegível para a campanha selecionada" if elegivel else "⛔ Não elegível para a campanha selecionada")))
                         detalhes = []
                         if prod.get("Material"): detalhes.append(f"Material: {prod.get('Material')}")
                         if prod.get("Preco"): detalhes.append(f"Valor: {formatar_preco_catalogo(prod.get('Preco'))}")
