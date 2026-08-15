@@ -7258,7 +7258,12 @@ def dialog_fluxo_anna():
 
 
 @st.dialog("➕ Cadastrar produto no catálogo", width="large")
-def dialog_catalogo_cadastro_anna(produto_indice=None):
+def dialog_catalogo_cadastro_anna(
+    produto_indice=None,
+    nome_prefill="",
+    retorno_padronizacao=False,
+    grupo_padronizacao=None,
+):
     registrar_atividade(obter_usuario_atual(), "Atualizando produto" if produto_indice is not None else "Cadastrando produto no catálogo", "Catálogo")
     mostrar_orientacao_thu(
         "atualizar_catalogo" if produto_indice is not None else "cadastrar_produto",
@@ -7266,10 +7271,14 @@ def dialog_catalogo_cadastro_anna(produto_indice=None):
     )
     catalogo = carregar_catalogo()
     produto = dict(catalogo[produto_indice]) if produto_indice is not None and 0 <= produto_indice < len(catalogo) else {}
-    chave = f"anna_cat_{produto_indice if produto_indice is not None else 'novo'}"
+    _sufixo_prefill = abs(hash(str(nome_prefill or ""))) if nome_prefill else "padrao"
+    chave = f"anna_cat_{produto_indice if produto_indice is not None else 'novo'}_{_sufixo_prefill}"
     with st.form(chave, clear_on_submit=False):
         c1, c2 = st.columns(2)
-        nome = c1.text_input("Nome do produto", value=str(produto.get("Nome", "")))
+        nome = c1.text_input(
+            "Nome do produto",
+            value=str(produto.get("Nome", "") or nome_prefill or ""),
+        )
         categoria = c2.text_input("Grupo / categoria", value=str(produto.get("Categoria", "")))
         c3, c4 = st.columns(2)
         subcategoria = c3.text_input("Subcategoria", value=str(produto.get("Subcategoria", "")))
@@ -7343,7 +7352,20 @@ def dialog_catalogo_cadastro_anna(produto_indice=None):
         salvar_catalogo(catalogo)
         confirmado = any(str(x.get("Nome", "")).strip() == nome.strip() for x in carregar_catalogo())
         if confirmado:
-            st.session_state["_mensagem_sucesso_pendente"] = f"Produto {nome.strip()} salvo no catálogo."
+            if retorno_padronizacao:
+                st.session_state["_abrir_padronizacao_h2"] = True
+                grupo_txt = " • ".join(
+                    str(x) for x in (grupo_padronizacao or []) if str(x).strip()
+                )
+                mensagem = (
+                    f"Produto oficial '{nome.strip()}' cadastrado. "
+                    "Agora confirme a equivalência abaixo."
+                )
+                if grupo_txt:
+                    mensagem += f" Grupo: {grupo_txt}."
+                st.session_state["_mensagem_sucesso_pendente"] = mensagem
+            else:
+                st.session_state["_mensagem_sucesso_pendente"] = f"Produto {nome.strip()} salvo no catálogo."
             st.rerun()
         else:
             st.error("Não foi possível confirmar o salvamento do produto.")
@@ -10927,16 +10949,19 @@ if pagina_atual == "relatorios":
                                 )
                                 if criar2.button(
                                     "➕ Criar produto oficial",
-                                    key=f"rel_criar_produto_h2_{pos_dup}_{abs(hash('|'.join(nomes_dup)))}",
+                                    key=f"rel_criar_produto_h21_{pos_dup}_{abs(hash('|'.join(nomes_dup)))}",
                                     use_container_width=True,
                                 ):
-                                    st.session_state["_thu_catalogo_prefill_nome_2049"] = _nome_sugerido_cadastro
-                                    st.session_state["_retorno_padronizacao_h2"] = True
-                                    st.session_state["_grupo_padronizacao_h2"] = list(nomes_dup)
-                                    st.session_state["_nome_sugerido_padronizacao_h2"] = _nome_sugerido_cadastro
-                                    rerun_na_aba(
-                                        "catalogo",
-                                        "Cadastro aberto a partir da padronização. Revise os dados e salve o produto oficial.",
+                                    for _estado_h2_antigo in (
+                                        "_retorno_padronizacao_h2",
+                                        "_grupo_padronizacao_h2",
+                                        "_nome_sugerido_padronizacao_h2",
+                                    ):
+                                        st.session_state.pop(_estado_h2_antigo, None)
+                                    dialog_catalogo_cadastro_anna(
+                                        nome_prefill=_nome_sugerido_cadastro,
+                                        retorno_padronizacao=True,
+                                        grupo_padronizacao=list(nomes_dup),
                                     )
 
                             opcoes_oficiais = ["— Escolha o produto oficial —"] + nomes_oficiais
@@ -11632,34 +11657,11 @@ if pagina_atual == "catalogo":
                     catalogo.append(registro)
                 salvar_catalogo(catalogo)
                 st.session_state.catalogo_edit_index = None
-
-                retorno_padronizacao_h2 = bool(
-                    st.session_state.get("_retorno_padronizacao_h2", False)
-                )
-                if retorno_padronizacao_h2 and not item_edicao:
-                    st.session_state.pop("_retorno_padronizacao_h2", None)
-                    st.session_state.pop("_nome_sugerido_padronizacao_h2", None)
-                    # Mantém o grupo apenas durante o retorno para referência e abre a seção.
-                    st.session_state["_abrir_padronizacao_h2"] = True
-                    grupo_retorno_h2 = st.session_state.pop("_grupo_padronizacao_h2", [])
-                    grupo_txt_h2 = " • ".join(str(x) for x in grupo_retorno_h2 if str(x).strip())
-                    mensagem_h2 = (
-                        f"Produto oficial '{nome_cat.strip()}' cadastrado. "
-                        "Agora confirme a equivalência na Padronização de Produtos."
-                    )
-                    if grupo_txt_h2:
-                        mensagem_h2 += f" Grupo pendente: {grupo_txt_h2}."
-                    rerun_na_aba("relatorios", mensagem_h2)
-                else:
-                    st.success("Produto salvo com sucesso.")
-                    st.rerun()
+                st.success("Produto salvo com sucesso.")
+                st.rerun()
 
         if cancelar:
             st.session_state.catalogo_edit_index = None
-            if not item_edicao and st.session_state.get("_retorno_padronizacao_h2"):
-                st.session_state.pop("_retorno_padronizacao_h2", None)
-                st.session_state.pop("_grupo_padronizacao_h2", None)
-                st.session_state.pop("_nome_sugerido_padronizacao_h2", None)
             for chave in list(st.session_state.keys()):
                 if str(chave).startswith("cat_") and str(chave).endswith(f"_{sufixo}"):
                     st.session_state.pop(chave, None)
