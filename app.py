@@ -10314,18 +10314,92 @@ if pagina_atual == "fluxo":
 
 
 if pagina_atual == "relatorios":
-    h = carregar_historico()
-    if not h:
+    h_completo = carregar_historico()
+    if not h_completo:
         st.info("📊 Ainda não existem propostas cadastradas para gerar relatórios.")
     else:
+        hoje_rel = hoje_local()
+
+        # 20.4.9-G1 — um único período controla cards, gráficos, clientes e produtos.
+        st.markdown("### 📅 Período dos resultados")
+        col_periodo, col_base = st.columns([1.7, 2.3])
+        periodo_resultado = col_periodo.selectbox(
+            "Mostrar",
+            ["Hoje", "Este mês", "Últimos 30 dias", "Todo histórico", "Personalizado"],
+            index=1,
+            key="rel_periodo_resultado_2049g1",
+        )
+        col_base.caption(
+            "Base do período: **data de criação da proposta**. "
+            "Assim os cards, gráficos, clientes e produtos usam exatamente o mesmo conjunto de propostas."
+        )
+
+        datas_validas_historico = [
+            _data_resultado(p.get("data_geracao") or p.get("data") or p.get("criado_em") or p.get("created_at"))
+            for p in h_completo
+        ]
+        datas_validas_historico = [d for d in datas_validas_historico if d]
+
+        if periodo_resultado == "Hoje":
+            inicio_rel = fim_rel = hoje_rel
+        elif periodo_resultado == "Este mês":
+            inicio_rel = hoje_rel.replace(day=1)
+            fim_rel = hoje_rel
+        elif periodo_resultado == "Últimos 30 dias":
+            inicio_rel = hoje_rel - timedelta(days=29)
+            fim_rel = hoje_rel
+        elif periodo_resultado == "Todo histórico":
+            inicio_rel = min(datas_validas_historico) if datas_validas_historico else hoje_rel
+            fim_rel = max(datas_validas_historico) if datas_validas_historico else hoje_rel
+        else:
+            padrao_inicio = hoje_rel.replace(day=1)
+            p1, p2 = st.columns(2)
+            inicio_rel = p1.date_input(
+                "Data inicial",
+                value=padrao_inicio,
+                key="rel_data_inicial_2049g1",
+            )
+            fim_rel = p2.date_input(
+                "Data final",
+                value=hoje_rel,
+                key="rel_data_final_2049g1",
+            )
+            if inicio_rel > fim_rel:
+                inicio_rel, fim_rel = fim_rel, inicio_rel
+                st.info("As datas foram invertidas automaticamente para manter o período válido.")
+
+        sem_data_rel = 0
+        h = []
+        for p in h_completo:
+            d = _data_resultado(p.get("data_geracao") or p.get("data") or p.get("criado_em") or p.get("created_at"))
+            if periodo_resultado == "Todo histórico":
+                h.append(p)
+                if not d:
+                    sem_data_rel += 1
+            elif d and inicio_rel <= d <= fim_rel:
+                h.append(p)
+            elif not d:
+                sem_data_rel += 1
+
+        st.caption(
+            f"📌 Resultados de **{inicio_rel.strftime('%d/%m/%Y')}** a **{fim_rel.strftime('%d/%m/%Y')}** "
+            f"• {len(h)} proposta(s) no período."
+        )
+        if periodo_resultado != "Todo histórico" and sem_data_rel:
+            st.caption(
+                f"ℹ️ {sem_data_rel} registro(s) do histórico não possuem data de criação válida "
+                "e, por segurança, não entram em períodos filtrados."
+            )
+
         registros = []
         produtos = []
         for p in h:
             subtotal, desconto, total = calcular_valores_proposta(p)
+            data_prop = p.get("data_geracao") or p.get("data") or p.get("criado_em") or p.get("created_at") or ""
             registros.append({
                 "numero_proposta": p.get("numero_proposta", ""),
                 "cliente_nome": p.get("cliente_nome", "Não informado") or "Não informado",
-                "data_geracao": p.get("data_geracao", ""),
+                "data_geracao": data_prop,
                 "data_entrega": p.get("data_entrega", ""),
                 "valor_total": total,
                 "pago": valor_bool(p.get("pago", False)),
@@ -10334,13 +10408,24 @@ if pagina_atual == "relatorios":
             for item in p.get("itens", []) or []:
                 qtd = valor_float(item.get("quantidade"))
                 unit = valor_float(item.get("valor_unitario"))
-                produtos.append({"produto": str(item.get("produto", "Não informado")).strip() or "Não informado", "quantidade": qtd, "faturamento": qtd * unit, "pago": valor_bool(p.get("pago", False))})
+                produtos.append({
+                    "produto": str(item.get("produto", "Não informado")).strip() or "Não informado",
+                    "quantidade": qtd,
+                    "faturamento": qtd * unit,
+                    "pago": valor_bool(p.get("pago", False)),
+                    "data_geracao": data_prop,
+                })
 
-        df = pd.DataFrame(registros)
-        df["Data"] = pd.to_datetime(df["data_geracao"], dayfirst=True, errors="coerce")
+        if registros:
+            df = pd.DataFrame(registros)
+            df["Data"] = pd.to_datetime(df["data_geracao"], dayfirst=True, errors="coerce")
+        else:
+            df = pd.DataFrame(columns=[
+                "numero_proposta", "cliente_nome", "data_geracao",
+                "data_entrega", "valor_total", "pago", "entregue", "Data",
+            ])
 
-        # 20.4.9-G — Relatórios usa a mesma fonte oficial do Painel Executivo.
-        resultados_rel = calcular_resultados_oficiais(h, hoje_local())
+        resultados_rel = calcular_resultados_oficiais(h, hoje_rel)
         total_orcado = resultados_rel["total_orcado"]
         total_recebido = resultados_rel["total_recebido"]
         total_pendente = resultados_rel["a_receber"]
@@ -10356,47 +10441,149 @@ if pagina_atual == "relatorios":
         m4.metric("⏳ A Receber", _moeda_rel(total_pendente))
         st.metric("🎯 Ticket médio", _moeda_rel(ticket_medio))
         st.caption(
-            "Regra oficial: A Receber considera somente propostas aprovadas, não pagas e não encerradas/canceladas. "
-            "Por isso ele não é calculado como Total Orçado menos Recebido."
+            "Os valores acima usam somente as propostas do período selecionado. "
+            "A Receber = aprovadas, não pagas e não encerradas/canceladas. "
+            "Recebido = propostas desse período que estão marcadas como pagas."
         )
+        if periodo_resultado == "Este mês":
+            st.caption(
+                f"🔗 Conferência com o Painel Executivo: **{resultados_rel['propostas_total']} propostas no mês**."
+            )
 
-        with st.expander("🔎 Auditar números e resultados entre as telas", expanded=False):
+        with st.expander("🔎 Auditar números e resultados do período", expanded=False):
             renderizar_auditoria_resultados(h, resultados_rel)
 
-        periodo = st.selectbox("Período de agrupamento", ["Dia", "Semana", "Mês", "Ano"])
+        periodo = st.selectbox(
+            "Agrupamento do gráfico",
+            ["Dia", "Semana", "Mês", "Ano"],
+            key="rel_agrupamento_2049g1",
+        )
         df_data = df.dropna(subset=["Data"]).copy()
-        if periodo == "Dia": df_data["Periodo"] = df_data["Data"].dt.strftime("%d/%m/%Y")
-        elif periodo == "Semana": df_data["Periodo"] = df_data["Data"].dt.to_period("W").apply(lambda x: x.start_time)
-        elif periodo == "Mês": df_data["Periodo"] = df_data["Data"].dt.to_period("M").dt.to_timestamp()
-        else: df_data["Periodo"] = df_data["Data"].dt.to_period("Y").dt.to_timestamp()
+        if periodo == "Dia":
+            df_data["Periodo"] = df_data["Data"].dt.normalize()
+        elif periodo == "Semana":
+            df_data["Periodo"] = df_data["Data"].dt.to_period("W").apply(lambda x: x.start_time)
+        elif periodo == "Mês":
+            df_data["Periodo"] = df_data["Data"].dt.to_period("M").dt.to_timestamp()
+        else:
+            df_data["Periodo"] = df_data["Data"].dt.to_period("Y").dt.to_timestamp()
 
         if not df_data.empty:
-            vendas = df_data.groupby("Periodo", as_index=False)["valor_total"].sum()
+            # Datas permanecem datetime até o gráfico: evita 31/07 aparecer depois de 15/08.
+            vendas = (
+                df_data.groupby("Periodo", as_index=False)["valor_total"]
+                .sum()
+                .sort_values("Periodo")
+            )
             st.subheader("📈 Orçamentos por período")
             st.line_chart(vendas.set_index("Periodo")["valor_total"], use_container_width=True)
+        else:
+            st.info("Não há propostas com data válida para montar o gráfico neste período.")
 
         st.subheader("👥 Clientes com maior valor orçado")
-        clientes = df.groupby("cliente_nome", as_index=False)["valor_total"].sum().sort_values("valor_total", ascending=False).head(15)
-        grafico_clientes = criar_grafico_profissional(clientes, "cliente_nome", "valor_total", "Total por cliente", horizontal=True)
-        if grafico_clientes: st.altair_chart(grafico_clientes, use_container_width=True)
+        if not df.empty:
+            clientes = (
+                df.groupby("cliente_nome", as_index=False)["valor_total"]
+                .sum()
+                .sort_values("valor_total", ascending=False)
+                .head(15)
+            )
+            grafico_clientes = criar_grafico_profissional(
+                clientes, "cliente_nome", "valor_total", "Total por cliente", horizontal=True
+            )
+            if grafico_clientes:
+                st.altair_chart(grafico_clientes, use_container_width=True)
+        else:
+            st.info("Nenhum cliente com proposta no período selecionado.")
 
         if produtos:
             df_prod = pd.DataFrame(produtos)
-            ranking = df_prod.groupby("produto", as_index=False).agg(quantidade=("quantidade", "sum"), faturamento=("faturamento", "sum")).sort_values("quantidade", ascending=False).head(15)
+
+            ranking = (
+                df_prod.groupby("produto", as_index=False)
+                .agg(quantidade=("quantidade", "sum"), faturamento=("faturamento", "sum"))
+                .sort_values("quantidade", ascending=False)
+                .head(15)
+            )
             st.subheader("🏆 Produtos mais orçados")
-            grafico_prod = criar_grafico_profissional(ranking, "produto", "quantidade", "Quantidade por produto", horizontal=True, formato=".0f")
-            if grafico_prod: st.altair_chart(grafico_prod, use_container_width=True)
+            grafico_prod = criar_grafico_profissional(
+                ranking, "produto", "quantidade", "Quantidade por produto",
+                horizontal=True, formato=".0f"
+            )
+            if grafico_prod:
+                st.altair_chart(grafico_prod, use_container_width=True)
             st.dataframe(ranking, use_container_width=True, hide_index=True)
 
-            pagos = df_prod[df_prod["pago"]].groupby("produto", as_index=False).agg(quantidade=("quantidade", "sum"), faturamento=("faturamento", "sum")).sort_values("faturamento", ascending=False).head(15)
+            pagos = (
+                df_prod[df_prod["pago"]]
+                .groupby("produto", as_index=False)
+                .agg(quantidade=("quantidade", "sum"), faturamento=("faturamento", "sum"))
+                .sort_values("faturamento", ascending=False)
+                .head(15)
+            )
             st.subheader("✅ Produtos efetivamente pagos")
             if not pagos.empty:
-                grafico_pagos = criar_grafico_profissional(pagos, "produto", "faturamento", "Faturamento de produtos pagos", horizontal=True)
-                if grafico_pagos: st.altair_chart(grafico_pagos, use_container_width=True)
+                grafico_pagos = criar_grafico_profissional(
+                    pagos, "produto", "faturamento",
+                    "Faturamento de produtos pagos", horizontal=True
+                )
+                if grafico_pagos:
+                    st.altair_chart(grafico_pagos, use_container_width=True)
                 st.dataframe(pagos, use_container_width=True, hide_index=True)
             else:
-                st.info("Ainda não existem produtos em propostas marcadas como pagas.")
+                st.info("Ainda não existem produtos em propostas marcadas como pagas neste período.")
 
+            with st.expander("🧩 Auditar nomes de produtos possivelmente duplicados", expanded=False):
+                st.caption(
+                    "Esta auditoria só sinaliza nomes parecidos. Nenhum produto é renomeado, unido ou apagado automaticamente."
+                )
+
+                def _chave_nome_produto_rel(nome):
+                    import unicodedata
+                    texto = unicodedata.normalize("NFKD", str(nome or ""))
+                    texto = "".join(c for c in texto if not unicodedata.combining(c)).casefold()
+                    texto = re.sub(r"[^a-z0-9]+", " ", texto)
+                    palavras = [
+                        p for p in texto.split()
+                        if p not in {"de", "do", "da", "dos", "das"}
+                    ]
+                    return " ".join(palavras).strip()
+
+                grupos_nomes = {}
+                for nome in sorted({
+                    str(item.get("produto") or "").strip()
+                    for p in h_completo
+                    for item in (p.get("itens", []) or [])
+                    if str(item.get("produto") or "").strip()
+                }):
+                    chave = _chave_nome_produto_rel(nome)
+                    if chave:
+                        grupos_nomes.setdefault(chave, []).append(nome)
+
+                suspeitos = [
+                    nomes for nomes in grupos_nomes.values()
+                    if len(set(nomes)) > 1
+                ]
+                if suspeitos:
+                    dados_suspeitos = [
+                        {
+                            "Possível grupo duplicado": " / ".join(sorted(set(nomes))),
+                            "Ação": "Revisar manualmente antes de padronizar",
+                        }
+                        for nomes in suspeitos
+                    ]
+                    st.warning(
+                        f"Encontrei {len(suspeitos)} grupo(s) de nomes que podem representar o mesmo produto."
+                    )
+                    st.dataframe(
+                        pd.DataFrame(dados_suspeitos),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.success("Nenhuma variação simples de nome foi encontrada no histórico.")
+        else:
+            st.info("Nenhum produto encontrado nas propostas do período selecionado.")
 
 
 if pagina_atual == "executivo":
