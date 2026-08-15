@@ -5851,7 +5851,7 @@ def renderizar_alerta_thu_produto_sem_catalogo(proposta, prefixo="thu_sem_catalo
     texto_produtos = " • ".join(ausentes)
 
     st.info(
-        "💙 **THU:** "
+        "💙 **THU informa:** "
         + ("Esta proposta contém produtos que ainda não estão cadastrados no Catálogo: "
            if plural else
            "Esta proposta contém um produto que ainda não está cadastrado no Catálogo: ")
@@ -7769,7 +7769,7 @@ def dialog_banco_imagens_entrega(numero_proposta, produto_nome):
     idx_prod, produto = _produto_catalogo_da_proposta(produto_nome, catalogo)
     if produto is None:
         st.warning(
-            f"💙 THU: **{produto_nome}** ainda não possui cadastro oficial. Cadastre o produto antes de atualizar o banco de imagens."
+            f"💙 THU informa: **{produto_nome}** ainda não possui cadastro oficial. Cadastre o produto antes de atualizar o banco de imagens."
         )
         if st.button("➕ Cadastrar produto", use_container_width=True):
             dialog_catalogo_cadastro_anna(nome_prefill=str(produto_nome))
@@ -7943,7 +7943,7 @@ def renderizar_sugestao_banco_imagens_entrega(proposta, prefixo="thu_banco_entre
 
     numero = str((proposta or {}).get("numero_proposta") or "")
     st.info(
-        "💙 **THU:** entrega concluída. Vale revisar o banco de imagens: "
+        "💙 **THU informa:** entrega concluída. Vale revisar o banco de imagens: "
         "esta produção pode trazer uma nova cor, estampa, composição, acessório ou acabamento útil para futuras vendas."
     )
 
@@ -9070,7 +9070,7 @@ if pagina_atual == "central":
                                         st.session_state.catalogo_edit_index = _idx_prod
                                         rerun_na_aba("catalogo")
                 else:
-                    st.warning("💙 THU: ainda não há produto do Catálogo habilitado para esta campanha.")
+                    st.warning("💙 THU informa: ainda não há produto do Catálogo habilitado para esta campanha.")
         st.caption("Cadastre datas locais, escolares e campanhas próprias na aba Calendário Comercial.")
     else:
         st.info("Nenhuma campanha próxima. Use o Calendário Comercial para cadastrar novas oportunidades.")
@@ -10913,7 +10913,7 @@ if pagina_atual == "novo_orcamento":
             _ausentes_pos_salvar = produtos_proposta_sem_catalogo(ultima_salva)
             if _ausentes_pos_salvar:
                 st.info(
-                    "💙 **THU:** produto(s) ainda sem cadastro oficial no Catálogo: **"
+                    "💙 **THU informa:** produto(s) ainda sem cadastro oficial no Catálogo: **"
                     + " • ".join(_ausentes_pos_salvar)
                     + "**. A Central da Anna continuará sinalizando esta pendência até o cadastro ser feito."
                 )
