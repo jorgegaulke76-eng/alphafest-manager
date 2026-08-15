@@ -10746,7 +10746,13 @@ if pagina_atual == "relatorios":
             else:
                 st.info("Ainda não existem produtos em propostas marcadas como pagas neste período.")
 
-            with st.expander("🧩 Padronizar nomes de produtos com segurança", expanded=False):
+            _abrir_padronizacao_h2 = bool(
+                st.session_state.pop("_abrir_padronizacao_h2", False)
+            )
+            with st.expander(
+                "🧩 Padronizar nomes de produtos com segurança",
+                expanded=_abrir_padronizacao_h2,
+            ):
                 st.caption(
                     "Diferenças apenas de maiúsculas/minúsculas, acentos, espaços ou pontuação são consolidadas "
                     "automaticamente nos relatórios. Variações de nome com significado potencialmente diferente "
@@ -10902,8 +10908,36 @@ if pagina_atual == "relatorios":
                             else:
                                 st.info(
                                     "ℹ️ Nenhum produto oficial compatível foi encontrado com segurança no Catálogo. "
-                                    "Escolha manualmente somente se tiver certeza de que é o mesmo produto."
+                                    "Você pode escolher manualmente um produto existente ou cadastrar um novo produto oficial."
                                 )
+
+                                # H2 — sugestão editável para criar o produto oficial ausente.
+                                # Prefere a variante mais descritiva sem inventar um nome novo.
+                                _nome_sugerido_cadastro = max(
+                                    nomes_dup,
+                                    key=lambda n: (
+                                        len(_chave_nome_produto_rel(n).split()),
+                                        len(str(n)),
+                                    ),
+                                )
+                                criar1, criar2 = st.columns([3.4, 1.6])
+                                criar1.caption(
+                                    f"Sugestão para novo cadastro: **{_nome_sugerido_cadastro}**. "
+                                    "Você poderá editar o nome e preencher categoria, material, valor e campanhas antes de salvar."
+                                )
+                                if criar2.button(
+                                    "➕ Criar produto oficial",
+                                    key=f"rel_criar_produto_h2_{pos_dup}_{abs(hash('|'.join(nomes_dup)))}",
+                                    use_container_width=True,
+                                ):
+                                    st.session_state["_thu_catalogo_prefill_nome_2049"] = _nome_sugerido_cadastro
+                                    st.session_state["_retorno_padronizacao_h2"] = True
+                                    st.session_state["_grupo_padronizacao_h2"] = list(nomes_dup)
+                                    st.session_state["_nome_sugerido_padronizacao_h2"] = _nome_sugerido_cadastro
+                                    rerun_na_aba(
+                                        "catalogo",
+                                        "Cadastro aberto a partir da padronização. Revise os dados e salve o produto oficial.",
+                                    )
 
                             opcoes_oficiais = ["— Escolha o produto oficial —"] + nomes_oficiais
                             indice_sugerido = (
@@ -11598,11 +11632,34 @@ if pagina_atual == "catalogo":
                     catalogo.append(registro)
                 salvar_catalogo(catalogo)
                 st.session_state.catalogo_edit_index = None
-                st.success("Produto salvo com sucesso.")
-                st.rerun()
+
+                retorno_padronizacao_h2 = bool(
+                    st.session_state.get("_retorno_padronizacao_h2", False)
+                )
+                if retorno_padronizacao_h2 and not item_edicao:
+                    st.session_state.pop("_retorno_padronizacao_h2", None)
+                    st.session_state.pop("_nome_sugerido_padronizacao_h2", None)
+                    # Mantém o grupo apenas durante o retorno para referência e abre a seção.
+                    st.session_state["_abrir_padronizacao_h2"] = True
+                    grupo_retorno_h2 = st.session_state.pop("_grupo_padronizacao_h2", [])
+                    grupo_txt_h2 = " • ".join(str(x) for x in grupo_retorno_h2 if str(x).strip())
+                    mensagem_h2 = (
+                        f"Produto oficial '{nome_cat.strip()}' cadastrado. "
+                        "Agora confirme a equivalência na Padronização de Produtos."
+                    )
+                    if grupo_txt_h2:
+                        mensagem_h2 += f" Grupo pendente: {grupo_txt_h2}."
+                    rerun_na_aba("relatorios", mensagem_h2)
+                else:
+                    st.success("Produto salvo com sucesso.")
+                    st.rerun()
 
         if cancelar:
             st.session_state.catalogo_edit_index = None
+            if not item_edicao and st.session_state.get("_retorno_padronizacao_h2"):
+                st.session_state.pop("_retorno_padronizacao_h2", None)
+                st.session_state.pop("_grupo_padronizacao_h2", None)
+                st.session_state.pop("_nome_sugerido_padronizacao_h2", None)
             for chave in list(st.session_state.keys()):
                 if str(chave).startswith("cat_") and str(chave).endswith(f"_{sufixo}"):
                     st.session_state.pop(chave, None)
