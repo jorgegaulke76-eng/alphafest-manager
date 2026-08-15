@@ -3475,6 +3475,8 @@ def thu_consultar_catalogo_produto(catalogo, consulta="", campanha=""):
             continue
 
         nome = _norm(produto.get("Nome"))
+        aliases = [_norm(x) for x in (produto.get("Aliases", []) or []) if str(x).strip()]
+        nomes_busca = [nome] + aliases
         categoria = _norm(produto.get("Categoria"))
         subcategoria = _norm(produto.get("Subcategoria"))
         descricao = _norm(
@@ -3482,13 +3484,14 @@ def thu_consultar_catalogo_produto(catalogo, consulta="", campanha=""):
         )
 
         # Regra de relevância:
-        # 1) nome exato é o melhor resultado;
-        # 2) nome contendo toda a frase vem logo depois;
-        # 3) para busca por várias palavras, exige todas as palavras relevantes no nome
-        #    OU maioria forte no nome + apoio em categoria/descrição.
-        exato = bool(q and nome == q)
-        frase_no_nome = bool(q and q in nome)
-        nome_hits = sum(1 for t in termos_relevantes if t in nome)
+        # 1) nome oficial OU alias exato é a melhor correspondência;
+        # 2) frase no nome/alias vem logo depois;
+        # 3) para várias palavras, usa o melhor nome/alias do produto.
+        exato = bool(q and any(n == q for n in nomes_busca))
+        frase_no_nome = bool(q and any(q in n for n in nomes_busca))
+        nome_hits = max(
+            [sum(1 for t in termos_relevantes if t in n) for n in nomes_busca] or [0]
+        )
         apoio_hits = sum(1 for t in termos_relevantes if t in f"{categoria} {subcategoria} {descricao}")
 
         if termos_relevantes:
@@ -3537,14 +3540,18 @@ def thu_consultar_catalogo_produto(catalogo, consulta="", campanha=""):
     return [(p, prod, eleg, camp) for p, prod, eleg, camp, _ in encontrados]
 
 def thu_correlacionar_catalogo_biblioteca(produto_catalogo, conteudos):
-    """Procura artes usando somente o produto oficial escolhido no catálogo."""
+    """Procura artes pelo nome oficial e aliases confirmados no catálogo."""
     nome=str(produto_catalogo.get("Nome") or "").strip()
     categoria=str(produto_catalogo.get("Categoria") or "").strip()
-    termos=[t for t in re.findall(r"[\wÀ-ÿ]+", nome.casefold()) if len(t)>=3]
+    nomes=[nome] + [str(x).strip() for x in (produto_catalogo.get("Aliases", []) or []) if str(x).strip()]
+    grupos_termos=[
+        [t for t in re.findall(r"[\wÀ-ÿ]+", n.casefold()) if len(t)>=3]
+        for n in nomes if n
+    ]
     ranking=[]
     for arte in conteudos or []:
         texto=f"{arte.get('produto','')} {arte.get('categoria','')} {arte.get('campanha','')} {arte.get('tema_reuso','')}".casefold()
-        acertos=sum(1 for t in termos if t in texto)
+        acertos=max([sum(1 for t in termos if t in texto) for termos in grupos_termos] or [0])
         cat_match=bool(categoria and categoria.casefold() in texto)
         if acertos==0 and not cat_match:
             continue
@@ -5564,6 +5571,103 @@ def salvar_catalogo(lista):
     save_document("catalogo_db", lista, ARQUIVO_CATALOGO)
 
 
+def normalizar_identidade_produto(valor):
+    """20.4.9-H — normalização estrita para nome oficial/alias."""
+    import unicodedata
+    texto = unicodedata.normalize("NFKD", str(valor or "").strip())
+    texto = "".join(c for c in texto if not unicodedata.combining(c)).casefold()
+    texto = re.sub(r"[^a-z0-9]+", " ", texto)
+    return " ".join(texto.split())
+
+
+def mapa_identidade_produtos(catalogo):
+    """Retorna nome/alias normalizado -> nome oficial. Nome oficial sempre tem prioridade."""
+    catalogo = catalogo or []
+    mapa = {}
+
+    # Primeiro os nomes oficiais: um alias nunca pode sobrescrever um produto real.
+    for produto in catalogo:
+        nome = str(produto.get("Nome") or "").strip()
+        chave = normalizar_identidade_produto(nome)
+        if chave and nome:
+            mapa[chave] = nome
+
+    # Depois aliases livres.
+    for produto in catalogo:
+        oficial = str(produto.get("Nome") or "").strip()
+        if not oficial:
+            continue
+        for alias in (produto.get("Aliases", []) or []):
+            chave = normalizar_identidade_produto(alias)
+            if chave and chave not in mapa:
+                mapa[chave] = oficial
+    return mapa
+
+
+def nome_produto_oficial_catalogo(nome, catalogo):
+    """Resolve um nome histórico/alternativo sem modificar a proposta original."""
+    original = str(nome or "").strip() or "Não informado"
+    chave = normalizar_identidade_produto(original)
+    return mapa_identidade_produtos(catalogo).get(chave, original)
+
+
+def conflito_alias_catalogo(alias, produto_oficial, catalogo):
+    """Explica se um alias já pertence a outro produto oficial."""
+    chave_alias = normalizar_identidade_produto(alias)
+    chave_oficial = normalizar_identidade_produto(produto_oficial)
+    if not chave_alias or chave_alias == chave_oficial:
+        return ""
+
+    for produto in catalogo or []:
+        nome = str(produto.get("Nome") or "").strip()
+        if normalizar_identidade_produto(nome) == chave_alias and normalizar_identidade_produto(nome) != chave_oficial:
+            return f"'{alias}' já é nome oficial de '{nome}'."
+        if normalizar_identidade_produto(nome) == chave_oficial:
+            continue
+        for existente in (produto.get("Aliases", []) or []):
+            if normalizar_identidade_produto(existente) == chave_alias:
+                return f"'{alias}' já está vinculado como alias de '{nome}'."
+    return ""
+
+
+
+def filtrar_aliases_validos_produto(produto_oficial, aliases, catalogo, indice_ignorar=None):
+    """Valida aliases antes de salvar; conflitos são rejeitados sem afetar outros campos."""
+    chave_oficial = normalizar_identidade_produto(produto_oficial)
+    validos = []
+    conflitos = []
+    vistos = set()
+
+    for alias in aliases or []:
+        alias = str(alias or "").strip()
+        chave_alias = normalizar_identidade_produto(alias)
+        if not alias or not chave_alias or chave_alias == chave_oficial or chave_alias in vistos:
+            continue
+        vistos.add(chave_alias)
+
+        conflito = ""
+        for idx, produto in enumerate(catalogo or []):
+            if indice_ignorar is not None and idx == indice_ignorar:
+                continue
+            nome_outro = str(produto.get("Nome") or "").strip()
+            if normalizar_identidade_produto(nome_outro) == chave_alias:
+                conflito = f"'{alias}' é nome oficial de '{nome_outro}'"
+                break
+            for alias_outro in (produto.get("Aliases", []) or []):
+                if normalizar_identidade_produto(alias_outro) == chave_alias:
+                    conflito = f"'{alias}' já é alias de '{nome_outro}'"
+                    break
+            if conflito:
+                break
+
+        if conflito:
+            conflitos.append(conflito)
+        else:
+            validos.append(alias)
+
+    return validos, conflitos
+
+
 def avaliar_pendencias_produto_catalogo(produto):
     """20.4.9-E — mede se o cadastro possui os dados mínimos para o THU."""
     produto = produto or {}
@@ -5688,10 +5792,14 @@ def pesquisar_global(termo, limite_por_tipo=8):
                 break
 
     for indice, produto in enumerate(carregar_catalogo()):
-        base = " ".join(str(produto.get(c, "")) for c in [
-            "Nome", "Categoria", "Subcategoria", "CodigoInterno", "Descricao",
-            "DescricaoCurta", "DescricaoCompleta", "PalavrasChave", "Tags"
-        ]).lower()
+        base = (
+            " ".join(str(produto.get(c, "")) for c in [
+                "Nome", "Categoria", "Subcategoria", "CodigoInterno", "Descricao",
+                "DescricaoCurta", "DescricaoCompleta", "PalavrasChave", "Tags"
+            ])
+            + " "
+            + " ".join(str(x) for x in (produto.get("Aliases", []) or []))
+        ).lower()
         if termo in base:
             registro = dict(produto)
             registro["_indice_catalogo"] = indice
@@ -7167,6 +7275,12 @@ def dialog_catalogo_cadastro_anna(produto_indice=None):
         subcategoria = c3.text_input("Subcategoria", value=str(produto.get("Subcategoria", "")))
         preco = c4.text_input("Valor", value=str(produto.get("Preco", "")), placeholder="Ex.: 25,00")
         material = st.text_input("Material / composição", value=str(produto.get("Material", "")), placeholder="Ex.: papel arroz, PLA, acrílico, papel fotográfico...")
+        aliases_txt = st.text_area(
+            "Nomes alternativos / aliases (um por linha)",
+            value="\n".join(str(x) for x in (produto.get("Aliases", []) or []) if str(x).strip()),
+            height=75,
+            help="Use somente para nomes que realmente representam este mesmo produto. O histórico antigo não será alterado.",
+        )
         descricao = st.text_area("Descrição para o catálogo", value=str(produto.get("DescricaoCurta", produto.get("Descricao", ""))), height=110)
         campanhas_atuais = produto.get("CampanhasPermitidas", []) or []
         campanhas_permitidas = st.multiselect(
@@ -7202,10 +7316,20 @@ def dialog_catalogo_cadastro_anna(produto_indice=None):
             imagens.insert(0, caminho)
         if drive_erros:
             st.warning("Google Drive: " + " ".join(dict.fromkeys(drive_erros)))
+        aliases_digitados = [x.strip() for x in aliases_txt.splitlines() if x.strip()]
+        nome_anterior_alias = str(produto.get("Nome") or "").strip()
+        if nome_anterior_alias and normalizar_identidade_produto(nome_anterior_alias) != normalizar_identidade_produto(nome):
+            aliases_digitados.append(nome_anterior_alias)
+        aliases_validos, conflitos_alias = filtrar_aliases_validos_produto(
+            nome.strip(), aliases_digitados, catalogo, produto_indice
+        )
+        if conflitos_alias:
+            st.warning("Alguns aliases não foram salvos por conflito: " + " • ".join(conflitos_alias))
         registro = dict(produto)
         registro.update({
             "Nome": nome.strip(), "Categoria": categoria.strip(), "Subcategoria": subcategoria.strip(),
             "Preco": preco.strip(), "Material": material.strip(),
+            "Aliases": aliases_validos,
             "CampanhasPermitidas": list(dict.fromkeys(campanhas_permitidas)),
             "Descricao": descricao.strip(), "DescricaoCurta": descricao.strip(),
             "Imagens": list(dict.fromkeys(imagens)), "Ativo": bool(ativo), "Destaque": bool(destaque),
@@ -7248,7 +7372,10 @@ def dialog_catalogo_visualizar_anna():
     termo = busca.strip().casefold()
     filtrados = [
         (i, p) for i, p in enumerate(catalogo)
-        if (not termo or termo in f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')}".casefold())
+        if (not termo or termo in (
+            f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')} "
+            + " ".join(str(x) for x in (p.get("Aliases", []) or []))
+        ).casefold())
         and (not somente_pendentes or not avaliar_pendencias_produto_catalogo(p)["pronto_thu"])
     ]
     st.caption(f"{len(filtrados)} produto(s) encontrado(s)")
@@ -7307,6 +7434,13 @@ def dialog_catalogo_visualizar_anna():
                         "Material / composição",
                         value=str(produto.get("Material", "")),
                         key=f"{form_key}_material",
+                    )
+                    aliases_inline = st.text_area(
+                        "Nomes alternativos / aliases (um por linha)",
+                        value="\n".join(str(x) for x in (produto.get("Aliases", []) or []) if str(x).strip()),
+                        height=70,
+                        key=f"{form_key}_aliases",
+                        help="Não altera propostas antigas; apenas informa ao sistema que estes nomes representam o mesmo produto.",
                     )
                     campanhas_permitidas = st.multiselect(
                         "📅 Campanhas / Datas permitidas",
@@ -7367,6 +7501,15 @@ def dialog_catalogo_visualizar_anna():
                             imagens.insert(0, caminho)
                         if drive_erros:
                             st.warning("Google Drive: " + " ".join(dict.fromkeys(drive_erros)))
+                        aliases_digitados_inline = [x.strip() for x in aliases_inline.splitlines() if x.strip()]
+                        nome_anterior_inline = str(produto.get("Nome") or "").strip()
+                        if nome_anterior_inline and normalizar_identidade_produto(nome_anterior_inline) != normalizar_identidade_produto(nome):
+                            aliases_digitados_inline.append(nome_anterior_inline)
+                        aliases_validos_inline, conflitos_alias_inline = filtrar_aliases_validos_produto(
+                            nome.strip(), aliases_digitados_inline, catalogo, i
+                        )
+                        if conflitos_alias_inline:
+                            st.warning("Alguns aliases não foram salvos por conflito: " + " • ".join(conflitos_alias_inline))
                         registro = dict(produto)
                         registro.update({
                             "Nome": nome.strip(),
@@ -7374,6 +7517,7 @@ def dialog_catalogo_visualizar_anna():
                             "Subcategoria": subcategoria.strip(),
                             "Preco": preco.strip(),
                             "Material": material.strip(),
+                            "Aliases": aliases_validos_inline,
                             "CampanhasPermitidas": list(dict.fromkeys(campanhas_permitidas)),
                             "Descricao": descricao.strip(),
                             "DescricaoCurta": descricao.strip(),
@@ -7789,7 +7933,10 @@ if pagina_atual == "central":
                 termo_ws = busca_ws.strip().casefold()
                 encontrados_ws = [
                     (i, prod) for i, prod in enumerate(catalogo_ws)
-                    if not termo_ws or termo_ws in str(prod.get("Nome", "")).casefold() or termo_ws in str(prod.get("Categoria", "")).casefold()
+                    if not termo_ws
+                    or termo_ws in str(prod.get("Nome", "")).casefold()
+                    or termo_ws in str(prod.get("Categoria", "")).casefold()
+                    or termo_ws in " ".join(str(x) for x in (prod.get("Aliases", []) or [])).casefold()
                 ][:10]
                 if not encontrados_ws:
                     st.info("Nenhum produto encontrado.")
@@ -10393,6 +10540,8 @@ if pagina_atual == "relatorios":
 
         registros = []
         produtos = []
+        catalogo_rel = carregar_catalogo()
+        aliases_resolvidos_periodo = 0
         for p in h:
             subtotal, desconto, total = calcular_valores_proposta(p)
             data_prop = p.get("data_geracao") or p.get("data") or p.get("criado_em") or p.get("created_at") or ""
@@ -10408,8 +10557,13 @@ if pagina_atual == "relatorios":
             for item in p.get("itens", []) or []:
                 qtd = valor_float(item.get("quantidade"))
                 unit = valor_float(item.get("valor_unitario"))
+                nome_original_item = str(item.get("produto", "Não informado")).strip() or "Não informado"
+                nome_oficial_item = nome_produto_oficial_catalogo(nome_original_item, catalogo_rel)
+                if normalizar_identidade_produto(nome_original_item) != normalizar_identidade_produto(nome_oficial_item):
+                    aliases_resolvidos_periodo += 1
                 produtos.append({
-                    "produto": str(item.get("produto", "Não informado")).strip() or "Não informado",
+                    "produto": nome_oficial_item,
+                    "produto_original": nome_original_item,
                     "quantidade": qtd,
                     "faturamento": qtd * unit,
                     "pago": valor_bool(p.get("pago", False)),
@@ -10498,6 +10652,11 @@ if pagina_atual == "relatorios":
 
         if produtos:
             df_prod = pd.DataFrame(produtos)
+            if aliases_resolvidos_periodo:
+                st.caption(
+                    f"🔗 {aliases_resolvidos_periodo} item(ns) do período foram consolidados por aliases confirmados no Catálogo. "
+                    "As propostas originais permanecem intactas."
+                )
 
             ranking = (
                 df_prod.groupby("produto", as_index=False)
@@ -10533,9 +10692,10 @@ if pagina_atual == "relatorios":
             else:
                 st.info("Ainda não existem produtos em propostas marcadas como pagas neste período.")
 
-            with st.expander("🧩 Auditar nomes de produtos possivelmente duplicados", expanded=False):
+            with st.expander("🧩 Padronizar nomes de produtos com segurança", expanded=False):
                 st.caption(
-                    "Esta auditoria só sinaliza nomes parecidos. Nenhum produto é renomeado, unido ou apagado automaticamente."
+                    "O sistema procura variações no histórico e permite vinculá-las a um produto oficial do Catálogo. "
+                    "As propostas antigas não são editadas; a equivalência fica salva como alias no produto oficial."
                 )
 
                 def _chave_nome_produto_rel(nome):
@@ -10549,39 +10709,173 @@ if pagina_atual == "relatorios":
                     ]
                     return " ".join(palavras).strip()
 
-                grupos_nomes = {}
-                for nome in sorted({
+                nomes_historicos = sorted({
                     str(item.get("produto") or "").strip()
                     for p in h_completo
                     for item in (p.get("itens", []) or [])
                     if str(item.get("produto") or "").strip()
-                }):
+                })
+
+                grupos_nomes = {}
+                for nome in nomes_historicos:
                     chave = _chave_nome_produto_rel(nome)
                     if chave:
                         grupos_nomes.setdefault(chave, []).append(nome)
 
                 suspeitos = [
-                    nomes for nomes in grupos_nomes.values()
+                    sorted(set(nomes))
+                    for nomes in grupos_nomes.values()
                     if len(set(nomes)) > 1
                 ]
+
+                nomes_oficiais = sorted(
+                    [str(p.get("Nome") or "").strip() for p in catalogo_rel if str(p.get("Nome") or "").strip()],
+                    key=str.casefold,
+                )
+
                 if suspeitos:
-                    dados_suspeitos = [
-                        {
-                            "Possível grupo duplicado": " / ".join(sorted(set(nomes))),
-                            "Ação": "Revisar manualmente antes de padronizar",
-                        }
-                        for nomes in suspeitos
-                    ]
                     st.warning(
-                        f"Encontrei {len(suspeitos)} grupo(s) de nomes que podem representar o mesmo produto."
+                        f"Encontrei {len(suspeitos)} grupo(s) de variações que merecem conferência."
                     )
-                    st.dataframe(
-                        pd.DataFrame(dados_suspeitos),
-                        use_container_width=True,
-                        hide_index=True,
-                    )
+
+                    for pos_dup, nomes_dup in enumerate(suspeitos[:20], 1):
+                        resolvidos = {
+                            nome_produto_oficial_catalogo(n, catalogo_rel)
+                            for n in nomes_dup
+                        }
+                        resolvidos_norm = {
+                            normalizar_identidade_produto(n)
+                            for n in resolvidos if n
+                        }
+
+                        with st.container(border=True):
+                            st.markdown(f"**Grupo {pos_dup}:** " + " • ".join(nomes_dup))
+
+                            # Se todas as variações já chegam ao mesmo nome oficial, só confirma.
+                            if len(resolvidos_norm) == 1:
+                                nome_resolvido = next(iter(resolvidos))
+                                if any(
+                                    normalizar_identidade_produto(n) != normalizar_identidade_produto(nome_resolvido)
+                                    for n in nomes_dup
+                                ):
+                                    st.success(f"Já padronizado no Catálogo como: **{nome_resolvido}**")
+                                    st.caption("Para desfazer ou revisar, edite os aliases do produto no Catálogo.")
+                                    continue
+
+                            # Sugestão apenas para facilitar a escolha; salvar continua dependendo de ação humana.
+                            sugestao = ""
+                            for oficial in nomes_oficiais:
+                                if normalizar_identidade_produto(oficial) in {
+                                    normalizar_identidade_produto(n) for n in nomes_dup
+                                }:
+                                    sugestao = oficial
+                                    break
+                            if not sugestao:
+                                chave_grupo = _chave_nome_produto_rel(nomes_dup[0])
+                                for oficial in nomes_oficiais:
+                                    if _chave_nome_produto_rel(oficial) == chave_grupo:
+                                        sugestao = oficial
+                                        break
+
+                            opcoes_oficiais = ["— Escolha o produto oficial —"] + nomes_oficiais
+                            indice_sugerido = opcoes_oficiais.index(sugestao) if sugestao in opcoes_oficiais else 0
+                            escolhido = st.selectbox(
+                                "Produto oficial do Catálogo",
+                                opcoes_oficiais,
+                                index=indice_sugerido,
+                                key=f"rel_alias_oficial_{pos_dup}_{abs(hash('|'.join(nomes_dup)))}",
+                            )
+
+                            if escolhido != "— Escolha o produto oficial —":
+                                novos_aliases = [
+                                    n for n in nomes_dup
+                                    if normalizar_identidade_produto(n) != normalizar_identidade_produto(escolhido)
+                                ]
+                                if novos_aliases:
+                                    st.caption("Serão vinculados como alias: " + " • ".join(novos_aliases))
+                                else:
+                                    st.info("O grupo já usa somente o nome oficial selecionado.")
+
+                                if st.button(
+                                    "🔗 Confirmar equivalência",
+                                    key=f"rel_alias_salvar_{pos_dup}_{abs(hash('|'.join(nomes_dup)))}",
+                                    use_container_width=True,
+                                    disabled=not novos_aliases,
+                                ):
+                                    conflitos = [
+                                        conflito_alias_catalogo(alias, escolhido, catalogo_rel)
+                                        for alias in novos_aliases
+                                    ]
+                                    conflitos = [c for c in conflitos if c]
+                                    if conflitos:
+                                        st.error(
+                                            "Não vinculei automaticamente porque existe conflito: "
+                                            + " ".join(dict.fromkeys(conflitos))
+                                        )
+                                    else:
+                                        idx_oficial = next(
+                                            (
+                                                i for i, prod in enumerate(catalogo_rel)
+                                                if normalizar_identidade_produto(prod.get("Nome")) ==
+                                                   normalizar_identidade_produto(escolhido)
+                                            ),
+                                            None,
+                                        )
+                                        if idx_oficial is None:
+                                            st.error("O produto oficial não foi localizado no Catálogo.")
+                                        else:
+                                            registro_alias = dict(catalogo_rel[idx_oficial])
+                                            existentes = [
+                                                str(x).strip()
+                                                for x in (registro_alias.get("Aliases", []) or [])
+                                                if str(x).strip()
+                                            ]
+                                            combinado = existentes + novos_aliases
+                                            aliases_unicos = []
+                                            chaves_vistas = set()
+                                            for alias in combinado:
+                                                chave_alias = normalizar_identidade_produto(alias)
+                                                if not chave_alias or chave_alias in chaves_vistas:
+                                                    continue
+                                                if chave_alias == normalizar_identidade_produto(escolhido):
+                                                    continue
+                                                chaves_vistas.add(chave_alias)
+                                                aliases_unicos.append(alias)
+
+                                            registro_alias["Aliases"] = aliases_unicos
+                                            registro_alias["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+                                            catalogo_rel[idx_oficial] = registro_alias
+                                            salvar_catalogo(catalogo_rel)
+                                            st.session_state["_mensagem_sucesso_pendente"] = (
+                                                f"Equivalência salva: {', '.join(novos_aliases)} → {escolhido}. "
+                                                "O histórico original não foi alterado."
+                                            )
+                                            st.rerun()
+
+                    if len(suspeitos) > 20:
+                        st.caption(
+                            f"Mostrando 20 de {len(suspeitos)} grupos. "
+                            "A correção dos primeiros grupos já reduz a duplicidade dos relatórios."
+                        )
                 else:
                     st.success("Nenhuma variação simples de nome foi encontrada no histórico.")
+
+                aliases_cadastrados = [
+                    (str(p.get("Nome") or "").strip(), list(p.get("Aliases", []) or []))
+                    for p in catalogo_rel
+                    if (p.get("Aliases", []) or [])
+                ]
+                if aliases_cadastrados:
+                    st.divider()
+                    st.markdown("##### 🔗 Equivalências já confirmadas")
+                    dados_aliases = [
+                        {
+                            "Produto oficial": oficial,
+                            "Aliases": " • ".join(str(x) for x in aliases if str(x).strip()),
+                        }
+                        for oficial, aliases in aliases_cadastrados
+                    ]
+                    st.dataframe(pd.DataFrame(dados_aliases), use_container_width=True, hide_index=True)
         else:
             st.info("Nenhum produto encontrado nas propostas do período selecionado.")
 
@@ -10838,6 +11132,13 @@ if pagina_atual == "catalogo":
                 material_cat = c2.text_input(
                     "Material / composição", value=str(item_edicao.get("Material", "")),
                     placeholder="Ex.: papel arroz, PLA, acrílico, papel fotográfico...", key=f"cat_material_{sufixo}"
+                )
+                aliases_cat = c2.text_area(
+                    "Nomes alternativos / aliases",
+                    value="\n".join(str(x) for x in (item_edicao.get("Aliases", []) or []) if str(x).strip()),
+                    height=85,
+                    key=f"cat_aliases_{sufixo}",
+                    help="Um por linha. Use apenas para variações que representam exatamente o mesmo produto. O histórico não é renomeado.",
                 )
                 custo_cat = c2.text_input(
                     "Custo (opcional)", value=str(item_edicao.get("Custo", "")), key=f"cat_custo_{sufixo}"
@@ -11120,6 +11421,16 @@ if pagina_atual == "catalogo":
                     st.warning("Google Drive: " + " ".join(dict.fromkeys(drive_erros)))
 
                 imagens = list(dict.fromkeys(imagens))
+                aliases_digitados_cat = [x.strip() for x in aliases_cat.splitlines() if x.strip()]
+                nome_anterior_cat = str(item_edicao.get("Nome") or "").strip()
+                if nome_anterior_cat and normalizar_identidade_produto(nome_anterior_cat) != normalizar_identidade_produto(nome_cat):
+                    aliases_digitados_cat.append(nome_anterior_cat)
+                aliases_validos_cat, conflitos_alias_cat = filtrar_aliases_validos_produto(
+                    nome_cat.strip(), aliases_digitados_cat, catalogo, indice_edicao
+                )
+                if conflitos_alias_cat:
+                    st.warning("Alguns aliases não foram salvos por conflito: " + " • ".join(conflitos_alias_cat))
+
                 # Mantém campos futuros/desconhecidos existentes ao editar.
                 registro = dict(item_edicao)
                 registro.update({
@@ -11130,6 +11441,7 @@ if pagina_atual == "catalogo":
                     "DescricaoCurta": descricao_curta_cat.strip(), "DescricaoCompleta": descricao_cat.strip(),
                     "IdeiasGeracao": ideias_geracao.strip(),
                     "Preco": preco_cat.strip(), "Material": material_cat.strip(),
+                    "Aliases": aliases_validos_cat,
                     "CampanhasPermitidas": list(dict.fromkeys(campanhas_permitidas_cat)),
                     "Custo": custo_cat.strip(), "TempoProducao": tempo_cat.strip(),
                     "Processos": processos_cat, "CamposPersonalizacao": campos_personalizacao,
@@ -11259,7 +11571,7 @@ if pagina_atual == "catalogo":
             filtrados = [
                 (i, p) for i, p in enumerate(catalogo)
                 if not termo_cat
-                or termo_cat in (f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')} {p.get('CodigoInterno','')} {p.get('Descricao','')} {p.get('PalavrasChave','')} " + " ".join(
+                or termo_cat in (f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')} {p.get('CodigoInterno','')} {p.get('Descricao','')} {p.get('PalavrasChave','')} {' '.join(str(x) for x in (p.get('Aliases', []) or []))} " + " ".join(
                     f"{a.get('nome','')} {a.get('descricao','')} {' '.join(a.get('tags', []) or [])}"
                     for a in (p.get('ArquivosBiblioteca', []) or [])
                 )).lower()
@@ -11291,21 +11603,29 @@ if pagina_atual == "catalogo":
                     campanhas_lista = produto_cat.get("CampanhasPermitidas", []) or []
                     if campanhas_lista:
                         cinfo.caption("📅 Campanhas: " + " • ".join(campanhas_lista))
-                    # Estatísticas calculadas a partir do histórico, sem duplicar dados no produto.
-                    vendas_qtd = 0.0
-                    vendas_valor = 0.0
-                    ultima_venda = "—"
+                    aliases_lista = [str(x).strip() for x in (produto_cat.get("Aliases", []) or []) if str(x).strip()]
+                    if aliases_lista:
+                        cinfo.caption("🔗 Aliases: " + " • ".join(aliases_lista))
+
+                    # Estatísticas históricas consolidadas pelo nome oficial + aliases.
+                    orcado_qtd = 0.0
+                    orcado_valor = 0.0
+                    ultima_ocorrencia = "—"
                     for proposta_hist in carregar_historico():
                         for item_hist in proposta_hist.get("itens", []) or []:
-                            if str(item_hist.get("produto", "")).strip().casefold() == nome_produto.strip().casefold():
+                            nome_hist_oficial = nome_produto_oficial_catalogo(
+                                item_hist.get("produto", ""),
+                                catalogo,
+                            )
+                            if normalizar_identidade_produto(nome_hist_oficial) == normalizar_identidade_produto(nome_produto):
                                 qtd_hist = valor_float(item_hist.get("quantidade", 0))
                                 unit_hist = valor_float(item_hist.get("valor_unitario", 0))
-                                vendas_qtd += qtd_hist
-                                vendas_valor += qtd_hist * unit_hist
-                                if ultima_venda == "—":
-                                    ultima_venda = str(proposta_hist.get("data_geracao", "—"))
+                                orcado_qtd += qtd_hist
+                                orcado_valor += qtd_hist * unit_hist
+                                if ultima_ocorrencia == "—":
+                                    ultima_ocorrencia = str(proposta_hist.get("data_geracao", "—"))
                     cinfo.caption(
-                        f"Vendido: {vendas_qtd:g} un. | Receita histórica: {formatar_preco_catalogo(vendas_valor)} | Última venda: {ultima_venda}"
+                        f"Orçado histórico: {orcado_qtd:g} un. | Valor orçado: {formatar_preco_catalogo(orcado_valor)} | Última ocorrência: {ultima_ocorrencia}"
                     )
                     processos_lista = produto_cat.get("Processos", []) or []
                     if processos_lista:
