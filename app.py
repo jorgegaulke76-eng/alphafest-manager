@@ -3875,8 +3875,23 @@ class _ThuAlphaSiteParser:
                         or ""
                     )
                     srcset = str(attrs.get("srcset") or "")
-                    if not src and srcset:
-                        src = srcset.split(",")[-1].strip().split(" ")[0]
+                    if srcset:
+                        candidatos = []
+                        for parte in srcset.split(","):
+                            pedacos = parte.strip().split()
+                            if not pedacos:
+                                continue
+                            url_cand = pedacos[0]
+                            largura = 0
+                            if len(pedacos) > 1 and pedacos[1].endswith("w"):
+                                try:
+                                    largura = int(pedacos[1][:-1])
+                                except Exception:
+                                    largura = 0
+                            candidatos.append((largura, url_cand))
+                        if candidatos:
+                            candidatos.sort(key=lambda x: x[0])
+                            src = candidatos[-1][1] or src
                     alt = str(attrs.get("alt") or "").strip()
                     if src:
                         outer.images.append({"url": str(src).strip(), "alt": alt})
@@ -3921,6 +3936,36 @@ class _ThuAlphaSiteParser:
 
     def feed(self, html_text):
         self.parser.feed(html_text)
+
+
+def _thu_site_url_imagem_original(url):
+    """Retorna a melhor URL disponível; em Wix remove transformações /v1/... para acessar o arquivo original."""
+    valor = str(url or "").strip()
+    if not valor:
+        return ""
+    try:
+        p = urllib.parse.urlparse(valor)
+    except Exception:
+        return valor
+
+    host = (p.hostname or "").casefold()
+    if "wixstatic.com" not in host:
+        return valor
+
+    path = urllib.parse.unquote(p.path or "")
+    achou = re.search(r"(/media/[^/]+)", path)
+    if not achou:
+        return valor
+
+    original_path = achou.group(1)
+    return urllib.parse.urlunparse((
+        p.scheme or "https",
+        p.netloc,
+        original_path,
+        "",
+        "",
+        "",
+    ))
 
 
 def _thu_site_identidade_imagem(url):
@@ -3969,12 +4014,14 @@ def _thu_site_filtrar_imagens(imagens, limite=18):
         if _thu_site_imagem_global_obvia(url, alt):
             continue
 
-        chave = _thu_site_identidade_imagem(url) or url.split("?")[0]
+        original_url = _thu_site_url_imagem_original(url)
+        chave = _thu_site_identidade_imagem(original_url or url) or url.split("?")[0]
         if chave in vistos:
             continue
         vistos.add(chave)
         saida.append({
             "url": url,
+            "original_url": original_url or url,
             "alt": alt or Path(urllib.parse.urlparse(url).path).name or "Imagem",
             "identidade": chave,
         })
@@ -4377,32 +4424,57 @@ def thu_site_analisar_acervo(max_paginas=42):
     return thu_site_reprocessar_scan(scan)
 
 
-def _thu_site_baixar_imagem(url, nome_ref="imagem_site"):
-    if not _thu_site_url_segura(url, imagem=True):
+def _thu_site_baixar_imagem(url, nome_ref="imagem_site", fallback_url=""):
+    candidatos = []
+    original = _thu_site_url_imagem_original(url)
+    for cand in (original, url, fallback_url):
+        cand = str(cand or "").strip()
+        if cand and cand not in candidatos and _thu_site_url_segura(cand, imagem=True):
+            candidatos.append(cand)
+
+    if not candidatos:
         return None, "URL de imagem não autorizada."
-    try:
-        r = requests.get(
-            url,
-            timeout=20,
-            allow_redirects=True,
-            headers={"User-Agent": "AlphaFestManager/20.4.9-I3.1"},
-            stream=True,
-        )
-        r.raise_for_status()
-        ctype = str(r.headers.get("Content-Type") or "").split(";")[0].strip().casefold()
-        permitidos = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
-        if ctype not in permitidos:
-            return None, "O arquivo remoto não é PNG/JPG/WEBP."
-        content = r.content
-        if len(content) > 15 * 1024 * 1024:
-            return None, "A imagem ultrapassa 15 MB."
-        ext = permitidos[ctype]
-        nome_limpo = re.sub(r"[^A-Za-z0-9_-]+", "_", str(nome_ref or "imagem_site"))[:80]
-        return _DriveImageUpload(content, f"{nome_limpo}.{ext}", ctype), ""
-    except requests.RequestException:
-        return None, "Não foi possível baixar a imagem do site."
-    except Exception:
-        return None, "Falha ao preparar a imagem para importação."
+
+    ultimo_erro = "Não foi possível baixar a imagem do site."
+    for candidato in candidatos:
+        try:
+            r = requests.get(
+                candidato,
+                timeout=25,
+                allow_redirects=True,
+                headers={"User-Agent": "AlphaFestManager/20.4.9-I3.2"},
+                stream=True,
+            )
+            r.raise_for_status()
+            ctype = str(r.headers.get("Content-Type") or "").split(";")[0].strip().casefold()
+            permitidos = {"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
+            if ctype not in permitidos:
+                ultimo_erro = "O arquivo remoto não é PNG/JPG/WEBP."
+                continue
+
+            content = r.content
+            if len(content) > 25 * 1024 * 1024:
+                ultimo_erro = "A imagem original ultrapassa 25 MB."
+                continue
+
+            ext = permitidos[ctype]
+            nome_limpo = re.sub(r"[^A-Za-z0-9_-]+", "_", str(nome_ref or "imagem_site"))[:80]
+            upload = _DriveImageUpload(content, f"{nome_limpo}.{ext}", ctype)
+            # Metadados auxiliares usados apenas para auditoria da origem.
+            try:
+                upload._thu_origem_url = candidato
+                upload._thu_bytes = len(content)
+            except Exception:
+                pass
+            return upload, ""
+        except requests.RequestException:
+            ultimo_erro = "Não foi possível baixar uma das versões da imagem."
+            continue
+        except Exception:
+            ultimo_erro = "Falha ao preparar a imagem para importação."
+            continue
+
+    return None, ultimo_erro
 
 
 @st.dialog("🌐 Assistente THU • Importar imagens do Site AlphaFest", width="large")
@@ -4423,7 +4495,7 @@ def dialog_thu_importar_imagens_site(pagina):
 
     st.markdown(f"### {nome_pagina}")
     st.caption(
-        "Origem: Site AlphaFest legado. Nada será importado sem sua confirmação e o arquivo original do Catálogo não é substituído automaticamente."
+        "Origem: Site AlphaFest legado. A prévia pode ser reduzida, mas na importação o THU tenta baixar o arquivo original do Wix em maior resolução. Nada é salvo sem confirmação."
     )
 
     nomes_oficiais = [str(p.get("Nome") or "").strip() for p in catalogo if str(p.get("Nome") or "").strip()]
@@ -4506,8 +4578,9 @@ def dialog_thu_importar_imagens_site(pagina):
         fontes = []
         for pos, img in enumerate(selecionadas, 1):
             upload, erro = _thu_site_baixar_imagem(
-                img.get("url"),
+                img.get("original_url") or img.get("url"),
                 nome_ref=f"site_{produto_escolhido}_{pos}",
+                fallback_url=img.get("url"),
             )
             if erro:
                 erros.append(erro)
@@ -4517,7 +4590,9 @@ def dialog_thu_importar_imagens_site(pagina):
                 caminhos.append(caminho)
                 fontes.append({
                     "url_origem": str(img.get("url") or ""),
+                    "url_original": str(img.get("original_url") or img.get("url") or ""),
                     "alt": str(img.get("alt") or ""),
+                    "bytes_importados": int(getattr(upload, "_thu_bytes", 0) or 0),
                 })
             else:
                 erros.append("Uma das imagens não pôde ser gravada no armazenamento.")
