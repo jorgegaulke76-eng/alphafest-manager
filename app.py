@@ -7566,6 +7566,7 @@ def dialog_catalogo_cadastro_anna(
         salvar_catalogo(catalogo)
         confirmado = any(str(x.get("Nome", "")).strip() == nome.strip() for x in carregar_catalogo())
         if confirmado:
+            st.session_state["_thu_auditar_produto_nome"] = nome.strip()
             if retorno_padronizacao:
                 st.session_state["_abrir_padronizacao_h2"] = True
                 grupo_txt = " • ".join(
@@ -7583,6 +7584,390 @@ def dialog_catalogo_cadastro_anna(
             st.rerun()
         else:
             st.error("Não foi possível confirmar o salvamento do produto.")
+
+
+
+
+def auditoria_thu_produto_catalogo(produto):
+    """20.4.9-I2 — auditoria pós-cadastro sem preencher ou inventar dados."""
+    produto = produto or {}
+    base = avaliar_pendencias_produto_catalogo(produto)
+    alertas_legado = auditar_dados_antigos_catalogo(produto)
+
+    imagens = [x for x in (produto.get("Imagens", []) or []) if str(x).strip()]
+    campanhas = [x for x in (produto.get("CampanhasPermitidas", []) or []) if str(x).strip()]
+    aliases = [x for x in (produto.get("Aliases", []) or []) if str(x).strip()]
+
+    essenciais = {
+        "Nome": bool(str(produto.get("Nome") or "").strip()),
+        "Categoria": bool(str(produto.get("Categoria") or "").strip()),
+        "Descrição": bool(str(
+            produto.get("DescricaoCompleta")
+            or produto.get("DescricaoCurta")
+            or produto.get("Descricao")
+            or ""
+        ).strip()),
+        "Material": bool(str(produto.get("Material") or "").strip()),
+        "Valor": bool(str(produto.get("Preco") or "").strip()),
+        "Campanhas/Datas": bool(campanhas),
+        "Foto principal": bool(imagens),
+    }
+
+    faltas = [nome for nome, ok in essenciais.items() if not ok]
+    completo = not faltas and not alertas_legado
+
+    return {
+        "essenciais": essenciais,
+        "faltas": faltas,
+        "criticas": list(base.get("criticas") or []),
+        "avisos": list(base.get("avisos") or []),
+        "alertas_legado": list(alertas_legado or []),
+        "qtd_imagens": len(imagens),
+        "qtd_campanhas": len(campanhas),
+        "qtd_aliases": len(aliases),
+        "pronto_thu": bool(base.get("pronto_thu")),
+        "completo": completo,
+    }
+
+
+def renderizar_auditoria_thu_pos_cadastro(nome_produto, prefixo="thu_auditoria_produto"):
+    """Mostra auditoria visível após cadastro/edição do produto."""
+    nome_produto = str(nome_produto or "").strip()
+    if not nome_produto:
+        return False
+
+    catalogo = carregar_catalogo()
+    idx = next(
+        (
+            i for i, produto in enumerate(catalogo)
+            if normalizar_identidade_produto(produto.get("Nome"))
+            == normalizar_identidade_produto(nome_produto)
+        ),
+        None,
+    )
+    if idx is None:
+        return False
+
+    produto = catalogo[idx]
+    aud = auditoria_thu_produto_catalogo(produto)
+
+    with st.container(border=True):
+        st.markdown(f"### 💙 THU • Auditoria do cadastro — {produto.get('Nome','Produto')}")
+        st.caption(
+            "Conferência pós-cadastro. O THU não completa informações sozinho; ele mostra exatamente o que ainda precisa ser revisado."
+        )
+
+        a1, a2, a3, a4 = st.columns(4)
+        a1.metric("Status", "Completo" if aud["completo"] else ("Pronto para THU" if aud["pronto_thu"] else "Incompleto"))
+        a2.metric("Fotos", aud["qtd_imagens"])
+        a3.metric("Campanhas", aud["qtd_campanhas"])
+        a4.metric("Aliases", aud["qtd_aliases"])
+
+        checklist = " • ".join(
+            f"{'✅' if ok else '❌'} {campo}"
+            for campo, ok in aud["essenciais"].items()
+        )
+        st.caption(checklist)
+
+        if aud["faltas"]:
+            st.warning("Completar cadastro: " + " • ".join(aud["faltas"]))
+        elif aud["alertas_legado"]:
+            st.warning("Cadastro preenchido, mas há dados antigos para revisar: " + " • ".join(aud["alertas_legado"]))
+        else:
+            st.success("Cadastro completo para o THU e com imagem de referência.")
+
+        if aud["qtd_imagens"] == 0:
+            st.info(
+                "📸 Banco de imagens vazio. Adicione pelo menos uma foto real do produto para facilitar campanhas, conferência visual e futuras variações."
+            )
+        elif aud["qtd_imagens"] == 1:
+            st.info(
+                "📸 Há somente 1 foto de referência. Nas próximas entregas, vale salvar novas cores, estampas ou versões úteis."
+            )
+
+        b1, b2 = st.columns([1.4, 1])
+        if b1.button(
+            "✏️ Completar / revisar cadastro",
+            key=f"{prefixo}_editar_{idx}_{abs(hash(nome_produto))}",
+            use_container_width=True,
+        ):
+            dialog_catalogo_cadastro_anna(produto_indice=idx)
+        if b2.button(
+            "Fechar auditoria",
+            key=f"{prefixo}_fechar_{abs(hash(nome_produto))}",
+            use_container_width=True,
+        ):
+            st.session_state.pop("_thu_auditar_produto_nome", None)
+            st.rerun()
+    return True
+
+
+def _produto_catalogo_da_proposta(nome_item, catalogo):
+    """Resolve item da proposta para o registro oficial do Catálogo."""
+    oficial = nome_produto_oficial_catalogo(nome_item, catalogo)
+    idx = next(
+        (
+            i for i, p in enumerate(catalogo or [])
+            if normalizar_identidade_produto(p.get("Nome"))
+            == normalizar_identidade_produto(oficial)
+        ),
+        None,
+    )
+    return (idx, catalogo[idx]) if idx is not None else (None, None)
+
+
+def _produto_entrega_ja_revisado(proposta, produto_nome):
+    chave = normalizar_identidade_produto(produto_nome)
+    revisados = {
+        normalizar_identidade_produto(x)
+        for x in ((proposta or {}).get("BancoImagensRevisados", []) or [])
+        if str(x).strip()
+    }
+    return bool(chave and chave in revisados)
+
+
+def registrar_revisao_banco_imagens_proposta(numero, produto_nome, acao, fotos=None, observacao=""):
+    """Marca a revisão da entrega sem alterar itens/valores da proposta."""
+    historico = carregar_historico()
+    proposta = next((p for p in historico if str(p.get("numero_proposta") or "") == str(numero or "")), None)
+    if proposta is None:
+        return False
+
+    revisados = list(proposta.get("BancoImagensRevisados", []) or [])
+    chave = normalizar_identidade_produto(produto_nome)
+    if chave and not any(normalizar_identidade_produto(x) == chave for x in revisados):
+        revisados.append(str(produto_nome))
+    proposta["BancoImagensRevisados"] = revisados
+
+    historico_revisao = list(proposta.get("BancoImagensHistorico", []) or [])
+    historico_revisao.append({
+        "produto": str(produto_nome),
+        "acao": str(acao),
+        "fotos": list(fotos or []),
+        "observacao": str(observacao or "").strip(),
+        "revisado_em": agora_local().isoformat(timespec="seconds"),
+        "usuario": obter_usuario_atual(),
+    })
+    proposta["BancoImagensHistorico"] = historico_revisao[-100:]
+    salvar_historico_completo(historico)
+    return True
+
+
+@st.dialog("📸 THU • Atualizar banco de imagens", width="large")
+def dialog_banco_imagens_entrega(numero_proposta, produto_nome):
+    """Sugere atualização da galeria após entrega; só grava após confirmação."""
+    historico = carregar_historico()
+    proposta = next(
+        (p for p in historico if str(p.get("numero_proposta") or "") == str(numero_proposta or "")),
+        None,
+    )
+    if proposta is None:
+        st.error("Proposta não localizada.")
+        return
+
+    catalogo = carregar_catalogo()
+    idx_prod, produto = _produto_catalogo_da_proposta(produto_nome, catalogo)
+    if produto is None:
+        st.warning(
+            f"💙 THU: **{produto_nome}** ainda não possui cadastro oficial. Cadastre o produto antes de atualizar o banco de imagens."
+        )
+        if st.button("➕ Cadastrar produto", use_container_width=True):
+            dialog_catalogo_cadastro_anna(nome_prefill=str(produto_nome))
+        return
+
+    nome_oficial = str(produto.get("Nome") or produto_nome)
+    imagens_atuais = list(produto.get("Imagens", []) or [])
+
+    st.markdown(f"### {nome_oficial}")
+    st.caption(
+        f"Entrega {numero_proposta}. Esta foto pode registrar nova cor, estampa, composição, acessório ou acabamento."
+    )
+
+    if imagens_atuais:
+        st.caption(f"Banco atual: {len(imagens_atuais)} foto(s).")
+        cols_prev = st.columns(min(3, len(imagens_atuais)))
+        for pos, imagem in enumerate(imagens_atuais[:3]):
+            with cols_prev[pos]:
+                try:
+                    st.image(imagem_streamlit_catalogo(imagem), use_container_width=True)
+                except Exception:
+                    st.caption("Imagem indisponível")
+    else:
+        st.warning("Este produto ainda não possui foto de referência.")
+
+    with st.form(
+        f"form_banco_imagens_entrega_{abs(hash((str(numero_proposta), nome_oficial)))}",
+        clear_on_submit=False,
+    ):
+        fotos_novas = st.file_uploader(
+            "Fotos desta entrega",
+            type=["png", "jpg", "jpeg", "webp"],
+            accept_multiple_files=True,
+            help="Nada será salvo até você confirmar abaixo.",
+        )
+        destino = st.selectbox(
+            "Como usar estas fotos?",
+            [
+                "Adicionar como novas referências",
+                "Adicionar e usar a primeira como foto principal",
+                "Salvar como variação do produto",
+            ],
+        )
+        observacao = st.text_area(
+            "O que mudou nesta entrega? (opcional)",
+            placeholder="Ex.: nova estampa, versão rosa, acompanha laço, tamanho maior, novo acabamento...",
+            height=90,
+        )
+
+        salvar_fotos = st.form_submit_button(
+            "💾 Salvar no banco de imagens",
+            type="primary",
+            use_container_width=True,
+        )
+        ignorar = st.form_submit_button(
+            "Não há imagem nova útil nesta entrega",
+            use_container_width=True,
+        )
+
+    if ignorar:
+        if registrar_revisao_banco_imagens_proposta(
+            numero_proposta,
+            nome_oficial,
+            "Sem nova imagem útil",
+            [],
+            observacao,
+        ):
+            st.session_state["_mensagem_sucesso_pendente"] = (
+                f"THU: revisão de imagens concluída para {nome_oficial}. Nenhuma foto foi adicionada."
+            )
+            st.rerun()
+        else:
+            st.error("Não foi possível registrar a revisão desta entrega.")
+
+    if salvar_fotos:
+        if not fotos_novas:
+            st.error("Selecione pelo menos uma foto antes de salvar.")
+            return
+
+        caminhos = []
+        for foto in fotos_novas:
+            caminho = salvar_upload_catalogo(foto)
+            if caminho:
+                caminhos.append(caminho)
+
+        if not caminhos:
+            st.error("Não foi possível salvar as fotos selecionadas.")
+            return
+
+        registro = dict(produto)
+        atuais = list(registro.get("Imagens", []) or [])
+
+        if destino == "Adicionar e usar a primeira como foto principal":
+            imagens_finais = caminhos + [x for x in atuais if x not in caminhos]
+            acao = "Nova foto principal"
+        else:
+            imagens_finais = atuais + [x for x in caminhos if x not in atuais]
+            acao = "Novas referências" if destino == "Adicionar como novas referências" else "Nova variação"
+
+        registro["Imagens"] = list(dict.fromkeys(imagens_finais))
+        registro["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+
+        historico_imgs = list(registro.get("BancoImagensHistorico", []) or [])
+        historico_imgs.append({
+            "origem": "Entrega",
+            "numero_proposta": str(numero_proposta),
+            "acao": acao,
+            "fotos": caminhos,
+            "observacao": str(observacao or "").strip(),
+            "adicionado_em": agora_local().isoformat(timespec="seconds"),
+            "usuario": obter_usuario_atual(),
+        })
+        registro["BancoImagensHistorico"] = historico_imgs[-100:]
+
+        if destino == "Salvar como variação do produto":
+            variacoes = list(registro.get("VariacoesImagem", []) or [])
+            variacoes.append({
+                "numero_proposta": str(numero_proposta),
+                "fotos": caminhos,
+                "descricao": str(observacao or "").strip() or "Variação registrada a partir de entrega real",
+                "criado_em": agora_local().isoformat(timespec="seconds"),
+            })
+            registro["VariacoesImagem"] = variacoes[-100:]
+
+        catalogo[idx_prod] = registro
+        salvar_catalogo(catalogo)
+
+        registrar_revisao_banco_imagens_proposta(
+            numero_proposta,
+            nome_oficial,
+            acao,
+            caminhos,
+            observacao,
+        )
+
+        st.session_state["_thu_auditar_produto_nome"] = nome_oficial
+        st.session_state["_mensagem_sucesso_pendente"] = (
+            f"Banco de imagens de {nome_oficial} atualizado com {len(caminhos)} nova(s) foto(s)."
+        )
+        st.rerun()
+
+
+def renderizar_sugestao_banco_imagens_entrega(proposta, prefixo="thu_banco_entrega"):
+    """Mostra a sugestão somente para entrega concluída e ainda não revisada."""
+    if not valor_bool((proposta or {}).get("entregue")):
+        return False
+
+    catalogo = carregar_catalogo()
+    itens = (proposta or {}).get("itens", []) or []
+    candidatos = []
+    vistos = set()
+
+    for item in itens:
+        nome_item = str(item.get("produto") or "").strip()
+        if not nome_item:
+            continue
+        idx_prod, produto = _produto_catalogo_da_proposta(nome_item, catalogo)
+        if produto is None:
+            continue
+        nome_oficial = str(produto.get("Nome") or nome_item)
+        chave = normalizar_identidade_produto(nome_oficial)
+        if not chave or chave in vistos:
+            continue
+        vistos.add(chave)
+        if _produto_entrega_ja_revisado(proposta, nome_oficial):
+            continue
+        candidatos.append(nome_oficial)
+
+    if not candidatos:
+        return False
+
+    numero = str((proposta or {}).get("numero_proposta") or "")
+    st.info(
+        "💙 **THU:** entrega concluída. Vale revisar o banco de imagens: "
+        "esta produção pode trazer uma nova cor, estampa, composição, acessório ou acabamento útil para futuras vendas."
+    )
+
+    if len(candidatos) == 1:
+        nome = candidatos[0]
+        if st.button(
+            f"📸 Revisar fotos de {nome}",
+            key=f"{prefixo}_foto_{abs(hash((numero, nome)))}",
+            use_container_width=True,
+        ):
+            dialog_banco_imagens_entrega(numero, nome)
+    else:
+        st.caption("Produtos desta entrega ainda sem revisão de imagens:")
+        cols = st.columns(min(3, len(candidatos)))
+        for pos, nome in enumerate(candidatos):
+            with cols[pos % len(cols)]:
+                if st.button(
+                    f"📸 {nome}",
+                    key=f"{prefixo}_foto_{pos}_{abs(hash((numero, nome)))}",
+                    use_container_width=True,
+                ):
+                    dialog_banco_imagens_entrega(numero, nome)
+
+    return True
 
 
 @st.dialog("📋 Visualizar e editar catálogo", width="large")
@@ -7767,6 +8152,7 @@ def dialog_catalogo_visualizar_anna():
                         confirmado = carregar_catalogo()
                         ok = i < len(confirmado) and str(confirmado[i].get("Nome", "")).strip() == nome.strip()
                         if ok:
+                            st.session_state["_thu_auditar_produto_nome"] = nome.strip()
                             st.session_state["_mensagem_sucesso_pendente"] = f"Produto {nome.strip()} e suas fotos foram atualizados."
                             st.rerun()
                         else:
@@ -7858,6 +8244,12 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
             else:
                 st.error(mensagem)
 
+    # Quando a entrega já estiver concluída, o THU sugere enriquecer o banco de imagens.
+    renderizar_sugestao_banco_imagens_entrega(
+        prop,
+        prefixo=f"{prefixo}_thu_banco_entrega",
+    )
+
 
 @st.dialog("📦 Entregas de hoje", width="large")
 def dialog_entregas_hoje_anna(propostas):
@@ -7917,6 +8309,13 @@ def renderizar_workspace_anna_isolado():
     msg = st.session_state.pop("_mensagem_sucesso_pendente", None)
     if msg:
         st.success(msg)
+
+    _produto_auditar_anna = st.session_state.get("_thu_auditar_produto_nome")
+    if _produto_auditar_anna:
+        renderizar_auditoria_thu_pos_cadastro(
+            _produto_auditar_anna,
+            prefixo="anna_thu_auditoria_pos_cadastro",
+        )
 
     ultima = st.session_state.get("_ultima_proposta_salva_anna")
     if ultima:
@@ -10714,6 +11113,12 @@ if pagina_atual == "historico":
             for item in prop.get('itens', []):
                 st.write(f"• {item.get('produto', '')} (Qtd: {item.get('quantidade', 0)})")
 
+            if entregue_p:
+                renderizar_sugestao_banco_imagens_entrega(
+                    prop,
+                    prefixo=f"historico_thu_banco_{num_p}",
+                )
+
             c1, c2 = st.columns(2)
             c1.link_button("📱 Enviar WhatsApp", f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop_atual))}", use_container_width=True)
             c2.download_button("📄 Gerar HTML", gerar_html(prop_atual), file_name=f"{num_p}.html", mime="text/html", use_container_width=True, key=f"html_historico_{num_p}")
@@ -10865,6 +11270,13 @@ if pagina_atual == "fluxo":
 
 
 if pagina_atual == "relatorios":
+    _produto_auditar_relatorios = st.session_state.get("_thu_auditar_produto_nome")
+    if _produto_auditar_relatorios:
+        renderizar_auditoria_thu_pos_cadastro(
+            _produto_auditar_relatorios,
+            prefixo="relatorios_thu_auditoria_pos_cadastro",
+        )
+
     h_completo = carregar_historico()
     if not h_completo:
         st.info("📊 Ainda não existem propostas cadastradas para gerar relatórios.")
@@ -11646,6 +12058,14 @@ if pagina_atual == "catalogo":
     st.header("📦 Catálogo Alphafest")
     st.caption("Cadastro interno e geração de seleções específicas para consulta do cliente.")
     catalogo = carregar_catalogo()
+
+    _produto_auditar_catalogo = st.session_state.get("_thu_auditar_produto_nome")
+    if _produto_auditar_catalogo:
+        renderizar_auditoria_thu_pos_cadastro(
+            _produto_auditar_catalogo,
+            prefixo="catalogo_thu_auditoria_pos_cadastro",
+        )
+        catalogo = carregar_catalogo()
     if "catalogo_edit_index" not in st.session_state:
         st.session_state.catalogo_edit_index = None
 
@@ -12039,6 +12459,7 @@ if pagina_atual == "catalogo":
                     catalogo.append(registro)
                 salvar_catalogo(catalogo)
                 st.session_state.catalogo_edit_index = None
+                st.session_state["_thu_auditar_produto_nome"] = nome_cat.strip()
                 st.success("Produto salvo com sucesso.")
                 st.rerun()
 
