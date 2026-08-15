@@ -5290,6 +5290,47 @@ def avaliar_pendencias_produto_catalogo(produto):
     }
 
 
+
+def auditar_dados_antigos_catalogo(produto):
+    """20.4.9-F — detecta sinais de migração antiga sem modificar o registro."""
+    produto = produto or {}
+    alertas = []
+
+    material = str(produto.get("Material") or "").strip()
+    if material:
+        material_cf = material.casefold()
+        marcadores = [
+            "itemdetalhes", "tamanhorecomendado", "usoindicado",
+            "altura da estampa", "tamanho recomendado", "uso indicado",
+            "materialpla", "materialacrilico", "materialpapel"
+        ]
+        if len(material) > 120 or sum(1 for m in marcadores if m in material_cf) >= 2:
+            alertas.append("Material parece conter dados antigos concatenados")
+
+    imagens = [str(x).strip() for x in (produto.get("Imagens", []) or []) if str(x).strip()]
+    for img in imagens:
+        if img.startswith(("http://", "https://", "data:image/")):
+            continue
+        if not Path(img).exists():
+            alertas.append("Há referência de imagem local que não existe mais")
+            break
+
+    nome = str(produto.get("Nome") or "").strip()
+    categoria = str(produto.get("Categoria") or "").strip()
+    if nome and categoria and nome.casefold() == categoria.casefold():
+        alertas.append("Nome e categoria são idênticos; revisar classificação")
+
+    descricao = str(
+        produto.get("DescricaoCompleta")
+        or produto.get("DescricaoCurta")
+        or produto.get("Descricao")
+        or ""
+    ).strip()
+    if descricao and len(descricao) > 700:
+        alertas.append("Descrição muito longa; pode conter dados de migração")
+
+    return list(dict.fromkeys(alertas))
+
 def imagem_data_uri(path):
     if not path:
         return ""
@@ -6923,12 +6964,15 @@ def dialog_catalogo_visualizar_anna():
                     f" · {len(imagens_atuais)} foto(s)"
                 )
                 _rev_anna = avaliar_pendencias_produto_catalogo(produto)
+                _legado_anna = auditar_dados_antigos_catalogo(produto)
                 if _rev_anna["criticas"]:
                     st.warning("Completar: " + " • ".join(_rev_anna["criticas"]))
                 elif _rev_anna["avisos"]:
                     st.info("Pronto para THU • opcional: " + " • ".join(_rev_anna["avisos"]))
                 else:
                     st.success("Cadastro completo para THU")
+                if _legado_anna:
+                    st.warning("Revisar dados antigos: " + " • ".join(_legado_anna))
 
             with st.expander("✏️ Abrir campos, visualizar fotos e adicionar imagens", expanded=False):
                 if imagens_atuais:
@@ -10603,23 +10647,25 @@ if pagina_atual == "catalogo":
                 "Ele não inventa dados e não cria outro cadastro: o botão Editar abre o formulário oficial."
             )
             revisoes_catalogo = [
-                (i, produto, avaliar_pendencias_produto_catalogo(produto))
+                (i, produto, avaliar_pendencias_produto_catalogo(produto), auditar_dados_antigos_catalogo(produto))
                 for i, produto in enumerate(catalogo)
             ]
-            completos_thu = sum(1 for _, _, rev in revisoes_catalogo if rev["pronto_thu"])
+            completos_thu = sum(1 for _, _, rev, _ in revisoes_catalogo if rev["pronto_thu"])
             incompletos_thu = len(revisoes_catalogo) - completos_thu
-            sem_foto = sum(1 for _, _, rev in revisoes_catalogo if "Foto" in rev["avisos"])
+            sem_foto = sum(1 for _, _, rev, _ in revisoes_catalogo if "Foto" in rev["avisos"])
+            suspeitos_legado = sum(1 for _, _, _, legado in revisoes_catalogo if legado)
 
-            rv1, rv2, rv3, rv4 = st.columns(4)
+            rv1, rv2, rv3, rv4, rv5 = st.columns(5)
             rv1.metric("Produtos", len(catalogo))
             rv2.metric("Prontos para THU", completos_thu)
             rv3.metric("Precisam revisão", incompletos_thu)
             rv4.metric("Sem foto", sem_foto)
+            rv5.metric("Dados antigos suspeitos", suspeitos_legado)
 
             rf1, rf2 = st.columns([1.4, 2.6])
             filtro_revisao = rf1.selectbox(
                 "Pendência",
-                ["Todas", "Material", "Campanhas/Datas", "Descrição", "Valor", "Foto"],
+                ["Todas", "Material", "Campanhas/Datas", "Descrição", "Valor", "Foto", "Dados antigos suspeitos"],
                 key="cat_revisao_filtro_2049e",
             )
             busca_revisao = rf2.text_input(
@@ -10629,16 +10675,19 @@ if pagina_atual == "catalogo":
             ).strip().casefold()
 
             lista_revisao = []
-            for idx_rev, produto_rev, rev in revisoes_catalogo:
+            for idx_rev, produto_rev, rev, legado in revisoes_catalogo:
                 pendencias_rev = rev["criticas"] + rev["avisos"]
-                if filtro_revisao != "Todas" and filtro_revisao not in pendencias_rev:
+                if filtro_revisao == "Dados antigos suspeitos":
+                    if not legado:
+                        continue
+                elif filtro_revisao != "Todas" and filtro_revisao not in pendencias_rev:
                     continue
-                if filtro_revisao == "Todas" and not pendencias_rev:
+                elif filtro_revisao == "Todas" and not (pendencias_rev or legado):
                     continue
                 texto_rev = f"{produto_rev.get('Nome','')} {produto_rev.get('Categoria','')}".casefold()
                 if busca_revisao and busca_revisao not in texto_rev:
                     continue
-                lista_revisao.append((idx_rev, produto_rev, rev))
+                lista_revisao.append((idx_rev, produto_rev, rev, legado))
 
             if not lista_revisao:
                 if incompletos_thu == 0 and sem_foto == 0:
@@ -10647,14 +10696,19 @@ if pagina_atual == "catalogo":
                     st.info("Nenhum produto encontrado com esse filtro.")
             else:
                 st.caption(f"{len(lista_revisao)} produto(s) precisam de atenção neste filtro.")
-                for idx_rev, produto_rev, rev in lista_revisao[:30]:
+                for idx_rev, produto_rev, rev, legado in lista_revisao[:30]:
                     rr1, rr2 = st.columns([5, 1])
                     rr1.markdown(f"**{produto_rev.get('Nome') or 'Produto sem nome'}**")
                     pend_txt = rev["criticas"] + rev["avisos"]
-                    rr1.caption(
-                        f"{produto_rev.get('Categoria') or 'Sem categoria'} • "
-                        + "Falta: " + " • ".join(pend_txt)
-                    )
+                    if pend_txt:
+                        rr1.caption(
+                            f"{produto_rev.get('Categoria') or 'Sem categoria'} • "
+                            + "Falta: " + " • ".join(pend_txt)
+                        )
+                    else:
+                        rr1.caption(f"{produto_rev.get('Categoria') or 'Sem categoria'}")
+                    if legado:
+                        rr1.warning("Dados a revisar: " + " • ".join(legado))
                     if rr2.button(
                         "✏️ Editar",
                         key=f"cat_revisao_editar_{idx_rev}",
