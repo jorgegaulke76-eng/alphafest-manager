@@ -52,11 +52,14 @@ def _status_text(record: dict[str, Any]) -> str:
 
 def _encerrada(record: dict[str, Any]) -> bool:
     status = _status_text(record)
-    return _bool(record.get("encerrado")) or status in {
+    motivo_nao_fechado = _bool(record.get("nao_fechado_pagamento")) or _bool(record.get("nao_fechado_sem_retorno"))
+    return motivo_nao_fechado or _bool(record.get("encerrado")) or status in {
         "encerrado", "encerrada", "encerrado sem retorno", "encerrado por preço",
         "encerrado por preco", "encerrado pelo cliente", "encerrado por prazo",
         "cancelado", "cancelada", "recusado", "recusada", "arquivado", "arquivada",
         "excluído", "excluida", "excluído", "excluída",
+        "nao_fechado_pagamento", "não fechado — falta de pagamento",
+        "nao_fechado_sem_retorno", "não fechado — sem retorno do cliente",
     }
 
 
@@ -98,12 +101,12 @@ def calcular_indicadores_unificados(
     aprovadas_total = [p for p in propostas_validas if _bool(p.get("aprovado"))]
     aprovadas_hoje = [
         p for p in aprovadas_total
-        if _is_today(p, ("aprovado_em", "atualizado_em", "updated_at", "data_geracao", "data"), hoje)
+        if _is_today(p, ("aprovado_em", "data_aprovacao"), hoje)
     ]
     entregues_total = [p for p in propostas_validas if _bool(p.get("entregue"))]
     entregues_hoje = [
         p for p in entregues_total
-        if _is_today(p, ("entregue_em", "atualizado_em", "updated_at"), hoje)
+        if _is_today(p, ("entregue_em", "data_entrega_real"), hoje)
     ]
     pagas_total = [p for p in propostas_validas if _bool(p.get("pago"))]
 

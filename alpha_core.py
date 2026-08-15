@@ -50,11 +50,14 @@ def _encerrada(record: dict[str, Any]) -> bool:
         or record.get("status")
         or ""
     ).strip().casefold()
-    return _bool(record.get("encerrado")) or status in {
+    motivo_nao_fechado = _bool(record.get("nao_fechado_pagamento")) or _bool(record.get("nao_fechado_sem_retorno"))
+    return motivo_nao_fechado or _bool(record.get("encerrado")) or status in {
         "encerrado", "encerrada", "encerrado sem retorno", "encerrado por preço",
         "encerrado por preco", "encerrado pelo cliente", "encerrado por prazo",
         "cancelado", "cancelada", "recusado", "recusada", "arquivado", "arquivada",
         "excluído", "excluida", "excluída",
+        "nao_fechado_pagamento", "não fechado — falta de pagamento",
+        "nao_fechado_sem_retorno", "não fechado — sem retorno do cliente",
     }
 
 
@@ -124,7 +127,7 @@ def calcular_alpha_core(
     entregues_hoje_lista = [
         p for p in validas
         if _bool(p.get("entregue"))
-        and _date(p.get("entregue_em") or p.get("data_entrega_real") or p.get("atualizado_em")) == hoje
+        and _date(p.get("entregue_em") or p.get("data_entrega_real")) == hoje
     ]
     atrasadas_lista = [
         p for p in aprovadas_abertas
@@ -133,7 +136,7 @@ def calcular_alpha_core(
     pagos_hoje = [
         p for p in validas
         if _bool(p.get("pago"))
-        and _date(p.get("pago_em") or p.get("data_pagamento") or p.get("atualizado_em")) == hoje
+        and _date(p.get("pago_em") or p.get("data_pagamento")) == hoje
     ]
 
     atendimentos_abertos = [

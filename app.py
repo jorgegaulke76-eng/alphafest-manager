@@ -2232,6 +2232,316 @@ def calcular_valores_proposta(prop):
     return subtotal, desconto, total
 
 
+
+def _data_resultado(valor):
+    """Normaliza datas usadas em indicadores financeiros/comerciais."""
+    if isinstance(valor, datetime):
+        return valor.date()
+    if isinstance(valor, date):
+        return valor
+    texto = str(valor or "").strip()
+    if not texto:
+        return None
+    candidatos = (texto, texto[:19], texto[:10])
+    formatos = (
+        "%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y",
+        "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d",
+    )
+    for candidato in candidatos:
+        for formato in formatos:
+            try:
+                return datetime.strptime(candidato, formato).date()
+            except (TypeError, ValueError):
+                pass
+    try:
+        return datetime.fromisoformat(texto.replace("Z", "+00:00")).date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _data_evento_resultado(proposta, campos_principais, campos_legado=()):
+    """Retorna (data, campo_usado, usou_fallback_legado)."""
+    for campo in campos_principais:
+        d = _data_resultado(proposta.get(campo))
+        if d:
+            return d, campo, False
+    for campo in campos_legado:
+        d = _data_resultado(proposta.get(campo))
+        if d:
+            return d, campo, True
+    return None, "", False
+
+
+def calcular_resultados_oficiais(historico, referencia=None):
+    """20.4.9-G — fonte única dos resultados financeiros/comerciais.
+
+    Regras:
+    - Total orçado: tudo que foi efetivamente registrado como proposta.
+    - Total aprovado: propostas aprovadas e não encerradas/canceladas.
+    - Recebido: propostas pagas e não encerradas/canceladas.
+    - A receber: aprovadas, não pagas e não encerradas/canceladas.
+    - Indicadores 'hoje' usam a data do evento (aprovação/pagamento/entrega);
+      registros legados sem data do evento são auditados, mas não têm a data adivinhada.
+    """
+    referencia = referencia or hoje_local()
+    propostas = [p for p in (historico or []) if isinstance(p, dict)]
+    validas = [p for p in propostas if not proposta_encerrada(p)]
+    aprovadas = [p for p in validas if valor_bool(p.get("aprovado"))]
+    pagas = [p for p in validas if valor_bool(p.get("pago"))]
+    a_receber = [p for p in aprovadas if not valor_bool(p.get("pago"))]
+
+    def total_lista(lista):
+        return sum(calcular_valores_proposta(p)[2] for p in lista)
+
+    criadas_hoje = []
+    propostas_mes = []
+    inicio_mes = referencia.replace(day=1)
+    for p in propostas:
+        d, _, _ = _data_evento_resultado(
+            p,
+            ("data_geracao", "data", "criado_em", "created_at"),
+        )
+        if d == referencia:
+            criadas_hoje.append(p)
+        if d and inicio_mes <= d <= referencia:
+            propostas_mes.append(p)
+
+    aprovadas_hoje = []
+    pagas_hoje = []
+    entregues_hoje = []
+    fallback_eventos = {"aprovacao": 0, "pagamento": 0, "entrega": 0}
+
+    for p in aprovadas:
+        d, _, _ = _data_evento_resultado(
+            p,
+            ("aprovado_em", "data_aprovacao"),
+        )
+        if d == referencia:
+            aprovadas_hoje.append(p)
+        if d is None:
+            fallback_eventos["aprovacao"] += 1
+
+    for p in pagas:
+        d, _, _ = _data_evento_resultado(
+            p,
+            ("pago_em", "data_pagamento"),
+        )
+        if d == referencia:
+            pagas_hoje.append(p)
+        if d is None:
+            fallback_eventos["pagamento"] += 1
+
+    entregues_validas = [p for p in validas if valor_bool(p.get("entregue"))]
+    for p in entregues_validas:
+        d, _, _ = _data_evento_resultado(
+            p,
+            ("entregue_em", "data_entrega_real"),
+        )
+        if d == referencia:
+            entregues_hoje.append(p)
+        if d is None:
+            fallback_eventos["entrega"] += 1
+
+    aprovadas_mes = [p for p in propostas_mes if (not proposta_encerrada(p)) and valor_bool(p.get("aprovado"))]
+
+    return {
+        "referencia": referencia,
+        "propostas_total": len(propostas),
+        "propostas_validas": len(validas),
+        "propostas_encerradas": len(propostas) - len(validas),
+        "aprovadas_total": len(aprovadas),
+        "pagas_total": len(pagas),
+        "a_receber_total_qtd": len(a_receber),
+        "total_orcado": total_lista(propostas),
+        "total_orcado_valido": total_lista(validas),
+        "total_aprovado": total_lista(aprovadas),
+        "total_recebido": total_lista(pagas),
+        "a_receber": total_lista(a_receber),
+        "orcado_hoje": total_lista(criadas_hoje),
+        "confirmado_hoje": total_lista(aprovadas_hoje),
+        "recebido_hoje": total_lista(pagas_hoje),
+        "entregues_hoje": len(entregues_hoje),
+        "propostas_mes": propostas_mes,
+        "aprovadas_mes": aprovadas_mes,
+        "total_mes": total_lista(propostas_mes),
+        "confirmado_mes": total_lista(aprovadas_mes),
+        "ticket_medio": (total_lista(propostas) / len(propostas)) if propostas else 0.0,
+        "ticket_aprovado_mes": (total_lista(aprovadas_mes) / len(aprovadas_mes)) if aprovadas_mes else 0.0,
+        "conversao_mes": (len(aprovadas_mes) / len(propostas_mes) * 100.0) if propostas_mes else 0.0,
+        "fallback_eventos": fallback_eventos,
+        "_listas": {
+            "propostas": propostas,
+            "validas": validas,
+            "aprovadas": aprovadas,
+            "pagas": pagas,
+            "a_receber": a_receber,
+            "criadas_hoje": criadas_hoje,
+            "aprovadas_hoje": aprovadas_hoje,
+            "pagas_hoje": pagas_hoje,
+            "entregues_hoje": entregues_hoje,
+        },
+    }
+
+
+def auditar_integridade_resultados(historico):
+    """Audita inconsistências que podem fazer telas exibirem resultados estranhos."""
+    propostas = [p for p in (historico or []) if isinstance(p, dict)]
+    achados = []
+
+    numeros = {}
+    for indice, p in enumerate(propostas):
+        numero = str(p.get("numero_proposta") or "").strip()
+        if numero:
+            numeros.setdefault(numero, []).append(indice)
+        else:
+            achados.append({
+                "nivel": "Atenção",
+                "proposta": f"registro {indice + 1}",
+                "problema": "Proposta sem número identificador",
+            })
+
+        aprovado = valor_bool(p.get("aprovado"))
+        pago = valor_bool(p.get("pago"))
+        entregue = valor_bool(p.get("entregue"))
+
+        if pago and not aprovado:
+            achados.append({
+                "nivel": "Crítico",
+                "proposta": numero or f"registro {indice + 1}",
+                "problema": "Marcada como paga, mas não aprovada",
+            })
+        if entregue and not aprovado:
+            achados.append({
+                "nivel": "Crítico",
+                "proposta": numero or f"registro {indice + 1}",
+                "problema": "Marcada como entregue, mas não aprovada",
+            })
+        if entregue and not pago:
+            achados.append({
+                "nivel": "Atenção",
+                "proposta": numero or f"registro {indice + 1}",
+                "problema": "Entregue, mas pagamento ainda não está marcado",
+            })
+
+        if aprovado and not (_data_resultado(p.get("aprovado_em")) or _data_resultado(p.get("data_aprovacao"))):
+            achados.append({
+                "nivel": "Legado",
+                "proposta": numero or f"registro {indice + 1}",
+                "problema": "Aprovação sem data própria; indicador diário usa fallback",
+            })
+        if pago and not (_data_resultado(p.get("pago_em")) or _data_resultado(p.get("data_pagamento"))):
+            achados.append({
+                "nivel": "Legado",
+                "proposta": numero or f"registro {indice + 1}",
+                "problema": "Pagamento sem data própria; indicador diário usa fallback",
+            })
+        if entregue and not (_data_resultado(p.get("entregue_em")) or _data_resultado(p.get("data_entrega_real"))):
+            achados.append({
+                "nivel": "Legado",
+                "proposta": numero or f"registro {indice + 1}",
+                "problema": "Entrega concluída sem data própria; indicador diário usa fallback",
+            })
+
+        itens = p.get("itens", []) or []
+        subtotal_calc = sum(
+            valor_float(i.get("quantidade")) * valor_float(i.get("valor_unitario"))
+            for i in itens if isinstance(i, dict)
+        )
+        desconto = valor_float(p.get("desconto", p.get("desconto_valor", 0)))
+        taxa = valor_float(p.get("taxa_entrega", 0))
+        total_calc = max(subtotal_calc - desconto, 0) + taxa
+        total_salvo = p.get("valor_total", p.get("total"))
+        if total_salvo is not None:
+            total_salvo_num = valor_float(total_salvo, total_calc)
+            if abs(total_salvo_num - total_calc) > 0.01:
+                achados.append({
+                    "nivel": "Atenção",
+                    "proposta": numero or f"registro {indice + 1}",
+                    "problema": f"Total salvo ({total_salvo_num:.2f}) difere do cálculo dos itens ({total_calc:.2f})",
+                })
+
+    for numero, indices in numeros.items():
+        if len(indices) > 1:
+            achados.append({
+                "nivel": "Crítico",
+                "proposta": numero,
+                "problema": f"Número de proposta duplicado em {len(indices)} registros",
+            })
+
+    ordem = {"Crítico": 0, "Atenção": 1, "Legado": 2}
+    achados.sort(key=lambda x: (ordem.get(x["nivel"], 9), str(x["proposta"])))
+    return achados
+
+
+def renderizar_auditoria_resultados(historico, resultados=None):
+    resultados = resultados or calcular_resultados_oficiais(historico)
+    achados = auditar_integridade_resultados(historico)
+
+    st.markdown("### 🔎 Auditoria de Resultados")
+    st.caption(
+        "Central, Painel Executivo e Relatórios passam a consultar a mesma regra oficial "
+        "para indicadores equivalentes. A auditoria abaixo verifica a qualidade dos dados que alimentam essas telas."
+    )
+
+    a1, a2, a3, a4 = st.columns(4)
+    a1.metric("Propostas auditadas", resultados["propostas_total"])
+    a2.metric("Aprovadas válidas", resultados["aprovadas_total"])
+    a3.metric("Pagas válidas", resultados["pagas_total"])
+    a4.metric("Achados", len(achados))
+
+    st.markdown("##### Regras oficiais que devem coincidir entre telas")
+    regras = pd.DataFrame([
+        {
+            "Indicador": "A receber",
+            "Regra": "Aprovada + não paga + não encerrada/cancelada",
+            "Valor oficial": f"R$ {resultados['a_receber']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+        },
+        {
+            "Indicador": "Recebido total",
+            "Regra": "Paga + não encerrada/cancelada",
+            "Valor oficial": f"R$ {resultados['total_recebido']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+        },
+        {
+            "Indicador": "Orçado hoje",
+            "Regra": "Proposta criada hoje",
+            "Valor oficial": f"R$ {resultados['orcado_hoje']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+        },
+        {
+            "Indicador": "Confirmado hoje",
+            "Regra": "Aprovação registrada hoje",
+            "Valor oficial": f"R$ {resultados['confirmado_hoje']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+        },
+        {
+            "Indicador": "Recebido hoje",
+            "Regra": "Pagamento registrado hoje",
+            "Valor oficial": f"R$ {resultados['recebido_hoje']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+        },
+    ])
+    st.dataframe(regras, use_container_width=True, hide_index=True)
+
+    fallback = resultados.get("fallback_eventos", {})
+    total_fallback = sum(int(v or 0) for v in fallback.values())
+    if total_fallback:
+        st.warning(
+            "Existem registros antigos sem data específica do evento. Eles não são adivinhados nos indicadores do dia. "
+            f"Sem data — aprovação: {fallback.get('aprovacao', 0)}, "
+            f"pagamento: {fallback.get('pagamento', 0)}, entrega: {fallback.get('entrega', 0)}."
+        )
+    else:
+        st.success("Datas de aprovação, pagamento e entrega estão consistentes para os registros auditados.")
+
+    if not achados:
+        st.success("Nenhuma inconsistência estrutural encontrada nos resultados.")
+    else:
+        criticos = sum(1 for a in achados if a["nivel"] == "Crítico")
+        atencao = sum(1 for a in achados if a["nivel"] == "Atenção")
+        legado = sum(1 for a in achados if a["nivel"] == "Legado")
+        st.caption(f"Críticos: {criticos} • Atenção: {atencao} • Legados: {legado}")
+        st.dataframe(pd.DataFrame(achados[:100]), use_container_width=True, hide_index=True)
+        if len(achados) > 100:
+            st.caption(f"Mostrando 100 de {len(achados)} achados.")
+
+
 def atualizar_proposta(numero_original, dados_atualizados):
     historico = carregar_historico()
     for indice, proposta in enumerate(historico):
@@ -9825,9 +10135,9 @@ if pagina_atual == "historico":
         num_p = prop.get("numero_proposta", "SEM-NÚMERO")
         cliente_p = prop_atual.get("cliente_nome", "Cliente não informado")
         subtotal_p, desconto_p, total_p = calcular_valores_proposta(prop)
-        pago_p = bool(prop.get("pago", False))
-        entregue_p = bool(prop.get("entregue", False))
-        aprovado_p = bool(prop.get("aprovado", False))
+        pago_p = valor_bool(prop.get("pago", False))
+        entregue_p = valor_bool(prop.get("entregue", False))
+        aprovado_p = valor_bool(prop.get("aprovado", False))
         proposta_fechada = pago_p and entregue_p
 
         if proposta_fechada:
@@ -9868,9 +10178,9 @@ if pagina_atual == "historico":
                 excluir_proposta(num_p)
 
             s1, s2, s3 = st.columns(3)
-            s1.checkbox("Aprovado", value=prop.get("aprovado", False), key=f"a_{num_p}", on_change=alternar_status, args=(num_p, "aprovado", not prop.get("aprovado", False)))
-            s2.checkbox("Pago", value=prop.get("pago", False), key=f"p_{num_p}", on_change=alternar_status, args=(num_p, "pago", not prop.get("pago", False)))
-            s3.checkbox("Entregue", value=prop.get("entregue", False), key=f"e_{num_p}", on_change=alternar_status, args=(num_p, "entregue", not prop.get("entregue", False)))
+            s1.checkbox("Aprovado", value=valor_bool(prop.get("aprovado", False)), key=f"a_{num_p}", on_change=alternar_status, args=(num_p, "aprovado", not valor_bool(prop.get("aprovado", False))))
+            s2.checkbox("Pago", value=valor_bool(prop.get("pago", False)), key=f"p_{num_p}", on_change=alternar_status, args=(num_p, "pago", not valor_bool(prop.get("pago", False))))
+            s3.checkbox("Entregue", value=valor_bool(prop.get("entregue", False)), key=f"e_{num_p}", on_change=alternar_status, args=(num_p, "entregue", not valor_bool(prop.get("entregue", False))))
             nf1, nf2 = st.columns(2)
             nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"legacy_nf_pag_{num_p}", on_change=alternar_motivo_nao_fechado, args=(num_p, "pagamento", not valor_bool(prop.get("nao_fechado_pagamento"))))
             nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(prop.get("nao_fechado_sem_retorno")), key=f"legacy_nf_ret_{num_p}", on_change=alternar_motivo_nao_fechado, args=(num_p, "sem_retorno", not valor_bool(prop.get("nao_fechado_sem_retorno"))))
@@ -10018,27 +10328,40 @@ if pagina_atual == "relatorios":
                 "data_geracao": p.get("data_geracao", ""),
                 "data_entrega": p.get("data_entrega", ""),
                 "valor_total": total,
-                "pago": bool(p.get("pago", False)),
-                "entregue": bool(p.get("entregue", False)),
+                "pago": valor_bool(p.get("pago", False)),
+                "entregue": valor_bool(p.get("entregue", False)),
             })
             for item in p.get("itens", []) or []:
                 qtd = valor_float(item.get("quantidade"))
                 unit = valor_float(item.get("valor_unitario"))
-                produtos.append({"produto": str(item.get("produto", "Não informado")).strip() or "Não informado", "quantidade": qtd, "faturamento": qtd * unit, "pago": bool(p.get("pago", False))})
+                produtos.append({"produto": str(item.get("produto", "Não informado")).strip() or "Não informado", "quantidade": qtd, "faturamento": qtd * unit, "pago": valor_bool(p.get("pago", False))})
 
         df = pd.DataFrame(registros)
         df["Data"] = pd.to_datetime(df["data_geracao"], dayfirst=True, errors="coerce")
-        total_orcado = float(df["valor_total"].sum())
-        total_recebido = float(df.loc[df["pago"], "valor_total"].sum())
-        total_pendente = total_orcado - total_recebido
-        ticket_medio = total_orcado / len(df) if len(df) else 0
+
+        # 20.4.9-G — Relatórios usa a mesma fonte oficial do Painel Executivo.
+        resultados_rel = calcular_resultados_oficiais(h, hoje_local())
+        total_orcado = resultados_rel["total_orcado"]
+        total_recebido = resultados_rel["total_recebido"]
+        total_pendente = resultados_rel["a_receber"]
+        ticket_medio = resultados_rel["ticket_medio"]
+
+        def _moeda_rel(valor):
+            return f"R$ {float(valor or 0):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("📝 Propostas", len(df))
-        m2.metric("💰 Total Orçado", f"R$ {total_orcado:,.2f}")
-        m3.metric("✅ Recebido", f"R$ {total_recebido:,.2f}")
-        m4.metric("⏳ A Receber", f"R$ {total_pendente:,.2f}")
-        st.metric("🎯 Ticket médio", f"R$ {ticket_medio:,.2f}")
+        m1.metric("📝 Propostas", resultados_rel["propostas_total"])
+        m2.metric("💰 Total Orçado", _moeda_rel(total_orcado))
+        m3.metric("✅ Recebido", _moeda_rel(total_recebido))
+        m4.metric("⏳ A Receber", _moeda_rel(total_pendente))
+        st.metric("🎯 Ticket médio", _moeda_rel(ticket_medio))
+        st.caption(
+            "Regra oficial: A Receber considera somente propostas aprovadas, não pagas e não encerradas/canceladas. "
+            "Por isso ele não é calculado como Total Orçado menos Recebido."
+        )
+
+        with st.expander("🔎 Auditar números e resultados entre as telas", expanded=False):
+            renderizar_auditoria_resultados(h, resultados_rel)
 
         periodo = st.selectbox("Período de agrupamento", ["Dia", "Semana", "Mês", "Ano"])
         df_data = df.dropna(subset=["Data"]).copy()
@@ -10060,7 +10383,7 @@ if pagina_atual == "relatorios":
         if produtos:
             df_prod = pd.DataFrame(produtos)
             ranking = df_prod.groupby("produto", as_index=False).agg(quantidade=("quantidade", "sum"), faturamento=("faturamento", "sum")).sort_values("quantidade", ascending=False).head(15)
-            st.subheader("🏆 Produtos mais vendidos")
+            st.subheader("🏆 Produtos mais orçados")
             grafico_prod = criar_grafico_profissional(ranking, "produto", "quantidade", "Quantidade por produto", horizontal=True, formato=".0f")
             if grafico_prod: st.altair_chart(grafico_prod, use_container_width=True)
             st.dataframe(ranking, use_container_width=True, hide_index=True)
@@ -10115,25 +10438,21 @@ if pagina_atual == "executivo":
     atendimentos_exec = carregar_atendimentos()
     tarefas_exec = [t for t in sincronizar_producao_com_propostas() if t.get("ativa", True)]
 
-    propostas_mes = []
-    propostas_hoje = []
-    for proposta in historico_exec:
-        d = _data_exec(proposta.get("data_geracao") or proposta.get("data") or proposta.get("criado_em"))
-        if d == hoje_exec:
-            propostas_hoje.append(proposta)
-        if d and inicio_mes_exec <= d <= hoje_exec:
-            propostas_mes.append(proposta)
+    # 20.4.9-G — fonte oficial compartilhada com Relatórios.
+    resultados_exec = calcular_resultados_oficiais(historico_exec, hoje_exec)
+    propostas_mes = resultados_exec["propostas_mes"]
+    propostas_hoje = resultados_exec["_listas"]["criadas_hoje"]
+    aprovadas_mes = resultados_exec["aprovadas_mes"]
 
-    orcado_hoje = sum(calcular_valores_proposta(p)[2] for p in propostas_hoje)
-    confirmado_hoje = sum(calcular_valores_proposta(p)[2] for p in propostas_hoje if p.get("aprovado", False))
-    recebido_hoje = sum(calcular_valores_proposta(p)[2] for p in historico_exec if p.get("pago", False) and registro_eh_de_hoje(p.get("atualizado_em") or p.get("pago_em") or p.get("data_geracao")))
-    a_receber_total = sum(calcular_valores_proposta(p)[2] for p in historico_exec if p.get("aprovado", False) and not p.get("pago", False))
+    orcado_hoje = resultados_exec["orcado_hoje"]
+    confirmado_hoje = resultados_exec["confirmado_hoje"]
+    recebido_hoje = resultados_exec["recebido_hoje"]
+    a_receber_total = resultados_exec["a_receber"]
 
-    total_mes = sum(calcular_valores_proposta(p)[2] for p in propostas_mes)
-    aprovadas_mes = [p for p in propostas_mes if p.get("aprovado", False)]
-    confirmado_mes = sum(calcular_valores_proposta(p)[2] for p in aprovadas_mes)
-    conversao_mes = (len(aprovadas_mes) / len(propostas_mes) * 100) if propostas_mes else 0
-    ticket_aprovado = (confirmado_mes / len(aprovadas_mes)) if aprovadas_mes else 0
+    total_mes = resultados_exec["total_mes"]
+    confirmado_mes = resultados_exec["confirmado_mes"]
+    conversao_mes = resultados_exec["conversao_mes"]
+    ticket_aprovado = resultados_exec["ticket_aprovado_mes"]
 
     st.markdown("#### 💰 Comercial e financeiro")
     ef1, ef2, ef3, ef4 = st.columns(4)
@@ -10141,6 +10460,14 @@ if pagina_atual == "executivo":
     ef2.metric("Confirmado hoje", _moeda_exec(confirmado_hoje))
     ef3.metric("Recebido hoje", _moeda_exec(recebido_hoje))
     ef4.metric("A receber", _moeda_exec(a_receber_total))
+    st.caption("Fonte oficial compartilhada com Relatórios: criação, aprovação e pagamento são tratados como eventos diferentes.")
+
+    indicadores_exec = calcular_indicadores_unificados(
+        historico_exec,
+        atendimentos_exec.get("itens", []),
+        tarefas_exec,
+        hoje_exec,
+    )
 
     em_atraso_exec = [t for t in tarefas_exec if classe_prazo_producao(t.get("data_entrega"), t.get("status")) == "Atrasado"]
     urgentes_exec = [t for t in tarefas_exec if str(t.get("prioridade", "")).lower() == "urgente"]
@@ -10153,11 +10480,15 @@ if pagina_atual == "executivo":
 
     st.markdown("#### ⚙️ Operação de hoje")
     eo1, eo2, eo3, eo4, eo5 = st.columns(5)
-    eo1.metric("Pedidos ativos", len(tarefas_exec))
-    eo2.metric("Atrasados", len(em_atraso_exec))
+    eo1.metric("Pedidos ativos", indicadores_exec["pedidos_ativos"])
+    eo2.metric("Atrasados", indicadores_exec["atrasados_operacionais"])
     eo3.metric("Urgentes", len(urgentes_exec))
-    eo4.metric("Em produção", len(em_producao_exec))
-    eo5.metric("Prontos", len(prontos_exec))
+    eo4.metric("Em produção", indicadores_exec["em_producao_operacional"])
+    eo5.metric("Prontos", indicadores_exec["prontos_operacionais"])
+    st.caption(
+        "Pedidos ativos, atrasados, em produção e prontos usam a mesma regra oficial da Central. "
+        "Urgentes continua sendo uma prioridade específica das tarefas de produção."
+    )
 
     st.markdown("#### 📱 Atendimento e vendas do mês")
     ea1, ea2, ea3, ea4, ea5 = st.columns(5)
