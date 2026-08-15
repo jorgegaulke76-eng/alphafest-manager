@@ -3584,6 +3584,153 @@ def thu_oportunidades_calendario(catalogo, conteudos, campanha_nome):
     return saida
 
 
+
+
+def thu_priorizar_oportunidades(catalogo, conteudos, campanha_nome, dias_para_inicio=None):
+    """20.4.9-I — classifica oportunidades sem inventar dados.
+
+    O índice mede prontidão de divulgação, não previsão de vendas.
+    Produtos com cadastro crítico incompleto nunca recebem status "Pronto para divulgar".
+    """
+    campanha = _thu_normalizar_campanha(campanha_nome)
+    oportunidades = thu_oportunidades_calendario(catalogo, conteudos, campanha_nome)
+    agora = agora_local()
+    hoje = agora.date() if isinstance(agora, datetime) else hoje_local()
+
+    def _data_uso_arte(valor):
+        texto = str(valor or "").strip()
+        if not texto:
+            return None
+        for formato in (
+            "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y",
+            "%Y-%m-%d",
+        ):
+            try:
+                return datetime.strptime(texto[:26], formato).date()
+            except (ValueError, TypeError):
+                pass
+        try:
+            return datetime.fromisoformat(texto.replace("Z", "+00:00")).date()
+        except (ValueError, TypeError):
+            return None
+
+    priorizadas = []
+    for op in oportunidades:
+        produto = op["produto"]
+        artes = list(op.get("artes") or [])
+        revisao = avaliar_pendencias_produto_catalogo(produto)
+        criticas = list(revisao.get("criticas") or [])
+        permitidas = list(produto.get("CampanhasPermitidas", []) or [])
+
+        explicita = bool(campanha and campanha in permitidas)
+        permanente = "Permanente / Todas as épocas" in permitidas
+        arte = artes[0] if artes else None
+
+        pontos = 0
+        motivos = []
+        alertas = []
+
+        if not criticas:
+            pontos += 42
+            motivos.append("cadastro oficial completo")
+        else:
+            alertas.append("completar: " + ", ".join(criticas))
+
+        if explicita:
+            pontos += 14
+            motivos.append("campanha marcada especificamente no Catálogo")
+        elif permanente:
+            pontos += 7
+            motivos.append("produto permanente elegível")
+
+        if arte:
+            pontos += 28
+            motivos.append("arte disponível")
+            if arte.get("favorita"):
+                pontos += 5
+                motivos.append("arte favorita/oficial")
+
+            reusos = int(
+                arte.get("quantidade_reutilizacoes")
+                or len(arte.get("historico_reutilizacoes") or [])
+                or 0
+            )
+            if reusos:
+                motivos.append(f"arte já reutilizada {reusos}x")
+
+            ultima = _data_uso_arte(arte.get("ultima_reutilizacao_em"))
+            if ultima:
+                dias_sem_uso = (hoje - ultima).days
+                if dias_sem_uso <= 14:
+                    pontos -= 12
+                    alertas.append(f"arte usada há {max(dias_sem_uso, 0)} dia(s)")
+                elif dias_sem_uso <= 30:
+                    pontos -= 6
+                    alertas.append(f"arte usada há {dias_sem_uso} dias")
+                elif dias_sem_uso >= 45:
+                    pontos += 6
+                    motivos.append("arte sem uso recente")
+            else:
+                pontos += 4
+                motivos.append("sem reutilização recente registrada")
+        else:
+            alertas.append("falta arte aprovada na Biblioteca")
+
+        if produto.get("Destaque"):
+            pontos += 5
+            motivos.append("produto em destaque")
+
+        pontos = max(0, min(100, int(pontos)))
+
+        pronto_cadastro = not criticas
+        pronto_divulgar = pronto_cadastro and bool(arte)
+
+        if pronto_divulgar:
+            if dias_para_inicio is not None and int(dias_para_inicio) <= 30:
+                prioridade = "Alta"
+            else:
+                prioridade = "Média"
+            status = "Pronto para divulgar"
+            icone = "🟢"
+        elif pronto_cadastro:
+            prioridade = "Preparar arte"
+            status = "Cadastro pronto, falta arte"
+            icone = "🟡"
+        else:
+            prioridade = "Revisar cadastro"
+            status = "Cadastro incompleto"
+            icone = "🟠"
+
+        priorizadas.append({
+            **op,
+            "arte_recomendada": arte,
+            "indice_prontidao": pontos,
+            "motivos_prioridade": motivos,
+            "alertas_prioridade": alertas,
+            "criticas_cadastro": criticas,
+            "pronto_cadastro": pronto_cadastro,
+            "pronto_divulgar": pronto_divulgar,
+            "prioridade_thu": prioridade,
+            "status_thu": status,
+            "icone_thu": icone,
+            "dias_para_inicio": dias_para_inicio,
+        })
+
+    priorizadas.sort(
+        key=lambda x: (
+            bool(x.get("pronto_divulgar")),
+            bool(x.get("pronto_cadastro")),
+            int(x.get("indice_prontidao") or 0),
+            bool(x.get("tem_arte")),
+            bool((x.get("produto") or {}).get("Destaque")),
+            str((x.get("produto") or {}).get("Nome") or "").casefold(),
+        ),
+        reverse=True,
+    )
+    return priorizadas
+
+
 def thu_montar_campanha_catalogo(produto, campanha_nome, arte=None, objetivo="Vender"):
     """20.4.9-C — monta briefing/copy usando exclusivamente dados oficiais do Catálogo."""
     nome=str(produto.get("Nome") or "Produto").strip()
@@ -8365,26 +8512,86 @@ if pagina_atual == "central":
                 _catalogo_op = carregar_catalogo()
                 _marketing_op = carregar_marketing()
                 _conteudos_op = _marketing_op.get("conteudos", []) or []
-                _thu_ops = thu_oportunidades_calendario(_catalogo_op, _conteudos_op, oportunidade.get("nome", ""))
+                _thu_ops = thu_priorizar_oportunidades(
+                    _catalogo_op,
+                    _conteudos_op,
+                    oportunidade.get("nome", ""),
+                    dias_para_inicio=oportunidade.get("dias_para_inicio"),
+                )
                 if _thu_ops:
-                    with st.expander(f"💙 THU • Produtos elegíveis para {oportunidade.get('nome','Campanha')}", expanded=False):
-                        st.caption("Somente produtos autorizados no Catálogo para esta campanha aparecem aqui.")
+                    with st.expander(f"💙 THU • Prioridade de divulgação — {oportunidade.get('nome','Campanha')}", expanded=False):
+                        st.caption(
+                            "O THU ordena por prontidão real: cadastro oficial, elegibilidade da campanha, arte disponível "
+                            "e histórico de reutilização. O índice não é previsão de vendas."
+                        )
+
+                        _melhor = next((x for x in _thu_ops if x.get("pronto_divulgar")), None)
+                        if _melhor:
+                            _pm = _melhor["produto"]
+                            st.success(
+                                f"🥇 Melhor oportunidade agora: {_pm.get('Nome','Produto')} "
+                                f"• prontidão {_melhor.get('indice_prontidao',0)}/100"
+                            )
+
                         for _n, _op in enumerate(_thu_ops[:8], 1):
-                            _p=_op["produto"]; _artes=_op["artes"]
-                            _oc1,_oc2=st.columns([4,1.3])
-                            _oc1.markdown(f"**{_n}. {_p.get('Nome','Produto')}** " + ("🎨" if _artes else "⚠️"))
-                            _det=[]
-                            if _p.get("Preco"): _det.append(f"Valor: {formatar_preco_catalogo(_p.get('Preco'))}")
-                            if _p.get("Material"): _det.append(f"Material: {_p.get('Material')}")
-                            _det.append(f"{len(_artes)} arte(s) encontrada(s)" if _artes else "sem arte na Biblioteca")
+                            _p = _op["produto"]
+                            _artes = _op["artes"]
+                            _arte_rec = _op.get("arte_recomendada")
+                            _oc1, _oc2 = st.columns([4.2, 1.35])
+                            _oc1.markdown(
+                                f"**{_n}. {_op.get('icone_thu','')} {_p.get('Nome','Produto')}** "
+                                f"• {_op.get('status_thu')} • **{_op.get('indice_prontidao',0)}/100**"
+                            )
+
+                            _det = []
+                            if _p.get("Preco"):
+                                _det.append(f"Valor: {formatar_preco_catalogo(_p.get('Preco'))}")
+                            if _p.get("Material"):
+                                _det.append(f"Material: {_p.get('Material')}")
+                            _det.append(
+                                f"{len(_artes)} arte(s) relacionada(s)"
+                                if _artes else "sem arte na Biblioteca"
+                            )
                             _oc1.caption(" • ".join(_det))
-                            if _artes:
-                                if _oc2.button("Preparar campanha", key=f"thu_cal_prep_{oportunidade.get('id','')}_{_n}", use_container_width=True):
-                                    st.session_state["_thu_aplicar_busca_2048"] = str(_artes[0].get("produto") or "")
-                                    st.session_state["thu_produto_escolhido_2049"] = _p.get("Nome")
+
+                            _motivos = list(_op.get("motivos_prioridade") or [])
+                            _alertas = list(_op.get("alertas_prioridade") or [])
+                            if _motivos:
+                                _oc1.caption("✅ " + " • ".join(_motivos[:4]))
+                            if _alertas:
+                                _oc1.caption("⚠️ " + " • ".join(_alertas[:3]))
+
+                            if _op.get("pronto_divulgar") and _arte_rec:
+                                if _oc2.button(
+                                    "Preparar campanha",
+                                    key=f"thu_cal_prep_i_{oportunidade.get('id','')}_{_n}",
+                                    use_container_width=True,
+                                ):
+                                    st.session_state["thu_campanha_preparar_2049c"] = {
+                                        "produto": _p.get("Nome"),
+                                        "campanha": oportunidade.get("nome", ""),
+                                        "arte_id": str(_arte_rec.get("id") or ""),
+                                    }
                                     rerun_na_aba("marketing")
-                            else:
+                            elif _op.get("pronto_cadastro"):
                                 _oc2.warning("Falta arte")
+                            else:
+                                if _oc2.button(
+                                    "Revisar cadastro",
+                                    key=f"thu_cal_revisar_i_{oportunidade.get('id','')}_{_n}",
+                                    use_container_width=True,
+                                ):
+                                    _idx_prod = next(
+                                        (
+                                            idx for idx, prod in enumerate(_catalogo_op)
+                                            if normalizar_identidade_produto(prod.get("Nome"))
+                                            == normalizar_identidade_produto(_p.get("Nome"))
+                                        ),
+                                        None,
+                                    )
+                                    if _idx_prod is not None:
+                                        st.session_state.catalogo_edit_index = _idx_prod
+                                        rerun_na_aba("catalogo")
                 else:
                     st.warning("💙 THU: ainda não há produto do Catálogo habilitado para esta campanha.")
         st.caption("Cadastre datas locais, escolares e campanhas próprias na aba Calendário Comercial.")
@@ -9606,8 +9813,8 @@ if pagina_atual == "crescimento":
                 st.session_state["central_camp_tipo_2047b"] = "Todos"
                 st.session_state["central_camp_favoritas_2030"] = False
 
-            with st.expander("📅 THU • Calendário Inteligente", expanded=False):
-                st.caption("O THU lê o Calendário Mestre existente, cruza com as campanhas permitidas no Catálogo e verifica se já existe arte na Biblioteca.")
+            with st.expander("📅 THU • Prioridade de Divulgação", expanded=False):
+                st.caption("O THU cruza Calendário, Catálogo e Biblioteca e ordena as oportunidades pela prontidão real para divulgação.")
                 _eventos_thu = calendar_theme_options(carregar_campanhas(), hoje_local(), limit_days=120)
                 if not _eventos_thu:
                     st.info("Nenhuma campanha encontrada nos próximos 120 dias.")
@@ -9615,32 +9822,122 @@ if pagina_atual == "crescimento":
                     _labels_thu=[f"{e['name']} · {e['start'].strftime('%d/%m/%Y')}" for e in _eventos_thu]
                     _sel_thu=st.selectbox("Escolha uma oportunidade do Calendário", _labels_thu, key="thu_calendario_sel_2049b")
                     _ev_thu=_eventos_thu[_labels_thu.index(_sel_thu)]
-                    _cat_thu=carregar_catalogo()
-                    _ops_thu=thu_oportunidades_calendario(_cat_thu, conteudos, _ev_thu["name"])
+                    _cat_thu = carregar_catalogo()
+
+                    _inicio_ev = _ev_thu.get("start")
+                    if isinstance(_inicio_ev, datetime):
+                        _inicio_ev = _inicio_ev.date()
+                    _dias_ev = None
+                    if isinstance(_inicio_ev, date):
+                        _dias_ev = max((_inicio_ev - hoje_local()).days, 0)
+
+                    _ops_thu = thu_priorizar_oportunidades(
+                        _cat_thu,
+                        conteudos,
+                        _ev_thu["name"],
+                        dias_para_inicio=_dias_ev,
+                    )
                     if _ops_thu:
-                        _com_arte=sum(1 for x in _ops_thu if x["tem_arte"])
-                        ca1,ca2,ca3=st.columns(3)
-                        ca1.metric("Produtos elegíveis",len(_ops_thu))
-                        ca2.metric("Com arte pronta",_com_arte)
-                        ca3.metric("Precisam de arte",len(_ops_thu)-_com_arte)
-                        for _i,_op in enumerate(_ops_thu[:10],1):
-                            _p=_op["produto"]; _artes=_op["artes"]
-                            _r1,_r2=st.columns([3.4,1])
-                            _r1.markdown(f"**{_p.get('Nome','Produto')}** " + ("✅ Arte disponível" if _artes else "⚠️ Sem arte"))
-                            _info=[]
-                            if _p.get("Preco"): _info.append(f"Valor {formatar_preco_catalogo(_p.get('Preco'))}")
-                            if _p.get("Material"): _info.append(str(_p.get("Material")))
-                            _r1.caption(" • ".join(_info) if _info else "Dados do Catálogo")
-                            if _artes:
-                                if _r2.button("Preparar campanha",key=f"thu_cal_arte_2049b_{_i}_{_artes[0].get('id')}",use_container_width=True):
-                                    st.session_state["thu_campanha_preparar_2049c"]={
-                                        "produto":_p.get("Nome"),"campanha":_ev_thu["name"],"arte_id":str(_artes[0].get("id") or "")
+                        _prontos = sum(1 for x in _ops_thu if x.get("pronto_divulgar"))
+                        _sem_arte = sum(
+                            1 for x in _ops_thu
+                            if x.get("pronto_cadastro") and not x.get("tem_arte")
+                        )
+                        _incompletos = sum(1 for x in _ops_thu if not x.get("pronto_cadastro"))
+
+                        ca1, ca2, ca3, ca4 = st.columns(4)
+                        ca1.metric("Elegíveis", len(_ops_thu))
+                        ca2.metric("Prontos para divulgar", _prontos)
+                        ca3.metric("Precisam de arte", _sem_arte)
+                        ca4.metric("Revisar cadastro", _incompletos)
+
+                        _melhor_thu = next(
+                            (x for x in _ops_thu if x.get("pronto_divulgar")),
+                            None,
+                        )
+                        if _melhor_thu:
+                            _p_melhor = _melhor_thu["produto"]
+                            st.success(
+                                f"🥇 Recomendação do THU: **{_p_melhor.get('Nome','Produto')}** "
+                                f"• prontidão {_melhor_thu.get('indice_prontidao',0)}/100"
+                            )
+                            st.caption(
+                                "O índice mede prontidão de divulgação, não probabilidade de venda."
+                            )
+                        elif _incompletos:
+                            st.warning(
+                                "Ainda não existe produto pronto para divulgação nesta campanha. "
+                                "Complete os cadastros críticos antes de automatizar a campanha."
+                            )
+                        else:
+                            st.info(
+                                "Os produtos elegíveis estão cadastrados, mas ainda precisam de arte aprovada."
+                            )
+
+                        for _i, _op in enumerate(_ops_thu[:10], 1):
+                            _p = _op["produto"]
+                            _artes = _op["artes"]
+                            _arte_rec = _op.get("arte_recomendada")
+                            _r1, _r2 = st.columns([3.7, 1.15])
+                            _r1.markdown(
+                                f"**{_i}. {_op.get('icone_thu','')} {_p.get('Nome','Produto')}** "
+                                f"• {_op.get('status_thu')} • **{_op.get('indice_prontidao',0)}/100**"
+                            )
+
+                            _info = []
+                            if _p.get("Preco"):
+                                _info.append(f"Valor {formatar_preco_catalogo(_p.get('Preco'))}")
+                            if _p.get("Material"):
+                                _info.append(str(_p.get("Material")))
+                            _info.append(
+                                f"{len(_artes)} arte(s) relacionada(s)"
+                                if _artes else "sem arte aprovada"
+                            )
+                            _r1.caption(" • ".join(_info))
+
+                            _motivos = list(_op.get("motivos_prioridade") or [])
+                            _alertas = list(_op.get("alertas_prioridade") or [])
+                            if _motivos:
+                                _r1.caption("✅ " + " • ".join(_motivos[:4]))
+                            if _alertas:
+                                _r1.caption("⚠️ " + " • ".join(_alertas[:3]))
+
+                            if _op.get("pronto_divulgar") and _arte_rec:
+                                if _r2.button(
+                                    "Preparar campanha",
+                                    key=f"thu_cal_arte_i_{_i}_{_arte_rec.get('id')}",
+                                    use_container_width=True,
+                                ):
+                                    st.session_state["thu_campanha_preparar_2049c"] = {
+                                        "produto": _p.get("Nome"),
+                                        "campanha": _ev_thu["name"],
+                                        "arte_id": str(_arte_rec.get("id") or ""),
                                     }
                                     st.rerun()
+                            elif _op.get("pronto_cadastro"):
+                                _r2.caption("🎨 Falta arte")
                             else:
-                                _r2.caption("Cadastrar arte")
+                                if _r2.button(
+                                    "Revisar cadastro",
+                                    key=f"thu_cal_revisar_i_mkt_{_i}_{abs(hash(str(_p.get('Nome'))))}",
+                                    use_container_width=True,
+                                ):
+                                    _idx_prod = next(
+                                        (
+                                            idx for idx, prod in enumerate(_cat_thu)
+                                            if normalizar_identidade_produto(prod.get("Nome"))
+                                            == normalizar_identidade_produto(_p.get("Nome"))
+                                        ),
+                                        None,
+                                    )
+                                    if _idx_prod is not None:
+                                        st.session_state.catalogo_edit_index = _idx_prod
+                                        rerun_na_aba("catalogo")
                     else:
-                        st.warning(f"Nenhum produto do Catálogo está habilitado para {_ev_thu['name']}. Revise Campanhas / Datas permitidas nos produtos.")
+                        st.warning(
+                            f"Nenhum produto do Catálogo está habilitado para {_ev_thu['name']}. "
+                            "Revise Campanhas / Datas permitidas nos produtos."
+                        )
 
             _prep_thu=st.session_state.get("thu_campanha_preparar_2049c")
             if _prep_thu:
