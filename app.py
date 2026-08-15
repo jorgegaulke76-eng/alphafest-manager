@@ -3754,9 +3754,33 @@ ALPHAFEST_SITE_CAMPANHAS = {
 }
 
 ALPHAFEST_SITE_RAIZES = {
-    "alpha fest", "contato", "topo de bolo", "convites", "lembrancas",
-    "mundo pet", "baloes", "personalizados", "kit festa", "datas especiais",
-    "quem somos", "loja", "mais itens",
+    "alpha fest", "contato", "personalizados", "datas especiais",
+    "quem somos", "loja", "mais itens", "home", "inicio",
+}
+
+# I3.1 — classificação conservadora do acervo antigo.
+# Páginas genéricas de linha/coleção não viram produto automaticamente.
+ALPHAFEST_SITE_CATEGORIAS = {
+    "topo de bolo", "topos de bolo", "convites", "lembrancas", "mundo pet",
+    "baloes", "kit festa", "acrilicos", "camisetas", "canecas", "copos",
+    "sacolas", "bottons", "brindes", "bolas personalizadas", "inflaveis",
+    "papelaria", "chaveiros", "adesivos", "toppers", "carimbos",
+}
+
+ALPHAFEST_SITE_SERVICOS = {
+    "grafica rapida", "balcoes promocionais", "banners e faixas",
+    "banner e faixa", "decoracao", "locacao", "impressao",
+}
+
+ALPHAFEST_SITE_PRODUTOS_SEGUROS = {
+    "papel de arroz", "transfer", "ecobag", "bubble personalizado",
+    "balao bubble", "copo long drink", "agua personalizada",
+}
+
+ALPHAFEST_SITE_TITULOS_GENERICOS = {
+    "pagina", "paginas", "produto", "produtos", "galeria", "fotos",
+    "mais", "mais itens", "alpha fest", "alphafest", "personalizados",
+    "datas especiais", "contate nos", "contatos", "adorariamos ouvir de voce",
 }
 
 
@@ -3794,25 +3818,26 @@ def _thu_site_url_absoluta(url, base=ALPHAFEST_SITE_BASE):
 
 
 def _thu_site_classificar_link(texto, url):
+    """Classificação inicial do link; a classificação final usa o conteúdo da página."""
     t = _thu_site_norm(texto)
     path = _thu_site_norm(urllib.parse.urlparse(str(url or "")).path.replace("/", " "))
 
-    campanha = ""
     for chave, oficial in ALPHAFEST_SITE_CAMPANHAS.items():
         if chave == t or chave in t or chave in path:
-            campanha = oficial
-            break
-    if campanha:
-        return "campanha", campanha
+            return "campanha", oficial
 
     if t in ALPHAFEST_SITE_RAIZES or not t:
         return "estrutura", ""
+    if t in ALPHAFEST_SITE_CATEGORIAS:
+        return "categoria", ""
+    if t in ALPHAFEST_SITE_SERVICOS:
+        return "servico", ""
+    if t in ALPHAFEST_SITE_PRODUTOS_SEGUROS:
+        return "produto", ""
 
-    # Páginas conhecidas de produto/serviço no menu antigo.
-    if any(x in path for x in (
-        "personalizados", "topo", "convite", "lembranca", "balao",
-        "ballon", "bubble", "kit festa", "mundo pet",
-    )):
+    # Uma página específica dentro de "personalizados" é candidata a produto,
+    # mas só recebe cadastro automático habilitado depois da classificação final.
+    if "personalizados" in path:
         return "produto", ""
 
     return "estrutura", ""
@@ -3898,6 +3923,35 @@ class _ThuAlphaSiteParser:
         self.parser.feed(html_text)
 
 
+def _thu_site_identidade_imagem(url):
+    """Normaliza URL para reconhecer a mesma imagem Wix em páginas diferentes."""
+    try:
+        p = urllib.parse.urlparse(str(url or "").strip())
+    except Exception:
+        return ""
+    host = (p.hostname or "").casefold()
+    path = urllib.parse.unquote(p.path or "")
+    if "wixstatic.com" in host:
+        achou = re.search(r"/media/([^/]+)", path)
+        if achou:
+            return f"wix:{achou.group(1).casefold()}"
+    return f"{host}:{path.casefold().rstrip('/')}"
+
+
+def _thu_site_imagem_global_obvia(url, alt=""):
+    alt_n = _thu_site_norm(alt)
+    url_n = str(url or "").casefold()
+    marcadores_alt = {
+        "logo", "alpha fest", "alphafest", "alphafest itatiba",
+        "facebook", "instagram", "tiktok", "whatsapp", "youtube",
+    }
+    if any(m in alt_n for m in marcadores_alt):
+        return True
+    if any(m in url_n for m in ("favicon", "/logo", "logo.", "social-icon")):
+        return True
+    return False
+
+
 def _thu_site_filtrar_imagens(imagens, limite=18):
     saida = []
     vistos = set()
@@ -3912,22 +3966,58 @@ def _thu_site_filtrar_imagens(imagens, limite=18):
             url = urllib.parse.urljoin(ALPHAFEST_SITE_BASE, url)
         if not _thu_site_url_segura(url, imagem=True):
             continue
-
-        alt_norm = _thu_site_norm(alt)
-        url_norm = url.casefold()
-        if any(x in alt_norm for x in ("logo", "facebook", "instagram", "tiktok", "whatsapp")):
-            continue
-        if any(x in url_norm for x in ("favicon", "logo")) and not alt:
+        if _thu_site_imagem_global_obvia(url, alt):
             continue
 
-        chave = url.split("?")[0]
+        chave = _thu_site_identidade_imagem(url) or url.split("?")[0]
         if chave in vistos:
             continue
         vistos.add(chave)
-        saida.append({"url": url, "alt": alt or Path(urllib.parse.urlparse(url).path).name or "Imagem"})
+        saida.append({
+            "url": url,
+            "alt": alt or Path(urllib.parse.urlparse(url).path).name or "Imagem",
+            "identidade": chave,
+        })
         if len(saida) >= limite:
             break
     return saida
+
+
+def _thu_site_limpar_imagens_repetidas(paginas):
+    """Remove ativos globais repetidos em muitas páginas, como logo/cabeçalho."""
+    paginas = [dict(p) for p in (paginas or [])]
+    validas = [p for p in paginas if p.get("ok")]
+    if not validas:
+        return paginas, []
+
+    frequencia = {}
+    for pagina in validas:
+        ids_pagina = set()
+        for img in (pagina.get("imagens") or []):
+            ident = str(img.get("identidade") or _thu_site_identidade_imagem(img.get("url")) or "")
+            if ident:
+                ids_pagina.add(ident)
+        for ident in ids_pagina:
+            frequencia[ident] = frequencia.get(ident, 0) + 1
+
+    # Só considera ativo global quando aparece em pelo menos 5 páginas e em >=35% do scan.
+    limite_global = max(5, int((len(validas) * 35 + 99) // 100))
+    globais = {ident for ident, qtd in frequencia.items() if qtd >= limite_global}
+
+    for pagina in paginas:
+        imagens = list(pagina.get("imagens") or [])
+        limpas = []
+        removidas = 0
+        for img in imagens:
+            ident = str(img.get("identidade") or _thu_site_identidade_imagem(img.get("url")) or "")
+            if ident in globais or _thu_site_imagem_global_obvia(img.get("url"), img.get("alt")):
+                removidas += 1
+                continue
+            limpas.append(img)
+        pagina["imagens"] = limpas
+        pagina["imagens_globais_removidas"] = removidas
+
+    return paginas, sorted(globais)
 
 
 def _thu_site_fetch(url, timeout=12):
@@ -3941,7 +4031,7 @@ def _thu_site_fetch(url, timeout=12):
             timeout=timeout,
             allow_redirects=True,
             headers={
-                "User-Agent": "AlphaFestManager/20.4.9-I3 (+acervo interno; alphafest.com.br)"
+                "User-Agent": "AlphaFestManager/20.4.9-I3.1 (+acervo interno; alphafest.com.br)"
             },
         )
         r.raise_for_status()
@@ -3984,71 +4074,236 @@ def _thu_site_fetch(url, timeout=12):
 
 
 def _thu_site_nome_pagina(pagina, fallback=""):
-    headings = list((pagina or {}).get("headings") or [])
-    bloqueados = {
-        "contate nos", "contatos", "adorariamos ouvir de voce", "alpha fest",
-        "personalizados", "datas especiais",
-    }
+    """Prefere o nome específico do menu e ignora headings genéricos como 'Páginas'."""
+    pagina = pagina or {}
+    fallback = str(fallback or "").strip()
+
+    if fallback and _thu_site_norm(fallback) not in ALPHAFEST_SITE_TITULOS_GENERICOS:
+        return fallback
+
+    headings = list(pagina.get("headings") or [])
     for h in headings:
         h = str(h or "").strip()
-        if h and _thu_site_norm(h) not in bloqueados and len(h) <= 120:
+        if (
+            h
+            and _thu_site_norm(h) not in ALPHAFEST_SITE_TITULOS_GENERICOS
+            and len(h) <= 120
+        ):
             return h
-    titulo = str((pagina or {}).get("titulo_html") or "").split("|")[0].strip()
-    return titulo or str(fallback or "").strip() or "Página do site"
+
+    titulo = str(pagina.get("titulo_html") or "").split("|")[0].strip()
+    if titulo and _thu_site_norm(titulo) not in ALPHAFEST_SITE_TITULOS_GENERICOS:
+        return titulo
+
+    # Último recurso: transforma o slug em título legível.
+    slug = urllib.parse.urlparse(str(pagina.get("url") or "")).path.rstrip("/").split("/")[-1]
+    slug = urllib.parse.unquote(slug).replace("-", " ").replace("_", " ").strip()
+    return slug.title() if slug else (fallback or "Página do site")
 
 
-def thu_site_sugerir_produto(nome_pagina, catalogo):
-    """Sugere correspondência, mas nunca grava/mescla automaticamente."""
+def _thu_site_classificar_pagina(pagina, fallback=""):
+    """Classifica Produto/Categoria/Serviço/Campanha com motivo e confiança."""
+    pagina = pagina or {}
+    nome = _thu_site_nome_pagina(pagina, fallback)
+    candidatos = [
+        nome,
+        str(fallback or ""),
+        str(pagina.get("titulo_html") or "").split("|")[0].strip(),
+        *[str(x or "").strip() for x in (pagina.get("headings") or [])[:6]],
+    ]
+    norm_candidatos = [x for x in {_thu_site_norm(c) for c in candidatos if c} if x]
+    path = _thu_site_norm(urllib.parse.urlparse(str(pagina.get("url") or "")).path.replace("/", " "))
+
+    for cand in norm_candidatos + [path]:
+        for chave, oficial in ALPHAFEST_SITE_CAMPANHAS.items():
+            if chave == cand or chave in cand:
+                return {
+                    "tipo": "campanha",
+                    "campanha": oficial,
+                    "confianca": 1.0,
+                    "motivo": "data/campanha reconhecida no acervo",
+                }
+
+    for cand in norm_candidatos:
+        if cand in ALPHAFEST_SITE_CATEGORIAS:
+            return {
+                "tipo": "categoria",
+                "campanha": "",
+                "confianca": 0.99,
+                "motivo": "linha/categoria conhecida do site",
+            }
+        if cand in ALPHAFEST_SITE_SERVICOS:
+            return {
+                "tipo": "servico",
+                "campanha": "",
+                "confianca": 0.99,
+                "motivo": "serviço conhecido do site",
+            }
+        if cand in ALPHAFEST_SITE_PRODUTOS_SEGUROS:
+            return {
+                "tipo": "produto",
+                "campanha": "",
+                "confianca": 0.99,
+                "motivo": "produto específico conhecido do acervo",
+            }
+
+    if any(c in ALPHAFEST_SITE_RAIZES for c in norm_candidatos):
+        return {
+            "tipo": "estrutura",
+            "campanha": "",
+            "confianca": 0.98,
+            "motivo": "página estrutural do site",
+        }
+
+    # Página específica em /personalizados-xxx: forte candidata a produto,
+    # desde que o nome não seja genérico.
+    nome_n = _thu_site_norm(nome)
+    if (
+        "personalizados" in path
+        and nome_n
+        and nome_n not in ALPHAFEST_SITE_TITULOS_GENERICOS
+    ):
+        return {
+            "tipo": "produto",
+            "campanha": "",
+            "confianca": 0.86,
+            "motivo": "página específica dentro da área de personalizados",
+        }
+
+    return {
+        "tipo": "estrutura",
+        "campanha": "",
+        "confianca": 0.50,
+        "motivo": "página não classificada com segurança",
+    }
+
+
+def thu_site_sugerir_produto(nome_pagina, catalogo, alternativas=None):
+    """Sugere correspondência usando nome, menu, título e headings; nunca grava sozinho."""
     from difflib import SequenceMatcher
 
-    nome = str(nome_pagina or "").strip()
-    chave = normalizar_identidade_produto(nome)
+    nomes_busca = [str(nome_pagina or "").strip()]
+    nomes_busca.extend(str(x or "").strip() for x in (alternativas or []) if str(x or "").strip())
+    nomes_busca = list(dict.fromkeys([x for x in nomes_busca if x]))
+
     mapa = mapa_identidade_produtos(catalogo)
-    if chave in mapa:
-        oficial = mapa[chave]
-        idx = next(
-            (
-                i for i, p in enumerate(catalogo or [])
-                if normalizar_identidade_produto(p.get("Nome")) == normalizar_identidade_produto(oficial)
-            ),
-            None,
-        )
-        return {"status": "oficial", "nome": oficial, "indice": idx, "score": 1.0}
+    for nome in nomes_busca:
+        chave = normalizar_identidade_produto(nome)
+        if chave in mapa:
+            oficial = mapa[chave]
+            idx = next(
+                (
+                    i for i, p in enumerate(catalogo or [])
+                    if normalizar_identidade_produto(p.get("Nome"))
+                    == normalizar_identidade_produto(oficial)
+                ),
+                None,
+            )
+            return {
+                "status": "oficial",
+                "nome": oficial,
+                "indice": idx,
+                "score": 1.0,
+                "origem_match": nome,
+            }
 
     stop = {
         "personalizado", "personalizada", "personalizados", "personalizadas",
-        "ceramica", "ceramica", "produto", "produtos",
+        "ceramica", "produto", "produtos", "linha", "colecao",
     }
 
-    def flex(v):
-        termos = [x for x in normalizar_identidade_produto(v).split() if x not in stop]
-        return " ".join(termos)
+    def canon_token(token):
+        t = str(token or "")
+        if len(t) > 5 and t.endswith("oes"):
+            return t[:-3] + "ao"
+        if len(t) > 4 and t.endswith("s"):
+            return t[:-1]
+        return t
 
-    alvo = flex(nome)
-    melhor = {"status": "ausente", "nome": "", "indice": None, "score": 0.0}
+    def flex(v):
+        termos = [
+            canon_token(x)
+            for x in normalizar_identidade_produto(v).split()
+            if x not in stop
+        ]
+        return " ".join([x for x in termos if x])
+
+    pares_busca = [
+        (nome, flex(nome))
+        for nome in nomes_busca
+        if flex(nome)
+    ]
+    alvos = [alvo for _, alvo in pares_busca]
+    melhor = {
+        "status": "ausente",
+        "nome": "",
+        "indice": None,
+        "score": 0.0,
+        "origem_match": "",
+    }
+
     for i, produto in enumerate(catalogo or []):
         candidatos = [str(produto.get("Nome") or "")] + [
             str(x) for x in (produto.get("Aliases", []) or [])
         ]
         for candidato in candidatos:
             base = flex(candidato)
-            if not alvo or not base:
+            if not base:
                 continue
-            seq = SequenceMatcher(None, alvo, base).ratio()
-            ta, tb = set(alvo.split()), set(base.split())
-            jac = len(ta & tb) / max(len(ta | tb), 1)
-            score = max(seq, (seq * 0.65 + jac * 0.35))
-            if score > melhor["score"]:
-                melhor = {
-                    "status": "provavel" if score >= 0.84 else "ausente",
-                    "nome": str(produto.get("Nome") or ""),
-                    "indice": i,
-                    "score": score,
-                }
+            for origem, alvo in pares_busca:
+                seq = SequenceMatcher(None, alvo, base).ratio()
+                ta, tb = set(alvo.split()), set(base.split())
+                jac = len(ta & tb) / max(len(ta | tb), 1)
+
+                # Se todos os termos úteis de um lado estão contidos no outro,
+                # aumenta a confiança sem depender só da distância textual.
+                subset = 1.0 if (ta and tb and (ta <= tb or tb <= ta)) else 0.0
+                score = max(seq, (seq * 0.55 + jac * 0.30 + subset * 0.15))
+
+                if score > melhor["score"]:
+                    melhor = {
+                        "status": "provavel" if score >= 0.82 else "ausente",
+                        "nome": str(produto.get("Nome") or ""),
+                        "indice": i,
+                        "score": score,
+                        "origem_match": origem,
+                    }
+
     if melhor["status"] != "provavel":
         melhor["nome"] = ""
         melhor["indice"] = None
+        melhor["origem_match"] = ""
     return melhor
+
+
+def thu_site_reprocessar_scan(scan):
+    """Aplica regras I3.1 também em scans antigos já armazenados."""
+    scan = dict(scan or {})
+    paginas = []
+
+    for original in (scan.get("paginas") or []):
+        if not isinstance(original, dict):
+            continue
+        pagina = dict(original)
+        fallback = str(pagina.get("texto_menu") or "").strip()
+        pagina["nome"] = _thu_site_nome_pagina(pagina, fallback)
+        cls = _thu_site_classificar_pagina(pagina, fallback)
+        pagina["tipo"] = cls["tipo"]
+        pagina["campanha"] = cls.get("campanha") or pagina.get("campanha") or ""
+        pagina["classificacao_confianca"] = cls["confianca"]
+        pagina["classificacao_motivo"] = cls["motivo"]
+        # Reaplica filtro óbvio a scans antigos.
+        pagina["imagens"] = _thu_site_filtrar_imagens(
+            pagina.get("imagens") or [],
+            limite=18,
+        )
+        paginas.append(pagina)
+
+    paginas, globais = _thu_site_limpar_imagens_repetidas(paginas)
+    scan["paginas"] = paginas
+    scan["ativos_globais_filtrados"] = len(globais)
+    scan["regra_acervo"] = "20.4.9-I3.1"
+    return scan
 
 
 def thu_site_analisar_acervo(max_paginas=42):
@@ -4083,7 +4338,7 @@ def thu_site_analisar_acervo(max_paginas=42):
         })
 
     # Prioriza produtos/campanhas e evita varrer o site inteiro sem necessidade.
-    prioridade = {"produto": 0, "campanha": 1, "estrutura": 2}
+    prioridade = {"produto": 0, "campanha": 1, "categoria": 2, "servico": 2, "estrutura": 3}
     candidatos.sort(key=lambda x: (prioridade.get(x["tipo"], 9), str(x["texto_menu"]).casefold()))
     candidatos = candidatos[:max(1, int(max_paginas))]
 
@@ -4106,14 +4361,10 @@ def thu_site_analisar_acervo(max_paginas=42):
     paginas = []
     for meta in candidatos:
         pagina = resultados.get(meta["url"], dict(meta))
-        nome = _thu_site_nome_pagina(pagina, meta.get("texto_menu"))
-        tipo, campanha = _thu_site_classificar_link(meta.get("texto_menu") or nome, meta["url"])
-        pagina["nome"] = nome
-        pagina["tipo"] = meta.get("tipo") if meta.get("tipo") != "estrutura" else tipo
-        pagina["campanha"] = meta.get("campanha") or campanha
+        pagina["texto_menu"] = meta.get("texto_menu") or pagina.get("texto_menu") or ""
         paginas.append(pagina)
 
-    return {
+    scan = {
         "ok": True,
         "base": ALPHAFEST_SITE_BASE,
         "paginas": paginas,
@@ -4123,6 +4374,7 @@ def thu_site_analisar_acervo(max_paginas=42):
             "url": home.get("url"),
         },
     }
+    return thu_site_reprocessar_scan(scan)
 
 
 def _thu_site_baixar_imagem(url, nome_ref="imagem_site"):
@@ -4133,7 +4385,7 @@ def _thu_site_baixar_imagem(url, nome_ref="imagem_site"):
             url,
             timeout=20,
             allow_redirects=True,
-            headers={"User-Agent": "AlphaFestManager/20.4.9-I3"},
+            headers={"User-Agent": "AlphaFestManager/20.4.9-I3.1"},
             stream=True,
         )
         r.raise_for_status()
@@ -4153,13 +4405,21 @@ def _thu_site_baixar_imagem(url, nome_ref="imagem_site"):
         return None, "Falha ao preparar a imagem para importação."
 
 
-@st.dialog("🌐 THU • Importar imagens do Site AlphaFest", width="large")
+@st.dialog("🌐 Assistente THU • Importar imagens do Site AlphaFest", width="large")
 def dialog_thu_importar_imagens_site(pagina):
     catalogo = carregar_catalogo()
     pagina = dict(pagina or {})
     nome_pagina = str(pagina.get("nome") or pagina.get("texto_menu") or "Página do site")
     imagens = list(pagina.get("imagens") or [])
-    sugestao = thu_site_sugerir_produto(nome_pagina, catalogo)
+    sugestao = thu_site_sugerir_produto(
+        nome_pagina,
+        catalogo,
+        alternativas=[
+            pagina.get("texto_menu", ""),
+            pagina.get("titulo_html", ""),
+            *(pagina.get("headings") or [])[:5],
+        ],
+    )
 
     st.markdown(f"### {nome_pagina}")
     st.caption(
@@ -10887,7 +11147,7 @@ if pagina_atual == "crescimento":
                 st.session_state["central_camp_tipo_2047b"] = "Todos"
                 st.session_state["central_camp_favoritas_2030"] = False
 
-            with st.expander("📅 THU • Prioridade de Divulgação", expanded=False):
+            with st.expander("📅 Assistente THU • Prioridade de Divulgação", expanded=False):
                 st.caption("O THU cruza Calendário, Catálogo e Biblioteca e ordena as oportunidades pela prontidão real para divulgação.")
                 _eventos_thu = calendar_theme_options(carregar_campanhas(), hoje_local(), limit_days=120)
                 if not _eventos_thu:
@@ -11013,9 +11273,9 @@ if pagina_atual == "crescimento":
                             "Revise Campanhas / Datas permitidas nos produtos."
                         )
 
-            with st.expander("🌐 THU • Acervo do Site AlphaFest", expanded=False):
+            with st.expander("🌐 Assistente THU • Acervo do Site AlphaFest", expanded=False):
                 st.caption(
-                    "O site é tratado como acervo histórico e fonte de sugestões. "
+                    "O site é um acervo histórico e fonte de sugestões. "
                     "O Catálogo continua sendo a fonte oficial. Nenhum produto, campanha ou foto é importado automaticamente."
                 )
 
@@ -11024,68 +11284,109 @@ if pagina_atual == "crescimento":
                     "Páginas por análise",
                     [18, 30, 42, 60],
                     index=2,
-                    key="thu_site_limite_i3",
-                    help="O THU começa pelo menu público e limita a leitura para não sobrecarregar o site.",
+                    key="thu_site_limite_i31",
+                    help="A leitura começa pelo menu público e é limitada para não sobrecarregar o site.",
                 )
                 acv2.caption(
                     "A análise lê somente páginas públicas de **alphafest.com.br**. "
-                    "Imagens externas são aceitas apenas do próprio domínio ou do armazenamento Wix usado pelo site."
+                    "A I3.1 também remove imagens globais repetidas, como logos e cabeçalhos."
                 )
+
+                _feedback_site = st.session_state.pop("_thu_site_feedback_i31", None)
+                if isinstance(_feedback_site, dict):
+                    if _feedback_site.get("tipo") == "sucesso":
+                        st.success(_feedback_site.get("texto") or "Análise concluída.")
+                    elif _feedback_site.get("tipo") == "erro":
+                        st.error(_feedback_site.get("texto") or "A análise não foi concluída.")
 
                 if st.button(
                     "🔄 Analisar o site agora",
                     type="primary",
                     use_container_width=True,
-                    key="thu_site_scan_i3",
+                    key="thu_site_scan_i31",
                 ):
-                    with st.spinner("THU lendo a estrutura pública do site AlphaFest..."):
+                    with st.spinner("Assistente THU lendo e classificando o acervo público da AlphaFest..."):
                         _novo_scan_site = thu_site_analisar_acervo(_limite_scan_site)
 
                     if _novo_scan_site.get("ok"):
                         st.session_state["_thu_acervo_site_scan_i3"] = _novo_scan_site
                         marketing["acervo_site_ultimo_scan"] = _novo_scan_site
                         salvar_marketing(marketing)
-                        st.success(
-                            f"Acervo analisado: {len(_novo_scan_site.get('paginas', []))} página(s) encontradas."
-                        )
+                        st.session_state["_thu_site_feedback_i31"] = {
+                            "tipo": "sucesso",
+                            "texto": (
+                                f"Acervo analisado: {len(_novo_scan_site.get('paginas', []))} página(s). "
+                                "A tela foi reconstruída em um novo ciclo para evitar conflito visual do Streamlit."
+                            ),
+                        }
                     else:
-                        st.error(
-                            _novo_scan_site.get("erro")
-                            or "Não foi possível analisar o site neste momento."
-                        )
+                        st.session_state["_thu_site_feedback_i31"] = {
+                            "tipo": "erro",
+                            "texto": (
+                                _novo_scan_site.get("erro")
+                                or "Não foi possível analisar o site neste momento."
+                            ),
+                        }
+                    # I3.1: não monta o resultado no mesmo ciclo do spinner/botão.
+                    # Isso evita a reconciliação de DOM que causava removeChild no frontend.
+                    st.rerun()
 
-                _scan_site = (
+                _scan_site_bruto = (
                     st.session_state.get("_thu_acervo_site_scan_i3")
                     or marketing.get("acervo_site_ultimo_scan")
                     or {}
                 )
+                _scan_site = (
+                    thu_site_reprocessar_scan(_scan_site_bruto)
+                    if _scan_site_bruto
+                    else {}
+                )
 
                 if _scan_site.get("ok"):
                     _paginas_site = [
-                        p for p in (_scan_site.get("paginas") or [])
+                        dict(p) for p in (_scan_site.get("paginas") or [])
                         if isinstance(p, dict) and p.get("ok")
                     ]
                     _cat_site = carregar_catalogo()
 
                     _produtos_site = []
+                    _categorias_site = []
+                    _servicos_site = []
                     _campanhas_site = []
                     _estruturas_site = []
 
                     for _pg in _paginas_site:
-                        _pg = dict(_pg)
-                        _nome_pg = str(
-                            _pg.get("nome")
-                            or _pg.get("texto_menu")
-                            or "Página do site"
-                        ).strip()
+                        _tipo_pg = str(_pg.get("tipo") or "estrutura")
+                        _nome_pg = str(_pg.get("nome") or _pg.get("texto_menu") or "Página do site").strip()
                         _pg["nome"] = _nome_pg
-                        _pg["match_catalogo"] = thu_site_sugerir_produto(
-                            _nome_pg,
-                            _cat_site,
+
+                        _alternativas_pg = [
+                            _pg.get("texto_menu", ""),
+                            _pg.get("titulo_html", ""),
+                            *(_pg.get("headings") or [])[:5],
+                        ]
+                        _pg["match_catalogo"] = (
+                            thu_site_sugerir_produto(
+                                _nome_pg,
+                                _cat_site,
+                                alternativas=_alternativas_pg,
+                            )
+                            if _tipo_pg == "produto"
+                            else {
+                                "status": "nao_aplicavel",
+                                "nome": "",
+                                "indice": None,
+                                "score": 0.0,
+                            }
                         )
-                        if _pg.get("tipo") == "produto":
+
+                        if _tipo_pg == "produto":
                             _produtos_site.append(_pg)
-                        elif _pg.get("tipo") == "campanha":
+                        elif _tipo_pg == "categoria":
+                            _categorias_site.append(_pg)
+                        elif _tipo_pg == "servico":
+                            _servicos_site.append(_pg)
+                        elif _tipo_pg == "campanha":
                             _campanhas_site.append(_pg)
                         else:
                             _estruturas_site.append(_pg)
@@ -11112,40 +11413,45 @@ if pagina_atual == "crescimento":
                         if (p.get("match_catalogo") or {}).get("status") in ("oficial", "provavel")
                         and (p.get("match_catalogo") or {}).get("indice") is not None
                     }
-                    _catalogo_sem_site = max(
-                        len(_cat_site) - len(_indices_match_site),
-                        0,
-                    )
+                    _catalogo_sem_site = max(len(_cat_site) - len(_indices_match_site), 0)
 
                     ma1, ma2, ma3, ma4, ma5 = st.columns(5)
-                    ma1.metric("Páginas analisadas", len(_paginas_site))
-                    ma2.metric("No Catálogo", _exatos_site)
-                    ma3.metric("Possíveis pares", _provaveis_site)
-                    ma4.metric("Possíveis ausentes", _ausentes_site)
-                    ma5.metric("Páginas com fotos", _paginas_com_foto)
+                    ma1.metric("Páginas", len(_paginas_site))
+                    ma2.metric("Produtos detectados", len(_produtos_site))
+                    ma3.metric("No Catálogo / pares", _exatos_site + _provaveis_site)
+                    ma4.metric("Produtos possivelmente ausentes", _ausentes_site)
+                    ma5.metric("Páginas com fotos úteis", _paginas_com_foto)
 
                     _lido_site = str(_scan_site.get("lido_em") or "")[:19].replace("T", " ")
                     st.caption(
                         f"Última análise: {_lido_site or '—'} • "
-                        f"{len(_campanhas_site)} campanha(s) histórica(s) detectada(s) • "
-                        f"{_catalogo_sem_site} produto(s) do Catálogo sem correspondência nas páginas analisadas."
+                        f"{len(_categorias_site)} categoria(s) • {len(_servicos_site)} serviço(s) • "
+                        f"{len(_campanhas_site)} campanha(s) • "
+                        f"{int(_scan_site.get('ativos_globais_filtrados') or 0)} ativo(s) global(is) repetido(s) filtrado(s)."
                     )
                     st.caption(
-                        "⚠️ Uma página do site não é automaticamente um produto oficial. "
-                        "Correspondências aproximadas são apenas sugestões para revisão."
+                        f"Catálogo sem correspondência nas **páginas classificadas como produto**: {_catalogo_sem_site}. "
+                        "Categoria e serviço não entram na conta de produto ausente."
                     )
 
-                    tab_site_prod, tab_site_fotos, tab_site_camp = st.tabs([
-                        "📦 Site × Catálogo",
+                    if _estruturas_site:
+                        st.caption(
+                            f"ℹ️ {len(_estruturas_site)} página(s) estrutural(is) foram lidas, "
+                            "mas ficam fora das sugestões de cadastro."
+                        )
+
+                    tab_site_prod, tab_site_cat, tab_site_fotos, tab_site_camp = st.tabs([
+                        "📦 Produtos",
+                        "🗂️ Categorias e serviços",
                         "📸 Acervo de fotos",
                         "📅 Campanhas históricas",
                     ])
 
                     with tab_site_prod:
                         _filtro_status_site = st.selectbox(
-                            "Mostrar páginas",
-                            ["Todas", "No Catálogo", "Possível correspondência", "Possível ausente"],
-                            key="thu_site_filtro_prod_i3",
+                            "Mostrar produtos",
+                            ["Todos", "No Catálogo", "Possível correspondência", "Possível ausente"],
+                            key="thu_site_filtro_prod_i31",
                         )
 
                         _prod_filtrados = []
@@ -11160,19 +11466,21 @@ if pagina_atual == "crescimento":
                             _prod_filtrados.append(_pg)
 
                         if not _prod_filtrados:
-                            st.info("Nenhuma página neste filtro.")
+                            st.info("Nenhum produto neste filtro.")
                         else:
                             for _pi, _pg in enumerate(_prod_filtrados[:30], 1):
                                 _match = _pg.get("match_catalogo") or {}
                                 _status = _match.get("status")
                                 _imgs = list(_pg.get("imagens") or [])
+                                _conf = float(_pg.get("classificacao_confianca") or 0)
 
                                 with st.container(border=True):
                                     pc1, pc2 = st.columns([4.2, 1.45])
-                                    pc1.markdown(f"**{_pg.get('nome','Página')}**")
+                                    pc1.markdown(f"**{_pg.get('nome','Produto do site')}**")
                                     pc1.caption(
-                                        f"{_pg.get('texto_menu') or 'Página do site'} • "
-                                        f"{len(_imgs)} imagem(ns) encontrada(s)"
+                                        f"Classificação: Produto • confiança {_conf*100:.0f}% • "
+                                        f"{_pg.get('classificacao_motivo') or 'revisão do acervo'} • "
+                                        f"{len(_imgs)} foto(s) útil(eis)"
                                     )
 
                                     if _status == "oficial":
@@ -11185,19 +11493,21 @@ if pagina_atual == "crescimento":
                                             f"({_match.get('score',0)*100:.0f}%). Confirme antes de usar."
                                         )
                                     else:
-                                        pc1.warning(
-                                            "Possível produto/serviço do site sem correspondência segura no Catálogo."
-                                        )
+                                        if _conf >= 0.85:
+                                            pc1.warning(
+                                                "Produto específico do site sem correspondência segura no Catálogo."
+                                            )
+                                        else:
+                                            pc1.warning(
+                                                "A página parece produto, mas a classificação ainda não é forte o bastante para sugerir cadastro."
+                                            )
 
                                     if _imgs:
                                         prev_cols = pc1.columns(min(3, len(_imgs)))
                                         for _jj, _img in enumerate(_imgs[:3]):
                                             with prev_cols[_jj]:
                                                 try:
-                                                    st.image(
-                                                        _img.get("url"),
-                                                        use_container_width=True,
-                                                    )
+                                                    st.image(_img.get("url"), width=150)
                                                 except Exception:
                                                     st.caption("Prévia indisponível")
 
@@ -11207,10 +11517,12 @@ if pagina_atual == "crescimento":
                                         use_container_width=True,
                                     )
 
-                                    if _status == "ausente":
+                                    # Cadastro só é oferecido para página classificada como produto
+                                    # com confiança mínima. Categoria/serviço nunca chega neste bloco.
+                                    if _status == "ausente" and _conf >= 0.85:
                                         if pc2.button(
-                                            "➕ Cadastrar",
-                                            key=f"thu_site_cad_i3_{_pi}_{abs(hash(_pg.get('url','')))}",
+                                            "➕ Cadastrar produto",
+                                            key=f"thu_site_cad_i31_{_pi}_{abs(hash(_pg.get('url','')))}",
                                             use_container_width=True,
                                         ):
                                             dialog_catalogo_cadastro_anna(
@@ -11219,7 +11531,7 @@ if pagina_atual == "crescimento":
                                     elif _match.get("indice") is not None:
                                         if pc2.button(
                                             "✏️ Revisar cadastro",
-                                            key=f"thu_site_edit_i3_{_pi}_{abs(hash(_pg.get('url','')))}",
+                                            key=f"thu_site_edit_i31_{_pi}_{abs(hash(_pg.get('url','')))}",
                                             use_container_width=True,
                                         ):
                                             dialog_catalogo_cadastro_anna(
@@ -11228,7 +11540,48 @@ if pagina_atual == "crescimento":
 
                                     if _imgs and pc2.button(
                                         "📸 Revisar imagens",
-                                        key=f"thu_site_img_open_i3_{_pi}_{abs(hash(_pg.get('url','')))}",
+                                        key=f"thu_site_img_open_i31_{_pi}_{abs(hash(_pg.get('url','')))}",
+                                        use_container_width=True,
+                                    ):
+                                        dialog_thu_importar_imagens_site(_pg)
+
+                    with tab_site_cat:
+                        _cats_servs = [
+                            *[("Categoria", p) for p in _categorias_site],
+                            *[("Serviço", p) for p in _servicos_site],
+                        ]
+                        if not _cats_servs:
+                            st.info("Nenhuma categoria ou serviço foi identificado nesta análise.")
+                        else:
+                            st.caption(
+                                "Estas páginas ajudam a entender o acervo, mas **não são tratadas como produto ausente** "
+                                "e não recebem botão de cadastro automático."
+                            )
+                            for _ci, (_rotulo_tipo, _pg) in enumerate(_cats_servs[:35], 1):
+                                _imgs = list(_pg.get("imagens") or [])
+                                with st.container(border=True):
+                                    cg1, cg2 = st.columns([4.1, 1.35])
+                                    cg1.markdown(f"**{_pg.get('nome','Página')}** • {_rotulo_tipo}")
+                                    cg1.caption(
+                                        f"{_pg.get('classificacao_motivo') or 'classificação do acervo'} • "
+                                        f"{len(_imgs)} foto(s) útil(eis)"
+                                    )
+                                    if _imgs:
+                                        pcs = cg1.columns(min(3, len(_imgs)))
+                                        for _jj, _img in enumerate(_imgs[:3]):
+                                            with pcs[_jj]:
+                                                try:
+                                                    st.image(_img.get("url"), width=140)
+                                                except Exception:
+                                                    st.caption("Prévia indisponível")
+                                    cg2.link_button(
+                                        "🌐 Abrir página",
+                                        str(_pg.get("url") or ALPHAFEST_SITE_BASE),
+                                        use_container_width=True,
+                                    )
+                                    if _imgs and cg2.button(
+                                        "📸 Revisar imagens",
+                                        key=f"thu_site_cat_img_i31_{_ci}_{abs(hash(_pg.get('url','')))}",
                                         use_container_width=True,
                                     ):
                                         dialog_thu_importar_imagens_site(_pg)
@@ -11237,19 +11590,21 @@ if pagina_atual == "crescimento":
                         _paginas_foto_site = [
                             p for p in _paginas_site
                             if p.get("imagens")
+                            and p.get("tipo") not in ("estrutura",)
                         ]
                         if not _paginas_foto_site:
-                            st.info("Nenhuma imagem de acervo foi localizada nesta análise.")
+                            st.info("Nenhuma imagem útil restou após a limpeza de logos/ativos globais.")
                         else:
                             st.caption(
-                                "As miniaturas abaixo continuam no site. Só entram no banco de imagens após revisão e confirmação."
+                                "Logos e imagens repetidas entre muitas páginas já foram filtrados. "
+                                "As miniaturas restantes só entram no Catálogo após sua confirmação."
                             )
-                            for _fi, _pg in enumerate(_paginas_foto_site[:25], 1):
+                            for _fi, _pg in enumerate(_paginas_foto_site[:30], 1):
                                 with st.container(border=True):
                                     fc1, fc2 = st.columns([4, 1.3])
                                     fc1.markdown(
                                         f"**{_pg.get('nome') or _pg.get('texto_menu') or 'Página'}** "
-                                        f"• {len(_pg.get('imagens') or [])} foto(s)"
+                                        f"• {_pg.get('tipo','acervo').title()} • {len(_pg.get('imagens') or [])} foto(s)"
                                     )
                                     _imgs = list(_pg.get("imagens") or [])
                                     if _imgs:
@@ -11257,7 +11612,7 @@ if pagina_atual == "crescimento":
                                         for _jj, _img in enumerate(_imgs[:4]):
                                             with prev[_jj]:
                                                 try:
-                                                    st.image(_img.get("url"), use_container_width=True)
+                                                    st.image(_img.get("url"), width=135)
                                                 except Exception:
                                                     st.caption("Prévia indisponível")
 
@@ -11268,7 +11623,7 @@ if pagina_atual == "crescimento":
                                     )
                                     if fc2.button(
                                         "📥 Revisar / importar",
-                                        key=f"thu_site_fotos_i3_{_fi}_{abs(hash(_pg.get('url','')))}",
+                                        key=f"thu_site_fotos_i31_{_fi}_{abs(hash(_pg.get('url','')))}",
                                         use_container_width=True,
                                     ):
                                         dialog_thu_importar_imagens_site(_pg)
@@ -11281,7 +11636,7 @@ if pagina_atual == "crescimento":
                                 _thu_site_norm(x): x
                                 for x in CAMPANHAS_PRODUTO_OPCOES
                             }
-                            for _ci, _pg in enumerate(_campanhas_site, 1):
+                            for _cpi, _pg in enumerate(_campanhas_site, 1):
                                 _camp_hist = str(
                                     _pg.get("campanha")
                                     or _pg.get("nome")
@@ -11297,16 +11652,16 @@ if pagina_atual == "crescimento":
                                     cc1.markdown(f"**📅 {_camp_hist or 'Campanha histórica'}**")
                                     cc1.caption(
                                         f"Origem: Site AlphaFest legado • "
-                                        f"{len(_pg.get('imagens') or [])} imagem(ns) na página"
+                                        f"{len(_pg.get('imagens') or [])} foto(s) útil(eis)"
                                     )
                                     if _camp_oficial:
                                         cc1.success(
-                                            f"Existe como opção de elegibilidade no Catálogo: **{_camp_oficial}**."
+                                            f"Já existe como opção de elegibilidade no Catálogo: **{_camp_oficial}**."
                                         )
                                     else:
                                         cc1.warning(
-                                            "Campanha encontrada no site, mas não existe hoje entre as opções "
-                                            "de Campanhas/Datas permitidas do Catálogo. Não será criada automaticamente."
+                                            "Campanha histórica sem opção equivalente nas Campanhas/Datas atuais. "
+                                            "Ela não será criada automaticamente."
                                         )
 
                                     cc2.link_button(
@@ -11316,14 +11671,14 @@ if pagina_atual == "crescimento":
                                     )
                                     if cc2.button(
                                         "📅 Abrir Calendário",
-                                        key=f"thu_site_cal_i3_{_ci}_{abs(hash(_pg.get('url','')))}",
+                                        key=f"thu_site_cal_i31_{_cpi}_{abs(hash(_pg.get('url','')))}",
                                         use_container_width=True,
                                     ):
                                         rerun_na_aba("calendario")
 
                                     if _pg.get("imagens") and cc2.button(
                                         "📸 Revisar fotos",
-                                        key=f"thu_site_camp_img_i3_{_ci}_{abs(hash(_pg.get('url','')))}",
+                                        key=f"thu_site_camp_img_i31_{_cpi}_{abs(hash(_pg.get('url','')))}",
                                         use_container_width=True,
                                     ):
                                         dialog_thu_importar_imagens_site(_pg)
@@ -11335,7 +11690,7 @@ if pagina_atual == "crescimento":
                     )
                 else:
                     st.info(
-                        "Clique em **Analisar o site agora** para criar a primeira auditoria Site × Catálogo."
+                        "Clique em **Analisar o site agora** para criar a primeira auditoria limpa Site × Catálogo."
                     )
 
             _prep_thu=st.session_state.get("thu_campanha_preparar_2049c")
@@ -11372,7 +11727,7 @@ if pagina_atual == "crescimento":
                         if _b3.button("Fechar",use_container_width=True,key="thu_camp_fechar_2049c"):
                             st.session_state.pop("thu_campanha_preparar_2049c",None); st.rerun()
 
-            with st.expander("💙 THU • Catálogo → Arte → Campanha", expanded=True):
+            with st.expander("💙 Assistente THU • Catálogo → Arte → Campanha", expanded=True):
                 st.caption("O Catálogo é a fonte oficial de produto, descrição, material, preço e campanhas permitidas. O THU não inventa dados que não estejam cadastrados.")
                 catalogo_thu = carregar_catalogo()
                 th1, th2 = st.columns([1.8, 1])
