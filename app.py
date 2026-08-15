@@ -4442,7 +4442,10 @@ def _thu_site_baixar_imagem(url, nome_ref="imagem_site", fallback_url=""):
                 candidato,
                 timeout=25,
                 allow_redirects=True,
-                headers={"User-Agent": "AlphaFestManager/20.4.9-I3.2"},
+                headers={
+                    "User-Agent": "AlphaFestManager/20.4.9-I3.2.1",
+                    "Accept": "image/jpeg,image/png,image/webp;q=0.9,*/*;q=0.5",
+                },
                 stream=True,
             )
             r.raise_for_status()
@@ -4458,12 +4461,29 @@ def _thu_site_baixar_imagem(url, nome_ref="imagem_site", fallback_url=""):
                 continue
 
             ext = permitidos[ctype]
+
+            largura = 0
+            altura = 0
+            try:
+                from PIL import Image
+                from io import BytesIO
+                with Image.open(BytesIO(content)) as _im_thu:
+                    largura, altura = _im_thu.size
+            except Exception:
+                largura, altura = 0, 0
+
             nome_limpo = re.sub(r"[^A-Za-z0-9_-]+", "_", str(nome_ref or "imagem_site"))[:80]
             upload = _DriveImageUpload(content, f"{nome_limpo}.{ext}", ctype)
-            # Metadados auxiliares usados apenas para auditoria da origem.
+
+            # Metadados auxiliares usados para auditoria de qualidade/origem.
             try:
                 upload._thu_origem_url = candidato
                 upload._thu_bytes = len(content)
+                upload._thu_largura = int(largura or 0)
+                upload._thu_altura = int(altura or 0)
+                upload._thu_original = (
+                    candidato == _thu_site_url_imagem_original(candidato)
+                )
             except Exception:
                 pass
             return upload, ""
@@ -4529,9 +4549,20 @@ def dialog_thu_importar_imagens_site(pagina):
             real_pos = pos + desloc
             with cols[desloc]:
                 try:
-                    st.image(img.get("url"), use_container_width=True)
+                    _preview_hd = (
+                        img.get("original_url")
+                        or _thu_site_url_imagem_original(img.get("url"))
+                        or img.get("url")
+                    )
+                    st.image(_preview_hd, use_container_width=True)
+                    if _preview_hd != img.get("url"):
+                        st.caption("Prévia em maior resolução do arquivo original")
                 except Exception:
-                    st.caption("Prévia indisponível")
+                    try:
+                        st.image(img.get("url"), use_container_width=True)
+                        st.caption("Prévia reduzida • o original será tentado na importação")
+                    except Exception:
+                        st.caption("Prévia indisponível")
                 rotulo = str(img.get("alt") or f"Imagem {real_pos+1}")[:55]
                 if st.checkbox(
                     f"Importar • {rotulo}",
@@ -4575,6 +4606,7 @@ def dialog_thu_importar_imagens_site(pagina):
 
         caminhos = []
         erros = []
+        avisos_resolucao = []
         fontes = []
         for pos, img in enumerate(selecionadas, 1):
             upload, erro = _thu_site_baixar_imagem(
@@ -4588,11 +4620,21 @@ def dialog_thu_importar_imagens_site(pagina):
             caminho = salvar_upload_catalogo(upload)
             if caminho:
                 caminhos.append(caminho)
+
+                _lw = int(getattr(upload, "_thu_largura", 0) or 0)
+                _lh = int(getattr(upload, "_thu_altura", 0) or 0)
+                if _lw and _lh and max(_lw, _lh) < 900:
+                    avisos_resolucao.append(
+                        f"{img.get('alt') or f'Imagem {pos}'}: {_lw}×{_lh}px"
+                    )
+
                 fontes.append({
                     "url_origem": str(img.get("url") or ""),
                     "url_original": str(img.get("original_url") or img.get("url") or ""),
                     "alt": str(img.get("alt") or ""),
                     "bytes_importados": int(getattr(upload, "_thu_bytes", 0) or 0),
+                    "largura_importada": int(getattr(upload, "_thu_largura", 0) or 0),
+                    "altura_importada": int(getattr(upload, "_thu_altura", 0) or 0),
                 })
             else:
                 erros.append("Uma das imagens não pôde ser gravada no armazenamento.")
@@ -4660,6 +4702,12 @@ def dialog_thu_importar_imagens_site(pagina):
         )
         if erros:
             st.warning("Algumas imagens não foram importadas: " + " ".join(dict.fromkeys(erros)))
+        if avisos_resolucao:
+            st.session_state["_thu_site_aviso_resolucao_i321"] = (
+                "Alguns arquivos originais do site já são pequenos: "
+                + " • ".join(avisos_resolucao[:6])
+                + ". O THU preservou a resolução real e não fez upscale artificial."
+            )
         st.rerun()
 
 
@@ -11349,6 +11397,10 @@ if pagina_atual == "crescimento":
                         )
 
             with st.expander("🌐 Assistente THU • Acervo do Site AlphaFest", expanded=False):
+                _aviso_res_site = st.session_state.pop("_thu_site_aviso_resolucao_i321", None)
+                if _aviso_res_site:
+                    st.warning(_aviso_res_site)
+
                 st.caption(
                     "O site é um acervo histórico e fonte de sugestões. "
                     "O Catálogo continua sendo a fonte oficial. Nenhum produto, campanha ou foto é importado automaticamente."
