@@ -5815,6 +5815,73 @@ def filtrar_aliases_validos_produto(produto_oficial, aliases, catalogo, indice_i
     return validos, conflitos
 
 
+
+def produtos_proposta_sem_catalogo(proposta, catalogo=None):
+    """20.4.9-I1 — retorna produtos da proposta sem correspondência oficial/alias no Catálogo."""
+    catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
+    mapa = mapa_identidade_produtos(catalogo)
+    ausentes = []
+    vistos = set()
+
+    for item in (proposta or {}).get("itens", []) or []:
+        nome = str(item.get("produto") or "").strip()
+        chave = normalizar_identidade_produto(nome)
+        if not nome or not chave:
+            continue
+        if chave in {"produto nao informado", "nao informado"}:
+            continue
+        if chave in mapa:
+            continue
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        ausentes.append(nome)
+
+    return ausentes
+
+
+def renderizar_alerta_thu_produto_sem_catalogo(proposta, prefixo="thu_sem_catalogo"):
+    """Mostra para a operação um aviso persistente enquanto houver item não cadastrado."""
+    ausentes = produtos_proposta_sem_catalogo(proposta)
+    if not ausentes:
+        return False
+
+    numero = str((proposta or {}).get("numero_proposta") or "").strip()
+    plural = len(ausentes) > 1
+    texto_produtos = " • ".join(ausentes)
+
+    st.info(
+        "💙 **THU:** "
+        + ("Esta proposta contém produtos que ainda não estão cadastrados no Catálogo: "
+           if plural else
+           "Esta proposta contém um produto que ainda não está cadastrado no Catálogo: ")
+        + f"**{texto_produtos}**. "
+        + "Cadastre para que preço, material, campanhas, relatórios e próximas sugestões usem a fonte oficial."
+    )
+
+    if len(ausentes) == 1:
+        nome = ausentes[0]
+        if st.button(
+            "➕ Cadastrar no Catálogo",
+            key=f"{prefixo}_cadastrar_{abs(hash((numero, nome)))}",
+            use_container_width=True,
+        ):
+            dialog_catalogo_cadastro_anna(nome_prefill=nome)
+    else:
+        st.caption("Cadastre os itens ausentes individualmente:")
+        cols = st.columns(min(len(ausentes), 3))
+        for idx, nome in enumerate(ausentes):
+            with cols[idx % len(cols)]:
+                if st.button(
+                    f"➕ {nome}",
+                    key=f"{prefixo}_cadastrar_{idx}_{abs(hash((numero, nome)))}",
+                    use_container_width=True,
+                ):
+                    dialog_catalogo_cadastro_anna(nome_prefill=nome)
+
+    return True
+
+
 def avaliar_pendencias_produto_catalogo(produto):
     """20.4.9-E — mede se o cadastro possui os dados mínimos para o THU."""
     produto = produto or {}
@@ -7758,6 +7825,13 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
     link = f"https://wa.me/{numero_wa}?text={quote(formatar_msg_whatsapp(prop))}" if numero_wa else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop))}"
     c3.link_button("📱 WhatsApp", link, use_container_width=True)
     c4.download_button("📄 HTML", gerar_html(prop), file_name=f"{numero}.html", mime="text/html", key=f"{prefixo}_html_{numero}", use_container_width=True)
+
+    # 20.4.9-I1 — THU avisa a Anna enquanto houver produto sem cadastro oficial.
+    renderizar_alerta_thu_produto_sem_catalogo(
+        prop,
+        prefixo=f"{prefixo}_thu_catalogo",
+    )
+
     with st.expander("✅ Atualizar aprovação, pagamento e entrega", expanded=False):
         with st.form(f"{prefixo}_status_form_{numero}"):
             s1, s2, s3 = st.columns(3)
@@ -7848,6 +7922,10 @@ def renderizar_workspace_anna_isolado():
     if ultima:
         with st.container(border=True):
             st.success(f"Proposta {ultima.get('numero_proposta', '')} salva.")
+            renderizar_alerta_thu_produto_sem_catalogo(
+                ultima,
+                prefixo="anna_ultima_proposta_thu_catalogo",
+            )
             c1, c2, c3, c4 = st.columns([2,2,1,1])
             numero = _anna_numero_whatsapp(ultima.get("whatsapp") or ultima.get("cliente_wa"))
             link = f"https://wa.me/{numero}?text={quote(formatar_msg_whatsapp(ultima))}" if numero else f"https://wa.me/?text={quote(formatar_msg_whatsapp(ultima))}"
@@ -10433,6 +10511,13 @@ if pagina_atual == "novo_orcamento":
     if ultima_salva:
         with st.container(border=True):
             st.success(f"Proposta {ultima_salva.get('numero_proposta', '')} salva com sucesso.")
+            _ausentes_pos_salvar = produtos_proposta_sem_catalogo(ultima_salva)
+            if _ausentes_pos_salvar:
+                st.info(
+                    "💙 **THU:** produto(s) ainda sem cadastro oficial no Catálogo: **"
+                    + " • ".join(_ausentes_pos_salvar)
+                    + "**. A Central da Anna continuará sinalizando esta pendência até o cadastro ser feito."
+                )
             ac1, ac2, ac3 = st.columns([2, 2, 1])
             numero_destino = re.sub(r"\D", "", str(ultima_salva.get("whatsapp") or ultima_salva.get("cliente_wa") or ""))
             if numero_destino and not numero_destino.startswith("55"):
