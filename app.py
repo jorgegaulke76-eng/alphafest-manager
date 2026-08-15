@@ -10542,6 +10542,43 @@ if pagina_atual == "relatorios":
         produtos = []
         catalogo_rel = carregar_catalogo()
         aliases_resolvidos_periodo = 0
+        variacoes_graficas_resolvidas = 0
+
+        # 20.4.9-H1 — variações puramente gráficas não exigem confirmação manual.
+        # Ex.: "BALÃO BUBBLE" e "Balão Bubble". O histórico permanece intocado.
+        _nomes_historicos_globais = sorted({
+            str(item.get("produto") or "").strip()
+            for proposta_nome in h_completo
+            for item in (proposta_nome.get("itens", []) or [])
+            if str(item.get("produto") or "").strip()
+        })
+        _grupos_graficos = {}
+        for _nome_hist in _nomes_historicos_globais:
+            _chave_hist = normalizar_identidade_produto(_nome_hist)
+            if _chave_hist:
+                _grupos_graficos.setdefault(_chave_hist, []).append(_nome_hist)
+
+        _mapa_nome_grafico = {}
+        for _chave_hist, _variantes_hist in _grupos_graficos.items():
+            _oficial_mesma_chave = next(
+                (
+                    str(prod.get("Nome") or "").strip()
+                    for prod in catalogo_rel
+                    if normalizar_identidade_produto(prod.get("Nome")) == _chave_hist
+                ),
+                "",
+            )
+            if _oficial_mesma_chave:
+                _canonico_hist = _oficial_mesma_chave
+            else:
+                # Prefere uma grafia legível (ex.: "Balão Bubble") a CAIXA ALTA,
+                # sem inventar nome novo.
+                _canonico_hist = sorted(
+                    set(_variantes_hist),
+                    key=lambda x: (str(x).isupper(), len(str(x)), str(x).casefold()),
+                )[0]
+            _mapa_nome_grafico[_chave_hist] = _canonico_hist
+
         for p in h:
             subtotal, desconto, total = calcular_valores_proposta(p)
             data_prop = p.get("data_geracao") or p.get("data") or p.get("criado_em") or p.get("created_at") or ""
@@ -10559,8 +10596,16 @@ if pagina_atual == "relatorios":
                 unit = valor_float(item.get("valor_unitario"))
                 nome_original_item = str(item.get("produto", "Não informado")).strip() or "Não informado"
                 nome_oficial_item = nome_produto_oficial_catalogo(nome_original_item, catalogo_rel)
+                _chave_original_item = normalizar_identidade_produto(nome_original_item)
+
                 if normalizar_identidade_produto(nome_original_item) != normalizar_identidade_produto(nome_oficial_item):
                     aliases_resolvidos_periodo += 1
+                elif _chave_original_item in _mapa_nome_grafico:
+                    _canonico_grafico = _mapa_nome_grafico[_chave_original_item]
+                    if nome_original_item != _canonico_grafico:
+                        variacoes_graficas_resolvidas += 1
+                    nome_oficial_item = _canonico_grafico
+
                 produtos.append({
                     "produto": nome_oficial_item,
                     "produto_original": nome_original_item,
@@ -10652,10 +10697,19 @@ if pagina_atual == "relatorios":
 
         if produtos:
             df_prod = pd.DataFrame(produtos)
+            consolidacoes_info = []
             if aliases_resolvidos_periodo:
+                consolidacoes_info.append(
+                    f"{aliases_resolvidos_periodo} item(ns) por aliases confirmados"
+                )
+            if variacoes_graficas_resolvidas:
+                consolidacoes_info.append(
+                    f"{variacoes_graficas_resolvidas} item(ns) por diferença apenas de escrita"
+                )
+            if consolidacoes_info:
                 st.caption(
-                    f"🔗 {aliases_resolvidos_periodo} item(ns) do período foram consolidados por aliases confirmados no Catálogo. "
-                    "As propostas originais permanecem intactas."
+                    "🔗 Consolidação do ranking: " + " • ".join(consolidacoes_info)
+                    + ". As propostas originais permanecem intactas."
                 )
 
             ranking = (
@@ -10694,8 +10748,9 @@ if pagina_atual == "relatorios":
 
             with st.expander("🧩 Padronizar nomes de produtos com segurança", expanded=False):
                 st.caption(
-                    "O sistema procura variações no histórico e permite vinculá-las a um produto oficial do Catálogo. "
-                    "As propostas antigas não são editadas; a equivalência fica salva como alias no produto oficial."
+                    "Diferenças apenas de maiúsculas/minúsculas, acentos, espaços ou pontuação são consolidadas "
+                    "automaticamente nos relatórios. Variações de nome com significado potencialmente diferente "
+                    "continuam exigindo sua confirmação."
                 )
 
                 def _chave_nome_produto_rel(nome):
@@ -10709,6 +10764,42 @@ if pagina_atual == "relatorios":
                     ]
                     return " ".join(palavras).strip()
 
+                def _sugerir_produto_oficial(nomes_grupo, nomes_oficiais):
+                    """Sugere somente quando a correspondência é forte; não salva nada."""
+                    from difflib import SequenceMatcher
+
+                    chaves_grupo_estritas = {
+                        normalizar_identidade_produto(n) for n in nomes_grupo if n
+                    }
+                    chaves_grupo_flex = {
+                        _chave_nome_produto_rel(n) for n in nomes_grupo if n
+                    }
+
+                    # 1. Correspondência estrita com nome oficial.
+                    for oficial in nomes_oficiais:
+                        if normalizar_identidade_produto(oficial) in chaves_grupo_estritas:
+                            return oficial, "Correspondência direta com o Catálogo"
+
+                    # 2. Igualdade após remover apenas artigos/preposições simples.
+                    for oficial in nomes_oficiais:
+                        if _chave_nome_produto_rel(oficial) in chaves_grupo_flex:
+                            return oficial, "Correspondência forte de nomenclatura"
+
+                    # 3. Similaridade alta. Abaixo do limite, não pré-seleciona.
+                    melhor = ("", 0.0)
+                    for oficial in nomes_oficiais:
+                        chave_oficial = _chave_nome_produto_rel(oficial)
+                        for chave_grupo in chaves_grupo_flex:
+                            if not chave_oficial or not chave_grupo:
+                                continue
+                            score = SequenceMatcher(None, chave_oficial, chave_grupo).ratio()
+                            if score > melhor[1]:
+                                melhor = (oficial, score)
+
+                    if melhor[0] and melhor[1] >= 0.94:
+                        return melhor[0], f"Correspondência muito próxima ({melhor[1]*100:.0f}%)"
+                    return "", ""
+
                 nomes_historicos = sorted({
                     str(item.get("produto") or "").strip()
                     for p in h_completo
@@ -10716,26 +10807,62 @@ if pagina_atual == "relatorios":
                     if str(item.get("produto") or "").strip()
                 })
 
+                # Variações estritamente equivalentes: não pedem decisão.
+                grupos_estritos = {}
+                for nome in nomes_historicos:
+                    chave_estrita = normalizar_identidade_produto(nome)
+                    if chave_estrita:
+                        grupos_estritos.setdefault(chave_estrita, []).append(nome)
+
+                automaticos = [
+                    sorted(set(nomes))
+                    for nomes in grupos_estritos.values()
+                    if len(set(nomes)) > 1
+                ]
+
+                if automaticos:
+                    st.success(
+                        f"{len(automaticos)} grupo(s) com diferença apenas de escrita já são consolidados automaticamente."
+                    )
+                    with st.expander("Ver consolidações automáticas", expanded=False):
+                        for nomes_auto in automaticos:
+                            chave_auto = normalizar_identidade_produto(nomes_auto[0])
+                            nome_exibicao = _mapa_nome_grafico.get(chave_auto, nomes_auto[0])
+                            st.write("**" + " • ".join(nomes_auto) + f"** → {nome_exibicao}")
+                        st.caption("Isto altera somente a leitura dos relatórios; o histórico original não é modificado.")
+
+                # Grupos flexíveis encontram casos como PAPEL ARROZ / PAPEL DE ARROZ.
                 grupos_nomes = {}
                 for nome in nomes_historicos:
                     chave = _chave_nome_produto_rel(nome)
                     if chave:
                         grupos_nomes.setdefault(chave, []).append(nome)
 
-                suspeitos = [
-                    sorted(set(nomes))
-                    for nomes in grupos_nomes.values()
-                    if len(set(nomes)) > 1
-                ]
+                suspeitos = []
+                for nomes in grupos_nomes.values():
+                    nomes_unicos = sorted(set(nomes))
+                    if len(nomes_unicos) <= 1:
+                        continue
+                    # Se todas as grafias são equivalentes na normalização estrita,
+                    # já foram resolvidas automaticamente acima.
+                    if len({
+                        normalizar_identidade_produto(n) for n in nomes_unicos
+                    }) == 1:
+                        continue
+                    suspeitos.append(nomes_unicos)
 
                 nomes_oficiais = sorted(
-                    [str(p.get("Nome") or "").strip() for p in catalogo_rel if str(p.get("Nome") or "").strip()],
+                    [
+                        str(p.get("Nome") or "").strip()
+                        for p in catalogo_rel
+                        if str(p.get("Nome") or "").strip()
+                    ],
                     key=str.casefold,
                 )
 
                 if suspeitos:
                     st.warning(
-                        f"Encontrei {len(suspeitos)} grupo(s) de variações que merecem conferência."
+                        f"Restaram {len(suspeitos)} grupo(s) que realmente precisam de conferência."
                     )
 
                     for pos_dup, nomes_dup in enumerate(suspeitos[:20], 1):
@@ -10751,7 +10878,7 @@ if pagina_atual == "relatorios":
                         with st.container(border=True):
                             st.markdown(f"**Grupo {pos_dup}:** " + " • ".join(nomes_dup))
 
-                            # Se todas as variações já chegam ao mesmo nome oficial, só confirma.
+                            # Alias já confirmado anteriormente.
                             if len(resolvidos_norm) == 1:
                                 nome_resolvido = next(iter(resolvidos))
                                 if any(
@@ -10762,34 +10889,40 @@ if pagina_atual == "relatorios":
                                     st.caption("Para desfazer ou revisar, edite os aliases do produto no Catálogo.")
                                     continue
 
-                            # Sugestão apenas para facilitar a escolha; salvar continua dependendo de ação humana.
-                            sugestao = ""
-                            for oficial in nomes_oficiais:
-                                if normalizar_identidade_produto(oficial) in {
-                                    normalizar_identidade_produto(n) for n in nomes_dup
-                                }:
-                                    sugestao = oficial
-                                    break
-                            if not sugestao:
-                                chave_grupo = _chave_nome_produto_rel(nomes_dup[0])
-                                for oficial in nomes_oficiais:
-                                    if _chave_nome_produto_rel(oficial) == chave_grupo:
-                                        sugestao = oficial
-                                        break
+                            sugestao, motivo_sugestao = _sugerir_produto_oficial(
+                                nomes_dup,
+                                nomes_oficiais,
+                            )
+
+                            if sugestao:
+                                st.info(
+                                    f"💡 Sugestão do sistema: **{sugestao}** • {motivo_sugestao}. "
+                                    "A equivalência só será gravada se você confirmar."
+                                )
+                            else:
+                                st.info(
+                                    "ℹ️ Nenhum produto oficial compatível foi encontrado com segurança no Catálogo. "
+                                    "Escolha manualmente somente se tiver certeza de que é o mesmo produto."
+                                )
 
                             opcoes_oficiais = ["— Escolha o produto oficial —"] + nomes_oficiais
-                            indice_sugerido = opcoes_oficiais.index(sugestao) if sugestao in opcoes_oficiais else 0
+                            indice_sugerido = (
+                                opcoes_oficiais.index(sugestao)
+                                if sugestao in opcoes_oficiais
+                                else 0
+                            )
                             escolhido = st.selectbox(
                                 "Produto oficial do Catálogo",
                                 opcoes_oficiais,
                                 index=indice_sugerido,
-                                key=f"rel_alias_oficial_{pos_dup}_{abs(hash('|'.join(nomes_dup)))}",
+                                key=f"rel_alias_oficial_h1_{pos_dup}_{abs(hash('|'.join(nomes_dup)))}",
                             )
 
                             if escolhido != "— Escolha o produto oficial —":
                                 novos_aliases = [
                                     n for n in nomes_dup
-                                    if normalizar_identidade_produto(n) != normalizar_identidade_produto(escolhido)
+                                    if normalizar_identidade_produto(n)
+                                    != normalizar_identidade_produto(escolhido)
                                 ]
                                 if novos_aliases:
                                     st.caption("Serão vinculados como alias: " + " • ".join(novos_aliases))
@@ -10798,7 +10931,7 @@ if pagina_atual == "relatorios":
 
                                 if st.button(
                                     "🔗 Confirmar equivalência",
-                                    key=f"rel_alias_salvar_{pos_dup}_{abs(hash('|'.join(nomes_dup)))}",
+                                    key=f"rel_alias_salvar_h1_{pos_dup}_{abs(hash('|'.join(nomes_dup)))}",
                                     use_container_width=True,
                                     disabled=not novos_aliases,
                                 ):
@@ -10809,15 +10942,15 @@ if pagina_atual == "relatorios":
                                     conflitos = [c for c in conflitos if c]
                                     if conflitos:
                                         st.error(
-                                            "Não vinculei automaticamente porque existe conflito: "
+                                            "Não vinculei porque existe conflito: "
                                             + " ".join(dict.fromkeys(conflitos))
                                         )
                                     else:
                                         idx_oficial = next(
                                             (
                                                 i for i, prod in enumerate(catalogo_rel)
-                                                if normalizar_identidade_produto(prod.get("Nome")) ==
-                                                   normalizar_identidade_produto(escolhido)
+                                                if normalizar_identidade_produto(prod.get("Nome"))
+                                                == normalizar_identidade_produto(escolhido)
                                             ),
                                             None,
                                         )
@@ -10855,10 +10988,10 @@ if pagina_atual == "relatorios":
                     if len(suspeitos) > 20:
                         st.caption(
                             f"Mostrando 20 de {len(suspeitos)} grupos. "
-                            "A correção dos primeiros grupos já reduz a duplicidade dos relatórios."
+                            "Use primeiro as correspondências mais evidentes."
                         )
                 else:
-                    st.success("Nenhuma variação simples de nome foi encontrada no histórico.")
+                    st.success("Nenhuma variação de nome exige conferência manual.")
 
                 aliases_cadastrados = [
                     (str(p.get("Nome") or "").strip(), list(p.get("Aliases", []) or []))
@@ -10871,11 +11004,17 @@ if pagina_atual == "relatorios":
                     dados_aliases = [
                         {
                             "Produto oficial": oficial,
-                            "Aliases": " • ".join(str(x) for x in aliases if str(x).strip()),
+                            "Aliases": " • ".join(
+                                str(x) for x in aliases if str(x).strip()
+                            ),
                         }
                         for oficial, aliases in aliases_cadastrados
                     ]
-                    st.dataframe(pd.DataFrame(dados_aliases), use_container_width=True, hide_index=True)
+                    st.dataframe(
+                        pd.DataFrame(dados_aliases),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
         else:
             st.info("Nenhum produto encontrado nas propostas do período selecionado.")
 
