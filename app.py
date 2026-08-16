@@ -3431,6 +3431,8 @@ def carregar_marketing():
     if not isinstance(dados, dict): dados = {"conteudos": [], "config": {}}
     dados.setdefault("conteudos", [])
     dados.setdefault("config", {})
+    dados.setdefault("publicacoes_sociais", [])
+    dados.setdefault("thu_campanhas_sugeridas", [])
     return dados
 
 def salvar_marketing(dados):
@@ -8822,7 +8824,32 @@ def thu_montar_plano_execucao_campanhas(
             dias_para_inicio=dias_inicio,
         )
 
+        for _op_social in ops:
+            _produto_social = (_op_social.get("produto") or {}).get("Nome")
+            _frescor = thu_social_frescor_produto(
+                marketing,
+                _produto_social,
+                referencia=referencia,
+            )
+            _op_social["ajuste_social"] = int(_frescor.get("ajuste") or 0)
+            _op_social["nota_social"] = str(_frescor.get("nota") or "")
+            _op_social["indice_execucao"] = max(
+                0,
+                min(
+                    100,
+                    int(_op_social.get("indice_prontidao") or 0)
+                    + int(_frescor.get("ajuste") or 0),
+                ),
+            )
+
         prontos = [x for x in ops if x.get("pronto_divulgar")]
+        prontos.sort(
+            key=lambda x: (
+                int(x.get("indice_execucao") or 0),
+                int(x.get("indice_prontidao") or 0),
+            ),
+            reverse=True,
+        )
         sem_arte = [
             x for x in ops
             if x.get("pronto_cadastro") and not x.get("tem_arte")
@@ -8842,8 +8869,39 @@ def thu_montar_plano_execucao_campanhas(
             if produto_nome
             else None
         )
+        publicacoes_campanha = []
+        if produto_nome:
+            _pubs_mesmo_produto = thu_social_publicacoes_da_campanha(
+                marketing,
+                campanha,
+                produto_nome,
+            )
+            if salva:
+                _chave_salva = thu_social_chave_campanha(salva)
+                publicacoes_campanha = [
+                    x for x in _pubs_mesmo_produto
+                    if str(x.get("campanha_preparada_chave") or "") == _chave_salva
+                ]
 
-        if salva:
+            # Publicação manual/avulsa também encerra a etapa quando ocorreu
+            # na janela desta campanha. Histórico de anos anteriores não conta.
+            if not publicacoes_campanha:
+                for _pub in _pubs_mesmo_produto:
+                    _data_pub = _thu_social_data(_pub.get("data_publicacao"))
+                    if not _data_pub:
+                        continue
+                    _inicio_janela = data_preparar or inicio
+                    if isinstance(_inicio_janela, date) and _data_pub < _inicio_janela:
+                        continue
+                    if isinstance(fim, date) and _data_pub > fim:
+                        continue
+                    publicacoes_campanha.append(_pub)
+
+        if publicacoes_campanha:
+            etapa = "Campanha publicada"
+            acao = "ver_publicacao"
+            icone = "📣"
+        elif salva:
             etapa = "Campanha preparada"
             acao = "ver_campanha"
             icone = "✅"
@@ -8871,7 +8929,10 @@ def thu_montar_plano_execucao_campanhas(
             else None
         )
 
-        if salva:
+        if publicacoes_campanha:
+            urgencia = "Publicada"
+            ordem_urgencia = 0
+        elif salva:
             urgencia = "Preparada"
             ordem_urgencia = 1
         elif em_periodo:
@@ -8921,7 +8982,10 @@ def thu_montar_plano_execucao_campanhas(
             "produto_nome": produto_nome,
             "produto_indice": idx_prod,
             "arte": arte,
+            "nota_social": str((recomendado or {}).get("nota_social") or ""),
+            "indice_execucao": int((recomendado or {}).get("indice_execucao") or 0),
             "campanha_salva": salva,
+            "publicacoes": publicacoes_campanha,
             "elegiveis": len(ops),
             "prontos": len(prontos),
             "sem_arte": len(sem_arte),
@@ -8938,6 +9002,16 @@ def thu_montar_plano_execucao_campanhas(
         )
     )
     return planos
+
+
+def _thu_i6_abrir_registro_preparada(campanha_salva):
+    for chave in list(st.session_state.keys()):
+        if str(chave).startswith("thu_i6_"):
+            st.session_state.pop(chave, None)
+    st.session_state["_thu_i6_publicar_chave"] = thu_social_chave_campanha(
+        campanha_salva or {}
+    )
+    st.session_state["_thu_i6_abrir"] = True
 
 
 def _thu_i5_acionar_plano(item, prefixo):
@@ -8995,8 +9069,12 @@ def renderizar_plano_execucao_thu(
         st.info("Nenhuma campanha em janela de planejamento neste período.")
         return []
 
-    pendentes = [p for p in planos if p.get("acao") != "ver_campanha"]
+    pendentes = [
+        p for p in planos
+        if p.get("acao") not in ("ver_campanha", "ver_publicacao")
+    ]
     preparadas = [p for p in planos if p.get("acao") == "ver_campanha"]
+    publicadas = [p for p in planos if p.get("acao") == "ver_publicacao"]
     atrasadas = [
         p for p in pendentes
         if p.get("urgencia") in ("Ação imediata", "Preparação atrasada")
@@ -9004,11 +9082,12 @@ def renderizar_plano_execucao_thu(
     falta_arte = [p for p in pendentes if p.get("acao") == "cadastrar_arte"]
 
     if not compacto:
-        m1, m2, m3, m4 = st.columns(4)
+        m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("Campanhas no plano", len(planos))
         m2.metric("Ação agora / atrasadas", len(atrasadas))
-        m3.metric("Campanhas preparadas", len(preparadas))
-        m4.metric("Aguardando arte", len(falta_arte))
+        m3.metric("Preparadas", len(preparadas))
+        m4.metric("Publicadas", len(publicadas))
+        m5.metric("Aguardando arte", len(falta_arte))
         st.caption(
             "O prazo de preparação vem da antecedência cadastrada no Calendário. "
             "O THU organiza o trabalho; não publica nem aprova nada automaticamente."
@@ -9045,6 +9124,11 @@ def renderizar_plano_execucao_thu(
                     f"{item.get('prontos',0)} pronto(s) • "
                     f"{item.get('sem_arte',0)} sem arte"
                 )
+                if item.get("nota_social"):
+                    c1.caption(
+                        "📱 Memória social: " + str(item.get("nota_social"))
+                        + ". Este ajuste serve apenas para diversidade de divulgação."
+                    )
             elif item.get("produtos_calendario"):
                 c1.caption(
                     "📅 Calendário sugere: "
@@ -9062,19 +9146,30 @@ def renderizar_plano_execucao_thu(
             elif acao == "preparar_campanha":
                 label = "💙 Preparar campanha"
             else:
-                label = "✅ Preparada"
+                label = ""
 
-            if acao != "ver_campanha":
+            if acao not in ("ver_campanha", "ver_publicacao"):
                 if c2.button(
                     label,
                     key=f"{prefixo}_acao_{pos}_{abs(hash((item.get('id'), campanha, acao)))}",
                     use_container_width=True,
                 ):
                     _thu_i5_acionar_plano(item, prefixo)
-            else:
-                c2.success("Texto salvo")
 
+            elif acao == "ver_campanha":
                 salva = item.get("campanha_salva") or {}
+                c2.success("Preparada")
+                if c2.button(
+                    "📤 Registrar publicação",
+                    key=f"{prefixo}_publicar_{pos}_{abs(hash((item.get('id'), campanha)))}",
+                    use_container_width=True,
+                ):
+                    _thu_i6_abrir_registro_preparada(salva)
+                    if compacto:
+                        rerun_na_aba("marketing")
+                    else:
+                        st.rerun()
+
                 with c1.expander("Ver campanha preparada", expanded=False):
                     st.caption(
                         f"Produto: {salva.get('produto') or produto_nome} • "
@@ -9097,7 +9192,974 @@ def renderizar_plano_execucao_thu(
                             key=f"{prefixo}_story_salvo_{pos}_{abs(hash(campanha))}",
                         )
 
+            else:
+                c2.success("Publicada")
+                publicacoes_item = list(item.get("publicacoes") or [])
+                salva = item.get("campanha_salva") or {}
+                if salva and c2.button(
+                    "➕ Outro canal",
+                    key=f"{prefixo}_outro_canal_{pos}_{abs(hash((item.get('id'), campanha)))}",
+                    use_container_width=True,
+                ):
+                    _thu_i6_abrir_registro_preparada(salva)
+                    if compacto:
+                        rerun_na_aba("marketing")
+                    else:
+                        st.rerun()
+
+                with c1.expander("Ver histórico de publicação", expanded=False):
+                    for pub in publicacoes_item[:8]:
+                        st.write(
+                            f"• **{pub.get('canal') or 'Canal'}** — "
+                            f"{pub.get('data_publicacao') or '—'}"
+                        )
+                        if pub.get("link"):
+                            st.link_button(
+                                "Abrir publicação",
+                                str(pub.get("link")),
+                            )
+
     return planos
+
+
+
+# --- 20.4.9-I6: THU Acervo Social + Histórico de Publicações ---
+THU_SOCIAL_CANAIS = [
+    "Instagram Feed",
+    "Instagram Story",
+    "Instagram Reel",
+    "Instagram Carrossel",
+    "Facebook",
+    "Status WhatsApp",
+]
+
+THU_SOCIAL_ORIGENS = [
+    "Campanha preparada pelo THU",
+    "Publicação histórica",
+    "Publicação avulsa",
+]
+
+
+def thu_social_chave_campanha(campanha):
+    campanha = campanha or {}
+    base = "|".join([
+        normalizar_identidade_produto(campanha.get("produto")),
+        _thu_normalizar_campanha(campanha.get("campanha")),
+        str(campanha.get("arte_id") or ""),
+        str(campanha.get("gerado_em") or ""),
+    ])
+    return hashlib.sha1(base.encode("utf-8")).hexdigest()[:18]
+
+
+def _thu_social_data(valor):
+    if isinstance(valor, datetime):
+        return valor.date()
+    if isinstance(valor, date):
+        return valor
+    texto = str(valor or "").strip()
+    if not texto:
+        return None
+    try:
+        return datetime.fromisoformat(texto.replace("Z", "+00:00")).date()
+    except Exception:
+        pass
+    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(texto[:19], fmt).date()
+        except Exception:
+            pass
+    return None
+
+
+def _thu_social_publicacoes(marketing, incluir_anuladas=False):
+    itens = [
+        dict(x) for x in (marketing or {}).get("publicacoes_sociais", []) or []
+        if isinstance(x, dict)
+    ]
+    if not incluir_anuladas:
+        itens = [x for x in itens if not x.get("anulada")]
+    itens.sort(
+        key=lambda x: (
+            str(x.get("data_publicacao") or ""),
+            str(x.get("registrado_em") or ""),
+        ),
+        reverse=True,
+    )
+    return itens
+
+
+def thu_social_publicacoes_da_campanha(marketing, campanha, produto_nome=""):
+    camp = _thu_normalizar_campanha(campanha)
+    produto_key = normalizar_identidade_produto(produto_nome)
+    encontrados = []
+    for item in _thu_social_publicacoes(marketing):
+        if camp and _thu_normalizar_campanha(item.get("campanha")) != camp:
+            continue
+        if produto_key and normalizar_identidade_produto(item.get("produto")) != produto_key:
+            continue
+        encontrados.append(item)
+    return encontrados
+
+
+def thu_social_ultima_publicacao_produto(marketing, produto_nome):
+    chave = normalizar_identidade_produto(produto_nome)
+    if not chave:
+        return None
+    itens = [
+        x for x in _thu_social_publicacoes(marketing)
+        if normalizar_identidade_produto(x.get("produto")) == chave
+    ]
+    return itens[0] if itens else None
+
+
+def thu_social_frescor_produto(marketing, produto_nome, referencia=None):
+    """Ajuste pequeno para diversidade; nunca substitui prontidão/cadastro."""
+    referencia = referencia or hoje_local()
+    ultima = thu_social_ultima_publicacao_produto(marketing, produto_nome)
+    if not ultima:
+        return {
+            "dias": None,
+            "ajuste": 5,
+            "nota": "produto sem publicação registrada no histórico social",
+        }
+
+    data_pub = _thu_social_data(ultima.get("data_publicacao"))
+    if not data_pub:
+        return {"dias": None, "ajuste": 0, "nota": ""}
+
+    dias = (referencia - data_pub).days
+    if dias < 0:
+        return {"dias": dias, "ajuste": 0, "nota": ""}
+    if dias <= 7:
+        return {
+            "dias": dias,
+            "ajuste": -18,
+            "nota": f"produto publicado há {dias} dia(s); considerar variar o conteúdo",
+        }
+    if dias <= 14:
+        return {
+            "dias": dias,
+            "ajuste": -12,
+            "nota": f"produto publicado há {dias} dias",
+        }
+    if dias <= 30:
+        return {
+            "dias": dias,
+            "ajuste": -6,
+            "nota": f"produto publicado há {dias} dias",
+        }
+    if dias >= 45:
+        return {
+            "dias": dias,
+            "ajuste": 5,
+            "nota": f"produto sem publicação há {dias} dias",
+        }
+    return {"dias": dias, "ajuste": 0, "nota": f"última publicação há {dias} dias"}
+
+
+def thu_social_alertas_repeticao(
+    marketing,
+    produto_nome,
+    canal,
+    arte_id="",
+    data_publicacao=None,
+):
+    """Alerta; nunca bloqueia publicação."""
+    alvo = data_publicacao or hoje_local()
+    if isinstance(alvo, datetime):
+        alvo = alvo.date()
+    produto_key = normalizar_identidade_produto(produto_nome)
+    arte_id = str(arte_id or "").strip()
+    canal = str(canal or "").strip()
+    alertas = []
+
+    for item in _thu_social_publicacoes(marketing):
+        data_item = _thu_social_data(item.get("data_publicacao"))
+        if not data_item:
+            continue
+        delta = (alvo - data_item).days
+        if delta < 0:
+            continue
+
+        mesmo_produto = (
+            produto_key
+            and normalizar_identidade_produto(item.get("produto")) == produto_key
+        )
+        mesmo_canal = canal and str(item.get("canal") or "") == canal
+        mesma_arte = arte_id and str(item.get("arte_id") or "") == arte_id
+
+        if mesmo_produto and mesmo_canal and delta <= 14:
+            alertas.append(
+                f"{produto_nome} já foi registrado em {canal} há {delta} dia(s)."
+            )
+        if mesma_arte and delta <= 30:
+            alertas.append(
+                f"A mesma arte já foi registrada há {delta} dia(s) em {item.get('canal') or 'outro canal'}."
+            )
+
+    return list(dict.fromkeys(alertas))
+
+
+def thu_social_link_coerente(canal, link):
+    link = str(link or "").strip()
+    if not link:
+        return True, ""
+    try:
+        parsed = urllib.parse.urlparse(link)
+        host = (parsed.hostname or "").casefold()
+    except Exception:
+        return False, "Link não reconhecido."
+
+    if parsed.scheme not in ("http", "https") or not host:
+        return False, "Use um link completo começando por https://."
+
+    if canal.startswith("Instagram"):
+        esperado = ("instagram.com", "www.instagram.com")
+        if host not in esperado:
+            return False, "O canal é Instagram, mas o link não aponta para instagram.com."
+    elif canal == "Facebook":
+        if host not in ("facebook.com", "www.facebook.com", "m.facebook.com"):
+            return False, "O canal é Facebook, mas o link não aponta para facebook.com."
+    return True, ""
+
+
+def salvar_upload_social(upload):
+    """Usa armazenamento persistente existente, mas em namespace separado do Catálogo."""
+    if upload is None:
+        return ""
+    return upload_catalog_image(upload, "social_uploads")
+
+
+def thu_social_registrar_publicacao(
+    marketing,
+    *,
+    origem,
+    canal,
+    data_publicacao,
+    tipo_midia="Imagem",
+    produto="",
+    campanha="",
+    arte_id="",
+    legenda="",
+    link="",
+    observacao="",
+    imagem="",
+    campanha_preparada=None,
+):
+    """Registra fato de publicação. Não publica em rede social."""
+    marketing = marketing or {}
+    publicacoes = list(marketing.get("publicacoes_sociais", []) or [])
+
+    data_obj = _thu_social_data(data_publicacao) or hoje_local()
+    agora = agora_local()
+    chave_preparada = (
+        thu_social_chave_campanha(campanha_preparada)
+        if campanha_preparada
+        else ""
+    )
+
+    base_id = "|".join([
+        data_obj.isoformat(),
+        str(canal or ""),
+        normalizar_identidade_produto(produto),
+        _thu_normalizar_campanha(campanha),
+        str(arte_id or ""),
+        str(link or ""),
+        str(agora.isoformat()),
+    ])
+    registro = {
+        "id": "SOC-" + hashlib.sha1(base_id.encode("utf-8")).hexdigest()[:16].upper(),
+        "origem": str(origem or "Publicação avulsa"),
+        "canal": str(canal or "").strip(),
+        "tipo_midia": str(tipo_midia or "Imagem").strip(),
+        "data_publicacao": data_obj.isoformat(),
+        "produto": str(produto or "").strip(),
+        "campanha": _thu_normalizar_campanha(campanha),
+        "arte_id": str(arte_id or "").strip(),
+        "legenda": str(legenda or "").strip(),
+        "link": str(link or "").strip(),
+        "observacao": str(observacao or "").strip(),
+        "imagem": str(imagem or "").strip(),
+        "campanha_preparada_chave": chave_preparada,
+        "registrado_em": agora.isoformat(timespec="seconds"),
+        "usuario": obter_usuario_atual(),
+        "anulada": False,
+    }
+    publicacoes.insert(0, registro)
+    marketing["publicacoes_sociais"] = publicacoes[:1000]
+
+    if chave_preparada:
+        campanhas = list(marketing.get("thu_campanhas_sugeridas", []) or [])
+        for idx, item in enumerate(campanhas):
+            if thu_social_chave_campanha(item) != chave_preparada:
+                continue
+            atualizado = dict(item)
+            ids = list(atualizado.get("publicacoes_ids", []) or [])
+            if registro["id"] not in ids:
+                ids.append(registro["id"])
+            atualizado["publicacoes_ids"] = ids[-50:]
+            atualizado["status_publicacao"] = "Publicada"
+            atualizado["ultima_publicacao_em"] = data_obj.isoformat()
+            atualizado["ultima_publicacao_canal"] = registro["canal"]
+            campanhas[idx] = atualizado
+            break
+        marketing["thu_campanhas_sugeridas"] = campanhas
+
+    salvar_marketing(marketing)
+    return registro
+
+
+def thu_social_anular_publicacao(marketing, publicacao_id, motivo=""):
+    """Não apaga histórico: marca o registro como anulado."""
+    marketing = marketing or {}
+    publicacoes = list(marketing.get("publicacoes_sociais", []) or [])
+    alterou = False
+    for idx, item in enumerate(publicacoes):
+        if str(item.get("id") or "") != str(publicacao_id or ""):
+            continue
+        reg = dict(item)
+        reg["anulada"] = True
+        reg["anulada_em"] = agora_local().isoformat(timespec="seconds")
+        reg["anulada_por"] = obter_usuario_atual()
+        reg["motivo_anulacao"] = str(motivo or "").strip()
+        publicacoes[idx] = reg
+        alterou = True
+        break
+    if alterou:
+        marketing["publicacoes_sociais"] = publicacoes
+
+        # Recalcula o status da campanha preparada sem apagar histórico.
+        chave_anulada = ""
+        for item in publicacoes:
+            if str(item.get("id") or "") == str(publicacao_id or ""):
+                chave_anulada = str(item.get("campanha_preparada_chave") or "")
+                break
+
+        if chave_anulada:
+            ainda_ativas = any(
+                str(x.get("campanha_preparada_chave") or "") == chave_anulada
+                and not x.get("anulada")
+                for x in publicacoes
+            )
+            if not ainda_ativas:
+                campanhas = list(marketing.get("thu_campanhas_sugeridas", []) or [])
+                for idx, camp in enumerate(campanhas):
+                    if thu_social_chave_campanha(camp) != chave_anulada:
+                        continue
+                    atualizado = dict(camp)
+                    atualizado["status_publicacao"] = "Preparada"
+                    atualizado.pop("ultima_publicacao_em", None)
+                    atualizado.pop("ultima_publicacao_canal", None)
+                    campanhas[idx] = atualizado
+                    break
+                marketing["thu_campanhas_sugeridas"] = campanhas
+
+        salvar_marketing(marketing)
+    return alterou
+
+
+def thu_social_resumo(marketing, referencia=None):
+    referencia = referencia or hoje_local()
+    publicacoes = _thu_social_publicacoes(marketing)
+    mes = [
+        x for x in publicacoes
+        if (_thu_social_data(x.get("data_publicacao")) or date.min).year == referencia.year
+        and (_thu_social_data(x.get("data_publicacao")) or date.min).month == referencia.month
+    ]
+    ultimos_30 = [
+        x for x in publicacoes
+        if _thu_social_data(x.get("data_publicacao"))
+        and 0 <= (referencia - _thu_social_data(x.get("data_publicacao"))).days <= 30
+    ]
+    produtos_30 = {
+        normalizar_identidade_produto(x.get("produto"))
+        for x in ultimos_30
+        if normalizar_identidade_produto(x.get("produto"))
+    }
+    return {
+        "total": len(publicacoes),
+        "mes": len(mes),
+        "ultimos_30": len(ultimos_30),
+        "produtos_30": len(produtos_30),
+    }
+
+
+@st.dialog("📸 Assistente THU • Aproveitar imagem social", width="large")
+def dialog_thu_aproveitar_imagem_social(publicacao_id):
+    marketing = carregar_marketing()
+    publicacao = next(
+        (
+            x for x in _thu_social_publicacoes(marketing)
+            if str(x.get("id") or "") == str(publicacao_id or "")
+        ),
+        None,
+    )
+    if not publicacao:
+        st.error("Publicação não localizada.")
+        return
+
+    imagem = str(publicacao.get("imagem") or "").strip()
+    produto_nome = str(publicacao.get("produto") or "").strip()
+    if not imagem:
+        st.warning("Este registro social não possui imagem/print armazenado.")
+        return
+    if not produto_nome:
+        st.warning("Vincule a publicação a um produto oficial antes de aproveitar a imagem.")
+        return
+
+    catalogo = carregar_catalogo()
+    idx_prod = next(
+        (
+            i for i, p in enumerate(catalogo)
+            if normalizar_identidade_produto(p.get("Nome"))
+            == normalizar_identidade_produto(produto_nome)
+        ),
+        None,
+    )
+    if idx_prod is None:
+        st.warning("O produto vinculado não existe mais no Catálogo oficial.")
+        return
+
+    produto = dict(catalogo[idx_prod])
+    st.markdown(f"### {produto.get('Nome')}")
+    st.caption(
+        "A imagem veio de uma publicação social e pode estar comprimida. "
+        "Por segurança, ela não pode substituir a foto principal nesta etapa."
+    )
+    try:
+        st.image(imagem_streamlit_catalogo(imagem), width=360)
+    except Exception:
+        st.caption("Prévia indisponível.")
+
+    modo = st.radio(
+        "Como aproveitar esta imagem?",
+        [
+            "Adicionar como referência secundária",
+            "Salvar como variação do produto",
+        ],
+        key=f"thu_i6_aproveitar_modo_{publicacao_id}",
+    )
+    observacao = st.text_input(
+        "Descrição da variação/referência (opcional)",
+        placeholder="Ex.: versão rosa, nova estampa, acabamento diferente...",
+        key=f"thu_i6_aproveitar_obs_{publicacao_id}",
+    )
+
+    if st.button(
+        "✅ Confirmar no banco de imagens",
+        type="primary",
+        use_container_width=True,
+        key=f"thu_i6_aproveitar_confirmar_{publicacao_id}",
+    ):
+        imagens = list(produto.get("Imagens", []) or [])
+        ja_existe = imagem in imagens
+        if not ja_existe:
+            imagens.append(imagem)
+            produto["Imagens"] = imagens
+
+        acao = (
+            "Acervo Social — variação"
+            if modo == "Salvar como variação do produto"
+            else "Acervo Social — referência secundária"
+        )
+        hist = list(produto.get("BancoImagensHistorico", []) or [])
+        hist.append({
+            "origem": "Acervo Social AlphaFest",
+            "publicacao_id": str(publicacao.get("id") or ""),
+            "canal": str(publicacao.get("canal") or ""),
+            "link": str(publicacao.get("link") or ""),
+            "acao": acao,
+            "fotos": [imagem],
+            "observacao": str(observacao or "").strip(),
+            "adicionado_em": agora_local().isoformat(timespec="seconds"),
+            "usuario": obter_usuario_atual(),
+        })
+        produto["BancoImagensHistorico"] = hist[-150:]
+
+        if modo == "Salvar como variação do produto":
+            variacoes = list(produto.get("VariacoesImagem", []) or [])
+            variacoes.append({
+                "origem": "Acervo Social AlphaFest",
+                "publicacao_id": str(publicacao.get("id") or ""),
+                "canal": str(publicacao.get("canal") or ""),
+                "fotos": [imagem],
+                "descricao": (
+                    str(observacao or "").strip()
+                    or "Variação registrada a partir de publicação social"
+                ),
+                "criado_em": agora_local().isoformat(timespec="seconds"),
+            })
+            produto["VariacoesImagem"] = variacoes[-150:]
+
+        produto["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+        catalogo[idx_prod] = produto
+        salvar_catalogo(catalogo)
+
+        st.session_state["_thu_auditar_produto_nome"] = produto.get("Nome")
+        st.session_state["_thu_i6_feedback"] = (
+            "Imagem social já existia no produto; histórico atualizado."
+            if ja_existe
+            else f"Imagem social adicionada ao banco de {produto.get('Nome')} como "
+                 + ("variação." if modo == "Salvar como variação do produto" else "referência secundária.")
+        )
+        st.rerun()
+
+
+def renderizar_acervo_social_thu(marketing, conteudos):
+    """Painel manual primeiro; futura API Meta pode alimentar a mesma estrutura."""
+    catalogo = carregar_catalogo()
+    publicacoes = _thu_social_publicacoes(marketing)
+    resumo = thu_social_resumo(marketing)
+
+    sm1, sm2, sm3, sm4 = st.columns(4)
+    sm1.metric("Publicações registradas", resumo["total"])
+    sm2.metric("Neste mês", resumo["mes"])
+    sm3.metric("Últimos 30 dias", resumo["ultimos_30"])
+    sm4.metric("Produtos divulgados / 30d", resumo["produtos_30"])
+
+    st.caption(
+        "Nesta versão o registro é manual e confiável. O sistema não faz scraping contínuo de Instagram/Facebook. "
+        "Quando a API oficial da Meta for conectada, ela poderá alimentar este mesmo histórico."
+    )
+    perf1, perf2, perf3 = st.columns([1, 1, 2])
+    perf1.link_button(
+        "📸 Abrir Instagram AlphaFest",
+        "https://www.instagram.com/alphafest10/",
+        use_container_width=True,
+    )
+    perf2.link_button(
+        "📘 Abrir Facebook AlphaFest",
+        "https://www.facebook.com/alphafest10",
+        use_container_width=True,
+    )
+    perf3.caption(
+        "Use estes atalhos para revisar publicações antigas e registrar no Acervo Social somente o que realmente vale preservar."
+    )
+
+    tab_reg, tab_hist, tab_prod = st.tabs([
+        "📤 Registrar publicação",
+        "🕘 Histórico social",
+        "📦 Memória por produto",
+    ])
+
+    with tab_reg:
+        campanhas_preparadas = list(marketing.get("thu_campanhas_sugeridas", []) or [])
+        campanhas_preparadas.sort(
+            key=lambda x: str(x.get("gerado_em") or ""),
+            reverse=True,
+        )
+
+        chave_prefill = str(st.session_state.get("_thu_i6_publicar_chave") or "")
+        origem_index = 0 if chave_prefill else 1
+        origem = st.selectbox(
+            "Origem do registro",
+            THU_SOCIAL_ORIGENS,
+            index=origem_index,
+            key="thu_i6_origem",
+        )
+
+        preparada = None
+        if origem == "Campanha preparada pelo THU":
+            if not campanhas_preparadas:
+                st.info("Ainda não há campanha preparada pelo THU.")
+            else:
+                labels = []
+                mapa_preparadas = {}
+                for _pos_pre, item in enumerate(campanhas_preparadas, 1):
+                    chave = thu_social_chave_campanha(item)
+                    _gerado_label = str(item.get("gerado_em") or "")[:16].replace("T", " ")
+                    label = (
+                        f"{item.get('campanha') or 'Campanha livre'} • "
+                        f"{item.get('produto') or 'Produto'} • "
+                        f"{_gerado_label or 'sem data'} • #{_pos_pre}"
+                    )
+                    labels.append(label)
+                    mapa_preparadas[label] = item
+
+                index_pre = 0
+                if chave_prefill:
+                    for pos, label in enumerate(labels):
+                        if thu_social_chave_campanha(mapa_preparadas[label]) == chave_prefill:
+                            index_pre = pos
+                            break
+                label_preparada = st.selectbox(
+                    "Campanha preparada",
+                    labels,
+                    index=index_pre,
+                    key="thu_i6_preparada",
+                )
+                preparada = mapa_preparadas.get(label_preparada)
+
+        _ctx_social = (
+            thu_social_chave_campanha(preparada)
+            if preparada
+            else "manual"
+        )
+
+        nomes_catalogo = [
+            str(p.get("Nome") or "").strip()
+            for p in catalogo
+            if str(p.get("Nome") or "").strip()
+        ]
+        produto_default = str((preparada or {}).get("produto") or "")
+        produto_opcoes = ["— Sem produto vinculado —"] + nomes_catalogo
+        produto_index = (
+            produto_opcoes.index(produto_default)
+            if produto_default in produto_opcoes else 0
+        )
+
+        r1, r2, r3 = st.columns([1.3, 1.3, 1])
+        canal = r1.selectbox(
+            "Canal",
+            THU_SOCIAL_CANAIS,
+            key="thu_i6_canal",
+        )
+        data_pub = r2.date_input(
+            "Data da publicação",
+            value=hoje_local(),
+            key="thu_i6_data",
+        )
+        _tipos_midia = ["Imagem", "Vídeo / Reel", "Sem arquivo"]
+        _tipo_index = 1 if canal == "Instagram Reel" else 0
+        tipo_midia = r3.selectbox(
+            "Mídia",
+            _tipos_midia,
+            index=_tipo_index,
+            key=f"thu_i6_tipo_midia_{_ctx_social}_{canal}",
+        )
+
+        produto_sel = st.selectbox(
+            "Produto oficial do Catálogo",
+            produto_opcoes,
+            index=produto_index,
+            key=f"thu_i6_produto_{_ctx_social}",
+        )
+        produto = "" if produto_sel == "— Sem produto vinculado —" else produto_sel
+
+        campanha_default = _thu_normalizar_campanha((preparada or {}).get("campanha"))
+        campanhas_opts = ["Sem campanha específica"] + [
+            x for x in CAMPANHAS_PRODUTO_OPCOES
+            if x != "Permanente / Todas as épocas"
+        ]
+        camp_index = (
+            campanhas_opts.index(campanha_default)
+            if campanha_default in campanhas_opts else 0
+        )
+        campanha_sel = st.selectbox(
+            "Campanha / data relacionada",
+            campanhas_opts,
+            index=camp_index,
+            key=f"thu_i6_campanha_{_ctx_social}",
+        )
+        campanha = "" if campanha_sel == "Sem campanha específica" else campanha_sel
+
+        arte_id = str((preparada or {}).get("arte_id") or "")
+        if canal in ("Instagram Story", "Status WhatsApp"):
+            legenda_default = str(
+                (preparada or {}).get("story")
+                or (preparada or {}).get("status")
+                or ""
+            )
+        else:
+            legenda_default = str((preparada or {}).get("legenda") or "")
+        legenda = st.text_area(
+            "Legenda / texto publicado",
+            value=legenda_default,
+            height=170,
+            key=f"thu_i6_legenda_{_ctx_social}_{canal}",
+        )
+
+        l1, l2 = st.columns([1.4, 1])
+        link = l1.text_input(
+            "Link da publicação (opcional)",
+            placeholder="https://www.instagram.com/p/... ou https://www.facebook.com/...",
+            key=f"thu_i6_link_{_ctx_social}_{canal}",
+        )
+        arquivo = l2.file_uploader(
+            "Imagem / print opcional",
+            type=["png", "jpg", "jpeg", "webp"],
+            key=f"thu_i6_arquivo_{_ctx_social}_{canal}",
+            help="Para Reels/vídeos, guarde o link e envie apenas uma capa/print se desejar.",
+        )
+        observacao = st.text_input(
+            "Observação (opcional)",
+            placeholder="Ex.: republicado pela Meta, post antigo, campanha de 2025...",
+            key=f"thu_i6_obs_{_ctx_social}_{canal}",
+        )
+
+        _replica_configurada = bool(
+            (marketing.get("config") or {}).get("replicar_facebook", True)
+        )
+        registrar_replica_facebook = False
+        if canal == "Instagram Feed" and _replica_configurada:
+            registrar_replica_facebook = st.checkbox(
+                "📘 Registrar também a réplica no Facebook",
+                value=False,
+                help="Marque somente se esta publicação realmente foi replicada pela Meta. O THU não presume que a réplica aconteceu.",
+                key=f"thu_i6_replica_fb_{_ctx_social}_{canal}",
+            )
+
+        link_ok, link_aviso = thu_social_link_coerente(canal, link)
+        if link and not link_ok:
+            st.warning(link_aviso)
+
+        alertas = thu_social_alertas_repeticao(
+            marketing,
+            produto,
+            canal,
+            arte_id=arte_id,
+            data_publicacao=data_pub,
+        )
+        if alertas:
+            st.warning(
+                "💙 THU informa: antes de registrar, confira possível repetição recente: "
+                + " • ".join(alertas[:4])
+            )
+
+        if preparada:
+            publicadas_preparada = [
+                x for x in publicacoes
+                if str(x.get("campanha_preparada_chave") or "")
+                == thu_social_chave_campanha(preparada)
+            ]
+            if publicadas_preparada:
+                canais_ja = list(dict.fromkeys(
+                    str(x.get("canal") or "")
+                    for x in publicadas_preparada
+                    if str(x.get("canal") or "")
+                ))
+                st.info(
+                    "Esta campanha preparada já possui registro em: "
+                    + " • ".join(canais_ja)
+                    + ". Você pode registrar outro canal separadamente."
+                )
+
+        if st.button(
+            "✅ Registrar como publicada",
+            type="primary",
+            use_container_width=True,
+            key="thu_i6_salvar_publicacao",
+        ):
+            if not canal:
+                st.error("Informe o canal.")
+            elif origem == "Campanha preparada pelo THU" and not preparada:
+                st.error("Escolha uma campanha preparada.")
+            elif link and not link_ok:
+                st.error("Corrija o link da publicação antes de registrar.")
+            else:
+                imagem_salva = ""
+                if arquivo is not None:
+                    imagem_salva = salvar_upload_social(arquivo)
+                    if not imagem_salva:
+                        st.error("Não foi possível salvar a imagem/print.")
+                        st.stop()
+
+                registro = thu_social_registrar_publicacao(
+                    marketing,
+                    origem=origem,
+                    canal=canal,
+                    data_publicacao=data_pub,
+                    tipo_midia=tipo_midia,
+                    produto=produto,
+                    campanha=campanha,
+                    arte_id=arte_id,
+                    legenda=legenda,
+                    link=link,
+                    observacao=observacao,
+                    imagem=imagem_salva,
+                    campanha_preparada=preparada,
+                )
+
+                if registrar_replica_facebook:
+                    # Recarrega porque o primeiro registro já foi persistido.
+                    marketing = carregar_marketing()
+                    thu_social_registrar_publicacao(
+                        marketing,
+                        origem="Replicação confirmada pela Meta",
+                        canal="Facebook",
+                        data_publicacao=data_pub,
+                        tipo_midia=tipo_midia,
+                        produto=produto,
+                        campanha=campanha,
+                        arte_id=arte_id,
+                        legenda=legenda,
+                        link="",
+                        observacao=(
+                            "Réplica no Facebook confirmada no registro do Instagram. "
+                            + str(observacao or "")
+                        ).strip(),
+                        imagem=imagem_salva,
+                        campanha_preparada=preparada,
+                    )
+
+                st.session_state.pop("_thu_i6_publicar_chave", None)
+                st.session_state["_thu_i6_feedback"] = (
+                    f"Publicação registrada: {registro.get('canal')} • "
+                    f"{registro.get('produto') or registro.get('campanha') or 'Acervo social'}"
+                    + (" • réplica no Facebook registrada." if registrar_replica_facebook else ".")
+                )
+                st.rerun()
+
+    with tab_hist:
+        filtro_canal = st.selectbox(
+            "Canal",
+            ["Todos"] + THU_SOCIAL_CANAIS,
+            key="thu_i6_hist_canal",
+        )
+        filtro_prod = st.text_input(
+            "Pesquisar produto/campanha/legenda",
+            key="thu_i6_hist_busca",
+        ).strip().casefold()
+
+        filtradas = []
+        for pub in publicacoes:
+            if filtro_canal != "Todos" and pub.get("canal") != filtro_canal:
+                continue
+            texto = " ".join([
+                str(pub.get("produto") or ""),
+                str(pub.get("campanha") or ""),
+                str(pub.get("legenda") or ""),
+                str(pub.get("observacao") or ""),
+            ]).casefold()
+            if filtro_prod and filtro_prod not in texto:
+                continue
+            filtradas.append(pub)
+
+        if not filtradas:
+            st.info("Nenhuma publicação encontrada neste filtro.")
+        else:
+            for pos, pub in enumerate(filtradas[:60], 1):
+                with st.container(border=True):
+                    h1, h2 = st.columns([4.4, 1.4])
+                    titulo = pub.get("produto") or pub.get("campanha") or "Publicação social"
+                    h1.markdown(
+                        f"**{titulo}** • {pub.get('canal') or 'Canal'}"
+                    )
+                    h1.caption(
+                        f"{pub.get('data_publicacao') or '—'} • "
+                        f"{pub.get('tipo_midia') or 'Mídia'} • "
+                        f"{pub.get('origem') or 'Registro'} • "
+                        f"registrado por {pub.get('usuario') or '—'}"
+                    )
+                    if pub.get("campanha"):
+                        h1.caption(f"📅 {pub.get('campanha')}")
+                    if pub.get("observacao"):
+                        h1.caption(f"📝 {pub.get('observacao')}")
+
+                    if pub.get("imagem"):
+                        try:
+                            h1.image(
+                                imagem_streamlit_catalogo(pub.get("imagem")),
+                                width=160,
+                            )
+                        except Exception:
+                            pass
+
+                    if pub.get("legenda"):
+                        with h1.expander("Ver legenda", expanded=False):
+                            st.write(pub.get("legenda"))
+
+                    if pub.get("link"):
+                        h2.link_button(
+                            "🔗 Abrir publicação",
+                            str(pub.get("link")),
+                            use_container_width=True,
+                        )
+                    else:
+                        h2.caption("Sem link registrado")
+
+                    if pub.get("imagem") and pub.get("produto"):
+                        if h2.button(
+                            "📸 Aproveitar imagem",
+                            key=f"thu_i6_aproveitar_{pub.get('id')}",
+                            use_container_width=True,
+                        ):
+                            dialog_thu_aproveitar_imagem_social(pub.get("id"))
+
+                    with h2.expander("⚠️ Corrigir registro", expanded=False):
+                        motivo = st.text_input(
+                            "Motivo",
+                            key=f"thu_i6_anular_motivo_{pub.get('id')}",
+                            placeholder="Ex.: link errado, registro duplicado...",
+                        )
+                        confirmar_anular = st.checkbox(
+                            "Confirmo que quero anular este registro",
+                            key=f"thu_i6_anular_conf_{pub.get('id')}",
+                        )
+                        if st.button(
+                            "Anular",
+                            key=f"thu_i6_anular_{pub.get('id')}",
+                            disabled=not confirmar_anular,
+                            use_container_width=True,
+                        ):
+                            if thu_social_anular_publicacao(
+                                marketing,
+                                pub.get("id"),
+                                motivo,
+                            ):
+                                st.session_state["_thu_i6_feedback"] = (
+                                    "Registro social anulado sem apagar o histórico."
+                                )
+                                st.rerun()
+
+    with tab_prod:
+        produtos_com_memoria = {}
+        for pub in publicacoes:
+            nome = str(pub.get("produto") or "").strip()
+            if not nome:
+                continue
+            produtos_com_memoria.setdefault(nome, []).append(pub)
+
+        if not produtos_com_memoria:
+            st.info("Ainda não há produto vinculado ao histórico social.")
+        else:
+            linhas = []
+            hoje = hoje_local()
+            for nome, pubs in produtos_com_memoria.items():
+                pubs.sort(
+                    key=lambda x: str(x.get("data_publicacao") or ""),
+                    reverse=True,
+                )
+                ultima = pubs[0]
+                data_ultima = _thu_social_data(ultima.get("data_publicacao"))
+                dias = (hoje - data_ultima).days if data_ultima else None
+                canais = list(dict.fromkeys(
+                    str(x.get("canal") or "")
+                    for x in pubs if str(x.get("canal") or "")
+                ))
+                linhas.append({
+                    "produto": nome,
+                    "publicacoes": len(pubs),
+                    "ultima": data_ultima.isoformat() if data_ultima else "—",
+                    "dias_sem_publicar": dias if dias is not None else "",
+                    "canais": " • ".join(canais),
+                })
+
+            linhas.sort(
+                key=lambda x: (
+                    x["dias_sem_publicar"]
+                    if isinstance(x["dias_sem_publicar"], int)
+                    else -1
+                ),
+                reverse=True,
+            )
+
+            for pos, linha in enumerate(linhas[:40], 1):
+                with st.container(border=True):
+                    p1, p2 = st.columns([4.4, 1.2])
+                    p1.markdown(f"**{linha['produto']}**")
+                    p1.caption(
+                        f"{linha['publicacoes']} publicação(ões) • "
+                        f"última: {linha['ultima']} • {linha['canais'] or 'sem canal'}"
+                    )
+                    if isinstance(linha["dias_sem_publicar"], int):
+                        dias = linha["dias_sem_publicar"]
+                        if dias >= 45:
+                            p2.warning(f"{dias} dias")
+                        elif dias >= 21:
+                            p2.info(f"{dias} dias")
+                        else:
+                            p2.success(f"{dias} dias")
 
 
 @st.dialog("📅 Assistente THU • Revisar elegibilidade", width="large")
@@ -12258,6 +13320,21 @@ if pagina_atual == "crescimento":
                     limite_dias=120,
                 )
 
+            _thu_i6_feedback = st.session_state.pop("_thu_i6_feedback", None)
+            _thu_i6_expandir = bool(
+                st.session_state.pop("_thu_i6_abrir", False)
+                or st.session_state.get("_thu_i6_publicar_chave")
+                or _thu_i6_feedback
+            )
+            if _thu_i6_feedback:
+                st.success(_thu_i6_feedback)
+
+            with st.expander(
+                "📱 Assistente THU • Acervo Social + Histórico de Publicações",
+                expanded=_thu_i6_expandir,
+            ):
+                renderizar_acervo_social_thu(marketing, conteudos)
+
             with st.expander("🌐 Assistente THU • Acervo do Site AlphaFest", expanded=False):
                 _aviso_res_site = st.session_state.pop("_thu_site_aviso_resolucao_i321", None)
                 if _aviso_res_site:
@@ -12706,6 +13783,8 @@ if pagina_atual == "crescimento":
                         _b1,_b2,_b3=st.columns(3)
                         if _b1.button("💾 Salvar campanha sugerida",type="primary",use_container_width=True,key="thu_camp_salvar_2049c"):
                             _camp["legenda"]=_leg; _camp["story"]=_story; _camp["status"]=_story; _camp["cta"]=_cta
+                            _camp["chave_social"] = thu_social_chave_campanha(_camp)
+                            _camp["status_publicacao"] = "Preparada"
                             marketing.setdefault("thu_campanhas_sugeridas",[]).insert(0,_camp)
                             salvar_marketing(marketing)
                             st.success("Campanha sugerida salva no Marketing.")
