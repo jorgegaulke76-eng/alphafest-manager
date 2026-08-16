@@ -11982,6 +11982,34 @@ def renderizar_acervo_catalogos_legados():
         st.markdown(f"#### Página {pg.get('pagina')} • {stat.get('status') or 'Pendente'}")
         if stat.get("produtos"):
             st.caption("Produtos já vinculados: " + " • ".join(stat.get("produtos") or []))
+
+        if str(stat.get("status") or "") == "Em cadastro" and stat.get("produtos"):
+            _catalogo_retomar_i8 = carregar_catalogo()
+            _mapa_retomar_i8 = mapa_identidade_produtos(_catalogo_retomar_i8)
+            _pendentes_retomar_i8 = [
+                str(_nome_i8).strip()
+                for _nome_i8 in (stat.get("produtos") or [])
+                if str(_nome_i8).strip()
+                and normalizar_identidade_produto(_nome_i8) not in _mapa_retomar_i8
+            ]
+            if _pendentes_retomar_i8:
+                if st.button(
+                    f"▶️ Continuar cadastro de {_pendentes_retomar_i8[0]}",
+                    key=f"thu_i8_retomar_{catalogo_id}_{pg.get('pagina')}",
+                    type="primary",
+                    use_container_width=True,
+                ):
+                    if thu_i8_preparar_cadastro_novo(
+                        catalogo_id,
+                        pg.get("pagina"),
+                        _pendentes_retomar_i8[0],
+                    ):
+                        st.session_state["_thu_i8_feedback"] = (
+                            f"Cadastro de '{_pendentes_retomar_i8[0]}' retomado. "
+                            "Abrindo o formulário oficial."
+                        )
+                        st.rerun()
+
         precos = list(pg.get("precos_historicos", []) or [])
         if precos:
             st.warning("💰 Valor(es) histórico(s) detectado(s): R$ " + " • R$ ".join(precos[:15]))
@@ -12088,7 +12116,7 @@ def renderizar_acervo_catalogos_legados():
                 ):
                     if thu_i8_preparar_cadastro_novo(catalogo_id, pg.get("pagina"), nome):
                         st.session_state["_thu_i8_feedback"] = (
-                            f"Cadastro de '{nome}' preparado. Revise o formulário oficial antes de salvar."
+                            f"Cadastro de '{nome}' preparado. Abrindo o formulário oficial para você concluir e salvar."
                         )
                         st.rerun()
                     else:
@@ -17418,14 +17446,24 @@ if pagina_atual == "catalogo":
                     st.session_state[chave] = pendente[campo]
             st.session_state[f"cat_geracao_ok_{sufixo}"] = True
 
-        titulo_form = "✏️ Editar produto" if item_edicao else "➕ Adicionar produto"
+        if item_edicao:
+            titulo_form = "✏️ Editar produto"
+        elif prefill_i8:
+            titulo_form = "📚 Finalizar cadastro preparado pelo Acervo Histórico"
+        else:
+            titulo_form = "➕ Adicionar produto"
+
         st.subheader(titulo_form)
         if item_edicao:
             st.info(f"Editando: {item_edicao.get('Nome', 'Produto')}")
         elif prefill_i8:
+            st.success(
+                "✅ **PASSO 2/2 — Cadastro preparado.** Confira os dados abaixo, informe/atualize o "
+                "**preço atual** quando já souber e clique em **Salvar no Catálogo Oficial**."
+            )
             st.info(
-                "📚 Cadastro preparado pelo Acervo Histórico. Revise todos os campos antes de salvar. "
-                "O preço histórico NÃO foi colocado como preço atual e nenhuma quantidade mínima foi criada."
+                "📚 Os dados vieram do Acervo Histórico. O preço antigo continua apenas como referência "
+                "e nenhuma quantidade mínima foi criada."
             )
             _i8_old_prices = list(prefill_i8.get("precos_historicos", []) or [])
             if _i8_old_prices:
@@ -17786,12 +17824,22 @@ if pagina_atual == "catalogo":
                 st.caption(f"{len(item_edicao.get('Imagens', []))} imagem(ns) já cadastrada(s).")
 
         b1, b2 = st.columns(2)
+        if item_edicao:
+            _label_salvar_cat = "💾 Salvar alterações"
+            _label_cancelar_cat = "↩️ Cancelar edição"
+        elif prefill_i8:
+            _label_salvar_cat = "💾 Salvar no Catálogo Oficial"
+            _label_cancelar_cat = "↩️ Voltar ao Acervo sem salvar"
+        else:
+            _label_salvar_cat = "💾 Salvar produto"
+            _label_cancelar_cat = "🧹 Limpar"
+
         salvar = b1.button(
-            "💾 Salvar alterações" if item_edicao else "💾 Salvar produto", type="primary",
+            _label_salvar_cat, type="primary",
             use_container_width=True, key=f"cat_salvar_{sufixo}"
         )
         cancelar = b2.button(
-            "↩️ Cancelar edição" if item_edicao else "🧹 Limpar", use_container_width=True,
+            _label_cancelar_cat, use_container_width=True,
             key=f"cat_cancelar_{sufixo}"
         )
 
@@ -17892,8 +17940,8 @@ if pagina_atual == "catalogo":
                     st.session_state.pop("_thu_i8_prefill_catalogo", None)
                     st.session_state.pop("_thu_i8_fonte_pendente_novo", None)
                     st.session_state["_thu_i8_feedback"] = (
-                        f"{nome_cat.strip()} entrou no Catálogo Oficial com a fonte histórica registrada. "
-                        "Preço antigo permaneceu somente como histórico."
+                        f"✅ {nome_cat.strip()} foi SALVO no Catálogo Oficial. "
+                        "A fonte histórica ficou vinculada e o preço antigo permaneceu somente como histórico."
                     )
                 st.session_state.catalogo_edit_index = None
                 st.session_state["_thu_auditar_produto_nome"] = nome_cat.strip()
@@ -17990,10 +18038,15 @@ if pagina_atual == "catalogo":
                 if len(lista_revisao) > 30:
                     st.caption(f"Mostrando 30 de {len(lista_revisao)} pendências. Use os filtros para refinar.")
 
-    # Quando o usuário clica em Editar, o formulário ocupa a tela do catálogo.
-    # Isso evita o problema de o Streamlit permanecer na aba "Produtos" após o rerun.
+    # Quando o usuário clica em Editar OU prepara um cadastro pelo Acervo Histórico,
+    # o formulário ocupa a tela do Catálogo. Isso evita o Streamlit permanecer na
+    # aba "Acervo histórico" depois do rerun e dar a impressão de que o cadastro sumiu.
+    _thu_i8_prefill_ativo = bool(st.session_state.get("_thu_i8_prefill_catalogo"))
+
     if st.session_state.catalogo_edit_index is not None:
         formulario_catalogo(st.session_state.catalogo_edit_index)
+    elif _thu_i8_prefill_ativo:
+        formulario_catalogo(None)
     else:
         aba_cad, aba_lista, aba_acervo, aba_cliente = st.tabs([
             "➕ Cadastrar",
