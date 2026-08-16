@@ -8770,6 +8770,336 @@ def thu_confirmar_elegibilidade_campanha(campanha, selecoes):
     return False, "Nenhum produto novo foi habilitado.", 0
 
 
+
+def _thu_i5_campanha_salva(marketing, campanha, produto_nome=""):
+    """Localiza copy THU já preparada para a mesma campanha/produto."""
+    camp = _thu_normalizar_campanha(campanha)
+    prod_key = normalizar_identidade_produto(produto_nome)
+    encontrados = []
+    for item in (marketing or {}).get("thu_campanhas_sugeridas", []) or []:
+        if _thu_normalizar_campanha(item.get("campanha")) != camp:
+            continue
+        if prod_key and normalizar_identidade_produto(item.get("produto")) != prod_key:
+            continue
+        encontrados.append(item)
+    encontrados.sort(
+        key=lambda x: str(x.get("gerado_em") or ""),
+        reverse=True,
+    )
+    return encontrados[0] if encontrados else None
+
+
+def thu_montar_plano_execucao_campanhas(
+    catalogo,
+    conteudos,
+    marketing,
+    referencia=None,
+    limite_dias=120,
+):
+    """I5 — transforma oportunidades em próximas ações operacionais de Marketing."""
+    referencia = referencia or hoje_local()
+    planos = []
+
+    for oportunidade in campanhas_em_oportunidade(
+        referencia=referencia,
+        limite_dias=limite_dias,
+    ):
+        campanha = str(oportunidade.get("nome") or "").strip()
+        inicio = oportunidade.get("inicio_calculado")
+        fim = oportunidade.get("fim_calculado")
+        dias_inicio = int(oportunidade.get("dias_para_inicio") or 0)
+        antecedencia = int(oportunidade.get("antecedencia_dias", 30) or 30)
+        data_preparar = (
+            inicio - timedelta(days=antecedencia)
+            if isinstance(inicio, date)
+            else None
+        )
+
+        ops = thu_priorizar_oportunidades(
+            catalogo,
+            conteudos,
+            campanha,
+            dias_para_inicio=dias_inicio,
+        )
+
+        prontos = [x for x in ops if x.get("pronto_divulgar")]
+        sem_arte = [
+            x for x in ops
+            if x.get("pronto_cadastro") and not x.get("tem_arte")
+        ]
+        incompletos = [x for x in ops if not x.get("pronto_cadastro")]
+
+        recomendado = (
+            prontos[0]
+            if prontos
+            else (sem_arte[0] if sem_arte else (incompletos[0] if incompletos else None))
+        )
+        produto = (recomendado or {}).get("produto") or {}
+        produto_nome = str(produto.get("Nome") or "").strip()
+        arte = (recomendado or {}).get("arte_recomendada")
+        salva = (
+            _thu_i5_campanha_salva(marketing, campanha, produto_nome)
+            if produto_nome
+            else None
+        )
+
+        if salva:
+            etapa = "Campanha preparada"
+            acao = "ver_campanha"
+            icone = "✅"
+        elif prontos:
+            etapa = "Preparar campanha"
+            acao = "preparar_campanha"
+            icone = "🟢"
+        elif sem_arte:
+            etapa = "Cadastrar arte"
+            acao = "cadastrar_arte"
+            icone = "🟡"
+        elif incompletos:
+            etapa = "Revisar cadastro"
+            acao = "revisar_cadastro"
+            icone = "🟠"
+        else:
+            etapa = "Revisar elegibilidade"
+            acao = "revisar_elegibilidade"
+            icone = "🔵"
+
+        em_periodo = bool(oportunidade.get("em_periodo"))
+        dias_prazo = (
+            (data_preparar - referencia).days
+            if isinstance(data_preparar, date)
+            else None
+        )
+
+        if salva:
+            urgencia = "Preparada"
+            ordem_urgencia = 1
+        elif em_periodo:
+            urgencia = "Ação imediata"
+            ordem_urgencia = 5
+        elif isinstance(data_preparar, date) and referencia > data_preparar:
+            urgencia = "Preparação atrasada"
+            ordem_urgencia = 5
+        elif isinstance(data_preparar, date) and referencia == data_preparar:
+            urgencia = "Preparar hoje"
+            ordem_urgencia = 4
+        elif isinstance(dias_prazo, int) and dias_prazo <= 7:
+            urgencia = f"Preparar em {max(dias_prazo, 0)} dia(s)"
+            ordem_urgencia = 4
+        elif dias_inicio <= 30:
+            urgencia = "Próxima"
+            ordem_urgencia = 3
+        else:
+            urgencia = "Programada"
+            ordem_urgencia = 2
+
+        idx_prod = None
+        if produto_nome:
+            idx_prod = next(
+                (
+                    i for i, p in enumerate(catalogo or [])
+                    if normalizar_identidade_produto(p.get("Nome"))
+                    == normalizar_identidade_produto(produto_nome)
+                ),
+                None,
+            )
+
+        planos.append({
+            "id": str(oportunidade.get("id") or campanha),
+            "campanha": campanha,
+            "inicio": inicio,
+            "fim": fim,
+            "dias_para_inicio": dias_inicio,
+            "antecedencia_dias": antecedencia,
+            "data_preparar": data_preparar,
+            "urgencia": urgencia,
+            "ordem_urgencia": ordem_urgencia,
+            "etapa": etapa,
+            "acao": acao,
+            "icone": icone,
+            "produto": produto,
+            "produto_nome": produto_nome,
+            "produto_indice": idx_prod,
+            "arte": arte,
+            "campanha_salva": salva,
+            "elegiveis": len(ops),
+            "prontos": len(prontos),
+            "sem_arte": len(sem_arte),
+            "incompletos": len(incompletos),
+            "produtos_calendario": list(oportunidade.get("produtos", []) or []),
+            "tipo": oportunidade.get("tipo", "Campanha"),
+        })
+
+    planos.sort(
+        key=lambda x: (
+            -int(x.get("ordem_urgencia") or 0),
+            x.get("inicio") or date.max,
+            str(x.get("campanha") or "").casefold(),
+        )
+    )
+    return planos
+
+
+def _thu_i5_acionar_plano(item, prefixo):
+    """Executa somente navegação/preenchimento; não toma decisão comercial sozinho."""
+    acao = str(item.get("acao") or "")
+    campanha = str(item.get("campanha") or "")
+    produto = item.get("produto") or {}
+    produto_nome = str(item.get("produto_nome") or "")
+    arte = item.get("arte") or {}
+
+    if acao == "revisar_elegibilidade":
+        dialog_thu_revisar_elegibilidade(campanha)
+        return
+
+    if acao == "revisar_cadastro":
+        idx = item.get("produto_indice")
+        if idx is not None:
+            dialog_catalogo_cadastro_anna(produto_indice=int(idx))
+        return
+
+    if acao == "cadastrar_arte":
+        st.session_state["_thu_i5_preencher_arte"] = {
+            "produto": produto_nome,
+            "categoria": str(produto.get("Categoria") or ""),
+            "campanha": campanha,
+        }
+        st.rerun()
+
+    if acao == "preparar_campanha":
+        st.session_state["thu_campanha_preparar_2049c"] = {
+            "produto": produto_nome,
+            "campanha": campanha,
+            "arte_id": str(arte.get("id") or ""),
+        }
+        st.rerun()
+
+
+def renderizar_plano_execucao_thu(
+    marketing,
+    conteudos,
+    prefixo="thu_i5",
+    compacto=False,
+    limite_dias=120,
+):
+    catalogo = carregar_catalogo()
+    planos = thu_montar_plano_execucao_campanhas(
+        catalogo,
+        conteudos,
+        marketing,
+        referencia=hoje_local(),
+        limite_dias=limite_dias,
+    )
+
+    if not planos:
+        st.info("Nenhuma campanha em janela de planejamento neste período.")
+        return []
+
+    pendentes = [p for p in planos if p.get("acao") != "ver_campanha"]
+    preparadas = [p for p in planos if p.get("acao") == "ver_campanha"]
+    atrasadas = [
+        p for p in pendentes
+        if p.get("urgencia") in ("Ação imediata", "Preparação atrasada")
+    ]
+    falta_arte = [p for p in pendentes if p.get("acao") == "cadastrar_arte"]
+
+    if not compacto:
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Campanhas no plano", len(planos))
+        m2.metric("Ação agora / atrasadas", len(atrasadas))
+        m3.metric("Campanhas preparadas", len(preparadas))
+        m4.metric("Aguardando arte", len(falta_arte))
+        st.caption(
+            "O prazo de preparação vem da antecedência cadastrada no Calendário. "
+            "O THU organiza o trabalho; não publica nem aprova nada automaticamente."
+        )
+
+    limite_cards = 4 if compacto else 15
+    exibidos = planos[:limite_cards]
+
+    for pos, item in enumerate(exibidos, 1):
+        campanha = item["campanha"]
+        inicio = item.get("inicio")
+        data_preparar = item.get("data_preparar")
+        produto_nome = item.get("produto_nome")
+        acao = item.get("acao")
+
+        with st.container(border=True):
+            c1, c2 = st.columns([4.4, 1.45])
+            c1.markdown(
+                f"**{item.get('icone','')} {campanha}** "
+                f"• {item.get('etapa')} • **{item.get('urgencia')}**"
+            )
+
+            datas = []
+            if isinstance(inicio, date):
+                datas.append(f"início {inicio.strftime('%d/%m/%Y')}")
+            if isinstance(data_preparar, date):
+                datas.append(f"preparar até {data_preparar.strftime('%d/%m/%Y')}")
+            c1.caption(" • ".join(datas))
+
+            if produto_nome:
+                c1.caption(
+                    f"🎯 Produto priorizado: **{produto_nome}** • "
+                    f"{item.get('elegiveis',0)} elegível(eis) • "
+                    f"{item.get('prontos',0)} pronto(s) • "
+                    f"{item.get('sem_arte',0)} sem arte"
+                )
+            elif item.get("produtos_calendario"):
+                c1.caption(
+                    "📅 Calendário sugere: "
+                    + " • ".join(item.get("produtos_calendario")[:6])
+                )
+            else:
+                c1.caption("Ainda não há produto oficial elegível para esta campanha.")
+
+            if acao == "revisar_elegibilidade":
+                label = "📅 Revisar elegibilidade"
+            elif acao == "revisar_cadastro":
+                label = "✏️ Revisar cadastro"
+            elif acao == "cadastrar_arte":
+                label = "🎨 Cadastrar arte"
+            elif acao == "preparar_campanha":
+                label = "💙 Preparar campanha"
+            else:
+                label = "✅ Preparada"
+
+            if acao != "ver_campanha":
+                if c2.button(
+                    label,
+                    key=f"{prefixo}_acao_{pos}_{abs(hash((item.get('id'), campanha, acao)))}",
+                    use_container_width=True,
+                ):
+                    _thu_i5_acionar_plano(item, prefixo)
+            else:
+                c2.success("Texto salvo")
+
+                salva = item.get("campanha_salva") or {}
+                with c1.expander("Ver campanha preparada", expanded=False):
+                    st.caption(
+                        f"Produto: {salva.get('produto') or produto_nome} • "
+                        f"Gerada em: {str(salva.get('gerado_em') or '')[:16].replace('T',' ')}"
+                    )
+                    if salva.get("legenda"):
+                        st.text_area(
+                            "Legenda Feed",
+                            value=str(salva.get("legenda") or ""),
+                            height=170,
+                            disabled=True,
+                            key=f"{prefixo}_legenda_salva_{pos}_{abs(hash(campanha))}",
+                        )
+                    if salva.get("story"):
+                        st.text_area(
+                            "Story / Status",
+                            value=str(salva.get("story") or ""),
+                            height=110,
+                            disabled=True,
+                            key=f"{prefixo}_story_salvo_{pos}_{abs(hash(campanha))}",
+                        )
+
+    return planos
+
+
 @st.dialog("📅 Assistente THU • Revisar elegibilidade", width="large")
 def dialog_thu_revisar_elegibilidade(campanha_inicial=""):
     campanhas = [
@@ -10538,6 +10868,17 @@ if pagina_atual == "central":
         st.info("Nenhuma campanha próxima. Use o Calendário Comercial para cadastrar novas oportunidades.")
 
     st.divider()
+    with st.expander("🧭 THU • Próximas ações de Marketing", expanded=False):
+        _marketing_plano_central = carregar_marketing()
+        renderizar_plano_execucao_thu(
+            _marketing_plano_central,
+            _marketing_plano_central.get("conteudos", []) or [],
+            prefixo="central_thu_i5",
+            compacto=True,
+            limite_dias=90,
+        )
+
+    st.divider()
     fila_operacional = montar_fila_operacional(
         historico_central,
         tarefas_ativas_central,
@@ -11704,7 +12045,23 @@ if pagina_atual == "crescimento":
 
             # Importação de artes já prontas para postagem. Essas peças entram como referência/repostagem,
             # enquanto campanhas criadas pelo AlphaFest continuam totalmente editáveis e regeneráveis.
-            with st.expander("➕ Adicionar arte pronta para postagem", expanded=False):
+            _thu_i5_arte_pendente = st.session_state.pop("_thu_i5_preencher_arte", None)
+            _thu_i5_abrir_upload = bool(_thu_i5_arte_pendente)
+            if _thu_i5_arte_pendente:
+                st.session_state["central_camp_nome_2030"] = str(
+                    _thu_i5_arte_pendente.get("produto") or ""
+                )
+                st.session_state["central_camp_categoria_2030"] = str(
+                    _thu_i5_arte_pendente.get("categoria") or ""
+                )
+                st.session_state["central_camp_tema_2030"] = str(
+                    _thu_i5_arte_pendente.get("campanha") or ""
+                )
+
+            with st.expander(
+                "➕ Adicionar arte pronta para postagem",
+                expanded=_thu_i5_abrir_upload,
+            ):
                 imp1, imp2 = st.columns([1.2, 1])
                 arte_pronta_upload = imp1.file_uploader(
                     "Arte pronta (PNG/JPG)", type=["png", "jpg", "jpeg", "webp"], key="central_camp_arte_pronta_2030"
@@ -11891,6 +12248,15 @@ if pagina_atual == "crescimento":
                             use_container_width=True,
                         ):
                             dialog_thu_revisar_elegibilidade(_ev_thu["name"])
+
+            with st.expander("🧭 Assistente THU • Plano Executivo de Campanhas", expanded=False):
+                renderizar_plano_execucao_thu(
+                    marketing,
+                    conteudos,
+                    prefixo="marketing_thu_i5",
+                    compacto=False,
+                    limite_dias=120,
+                )
 
             with st.expander("🌐 Assistente THU • Acervo do Site AlphaFest", expanded=False):
                 _aviso_res_site = st.session_state.pop("_thu_site_aviso_resolucao_i321", None)
