@@ -8451,6 +8451,479 @@ def dialog_fluxo_anna():
                     st.error(mensagem)
 
 
+
+def _thu_i4_tokens(valor):
+    """Tokens leves para comparar sugestão comercial com produto oficial."""
+    import unicodedata
+    texto = unicodedata.normalize("NFKD", str(valor or ""))
+    texto = "".join(c for c in texto if not unicodedata.combining(c)).casefold()
+    texto = re.sub(r"[^a-z0-9]+", " ", texto)
+    ignorar = {
+        "de", "do", "da", "dos", "das", "para", "com", "e",
+        "personalizado", "personalizada", "personalizados", "personalizadas",
+    }
+    equivalencias = {
+        "topos": "topo",
+        "baloes": "balao",
+        "lembrancinhas": "lembrancinha",
+        "canecas": "caneca",
+        "copos": "copo",
+        "chaveiros": "chaveiro",
+        "camisetas": "camiseta",
+        "brindes": "brinde",
+        "adesivos": "adesivo",
+        "etiquetas": "etiqueta",
+    }
+    saida = []
+    for token in texto.split():
+        if token in ignorar:
+            continue
+        saida.append(equivalencias.get(token, token))
+    return saida
+
+
+def _thu_i4_termo_base(termo, campanha=""):
+    """Retira qualificadores de campanha/cor para achar a família do produto."""
+    tokens = _thu_i4_tokens(termo)
+    camp_tokens = set(_thu_i4_tokens(campanha))
+    qualificadores = {
+        "rosa", "azul", "vermelho", "verde", "dourado", "branco", "preto",
+        "natalino", "natalina", "maes", "mae", "pais", "pai", "crianca",
+        "criancas", "outubro", "novembro", "pascoa", "halloween",
+    } | camp_tokens
+    base = [t for t in tokens if t not in qualificadores]
+    return base or tokens
+
+
+def _thu_i4_score_termo_produto(termo, produto, campanha=""):
+    """Pontua sem decidir: nome/alias > família do nome > categoria."""
+    termo_tokens = set(_thu_i4_termo_base(termo, campanha))
+    if not termo_tokens:
+        return 0, ""
+
+    nomes = [str(produto.get("Nome") or "")] + [
+        str(x) for x in (produto.get("Aliases", []) or []) if str(x).strip()
+    ]
+    melhor_nome = 0
+    for nome in nomes:
+        nome_tokens = set(_thu_i4_termo_base(nome, campanha))
+        if not nome_tokens:
+            continue
+        if nome_tokens == termo_tokens:
+            melhor_nome = max(melhor_nome, 100)
+            continue
+        inter = len(nome_tokens & termo_tokens)
+        uniao = max(len(nome_tokens | termo_tokens), 1)
+        jac = inter / uniao
+        if termo_tokens <= nome_tokens or nome_tokens <= termo_tokens:
+            melhor_nome = max(melhor_nome, 88 if inter >= 1 else 0)
+        elif jac >= 0.66:
+            melhor_nome = max(melhor_nome, 82)
+        elif jac >= 0.45:
+            melhor_nome = max(melhor_nome, 72)
+        elif inter >= 1 and min(len(nome_tokens), len(termo_tokens)) == 1:
+            melhor_nome = max(melhor_nome, 68)
+
+    if melhor_nome:
+        return melhor_nome, f"nome/alias relacionado a “{termo}”"
+
+    categoria = " ".join([
+        str(produto.get("Categoria") or ""),
+        str(produto.get("Subcategoria") or ""),
+    ])
+    cat_tokens = set(_thu_i4_termo_base(categoria, campanha))
+    inter_cat = len(cat_tokens & termo_tokens)
+    if cat_tokens and termo_tokens and (
+        termo_tokens <= cat_tokens or cat_tokens <= termo_tokens
+    ):
+        return 66, f"categoria relacionada a “{termo}”"
+    if inter_cat and len(termo_tokens) == 1:
+        return 62, f"família/categoria relacionada a “{termo}”"
+
+    return 0, ""
+
+
+def _thu_i4_termos_site_campanha(scan_site, campanha):
+    """Extrai somente textos de links úteis de páginas históricas da campanha."""
+    if not scan_site:
+        return []
+    try:
+        scan = thu_site_reprocessar_scan(scan_site)
+    except Exception:
+        scan = dict(scan_site or {})
+
+    campanha_norm = _thu_normalizar_campanha(campanha)
+    termos = []
+    bloqueados = {
+        "inicio", "home", "contato", "quem somos", "loja", "mais itens",
+        "instagram", "facebook", "whatsapp", "alpha fest", "alphafest",
+    }
+
+    for pagina in (scan.get("paginas") or []):
+        if not isinstance(pagina, dict):
+            continue
+        camp_pg = _thu_normalizar_campanha(
+            pagina.get("campanha") or pagina.get("nome") or pagina.get("texto_menu")
+        )
+        if camp_pg != campanha_norm:
+            continue
+        for link in (pagina.get("links") or []):
+            texto = str((link or {}).get("texto") or "").strip()
+            if not texto:
+                continue
+            norm = _thu_site_norm(texto)
+            if not norm or norm in bloqueados or len(norm) < 3:
+                continue
+            tipo_link, _ = _thu_site_classificar_link(
+                texto,
+                str((link or {}).get("url") or ""),
+            )
+            if tipo_link in ("produto", "categoria", "servico"):
+                termos.append(texto)
+
+    return list(dict.fromkeys(termos))[:30]
+
+
+def thu_sugerir_elegibilidade_campanha(
+    catalogo,
+    campanha,
+    produtos_calendario=None,
+    conteudos=None,
+    scan_site=None,
+):
+    """I4 — sugere elegibilidade com evidência; não modifica o Catálogo."""
+    campanha = _thu_normalizar_campanha(campanha)
+    produtos_calendario = [
+        str(x).strip() for x in (produtos_calendario or []) if str(x).strip()
+    ]
+    termos_site = _thu_i4_termos_site_campanha(scan_site, campanha)
+    conteudos = conteudos or []
+
+    candidatos = []
+    elegiveis = []
+    correspondencias_cal = set()
+
+    for idx, produto in enumerate(catalogo or []):
+        if produto.get("Ativo") is False:
+            continue
+
+        permitidas = list(produto.get("CampanhasPermitidas", []) or [])
+        if (
+            campanha in permitidas
+            or "Permanente / Todas as épocas" in permitidas
+        ):
+            elegiveis.append({
+                "indice": idx,
+                "produto": produto,
+                "motivo": (
+                    "campanha explícita"
+                    if campanha in permitidas
+                    else "produto permanente"
+                ),
+            })
+            continue
+
+        score = 0
+        evidencias = []
+        fontes = []
+
+        for termo in produtos_calendario:
+            pts, motivo = _thu_i4_score_termo_produto(termo, produto, campanha)
+            if pts:
+                correspondencias_cal.add(termo)
+                if pts > score:
+                    score = pts
+                evidencias.append(f"Calendário: {motivo}")
+                fontes.append({"fonte": "Calendário", "termo": termo, "pontos": pts})
+
+        melhor_site = 0
+        melhor_site_motivo = ""
+        melhor_site_termo = ""
+        for termo in termos_site:
+            pts, motivo = _thu_i4_score_termo_produto(termo, produto, campanha)
+            if pts > melhor_site:
+                melhor_site = pts
+                melhor_site_motivo = motivo
+                melhor_site_termo = termo
+        if melhor_site >= 66:
+            bonus_site = 18 if score else min(72, melhor_site)
+            score = min(100, score + bonus_site) if score else bonus_site
+            evidencias.append(f"Site legado: {melhor_site_motivo}")
+            fontes.append({
+                "fonte": "Site AlphaFest legado",
+                "termo": melhor_site_termo,
+                "pontos": melhor_site,
+            })
+
+        # Arte já classificada com esta campanha é uma evidência forte.
+        campanha_norm = _thu_site_norm(campanha)
+        artes_campanha = []
+        for arte in thu_correlacionar_catalogo_biblioteca(produto, conteudos):
+            texto_arte = _thu_site_norm(
+                " ".join([
+                    str(arte.get("campanha") or ""),
+                    str(arte.get("tema_reuso") or ""),
+                    str(arte.get("produto") or ""),
+                ])
+            )
+            if campanha_norm and campanha_norm in texto_arte:
+                artes_campanha.append(arte)
+
+        if artes_campanha:
+            score = min(100, max(score, 78) + (10 if score else 0))
+            evidencias.append("Biblioteca: já existe arte relacionada a esta campanha")
+            fontes.append({
+                "fonte": "Biblioteca",
+                "termo": campanha,
+                "pontos": 78,
+            })
+
+        if score < 62:
+            continue
+
+        revisao = avaliar_pendencias_produto_catalogo(produto)
+        # Nesta tela "Campanhas/Datas" não é tratada como falha:
+        # justamente é o dado que o usuário está revisando aqui.
+        pendencias_reais = [
+            x for x in (revisao.get("criticas") or [])
+            if str(x) != "Campanhas/Datas"
+        ]
+        candidatos.append({
+            "indice": idx,
+            "produto": produto,
+            "score": int(min(score, 100)),
+            "evidencias": list(dict.fromkeys(evidencias)),
+            "fontes": fontes,
+            "cadastro_pronto": not pendencias_reais,
+            "pendencias": pendencias_reais,
+        })
+
+    candidatos.sort(
+        key=lambda x: (
+            x["score"],
+            x["cadastro_pronto"],
+            bool(x["produto"].get("Destaque")),
+            str(x["produto"].get("Nome") or "").casefold(),
+        ),
+        reverse=True,
+    )
+
+    termos_sem_match = [
+        termo for termo in produtos_calendario
+        if termo not in correspondencias_cal
+    ]
+
+    return {
+        "campanha": campanha,
+        "candidatos": candidatos,
+        "elegiveis": elegiveis,
+        "termos_calendario": produtos_calendario,
+        "termos_site": termos_site,
+        "termos_sem_match": termos_sem_match,
+    }
+
+
+def thu_confirmar_elegibilidade_campanha(campanha, selecoes):
+    """Grava somente seleções confirmadas e mantém auditoria da decisão."""
+    campanha = _thu_normalizar_campanha(campanha)
+    if campanha not in CAMPANHAS_PRODUTO_OPCOES:
+        return False, "A campanha não existe nas opções oficiais do Catálogo.", 0
+
+    catalogo = carregar_catalogo()
+    mapa_selecoes = {
+        normalizar_identidade_produto(str(item.get("nome") or "")): item
+        for item in (selecoes or [])
+        if str(item.get("nome") or "").strip()
+    }
+    alterados = 0
+
+    for idx, produto in enumerate(catalogo):
+        chave = normalizar_identidade_produto(produto.get("Nome"))
+        selecao = mapa_selecoes.get(chave)
+        if not selecao:
+            continue
+
+        registro = dict(produto)
+        permitidas = list(registro.get("CampanhasPermitidas", []) or [])
+        if campanha not in permitidas:
+            permitidas.append(campanha)
+            registro["CampanhasPermitidas"] = list(dict.fromkeys(permitidas))
+
+            hist = list(registro.get("HistoricoElegibilidadeTHU", []) or [])
+            hist.append({
+                "campanha": campanha,
+                "acao": "Habilitada com confirmação humana",
+                "evidencias": list(selecao.get("evidencias") or []),
+                "fontes": list(selecao.get("fontes") or []),
+                "confirmado_em": agora_local().isoformat(timespec="seconds"),
+                "usuario": obter_usuario_atual(),
+            })
+            registro["HistoricoElegibilidadeTHU"] = hist[-100:]
+            registro["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+            catalogo[idx] = registro
+            alterados += 1
+
+    if alterados:
+        salvar_catalogo(catalogo)
+        return True, f"{alterados} produto(s) habilitado(s) para {campanha}.", alterados
+
+    return False, "Nenhum produto novo foi habilitado.", 0
+
+
+@st.dialog("📅 Assistente THU • Revisar elegibilidade", width="large")
+def dialog_thu_revisar_elegibilidade(campanha_inicial=""):
+    campanhas = [
+        x for x in CAMPANHAS_PRODUTO_OPCOES
+        if x != "Permanente / Todas as épocas"
+    ]
+    if not campanhas:
+        st.info("Não há campanhas oficiais configuradas no Catálogo.")
+        return
+
+    campanha_inicial = _thu_normalizar_campanha(campanha_inicial)
+    if campanha_inicial not in campanhas:
+        campanha_inicial = campanhas[0]
+
+    campanha = st.selectbox(
+        "Campanha que deseja revisar",
+        campanhas,
+        index=campanhas.index(campanha_inicial),
+        key=f"thu_i4_campanha_{abs(hash(campanha_inicial or 'geral'))}",
+    )
+
+    registros_camp = carregar_campanhas()
+    registro = next(
+        (
+            c for c in registros_camp
+            if _thu_normalizar_campanha(c.get("nome")) == _thu_normalizar_campanha(campanha)
+        ),
+        {},
+    )
+    produtos_cal = list(registro.get("produtos", []) or [])
+
+    marketing_i4 = carregar_marketing()
+    conteudos_i4 = list(marketing_i4.get("conteudos", []) or [])
+    scan_site_i4 = (
+        st.session_state.get("_thu_acervo_site_scan_i3")
+        or marketing_i4.get("acervo_site_ultimo_scan")
+        or {}
+    )
+
+    catalogo_i4 = carregar_catalogo()
+    analise = thu_sugerir_elegibilidade_campanha(
+        catalogo_i4,
+        campanha,
+        produtos_calendario=produtos_cal,
+        conteudos=conteudos_i4,
+        scan_site=scan_site_i4,
+    )
+
+    st.caption(
+        "O THU usa evidências do Calendário, Biblioteca e acervo histórico do site. "
+        "Isto é uma revisão assistida: nenhuma campanha é adicionada sem sua confirmação."
+    )
+
+    r1, r2, r3, r4 = st.columns(4)
+    r1.metric("Já elegíveis", len(analise["elegiveis"]))
+    r2.metric("Sugestões para revisar", len(analise["candidatos"]))
+    r3.metric("Sugestões do calendário", len(produtos_cal))
+    r4.metric("Sem correspondência", len(analise["termos_sem_match"]))
+
+    if produtos_cal:
+        st.caption("📅 Calendário sugere: " + " • ".join(produtos_cal[:10]))
+    if analise["termos_site"]:
+        st.caption(
+            "🌐 Evidências úteis encontradas no acervo do site: "
+            + " • ".join(analise["termos_site"][:10])
+        )
+
+    if analise["elegiveis"]:
+        with st.expander("✅ Produtos que já podem participar", expanded=False):
+            for item in analise["elegiveis"][:20]:
+                st.write(
+                    f"• **{item['produto'].get('Nome','Produto')}** — {item['motivo']}"
+                )
+
+    candidatos = analise["candidatos"]
+    if not candidatos:
+        st.info(
+            "O THU não encontrou produto do Catálogo com evidência suficiente para sugerir nova elegibilidade."
+        )
+    else:
+        st.markdown("#### Produtos para sua decisão")
+        with st.form(
+            f"thu_i4_form_{abs(hash(campanha))}",
+            clear_on_submit=False,
+        ):
+            selecionados = []
+            for pos, item in enumerate(candidatos[:15], 1):
+                produto = item["produto"]
+                c1, c2 = st.columns([1, 5])
+                with c1:
+                    fotos = list(produto.get("Imagens", []) or [])
+                    if fotos:
+                        try:
+                            st.image(
+                                imagem_streamlit_catalogo(fotos[0]),
+                                width=90,
+                            )
+                        except Exception:
+                            st.caption("🖼️")
+                with c2:
+                    marcar = st.checkbox(
+                        f"{produto.get('Nome','Produto')} • evidência {item['score']}/100",
+                        value=False,
+                        key=f"thu_i4_sel_{abs(hash(campanha))}_{item['indice']}",
+                    )
+                    st.caption("✅ " + " • ".join(item["evidencias"][:4]))
+                    if item["pendencias"]:
+                        st.caption(
+                            "⚠️ Cadastro ainda precisa revisão: "
+                            + " • ".join(item["pendencias"][:4])
+                        )
+                    atuais = list(produto.get("CampanhasPermitidas", []) or [])
+                    if atuais:
+                        st.caption("Atuais: " + " • ".join(atuais[:8]))
+                    if marcar:
+                        selecionados.append({
+                            "nome": produto.get("Nome"),
+                            "evidencias": item["evidencias"],
+                            "fontes": item["fontes"],
+                        })
+                if pos < min(len(candidatos), 15):
+                    st.divider()
+
+            confirmar = st.form_submit_button(
+                f"✅ Confirmar selecionados para {campanha}",
+                type="primary",
+                use_container_width=True,
+            )
+
+        if confirmar:
+            if not selecionados:
+                st.warning("Selecione pelo menos um produto antes de confirmar.")
+            else:
+                ok, mensagem, qtd = thu_confirmar_elegibilidade_campanha(
+                    campanha,
+                    selecionados,
+                )
+                if ok:
+                    st.session_state["_mensagem_sucesso_pendente"] = (
+                        f"💙 THU: {mensagem} A decisão ficou registrada no histórico de elegibilidade do produto."
+                    )
+                    st.rerun()
+                else:
+                    st.warning(mensagem)
+
+    if analise["termos_sem_match"]:
+        st.divider()
+        st.warning(
+            "Sugestões do Calendário que ainda não encontrei com segurança no Catálogo: "
+            + " • ".join(analise["termos_sem_match"])
+            + ". Não cadastrei nem associei nada automaticamente."
+        )
+
+
 @st.dialog("➕ Cadastrar produto no catálogo", width="large")
 def dialog_catalogo_cadastro_anna(
     produto_indice=None,
@@ -9326,10 +9799,11 @@ def renderizar_workspace_anna_isolado():
         rerun_na_aba("historico")
 
     st.markdown("### 📚 Catálogo")
-    k1, k2, k3 = st.columns(3)
+    k1, k2, k3, k4 = st.columns(4)
     if k1.button("➕ Cadastrar produto", use_container_width=True): dialog_catalogo_cadastro_anna()
     if k2.button("📋 Visualizar produtos", use_container_width=True): dialog_catalogo_visualizar_anna()
     if k3.button("📤 Gerar catálogos", use_container_width=True): dialog_catalogo_gerar_anna()
+    if k4.button("📅 Revisar campanhas", use_container_width=True): dialog_thu_revisar_elegibilidade()
 
     entregas_hoje = [p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]
     propostas_hoje = _ordenar_propostas_recentes([p for p in historico if proposta_ativa_operacional(p) and _proposta_eh_de_hoje(p)])
@@ -10051,6 +10525,14 @@ if pagina_atual == "central":
                                         rerun_na_aba("catalogo")
                 else:
                     st.warning("💙 THU informa: ainda não há produto do Catálogo habilitado para esta campanha.")
+                    if st.button(
+                        "📅 Revisar elegibilidade desta campanha",
+                        key=f"thu_i4_revisar_central_{oportunidade.get('id','')}",
+                        use_container_width=True,
+                    ):
+                        dialog_thu_revisar_elegibilidade(
+                            oportunidade.get("nome", "")
+                        )
         st.caption("Cadastre datas locais, escolares e campanhas próprias na aba Calendário Comercial.")
     else:
         st.info("Nenhuma campanha próxima. Use o Calendário Comercial para cadastrar novas oportunidades.")
@@ -11390,11 +11872,25 @@ if pagina_atual == "crescimento":
                                     if _idx_prod is not None:
                                         st.session_state.catalogo_edit_index = _idx_prod
                                         rerun_na_aba("catalogo")
+
+                        st.divider()
+                        if st.button(
+                            "📅 Revisar outros produtos para esta campanha",
+                            key=f"thu_i4_revisar_outros_{abs(hash(_ev_thu['name']))}",
+                            use_container_width=True,
+                        ):
+                            dialog_thu_revisar_elegibilidade(_ev_thu["name"])
                     else:
                         st.warning(
                             f"Nenhum produto do Catálogo está habilitado para {_ev_thu['name']}. "
                             "Revise Campanhas / Datas permitidas nos produtos."
                         )
+                        if st.button(
+                            "📅 THU, revisar elegibilidade",
+                            key=f"thu_i4_revisar_marketing_{abs(hash(_ev_thu['name']))}",
+                            use_container_width=True,
+                        ):
+                            dialog_thu_revisar_elegibilidade(_ev_thu["name"])
 
             with st.expander("🌐 Assistente THU • Acervo do Site AlphaFest", expanded=False):
                 _aviso_res_site = st.session_state.pop("_thu_site_aviso_resolucao_i321", None)
