@@ -306,6 +306,7 @@ ARQUIVO_LIXEIRA = "lixeira_db.json"
 ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
 ARQUIVO_MARKETING = "marketing_db.json"
+ARQUIVO_CATALOGOS_LEGADOS = "catalogos_legados_db.json"
 ARQUIVO_INTEGRACOES = "integracoes_db.json"
 ARQUIVO_INTELIGENCIA = "alpha_intelligence_db.json"
 ARQUIVO_USUARIOS = "usuarios_config.json"
@@ -470,17 +471,23 @@ CAMPANHAS_PRODUTO_OPCOES = [
     "Batizado",
     "1ª Comunhão",
     "Chá Revelação",
+    "Nascimento",
+    "Volta às Aulas",
     "Dia das Mulheres",
     "Páscoa",
     "Dia das Mães",
     "Festa Junina",
     "Dia dos Pais",
+    "Setembro Amarelo",
     "Dia das Crianças",
+    "Dia dos Professores",
     "Outubro Rosa",
+    "Novembro Azul",
     "Halloween",
     "Black Friday",
     "Natal",
     "Ano Novo",
+    "Crisma",
     "Formatura",
     "Corporativo",
 ]
@@ -7216,6 +7223,11 @@ def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True):
         for produto in selecionados:
             nome = html.escape(str(produto.get("Nome", "Produto")))
             descricao = html.escape(str(produto.get("DescricaoCurta", produto.get("Descricao", ""))))
+            variacoes = [str(x).strip() for x in (produto.get("Variacoes", []) or []) if str(x).strip()]
+            variacoes_html = (
+                '<div class="variacoes"><strong>Opções:</strong> ' + html.escape(" • ".join(variacoes)) + '</div>'
+                if variacoes else ''
+            )
             imagens = produto.get("Imagens", []) or []
             primeira = imagens[0] if imagens else ""
             src = primeira if str(primeira).startswith(("http://", "https://")) else imagem_data_uri(primeira)
@@ -7225,14 +7237,14 @@ def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True):
             numero_wpp = re.sub(r"\D", "", str(empresa.get("whatsapp_catalogo", "")))
             if numero_wpp and not numero_wpp.startswith("55"):
                 numero_wpp = "55" + numero_wpp
-            cards.append(f'<article class="card">{imagem_html}<div class="card-body"><h3>{nome}</h3><p>{descricao}</p>{preco_html}<a class="btn" target="_blank" href="https://wa.me/{numero_wpp}?text={msg}">Consultar no WhatsApp</a></div></article>')
+            cards.append(f'<article class="card">{imagem_html}<div class="card-body"><h3>{nome}</h3><p>{descricao}</p>{variacoes_html}{preco_html}<a class="btn" target="_blank" href="https://wa.me/{numero_wpp}?text={msg}">Consultar no WhatsApp</a></div></article>')
         cards_por_categoria.append(f'<section id="{slug_html(categoria)}"><h2>{html.escape(categoria)}</h2><div class="grid">{"".join(cards)}</div></section>')
 
     links = "".join(f'<a href="#{slug_html(c)}">{html.escape(c)}</a>' for c in categorias)
     logo_tag = f'<img class="logo" src="{logo_src}">' if logo_src else ''
     corpo = ''.join(cards_por_categoria) if cards_por_categoria else '<div class="intro">Nenhum produto selecionado.</div>'
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(titulo)}</title><style>
-    *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f5f6f8;color:#20252b}} .layout{{display:flex;min-height:100vh}} aside{{width:260px;background:#18222d;color:#fff;padding:24px 18px;position:sticky;top:0;height:100vh;overflow:auto}} .logo{{max-width:180px;max-height:95px;display:block;margin:0 auto 18px;object-fit:contain}} aside h1{{font-size:20px;text-align:center;margin:8px 0 22px}} nav a{{display:block;color:#eef2f7;text-decoration:none;padding:11px 10px;border-bottom:1px solid rgba(255,255,255,.12)}} main{{flex:1;padding:32px;max-width:1400px}} .intro{{background:#fff;padding:22px;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.06);margin-bottom:28px}} section{{scroll-margin-top:20px;margin-bottom:42px}} section h2{{border-bottom:3px solid #202b36;padding-bottom:9px}} .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:22px}} .card{{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 5px 18px rgba(0,0,0,.08);display:flex;flex-direction:column}} .card img,.sem-imagem{{width:100%;height:220px;object-fit:cover;background:#e9edf2;display:flex;align-items:center;justify-content:center;cursor:pointer}} .card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .card h3{{margin:0 0 10px}} .card p{{line-height:1.45;flex:1}} .preco{{font-size:22px;font-weight:800;margin:12px 0;color:#147a42}} .btn{{display:block;text-align:center;background:#25d366;color:#fff;text-decoration:none;padding:12px;border-radius:9px;font-weight:800}} footer{{text-align:center;color:#6b7280;padding:30px}} #modal{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:999;align-items:center;justify-content:center}} #modal img{{max-width:92vw;max-height:90vh}} @media(max-width:760px){{.layout{{display:block}}aside{{width:100%;height:auto;position:relative}}main{{padding:18px}}nav{{display:flex;gap:5px;overflow:auto}}nav a{{white-space:nowrap;border:1px solid rgba(255,255,255,.18);border-radius:8px}}}}
+    *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f5f6f8;color:#20252b}} .layout{{display:flex;min-height:100vh}} aside{{width:260px;background:#18222d;color:#fff;padding:24px 18px;position:sticky;top:0;height:100vh;overflow:auto}} .logo{{max-width:180px;max-height:95px;display:block;margin:0 auto 18px;object-fit:contain}} aside h1{{font-size:20px;text-align:center;margin:8px 0 22px}} nav a{{display:block;color:#eef2f7;text-decoration:none;padding:11px 10px;border-bottom:1px solid rgba(255,255,255,.12)}} main{{flex:1;padding:32px;max-width:1400px}} .intro{{background:#fff;padding:22px;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.06);margin-bottom:28px}} section{{scroll-margin-top:20px;margin-bottom:42px}} section h2{{border-bottom:3px solid #202b36;padding-bottom:9px}} .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:22px}} .card{{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 5px 18px rgba(0,0,0,.08);display:flex;flex-direction:column}} .card img,.sem-imagem{{width:100%;height:220px;object-fit:cover;background:#e9edf2;display:flex;align-items:center;justify-content:center;cursor:pointer}} .card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .card h3{{margin:0 0 10px}} .card p{{line-height:1.45;flex:1}} .variacoes{{font-size:13px;line-height:1.45;color:#4b5563;margin:2px 0 10px}} .preco{{font-size:22px;font-weight:800;margin:12px 0;color:#147a42}} .btn{{display:block;text-align:center;background:#25d366;color:#fff;text-decoration:none;padding:12px;border-radius:9px;font-weight:800}} footer{{text-align:center;color:#6b7280;padding:30px}} #modal{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:999;align-items:center;justify-content:center}} #modal img{{max-width:92vw;max-height:90vh}} @media(max-width:760px){{.layout{{display:block}}aside{{width:100%;height:auto;position:relative}}main{{padding:18px}}nav{{display:flex;gap:5px;overflow:auto}}nav a{{white-space:nowrap;border:1px solid rgba(255,255,255,.18);border-radius:8px}}}}
     </style></head><body><div class="layout"><aside>{logo_tag}<h1>{html.escape(titulo)}</h1><nav>{links}</nav></aside><main><div class="intro"><h1>{html.escape(titulo)}</h1><p>Seleção preparada por {html.escape(str(empresa.get("nome", "Empresa")))}. Consulte disponibilidade, personalização e prazo pelo WhatsApp.</p></div>{corpo}<footer>{html.escape(str(empresa.get("nome", "Empresa")))} - {html.escape(str(empresa.get("slogan", "")))}</footer></main></div><div id="modal" onclick="this.style.display='none'"><img id="modal-img"></div><script>function abrirImagem(src){{document.getElementById('modal-img').src=src;document.getElementById('modal').style.display='flex';}}</script></body></html>'''
 
 
@@ -7590,6 +7602,7 @@ DOCUMENTOS_BACKUP = [
     ("system_meta", ARQUIVO_SYSTEM_META, SYSTEM_META_PADRAO),
     ("componentes_db", ARQUIVO_COMPONENTES, COMPONENTES_PADRAO),
     ("marketing_db", ARQUIVO_MARKETING, {"conteudos": [], "config": {}}),
+    ("catalogos_legados_db", ARQUIVO_CATALOGOS_LEGADOS, {"revisoes": {}, "config": {}}),
 ]
 
 def carregar_config_backup():
@@ -11230,6 +11243,886 @@ def renderizar_inteligencia_marketing_resultados(marketing):
         )
 
 
+# --- 20.4.9-I8: THU Acervo Inteligente de Catálogos Históricos ---
+THU_I8_ACERVO_PATH = Path(__file__).resolve().parent / "assets" / "catalogos_legados" / "acervo_catalogos_legados.json"
+
+
+@st.cache_data(show_spinner=False)
+def thu_i8_carregar_acervo_estatico():
+    try:
+        dados = json.loads(THU_I8_ACERVO_PATH.read_text(encoding="utf-8"))
+        if isinstance(dados, dict):
+            dados.setdefault("catalogos", [])
+            dados.setdefault("estatisticas", {})
+            return dados
+    except Exception:
+        pass
+    return {"catalogos": [], "estatisticas": {}, "regras": {}}
+
+
+def carregar_catalogos_legados_status():
+    dados = load_document(
+        "catalogos_legados_db",
+        ARQUIVO_CATALOGOS_LEGADOS,
+        {"revisoes": {}, "config": {}},
+    )
+    if not isinstance(dados, dict):
+        dados = {"revisoes": {}, "config": {}}
+    dados.setdefault("revisoes", {})
+    dados.setdefault("config", {})
+    return dados
+
+
+def salvar_catalogos_legados_status(dados):
+    if not isinstance(dados, dict):
+        dados = {"revisoes": {}, "config": {}}
+    dados.setdefault("revisoes", {})
+    dados.setdefault("config", {})
+    save_document("catalogos_legados_db", dados, ARQUIVO_CATALOGOS_LEGADOS)
+
+
+def _thu_i8_chave_pagina(catalogo_id, pagina):
+    return f"{str(catalogo_id or '').strip()}:{int(pagina or 0)}"
+
+
+def thu_i8_status_pagina(catalogo_id, pagina, status_db=None):
+    status_db = status_db or carregar_catalogos_legados_status()
+    return dict(
+        (status_db.get("revisoes") or {}).get(
+            _thu_i8_chave_pagina(catalogo_id, pagina),
+            {},
+        )
+        or {}
+    )
+
+
+def thu_i8_marcar_pagina(
+    catalogo_id,
+    pagina,
+    status,
+    produtos=None,
+    observacao="",
+):
+    dados = carregar_catalogos_legados_status()
+    revisoes = dict(dados.get("revisoes") or {})
+    chave = _thu_i8_chave_pagina(catalogo_id, pagina)
+    anterior = dict(revisoes.get(chave) or {})
+    produtos_antigos = [
+        str(x).strip()
+        for x in (anterior.get("produtos") or [])
+        if str(x).strip()
+    ]
+    produtos_novos = [
+        str(x).strip()
+        for x in (produtos or [])
+        if str(x).strip()
+    ]
+    revisoes[chave] = {
+        **anterior,
+        "catalogo_id": str(catalogo_id or ""),
+        "pagina": int(pagina or 0),
+        "status": str(status or "Pendente"),
+        "produtos": list(dict.fromkeys(produtos_antigos + produtos_novos)),
+        "observacao": str(observacao or anterior.get("observacao") or "").strip(),
+        "revisado_em": agora_local().isoformat(timespec="seconds"),
+        "usuario": obter_usuario_atual(),
+    }
+    dados["revisoes"] = revisoes
+    salvar_catalogos_legados_status(dados)
+    return revisoes[chave]
+
+
+def thu_i8_catalogo_por_id(catalogo_id, acervo=None):
+    acervo = acervo or thu_i8_carregar_acervo_estatico()
+    return next(
+        (
+            c for c in (acervo.get("catalogos") or [])
+            if str(c.get("id") or "") == str(catalogo_id or "")
+        ),
+        None,
+    )
+
+
+def thu_i8_pagina(catalogo_id, pagina, acervo=None):
+    cat = thu_i8_catalogo_por_id(catalogo_id, acervo=acervo)
+    if not cat:
+        return None, None
+    pg = next(
+        (
+            p for p in (cat.get("paginas") or [])
+            if int(p.get("pagina") or 0) == int(pagina or 0)
+        ),
+        None,
+    )
+    return cat, pg
+
+
+def thu_i8_preview_path(pagina):
+    rel = str((pagina or {}).get("preview") or "").strip()
+    if not rel:
+        return None
+    caminho = Path(__file__).resolve().parent / rel
+    return caminho if caminho.exists() else None
+
+
+def _thu_i8_limpar_candidato(valor):
+    texto = re.sub(r"\s+", " ", str(valor or "")).strip(" -—:;,.\t")
+    if not texto:
+        return ""
+    # remove price/quantity tail copied from some PDFs
+    texto = re.split(r"R\$", texto, maxsplit=1, flags=re.I)[0].strip(" -—:;,.\t")
+    return texto[:120]
+
+
+def _thu_i8_candidato_util(valor):
+    texto = _thu_i8_limpar_candidato(valor)
+    if not texto:
+        return False
+    n = normalizar_identidade_produto(texto)
+    if not n or len(n) < 3:
+        return False
+    bloqueios = {
+        "catalogo", "lembrancas", "lembranca", "personalizado", "personalizada",
+        "personalizados", "personalizadas", "pedido minimo", "unidades", "unidade",
+        "adicionais", "consulta", "brindes", "brindes personalizados", "papelaria",
+        "dia dos professores", "natal", "outubro rosa", "novembro azul",
+        "setembro amarelo", "dia das criancas", "volta as aulas",
+    }
+    if n in bloqueios:
+        return False
+    if any(x in n for x in (
+        "pedido minimo", "valores sem embalagem", "valores sujeito", "embalagem acresce",
+        "outros modelos mediante", "imagens sao meramente", "todos os valores",
+        "instagram com", "facebook com", "www alphafest", "caro cliente",
+    )):
+        return False
+    if re.fullmatch(r"[0-9\s]+(?:unds?|unidades?)?", n):
+        return False
+    return True
+
+
+def thu_i8_candidatos_pagina(pagina):
+    saida = []
+    sugerido = _thu_i8_limpar_candidato((pagina or {}).get("nome_sugerido"))
+    if sugerido and _thu_i8_candidato_util(sugerido):
+        saida.append(sugerido)
+    for item in (pagina or {}).get("candidatos_produto", []) or []:
+        item = _thu_i8_limpar_candidato(item)
+        if item and _thu_i8_candidato_util(item) and item not in saida:
+            saida.append(item)
+    return saida[:12]
+
+
+def thu_i8_correspondencias_catalogo(pagina, catalogo):
+    """Correspondências conservadoras usando os mecanismos oficiais do próprio Manager."""
+    candidatos = thu_i8_candidatos_pagina(pagina)
+    texto = str((pagina or {}).get("clean_text") or "")
+    texto_norm = normalizar_identidade_produto(texto)
+
+    # Primeiro nomes oficiais/aliases literalmente presentes na página.
+    correspondencias = []
+    vistos = set()
+    for idx, produto in enumerate(catalogo or []):
+        oficial = str(produto.get("Nome") or "").strip()
+        termos = [oficial] + [
+            str(x).strip() for x in (produto.get("Aliases", []) or [])
+            if str(x).strip()
+        ]
+        for termo in termos:
+            chave = normalizar_identidade_produto(termo)
+            if len(chave) < 4:
+                continue
+            if chave and chave in texto_norm:
+                chave_oficial = normalizar_identidade_produto(oficial)
+                if chave_oficial not in vistos:
+                    vistos.add(chave_oficial)
+                    correspondencias.append({
+                        "nome": oficial,
+                        "indice": idx,
+                        "score": 1.0,
+                        "motivo": f"nome/alias encontrado no texto da página: {termo}",
+                    })
+                break
+
+    # Depois sugestões fortes a partir dos títulos detectados.
+    for candidato in candidatos[:8]:
+        sug = thu_site_sugerir_produto(candidato, catalogo, alternativas=[])
+        if sug.get("status") not in ("oficial", "provavel"):
+            continue
+        oficial = str(sug.get("nome") or "").strip()
+        if not oficial:
+            continue
+        chave = normalizar_identidade_produto(oficial)
+        if chave in vistos:
+            continue
+        vistos.add(chave)
+        correspondencias.append({
+            "nome": oficial,
+            "indice": sug.get("indice"),
+            "score": float(sug.get("score") or 0),
+            "motivo": f"similaridade forte com: {candidato}",
+        })
+
+    correspondencias.sort(key=lambda x: float(x.get("score") or 0), reverse=True)
+    return correspondencias[:12]
+
+
+def thu_i8_fonte_historica(catalogo_fonte, pagina_fonte, nome_candidato=""):
+    return {
+        "catalogo_id": str(catalogo_fonte.get("id") or ""),
+        "catalogo": str(catalogo_fonte.get("titulo") or ""),
+        "arquivo_origem": str(catalogo_fonte.get("filename") or ""),
+        "sha256_origem": str(catalogo_fonte.get("sha256_origem") or ""),
+        "pagina": int(pagina_fonte.get("pagina") or 0),
+        "preview": str(pagina_fonte.get("preview") or ""),
+        "nome_candidato": str(nome_candidato or "").strip(),
+        "texto_fonte": str(pagina_fonte.get("clean_text") or "")[:1800],
+        "precos_historicos": list(pagina_fonte.get("precos_historicos", []) or []),
+        "valores_adicionais_historicos": list(pagina_fonte.get("valores_adicionais_historicos", []) or []),
+        "validade_preco_historico": str(catalogo_fonte.get("validade_preco_historico") or ""),
+        "preco_sujeito_alteracao_mensal": bool(catalogo_fonte.get("preco_sujeito_alteracao_mensal")),
+        "quantidades_minimas_historicas_ignoradas": list(pagina_fonte.get("minimos_historicos", []) or []),
+        "materiais_detectados": list(pagina_fonte.get("materiais_detectados", []) or []),
+        "variacoes_detectadas": list(pagina_fonte.get("medidas_variacoes_detectadas", []) or []),
+        "campanhas_sugeridas": list(catalogo_fonte.get("campanhas_hint", []) or []),
+        "pagina_multiproduto": bool(pagina_fonte.get("multiproduto")),
+        "registrado_em": agora_local().isoformat(timespec="seconds"),
+        "usuario": obter_usuario_atual(),
+        "regra_quantidade_minima": "Não utilizada pela AlphaFest atual",
+        "regra_preco": "Preço histórico; nunca substituir preço oficial automaticamente",
+    }
+
+
+def thu_i8_adicionar_fonte_ao_produto(produto, fonte):
+    registro = dict(produto or {})
+    fontes = list(registro.get("FontesHistoricasCatalogos", []) or [])
+    chave_fonte = (
+        str(fonte.get("catalogo_id") or ""),
+        int(fonte.get("pagina") or 0),
+        str(fonte.get("nome_candidato") or "").casefold(),
+    )
+    fontes = [
+        x for x in fontes
+        if (
+            str((x or {}).get("catalogo_id") or ""),
+            int((x or {}).get("pagina") or 0),
+            str((x or {}).get("nome_candidato") or "").casefold(),
+        ) != chave_fonte
+    ]
+    fontes.append(dict(fonte))
+    registro["FontesHistoricasCatalogos"] = fontes[-150:]
+
+    precos = list(registro.get("PrecosHistoricosCatalogos", []) or [])
+    valores_para_produto = (
+        [] if fonte.get("pagina_multiproduto")
+        else list(fonte.get("precos_historicos", []) or [])
+    )
+    for valor in valores_para_produto:
+        item = {
+            "valor": str(valor),
+            "catalogo_id": fonte.get("catalogo_id"),
+            "catalogo": fonte.get("catalogo"),
+            "pagina": fonte.get("pagina"),
+            "validade": fonte.get("validade_preco_historico"),
+            "status": "Histórico — revisar preço atual",
+        }
+        if not any(
+            str(x.get("valor")) == str(item["valor"])
+            and str(x.get("catalogo_id")) == str(item["catalogo_id"])
+            and int(x.get("pagina") or 0) == int(item["pagina"] or 0)
+            for x in precos
+            if isinstance(x, dict)
+        ):
+            precos.append(item)
+    registro["PrecosHistoricosCatalogos"] = precos[-200:]
+    return registro
+
+
+def thu_i8_preparar_cadastro_novo(catalogo_id, pagina, nome_candidato=""):
+    acervo = thu_i8_carregar_acervo_estatico()
+    cat_fonte, pg = thu_i8_pagina(catalogo_id, pagina, acervo=acervo)
+    if not cat_fonte or not pg:
+        return False
+
+    nome = _thu_i8_limpar_candidato(nome_candidato)
+    if not nome:
+        candidatos = thu_i8_candidatos_pagina(pg)
+        nome = candidatos[0] if candidatos else ""
+
+    if nome:
+        mapa_atual = mapa_identidade_produtos(carregar_catalogo())
+        if normalizar_identidade_produto(nome) in mapa_atual:
+            return False
+
+    _multiproduto = bool(pg.get("multiproduto"))
+    descricao = "" if _multiproduto else str(pg.get("descricao_sugerida") or "").strip()
+    materiais = [] if _multiproduto else [
+        str(x).strip() for x in (pg.get("materiais_detectados") or []) if str(x).strip()
+    ]
+    variacoes = [] if _multiproduto else [
+        str(x).strip() for x in (pg.get("medidas_variacoes_detectadas") or []) if str(x).strip()
+    ]
+    fonte = thu_i8_fonte_historica(cat_fonte, pg, nome)
+
+    # Limpa somente widgets do novo cadastro para o prefill entrar de forma previsível.
+    for chave in list(st.session_state.keys()):
+        if str(chave).startswith("cat_") and str(chave).endswith("_novo"):
+            st.session_state.pop(chave, None)
+
+    st.session_state["_thu_i8_prefill_catalogo"] = {
+        "nome": nome,
+        "categoria": str(cat_fonte.get("categoria_hint") or ""),
+        "subcategoria": str(cat_fonte.get("subcategoria_hint") or ""),
+        "descricao_curta": descricao[:400],
+        "descricao_completa": descricao,
+        "material": " • ".join(materiais),
+        "variacoes": list(dict.fromkeys(variacoes)),
+        "aliases": [],
+        "campanhas_sugeridas": [
+            x for x in (cat_fonte.get("campanhas_hint") or [])
+            if x in CAMPANHAS_PRODUTO_OPCOES
+        ],
+        "precos_historicos": list(pg.get("precos_historicos", []) or []),
+        "fonte": fonte,
+    }
+    st.session_state["_thu_i8_fonte_pendente_novo"] = fonte
+    st.session_state.catalogo_edit_index = None
+    thu_i8_marcar_pagina(
+        catalogo_id,
+        pagina,
+        "Em cadastro",
+        produtos=[nome] if nome else [],
+    )
+    return True
+
+
+@st.dialog("📚 THU • Revisar produto do catálogo histórico", width="large")
+def dialog_thu_i8_revisar_produto(catalogo_id, pagina, nome_candidato=""):
+    acervo = thu_i8_carregar_acervo_estatico()
+    cat_fonte, pg = thu_i8_pagina(catalogo_id, pagina, acervo=acervo)
+    if not cat_fonte or not pg:
+        st.error("Página histórica não localizada.")
+        return
+
+    catalogo = carregar_catalogo()
+    if not catalogo:
+        st.warning("O Catálogo Oficial está vazio. Prepare um novo cadastro em vez de vincular.")
+        return
+
+    candidatos = thu_i8_candidatos_pagina(pg)
+    nome_candidato = _thu_i8_limpar_candidato(nome_candidato)
+    sugestao = thu_site_sugerir_produto(
+        nome_candidato or (candidatos[0] if candidatos else ""),
+        catalogo,
+        alternativas=candidatos,
+    )
+    nomes_oficiais = [str(p.get("Nome") or "").strip() for p in catalogo if str(p.get("Nome") or "").strip()]
+    nomes_oficiais.sort(key=str.casefold)
+    default_nome = str(sugestao.get("nome") or "")
+    default_index = nomes_oficiais.index(default_nome) if default_nome in nomes_oficiais else 0
+
+    st.caption(
+        f"Fonte: **{cat_fonte.get('titulo')}** • página **{pg.get('pagina')}**. "
+        "Nenhum campo será alterado sem confirmação."
+    )
+    cprev, cform = st.columns([1.1, 1.4])
+    with cprev:
+        prev = thu_i8_preview_path(pg)
+        if prev:
+            st.image(str(prev), use_container_width=True)
+        st.caption("Prévia histórica da página original")
+
+    with cform:
+        oficial_nome = st.selectbox(
+            "Produto oficial que esta página representa",
+            nomes_oficiais,
+            index=default_index,
+            key=f"thu_i8_oficial_{catalogo_id}_{pagina}_{abs(hash(nome_candidato))}",
+        )
+        idx_prod = next(
+            (
+                i for i, p in enumerate(catalogo)
+                if normalizar_identidade_produto(p.get("Nome"))
+                == normalizar_identidade_produto(oficial_nome)
+            ),
+            None,
+        )
+        produto = dict(catalogo[idx_prod]) if idx_prod is not None else {}
+
+        st.markdown("##### Comparação com o cadastro atual")
+        st.caption(f"Categoria atual: {produto.get('Categoria') or '—'}")
+        st.caption(f"Preço atual: {formatar_preco_catalogo(produto.get('Preco'))}")
+        if produto.get("Material"):
+            st.caption(f"Material atual: {produto.get('Material')}")
+        if produto.get("Variacoes"):
+            st.caption("Variações atuais: " + " • ".join(str(x) for x in produto.get("Variacoes", [])[:10]))
+
+    precos_antigos = list(pg.get("precos_historicos", []) or [])
+    if precos_antigos:
+        validade = str(cat_fonte.get("validade_preco_historico") or "").strip()
+        detalhe_validade = f" • validade indicada no PDF: {validade}" if validade else ""
+        _nota_multi_preco = (
+            " Nesta página há vários produtos; os valores ficam ligados à página histórica e não a este produto individual."
+            if pg.get("multiproduto") else ""
+        )
+        st.warning(
+            "💰 **Valor(es) histórico(s) detectado(s) — NÃO atualizar automaticamente:** R$ "
+            + " • R$ ".join(precos_antigos[:15])
+            + detalhe_validade
+            + _nota_multi_preco
+        )
+    if pg.get("minimos_historicos"):
+        st.info(
+            "🚫 O PDF antigo contém referência a quantidade mínima. "
+            "A AlphaFest atual atende de 1 a grandes quantidades; esta informação será guardada somente como histórico e não vira regra do produto."
+        )
+
+    st.divider()
+    descricao_fonte = str(pg.get("descricao_sugerida") or "").strip()
+    materiais_fonte = [str(x).strip() for x in (pg.get("materiais_detectados") or []) if str(x).strip()]
+    variacoes_fonte = [str(x).strip() for x in (pg.get("medidas_variacoes_detectadas") or []) if str(x).strip()]
+    campanhas_fonte = [
+        x for x in (cat_fonte.get("campanhas_hint") or [])
+        if x in CAMPANHAS_PRODUTO_OPCOES
+    ]
+
+    a1, a2 = st.columns(2)
+    usar_alias = a1.checkbox(
+        "Adicionar nome histórico como alias",
+        value=bool(nome_candidato and normalizar_identidade_produto(nome_candidato) != normalizar_identidade_produto(oficial_nome)),
+        key=f"thu_i8_alias_{catalogo_id}_{pagina}",
+    )
+    alias_txt = a2.text_input(
+        "Alias histórico",
+        value=nome_candidato,
+        disabled=not usar_alias,
+        key=f"thu_i8_alias_txt_{catalogo_id}_{pagina}",
+    )
+
+    usar_desc = st.checkbox(
+        "Atualizar a descrição oficial com texto revisado desta fonte",
+        value=bool(descricao_fonte and not str(produto.get("DescricaoCompleta") or produto.get("Descricao") or "").strip()),
+        key=f"thu_i8_desc_chk_{catalogo_id}_{pagina}",
+    )
+    desc_revisada = st.text_area(
+        "Descrição revisada",
+        value=descricao_fonte,
+        height=130,
+        disabled=not usar_desc,
+        key=f"thu_i8_desc_{catalogo_id}_{pagina}",
+    )
+
+    usar_material = st.checkbox(
+        "Aproveitar material/composição detectado",
+        value=bool(
+            materiais_fonte
+            and not pg.get("multiproduto")
+            and not str(produto.get("Material") or "").strip()
+        ),
+        key=f"thu_i8_mat_chk_{catalogo_id}_{pagina}",
+    )
+    material_revisado = st.text_input(
+        "Material revisado",
+        value=" • ".join(materiais_fonte),
+        disabled=not usar_material,
+        key=f"thu_i8_mat_{catalogo_id}_{pagina}",
+    )
+
+    usar_variacoes = st.checkbox(
+        "Adicionar medidas/variações detectadas às opções oficiais",
+        value=bool(variacoes_fonte and not pg.get("multiproduto")),
+        key=f"thu_i8_var_chk_{catalogo_id}_{pagina}",
+    )
+    variacoes_revisadas = st.text_area(
+        "Variações / opções (uma por linha)",
+        value="\n".join(variacoes_fonte),
+        height=90,
+        disabled=not usar_variacoes,
+        key=f"thu_i8_var_{catalogo_id}_{pagina}",
+    )
+
+    confirmar_campanha = st.checkbox(
+        "Confirmar elegibilidade sugerida por este catálogo",
+        value=False,
+        key=f"thu_i8_camp_chk_{catalogo_id}_{pagina}",
+        help="O catálogo histórico é evidência, não autorização. Marque somente se a regra ainda vale hoje.",
+    )
+    campanhas_confirmadas = st.multiselect(
+        "Campanhas / ocasiões a adicionar",
+        CAMPANHAS_PRODUTO_OPCOES,
+        default=campanhas_fonte if confirmar_campanha else [],
+        disabled=not confirmar_campanha,
+        key=f"thu_i8_camps_{catalogo_id}_{pagina}",
+    )
+
+    with st.expander("📄 Ver texto extraído desta página", expanded=False):
+        st.text_area(
+            "Conteúdo histórico",
+            value=str(pg.get("clean_text") or ""),
+            height=220,
+            disabled=True,
+            key=f"thu_i8_texto_{catalogo_id}_{pagina}",
+        )
+
+    if st.button(
+        "✅ Aplicar somente as informações confirmadas",
+        type="primary",
+        use_container_width=True,
+        key=f"thu_i8_aplicar_{catalogo_id}_{pagina}",
+    ):
+        if idx_prod is None:
+            st.error("Produto oficial não localizado.")
+            return
+        antes = dict(produto)
+        atualizado = dict(produto)
+
+        if usar_alias and alias_txt.strip():
+            aliases_existentes = list(atualizado.get("Aliases", []) or []) + [alias_txt.strip()]
+            aliases_validos, conflitos = filtrar_aliases_validos_produto(
+                atualizado.get("Nome"), aliases_existentes, catalogo, idx_prod
+            )
+            atualizado["Aliases"] = aliases_validos
+            if conflitos:
+                st.warning("Alias não aplicado por conflito: " + " • ".join(conflitos))
+
+        if usar_desc and desc_revisada.strip():
+            atualizado["Descricao"] = desc_revisada.strip()
+            atualizado["DescricaoCurta"] = desc_revisada.strip()[:500]
+            atualizado["DescricaoCompleta"] = desc_revisada.strip()
+
+        if usar_material and material_revisado.strip():
+            atualizado["Material"] = material_revisado.strip()
+
+        if usar_variacoes:
+            atuais = [str(x).strip() for x in (atualizado.get("Variacoes", []) or []) if str(x).strip()]
+            novas = [x.strip() for x in variacoes_revisadas.splitlines() if x.strip()]
+            atualizado["Variacoes"] = list(dict.fromkeys(atuais + novas))
+
+        if confirmar_campanha:
+            atuais = list(atualizado.get("CampanhasPermitidas", []) or [])
+            atualizado["CampanhasPermitidas"] = list(dict.fromkeys(
+                atuais + [x for x in campanhas_confirmadas if x in CAMPANHAS_PRODUTO_OPCOES]
+            ))
+
+        fonte = thu_i8_fonte_historica(cat_fonte, pg, nome_candidato)
+        atualizado = thu_i8_adicionar_fonte_ao_produto(atualizado, fonte)
+        hist = list(atualizado.get("HistoricoEnriquecimentoCatalogos", []) or [])
+        hist.append({
+            "fonte": f"{cat_fonte.get('titulo')} • p.{pg.get('pagina')}",
+            "produto": atualizado.get("Nome"),
+            "campos_aplicados": [
+                nome for nome, ok in (
+                    ("Alias", usar_alias),
+                    ("Descrição", usar_desc),
+                    ("Material", usar_material),
+                    ("Variações", usar_variacoes),
+                    ("Campanhas", confirmar_campanha),
+                ) if ok
+            ],
+            "preco_oficial_preservado": str(antes.get("Preco") or ""),
+            "quantidade_minima_ignorada": bool(pg.get("minimos_historicos")),
+            "confirmado_em": agora_local().isoformat(timespec="seconds"),
+            "usuario": obter_usuario_atual(),
+        })
+        atualizado["HistoricoEnriquecimentoCatalogos"] = hist[-150:]
+        atualizado["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+        catalogo[idx_prod] = atualizado
+        salvar_catalogo(catalogo)
+        thu_i8_marcar_pagina(
+            catalogo_id,
+            pagina,
+            "Em revisão",
+            produtos=[atualizado.get("Nome")],
+        )
+        st.session_state["_thu_auditar_produto_nome"] = atualizado.get("Nome")
+        st.session_state["_thu_i8_feedback"] = (
+            f"Fonte histórica vinculada a {atualizado.get('Nome')}. "
+            "Preço oficial preservado e nenhuma quantidade mínima foi criada."
+        )
+        st.rerun()
+
+
+def renderizar_acervo_catalogos_legados():
+    acervo = thu_i8_carregar_acervo_estatico()
+    catalogos = list(acervo.get("catalogos") or [])
+    if not catalogos:
+        st.error("O pacote do Acervo Histórico não foi encontrado nesta versão.")
+        return
+
+    status_db = carregar_catalogos_legados_status()
+    revisoes = status_db.get("revisoes") or {}
+    total_paginas = sum(int(c.get("paginas_total") or 0) for c in catalogos)
+    revisadas = sum(1 for x in revisoes.values() if str((x or {}).get("status")) == "Revisada")
+    ignoradas = sum(1 for x in revisoes.values() if str((x or {}).get("status")) == "Ignorada")
+    em_cadastro = sum(
+        1 for x in revisoes.values()
+        if str((x or {}).get("status")) in ("Em cadastro", "Em revisão")
+    )
+
+    st.markdown("### 📚 THU • Acervo Inteligente de Catálogos AlphaFest")
+    st.caption(
+        "Os PDFs antigos viraram uma fonte histórica pesquisável dentro do Manager. "
+        "O Catálogo Oficial continua sendo a única fonte atual de produto, preço e campanha."
+    )
+
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Catálogos históricos", len(catalogos))
+    m2.metric("Páginas preservadas", total_paginas)
+    m3.metric("Revisadas", revisadas)
+    m4.metric("Em revisão/cadastro", em_cadastro)
+    m5.metric("Institucionais/ignoradas", ignoradas)
+
+    st.warning(
+        "💰 **Todos os valores destes PDFs são históricos.** Nenhum preço é importado para o campo oficial automaticamente."
+    )
+    st.info(
+        "🚫 **A AlphaFest não trabalha com quantidade mínima.** Qualquer menção antiga a mínimo é mantida apenas na fonte histórica e não vira regra do produto."
+    )
+
+    feedback = st.session_state.pop("_thu_i8_feedback", None)
+    if feedback:
+        st.success(feedback)
+
+    f1, f2 = st.columns([1.35, 2.65])
+    rotulos = {
+        f"{c.get('titulo')} • {c.get('paginas_total')} pág.": c.get("id")
+        for c in catalogos
+    }
+    escolha = f1.selectbox(
+        "Catálogo histórico",
+        list(rotulos.keys()),
+        key="thu_i8_catalogo_select",
+    )
+    catalogo_id = rotulos[escolha]
+    cat_fonte = thu_i8_catalogo_por_id(catalogo_id, acervo=acervo)
+    busca = f2.text_input(
+        "Pesquisar dentro deste catálogo",
+        placeholder="Ex.: caneca, água, caixa, adesivo, 500 ml...",
+        key="thu_i8_busca",
+    ).strip().casefold()
+
+    if not cat_fonte:
+        return
+
+    cmeta1, cmeta2, cmeta3 = st.columns(3)
+    cmeta1.write(f"**Tipo:** {cat_fonte.get('tipo') or 'Acervo'}")
+    cmeta2.write(f"**Grupo sugerido:** {cat_fonte.get('categoria_hint') or '—'}")
+    camp_hint = list(cat_fonte.get("campanhas_hint", []) or [])
+    cmeta3.write("**Campanha/ocasião:** " + (" • ".join(camp_hint) if camp_hint else "—"))
+    validade = str(cat_fonte.get("validade_preco_historico") or "").strip()
+    if validade:
+        st.caption(f"O próprio documento informa preço válido até {validade}. Hoje esses valores são tratados somente como histórico.")
+    elif cat_fonte.get("preco_sujeito_alteracao_mensal"):
+        st.caption("O próprio documento informava valores sujeitos a alterações mensais; por isso todos são tratados somente como histórico.")
+
+    filtro_status = st.radio(
+        "Páginas",
+        ["Todas", "Pendentes", "Revisadas", "Com preço histórico", "Com mínimo antigo"],
+        horizontal=True,
+        key="thu_i8_filtro_status",
+    )
+
+    paginas_filtradas = []
+    for pg in (cat_fonte.get("paginas") or []):
+        stat = thu_i8_status_pagina(catalogo_id, pg.get("pagina"), status_db=status_db)
+        status_txt = str(stat.get("status") or "Pendente")
+        if filtro_status == "Pendentes" and status_txt not in ("Pendente", "Em cadastro", "Em revisão"):
+            continue
+        if filtro_status == "Revisadas" and status_txt != "Revisada":
+            continue
+        if filtro_status == "Com preço histórico" and not pg.get("precos_historicos"):
+            continue
+        if filtro_status == "Com mínimo antigo" and not pg.get("minimos_historicos"):
+            continue
+        if busca:
+            base = " ".join([
+                str(pg.get("clean_text") or ""),
+                " ".join(str(x) for x in (pg.get("candidatos_produto") or [])),
+                " ".join(str(x) for x in (pg.get("medidas_variacoes_detectadas") or [])),
+                " ".join(str(x) for x in (pg.get("materiais_detectados") or [])),
+            ]).casefold()
+            if busca not in base:
+                continue
+        paginas_filtradas.append(pg)
+
+    if not paginas_filtradas:
+        st.info("Nenhuma página encontrada neste filtro.")
+        return
+
+    labels = []
+    mapa_paginas = {}
+    for pg in paginas_filtradas:
+        stat = thu_i8_status_pagina(catalogo_id, pg.get("pagina"), status_db=status_db)
+        status_txt = str(stat.get("status") or "Pendente")
+        icone = {"Revisada": "✅", "Ignorada": "⚪", "Em cadastro": "🟡", "Em revisão": "🟡"}.get(status_txt, "🔵")
+        candidatos = thu_i8_candidatos_pagina(pg)
+        resumo = candidatos[0] if candidatos else ("página com vários itens" if pg.get("multiproduto") else "sem título detectado")
+        label = f"{icone} Página {pg.get('pagina'):02d} • {resumo[:70]}"
+        labels.append(label)
+        mapa_paginas[label] = pg
+
+    page_label = st.selectbox(
+        f"Página para revisar • {len(paginas_filtradas)} encontrada(s)",
+        labels,
+        key=f"thu_i8_pagina_{catalogo_id}",
+    )
+    pg = mapa_paginas[page_label]
+    stat = thu_i8_status_pagina(catalogo_id, pg.get("pagina"), status_db=status_db)
+
+    left, right = st.columns([1.15, 1])
+    with left:
+        prev = thu_i8_preview_path(pg)
+        if prev:
+            st.image(str(prev), use_container_width=True)
+        st.caption(
+            f"Fonte preservada: {cat_fonte.get('filename')} • página {pg.get('pagina')}"
+        )
+
+    with right:
+        st.markdown(f"#### Página {pg.get('pagina')} • {stat.get('status') or 'Pendente'}")
+        if stat.get("produtos"):
+            st.caption("Produtos já vinculados: " + " • ".join(stat.get("produtos") or []))
+        precos = list(pg.get("precos_historicos", []) or [])
+        if precos:
+            st.warning("💰 Valor(es) histórico(s) detectado(s): R$ " + " • R$ ".join(precos[:15]))
+        _adicionais_hist = list(pg.get("valores_adicionais_historicos", []) or [])
+        if _adicionais_hist:
+            st.caption("Valores adicionais do documento (ex.: embalagem): R$ " + " • R$ ".join(_adicionais_hist[:10]))
+        if pg.get("minimos_historicos"):
+            st.info("🚫 Quantidade mínima detectada no documento antigo — **ignorada pela regra atual da AlphaFest**.")
+        mats = list(pg.get("materiais_detectados", []) or [])
+        if mats:
+            st.caption("🧱 Material detectado: " + " • ".join(mats))
+        vars_pg = list(pg.get("medidas_variacoes_detectadas", []) or [])
+        if vars_pg:
+            st.caption("🔀 Medidas/opções detectadas: " + " • ".join(vars_pg[:15]))
+        if camp_hint:
+            st.caption(
+                "📅 Evidência histórica de campanha/ocasião: "
+                + " • ".join(camp_hint)
+                + " — exige confirmação antes de entrar em CampanhasPermitidas."
+            )
+
+        catalogo_atual = carregar_catalogo()
+        matches = thu_i8_correspondencias_catalogo(pg, catalogo_atual)
+        if matches:
+            st.success(
+                "Correspondência(s) provável(is) no Catálogo Oficial: "
+                + " • ".join(
+                    f"{x.get('nome')} ({float(x.get('score') or 0)*100:.0f}%)"
+                    for x in matches[:5]
+                )
+            )
+        else:
+            st.caption("Nenhuma correspondência segura foi encontrada automaticamente.")
+
+    with st.expander("📄 Conteúdo textual extraído da página", expanded=False):
+        texto = str(pg.get("clean_text") or "").strip()
+        if texto:
+            st.text_area(
+                "Texto histórico",
+                value=texto,
+                height=250,
+                disabled=True,
+                key=f"thu_i8_texto_pagina_{catalogo_id}_{pg.get('pagina')}",
+            )
+        else:
+            st.info("Esta página é predominantemente visual. A prévia acima preserva o conteúdo original para revisão manual.")
+
+    candidatos = thu_i8_candidatos_pagina(pg)
+    prefill_names = ""
+    if pg.get("multiproduto"):
+        # Curadoria visual feita durante a preparação da I8 é segura para preencher todos os nomes.
+        # Extração automática genérica continua conservadora para evitar lixo textual.
+        limite_prefill = 12 if pg.get("curadoria_visual") else 4
+        prefill_names = "\n".join(candidatos[:limite_prefill])
+    elif candidatos:
+        prefill_names = candidatos[0]
+
+    st.markdown("#### Transformar conteúdo histórico em cadastro atual")
+    st.caption(
+        "Digite um produto por linha. Em páginas com vários produtos, você pode revisar cada item separadamente. "
+        "O nome é sempre editável antes de vincular ou preparar um novo cadastro."
+    )
+    nomes_txt = st.text_area(
+        "Produtos / serviços identificados nesta página",
+        value=prefill_names,
+        height=105,
+        key=f"thu_i8_nomes_{catalogo_id}_{pg.get('pagina')}",
+    )
+    nomes = list(dict.fromkeys(
+        _thu_i8_limpar_candidato(x)
+        for x in nomes_txt.splitlines()
+        if _thu_i8_limpar_candidato(x)
+    ))
+
+    if candidatos:
+        st.caption("Sugestões automáticas da extração: " + " • ".join(candidatos[:8]))
+
+    if nomes:
+        for pos, nome in enumerate(nomes[:12], 1):
+            with st.container(border=True):
+                n1, n2, n3 = st.columns([3.3, 1.35, 1.35])
+                n1.markdown(f"**{nome}**")
+                sug = thu_site_sugerir_produto(nome, catalogo_atual, alternativas=candidatos)
+                if sug.get("status") in ("oficial", "provavel") and sug.get("nome"):
+                    n1.caption(
+                        f"THU sugere: {sug.get('nome')} • confiança {float(sug.get('score') or 0)*100:.0f}%"
+                    )
+                else:
+                    n1.caption("Sem correspondência forte; confirme se é um produto novo.")
+
+                if n2.button(
+                    "🔗 Revisar existente",
+                    key=f"thu_i8_existente_{catalogo_id}_{pg.get('pagina')}_{pos}_{abs(hash(nome))}",
+                    use_container_width=True,
+                ):
+                    dialog_thu_i8_revisar_produto(catalogo_id, pg.get("pagina"), nome)
+
+                _match_exato = sug.get("status") == "oficial"
+                if n3.button(
+                    "✅ Já existe" if _match_exato else "🆕 Preparar cadastro",
+                    key=f"thu_i8_novo_{catalogo_id}_{pg.get('pagina')}_{pos}_{abs(hash(nome))}",
+                    use_container_width=True,
+                    disabled=_match_exato,
+                ):
+                    if thu_i8_preparar_cadastro_novo(catalogo_id, pg.get("pagina"), nome):
+                        st.session_state["_thu_i8_feedback"] = (
+                            f"Cadastro de '{nome}' preparado. Revise o formulário oficial antes de salvar."
+                        )
+                        st.rerun()
+                    else:
+                        st.warning("Este nome já existe no Catálogo Oficial. Use Revisar existente para evitar duplicidade.")
+    else:
+        st.info("Digite pelo menos um nome de produto/serviço para iniciar a migração desta página.")
+
+    st.divider()
+    r1, r2 = st.columns(2)
+    if r1.button(
+        "✅ Marcar página como revisada",
+        key=f"thu_i8_pag_revisada_{catalogo_id}_{pg.get('pagina')}",
+        use_container_width=True,
+    ):
+        thu_i8_marcar_pagina(catalogo_id, pg.get("pagina"), "Revisada", produtos=nomes)
+        st.session_state["_thu_i8_feedback"] = "Página marcada como revisada. O conteúdo original continua preservado no acervo."
+        st.rerun()
+
+    if r2.button(
+        "⚪ Página institucional / sem produto",
+        key=f"thu_i8_pag_ignorada_{catalogo_id}_{pg.get('pagina')}",
+        use_container_width=True,
+    ):
+        thu_i8_marcar_pagina(
+            catalogo_id,
+            pg.get("pagina"),
+            "Ignorada",
+            observacao="Página institucional / capa / conteúdo sem cadastro de produto",
+        )
+        st.session_state["_thu_i8_feedback"] = "Página classificada como institucional/sem produto. Ela continua preservada e pesquisável."
+        st.rerun()
+
+
+
 @st.dialog("📅 Assistente THU • Revisar elegibilidade", width="large")
 def dialog_thu_revisar_elegibilidade(campanha_inicial=""):
     campanhas = [
@@ -11411,6 +12304,12 @@ def dialog_catalogo_cadastro_anna(
         subcategoria = c3.text_input("Subcategoria", value=str(produto.get("Subcategoria", "")))
         preco = c4.text_input("Valor", value=str(produto.get("Preco", "")), placeholder="Ex.: 25,00")
         material = st.text_input("Material / composição", value=str(produto.get("Material", "")), placeholder="Ex.: papel arroz, PLA, acrílico, papel fotográfico...")
+        variacoes_txt = st.text_area(
+            "Variações / opções do produto (uma por linha)",
+            value="\n".join(str(x) for x in (produto.get("Variacoes", []) or []) if str(x).strip()),
+            height=75,
+            help="Ex.: 240 ml, 300 ml, 500 ml, Redonda. Não use este campo para quantidade mínima.",
+        )
         aliases_txt = st.text_area(
             "Nomes alternativos / aliases (um por linha)",
             value="\n".join(str(x) for x in (produto.get("Aliases", []) or []) if str(x).strip()),
@@ -11452,6 +12351,7 @@ def dialog_catalogo_cadastro_anna(
             imagens.insert(0, caminho)
         if drive_erros:
             st.warning("Google Drive: " + " ".join(dict.fromkeys(drive_erros)))
+        variacoes_digitadas = list(dict.fromkeys(x.strip() for x in variacoes_txt.splitlines() if x.strip()))
         aliases_digitados = [x.strip() for x in aliases_txt.splitlines() if x.strip()]
         nome_anterior_alias = str(produto.get("Nome") or "").strip()
         if nome_anterior_alias and normalizar_identidade_produto(nome_anterior_alias) != normalizar_identidade_produto(nome):
@@ -11465,6 +12365,7 @@ def dialog_catalogo_cadastro_anna(
         registro.update({
             "Nome": nome.strip(), "Categoria": categoria.strip(), "Subcategoria": subcategoria.strip(),
             "Preco": preco.strip(), "Material": material.strip(),
+            "Variacoes": variacoes_digitadas,
             "Aliases": aliases_validos,
             "CampanhasPermitidas": list(dict.fromkeys(campanhas_permitidas)),
             "Descricao": descricao.strip(), "DescricaoCurta": descricao.strip(),
@@ -16495,6 +17396,11 @@ if pagina_atual == "catalogo":
             else None
         )
         item_edicao = dict(item_edicao or {})
+        prefill_i8 = (
+            dict(st.session_state.get("_thu_i8_prefill_catalogo") or {})
+            if indice_edicao is None
+            else {}
+        )
         sufixo = str(indice_edicao) if indice_edicao is not None else "novo"
         pendente = st.session_state.pop(f"cat_geracao_pendente_{sufixo}", None)
         if isinstance(pendente, dict):
@@ -16516,6 +17422,24 @@ if pagina_atual == "catalogo":
         st.subheader(titulo_form)
         if item_edicao:
             st.info(f"Editando: {item_edicao.get('Nome', 'Produto')}")
+        elif prefill_i8:
+            st.info(
+                "📚 Cadastro preparado pelo Acervo Histórico. Revise todos os campos antes de salvar. "
+                "O preço histórico NÃO foi colocado como preço atual e nenhuma quantidade mínima foi criada."
+            )
+            _i8_old_prices = list(prefill_i8.get("precos_historicos", []) or [])
+            if _i8_old_prices:
+                st.warning(
+                    "Preço(s) encontrado(s) no PDF antigo, somente para referência: R$ "
+                    + " • R$ ".join(_i8_old_prices[:12])
+                )
+            _i8_campaigns = list(prefill_i8.get("campanhas_sugeridas", []) or [])
+            if _i8_campaigns:
+                st.caption(
+                    "📅 Campanhas sugeridas pela fonte histórica: "
+                    + " • ".join(_i8_campaigns)
+                    + ". Marque abaixo somente as que continuam válidas hoje."
+                )
 
         tab_info, tab_producao, tab_marketing, tab_midias = st.tabs([
             "📦 Informações", "⚙️ Produção", "📣 Marketing", "🧠 Arquivos, artes e fotos"
@@ -16525,36 +17449,55 @@ if pagina_atual == "catalogo":
             with st.container(border=True):
                 c1, c2 = st.columns(2)
                 categoria_cat = c1.text_input(
-                    "Categoria *", value=item_edicao.get("Categoria", ""), key=f"cat_categoria_{sufixo}"
+                    "Categoria *", value=item_edicao.get("Categoria", "") or prefill_i8.get("categoria", ""), key=f"cat_categoria_{sufixo}"
                 )
                 subcategoria_cat = c1.text_input(
-                    "Subcategoria", value=item_edicao.get("Subcategoria", ""), key=f"cat_subcategoria_{sufixo}"
+                    "Subcategoria", value=item_edicao.get("Subcategoria", "") or prefill_i8.get("subcategoria", ""), key=f"cat_subcategoria_{sufixo}"
                 )
                 codigo_cat = c1.text_input(
                     "Código interno", value=item_edicao.get("CodigoInterno", ""), key=f"cat_codigo_{sufixo}"
                 )
                 _prefill_thu = st.session_state.pop("_thu_catalogo_prefill_nome_2049", "") if not item_edicao else ""
                 nome_cat = c1.text_input(
-                    "Nome do produto *", value=item_edicao.get("Nome", "") or _prefill_thu, key=f"cat_nome_{sufixo}"
+                    "Nome do produto *", value=item_edicao.get("Nome", "") or _prefill_thu or prefill_i8.get("nome", ""), key=f"cat_nome_{sufixo}"
                 )
                 descricao_curta_cat = c1.text_area(
-                    "Descrição curta", value=item_edicao.get("DescricaoCurta", item_edicao.get("Descricao", "")),
+                    "Descrição curta", value=item_edicao.get("DescricaoCurta", item_edicao.get("Descricao", "")) or prefill_i8.get("descricao_curta", ""),
                     height=100, key=f"cat_desc_curta_{sufixo}"
                 )
                 descricao_cat = c2.text_area(
-                    "Descrição completa", value=item_edicao.get("DescricaoCompleta", item_edicao.get("Descricao", "")),
+                    "Descrição completa", value=item_edicao.get("DescricaoCompleta", item_edicao.get("Descricao", "")) or prefill_i8.get("descricao_completa", ""),
                     height=180, key=f"cat_desc_{sufixo}"
                 )
                 preco_cat = c2.text_input(
                     "Preço sugerido", value=str(item_edicao.get("Preco", "")), key=f"cat_preco_{sufixo}"
                 )
                 material_cat = c2.text_input(
-                    "Material / composição", value=str(item_edicao.get("Material", "")),
+                    "Material / composição", value=str(item_edicao.get("Material", "") or prefill_i8.get("material", "")),
                     placeholder="Ex.: papel arroz, PLA, acrílico, papel fotográfico...", key=f"cat_material_{sufixo}"
+                )
+                variacoes_cat = c2.text_area(
+                    "Variações / opções (uma por linha)",
+                    value="\n".join(
+                        str(x) for x in (
+                            item_edicao.get("Variacoes", [])
+                            or prefill_i8.get("variacoes", [])
+                            or []
+                        ) if str(x).strip()
+                    ),
+                    height=90,
+                    key=f"cat_variacoes_{sufixo}",
+                    help="Ex.: 240 ml, 300 ml, 500 ml, Redonda. A AlphaFest não trabalha com quantidade mínima.",
                 )
                 aliases_cat = c2.text_area(
                     "Nomes alternativos / aliases",
-                    value="\n".join(str(x) for x in (item_edicao.get("Aliases", []) or []) if str(x).strip()),
+                    value="\n".join(
+                        str(x) for x in (
+                            item_edicao.get("Aliases", [])
+                            or prefill_i8.get("aliases", [])
+                            or []
+                        ) if str(x).strip()
+                    ),
                     height=85,
                     key=f"cat_aliases_{sufixo}",
                     help="Um por linha. Use apenas para variações que representam exatamente o mesmo produto. O histórico não é renomeado.",
@@ -16657,6 +17600,43 @@ if pagina_atual == "catalogo":
             )
 
         with tab_midias:
+            fontes_catalogos_hist = list(item_edicao.get("FontesHistoricasCatalogos", []) or [])
+            if fontes_catalogos_hist:
+                st.markdown("#### 📚 Fontes históricas dos catálogos")
+                st.caption(
+                    "Essas referências explicam de onde vieram informações antigas. "
+                    "Preço histórico não substitui o preço atual e quantidade mínima antiga não é regra da AlphaFest."
+                )
+                for _fi, _fonte_hist in enumerate(reversed(fontes_catalogos_hist[-12:]), 1):
+                    with st.expander(
+                        f"{_fonte_hist.get('catalogo') or 'Catálogo histórico'} • página {_fonte_hist.get('pagina') or '—'}",
+                        expanded=False,
+                    ):
+                        _preview_hist = str(_fonte_hist.get("preview") or "").strip()
+                        if _preview_hist:
+                            _preview_path_hist = Path(__file__).resolve().parent / _preview_hist
+                            if _preview_path_hist.exists():
+                                st.image(str(_preview_path_hist), width=360)
+                        _precos_hist = list(_fonte_hist.get("precos_historicos", []) or [])
+                        if _precos_hist:
+                            st.warning("Preço(s) histórico(s): R$ " + " • R$ ".join(_precos_hist[:12]))
+                        _valores_extra_hist = list(_fonte_hist.get("valores_adicionais_historicos", []) or [])
+                        if _valores_extra_hist:
+                            st.caption("Outros valores do documento: R$ " + " • R$ ".join(_valores_extra_hist[:10]))
+                        if _fonte_hist.get("quantidades_minimas_historicas_ignoradas"):
+                            st.info("Quantidade mínima mencionada no PDF antigo: preservada somente como histórico; regra atual = sem mínimo.")
+                        if _fonte_hist.get("campanhas_sugeridas"):
+                            st.caption("Campanha/ocasião na fonte: " + " • ".join(_fonte_hist.get("campanhas_sugeridas") or []))
+                        if _fonte_hist.get("texto_fonte"):
+                            st.text_area(
+                                "Trecho da fonte",
+                                value=str(_fonte_hist.get("texto_fonte") or ""),
+                                height=150,
+                                disabled=True,
+                                key=f"cat_fonte_hist_{sufixo}_{_fi}",
+                            )
+                st.divider()
+
             st.markdown("#### 🧠 Memória do produto")
             st.caption("Adicione os arquivos individualmente conforme forem criados ou encontrados. Eles ficam vinculados a este produto.")
             arquivos_atuais = list(item_edicao.get("ArquivosBiblioteca", []) or [])
@@ -16840,6 +17820,9 @@ if pagina_atual == "catalogo":
                     st.warning("Google Drive: " + " ".join(dict.fromkeys(drive_erros)))
 
                 imagens = list(dict.fromkeys(imagens))
+                variacoes_digitadas_cat = list(dict.fromkeys(
+                    x.strip() for x in variacoes_cat.splitlines() if x.strip()
+                ))
                 aliases_digitados_cat = [x.strip() for x in aliases_cat.splitlines() if x.strip()]
                 nome_anterior_cat = str(item_edicao.get("Nome") or "").strip()
                 if nome_anterior_cat and normalizar_identidade_produto(nome_anterior_cat) != normalizar_identidade_produto(nome_cat):
@@ -16860,6 +17843,7 @@ if pagina_atual == "catalogo":
                     "DescricaoCurta": descricao_curta_cat.strip(), "DescricaoCompleta": descricao_cat.strip(),
                     "IdeiasGeracao": ideias_geracao.strip(),
                     "Preco": preco_cat.strip(), "Material": material_cat.strip(),
+                    "Variacoes": variacoes_digitadas_cat,
                     "Aliases": aliases_validos_cat,
                     "CampanhasPermitidas": list(dict.fromkeys(campanhas_permitidas_cat)),
                     "Custo": custo_cat.strip(), "TempoProducao": tempo_cat.strip(),
@@ -16871,12 +17855,46 @@ if pagina_atual == "catalogo":
                     "ArquivosBiblioteca": list(item_edicao.get("ArquivosBiblioteca", []) or []),
                     "AtualizadoEm": agora_local().isoformat(timespec="seconds"),
                 })
+
+                _fonte_i8_novo = (
+                    dict(st.session_state.get("_thu_i8_fonte_pendente_novo") or {})
+                    if not item_edicao
+                    else {}
+                )
+                if _fonte_i8_novo:
+                    registro = thu_i8_adicionar_fonte_ao_produto(registro, _fonte_i8_novo)
+                    _hist_i8_novo = list(registro.get("HistoricoEnriquecimentoCatalogos", []) or [])
+                    _hist_i8_novo.append({
+                        "fonte": f"{_fonte_i8_novo.get('catalogo')} • p.{_fonte_i8_novo.get('pagina')}",
+                        "produto": nome_cat.strip(),
+                        "acao": "Produto cadastrado a partir de fonte histórica com revisão humana",
+                        "preco_historico_importado_como_oficial": False,
+                        "preco_oficial_informado": preco_cat.strip(),
+                        "quantidade_minima_ignorada": bool(_fonte_i8_novo.get("quantidades_minimas_historicas_ignoradas")),
+                        "confirmado_em": agora_local().isoformat(timespec="seconds"),
+                        "usuario": obter_usuario_atual(),
+                    })
+                    registro["HistoricoEnriquecimentoCatalogos"] = _hist_i8_novo[-150:]
+
                 if item_edicao:
                     catalogo[indice_edicao] = registro
                 else:
                     registro["CriadoEm"] = agora_local().isoformat(timespec="seconds")
                     catalogo.append(registro)
                 salvar_catalogo(catalogo)
+                if _fonte_i8_novo:
+                    thu_i8_marcar_pagina(
+                        _fonte_i8_novo.get("catalogo_id"),
+                        _fonte_i8_novo.get("pagina"),
+                        "Em revisão",
+                        produtos=[nome_cat.strip()],
+                    )
+                    st.session_state.pop("_thu_i8_prefill_catalogo", None)
+                    st.session_state.pop("_thu_i8_fonte_pendente_novo", None)
+                    st.session_state["_thu_i8_feedback"] = (
+                        f"{nome_cat.strip()} entrou no Catálogo Oficial com a fonte histórica registrada. "
+                        "Preço antigo permaneceu somente como histórico."
+                    )
                 st.session_state.catalogo_edit_index = None
                 st.session_state["_thu_auditar_produto_nome"] = nome_cat.strip()
                 st.success("Produto salvo com sucesso.")
@@ -16884,6 +17902,9 @@ if pagina_atual == "catalogo":
 
         if cancelar:
             st.session_state.catalogo_edit_index = None
+            if not item_edicao:
+                st.session_state.pop("_thu_i8_prefill_catalogo", None)
+                st.session_state.pop("_thu_i8_fonte_pendente_novo", None)
             for chave in list(st.session_state.keys()):
                 if str(chave).startswith("cat_") and str(chave).endswith(f"_{sufixo}"):
                     st.session_state.pop(chave, None)
@@ -16974,9 +17995,10 @@ if pagina_atual == "catalogo":
     if st.session_state.catalogo_edit_index is not None:
         formulario_catalogo(st.session_state.catalogo_edit_index)
     else:
-        aba_cad, aba_lista, aba_cliente = st.tabs([
+        aba_cad, aba_lista, aba_acervo, aba_cliente = st.tabs([
             "➕ Cadastrar",
             "📋 Produtos",
+            "📚 Acervo histórico",
             "📤 Catálogo para cliente",
         ])
 
@@ -16991,7 +18013,7 @@ if pagina_atual == "catalogo":
             filtrados = [
                 (i, p) for i, p in enumerate(catalogo)
                 if not termo_cat
-                or termo_cat in (f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')} {p.get('CodigoInterno','')} {p.get('Descricao','')} {p.get('PalavrasChave','')} {' '.join(str(x) for x in (p.get('Aliases', []) or []))} " + " ".join(
+                or termo_cat in (f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')} {p.get('CodigoInterno','')} {p.get('Descricao','')} {p.get('PalavrasChave','')} {' '.join(str(x) for x in (p.get('Aliases', []) or []))} {' '.join(str(x) for x in (p.get('Variacoes', []) or []))} " + " ".join(
                     f"{a.get('nome','')} {a.get('descricao','')} {' '.join(a.get('tags', []) or [])}"
                     for a in (p.get('ArquivosBiblioteca', []) or [])
                 )).lower()
@@ -17020,6 +18042,9 @@ if pagina_atual == "catalogo":
                     cinfo.caption(descricao_lista)
                     if produto_cat.get("Material"):
                         cinfo.caption(f"Material: {produto_cat.get('Material')}")
+                    variacoes_lista = [str(x).strip() for x in (produto_cat.get("Variacoes", []) or []) if str(x).strip()]
+                    if variacoes_lista:
+                        cinfo.caption("🔀 Variações: " + " • ".join(variacoes_lista[:8]) + (" …" if len(variacoes_lista) > 8 else ""))
                     campanhas_lista = produto_cat.get("CampanhasPermitidas", []) or []
                     if campanhas_lista:
                         cinfo.caption("📅 Campanhas: " + " • ".join(campanhas_lista))
@@ -17050,6 +18075,9 @@ if pagina_atual == "catalogo":
                     processos_lista = produto_cat.get("Processos", []) or []
                     if processos_lista:
                         cinfo.caption("Processos: " + " • ".join(processos_lista))
+                    fontes_hist_produto = list(produto_cat.get("FontesHistoricasCatalogos", []) or [])
+                    if fontes_hist_produto:
+                        cinfo.caption(f"📚 Acervo histórico: {len(fontes_hist_produto)} fonte(s) de catálogo vinculada(s)")
                     arquivos_memoria = [a for a in (produto_cat.get("ArquivosBiblioteca", []) or []) if not a.get("arquivado")]
                     if arquivos_memoria:
                         mestres = sum(1 for a in arquivos_memoria if a.get("mestre"))
@@ -17074,6 +18102,9 @@ if pagina_atual == "catalogo":
                             "valor_unitario": preco_num,
                         })
                         st.success("Produto adicionado ao orçamento. Abra a aba Novo Orçamento.")
+
+        with aba_acervo:
+            renderizar_acervo_catalogos_legados()
 
         with aba_cliente:
             if not catalogo:
