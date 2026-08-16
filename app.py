@@ -1225,7 +1225,11 @@ def salvar_historico_completo(historico):
     """
     if not isinstance(historico, list):
         raise ValueError("O histórico precisa ser uma lista de propostas.")
-    return bool(save_document("historico_orcamentos", historico, ARQUIVO_HISTORICO))
+    ok = bool(save_document("historico_orcamentos", historico, ARQUIVO_HISTORICO))
+    if ok:
+        st.session_state.pop("_thu_i7_analise", None)
+        st.session_state.pop("_thu_i7_periodo_analisado", None)
+    return ok
 
 def registrar_evento_proposta(proposta, descricao, usuario="Sistema"):
     timeline = proposta.get("timeline") if isinstance(proposta.get("timeline"), list) else []
@@ -3437,6 +3441,8 @@ def carregar_marketing():
 
 def salvar_marketing(dados):
     save_document("marketing_db", dados, ARQUIVO_MARKETING)
+    st.session_state.pop("_thu_i7_analise", None)
+    st.session_state.pop("_thu_i7_periodo_analisado", None)
 
 def _thu_normalizar_campanha(valor):
     texto=str(valor or "").strip().casefold()
@@ -6698,6 +6704,8 @@ def salvar_catalogo(lista):
     if not isinstance(lista, list):
         raise ValueError("O catálogo precisa ser uma lista de produtos.")
     save_document("catalogo_db", lista, ARQUIVO_CATALOGO)
+    st.session_state.pop("_thu_i7_analise", None)
+    st.session_state.pop("_thu_i7_periodo_analisado", None)
 
 
 def normalizar_identidade_produto(valor):
@@ -10162,6 +10170,1066 @@ def renderizar_acervo_social_thu(marketing, conteudos):
                             p2.success(f"{dias} dias")
 
 
+
+# --- 20.4.9-I7: THU Inteligência de Marketing e Resultados ---
+def _thu_i7_data_proposta(proposta):
+    data, _, _ = _data_evento_resultado(
+        proposta or {},
+        ("data_geracao", "data", "criado_em", "created_at"),
+    )
+    return data
+
+
+def _thu_i7_nome_produto_oficial(nome, catalogo):
+    nome = str(nome or "").strip()
+    if not nome:
+        return ""
+    return str(nome_produto_oficial_catalogo(nome, catalogo) or nome).strip()
+
+
+def _thu_i7_produto_existe_catalogo(nome, catalogo):
+    chave = normalizar_identidade_produto(nome)
+    if not chave:
+        return False
+    mapa = mapa_identidade_produtos(catalogo)
+    return chave in mapa or any(
+        normalizar_identidade_produto(p.get("Nome")) == chave
+        for p in (catalogo or [])
+    )
+
+
+def _thu_i7_registro_produto(nome):
+    return {
+        "produto": str(nome or "").strip(),
+        "propostas": 0,
+        "aprovadas": 0,
+        "pagas": 0,
+        "quantidade_orcada": 0.0,
+        "quantidade_paga": 0.0,
+        "valor_itens_orcados": 0.0,
+        "valor_itens_pagos": 0.0,
+        "publicacoes": 0,
+        "canais": {},
+        "propostas_origem_social": 0,
+        "origens_sociais": {},
+        "ultima_publicacao": None,
+        "primeira_publicacao": None,
+        "tem_catalogo": False,
+    }
+
+
+def thu_i7_mapa_origem_atendimento(atendimentos):
+    dados = atendimentos or {}
+    itens = dados.get("itens", []) if isinstance(dados, dict) else []
+    mapa = {}
+    for item in itens or []:
+        if not isinstance(item, dict):
+            continue
+        ident = str(item.get("id") or "").strip()
+        if not ident:
+            continue
+        origem = str(
+            item.get("canal_origem")
+            or item.get("origem")
+            or item.get("canal")
+            or item.get("canal_atendimento")
+            or ""
+        ).strip()
+        mapa[ident] = origem
+    return mapa
+
+
+def thu_i7_consolidar_periodo(
+    historico,
+    marketing,
+    catalogo,
+    inicio,
+    fim,
+    mapa_origens=None,
+):
+    """Consolida demanda e exposição sem atribuir causalidade."""
+    produtos = {}
+    propostas_periodo = []
+    itens_sem_catalogo = set()
+    itens_total = 0
+    itens_catalogados = 0
+    mapa_origens = mapa_origens or {}
+    propostas_com_origem = 0
+    propostas_origem_social = 0
+    propostas_por_origem = {}
+
+    def reg_prod(nome):
+        nome = str(nome or "").strip()
+        if not nome:
+            return None
+        if nome not in produtos:
+            produtos[nome] = _thu_i7_registro_produto(nome)
+            produtos[nome]["tem_catalogo"] = _thu_i7_produto_existe_catalogo(
+                nome,
+                catalogo,
+            )
+        return produtos[nome]
+
+    for proposta in (historico or []):
+        if not isinstance(proposta, dict):
+            continue
+        data_prop = _thu_i7_data_proposta(proposta)
+        if not data_prop or data_prop < inicio or data_prop > fim:
+            continue
+
+        propostas_periodo.append(proposta)
+        encerrada = proposta_encerrada(proposta)
+        aprovada = (not encerrada) and valor_bool(proposta.get("aprovado"))
+        paga = (not encerrada) and valor_bool(proposta.get("pago"))
+
+        atendimento_id = str(proposta.get("atendimento_id") or "").strip()
+        origem_atendimento = str(
+            mapa_origens.get(atendimento_id)
+            or proposta.get("canal_origem")
+            or proposta.get("origem")
+            or ""
+        ).strip()
+        origem_social = origem_atendimento.casefold() in {"instagram", "facebook"}
+        if origem_atendimento:
+            propostas_com_origem += 1
+            propostas_por_origem[origem_atendimento] = (
+                propostas_por_origem.get(origem_atendimento, 0) + 1
+            )
+            if origem_social:
+                propostas_origem_social += 1
+
+        produtos_na_proposta = {}
+        for item in (proposta.get("itens", []) or []):
+            if not isinstance(item, dict):
+                continue
+            nome_original = str(item.get("produto") or "").strip()
+            if not nome_original:
+                continue
+            itens_total += 1
+            nome_oficial = _thu_i7_nome_produto_oficial(
+                nome_original,
+                catalogo,
+            )
+            existe = _thu_i7_produto_existe_catalogo(
+                nome_original,
+                catalogo,
+            ) or _thu_i7_produto_existe_catalogo(nome_oficial, catalogo)
+            if existe:
+                itens_catalogados += 1
+            else:
+                itens_sem_catalogo.add(nome_original)
+
+            qtd = valor_float(item.get("quantidade"))
+            unit = valor_float(item.get("valor_unitario"))
+            bruto = qtd * unit
+
+            agregado = produtos_na_proposta.setdefault(
+                nome_oficial,
+                {
+                    "quantidade": 0.0,
+                    "valor": 0.0,
+                },
+            )
+            agregado["quantidade"] += qtd
+            agregado["valor"] += bruto
+
+        for nome_oficial, item_agregado in produtos_na_proposta.items():
+            reg = reg_prod(nome_oficial)
+            if reg is None:
+                continue
+            reg["propostas"] += 1
+            reg["quantidade_orcada"] += item_agregado["quantidade"]
+            reg["valor_itens_orcados"] += item_agregado["valor"]
+            if aprovada:
+                reg["aprovadas"] += 1
+            if paga:
+                reg["pagas"] += 1
+                reg["quantidade_paga"] += item_agregado["quantidade"]
+                reg["valor_itens_pagos"] += item_agregado["valor"]
+            if origem_social:
+                reg["propostas_origem_social"] += 1
+                reg["origens_sociais"][origem_atendimento] = (
+                    reg["origens_sociais"].get(origem_atendimento, 0) + 1
+                )
+
+    publicacoes_todas = _thu_social_publicacoes(marketing)
+    publicacoes_periodo = []
+    publicacoes_sem_produto = 0
+    publicacoes_produto_nao_catalogado = 0
+
+    for pub in publicacoes_todas:
+        data_pub = _thu_social_data(pub.get("data_publicacao"))
+        if not data_pub or data_pub < inicio or data_pub > fim:
+            continue
+        publicacoes_periodo.append(pub)
+
+        nome_pub = str(pub.get("produto") or "").strip()
+        if not nome_pub:
+            publicacoes_sem_produto += 1
+            continue
+
+        nome_oficial = _thu_i7_nome_produto_oficial(nome_pub, catalogo)
+        reg = reg_prod(nome_oficial)
+        if reg is None:
+            publicacoes_sem_produto += 1
+            continue
+
+        if not reg["tem_catalogo"]:
+            publicacoes_produto_nao_catalogado += 1
+
+        reg["publicacoes"] += 1
+        canal = str(pub.get("canal") or "Canal não informado")
+        reg["canais"][canal] = reg["canais"].get(canal, 0) + 1
+
+        if (
+            reg["ultima_publicacao"] is None
+            or data_pub > reg["ultima_publicacao"]
+        ):
+            reg["ultima_publicacao"] = data_pub
+        if (
+            reg["primeira_publicacao"] is None
+            or data_pub < reg["primeira_publicacao"]
+        ):
+            reg["primeira_publicacao"] = data_pub
+
+    propostas_validas = [
+        p for p in propostas_periodo
+        if not proposta_encerrada(p)
+    ]
+    aprovadas = [
+        p for p in propostas_validas
+        if valor_bool(p.get("aprovado"))
+    ]
+    pagas = [
+        p for p in propostas_validas
+        if valor_bool(p.get("pago"))
+    ]
+
+    valor_orcado_total = sum(
+        calcular_valores_proposta(p)[2]
+        for p in propostas_periodo
+    )
+    valor_aprovado_total = sum(
+        calcular_valores_proposta(p)[2]
+        for p in aprovadas
+    )
+    valor_recebido_total = sum(
+        calcular_valores_proposta(p)[2]
+        for p in pagas
+    )
+
+    return {
+        "inicio": inicio,
+        "fim": fim,
+        "produtos": produtos,
+        "propostas": propostas_periodo,
+        "propostas_qtd": len(propostas_periodo),
+        "aprovadas_qtd": len(aprovadas),
+        "pagas_qtd": len(pagas),
+        "valor_orcado_total": valor_orcado_total,
+        "valor_aprovado_total": valor_aprovado_total,
+        "valor_recebido_total": valor_recebido_total,
+        "publicacoes": publicacoes_periodo,
+        "publicacoes_qtd": len(publicacoes_periodo),
+        "publicacoes_sem_produto": publicacoes_sem_produto,
+        "publicacoes_produto_nao_catalogado": publicacoes_produto_nao_catalogado,
+        "itens_total": itens_total,
+        "itens_catalogados": itens_catalogados,
+        "itens_sem_catalogo": sorted(itens_sem_catalogo),
+        "propostas_com_origem": propostas_com_origem,
+        "propostas_origem_social": propostas_origem_social,
+        "propostas_por_origem": propostas_por_origem,
+    }
+
+
+def _thu_i7_percentil_rank(valores, valor):
+    valor = float(valor or 0)
+    if valor <= 0:
+        return 0.0
+    positivos = sorted(float(v or 0) for v in valores if float(v or 0) > 0)
+    if not positivos:
+        return 0.0
+    menores_ou_iguais = sum(1 for v in positivos if v <= valor)
+    return menores_ou_iguais / len(positivos) * 100.0
+
+
+def thu_i7_classificar_oportunidades(consolidado):
+    """Gera sinais de gestão; não decide nem afirma causa de venda."""
+    produtos = list((consolidado or {}).get("produtos", {}).values())
+    ativos = [
+        p for p in produtos
+        if p.get("propostas") or p.get("publicacoes")
+    ]
+    if not ativos:
+        return []
+
+    demanda_vals = [
+        float(p.get("propostas") or 0)
+        + float(p.get("aprovadas") or 0) * 0.5
+        + float(p.get("pagas") or 0) * 0.75
+        for p in ativos
+    ]
+    exposicao_vals = [
+        float(p.get("publicacoes") or 0)
+        for p in ativos
+    ]
+
+    sinais = []
+    for p in ativos:
+        demanda_bruta = (
+            float(p.get("propostas") or 0)
+            + float(p.get("aprovadas") or 0) * 0.5
+            + float(p.get("pagas") or 0) * 0.75
+        )
+        exposicao_bruta = float(p.get("publicacoes") or 0)
+        demanda_score = _thu_i7_percentil_rank(
+            demanda_vals,
+            demanda_bruta,
+        )
+        exposicao_score = _thu_i7_percentil_rank(
+            exposicao_vals,
+            exposicao_bruta,
+        )
+        gap = demanda_score - exposicao_score
+
+        categoria = "Monitorar"
+        prioridade = 1
+        motivo = "Demanda e exposição sem diferença relevante neste período."
+
+        if (
+            p.get("propostas", 0) >= 2
+            and p.get("publicacoes", 0) == 0
+        ):
+            categoria = "Divulgar mais"
+            prioridade = 5
+            motivo = (
+                "Há propostas registradas no Manager, mas nenhuma publicação "
+                "desse produto no Acervo Social durante o período."
+            )
+        elif (
+            gap >= 30
+            and demanda_score >= 60
+            and p.get("propostas", 0) >= 2
+        ):
+            categoria = "Divulgar mais"
+            prioridade = 4
+            motivo = (
+                "A demanda registrada está relativamente acima da exposição social."
+            )
+        elif (
+            p.get("publicacoes", 0) >= 3
+            and p.get("propostas", 0) == 0
+        ):
+            categoria = "Revisar divulgação"
+            prioridade = 4
+            motivo = (
+                "O produto teve várias publicações, mas nenhuma proposta registrada "
+                "no Manager no mesmo período."
+            )
+        elif (
+            gap <= -30
+            and exposicao_score >= 60
+            and p.get("publicacoes", 0) >= 2
+        ):
+            categoria = "Revisar frequência/mensagem"
+            prioridade = 3
+            motivo = (
+                "A exposição social está relativamente acima da demanda registrada."
+            )
+        elif (
+            p.get("pagas", 0) >= 1
+            and p.get("publicacoes", 0) <= 1
+        ):
+            categoria = "Venda com pouca divulgação"
+            prioridade = 4
+            motivo = (
+                "Existem propostas pagas para o produto com baixa exposição social "
+                "registrada no período."
+            )
+
+        sinais.append({
+            **p,
+            "demanda_score": round(demanda_score, 1),
+            "exposicao_score": round(exposicao_score, 1),
+            "gap": round(gap, 1),
+            "categoria_sinal": categoria,
+            "prioridade_sinal": prioridade,
+            "motivo_sinal": motivo,
+        })
+
+    sinais.sort(
+        key=lambda x: (
+            int(x.get("prioridade_sinal") or 0),
+            float(x.get("propostas") or 0),
+            float(x.get("pagas") or 0),
+            -float(x.get("publicacoes") or 0),
+        ),
+        reverse=True,
+    )
+    return sinais
+
+
+def thu_i7_sinais_temporais(
+    historico,
+    marketing,
+    catalogo,
+    referencia=None,
+    janela_dias=14,
+    limite_produtos=30,
+):
+    """Compara propostas antes/depois de uma publicação com janela completa.
+
+    Isso mede associação temporal. Não atribui venda à publicação.
+    """
+    referencia = referencia or hoje_local()
+    publicacoes = _thu_social_publicacoes(marketing)
+
+    datas_propostas_por_produto = {}
+    status_por_produto = {}
+
+    for proposta in (historico or []):
+        if not isinstance(proposta, dict):
+            continue
+        data_prop = _thu_i7_data_proposta(proposta)
+        if not data_prop:
+            continue
+
+        nomes = set()
+        for item in (proposta.get("itens", []) or []):
+            if not isinstance(item, dict):
+                continue
+            nome = _thu_i7_nome_produto_oficial(
+                item.get("produto"),
+                catalogo,
+            )
+            if nome:
+                nomes.add(nome)
+
+        for nome in nomes:
+            datas_propostas_por_produto.setdefault(nome, []).append(
+                (data_prop, str(proposta.get("numero_proposta") or ""))
+            )
+
+    pubs_por_produto = {}
+    for pub in publicacoes:
+        nome = _thu_i7_nome_produto_oficial(
+            pub.get("produto"),
+            catalogo,
+        )
+        data_pub = _thu_social_data(pub.get("data_publicacao"))
+        if not nome or not data_pub:
+            continue
+        if data_pub > referencia - timedelta(days=janela_dias):
+            continue
+        pubs_por_produto.setdefault(nome, []).append(pub)
+
+    resultados = []
+    for nome, pubs in pubs_por_produto.items():
+        pubs.sort(
+            key=lambda x: _thu_social_data(x.get("data_publicacao")) or date.min,
+            reverse=True,
+        )
+        pub = pubs[0]
+        data_pub = _thu_social_data(pub.get("data_publicacao"))
+        if not data_pub:
+            continue
+
+        antes_inicio = data_pub - timedelta(days=janela_dias)
+        antes_fim = data_pub - timedelta(days=1)
+        depois_inicio = data_pub
+        depois_fim = data_pub + timedelta(days=janela_dias - 1)
+
+        antes_ids = set()
+        depois_ids = set()
+        for data_prop, numero in datas_propostas_por_produto.get(nome, []):
+            chave_prop = numero or data_prop.isoformat()
+            if antes_inicio <= data_prop <= antes_fim:
+                antes_ids.add(chave_prop)
+            if depois_inicio <= data_prop <= depois_fim:
+                depois_ids.add(chave_prop)
+
+        antes = len(antes_ids)
+        depois = len(depois_ids)
+        delta = depois - antes
+
+        if depois > antes:
+            leitura = "Atividade de propostas maior após a publicação"
+        elif depois < antes:
+            leitura = "Atividade de propostas menor após a publicação"
+        else:
+            leitura = "Atividade de propostas estável na comparação"
+
+        resultados.append({
+            "produto": nome,
+            "data_publicacao": data_pub,
+            "canal": str(pub.get("canal") or ""),
+            "antes": antes,
+            "depois": depois,
+            "delta": delta,
+            "leitura": leitura,
+            "link": str(pub.get("link") or ""),
+        })
+
+    resultados.sort(
+        key=lambda x: (
+            abs(int(x.get("delta") or 0)),
+            int(x.get("depois") or 0),
+        ),
+        reverse=True,
+    )
+    return resultados[:max(1, int(limite_produtos or 30))]
+
+
+def thu_i7_analisar(
+    historico,
+    marketing,
+    catalogo,
+    atendimentos=None,
+    referencia=None,
+    dias=60,
+):
+    referencia = referencia or hoje_local()
+    dias = max(14, int(dias or 60))
+    inicio_atual = referencia - timedelta(days=dias - 1)
+    fim_atual = referencia
+    fim_anterior = inicio_atual - timedelta(days=1)
+    inicio_anterior = fim_anterior - timedelta(days=dias - 1)
+
+    mapa_origens = thu_i7_mapa_origem_atendimento(atendimentos)
+
+    atual = thu_i7_consolidar_periodo(
+        historico,
+        marketing,
+        catalogo,
+        inicio_atual,
+        fim_atual,
+        mapa_origens=mapa_origens,
+    )
+    anterior = thu_i7_consolidar_periodo(
+        historico,
+        marketing,
+        catalogo,
+        inicio_anterior,
+        fim_anterior,
+        mapa_origens=mapa_origens,
+    )
+    sinais = thu_i7_classificar_oportunidades(atual)
+    temporais = thu_i7_sinais_temporais(
+        historico,
+        marketing,
+        catalogo,
+        referencia=referencia,
+        janela_dias=14,
+    )
+
+    return {
+        "referencia": referencia,
+        "dias": dias,
+        "atual": atual,
+        "anterior": anterior,
+        "sinais": sinais,
+        "temporais": temporais,
+        "gerado_em": agora_local().isoformat(timespec="seconds"),
+    }
+
+
+def _thu_i7_delta_texto(atual, anterior):
+    atual = float(atual or 0)
+    anterior = float(anterior or 0)
+    delta = atual - anterior
+    if anterior == 0:
+        if atual == 0:
+            return "sem mudança"
+        return f"+{atual:g} vs. período anterior sem registros"
+    pct = delta / abs(anterior) * 100.0
+    sinal = "+" if pct >= 0 else ""
+    return f"{sinal}{pct:.0f}% vs. período anterior"
+
+
+def renderizar_inteligencia_marketing_resultados(marketing):
+    st.caption(
+        "A I7 cruza exposição social e atividade comercial registrada no Manager. "
+        "**Correlação temporal não significa que uma publicação causou uma venda.**"
+    )
+
+    c_periodo, c_acao = st.columns([1.2, 2.8])
+    dias = c_periodo.selectbox(
+        "Período da análise",
+        [30, 60, 90, 120, 180],
+        index=1,
+        format_func=lambda x: f"Últimos {x} dias",
+        key="thu_i7_periodo",
+    )
+
+    if c_acao.button(
+        "📊 Atualizar inteligência agora",
+        type="primary",
+        use_container_width=True,
+        key="thu_i7_analisar",
+    ):
+        with st.spinner("THU consolidando Marketing, Catálogo e propostas..."):
+            analise = thu_i7_analisar(
+                carregar_historico(),
+                carregar_marketing(),
+                carregar_catalogo(),
+                atendimentos=carregar_atendimentos(),
+                referencia=hoje_local(),
+                dias=dias,
+            )
+        st.session_state["_thu_i7_analise"] = analise
+        st.session_state["_thu_i7_periodo_analisado"] = dias
+        st.rerun()
+
+    analise = st.session_state.get("_thu_i7_analise")
+    periodo_analisado = st.session_state.get("_thu_i7_periodo_analisado")
+
+    if not analise:
+        st.info(
+            "Clique em **Atualizar inteligência agora** para gerar a primeira leitura. "
+            "A análise é sob demanda para não pesar os demais fluxos do Manager."
+        )
+        return
+
+    if periodo_analisado != dias:
+        st.warning(
+            "O período selecionado mudou. Clique em **Atualizar inteligência agora** "
+            "para recalcular os números."
+        )
+
+    atual = analise["atual"]
+    anterior = analise["anterior"]
+    sinais = analise["sinais"]
+    temporais = analise["temporais"]
+
+    st.caption(
+        f"Análise gerada em {str(analise.get('gerado_em') or '')[:19].replace('T',' ')} • "
+        f"{atual['inicio'].strftime('%d/%m/%Y')} a {atual['fim'].strftime('%d/%m/%Y')}"
+    )
+
+    tab_visao, tab_prod, tab_origem, tab_temp, tab_qual = st.tabs([
+        "📈 Visão geral",
+        "📦 Produto × Divulgação",
+        "🔗 Origem do atendimento",
+        "⏱️ Sinais temporais",
+        "🧪 Qualidade dos dados",
+    ])
+
+    with tab_visao:
+        v1, v2, v3, v4 = st.columns(4)
+        v1.metric(
+            "Publicações registradas",
+            atual["publicacoes_qtd"],
+            _thu_i7_delta_texto(
+                atual["publicacoes_qtd"],
+                anterior["publicacoes_qtd"],
+            ),
+        )
+        v2.metric(
+            "Propostas criadas",
+            atual["propostas_qtd"],
+            _thu_i7_delta_texto(
+                atual["propostas_qtd"],
+                anterior["propostas_qtd"],
+            ),
+        )
+        v3.metric(
+            "Aprovadas atualmente",
+            atual["aprovadas_qtd"],
+            help=(
+                "Propostas criadas no período que atualmente estão aprovadas "
+                "e não encerradas."
+            ),
+        )
+        v4.metric(
+            "Pagas atualmente",
+            atual["pagas_qtd"],
+            help=(
+                "Propostas criadas no período que atualmente estão pagas "
+                "e não encerradas. Não é faturamento por data de pagamento."
+            ),
+        )
+
+        f1, f2, f3, f4 = st.columns(4)
+        f1.metric(
+            "Valor orçado",
+            formatar_preco_catalogo(atual["valor_orcado_total"]),
+            _thu_i7_delta_texto(
+                atual["valor_orcado_total"],
+                anterior["valor_orcado_total"],
+            ),
+        )
+        f2.metric(
+            "Valor aprovado atual",
+            formatar_preco_catalogo(atual["valor_aprovado_total"]),
+            help=(
+                "Valor total das propostas criadas no período que atualmente "
+                "estão aprovadas e não encerradas."
+            ),
+        )
+        f3.metric(
+            "Valor recebido atual",
+            formatar_preco_catalogo(atual["valor_recebido_total"]),
+            help=(
+                "Valor total das propostas criadas no período que atualmente "
+                "estão pagas e não encerradas. Não representa caixa pela data do pagamento."
+            ),
+        )
+        _taxa_aprov = (
+            atual["aprovadas_qtd"] / atual["propostas_qtd"] * 100.0
+            if atual["propostas_qtd"] else 0.0
+        )
+        f4.metric(
+            "Aprovação atual da coorte",
+            f"{_taxa_aprov:.1f}%",
+            help=(
+                "Percentual das propostas criadas no período que hoje estão aprovadas. "
+                "Períodos recentes ainda podem estar em negociação."
+            ),
+        )
+
+        oportunidades = [
+            x for x in sinais
+            if x.get("categoria_sinal") in (
+                "Divulgar mais",
+                "Venda com pouca divulgação",
+            )
+        ]
+        revisar = [
+            x for x in sinais
+            if x.get("categoria_sinal") in (
+                "Revisar divulgação",
+                "Revisar frequência/mensagem",
+            )
+        ]
+
+        st.markdown("#### 💙 Leitura executiva do THU")
+        if oportunidades:
+            st.success(
+                f"Há **{len(oportunidades)} produto(s)** com sinal de demanda "
+                "relativamente maior que a exposição social registrada."
+            )
+        if revisar:
+            st.warning(
+                f"Há **{len(revisar)} produto(s)** com exposição relativamente alta "
+                "e pouca atividade de propostas registrada no Manager. "
+                "Isso sugere revisão; não prova que a divulgação foi ineficiente."
+            )
+        if not oportunidades and not revisar:
+            st.info(
+                "Ainda não há diferença forte o suficiente entre demanda e exposição "
+                "para gerar uma recomendação executiva."
+            )
+
+        top_demanda = sorted(
+            sinais,
+            key=lambda x: (
+                x.get("propostas", 0),
+                x.get("pagas", 0),
+                x.get("valor_itens_orcados", 0),
+            ),
+            reverse=True,
+        )[:8]
+        if top_demanda:
+            st.markdown("#### Produtos com maior atividade de propostas")
+            df_demanda = pd.DataFrame([
+                {
+                    "Produto": x["produto"],
+                    "Propostas": int(x["propostas"]),
+                    "Aprovadas": int(x["aprovadas"]),
+                    "Pagas": int(x["pagas"]),
+                    "Publicações": int(x["publicacoes"]),
+                    "Qtd. orçada": round(float(x["quantidade_orcada"]), 2),
+                }
+                for x in top_demanda
+            ])
+            st.dataframe(
+                df_demanda,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    with tab_prod:
+        st.caption(
+            "Os valores por produto abaixo são **valores brutos dos itens** "
+            "(quantidade × valor unitário). Desconto e taxa de entrega não são "
+            "distribuídos artificialmente entre os itens."
+        )
+        filtro_sinal = st.selectbox(
+            "Sinal",
+            [
+                "Todos",
+                "Divulgar mais",
+                "Venda com pouca divulgação",
+                "Revisar divulgação",
+                "Revisar frequência/mensagem",
+                "Monitorar",
+            ],
+            key="thu_i7_filtro_sinal",
+        )
+
+        filtrados = [
+            x for x in sinais
+            if filtro_sinal == "Todos"
+            or x.get("categoria_sinal") == filtro_sinal
+        ]
+
+        if not filtrados:
+            st.info("Nenhum produto neste filtro.")
+        else:
+            for pos, x in enumerate(filtrados[:40], 1):
+                with st.container(border=True):
+                    p1, p2 = st.columns([4.5, 1.25])
+                    p1.markdown(
+                        f"**{x.get('produto')}** • {x.get('categoria_sinal')}"
+                    )
+                    p1.caption(x.get("motivo_sinal") or "")
+                    p1.caption(
+                        f"Propostas: {int(x.get('propostas') or 0)} • "
+                        f"Aprovadas: {int(x.get('aprovadas') or 0)} • "
+                        f"Pagas: {int(x.get('pagas') or 0)} • "
+                        f"Publicações: {int(x.get('publicacoes') or 0)}"
+                    )
+                    p1.caption(
+                        f"Valor bruto dos itens orçados: "
+                        f"{formatar_preco_catalogo(x.get('valor_itens_orcados') or 0)} • "
+                        f"em propostas pagas: "
+                        f"{formatar_preco_catalogo(x.get('valor_itens_pagos') or 0)}"
+                    )
+                    if x.get("propostas_origem_social"):
+                        _origens_diretas = x.get("origens_sociais") or {}
+                        p1.success(
+                            "🔗 Evidência direta de canal: "
+                            f"{int(x.get('propostas_origem_social') or 0)} proposta(s) "
+                            "deste produto estão vinculadas a atendimento iniciado em "
+                            + " / ".join(
+                                f"{canal} ({qtd})"
+                                for canal, qtd in sorted(
+                                    _origens_diretas.items(),
+                                    key=lambda kv: kv[1],
+                                    reverse=True,
+                                )
+                            )
+                            + ". Isso identifica o canal de entrada, não um post específico."
+                        )
+
+                    canais = x.get("canais") or {}
+                    if canais:
+                        p1.caption(
+                            "📱 Canais: "
+                            + " • ".join(
+                                f"{canal} ({qtd})"
+                                for canal, qtd in sorted(
+                                    canais.items(),
+                                    key=lambda kv: kv[1],
+                                    reverse=True,
+                                )
+                            )
+                        )
+                    if x.get("ultima_publicacao"):
+                        p1.caption(
+                            "Última publicação registrada: "
+                            + x["ultima_publicacao"].strftime("%d/%m/%Y")
+                        )
+
+                    if x.get("categoria_sinal") in (
+                        "Divulgar mais",
+                        "Venda com pouca divulgação",
+                    ):
+                        if p2.button(
+                            "💙 Levar ao THU",
+                            key=f"thu_i7_levar_{pos}_{abs(hash(x.get('produto')))}",
+                            use_container_width=True,
+                        ):
+                            st.session_state["thu_produto_escolhido_2049"] = x.get("produto")
+                            st.session_state["thu_catalogo_consulta_2049"] = x.get("produto")
+                            st.session_state["thu_catalogo_busca_2049"] = x.get("produto")
+                            st.session_state["thu_catalogo_resultados_2049"] = [{
+                                "nome": x.get("produto"),
+                                "elegivel": True,
+                                "campanha": "",
+                            }]
+                            st.rerun()
+
+    with tab_origem:
+        st.caption(
+            "Esta é uma evidência mais forte do que a comparação antes/depois: "
+            "ela usa o **canal de origem do atendimento** vinculado à proposta. "
+            "Mesmo assim, não identifica qual publicação específica motivou o contato."
+        )
+
+        total_props = atual["propostas_qtd"]
+        com_origem = atual["propostas_com_origem"]
+        cobertura_origem = (
+            com_origem / total_props * 100.0
+            if total_props else 0.0
+        )
+
+        o1, o2, o3 = st.columns(3)
+        o1.metric(
+            "Propostas com origem identificada",
+            com_origem,
+        )
+        o2.metric(
+            "Cobertura de origem",
+            f"{cobertura_origem:.0f}%",
+        )
+        o3.metric(
+            "Origem Instagram/Facebook",
+            atual["propostas_origem_social"],
+        )
+
+        origens = atual.get("propostas_por_origem") or {}
+        if origens:
+            df_origens = pd.DataFrame([
+                {"Canal de origem": canal, "Propostas": qtd}
+                for canal, qtd in sorted(
+                    origens.items(),
+                    key=lambda kv: kv[1],
+                    reverse=True,
+                )
+            ])
+            st.dataframe(
+                df_origens,
+                use_container_width=True,
+                hide_index=True,
+            )
+        else:
+            st.info(
+                "Nenhuma proposta do período está ligada a um atendimento com canal de origem identificado."
+            )
+
+        produtos_origem_social = [
+            x for x in sinais
+            if x.get("propostas_origem_social")
+        ]
+        if produtos_origem_social:
+            st.markdown("#### Produtos com atendimento originado em rede social")
+            for item in sorted(
+                produtos_origem_social,
+                key=lambda x: x.get("propostas_origem_social", 0),
+                reverse=True,
+            )[:25]:
+                origens_item = item.get("origens_sociais") or {}
+                st.write(
+                    f"• **{item.get('produto')}** — "
+                    f"{int(item.get('propostas_origem_social') or 0)} proposta(s) • "
+                    + " • ".join(
+                        f"{canal}: {qtd}"
+                        for canal, qtd in sorted(
+                            origens_item.items(),
+                            key=lambda kv: kv[1],
+                            reverse=True,
+                        )
+                    )
+                )
+
+    with tab_temp:
+        st.caption(
+            "Para cada produto, o THU usa a **última publicação com pelo menos 14 dias "
+            "completos depois dela** e compara propostas do mesmo produto nos 14 dias "
+            "anteriores e posteriores. É apenas associação temporal."
+        )
+
+        if not temporais:
+            st.info(
+                "Ainda não existem publicações vinculadas a produtos com janela completa "
+                "para essa comparação."
+            )
+        else:
+            for pos, item in enumerate(temporais[:30], 1):
+                with st.container(border=True):
+                    t1, t2 = st.columns([4.3, 1.3])
+                    t1.markdown(f"**{item.get('produto')}**")
+                    t1.caption(
+                        f"Publicação: {item['data_publicacao'].strftime('%d/%m/%Y')} "
+                        f"• {item.get('canal') or 'canal não informado'}"
+                    )
+                    t1.caption(
+                        f"14 dias antes: **{item.get('antes')} proposta(s)** • "
+                        f"14 dias depois: **{item.get('depois')} proposta(s)** • "
+                        f"diferença: **{item.get('delta'):+d}**"
+                    )
+                    t1.info(
+                        item.get("leitura")
+                        + ". Isso não demonstra que a publicação causou a mudança."
+                    )
+                    if item.get("link"):
+                        t2.link_button(
+                            "🔗 Ver publicação",
+                            item.get("link"),
+                            use_container_width=True,
+                        )
+
+    with tab_qual:
+        total_pubs = atual["publicacoes_qtd"]
+        vinculadas = max(
+            total_pubs - atual["publicacoes_sem_produto"],
+            0,
+        )
+        cobertura_social = (
+            vinculadas / total_pubs * 100.0
+            if total_pubs else 0.0
+        )
+        cobertura_itens = (
+            atual["itens_catalogados"] / atual["itens_total"] * 100.0
+            if atual["itens_total"] else 0.0
+        )
+
+        cobertura_origem = (
+            atual["propostas_com_origem"] / atual["propostas_qtd"] * 100.0
+            if atual["propostas_qtd"] else 0.0
+        )
+
+        q1, q2, q3, q4, q5 = st.columns(5)
+        q1.metric(
+            "Publicações com produto",
+            f"{cobertura_social:.0f}%",
+        )
+        q2.metric(
+            "Itens reconhecidos no Catálogo",
+            f"{cobertura_itens:.0f}%",
+        )
+        q3.metric(
+            "Propostas com origem",
+            f"{cobertura_origem:.0f}%",
+        )
+        q4.metric(
+            "Posts sem produto",
+            atual["publicacoes_sem_produto"],
+        )
+        q5.metric(
+            "Posts com produto fora do Catálogo",
+            atual["publicacoes_produto_nao_catalogado"],
+        )
+
+        if atual["itens_sem_catalogo"]:
+            st.warning(
+                "Produtos encontrados em propostas sem correspondência segura no Catálogo: "
+                + " • ".join(atual["itens_sem_catalogo"][:20])
+            )
+
+        if total_pubs == 0:
+            st.info(
+                "Ainda não há publicação social registrada neste período. "
+                "Sem histórico social, o THU consegue medir demanda, mas não comparar exposição."
+            )
+        elif cobertura_social < 70:
+            st.warning(
+                "Menos de 70% das publicações do período estão vinculadas a um produto. "
+                "A leitura Produto × Divulgação fica menos confiável."
+            )
+        else:
+            st.success(
+                "Cobertura social suficiente para comparações por produto neste período."
+            )
+
+        st.caption(
+            "Quanto mais publicações históricas forem vinculadas corretamente ao produto oficial "
+            "e quanto mais itens das propostas estiverem padronizados no Catálogo, melhor será a "
+            "qualidade desta inteligência."
+        )
+
+
 @st.dialog("📅 Assistente THU • Revisar elegibilidade", width="large")
 def dialog_thu_revisar_elegibilidade(campanha_inicial=""):
     campanhas = [
@@ -13334,6 +14402,12 @@ if pagina_atual == "crescimento":
                 expanded=_thu_i6_expandir,
             ):
                 renderizar_acervo_social_thu(marketing, conteudos)
+
+            with st.expander(
+                "📊 Assistente THU • Inteligência de Marketing e Resultados",
+                expanded=False,
+            ):
+                renderizar_inteligencia_marketing_resultados(marketing)
 
             with st.expander("🌐 Assistente THU • Acervo do Site AlphaFest", expanded=False):
                 _aviso_res_site = st.session_state.pop("_thu_site_aviso_resolucao_i321", None)
