@@ -236,6 +236,14 @@ def catalog_public_url(object_path):
     func = getattr(_cloud_db, "catalog_public_url", None) if _cloud_db else None
     return func(object_path) if callable(func) else ""
 
+def catalog_render_url(object_path):
+    func = getattr(_cloud_db, "catalog_render_url", None) if _cloud_db else None
+    return func(object_path) if callable(func) else ""
+
+def catalog_render_available():
+    func = getattr(_cloud_db, "catalog_render_available", None) if _cloud_db else None
+    return bool(func()) if callable(func) else False
+
 def publish_catalog_html(content, object_path):
     func = getattr(_cloud_db, "publish_catalog_html", None) if _cloud_db else None
     return func(content, object_path) if callable(func) else ""
@@ -9196,7 +9204,7 @@ def _i88_duplicar_registro(registro):
     copia["revisao"] = 1
     return copia
 
-# --- 20.4.9-I8.9: Compartilhamento Profissional ---
+# --- 20.4.9-I8.9.1: Link público renderizado por Edge Function ---
 def _i89_qr_png_bytes(conteudo):
     texto = str(conteudo or "").strip()
     if not texto or qrcode is None:
@@ -9252,6 +9260,17 @@ def _i89_objeto_publicacao(registro, metadados):
 def _i89_publicacoes(registro):
     itens = (registro or {}).get("publicacoes") or []
     return [x for x in itens if isinstance(x, dict)]
+
+
+def _i891_url_cliente(publicacao):
+    """Converte publicações antigas do Storage para o renderizador público I8.9.1."""
+    publicacao = publicacao or {}
+    caminho = str(publicacao.get("object_path") or "").strip()
+    if caminho:
+        render = catalog_render_url(caminho)
+        if render:
+            return render
+    return str(publicacao.get("url") or "").strip()
 
 
 def _i89_registrar_publicacao(catalogo_id, publicacao):
@@ -21313,7 +21332,7 @@ if pagina_atual == "catalogo":
             aba_gerador, aba_modelos, aba_central, aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_cliente = st.tabs([
                 "✨ Gerador I8.7.1",
                 "🧩 Modelos I8.8.3",
-                "📤 Central I8.9",
+                "📤 Central I8.9.1",
                 "➕ Cadastrar",
                 "📋 Produtos",
                 "🧹 Saneamento",
@@ -21328,7 +21347,7 @@ if pagina_atual == "catalogo":
                 "📚 Acervo histórico",
                 "✨ Gerador I8.7.1",
                 "🧩 Modelos I8.8.3",
-                "📤 Central I8.9",
+                "📤 Central I8.9.1",
                 "📤 Catálogo para cliente",
             ])
 
@@ -22196,7 +22215,7 @@ if pagina_atual == "catalogo":
                             st.rerun()
 
         with aba_central:
-            st.markdown("### 📤 I8.9 • Central e Compartilhamento de Catálogos AlphaFest")
+            st.markdown("### 📤 I8.9.1 • Central e Compartilhamento de Catálogos AlphaFest")
             st.caption(
                 "Catálogos agora são objetos operacionais reutilizáveis. Cada item salvo guarda somente "
                 "configuração e referências; ao gerar novamente, os dados vêm do Catálogo Oficial atual."
@@ -22516,7 +22535,7 @@ if pagina_atual == "catalogo":
             if compartilhar_reg_i89:
                 st.divider()
                 share_id_i89 = str(compartilhar_reg_i89.get("id") or "")
-                st.markdown(f"### 📤 I8.9 • Compartilhar {compartilhar_reg_i89.get('nome_interno') or 'Catálogo'}")
+                st.markdown(f"### 📤 I8.9.1 • Compartilhar {compartilhar_reg_i89.get('nome_interno') or 'Catálogo'}")
                 st.caption(
                     "A publicação gera uma versão comercial estática usando os dados atuais do Catálogo Oficial. "
                     "A Central guarda somente URL e rastreabilidade da publicação; não vira uma segunda fonte de preço."
@@ -22539,8 +22558,9 @@ if pagina_atual == "catalogo":
                             f"{status_pub_i89} • publicado em {meta_ultima_pub_i89['data']} às {meta_ultima_pub_i89['hora']} "
                             f"por {meta_ultima_pub_i89['gerado_por']} • válido até {meta_ultima_pub_i89['validade_texto']}"
                         )
-                        url_ultima_i89 = str(ultima_pub_i89.get("url") or "")
-                        if url_ultima_i89:
+                        url_ultima_i89 = _i891_url_cliente(ultima_pub_i89)
+                        renderer_ok_i891 = catalog_render_available()
+                        if url_ultima_i89 and renderer_ok_i891:
                             u1_i89, u2_i89 = st.columns([3, 1])
                             u1_i89.code(url_ultima_i89, language=None)
                             u2_i89.link_button("🌐 Abrir catálogo", url_ultima_i89, use_container_width=True)
@@ -22574,20 +22594,26 @@ if pagina_atual == "catalogo":
                                     )
                                     st.link_button("💬 Enviar pelo WhatsApp", link_wpp_i89, type="primary", use_container_width=True)
                                     st.caption("A mensagem já informa a validade comercial do catálogo.")
+                        elif url_ultima_i89 and not renderer_ok_i891:
+                            st.warning(
+                                "O HTML está salvo no Supabase, mas o renderizador público I8.9.1 ainda não está ativo. "
+                                "Ative a Edge Function `catalogo-publico` para liberar Abrir catálogo, QR e WhatsApp."
+                            )
 
                     st.markdown("#### Nova saída")
                     n1_i89, n2_i89 = st.columns(2)
                     storage_disponivel_i89 = bool(catalog_public_url("catalogos-publicos/verificacao.html"))
+                    renderer_disponivel_i891 = catalog_render_available()
                     if n1_i89.button(
                         "🌐 Publicar nova versão + QR",
                         type="primary",
                         use_container_width=True,
                         key=f"i89_publicar_{share_id_i89}",
-                        disabled=not storage_disponivel_i89,
+                        disabled=not (storage_disponivel_i89 and renderer_disponivel_i891),
                     ):
                         meta_pub_i89 = _i884_metadados_geracao()
                         object_path_i89 = _i89_objeto_publicacao(compartilhar_reg_i89, meta_pub_i89)
-                        url_planejada_i89 = catalog_public_url(object_path_i89)
+                        url_planejada_i89 = catalog_render_url(object_path_i89)
                         qr_data_i89 = _i89_qr_data_uri(url_planejada_i89)
                         html_publico_i89, _, _, _ = _i88_html_catalogo_salvo(
                             compartilhar_reg_i89,
@@ -22596,11 +22622,13 @@ if pagina_atual == "catalogo":
                             url_publica=url_planejada_i89,
                             qr_data_uri=qr_data_i89,
                         )
-                        url_publicada_i89 = publish_catalog_html(html_publico_i89, object_path_i89)
+                        storage_url_i89 = publish_catalog_html(html_publico_i89, object_path_i89)
+                        url_publicada_i89 = catalog_render_url(object_path_i89) if storage_url_i89 else ""
                         if url_publicada_i89:
                             publicacao_i89 = {
                                 "id": f"PUB-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
                                 "url": url_publicada_i89,
+                                "storage_url": storage_url_i89,
                                 "object_path": object_path_i89,
                                 "gerado_em": meta_pub_i89["gerado_em"],
                                 "gerado_por": meta_pub_i89["gerado_por"],
@@ -22623,9 +22651,17 @@ if pagina_atual == "catalogo":
                             st.error("Não foi possível publicar no armazenamento online. O catálogo não ganhou link público.")
                     if not storage_disponivel_i89:
                         n1_i89.caption("Link público exige o Supabase online configurado. HTML e PDF continuam disponíveis sem publicação.")
+                    elif not renderer_disponivel_i891:
+                        n1_i89.caption("I8.9.1: falta ativar a Edge Function pública `catalogo-publico`. O Storage sozinho exibe HTML como texto por segurança.")
+                        with st.expander("⚙️ Como ativar o link público I8.9.1"):
+                            st.markdown(
+                                "No Supabase, implante a função **catalogo-publico** incluída na pasta `supabase/functions/catalogo-publico/` "
+                                "e deixe a verificação JWT desativada (`verify_jwt = false`). Depois aguarde alguns segundos e recarregue esta tela."
+                            )
+                            st.code("supabase functions deploy catalogo-publico --no-verify-jwt", language="bash")
 
                     sig_pdf_share_i89 = hashlib.sha1(
-                        f"{share_id_i89}|{compartilhar_reg_i89.get('revisao',1)}|{str((ultima_pub_i89 or {}).get('url') or '')}".encode("utf-8")
+                        f"{share_id_i89}|{compartilhar_reg_i89.get('revisao',1)}|{_i891_url_cliente(ultima_pub_i89 or {})}".encode("utf-8")
                     ).hexdigest()
                     if st.session_state.get(f"i89_pdf_sig_{share_id_i89}") != sig_pdf_share_i89:
                         st.session_state.pop(f"i89_pdf_bytes_{share_id_i89}", None)
@@ -22637,7 +22673,7 @@ if pagina_atual == "catalogo":
                         key=f"i89_preparar_pdf_{share_id_i89}",
                     ):
                         meta_pdf_i89 = _i884_metadados_geracao()
-                        url_pdf_i89 = str((ultima_pub_i89 or {}).get("url") or "")
+                        url_pdf_i89 = _i891_url_cliente(ultima_pub_i89 or {}) if catalog_render_available() else ""
                         pdf_bytes_i89 = _i89_pdf_catalogo_salvo(
                             compartilhar_reg_i89,
                             catalogo,
@@ -22673,7 +22709,7 @@ if pagina_atual == "catalogo":
                                     f"{stat_hist_i89} **{meta_hist_i89['data']} {meta_hist_i89['hora']}** • "
                                     f"{meta_hist_i89['gerado_por']} • válido até {meta_hist_i89['validade_texto']}"
                                 )
-                                st.code(str(pub_i89.get("url") or ""), language=None)
+                                st.code(_i891_url_cliente(pub_i89), language=None)
 
                 if st.button("Fechar compartilhamento", key=f"i89_fechar_{share_id_i89}"):
                     st.session_state.pop("i89_compartilhar_id", None)

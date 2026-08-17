@@ -1,3 +1,13 @@
+## 20.4.9-I8.9.1 — Correção do link público
+
+- Corrige o link público que abria o HTML como texto bruto no Supabase Storage.
+- Mantém o HTML imutável no bucket `catalogo`, mas a URL enviada ao cliente passa pela Edge Function pública `catalogo-publico`.
+- Edge Function aceita somente objetos da pasta `catalogos-publicos/` e responde com `text/html; charset=utf-8`.
+- QR Code, WhatsApp, PDF e histórico passam a usar a URL renderizada.
+- Publicações antigas com `object_path` são convertidas automaticamente para a nova URL, sem republicação.
+- O Manager verifica a saúde da Edge Function antes de habilitar nova publicação e orienta a ativação quando ela estiver ausente.
+- Nenhum preço, produto, foto, campanha ou banco comercial foi alterado.
+
 ## 20.4.9-I8.9 — Compartilhamento Profissional
 
 - Central ganha painel de compartilhamento por catálogo salvo.

@@ -36,6 +36,8 @@ __all__ = [
     "upload_catalog_image",
     "upload_library_file",
     "catalog_public_url",
+    "catalog_render_url",
+    "catalog_render_available",
     "publish_catalog_html",
 ]
 
@@ -275,8 +277,48 @@ def catalog_public_url(object_path: str) -> str:
     return f"{url}/storage/v1/object/public/catalogo/{quote(caminho, safe='/')}"
 
 
+def catalog_render_url(object_path: str) -> str:
+    """URL cliente do catálogo via Edge Function.
+
+    O Supabase Storage força arquivos HTML públicos para ``text/plain`` por
+    proteção contra abuso. A Edge Function ``catalogo-publico`` lê o objeto
+    do bucket e devolve o mesmo conteúdo com ``text/html``.
+    """
+    if not online_configured():
+        return ""
+    url, _ = _config()
+    caminho = str(object_path or "").strip().lstrip("/")
+    if not caminho:
+        return ""
+    return f"{url}/functions/v1/catalogo-publico?path={quote(caminho, safe='')}"
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def catalog_render_available() -> bool:
+    """Confirma se a Edge Function pública I8.9.1 está implantada e acessível."""
+    if not online_configured():
+        return False
+    url, _ = _config()
+    try:
+        response = _SESSION.get(
+            f"{url}/functions/v1/catalogo-publico?health=1",
+            timeout=min(TIMEOUT, 5),
+        )
+        return (
+            response.status_code == 200
+            and response.headers.get("X-AlphaFest-Catalog-Renderer", "") == "I8.9.1"
+        )
+    except requests.RequestException:
+        return False
+
+
 def publish_catalog_html(content: str | bytes, object_path: str) -> str:
-    """Publica um HTML imutável no bucket público `catalogo` e retorna sua URL."""
+    """Guarda o HTML imutável no Storage e retorna a URL técnica do objeto.
+
+    A URL técnica não deve ser enviada ao cliente, pois o Supabase Storage
+    serve HTML como texto puro. Use :func:`catalog_render_url` para a URL de
+    apresentação ao cliente.
+    """
     if not online_configured():
         return ""
     caminho = str(object_path or "").strip().lstrip("/")
