@@ -6956,6 +6956,499 @@ def auditar_dados_antigos_catalogo(produto):
 
     return list(dict.fromkeys(alertas))
 
+
+def thu_i86_nome_flexivel(nome):
+    """Normalização conservadora para localizar possíveis duplicidades de cadastro."""
+    import unicodedata
+    texto = unicodedata.normalize("NFKD", str(nome or ""))
+    texto = "".join(c for c in texto if not unicodedata.combining(c)).casefold()
+    texto = re.sub(r"[^a-z0-9]+", " ", texto)
+    palavras = [
+        p for p in texto.split()
+        if p not in {"de", "do", "da", "dos", "das", "para", "com"}
+    ]
+    return " ".join(palavras).strip()
+
+
+def thu_i86_possiveis_duplicidades(catalogo):
+    """Retorna somente sinais fortes. Não une, apaga ou altera cadastros."""
+    catalogo = list(catalogo or [])
+    pares = []
+    vistos = set()
+
+    for i, produto_a in enumerate(catalogo):
+        nome_a = str((produto_a or {}).get("Nome") or "").strip()
+        if not nome_a:
+            continue
+        estrita_a = normalizar_identidade_produto(nome_a)
+        flex_a = thu_i86_nome_flexivel(nome_a)
+        aliases_a = {
+            normalizar_identidade_produto(x)
+            for x in ((produto_a or {}).get("Aliases", []) or [])
+            if str(x).strip()
+        }
+
+        for j in range(i + 1, len(catalogo)):
+            produto_b = catalogo[j] or {}
+            nome_b = str(produto_b.get("Nome") or "").strip()
+            if not nome_b:
+                continue
+
+            estrita_b = normalizar_identidade_produto(nome_b)
+            flex_b = thu_i86_nome_flexivel(nome_b)
+            aliases_b = {
+                normalizar_identidade_produto(x)
+                for x in (produto_b.get("Aliases", []) or [])
+                if str(x).strip()
+            }
+
+            motivo = ""
+            nivel = ""
+
+            if estrita_a and estrita_a == estrita_b:
+                motivo = "Mesmo nome após normalização"
+                nivel = "forte"
+            elif (
+                estrita_a in aliases_b
+                or estrita_b in aliases_a
+            ):
+                motivo = "Nome de um cadastro aparece como alias do outro"
+                nivel = "forte"
+            elif flex_a and flex_a == flex_b and estrita_a != estrita_b:
+                motivo = "Nomes equivalentes após remover palavras de ligação"
+                nivel = "provável"
+
+            if not motivo:
+                continue
+
+            chave = tuple(sorted((i, j)))
+            if chave in vistos:
+                continue
+            vistos.add(chave)
+            pares.append({
+                "indices": (i, j),
+                "nomes": (nome_a, nome_b),
+                "motivo": motivo,
+                "nivel": nivel,
+            })
+
+    return pares
+
+
+def thu_i86_diagnosticar_catalogo(catalogo):
+    """Cria a fila de saneamento sem modificar o Catálogo Oficial."""
+    catalogo = list(catalogo or [])
+    duplicidades = thu_i86_possiveis_duplicidades(catalogo)
+    dup_por_indice = {}
+    for par in duplicidades:
+        for idx in par["indices"]:
+            dup_por_indice.setdefault(idx, []).append(par)
+
+    diagnosticos = []
+    for idx, produto in enumerate(catalogo):
+        produto = produto or {}
+        rev = avaliar_pendencias_produto_catalogo(produto)
+        legado = auditar_dados_antigos_catalogo(produto)
+        duplicados = dup_por_indice.get(idx, [])
+
+        peso = 0
+        motivos = []
+
+        for item in rev["criticas"]:
+            peso += 18
+            motivos.append({
+                "tipo": item,
+                "severidade": "critica",
+                "texto": f"Completar: {item}",
+            })
+
+        for item in rev["avisos"]:
+            peso += 7
+            motivos.append({
+                "tipo": item,
+                "severidade": "visual",
+                "texto": f"Revisar: {item}",
+            })
+
+        for alerta in legado:
+            peso += 10
+            motivos.append({
+                "tipo": "Dados antigos",
+                "severidade": "legado",
+                "texto": alerta,
+            })
+
+        for par in duplicados:
+            peso += 20 if par.get("nivel") == "forte" else 12
+            outro = (
+                par["nomes"][1]
+                if par["indices"][0] == idx
+                else par["nomes"][0]
+            )
+            motivos.append({
+                "tipo": "Possível duplicidade",
+                "severidade": "duplicidade",
+                "texto": f"{par.get('motivo')}: {outro}",
+            })
+
+        score = max(0, 100 - min(100, peso))
+
+        if rev["criticas"] or any(
+            x.get("nivel") == "forte" for x in duplicados
+        ):
+            status = "🔴 Prioridade alta"
+            ordem = 0
+        elif legado or duplicados:
+            status = "🟠 Revisar legado"
+            ordem = 1
+        elif rev["avisos"]:
+            status = "🟡 Ajuste visual"
+            ordem = 2
+        else:
+            status = "🟢 Saneado"
+            ordem = 3
+
+        fontes = list(produto.get("FontesHistoricasCatalogos", []) or [])
+        recortes = list(produto.get("RecortesCatalogosHistoricos", []) or [])
+
+        diagnosticos.append({
+            "indice": idx,
+            "produto": produto,
+            "status": status,
+            "ordem": ordem,
+            "score": score,
+            "motivos": motivos,
+            "criticas": list(rev["criticas"]),
+            "avisos": list(rev["avisos"]),
+            "legado": list(legado),
+            "duplicidades": list(duplicados),
+            "fontes_historicas": len(fontes),
+            "recortes_historicos": len(recortes),
+        })
+
+    diagnosticos.sort(
+        key=lambda d: (
+            d["ordem"],
+            d["score"],
+            normalizar_identidade_produto((d["produto"] or {}).get("Nome", "")),
+        )
+    )
+    return {
+        "diagnosticos": diagnosticos,
+        "duplicidades": duplicidades,
+    }
+
+
+def thu_i86_progresso_acervo():
+    """Resumo do tratamento das páginas históricas para apoiar o saneamento."""
+    acervo = thu_i8_carregar_acervo_estatico()
+    status_db = carregar_catalogos_legados_status()
+    paginas_total = 0
+    revisadas = 0
+    ignoradas = 0
+    em_andamento = 0
+
+    for cat in (acervo.get("catalogos") or []):
+        catalogo_id = str(cat.get("id") or "")
+        for pg in (cat.get("paginas") or []):
+            paginas_total += 1
+            stat = thu_i8_status_pagina(
+                catalogo_id,
+                pg.get("pagina"),
+                status_db=status_db,
+            )
+            estado = str(stat.get("status") or "Pendente")
+            if estado == "Revisada":
+                revisadas += 1
+            elif estado == "Ignorada":
+                ignoradas += 1
+            elif estado in ("Em cadastro", "Em revisão"):
+                em_andamento += 1
+
+    pendentes = max(
+        0,
+        paginas_total - revisadas - ignoradas - em_andamento,
+    )
+    return {
+        "total": paginas_total,
+        "revisadas": revisadas,
+        "ignoradas": ignoradas,
+        "em_andamento": em_andamento,
+        "pendentes": pendentes,
+    }
+
+
+
+
+def renderizar_saneamento_catalogo(catalogo):
+    """I8.6 — fila única para saneamento do Catálogo Oficial."""
+    catalogo = list(catalogo or [])
+    st.subheader("🧹 THU • Saneamento do Catálogo Oficial")
+    st.caption(
+        "Organiza as pendências do Catálogo por prioridade. "
+        "O THU não corrige, apaga, une ou inventa dados sozinho; "
+        "toda alteração continua sendo feita no cadastro oficial."
+    )
+
+    if not catalogo:
+        st.info("Cadastre produtos para iniciar o saneamento.")
+        return
+
+    analise = thu_i86_diagnosticar_catalogo(catalogo)
+    diagnosticos = list(analise.get("diagnosticos") or [])
+    duplicidades = list(analise.get("duplicidades") or [])
+    progresso_acervo = thu_i86_progresso_acervo()
+
+    saneados = sum(1 for d in diagnosticos if d["ordem"] == 3)
+    alta = sum(1 for d in diagnosticos if d["ordem"] == 0)
+    legado = sum(1 for d in diagnosticos if d["ordem"] == 1)
+    visual = sum(1 for d in diagnosticos if d["ordem"] == 2)
+    sem_foto = sum(
+        1
+        for d in diagnosticos
+        if "Foto" in (d.get("avisos") or [])
+    )
+
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
+    m1.metric("Produtos", len(catalogo))
+    m2.metric("🟢 Saneados", saneados)
+    m3.metric("🔴 Prioridade alta", alta)
+    m4.metric("🟠 Revisar legado", legado)
+    m5.metric("📷 Sem foto", sem_foto)
+    m6.metric("🔁 Possíveis duplicidades", len(duplicidades))
+
+    percentual = saneados / len(catalogo) if catalogo else 0.0
+    st.progress(percentual)
+    st.caption(
+        f"Catálogo saneado: {saneados}/{len(catalogo)} produto(s) "
+        f"({percentual * 100:.0f}%). "
+        "O índice considera somente integridade e revisão do cadastro, não desempenho de vendas."
+    )
+
+    with st.expander("📚 Progresso do Acervo Histórico", expanded=False):
+        a1, a2, a3, a4, a5 = st.columns(5)
+        a1.metric("Páginas", progresso_acervo["total"])
+        a2.metric("Revisadas", progresso_acervo["revisadas"])
+        a3.metric("Em andamento", progresso_acervo["em_andamento"])
+        a4.metric("Pendentes", progresso_acervo["pendentes"])
+        a5.metric("Institucionais", progresso_acervo["ignoradas"])
+        tratados = (
+            progresso_acervo["revisadas"]
+            + progresso_acervo["ignoradas"]
+        )
+        total_pag = max(1, progresso_acervo["total"])
+        st.progress(min(1.0, tratados / total_pag))
+        st.caption(
+            "O Acervo e o Catálogo são controles diferentes: uma página pode estar revisada "
+            "e ainda existir produto oficial com material, descrição, foto ou campanha a revisar."
+        )
+
+    st.markdown("#### Fila de saneamento")
+
+    f1, f2, f3 = st.columns([1.35, 1.55, 2.3])
+    filtro_status = f1.selectbox(
+        "Prioridade",
+        [
+            "Precisam atenção",
+            "Todas",
+            "🔴 Prioridade alta",
+            "🟠 Revisar legado",
+            "🟡 Ajuste visual",
+            "🟢 Saneado",
+        ],
+        key="thu_i86_filtro_status",
+    )
+    filtro_tipo = f2.selectbox(
+        "Tipo de revisão",
+        [
+            "Todos",
+            "Material",
+            "Campanhas/Datas",
+            "Descrição",
+            "Valor",
+            "Foto",
+            "Categoria",
+            "Nome",
+            "Dados antigos",
+            "Possível duplicidade",
+        ],
+        key="thu_i86_filtro_tipo",
+    )
+    busca = f3.text_input(
+        "Pesquisar produto, categoria ou alias",
+        placeholder="Ex.: papel de arroz, copo, cortador...",
+        key="thu_i86_busca",
+    ).strip().casefold()
+
+    somente_com_acervo = st.checkbox(
+        "📚 Mostrar somente produtos vinculados ao Acervo Histórico",
+        value=False,
+        key="thu_i86_so_acervo",
+    )
+
+    lista = []
+    for d in diagnosticos:
+        produto = d["produto"] or {}
+        status = d["status"]
+
+        if filtro_status == "Precisam atenção" and d["ordem"] == 3:
+            continue
+        if filtro_status not in ("Precisam atenção", "Todas") and status != filtro_status:
+            continue
+
+        if filtro_tipo != "Todos":
+            tipos = {str(m.get("tipo") or "") for m in d.get("motivos", [])}
+            if filtro_tipo == "Dados antigos":
+                if not d.get("legado"):
+                    continue
+            elif filtro_tipo not in tipos:
+                continue
+
+        if somente_com_acervo and not d.get("fontes_historicas"):
+            continue
+
+        texto_busca = " ".join([
+            str(produto.get("Nome") or ""),
+            str(produto.get("Categoria") or ""),
+            str(produto.get("Subcategoria") or ""),
+            " ".join(str(x) for x in (produto.get("Aliases", []) or [])),
+        ]).casefold()
+        if busca and busca not in texto_busca:
+            continue
+
+        lista.append(d)
+
+    st.caption(
+        f"{len(lista)} produto(s) nesta fila • ordenação: prioridade → menor índice de saneamento → alfabética."
+    )
+
+    if not lista:
+        st.success("Nenhum produto encontrado com esses filtros.")
+    else:
+        limite = 60
+        for d in lista[:limite]:
+            produto = d["produto"] or {}
+            idx = d["indice"]
+            imagens = [
+                str(x).strip()
+                for x in (produto.get("Imagens", []) or [])
+                if str(x).strip()
+            ]
+
+            with st.container(border=True):
+                cimg, cinfo, cacoes = st.columns([0.9, 4.7, 1.55])
+
+                with cimg:
+                    if imagens:
+                        try:
+                            st.image(
+                                imagem_streamlit_catalogo(imagens[0]),
+                                width=105,
+                            )
+                        except Exception:
+                            st.caption("📷 Imagem indisponível")
+                    else:
+                        st.caption("📷 Sem foto")
+
+                with cinfo:
+                    st.markdown(
+                        f"**{produto.get('Nome') or 'Produto sem nome'}** "
+                        f"— {d['status']}"
+                    )
+                    cat_txt = str(produto.get("Categoria") or "Sem categoria")
+                    sub_txt = str(produto.get("Subcategoria") or "").strip()
+                    if sub_txt:
+                        cat_txt += f" / {sub_txt}"
+                    st.caption(
+                        f"{cat_txt} • Índice de saneamento: **{d['score']}/100**"
+                    )
+
+                    motivos = list(d.get("motivos") or [])
+                    if motivos:
+                        for motivo in motivos[:6]:
+                            sev = str(motivo.get("severidade") or "")
+                            texto = str(motivo.get("texto") or "")
+                            if sev in ("critica", "duplicidade"):
+                                st.warning(texto)
+                            elif sev == "legado":
+                                st.info("🧹 " + texto)
+                            else:
+                                st.caption("• " + texto)
+                        if len(motivos) > 6:
+                            st.caption(f"+ {len(motivos) - 6} ponto(s) adicional(is)")
+
+                    extras = []
+                    if d.get("fontes_historicas"):
+                        extras.append(
+                            f"📚 {d['fontes_historicas']} fonte(s) histórica(s)"
+                        )
+                    if d.get("recortes_historicos"):
+                        extras.append(
+                            f"✂️ {d['recortes_historicos']} recorte(s)"
+                        )
+                    if produto.get("CampanhasPermitidas"):
+                        extras.append(
+                            f"📅 {len(produto.get('CampanhasPermitidas') or [])} campanha(s)"
+                        )
+                    if extras:
+                        st.caption(" • ".join(extras))
+
+                with cacoes:
+                    if st.button(
+                        "✏️ Corrigir cadastro",
+                        key=f"thu_i86_editar_{idx}",
+                        use_container_width=True,
+                        type="primary" if d["ordem"] == 0 else "secondary",
+                    ):
+                        st.session_state.catalogo_edit_index = idx
+                        st.rerun()
+
+                    if d.get("duplicidades"):
+                        st.caption("🔁 Conferir duplicidade antes de excluir ou unir qualquer cadastro.")
+
+        if len(lista) > limite:
+            st.caption(
+                f"Mostrando {limite} de {len(lista)} produto(s). "
+                "Use os filtros para reduzir a fila."
+            )
+
+    if duplicidades:
+        with st.expander(
+            f"🔁 Possíveis duplicidades para conferência ({len(duplicidades)})",
+            expanded=False,
+        ):
+            st.warning(
+                "São apenas sinais de nomes equivalentes/aliases. "
+                "O Manager não une nem exclui produtos automaticamente."
+            )
+            for pos_dup, par in enumerate(duplicidades[:30], 1):
+                i, j = par["indices"]
+                p1 = catalogo[i] or {}
+                p2 = catalogo[j] or {}
+                with st.container(border=True):
+                    d1, d2, d3 = st.columns([3.1, 3.1, 1.8])
+                    d1.markdown(f"**A:** {p1.get('Nome') or '—'}")
+                    d2.markdown(f"**B:** {p2.get('Nome') or '—'}")
+                    d1.caption(str(p1.get("Categoria") or "Sem categoria"))
+                    d2.caption(str(p2.get("Categoria") or "Sem categoria"))
+                    d3.caption(par.get("motivo") or "")
+                    b1, b2 = st.columns(2)
+                    if b1.button(
+                        "✏️ Abrir A",
+                        key=f"thu_i86_dup_a_{pos_dup}_{i}_{j}",
+                        use_container_width=True,
+                    ):
+                        st.session_state.catalogo_edit_index = i
+                        st.rerun()
+                    if b2.button(
+                        "✏️ Abrir B",
+                        key=f"thu_i86_dup_b_{pos_dup}_{i}_{j}",
+                        use_container_width=True,
+                    ):
+                        st.session_state.catalogo_edit_index = j
+                        st.rerun()
+
+
 def imagem_data_uri(path):
     if not path:
         return ""
@@ -19052,85 +19545,20 @@ if pagina_atual == "catalogo":
                     st.session_state.pop(chave, None)
             st.rerun()
 
-    # 20.4.9-E — auditoria do cadastro sem criar um segundo editor.
+    # I8.6 — resumo compacto; a fila completa agora vive na aba Saneamento.
     if st.session_state.catalogo_edit_index is None:
-        with st.expander("🩺 Revisão do Catálogo para o THU", expanded=True):
-            st.caption(
-                "O painel identifica cadastros antigos incompletos. "
-                "Ele não inventa dados e não cria outro cadastro: o botão Editar abre o formulário oficial."
+        _i86_resumo = thu_i86_diagnosticar_catalogo(catalogo)
+        _i86_diag = list(_i86_resumo.get("diagnosticos") or [])
+        _i86_atencao = sum(1 for _d in _i86_diag if _d.get("ordem") != 3)
+        _i86_saneados = len(_i86_diag) - _i86_atencao
+        if _i86_atencao:
+            st.info(
+                f"🧹 THU informa: {_i86_atencao} produto(s) ainda precisam de saneamento "
+                f"e {_i86_saneados} já estão sem pendências detectadas. "
+                "Use a aba **Saneamento** para trabalhar a fila por prioridade."
             )
-            revisoes_catalogo = [
-                (i, produto, avaliar_pendencias_produto_catalogo(produto), auditar_dados_antigos_catalogo(produto))
-                for i, produto in enumerate(catalogo)
-            ]
-            completos_thu = sum(1 for _, _, rev, _ in revisoes_catalogo if rev["pronto_thu"])
-            incompletos_thu = len(revisoes_catalogo) - completos_thu
-            sem_foto = sum(1 for _, _, rev, _ in revisoes_catalogo if "Foto" in rev["avisos"])
-            suspeitos_legado = sum(1 for _, _, _, legado in revisoes_catalogo if legado)
-
-            rv1, rv2, rv3, rv4, rv5 = st.columns(5)
-            rv1.metric("Produtos", len(catalogo))
-            rv2.metric("Prontos para THU", completos_thu)
-            rv3.metric("Precisam revisão", incompletos_thu)
-            rv4.metric("Sem foto", sem_foto)
-            rv5.metric("Dados antigos suspeitos", suspeitos_legado)
-
-            rf1, rf2 = st.columns([1.4, 2.6])
-            filtro_revisao = rf1.selectbox(
-                "Pendência",
-                ["Todas", "Material", "Campanhas/Datas", "Descrição", "Valor", "Foto", "Dados antigos suspeitos"],
-                key="cat_revisao_filtro_2049e",
-            )
-            busca_revisao = rf2.text_input(
-                "Pesquisar na revisão",
-                placeholder="Nome ou categoria...",
-                key="cat_revisao_busca_2049e",
-            ).strip().casefold()
-
-            lista_revisao = []
-            for idx_rev, produto_rev, rev, legado in revisoes_catalogo:
-                pendencias_rev = rev["criticas"] + rev["avisos"]
-                if filtro_revisao == "Dados antigos suspeitos":
-                    if not legado:
-                        continue
-                elif filtro_revisao != "Todas" and filtro_revisao not in pendencias_rev:
-                    continue
-                elif filtro_revisao == "Todas" and not (pendencias_rev or legado):
-                    continue
-                texto_rev = f"{produto_rev.get('Nome','')} {produto_rev.get('Categoria','')}".casefold()
-                if busca_revisao and busca_revisao not in texto_rev:
-                    continue
-                lista_revisao.append((idx_rev, produto_rev, rev, legado))
-
-            if not lista_revisao:
-                if incompletos_thu == 0 and sem_foto == 0:
-                    st.success("Todos os produtos estão completos para uso pelo THU.")
-                else:
-                    st.info("Nenhum produto encontrado com esse filtro.")
-            else:
-                st.caption(f"{len(lista_revisao)} produto(s) precisam de atenção neste filtro.")
-                for idx_rev, produto_rev, rev, legado in lista_revisao[:30]:
-                    rr1, rr2 = st.columns([5, 1])
-                    rr1.markdown(f"**{produto_rev.get('Nome') or 'Produto sem nome'}**")
-                    pend_txt = rev["criticas"] + rev["avisos"]
-                    if pend_txt:
-                        rr1.caption(
-                            f"{produto_rev.get('Categoria') or 'Sem categoria'} • "
-                            + "Falta: " + " • ".join(pend_txt)
-                        )
-                    else:
-                        rr1.caption(f"{produto_rev.get('Categoria') or 'Sem categoria'}")
-                    if legado:
-                        rr1.warning("Dados a revisar: " + " • ".join(legado))
-                    if rr2.button(
-                        "✏️ Editar",
-                        key=f"cat_revisao_editar_{idx_rev}",
-                        use_container_width=True,
-                    ):
-                        st.session_state.catalogo_edit_index = idx_rev
-                        st.rerun()
-                if len(lista_revisao) > 30:
-                    st.caption(f"Mostrando 30 de {len(lista_revisao)} pendências. Use os filtros para refinar.")
+        elif catalogo:
+            st.success("🧹 Catálogo sem pendências detectadas pelo saneamento atual.")
 
     # Quando o usuário clica em Editar OU prepara um cadastro pelo Acervo Histórico,
     # o formulário ocupa a tela do Catálogo. Isso evita o Streamlit permanecer na
@@ -19142,9 +19570,10 @@ if pagina_atual == "catalogo":
     elif _thu_i8_prefill_ativo:
         formulario_catalogo(None)
     else:
-        aba_cad, aba_lista, aba_acervo, aba_cliente = st.tabs([
+        aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_cliente = st.tabs([
             "➕ Cadastrar",
             "📋 Produtos",
+            "🧹 Saneamento",
             "📚 Acervo histórico",
             "📤 Catálogo para cliente",
         ])
@@ -19254,6 +19683,9 @@ if pagina_atual == "catalogo":
                             "valor_unitario": preco_num,
                         })
                         st.success("Produto adicionado ao orçamento. Abra a aba Novo Orçamento.")
+
+        with aba_saneamento:
+            renderizar_saneamento_catalogo(catalogo)
 
         with aba_acervo:
             renderizar_acervo_catalogos_legados()
