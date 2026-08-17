@@ -35,6 +35,8 @@ __all__ = [
     "save_document",
     "upload_catalog_image",
     "upload_library_file",
+    "catalog_public_url",
+    "publish_catalog_html",
 ]
 
 
@@ -260,3 +262,43 @@ def upload_library_file(upload: Any, produto_nome: str = "produto", local_upload
     local_path = local_dir / unique_name
     local_path.write_bytes(content)
     return str(local_path).replace("\\", "/")
+
+
+def catalog_public_url(object_path: str) -> str:
+    """Retorna a URL pública determinística de um catálogo no bucket `catalogo`."""
+    if not online_configured():
+        return ""
+    url, _ = _config()
+    caminho = str(object_path or "").strip().lstrip("/")
+    if not caminho:
+        return ""
+    return f"{url}/storage/v1/object/public/catalogo/{quote(caminho, safe='/')}"
+
+
+def publish_catalog_html(content: str | bytes, object_path: str) -> str:
+    """Publica um HTML imutável no bucket público `catalogo` e retorna sua URL."""
+    if not online_configured():
+        return ""
+    caminho = str(object_path or "").strip().lstrip("/")
+    if not caminho:
+        return ""
+    bruto = content.encode("utf-8") if isinstance(content, str) else bytes(content or b"")
+    if not bruto:
+        return ""
+    url, _ = _config()
+    encoded_path = quote(caminho, safe="/")
+    try:
+        response = _SESSION.post(
+            f"{url}/storage/v1/object/catalogo/{encoded_path}",
+            headers={
+                **_headers(),
+                "Content-Type": "text/html; charset=utf-8",
+                "x-upsert": "false",
+            },
+            data=bruto,
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        return catalog_public_url(caminho)
+    except requests.RequestException:
+        return ""

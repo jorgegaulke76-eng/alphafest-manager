@@ -1,3 +1,15 @@
+## 20.4.9-I8.9 — Compartilhamento Profissional
+
+- Central ganha painel de compartilhamento por catálogo salvo.
+- Publicação cria URL pública real e única no Storage Supabase, sem sobrescrever versões anteriores.
+- QR Code é gerado a partir do link público e pode ser baixado em PNG.
+- Envio facilitado por WhatsApp com mensagem pronta, link e validade comercial.
+- Link vencido é sinalizado e o sistema orienta publicar nova versão antes de enviar.
+- PDF comercial gerado sob demanda, com data, usuário, validade de 30 dias, rodapé em todas as páginas e QR do link quando disponível.
+- HTML passa a ter botão Imprimir / Salvar PDF; a versão pública também oferece Compartilhar.
+- Publicações registram somente URL e rastreabilidade na Central; Catálogo Oficial continua sendo a única fonte de dados comerciais.
+- Gerador oferece HTML e preparação de PDF sem executar processamento pesado a cada rerun.
+
 ## 20.4.9-I8.8.4 — Validade Comercial + Liberação Anna
 
 - Todo catálogo HTML passa a exibir no rodapé data, horário e usuário da geração.

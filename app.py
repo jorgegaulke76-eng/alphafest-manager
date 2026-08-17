@@ -78,6 +78,27 @@ except Exception:
     Image = ImageOps = ImageDraw = ImageFont = ImageFilter = None
 
 try:
+    import qrcode
+except Exception:
+    qrcode = None
+
+try:
+    from reportlab.lib import colors as rl_colors
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage,
+        PageBreak, KeepTogether, HRFlowable
+    )
+    from reportlab.lib.utils import ImageReader
+except Exception:
+    rl_colors = TA_CENTER = A4 = getSampleStyleSheet = ParagraphStyle = mm = None
+    SimpleDocTemplate = Paragraph = Spacer = Table = TableStyle = RLImage = PageBreak = KeepTogether = HRFlowable = None
+    ImageReader = None
+
+try:
     from openai import OpenAI
 except Exception:
     OpenAI = None
@@ -210,6 +231,14 @@ def upload_library_file(upload, produto_nome="produto", local_upload_dir="biblio
     destino = pasta / f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{nome}"
     destino.write_bytes(bytes(upload.getbuffer()))
     return str(destino).replace("\\", "/")
+
+def catalog_public_url(object_path):
+    func = getattr(_cloud_db, "catalog_public_url", None) if _cloud_db else None
+    return func(object_path) if callable(func) else ""
+
+def publish_catalog_html(content, object_path):
+    func = getattr(_cloud_db, "publish_catalog_html", None) if _cloud_db else None
+    return func(content, object_path) if callable(func) else ""
 
 # --- BLINDAGEM 14.2.4: BOOT MANAGER, FEATURE FLAGS E DIAGNÓSTICO ---
 DEFAULT_FEATURE_FLAGS = {
@@ -8501,6 +8530,8 @@ def gerar_html_catalogo_i87(
     mostrar_sem_foto=True,
     observacao_rodape="",
     metadados_geracao=None,
+    url_publica="",
+    qr_data_uri="",
 ):
     """Gera catálogo responsivo em modo somente leitura sobre o Catálogo Oficial.
 
@@ -8635,6 +8666,15 @@ def gerar_html_catalogo_i87(
     )
     subtitulo_html = f'<p class="hero-sub">{subtitulo_seguro}</p>' if subtitulo_seguro else ""
     rodape_obs_html = f'<p>{rodape_extra}</p>' if rodape_extra else ""
+    url_publica_segura = html.escape(str(url_publica or "").strip(), quote=True)
+    qr_seguro = html.escape(str(qr_data_uri or "").strip(), quote=True)
+    compartilhamento_html = ""
+    if url_publica_segura:
+        qr_html = f'<img class="qr-publico" src="{qr_seguro}" alt="QR Code do catálogo">' if qr_seguro else ""
+        compartilhamento_html = (
+            '<div class="compartilhamento-publico"><strong>Acesse este catálogo online</strong>'
+            f'{qr_html}<a href="{url_publica_segura}" target="_blank" rel="noopener">{url_publica_segura}</a></div>'
+        )
     corpo = "".join(secoes) if secoes else '<div class="vazio">Nenhum produto selecionado para este catálogo.</div>'
 
     return f'''<!doctype html>
@@ -8659,16 +8699,18 @@ main{{max-width:1240px;margin:auto;padding:32px 20px 70px}} .categoria{{margin:0
 .produto-body{{padding:18px;display:flex;flex-direction:column;gap:10px;flex:1}} .chips{{display:flex;gap:6px;flex-wrap:wrap}} .chip{{font-size:11px;font-weight:800;background:#eef6fb;color:#2d6289;border-radius:999px;padding:5px 8px}} .produto-card h3{{font-size:21px;line-height:1.13;margin:2px 0;color:#153b5a}} .descricao{{line-height:1.5;color:#536a7d;margin:0;white-space:pre-line}} .opcoes{{font-size:13px;line-height:1.45;color:#617385}}
 .produto-footer{{margin-top:auto;padding-top:4px}} .preco{{font-size:23px;font-weight:900;color:var(--rosa);margin:4px 0 12px}} .btn-whatsapp{{display:block;text-align:center;text-decoration:none;background:#25d366;color:white;font-weight:900;border-radius:12px;padding:12px 14px}}
 .vazio{{background:white;border:1px solid var(--linha);border-radius:18px;padding:30px;text-align:center;color:var(--muted)}} footer{{background:#123b5d;color:#eaf5fc;padding:28px 20px;text-align:center}} footer strong{{font-size:18px}} footer p{{margin:5px 0;color:#c8dcea}} .validade-comercial{{max-width:760px;margin:18px auto 0;padding:15px 18px;border:1px solid rgba(255,255,255,.28);border-radius:14px;background:rgba(255,255,255,.08)}} .validade-comercial p{{margin:5px 0;color:#eaf5fc}} .validade-comercial .aviso-validade{{font-weight:800;color:#fff}}
+.acoes-topo{{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}} .acao-topo{{border:1px solid var(--linha);background:#fff;color:var(--azul);border-radius:10px;padding:8px 11px;font-weight:800;cursor:pointer}} .compartilhamento-publico{{max-width:760px;margin:18px auto 0;padding:15px;border:1px solid rgba(255,255,255,.28);border-radius:14px;background:rgba(255,255,255,.08);display:flex;flex-direction:column;align-items:center;gap:10px}} .compartilhamento-publico a{{color:#fff;word-break:break-all}} .qr-publico{{width:150px;height:150px;background:#fff;padding:8px;border-radius:12px}}
 @media(max-width:920px){{.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}} .hero-inner{{grid-template-columns:1fr}} .logo,.logo-texto{{justify-self:start}}}}
 @media(max-width:620px){{.grid{{grid-template-columns:1fr}} .hero-inner{{padding-top:32px}} .topbar-inner{{align-items:flex-start;flex-direction:column;gap:8px}} .categoria{{scroll-margin-top:125px}}}}
 @media print{{.topbar,.btn-whatsapp{{display:none!important}} body{{background:#fff}} .hero-inner,main{{max-width:none}} .hero{{break-after:page}} .grid{{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}} .produto-card{{box-shadow:none}}}}
 </style>
 </head>
 <body>
-<div class="topbar"><div class="topbar-inner"><div class="mini-logo">{nome_empresa}</div><nav class="nav">{nav}</nav></div></div>
+<div class="topbar"><div class="topbar-inner"><div class="mini-logo">{nome_empresa}</div><nav class="nav">{nav}</nav><div class="acoes-topo"><button class="acao-topo" onclick="window.print()">Imprimir / Salvar PDF</button>{'<button class="acao-topo" onclick="compartilharCatalogo()">Compartilhar</button>' if url_publica_segura else ''}</div></div></div>
 <header class="hero"><div class="hero-inner"><div><span class="kicker">Catálogo AlphaFest</span><h1>{titulo_seguro}</h1>{subtitulo_html}<div class="hero-meta"><span>{len(produtos)} produto(s)</span><span>{len(grupos_categoria)} categoria(s)</span></div></div>{logo_html}</div></header>
 <main>{corpo}</main>
-<footer><strong>{nome_empresa}</strong><p>{slogan}</p><p>{contato}</p>{rodape_obs_html}{rodape_comercial}</footer>
+<footer><strong>{nome_empresa}</strong><p>{slogan}</p><p>{contato}</p>{rodape_obs_html}{rodape_comercial}{compartilhamento_html}</footer>
+<script>async function compartilharCatalogo(){{const url={json.dumps(str(url_publica or ""))}; const data={{title:document.title,text:"Catálogo AlphaFest",url:url}}; if(navigator.share){{try{{await navigator.share(data);return;}}catch(e){{}}}} if(navigator.clipboard && url){{await navigator.clipboard.writeText(url);alert("Link copiado.");}}}}</script>
 </body></html>'''
 
 
@@ -8852,7 +8894,7 @@ def _i88_produto_elegivel_campanha(registro, produto):
     return campanha_chave in permitidas or permanente in permitidas
 
 
-def _i88_html_catalogo_salvo(registro, catalogo_oficial, metadados_geracao=None):
+def _i88_html_catalogo_salvo(registro, catalogo_oficial, metadados_geracao=None, url_publica="", qr_data_uri=""):
     indices, ausentes = _i88_resolver_catalogo_salvo(registro, catalogo_oficial)
     produtos = [
         catalogo_oficial[i]
@@ -8876,6 +8918,8 @@ def _i88_html_catalogo_salvo(registro, catalogo_oficial, metadados_geracao=None)
         mostrar_sem_foto=mostrar_sem_foto,
         observacao_rodape=(registro or {}).get("observacao_rodape") or "",
         metadados_geracao=meta_saida,
+        url_publica=url_publica,
+        qr_data_uri=qr_data_uri,
     )
     return conteudo, indices, ausentes, produtos
 
@@ -9151,6 +9195,271 @@ def _i88_duplicar_registro(registro):
     copia["atualizado_por"] = _usuario_auditoria()
     copia["revisao"] = 1
     return copia
+
+# --- 20.4.9-I8.9: Compartilhamento Profissional ---
+def _i89_qr_png_bytes(conteudo):
+    texto = str(conteudo or "").strip()
+    if not texto or qrcode is None:
+        return b""
+    try:
+        qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=3)
+        qr.add_data(texto)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        saida = io.BytesIO()
+        img.save(saida, format="PNG")
+        return saida.getvalue()
+    except Exception:
+        return b""
+
+
+def _i89_qr_data_uri(conteudo):
+    bruto = _i89_qr_png_bytes(conteudo)
+    return f"data:image/png;base64,{base64.b64encode(bruto).decode('ascii')}" if bruto else ""
+
+
+def _i89_normalizar_telefone(valor):
+    numero = re.sub(r"\D", "", str(valor or ""))
+    if numero and len(numero) in (10, 11):
+        numero = "55" + numero
+    return numero
+
+
+def _i89_link_whatsapp_compartilhar(url_publica, metadados, titulo="Catálogo AlphaFest", telefone=""):
+    meta = dict(metadados or {})
+    url = str(url_publica or "").strip()
+    texto = (
+        f"Olá! Segue o {str(titulo or 'Catálogo AlphaFest').strip()}.\n\n"
+        f"{url}\n\n"
+        f"Gerado em {meta.get('data', '')} às {meta.get('hora', '')}. "
+        f"Válido até {meta.get('validade_texto', '')}.\n"
+        "Após a validade, valores e condições devem ser reconfirmados junto à AlphaFest."
+    )
+    numero = _i89_normalizar_telefone(telefone)
+    base = f"https://wa.me/{numero}" if numero else "https://wa.me/"
+    return f"{base}?text={quote(texto)}"
+
+
+def _i89_objeto_publicacao(registro, metadados):
+    reg_id = re.sub(r"[^A-Za-z0-9_-]", "", str((registro or {}).get("id") or "catalogo")) or "catalogo"
+    meta = dict(metadados or _i884_metadados_geracao())
+    stamp = re.sub(r"\D", "", str(meta.get("gerado_em") or agora_local().isoformat()))[:14]
+    titulo = slug_html((registro or {}).get("titulo") or (registro or {}).get("nome_interno") or "catalogo").lower()
+    token = secrets.token_hex(4)
+    return f"catalogos-publicos/{reg_id}/{stamp}_{titulo}_{token}.html"
+
+
+def _i89_publicacoes(registro):
+    itens = (registro or {}).get("publicacoes") or []
+    return [x for x in itens if isinstance(x, dict)]
+
+
+def _i89_registrar_publicacao(catalogo_id, publicacao):
+    catalogo_id = str(catalogo_id or "")
+    lista = carregar_catalogos_gerados()
+    for item in lista:
+        if str(item.get("id") or "") == catalogo_id:
+            historico = _i89_publicacoes(item)
+            historico.insert(0, dict(publicacao or {}))
+            item["publicacoes"] = historico[:30]
+            item["ultimo_link_publico"] = str((publicacao or {}).get("url") or "")
+            item["ultima_publicacao_em"] = str((publicacao or {}).get("gerado_em") or "")
+            item["ultima_publicacao_por"] = str((publicacao or {}).get("gerado_por") or "")
+            item["atualizado_em"] = agora_local().isoformat(timespec="seconds")
+            item["atualizado_por"] = _usuario_auditoria()
+            salvar_catalogos_gerados(lista)
+            return True
+    return False
+
+
+def _i89_imagem_bytes(origem):
+    origem = str(origem or "").strip()
+    if not origem:
+        return b""
+    try:
+        if origem.startswith("data:image/") and "," in origem:
+            return base64.b64decode(origem.split(",", 1)[1])
+        if origem.startswith(("http://", "https://")):
+            resposta = requests.get(origem, timeout=8)
+            resposta.raise_for_status()
+            return resposta.content
+        caminho = Path(origem)
+        if caminho.exists() and caminho.is_file():
+            return caminho.read_bytes()
+    except Exception:
+        return b""
+    return b""
+
+
+def _i89_rl_imagem(origem, max_w, max_h):
+    if RLImage is None:
+        return Spacer(1, 1) if Spacer else None
+    bruto = _i89_imagem_bytes(origem)
+    if not bruto:
+        estilo_placeholder = ParagraphStyle(
+            "i89_img_placeholder", fontName="Helvetica-Bold", fontSize=7.5, leading=9,
+            alignment=TA_CENTER, textColor=rl_colors.HexColor("#6d7f8f")
+        )
+        caixa = Table([[Paragraph("Imagem disponível no catálogo online", estilo_placeholder)]], colWidths=[max_w], rowHeights=[max_h * 0.7])
+        caixa.setStyle(TableStyle([
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"), ("ALIGN", (0,0), (-1,-1), "CENTER"),
+            ("BACKGROUND", (0,0), (-1,-1), rl_colors.HexColor("#edf3f7")),
+            ("BOX", (0,0), (-1,-1), 0.4, rl_colors.HexColor("#dce8f1")),
+        ]))
+        return caixa
+    try:
+        w = h = 1
+        if Image is not None:
+            with Image.open(io.BytesIO(bruto)) as img:
+                w, h = img.size
+        escala = min(float(max_w) / max(float(w), 1.0), float(max_h) / max(float(h), 1.0))
+        return RLImage(io.BytesIO(bruto), width=max(1, w * escala), height=max(1, h * escala))
+    except Exception:
+        return Spacer(max_w, max_h * 0.28)
+
+
+def gerar_pdf_catalogo_i89(
+    produtos,
+    titulo="Catálogo AlphaFest",
+    subtitulo="",
+    mostrar_precos=True,
+    mostrar_material=True,
+    mostrar_descricao=True,
+    observacao_rodape="",
+    metadados_geracao=None,
+    url_publica="",
+):
+    """PDF comercial estável, derivado da seleção atual do Catálogo Oficial."""
+    if SimpleDocTemplate is None or A4 is None:
+        return b""
+    meta = dict(metadados_geracao or _i884_metadados_geracao())
+    empresa = carregar_config_empresa()
+    itens = [dict(p or {}) for p in (produtos or []) if (p or {}).get("Ativo", True)]
+    itens.sort(key=lambda p: (_i871_categoria_chave(p), normalizar_identidade_produto(p.get("Nome", ""))))
+    saida = io.BytesIO()
+    doc = SimpleDocTemplate(
+        saida,
+        pagesize=A4,
+        leftMargin=15 * mm,
+        rightMargin=15 * mm,
+        topMargin=17 * mm,
+        bottomMargin=20 * mm,
+        title=str(titulo or "Catálogo AlphaFest"),
+        author="AlphaFest",
+    )
+    estilos = getSampleStyleSheet()
+    azul = rl_colors.HexColor("#0f4c81")
+    rosa = rl_colors.HexColor("#ed4f91")
+    texto = rl_colors.HexColor("#17324a")
+    muted = rl_colors.HexColor("#536a7d")
+    estilo_titulo = ParagraphStyle("i89_titulo", parent=estilos["Title"], fontName="Helvetica-Bold", fontSize=25, leading=29, textColor=azul, spaceAfter=7)
+    estilo_sub = ParagraphStyle("i89_sub", parent=estilos["BodyText"], fontName="Helvetica", fontSize=11, leading=15, textColor=muted, spaceAfter=10)
+    estilo_cat = ParagraphStyle("i89_cat", parent=estilos["Heading2"], fontName="Helvetica-Bold", fontSize=17, leading=20, textColor=azul, spaceBefore=10, spaceAfter=7)
+    estilo_nome = ParagraphStyle("i89_nome", parent=estilos["Heading3"], fontName="Helvetica-Bold", fontSize=12, leading=14, textColor=texto, spaceAfter=4)
+    estilo_corpo = ParagraphStyle("i89_corpo", parent=estilos["BodyText"], fontName="Helvetica", fontSize=8.8, leading=11.5, textColor=muted)
+    estilo_preco = ParagraphStyle("i89_preco", parent=estilos["BodyText"], fontName="Helvetica-Bold", fontSize=12, leading=14, textColor=rosa, spaceBefore=5)
+    estilo_centro = ParagraphStyle("i89_centro", parent=estilos["BodyText"], fontName="Helvetica", fontSize=8.5, leading=11, alignment=TA_CENTER, textColor=muted)
+
+    story = []
+    logo_path = Path("logo.png")
+    if logo_path.exists():
+        try:
+            logo_flow = _i89_rl_imagem(str(logo_path), 38 * mm, 24 * mm)
+            story.append(Table([[Paragraph("AlphaFest", estilo_titulo), logo_flow]], colWidths=[125 * mm, 40 * mm], style=[("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
+        except Exception:
+            story.append(Paragraph(html.escape(str(titulo or "Catálogo AlphaFest")), estilo_titulo))
+    else:
+        story.append(Paragraph(html.escape(str(titulo or "Catálogo AlphaFest")), estilo_titulo))
+    if str(subtitulo or "").strip():
+        story.append(Paragraph(html.escape(str(subtitulo).strip()), estilo_sub))
+    story.append(Paragraph(f"<b>Gerado em:</b> {meta.get('data','')} às {meta.get('hora','')} &nbsp;&nbsp; <b>Responsável:</b> {html.escape(str(meta.get('gerado_por','')))}", estilo_sub))
+    story.append(Paragraph(f"<b>Validade comercial:</b> até {meta.get('validade_texto','')} - após essa data, valores e condições devem ser reconfirmados.", estilo_sub))
+    if str(url_publica or "").strip():
+        qr_abertura_i89 = _i89_qr_png_bytes(url_publica)
+        if qr_abertura_i89:
+            qr_flow_i89 = RLImage(io.BytesIO(qr_abertura_i89), width=23 * mm, height=23 * mm)
+            link_flow_i89 = Paragraph(
+                "<b>Acesse a versão online</b><br/>" + html.escape(str(url_publica)),
+                ParagraphStyle("i89_link_top", parent=estilo_corpo, fontSize=7.8, leading=10)
+            )
+            tabela_link_i89 = Table([[qr_flow_i89, link_flow_i89]], colWidths=[28 * mm, 137 * mm], hAlign="LEFT")
+            tabela_link_i89.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE"), ("BOX", (0,0), (-1,-1), 0.45, rl_colors.HexColor("#dce8f1")), ("BACKGROUND", (0,0), (-1,-1), rl_colors.HexColor("#f4f8fb")), ("LEFTPADDING", (0,0), (-1,-1), 7), ("RIGHTPADDING", (0,0), (-1,-1), 7), ("TOPPADDING", (0,0), (-1,-1), 6), ("BOTTOMPADDING", (0,0), (-1,-1), 6)]))
+            story.append(tabela_link_i89)
+            story.append(Spacer(1, 6))
+    story.append(HRFlowable(width="100%", thickness=1.3, color=azul, spaceAfter=8))
+
+    rotulos = _i871_mapa_rotulos([p.get("Categoria") for p in itens], fallback="Sem categoria")
+    grupos = {}
+    for prod in itens:
+        grupos.setdefault(_i871_categoria_chave(prod), []).append(prod)
+    for chave in sorted(grupos, key=lambda k: normalizar_identidade_produto(rotulos.get(k, k))):
+        categoria = rotulos.get(chave, "Sem categoria")
+        story.append(Paragraph(html.escape(categoria), estilo_cat))
+        for prod in grupos[chave]:
+            nome = html.escape(str(prod.get("Nome") or "Produto"))
+            desc = html.escape(str(prod.get("DescricaoCurta") or prod.get("Descricao") or "").strip()).replace("\n", "<br/>")
+            material = html.escape(str(prod.get("Material") or "").strip())
+            variacoes = _i871_lista_textos(prod.get("Variacoes"))[:8]
+            blocos = [Paragraph(nome, estilo_nome)]
+            if mostrar_material and material:
+                blocos.append(Paragraph(f"<b>Material:</b> {material}", estilo_corpo))
+            if mostrar_descricao and desc:
+                blocos.append(Paragraph(desc, estilo_corpo))
+            if variacoes:
+                blocos.append(Paragraph("<b>Opções:</b> " + html.escape(" • ".join(variacoes)), estilo_corpo))
+            if mostrar_precos:
+                blocos.append(Paragraph(html.escape(formatar_preco_catalogo(prod.get("Preco"))), estilo_preco))
+            imagens = _i871_lista_textos(prod.get("Imagens"))
+            img = _i89_rl_imagem(imagens[0] if imagens else "", 44 * mm, 38 * mm)
+            card = Table([[img, blocos]], colWidths=[49 * mm, 116 * mm], hAlign="LEFT")
+            card.setStyle(TableStyle([
+                ("VALIGN", (0,0), (-1,-1), "TOP"),
+                ("BOX", (0,0), (-1,-1), 0.55, rl_colors.HexColor("#dce8f1")),
+                ("BACKGROUND", (0,0), (-1,-1), rl_colors.white),
+                ("LEFTPADDING", (0,0), (-1,-1), 8),
+                ("RIGHTPADDING", (0,0), (-1,-1), 8),
+                ("TOPPADDING", (0,0), (-1,-1), 8),
+                ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+            ]))
+            story.append(KeepTogether([card, Spacer(1, 5)]))
+
+    if str(observacao_rodape or "").strip():
+        story.append(Spacer(1, 7))
+        story.append(Paragraph(html.escape(str(observacao_rodape).strip()), estilo_centro))
+    def rodape(canvas, doc_obj):
+        canvas.saveState()
+        canvas.setStrokeColor(rl_colors.HexColor("#dce8f1"))
+        canvas.line(15 * mm, 14 * mm, A4[0] - 15 * mm, 14 * mm)
+        canvas.setFillColor(rl_colors.HexColor("#536a7d"))
+        canvas.setFont("Helvetica", 7.3)
+        texto_footer = (
+            f"{empresa.get('nome','AlphaFest')} | Gerado {meta.get('data','')} {meta.get('hora','')} | "
+            f"Responsável: {meta.get('gerado_por','')} | Válido até {meta.get('validade_texto','')} | Página {doc_obj.page}"
+        )
+        canvas.drawCentredString(A4[0] / 2, 9 * mm, texto_footer[:155])
+        canvas.restoreState()
+
+    try:
+        doc.build(story, onFirstPage=rodape, onLaterPages=rodape)
+        return saida.getvalue()
+    except Exception:
+        return b""
+
+
+def _i89_pdf_catalogo_salvo(registro, catalogo_oficial, metadados_geracao=None, url_publica=""):
+    _, _, _, produtos = _i88_html_catalogo_salvo(registro, catalogo_oficial, metadados_geracao=metadados_geracao)
+    opcoes = dict((registro or {}).get("opcoes") or {})
+    return gerar_pdf_catalogo_i89(
+        produtos,
+        titulo=(registro or {}).get("titulo") or "Catálogo AlphaFest",
+        subtitulo=(registro or {}).get("subtitulo") or "",
+        mostrar_precos=bool(opcoes.get("mostrar_precos", True)),
+        mostrar_material=bool(opcoes.get("mostrar_material", True)),
+        mostrar_descricao=bool(opcoes.get("mostrar_descricao", True)),
+        observacao_rodape=(registro or {}).get("observacao_rodape") or "",
+        metadados_geracao=metadados_geracao,
+        url_publica=url_publica,
+    )
 
 def salvar_upload_catalogo(upload):
     """Salva a imagem no Supabase Storage, com fallback para a pasta uploads."""
@@ -21004,7 +21313,7 @@ if pagina_atual == "catalogo":
             aba_gerador, aba_modelos, aba_central, aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_cliente = st.tabs([
                 "✨ Gerador I8.7.1",
                 "🧩 Modelos I8.8.3",
-                "🗂️ Central I8.8.4",
+                "📤 Central I8.9",
                 "➕ Cadastrar",
                 "📋 Produtos",
                 "🧹 Saneamento",
@@ -21019,7 +21328,7 @@ if pagina_atual == "catalogo":
                 "📚 Acervo histórico",
                 "✨ Gerador I8.7.1",
                 "🧩 Modelos I8.8.3",
-                "🗂️ Central I8.8.4",
+                "📤 Central I8.9",
                 "📤 Catálogo para cliente",
             ])
 
@@ -21479,14 +21788,62 @@ if pagina_atual == "catalogo":
                     habilitado=bool(selecao_saida_i871),
                     contexto="catálogo em montagem",
                 )
-                st.download_button(
-                    "📥 Baixar catálogo I8.7.1 em HTML",
+                sig_pdf_gerador_i89 = hashlib.sha1(json.dumps({
+                    "indices": list(indices_sel_i871),
+                    "titulo": titulo_i871,
+                    "subtitulo": subtitulo_i871,
+                    "precos": mostrar_precos_i871,
+                    "descricao": mostrar_descricao_i871,
+                    "material": mostrar_material_i871,
+                    "rodape": observacao_i871,
+                }, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+                if st.session_state.get("i89_pdf_gerador_sig") != sig_pdf_gerador_i89:
+                    st.session_state.pop("i89_pdf_gerador_bytes", None)
+                    st.session_state.pop("i89_pdf_gerador_nome", None)
+                sh1_i89, sh2_i89 = st.columns(2)
+                sh1_i89.download_button(
+                    "📥 Baixar HTML",
                     data=html_i871,
-                    file_name=f"{slug_html(titulo_i871 or 'catalogo_alphafest').lower()}_i871.html",
+                    file_name=f"{slug_html(titulo_i871 or 'catalogo_alphafest').lower()}_i89.html",
                     mime="text/html",
                     type="primary",
                     use_container_width=True,
                     disabled=not bool(selecao_saida_i871),
+                )
+                if sh2_i89.button(
+                    "📄 Preparar PDF comercial",
+                    use_container_width=True,
+                    disabled=not bool(selecao_saida_i871),
+                    key="i89_preparar_pdf_gerador",
+                ):
+                    pdf_gerador_i89 = gerar_pdf_catalogo_i89(
+                        selecao_saida_i871,
+                        titulo=titulo_i871 or "Catálogo AlphaFest",
+                        subtitulo=subtitulo_i871,
+                        mostrar_precos=mostrar_precos_i871,
+                        mostrar_material=mostrar_material_i871,
+                        mostrar_descricao=mostrar_descricao_i871,
+                        observacao_rodape=observacao_i871,
+                        metadados_geracao=meta_geracao_i884,
+                    )
+                    if pdf_gerador_i89:
+                        st.session_state["i89_pdf_gerador_bytes"] = pdf_gerador_i89
+                        st.session_state["i89_pdf_gerador_nome"] = slug_html(titulo_i871 or "catalogo_alphafest").lower()
+                        st.session_state["i89_pdf_gerador_sig"] = sig_pdf_gerador_i89
+                    else:
+                        st.error("Não foi possível preparar o PDF nesta execução.")
+                if st.session_state.get("i89_pdf_gerador_bytes"):
+                    st.download_button(
+                        "⬇️ Baixar PDF preparado",
+                        st.session_state.get("i89_pdf_gerador_bytes"),
+                        file_name=f"{st.session_state.get('i89_pdf_gerador_nome') or 'catalogo_alphafest'}_i89.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                        key="i89_download_pdf_gerador",
+                    )
+                st.caption(
+                    "I8.9: o HTML possui botão de impressão/Salvar como PDF. Para link público rastreável, QR Code e envio por WhatsApp, "
+                    "salve o catálogo na Central e use Compartilhar."
                 )
                 if not selecao_saida_i871:
                     st.caption("Selecione ao menos um produto elegível para liberar o arquivo.")
@@ -21600,7 +21957,7 @@ if pagina_atual == "catalogo":
                         mb2.caption("A opção de atualizar aparece quando um modelo personalizado é aplicado no Gerador.")
 
                 st.divider()
-                st.markdown("#### 🗂️ Salvar na Central I8.8.4")
+                st.markdown("#### 🗂️ Salvar na Central I8.9")
                 st.caption(
                     "A Central salva somente esta configuração e as referências aos produtos. "
                     "Preço, foto, descrição e material continuam exclusivamente no Catálogo Oficial."
@@ -21612,7 +21969,7 @@ if pagina_atual == "catalogo":
                     help="Este nome aparece somente na Central e ajuda a localizar o catálogo depois.",
                 )
                 if st.button(
-                    "💾 Salvar catálogo na Central I8.8.4",
+                    "💾 Salvar catálogo na Central I8.9",
                     type="primary",
                     use_container_width=True,
                     key="i88_salvar_novo_do_gerador",
@@ -21839,7 +22196,7 @@ if pagina_atual == "catalogo":
                             st.rerun()
 
         with aba_central:
-            st.markdown("### 🗂️ I8.8.4 • Central de Catálogos AlphaFest")
+            st.markdown("### 📤 I8.9 • Central e Compartilhamento de Catálogos AlphaFest")
             st.caption(
                 "Catálogos agora são objetos operacionais reutilizáveis. Cada item salvo guarda somente "
                 "configuração e referências; ao gerar novamente, os dados vêm do Catálogo Oficial atual."
@@ -21976,7 +22333,7 @@ if pagina_atual == "catalogo":
             if not catalogos_i88:
                 st.info(
                     "A Central ainda está vazia. Monte uma seleção na aba **Gerador I8.7.1** e clique em "
-                    "**Salvar catálogo na Central I8.8.4**."
+                    "**Salvar catálogo na Central I8.9**."
                 )
             elif not lista_visivel_i88:
                 st.info("Nenhum catálogo corresponde ao filtro atual.")
@@ -22118,10 +22475,20 @@ if pagina_atual == "catalogo":
                         catalogo,
                         metadados_geracao=meta_download_i884,
                     )
-                    gerou_download_i884 = st.download_button(
+                    gc1_i89, gc2_i89 = st.columns([1, 2])
+                    if gc1_i89.button(
+                        "📤 Compartilhar",
+                        key=f"i89_share_{reg_id_i88}",
+                        use_container_width=True,
+                        disabled=not bool(produtos_saida_reg_i88),
+                    ):
+                        atual_share_i89 = st.session_state.get("i89_compartilhar_id")
+                        st.session_state["i89_compartilhar_id"] = None if atual_share_i89 == reg_id_i88 else reg_id_i88
+                        st.rerun()
+                    gerou_download_i884 = gc2_i89.download_button(
                         "📥 Gerar novamente com dados atuais",
                         data=html_download_i884,
-                        file_name=f"{slug_html(reg_i88.get('titulo') or reg_i88.get('nome_interno') or 'catalogo').lower()}_i884.html",
+                        file_name=f"{slug_html(reg_i88.get('titulo') or reg_i88.get('nome_interno') or 'catalogo').lower()}_i89.html",
                         mime="text/html",
                         use_container_width=True,
                         disabled=not bool(produtos_saida_reg_i88),
@@ -22143,6 +22510,174 @@ if pagina_atual == "catalogo":
                             f"Nova geração registrada: {meta_download_i884['data']} às {meta_download_i884['hora']} "
                             f"• validade até {meta_download_i884['validade_texto']}."
                         )
+
+            compartilhar_id_i89 = st.session_state.get("i89_compartilhar_id")
+            compartilhar_reg_i89 = next((x for x in catalogos_i88 if str(x.get("id") or "") == str(compartilhar_id_i89 or "")), None)
+            if compartilhar_reg_i89:
+                st.divider()
+                share_id_i89 = str(compartilhar_reg_i89.get("id") or "")
+                st.markdown(f"### 📤 I8.9 • Compartilhar {compartilhar_reg_i89.get('nome_interno') or 'Catálogo'}")
+                st.caption(
+                    "A publicação gera uma versão comercial estática usando os dados atuais do Catálogo Oficial. "
+                    "A Central guarda somente URL e rastreabilidade da publicação; não vira uma segunda fonte de preço."
+                )
+                _, _, ausentes_share_i89, produtos_share_i89 = _i88_html_catalogo_salvo(compartilhar_reg_i89, catalogo)
+                if ausentes_share_i89:
+                    st.warning(f"{len(ausentes_share_i89)} referência(s) estão pendentes. Elas não entram na versão compartilhada.")
+                if not produtos_share_i89:
+                    st.warning("Não há produtos elegíveis para compartilhar neste catálogo.")
+                else:
+                    pub_list_i89 = _i89_publicacoes(compartilhar_reg_i89)
+                    ultima_pub_i89 = pub_list_i89[0] if pub_list_i89 else None
+                    if ultima_pub_i89:
+                        meta_ultima_pub_i89 = _i884_metadados_geracao(
+                            ultima_pub_i89.get("gerado_em"), ultima_pub_i89.get("gerado_por")
+                        )
+                        status_pub_i89, dias_pub_i89 = _i884_status_validade(meta_ultima_pub_i89)
+                        st.markdown("#### 🌐 Último link público")
+                        st.caption(
+                            f"{status_pub_i89} • publicado em {meta_ultima_pub_i89['data']} às {meta_ultima_pub_i89['hora']} "
+                            f"por {meta_ultima_pub_i89['gerado_por']} • válido até {meta_ultima_pub_i89['validade_texto']}"
+                        )
+                        url_ultima_i89 = str(ultima_pub_i89.get("url") or "")
+                        if url_ultima_i89:
+                            u1_i89, u2_i89 = st.columns([3, 1])
+                            u1_i89.code(url_ultima_i89, language=None)
+                            u2_i89.link_button("🌐 Abrir catálogo", url_ultima_i89, use_container_width=True)
+                            qr_ultima_i89 = _i89_qr_png_bytes(url_ultima_i89)
+                            q1_i89, q2_i89 = st.columns([1, 3])
+                            if qr_ultima_i89:
+                                q1_i89.image(qr_ultima_i89, width=190)
+                                q1_i89.download_button(
+                                    "⬇️ Baixar QR Code",
+                                    qr_ultima_i89,
+                                    file_name=f"qr_{slug_html(compartilhar_reg_i89.get('nome_interno') or 'catalogo').lower()}.png",
+                                    mime="image/png",
+                                    use_container_width=True,
+                                    key=f"i89_qr_{share_id_i89}",
+                                )
+                            with q2_i89:
+                                telefone_share_i89 = st.text_input(
+                                    "WhatsApp do cliente (opcional)",
+                                    placeholder="Ex.: (11) 99999-9999",
+                                    key=f"i89_tel_{share_id_i89}",
+                                    help="Se ficar vazio, o WhatsApp abre para você escolher o contato.",
+                                )
+                                if dias_pub_i89 < 0:
+                                    st.error("Este link está comercialmente vencido. Publique uma nova versão antes de enviar ao cliente.")
+                                else:
+                                    link_wpp_i89 = _i89_link_whatsapp_compartilhar(
+                                        url_ultima_i89,
+                                        meta_ultima_pub_i89,
+                                        compartilhar_reg_i89.get("titulo") or "Catálogo AlphaFest",
+                                        telefone_share_i89,
+                                    )
+                                    st.link_button("💬 Enviar pelo WhatsApp", link_wpp_i89, type="primary", use_container_width=True)
+                                    st.caption("A mensagem já informa a validade comercial do catálogo.")
+
+                    st.markdown("#### Nova saída")
+                    n1_i89, n2_i89 = st.columns(2)
+                    storage_disponivel_i89 = bool(catalog_public_url("catalogos-publicos/verificacao.html"))
+                    if n1_i89.button(
+                        "🌐 Publicar nova versão + QR",
+                        type="primary",
+                        use_container_width=True,
+                        key=f"i89_publicar_{share_id_i89}",
+                        disabled=not storage_disponivel_i89,
+                    ):
+                        meta_pub_i89 = _i884_metadados_geracao()
+                        object_path_i89 = _i89_objeto_publicacao(compartilhar_reg_i89, meta_pub_i89)
+                        url_planejada_i89 = catalog_public_url(object_path_i89)
+                        qr_data_i89 = _i89_qr_data_uri(url_planejada_i89)
+                        html_publico_i89, _, _, _ = _i88_html_catalogo_salvo(
+                            compartilhar_reg_i89,
+                            catalogo,
+                            metadados_geracao=meta_pub_i89,
+                            url_publica=url_planejada_i89,
+                            qr_data_uri=qr_data_i89,
+                        )
+                        url_publicada_i89 = publish_catalog_html(html_publico_i89, object_path_i89)
+                        if url_publicada_i89:
+                            publicacao_i89 = {
+                                "id": f"PUB-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
+                                "url": url_publicada_i89,
+                                "object_path": object_path_i89,
+                                "gerado_em": meta_pub_i89["gerado_em"],
+                                "gerado_por": meta_pub_i89["gerado_por"],
+                                "validade_ate": meta_pub_i89["validade_ate"],
+                            }
+                            _i89_registrar_publicacao(share_id_i89, publicacao_i89)
+                            _i884_atualizar_ultima_geracao(share_id_i89, meta_pub_i89)
+                            registrar_auditoria(
+                                "Publicar catálogo",
+                                "Catálogo gerado",
+                                share_id_i89,
+                                {"url": url_publicada_i89, "validade_ate": meta_pub_i89["validade_ate"], "gerado_por": meta_pub_i89["gerado_por"]},
+                            )
+                            st.session_state["i88_flash"] = True
+                            st.session_state["i88_flash_texto"] = (
+                                f"Nova versão pública criada por {meta_pub_i89['gerado_por']} e válida até {meta_pub_i89['validade_texto']}."
+                            )
+                            st.rerun()
+                        else:
+                            st.error("Não foi possível publicar no armazenamento online. O catálogo não ganhou link público.")
+                    if not storage_disponivel_i89:
+                        n1_i89.caption("Link público exige o Supabase online configurado. HTML e PDF continuam disponíveis sem publicação.")
+
+                    sig_pdf_share_i89 = hashlib.sha1(
+                        f"{share_id_i89}|{compartilhar_reg_i89.get('revisao',1)}|{str((ultima_pub_i89 or {}).get('url') or '')}".encode("utf-8")
+                    ).hexdigest()
+                    if st.session_state.get(f"i89_pdf_sig_{share_id_i89}") != sig_pdf_share_i89:
+                        st.session_state.pop(f"i89_pdf_bytes_{share_id_i89}", None)
+                        st.session_state.pop(f"i89_pdf_meta_{share_id_i89}", None)
+
+                    if n2_i89.button(
+                        "📄 Preparar PDF comercial",
+                        use_container_width=True,
+                        key=f"i89_preparar_pdf_{share_id_i89}",
+                    ):
+                        meta_pdf_i89 = _i884_metadados_geracao()
+                        url_pdf_i89 = str((ultima_pub_i89 or {}).get("url") or "")
+                        pdf_bytes_i89 = _i89_pdf_catalogo_salvo(
+                            compartilhar_reg_i89,
+                            catalogo,
+                            metadados_geracao=meta_pdf_i89,
+                            url_publica=url_pdf_i89,
+                        )
+                        if pdf_bytes_i89:
+                            st.session_state[f"i89_pdf_bytes_{share_id_i89}"] = pdf_bytes_i89
+                            st.session_state[f"i89_pdf_meta_{share_id_i89}"] = meta_pdf_i89
+                            st.session_state[f"i89_pdf_sig_{share_id_i89}"] = sig_pdf_share_i89
+                        else:
+                            st.error("Não foi possível montar o PDF nesta execução.")
+                    pdf_pronto_i89 = st.session_state.get(f"i89_pdf_bytes_{share_id_i89}")
+                    meta_pdf_pronto_i89 = st.session_state.get(f"i89_pdf_meta_{share_id_i89}") or {}
+                    if pdf_pronto_i89:
+                        st.download_button(
+                            f"⬇️ Baixar PDF • válido até {meta_pdf_pronto_i89.get('validade_texto','')}",
+                            pdf_pronto_i89,
+                            file_name=f"{slug_html(compartilhar_reg_i89.get('titulo') or compartilhar_reg_i89.get('nome_interno') or 'catalogo').lower()}_i89.pdf",
+                            mime="application/pdf",
+                            type="primary",
+                            use_container_width=True,
+                            key=f"i89_download_pdf_{share_id_i89}",
+                        )
+
+                    if len(pub_list_i89) > 1:
+                        with st.expander(f"🕘 Histórico de links publicados ({len(pub_list_i89)})"):
+                            st.caption("Cada publicação recebe uma URL própria e mantém no próprio arquivo a validade da geração correspondente.")
+                            for pub_i89 in pub_list_i89[:10]:
+                                meta_hist_i89 = _i884_metadados_geracao(pub_i89.get("gerado_em"), pub_i89.get("gerado_por"))
+                                stat_hist_i89, _ = _i884_status_validade(meta_hist_i89)
+                                st.write(
+                                    f"{stat_hist_i89} **{meta_hist_i89['data']} {meta_hist_i89['hora']}** • "
+                                    f"{meta_hist_i89['gerado_por']} • válido até {meta_hist_i89['validade_texto']}"
+                                )
+                                st.code(str(pub_i89.get("url") or ""), language=None)
+
+                if st.button("Fechar compartilhamento", key=f"i89_fechar_{share_id_i89}"):
+                    st.session_state.pop("i89_compartilhar_id", None)
+                    st.rerun()
 
             editor_id_i88 = st.session_state.get("i88_editor_id")
             editor_reg_i88 = next((x for x in catalogos_i88 if x.get("id") == editor_id_i88), None)
