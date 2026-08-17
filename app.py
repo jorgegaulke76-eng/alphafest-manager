@@ -11402,125 +11402,299 @@ def thu_i8_salvar_preview_como_foto(preview_relativo, produto_nome="produto"):
     return salvar_upload_catalogo(upload)
 
 
-def thu_i83_recuperar_fotos_historicas_seguras(catalogo=None, salvar=True):
-    """Recupera fotos para cadastros históricos antigos sem imagem.
+def thu_i84_imagem_referencia_utilizavel(origem, verificar_remota=False):
+    """Valida referências locais/data URL e, opcionalmente, URLs remotas.
 
-    Só atua quando:
-    - produto ainda não possui Imagens;
-    - existe FontesHistoricasCatalogos;
-    - a fonte aponta para página de produto único;
-    - o preview existe no pacote.
+    Retorna:
+    - True: utilizável;
+    - False: comprovadamente indisponível;
+    - None: não foi possível verificar com segurança.
+    """
+    if origem is None:
+        return False
+
+    if isinstance(origem, (bytes, bytearray, memoryview)):
+        return len(bytes(origem)) > 32
+
+    texto = str(origem).strip()
+    if not texto:
+        return False
+
+    if texto.startswith("data:image/"):
+        try:
+            bruto = _ler_bytes_midia(texto)
+            return bool(bruto and len(bruto) > 32)
+        except Exception:
+            return False
+
+    if texto.startswith(("http://", "https://")):
+        if not verificar_remota:
+            return True
+        try:
+            resposta = requests.get(
+                texto,
+                stream=True,
+                timeout=4,
+                headers={"User-Agent": "AlphaFestManager/20.4.9-I8.4"},
+            )
+            ok = 200 <= resposta.status_code < 400
+            tipo = str(resposta.headers.get("Content-Type") or "").casefold()
+            resposta.close()
+            if not ok:
+                return False
+            if tipo and not tipo.startswith("image/"):
+                return False
+            return True
+        except Exception:
+            return None
+
+    # Caminhos antigos são muito comuns no histórico. Só contam se o arquivo existir.
+    try:
+        caminho = Path(texto)
+        candidatos = [caminho]
+        if not caminho.is_absolute():
+            candidatos.extend([
+                Path.cwd() / caminho,
+                Path(__file__).resolve().parent / caminho,
+            ])
+        for candidato in candidatos:
+            if candidato.exists() and candidato.is_file() and candidato.stat().st_size > 32:
+                return True
+        return False
+    except Exception:
+        return False
+
+
+def thu_i84_candidatos_imagem_historica(produto):
+    """Coleta referências antigas sem alterar o produto."""
+    candidatos = []
+
+    for hist in reversed(list((produto or {}).get("BancoImagensHistorico", []) or [])):
+        if not isinstance(hist, dict):
+            continue
+        for foto in hist.get("fotos", []) or []:
+            if foto not in candidatos:
+                candidatos.append(foto)
+
+    for variacao in reversed(list((produto or {}).get("VariacoesImagem", []) or [])):
+        if not isinstance(variacao, dict):
+            continue
+        for foto in variacao.get("fotos", []) or []:
+            if foto not in candidatos:
+                candidatos.append(foto)
+
+    for arq in reversed(list((produto or {}).get("ArquivosBiblioteca", []) or [])):
+        if not isinstance(arq, dict) or arq.get("arquivado"):
+            continue
+        categoria = str(arq.get("categoria") or "").casefold()
+        tipo = str(arq.get("tipo") or "").casefold()
+        nome = str(arq.get("nome") or "").casefold()
+        eh_imagem = (
+            "foto" in categoria
+            or "referência" in categoria
+            or "referencia" in categoria
+            or "imagem" in tipo
+            or nome.endswith((".jpg", ".jpeg", ".png", ".webp"))
+        )
+        url = str(arq.get("url") or "").strip()
+        if eh_imagem and url and url not in candidatos:
+            candidatos.append(url)
+
+    return candidatos
+
+
+def thu_i83_recuperar_fotos_historicas_seguras(
+    catalogo=None,
+    salvar=True,
+    verificar_remotas=False,
+):
+    """I8.4 — recupera fotos ausentes e corrige referências comprovadamente quebradas.
+
+    Regras:
+    - foto válida nunca é removida;
+    - referência local/data comprovadamente quebrada sai da galeria, mas fica arquivada;
+    - URL remota só é removida em auditoria profunda e quando a falha é confirmada;
+    - tenta recuperar de BancoImagensHistorico, Variações/Arquivos e depois do Acervo;
+    - página multiproduto nunca vira foto automática.
     """
     catalogo = list(catalogo if catalogo is not None else carregar_catalogo())
     acervo = thu_i8_carregar_acervo_estatico()
+
     alterados = 0
+    recuperados = 0
+    referencias_quebradas = 0
+    sem_fonte = 0
     ignorados_multi = 0
     falhas = 0
     produtos_alterados = []
 
     for idx, produto in enumerate(catalogo):
         registro = dict(produto or {})
-        imagens = [
+        imagens_originais = [
             str(x).strip()
             for x in (registro.get("Imagens", []) or [])
             if str(x).strip()
         ]
-        if imagens:
+
+        imagens_validas = []
+        imagens_quebradas = []
+        for imagem in imagens_originais:
+            status = thu_i84_imagem_referencia_utilizavel(
+                imagem,
+                verificar_remota=verificar_remotas,
+            )
+            if status is False:
+                imagens_quebradas.append(imagem)
+            else:
+                # True ou None: na dúvida preserva.
+                imagens_validas.append(imagem)
+
+        houve_mudanca = False
+
+        if imagens_quebradas:
+            referencias_quebradas += len(imagens_quebradas)
+            arquivo_quebradas = list(
+                registro.get("ImagensInacessiveisHistoricoI84", []) or []
+            )
+            for imagem in imagens_quebradas:
+                if not any(
+                    isinstance(x, dict)
+                    and str(x.get("origem") or "") == imagem
+                    for x in arquivo_quebradas
+                ):
+                    arquivo_quebradas.append({
+                        "origem": imagem,
+                        "detectado_em": agora_local().isoformat(timespec="seconds"),
+                        "usuario": obter_usuario_atual(),
+                        "motivo": "Referência de imagem comprovadamente indisponível",
+                    })
+            registro["ImagensInacessiveisHistoricoI84"] = arquivo_quebradas[-150:]
+            registro["Imagens"] = list(imagens_validas)
+            houve_mudanca = True
+
+        # Se restou ao menos uma foto utilizável, não substitui por foto histórica.
+        if imagens_validas:
+            if houve_mudanca:
+                registro["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+                catalogo[idx] = registro
+                alterados += 1
+                produtos_alterados.append(str(registro.get("Nome") or "Produto"))
             continue
 
-        fontes = list(registro.get("FontesHistoricasCatalogos", []) or [])
-        if not fontes:
-            continue
+        # 1) Tenta recuperar de bancos já ligados ao próprio produto.
+        foto_recuperada = ""
+        origem_recuperacao = ""
+        for candidato in thu_i84_candidatos_imagem_historica(registro):
+            if candidato in imagens_quebradas:
+                continue
+            status = thu_i84_imagem_referencia_utilizavel(
+                candidato,
+                verificar_remota=verificar_remotas,
+            )
+            if status is True or (status is None and str(candidato).startswith(("http://", "https://"))):
+                foto_recuperada = str(candidato)
+                origem_recuperacao = "Banco histórico já vinculado ao produto"
+                break
 
+        # 2) Se ainda não achou, tenta página de produto único do Acervo de Catálogos.
         fonte_escolhida = None
         preview_rel = ""
+        if not foto_recuperada:
+            fontes = list(registro.get("FontesHistoricasCatalogos", []) or [])
+            for fonte in reversed(fontes):
+                if not isinstance(fonte, dict):
+                    continue
+                if bool(fonte.get("pagina_multiproduto")):
+                    ignorados_multi += 1
+                    continue
 
-        for fonte in reversed(fontes):
-            if not isinstance(fonte, dict):
-                continue
-            if bool(fonte.get("pagina_multiproduto")):
-                ignorados_multi += 1
-                continue
+                cat_id = str(fonte.get("catalogo_id") or "").strip()
+                pagina = int(fonte.get("pagina") or 0)
+                preview = str(fonte.get("preview") or "").strip()
 
-            _cat_id = str(fonte.get("catalogo_id") or "").strip()
-            _pagina = int(fonte.get("pagina") or 0)
-            _preview = str(fonte.get("preview") or "").strip()
+                if not preview and cat_id and pagina:
+                    _, pg = thu_i8_pagina(cat_id, pagina, acervo=acervo)
+                    if pg:
+                        preview = str(pg.get("preview") or "").strip()
 
-            # Se a fonte antiga não tinha o campo preview completo, reconstrói
-            # a referência a partir do acervo estático.
-            if not _preview and _cat_id and _pagina:
-                _cat_fonte, _pg = thu_i8_pagina(
-                    _cat_id,
-                    _pagina,
-                    acervo=acervo,
-                )
-                if _pg:
-                    _preview = str(_pg.get("preview") or "").strip()
+                if not preview:
+                    continue
 
-            if not _preview:
-                continue
+                caminho_preview = Path(__file__).resolve().parent / preview
+                if not caminho_preview.exists() or not caminho_preview.is_file():
+                    continue
 
-            _path = Path(__file__).resolve().parent / _preview
-            if not _path.exists() or not _path.is_file():
-                continue
+                fonte_escolhida = fonte
+                preview_rel = preview
+                break
 
-            fonte_escolhida = fonte
-            preview_rel = _preview
-            break
+            if fonte_escolhida and preview_rel:
+                try:
+                    foto_recuperada = thu_i8_salvar_preview_como_foto(
+                        preview_rel,
+                        registro.get("Nome") or "produto",
+                    )
+                    if foto_recuperada:
+                        origem_recuperacao = "Acervo Histórico de Catálogos AlphaFest"
+                except Exception:
+                    foto_recuperada = ""
+                    falhas += 1
 
-        if not fonte_escolhida or not preview_rel:
+        if foto_recuperada:
+            registro["Imagens"] = [foto_recuperada]
+            banco_hist = list(registro.get("BancoImagensHistorico", []) or [])
+            banco_hist.append({
+                "origem": origem_recuperacao,
+                "catalogo_id": (
+                    str((fonte_escolhida or {}).get("catalogo_id") or "")
+                    if fonte_escolhida else ""
+                ),
+                "catalogo": (
+                    str((fonte_escolhida or {}).get("catalogo") or "")
+                    if fonte_escolhida else ""
+                ),
+                "pagina": (
+                    int((fonte_escolhida or {}).get("pagina") or 0)
+                    if fonte_escolhida else 0
+                ),
+                "preview": preview_rel,
+                "acao": "Foto recuperada após auditoria de referência quebrada/ausente",
+                "fotos": [foto_recuperada],
+                "adicionado_em": agora_local().isoformat(timespec="seconds"),
+                "usuario": obter_usuario_atual(),
+                "regra": "Não substitui foto válida; página multiproduto não é automática",
+            })
+            registro["BancoImagensHistorico"] = banco_hist[-150:]
+
+            hist = list(registro.get("HistoricoEnriquecimentoCatalogos", []) or [])
+            hist.append({
+                "fonte": origem_recuperacao,
+                "produto": registro.get("Nome"),
+                "acao": "Recuperação de foto I8.4",
+                "campos_aplicados": ["Foto"],
+                "referencias_quebradas_arquivadas": list(imagens_quebradas),
+                "confirmado_em": agora_local().isoformat(timespec="seconds"),
+                "usuario": obter_usuario_atual(),
+                "preco_oficial_alterado": False,
+                "quantidade_minima_criada": False,
+            })
+            registro["HistoricoEnriquecimentoCatalogos"] = hist[-150:]
+            registro["MigracaoFotoHistoricaI84"] = True
+            registro["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+            catalogo[idx] = registro
+            recuperados += 1
+            alterados += 1
+            produtos_alterados.append(str(registro.get("Nome") or "Produto"))
             continue
 
-        try:
-            foto_salva = thu_i8_salvar_preview_como_foto(
-                preview_rel,
-                registro.get("Nome") or "produto",
-            )
-        except Exception:
-            foto_salva = ""
-
-        if not foto_salva:
-            falhas += 1
-            continue
-
-        registro["Imagens"] = [foto_salva]
-
-        banco_hist = list(registro.get("BancoImagensHistorico", []) or [])
-        banco_hist.append({
-            "origem": "Acervo Histórico de Catálogos AlphaFest",
-            "catalogo_id": str(fonte_escolhida.get("catalogo_id") or ""),
-            "catalogo": str(fonte_escolhida.get("catalogo") or ""),
-            "pagina": int(fonte_escolhida.get("pagina") or 0),
-            "preview": preview_rel,
-            "acao": "Foto histórica recuperada automaticamente para cadastro sem imagem",
-            "fotos": [foto_salva],
-            "adicionado_em": agora_local().isoformat(timespec="seconds"),
-            "usuario": obter_usuario_atual(),
-            "regra": "Somente página de produto único e produto sem foto",
-        })
-        registro["BancoImagensHistorico"] = banco_hist[-150:]
-
-        hist = list(registro.get("HistoricoEnriquecimentoCatalogos", []) or [])
-        hist.append({
-            "fonte": (
-                f"{fonte_escolhida.get('catalogo') or 'Catálogo histórico'} "
-                f"• p.{fonte_escolhida.get('pagina') or '—'}"
-            ),
-            "produto": registro.get("Nome"),
-            "acao": "Recuperação retroativa de foto histórica",
-            "campos_aplicados": ["Foto histórica"],
-            "confirmado_em": agora_local().isoformat(timespec="seconds"),
-            "usuario": obter_usuario_atual(),
-            "preco_oficial_alterado": False,
-            "quantidade_minima_criada": False,
-        })
-        registro["HistoricoEnriquecimentoCatalogos"] = hist[-150:]
-        registro["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
-        registro["MigracaoFotoHistoricaI83"] = True
-
-        catalogo[idx] = registro
-        alterados += 1
-        produtos_alterados.append(str(registro.get("Nome") or "Produto"))
+        # Não inventa foto. Se havia referência quebrada, a galeria fica vazia e correta.
+        if imagens_quebradas:
+            registro["Imagens"] = []
+            registro["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+            catalogo[idx] = registro
+            alterados += 1
+            sem_fonte += 1
+            produtos_alterados.append(str(registro.get("Nome") or "Produto"))
 
     if salvar and alterados:
         salvar_catalogo(catalogo)
@@ -11528,14 +11702,17 @@ def thu_i83_recuperar_fotos_historicas_seguras(catalogo=None, salvar=True):
     return {
         "catalogo": catalogo,
         "alterados": alterados,
-        "produtos": produtos_alterados,
+        "recuperados": recuperados,
+        "referencias_quebradas": referencias_quebradas,
+        "produtos": list(dict.fromkeys(produtos_alterados)),
         "ignorados_multiproduto": ignorados_multi,
+        "sem_fonte": sem_fonte,
         "falhas": falhas,
     }
 
 
 def thu_i83_garantir_fotos_historicas_sessao(catalogo=None):
-    """Executa uma vez por sessão para recuperar cadastros I8.1/I8.2 sem foto."""
+    """Executa uma vez por sessão para recuperar fotos ausentes e referências locais quebradas."""
     chave = "_thu_i83_fotos_historicas_verificadas"
     if st.session_state.get(chave):
         return {
@@ -11552,9 +11729,19 @@ def thu_i83_garantir_fotos_historicas_sessao(catalogo=None):
     )
     st.session_state[chave] = True
     if resultado.get("alterados"):
+        partes = []
+        if resultado.get("recuperados"):
+            partes.append(f"{resultado['recuperados']} foto(s) recuperada(s)")
+        if resultado.get("referencias_quebradas"):
+            partes.append(
+                f"{resultado['referencias_quebradas']} referência(s) quebrada(s) arquivada(s)"
+            )
+        if resultado.get("sem_fonte"):
+            partes.append(
+                f"{resultado['sem_fonte']} produto(s) ainda precisam de nova foto"
+            )
         st.session_state["_thu_i83_feedback_fotos"] = (
-            f"📸 {resultado['alterados']} produto(s) sem foto receberam a imagem "
-            "segura do Acervo Histórico."
+            "📸 Auditoria de imagens concluída: " + " • ".join(partes or ["cadastros revisados"])
         )
     return resultado
 
@@ -12094,25 +12281,33 @@ def renderizar_acervo_catalogos_legados():
 
     _rf1, _rf2 = st.columns([1.5, 2.5])
     if _rf1.button(
-        "📸 Recuperar fotos históricas seguras",
+        "🩺 Auditar e reparar fotos do Catálogo",
         use_container_width=True,
         key="thu_i83_recuperar_fotos_manual",
         help=(
-            "Preenche somente produtos sem foto que já possuem fonte histórica "
-            "de página com um único produto. Páginas multiproduto são ignoradas."
+            "Valida referências de imagem, inclusive URLs remotas, arquiva links quebrados "
+            "e tenta recuperar uma foto histórica segura sem tocar em fotos válidas."
         ),
     ):
         st.session_state.pop("_thu_i83_fotos_historicas_verificadas", None)
         _res_i83_manual = thu_i83_recuperar_fotos_historicas_seguras(
             catalogo=carregar_catalogo(),
             salvar=True,
+            verificar_remotas=True,
         )
         st.session_state["_thu_i83_fotos_historicas_verificadas"] = True
         if _res_i83_manual.get("alterados"):
             st.success(
-                f"📸 {_res_i83_manual['alterados']} produto(s) receberam foto histórica: "
-                + " • ".join(_res_i83_manual.get("produtos", [])[:12])
+                "📸 Auditoria concluída. "
+                f"Recuperadas: {_res_i83_manual.get('recuperados', 0)} • "
+                f"Referências quebradas arquivadas: {_res_i83_manual.get('referencias_quebradas', 0)} • "
+                f"Ainda sem fonte recuperável: {_res_i83_manual.get('sem_fonte', 0)}."
             )
+            if _res_i83_manual.get("produtos"):
+                st.caption(
+                    "Produtos revisados: "
+                    + " • ".join(_res_i83_manual.get("produtos", [])[:20])
+                )
         elif _res_i83_manual.get("falhas"):
             st.warning(
                 "As fontes foram localizadas, mas algumas imagens não puderam ser persistidas. "
@@ -12124,8 +12319,9 @@ def renderizar_acervo_catalogos_legados():
             )
 
     _rf2.caption(
-        "A recuperação nunca altera preço, quantidade mínima, descrição ou campanha. "
-        "Ela atua somente na galeria de produtos sem foto."
+        "A auditoria nunca altera preço, quantidade mínima, descrição ou campanha. "
+        "Foto válida é preservada. Referência comprovadamente quebrada é arquivada para histórico "
+        "antes de qualquer tentativa de recuperação."
     )
 
     m1, m2, m3, m4, m5 = st.columns(5)
