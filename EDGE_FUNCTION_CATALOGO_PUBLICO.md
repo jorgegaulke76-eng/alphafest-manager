@@ -1,3 +1,7 @@
+# LEGADO — NÃO É NECESSÁRIO NA I8.9.2
+
+A I8.9.2 passou a usar GitHub Pages como camada pública de renderização. Este material permanece apenas para histórico da I8.9.1.
+
 # I8.9.1 — Ativação única do link público de catálogo
 
 O Supabase Storage força arquivos HTML públicos para `text/plain` por segurança. Por isso, abrir diretamente o objeto do Storage mostra o código-fonte do catálogo em vez da página renderizada.

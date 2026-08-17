@@ -9204,7 +9204,7 @@ def _i88_duplicar_registro(registro):
     copia["revisao"] = 1
     return copia
 
-# --- 20.4.9-I8.9.1: Link público renderizado por Edge Function ---
+# --- 20.4.9-I8.9.2: Link público renderizado via GitHub Pages ---
 def _i89_qr_png_bytes(conteudo):
     texto = str(conteudo or "").strip()
     if not texto or qrcode is None:
@@ -9263,7 +9263,7 @@ def _i89_publicacoes(registro):
 
 
 def _i891_url_cliente(publicacao):
-    """Converte publicações antigas do Storage para o renderizador público I8.9.1."""
+    """Converte qualquer publicação com object_path para o link GitHub Pages I8.9.2."""
     publicacao = publicacao or {}
     caminho = str(publicacao.get("object_path") or "").strip()
     if caminho:
@@ -21332,7 +21332,7 @@ if pagina_atual == "catalogo":
             aba_gerador, aba_modelos, aba_central, aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_cliente = st.tabs([
                 "✨ Gerador I8.7.1",
                 "🧩 Modelos I8.8.3",
-                "📤 Central I8.9.1",
+                "📤 Central I8.9.2",
                 "➕ Cadastrar",
                 "📋 Produtos",
                 "🧹 Saneamento",
@@ -21347,7 +21347,7 @@ if pagina_atual == "catalogo":
                 "📚 Acervo histórico",
                 "✨ Gerador I8.7.1",
                 "🧩 Modelos I8.8.3",
-                "📤 Central I8.9.1",
+                "📤 Central I8.9.2",
                 "📤 Catálogo para cliente",
             ])
 
@@ -22215,7 +22215,7 @@ if pagina_atual == "catalogo":
                             st.rerun()
 
         with aba_central:
-            st.markdown("### 📤 I8.9.1 • Central e Compartilhamento de Catálogos AlphaFest")
+            st.markdown("### 📤 I8.9.2 • Central e Compartilhamento de Catálogos AlphaFest")
             st.caption(
                 "Catálogos agora são objetos operacionais reutilizáveis. Cada item salvo guarda somente "
                 "configuração e referências; ao gerar novamente, os dados vêm do Catálogo Oficial atual."
@@ -22535,7 +22535,7 @@ if pagina_atual == "catalogo":
             if compartilhar_reg_i89:
                 st.divider()
                 share_id_i89 = str(compartilhar_reg_i89.get("id") or "")
-                st.markdown(f"### 📤 I8.9.1 • Compartilhar {compartilhar_reg_i89.get('nome_interno') or 'Catálogo'}")
+                st.markdown(f"### 📤 I8.9.2 • Compartilhar {compartilhar_reg_i89.get('nome_interno') or 'Catálogo'}")
                 st.caption(
                     "A publicação gera uma versão comercial estática usando os dados atuais do Catálogo Oficial. "
                     "A Central guarda somente URL e rastreabilidade da publicação; não vira uma segunda fonte de preço."
@@ -22596,8 +22596,8 @@ if pagina_atual == "catalogo":
                                     st.caption("A mensagem já informa a validade comercial do catálogo.")
                         elif url_ultima_i89 and not renderer_ok_i891:
                             st.warning(
-                                "O HTML está salvo no Supabase, mas o renderizador público I8.9.1 ainda não está ativo. "
-                                "Ative a Edge Function `catalogo-publico` para liberar Abrir catálogo, QR e WhatsApp."
+                                "O visualizador público do GitHub Pages não está configurado. "
+                                "O HTML continua preservado no Supabase e pode ser republicado assim que o visualizador estiver disponível."
                             )
 
                     st.markdown("#### Nova saída")
@@ -22652,13 +22652,10 @@ if pagina_atual == "catalogo":
                     if not storage_disponivel_i89:
                         n1_i89.caption("Link público exige o Supabase online configurado. HTML e PDF continuam disponíveis sem publicação.")
                     elif not renderer_disponivel_i891:
-                        n1_i89.caption("I8.9.1: falta ativar a Edge Function pública `catalogo-publico`. O Storage sozinho exibe HTML como texto por segurança.")
-                        with st.expander("⚙️ Como ativar o link público I8.9.1"):
-                            st.markdown(
-                                "No Supabase, implante a função **catalogo-publico** incluída na pasta `supabase/functions/catalogo-publico/` "
-                                "e deixe a verificação JWT desativada (`verify_jwt = false`). Depois aguarde alguns segundos e recarregue esta tela."
-                            )
-                            st.code("supabase functions deploy catalogo-publico --no-verify-jwt", language="bash")
+                        n1_i89.caption(
+                            "I8.9.2: o visualizador público via GitHub Pages não está configurado. "
+                            "O armazenamento no Supabase continua preservado."
+                        )
 
                     sig_pdf_share_i89 = hashlib.sha1(
                         f"{share_id_i89}|{compartilhar_reg_i89.get('revisao',1)}|{_i891_url_cliente(ultima_pub_i89 or {})}".encode("utf-8")
@@ -22673,7 +22670,7 @@ if pagina_atual == "catalogo":
                         key=f"i89_preparar_pdf_{share_id_i89}",
                     ):
                         meta_pdf_i89 = _i884_metadados_geracao()
-                        url_pdf_i89 = _i891_url_cliente(ultima_pub_i89 or {}) if catalog_render_available() else ""
+                        url_pdf_i89 = _i891_url_cliente(ultima_pub_i89 or {})
                         pdf_bytes_i89 = _i89_pdf_catalogo_salvo(
                             compartilhar_reg_i89,
                             catalogo,

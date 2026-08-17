@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Catálogo AlphaFest</title>
+  <style>
+    html,body{margin:0;min-height:100%;font-family:Arial,Helvetica,sans-serif;background:#f4f8fb;color:#17324a}
+    .status{max-width:760px;margin:12vh auto;padding:28px;border-radius:18px;background:#fff;box-shadow:0 10px 30px rgba(15,76,129,.12);text-align:center}
+    .status h1{color:#0f4c81;margin:0 0 10px}
+    .status p{line-height:1.5;color:#536a7d}
+  </style>
+</head>
+<body>
+  <div id="status" class="status">
+    <h1>AlphaFest</h1>
+    <p>Abrindo catálogo...</p>
+  </div>
+
+<script>
+(() => {
+  const SUPABASE_BASE = "https://guejrwblcxptzlobhit.supabase.co";
+  const BUCKET = "catalogo";
+  const params = new URLSearchParams(window.location.search);
+  const rawPath = (params.get("path") || "").trim().replace(/^\/+/, "");
+  const allowed = /^catalogos-publicos\/[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+\.html$/;
+
+  function fail(message) {
+    document.getElementById("status").innerHTML =
+      "<h1>AlphaFest</h1><p>" + message + "</p>";
+  }
+
+  if (!rawPath) {
+    fail("Link de catálogo incompleto.");
+    return;
+  }
+
+  if (!allowed.test(rawPath)) {
+    fail("Link de catálogo inválido.");
+    return;
+  }
+
+  const encodedPath = rawPath.split("/").map(encodeURIComponent).join("/");
+  const storageUrl =
+    `${SUPABASE_BASE}/storage/v1/object/public/${BUCKET}/${encodedPath}`;
+
+  fetch(storageUrl, { method: "GET", cache: "no-store" })
+    .then(resp => {
+      if (!resp.ok) throw new Error("Catálogo não encontrado.");
+      return resp.text();
+    })
+    .then(html => {
+      // O HTML permanece armazenado no Supabase.
+      // O GitHub Pages apenas o renderiza no navegador.
+      document.open();
+      document.write(html);
+      document.close();
+    })
+    .catch(err => {
+      fail(
+        "Não foi possível abrir este catálogo. " +
+        "Confirme se ele ainda está publicado e tente novamente."
+      );
+      console.error(err);
+    });
+})();
+</script>
+</body>
+</html>

@@ -28,6 +28,10 @@ except Exception:
 TIMEOUT = 10
 _SESSION = requests.Session()
 
+# 20.4.9-I8.9.2 — visualizador público já homologado no GitHub Pages.
+# Pode ser sobrescrito por st.secrets/env sem alterar o código.
+DEFAULT_CATALOG_VIEWER_URL = "https://jorgegaulke76-eng.github.io/alphafest-catalogos/"
+
 __all__ = [
     "online_configured",
     "connection_test",
@@ -277,47 +281,59 @@ def catalog_public_url(object_path: str) -> str:
     return f"{url}/storage/v1/object/public/catalogo/{quote(caminho, safe='/')}"
 
 
-def catalog_render_url(object_path: str) -> str:
-    """URL cliente do catálogo via Edge Function.
+def _catalog_viewer_url() -> str:
+    """Retorna o visualizador público do catálogo.
 
-    O Supabase Storage força arquivos HTML públicos para ``text/plain`` por
-    proteção contra abuso. A Edge Function ``catalogo-publico`` lê o objeto
-    do bucket e devolve o mesmo conteúdo com ``text/html``.
+    O HTML permanece armazenado no Supabase. O GitHub Pages atua somente
+    como camada de apresentação, recebendo ``?path=...`` e buscando o objeto
+    público do bucket ``catalogo``.
     """
-    if not online_configured():
-        return ""
-    url, _ = _config()
+    viewer = ""
+    try:
+        viewer = str(st.secrets.get("CATALOG_VIEWER_URL", "")).strip()
+    except Exception:
+        pass
+    viewer = viewer or os.getenv("CATALOG_VIEWER_URL", "").strip() or DEFAULT_CATALOG_VIEWER_URL
+    return viewer.rstrip("/") + "/" if viewer else ""
+
+
+def catalog_render_url(object_path: str) -> str:
+    """URL que o cliente abre no GitHub Pages (I8.9.2).
+
+    Publicações antigas continuam compatíveis porque a URL é reconstruída
+    a partir do ``object_path`` já persistido na Central.
+    """
     caminho = str(object_path or "").strip().lstrip("/")
     if not caminho:
         return ""
-    return f"{url}/functions/v1/catalogo-publico?path={quote(caminho, safe='')}"
+    # Mesma blindagem do visualizador publicado no GitHub Pages: nunca gerar
+    # um link para objetos fora da árvore oficial de catálogos públicos.
+    if not re.fullmatch(r"catalogos-publicos/[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+\.html", caminho):
+        return ""
+    viewer = _catalog_viewer_url()
+    if not viewer:
+        return ""
+    return f"{viewer}?path={quote(caminho, safe='')}"
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def catalog_render_available() -> bool:
-    """Confirma se a Edge Function pública I8.9.1 está implantada e acessível."""
-    if not online_configured():
-        return False
-    url, _ = _config()
-    try:
-        response = _SESSION.get(
-            f"{url}/functions/v1/catalogo-publico?health=1",
-            timeout=min(TIMEOUT, 5),
-        )
-        return (
-            response.status_code == 200
-            and response.headers.get("X-AlphaFest-Catalog-Renderer", "") == "I8.9.1"
-        )
-    except requests.RequestException:
-        return False
+    """Indica se o visualizador GitHub Pages I8.9.2 está configurado.
+
+    A publicação não fica dependente de um teste de rede a cada rerun do
+    Streamlit. O endereço padrão já foi homologado e pode ser substituído por
+    ``CATALOG_VIEWER_URL`` em secrets/env se a AlphaFest trocar de domínio.
+    """
+    viewer = _catalog_viewer_url()
+    return bool(viewer and viewer.startswith("https://"))
 
 
 def publish_catalog_html(content: str | bytes, object_path: str) -> str:
     """Guarda o HTML imutável no Storage e retorna a URL técnica do objeto.
 
     A URL técnica não deve ser enviada ao cliente, pois o Supabase Storage
-    serve HTML como texto puro. Use :func:`catalog_render_url` para a URL de
-    apresentação ao cliente.
+    serve HTML como texto puro. Use :func:`catalog_render_url` para a URL de apresentação
+    via GitHub Pages que deve ser enviada ao cliente.
     """
     if not online_configured():
         return ""

@@ -1,3 +1,11 @@
+## 20.4.9-I8.9.2 — Link Público via GitHub Pages
+- Link do cliente passa a usar o GitHub Pages homologado da AlphaFest.
+- Supabase Storage continua sendo o armazenamento dos HTMLs publicados.
+- QR Code, WhatsApp, PDF e “Abrir catálogo” usam a mesma URL pública.
+- Publicações antigas são migradas em leitura a partir do `object_path`, sem duplicação.
+- Edge Function da I8.9.1 deixa de ser requisito.
+- Validade comercial, usuário, histórico, Central, Modelos e Catálogo Oficial preservados.
+
 ## 20.4.9-I8.9.1 — Correção do link público
 
 - Corrige o link público que abria o HTML como texto bruto no Supabase Storage.
