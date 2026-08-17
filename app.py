@@ -21061,7 +21061,7 @@ if pagina_atual == "catalogo":
                     )
 
         with aba_central:
-            st.markdown("### 🗂️ I8.8 • Central de Catálogos AlphaFest")
+            st.markdown("### 🗂️ I8.8.1 • Central de Catálogos AlphaFest")
             st.caption(
                 "Catálogos agora são objetos operacionais reutilizáveis. Cada item salvo guarda somente "
                 "configuração e referências; ao gerar novamente, os dados vêm do Catálogo Oficial atual."
@@ -21077,11 +21077,82 @@ if pagina_atual == "catalogo":
                 _, ausentes_reg_i88 = _i88_resolver_catalogo_salvo(reg_i88, catalogo)
                 if ausentes_reg_i88:
                     pendentes_i88 += 1
-            cm1, cm2, cm3, cm4 = st.columns(4)
+            lixeira_catalogos_i881 = [
+                reg for reg in carregar_lixeira()
+                if str(reg.get("tipo") or "") == "Catálogo gerado"
+            ]
+            cm1, cm2, cm3, cm4, cm5 = st.columns(5)
             cm1.metric("Catálogos salvos", len(catalogos_i88))
             cm2.metric("Ativos", len(ativos_i88))
             cm3.metric("Arquivados", len(arquivados_i88))
             cm4.metric("Com referência pendente", pendentes_i88)
+            cm5.metric("Na lixeira", len(lixeira_catalogos_i881))
+
+            with st.expander(
+                f"🗑️ Lixeira da Central ({len(lixeira_catalogos_i881)})",
+                expanded=bool(lixeira_catalogos_i881),
+            ):
+                st.caption(
+                    "Aqui aparecem somente catálogos excluídos da Central. Restaurar devolve a configuração "
+                    "à Central sem alterar nenhum produto do Catálogo Oficial."
+                )
+                if not lixeira_catalogos_i881:
+                    st.success("A Lixeira da Central está vazia.")
+                else:
+                    for lix_i881 in lixeira_catalogos_i881[:100]:
+                        item_lix_i881 = lix_i881.get("item") if isinstance(lix_i881.get("item"), dict) else {}
+                        nome_lix_i881 = str(
+                            item_lix_i881.get("nome_interno")
+                            or item_lix_i881.get("titulo")
+                            or lix_i881.get("identificador")
+                            or "Catálogo"
+                        )
+                        try:
+                            data_lix_i881 = datetime.fromisoformat(
+                                str(lix_i881.get("excluido_em") or "")
+                            ).astimezone(agora_local().tzinfo).strftime("%d/%m/%Y %H:%M")
+                        except Exception:
+                            data_lix_i881 = str(lix_i881.get("excluido_em") or "—")
+                        id_lix_i881 = str(lix_i881.get("id_lixeira") or "")
+                        with st.container(border=True):
+                            lc1, lc2 = st.columns([4, 1])
+                            lc1.markdown(f"**🗑️ {html.escape(nome_lix_i881)}**")
+                            lc1.caption(
+                                f"Excluído em {data_lix_i881} • por {lix_i881.get('excluido_por') or 'Não informado'}"
+                            )
+                            lc2.caption(f"ID {html.escape(str(item_lix_i881.get('id') or '—'))}")
+                            lr1, lr2 = st.columns(2)
+                            if lr1.button(
+                                "♻️ Restaurar catálogo",
+                                key=f"i881_lix_restore_{id_lix_i881}",
+                                use_container_width=True,
+                            ):
+                                try:
+                                    restaurar_item_lixeira(lix_i881)
+                                    st.session_state["i88_flash"] = True
+                                    st.session_state["i88_flash_texto"] = f"Catálogo '{nome_lix_i881}' restaurado da Lixeira."
+                                    st.rerun()
+                                except Exception as exc:
+                                    st.error(f"Não foi possível restaurar: {exc}")
+                            confirmar_purge_i881 = lr2.checkbox(
+                                "Confirmar exclusão definitiva",
+                                key=f"i881_lix_confirm_{id_lix_i881}",
+                            )
+                            if st.button(
+                                "❌ Remover definitivamente",
+                                key=f"i881_lix_purge_{id_lix_i881}",
+                                disabled=not confirmar_purge_i881,
+                                use_container_width=True,
+                            ):
+                                remover_da_lixeira(id_lix_i881)
+                                registrar_auditoria(
+                                    "Remover definitivamente",
+                                    "Catálogo gerado",
+                                    lix_i881.get("identificador", ""),
+                                )
+                                st.session_state["i88_flash"] = True
+                                st.session_state["i88_flash_texto"] = f"Catálogo '{nome_lix_i881}' removido definitivamente."
+                                st.rerun()
 
             cf1, cf2 = st.columns([2, 1])
             busca_i88 = cf1.text_input(

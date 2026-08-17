@@ -452,3 +452,9 @@ hangelog
 - Geração posterior sempre consulta os dados atuais do Catálogo Oficial.
 - Referências não resolvidas são sinalizadas como pendentes, sem substituição silenciosa.
 - Central incluída no backup completo, integridade e auditoria do sistema.
+
+
+## 20.4.9-I8.8.1
+- Hotfix de usabilidade: Lixeira de catálogos agora visível dentro da Central I8.8.
+- Indicador de quantidade na lixeira, restauração e exclusão definitiva com confirmação.
+- Lixeira geral do sistema preservada.
