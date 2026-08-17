@@ -1,3 +1,11 @@
+## 20.4.9-I8.8.2 — Prévia Interna do Catálogo
+
+- Prévia interna usa exatamente o mesmo HTML da exportação.
+- Modos Celular e Computador no Gerador.
+- Catálogo salvo pode ser aberto com prévia usando dados atuais do Catálogo Oficial.
+- Editor mostra prévia das alterações antes de salvar.
+- Nenhum snapshot comercial ou dado oficial é duplicado.
+
 ## 20.4.9-I8.7.1 — Homologação e Blindagem do Gerador de Catálogos
 
 - Unifica categorias equivalentes somente na apresentação (ex.: BUBBLE/Bubble), sem alterar o Catálogo Oficial.

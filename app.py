@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import json
 import os
@@ -8758,6 +8759,48 @@ def _i88_html_catalogo_salvo(registro, catalogo_oficial):
         observacao_rodape=(registro or {}).get("observacao_rodape") or "",
     )
     return conteudo, indices, ausentes, produtos
+
+
+# --- 20.4.9-I8.8.2: Prévia interna do catálogo ---
+def _i882_render_preview_catalogo(conteudo_html, *, key_prefix, habilitado=True, contexto="catálogo"):
+    """Exibe, sem persistir nada, o mesmo HTML usado na exportação.
+
+    A largura reduzida força os breakpoints responsivos reais do HTML no modo
+    celular. A prévia não cria snapshot comercial e não altera o Catálogo Oficial.
+    """
+    st.markdown("#### 👀 Prévia interna I8.8.2")
+    st.caption(
+        f"Confira o {contexto} antes de baixar ou salvar. A prévia usa o mesmo HTML da saída final "
+        "e continua somente leitura sobre o Catálogo Oficial."
+    )
+    if not habilitado or not str(conteudo_html or "").strip():
+        st.info("Selecione pelo menos um produto elegível para liberar a prévia.")
+        return
+
+    exibir = st.checkbox(
+        "Exibir prévia dentro do AlphaFest Manager",
+        value=False,
+        key=f"{key_prefix}_exibir",
+    )
+    if not exibir:
+        st.caption("A prévia fica recolhida para manter a tela leve. Marque a opção acima quando quiser conferir.")
+        return
+
+    modo = st.radio(
+        "Formato da prévia",
+        ["📱 Celular", "🖥️ Computador"],
+        horizontal=True,
+        key=f"{key_prefix}_modo",
+    )
+    st.caption(
+        "Somente a largura de visualização muda; conteúdo, preços, fotos e regras são exatamente os da geração atual."
+    )
+    if modo == "📱 Celular":
+        esquerda, centro, direita = st.columns([1.45, 1, 1.45])
+        with centro:
+            components.html(str(conteudo_html), height=760, scrolling=True)
+    else:
+        components.html(str(conteudo_html), height=780, scrolling=True)
 
 
 def _i88_duplicar_registro(registro):
@@ -20606,7 +20649,7 @@ if pagina_atual == "catalogo":
             "🧹 Saneamento",
             "📚 Acervo histórico",
             "✨ Gerador I8.7.1",
-            "🗂️ Central I8.8",
+            "🗂️ Central I8.8.2",
             "📤 Catálogo para cliente",
         ])
 
@@ -20983,6 +21026,12 @@ if pagina_atual == "catalogo":
                     mostrar_sem_foto=mostrar_sem_foto_i871,
                     observacao_rodape=observacao_i871,
                 )
+                _i882_render_preview_catalogo(
+                    html_i871,
+                    key_prefix="i882_gerador",
+                    habilitado=bool(selecao_saida_i871),
+                    contexto="catálogo em montagem",
+                )
                 st.download_button(
                     "📥 Baixar catálogo I8.7.1 em HTML",
                     data=html_i871,
@@ -21061,7 +21110,7 @@ if pagina_atual == "catalogo":
                     )
 
         with aba_central:
-            st.markdown("### 🗂️ I8.8.1 • Central de Catálogos AlphaFest")
+            st.markdown("### 🗂️ I8.8.2 • Central de Catálogos AlphaFest")
             st.caption(
                 "Catálogos agora são objetos operacionais reutilizáveis. Cada item salvo guarda somente "
                 "configuração e referências; ao gerar novamente, os dados vêm do Catálogo Oficial atual."
@@ -21250,7 +21299,7 @@ if pagina_atual == "catalogo":
                         )
 
                     ac1, ac2, ac3, ac4, ac5 = st.columns(5)
-                    if ac1.button("👁️ Abrir", key=f"i88_abrir_{reg_id_i88}", use_container_width=True):
+                    if ac1.button("👁️ Abrir / prévia", key=f"i88_abrir_{reg_id_i88}", use_container_width=True):
                         atual = st.session_state.get("i88_aberto_id")
                         st.session_state["i88_aberto_id"] = None if atual == reg_id_i88 else reg_id_i88
                         st.rerun()
@@ -21305,6 +21354,12 @@ if pagina_atual == "catalogo":
                             st.rerun()
 
                     if st.session_state.get("i88_aberto_id") == reg_id_i88:
+                        _i882_render_preview_catalogo(
+                            html_reg_i88,
+                            key_prefix=f"i882_central_{reg_id_i88}",
+                            habilitado=bool(produtos_saida_reg_i88),
+                            contexto=f"catálogo salvo '{reg_i88.get('nome_interno') or reg_i88.get('titulo') or 'Catálogo'}'",
+                        )
                         st.markdown("#### Conteúdo atual")
                         if indices_reg_i88:
                             for idx in indices_reg_i88:
@@ -21474,6 +21529,34 @@ if pagina_atual == "catalogo":
                     value=str(editor_reg_i88.get("observacao_rodape") or ""),
                     key=prefixo_i88 + "rodape",
                 )
+
+                produtos_preview_editor_i882 = [
+                    catalogo[i]
+                    for i in produtos_editor_i88
+                    if 0 <= int(i) < len(catalogo) and (catalogo[i] or {}).get("Ativo", True)
+                ]
+                if not sem_foto_editor_i88:
+                    produtos_preview_editor_i882 = [
+                        p for p in produtos_preview_editor_i882 if _i871_lista_textos((p or {}).get("Imagens"))
+                    ]
+                html_preview_editor_i882 = gerar_html_catalogo_i87(
+                    produtos_preview_editor_i882,
+                    titulo=titulo_editor_i88 or "Catálogo AlphaFest",
+                    subtitulo=subtitulo_editor_i88,
+                    mostrar_precos=precos_editor_i88,
+                    mostrar_material=material_editor_i88,
+                    mostrar_descricao=descricao_editor_i88,
+                    mostrar_whatsapp=whatsapp_editor_i88,
+                    mostrar_sem_foto=sem_foto_editor_i88,
+                    observacao_rodape=rodape_editor_i88,
+                )
+                _i882_render_preview_catalogo(
+                    html_preview_editor_i882,
+                    key_prefix=prefixo_i88 + "i882_preview",
+                    habilitado=bool(produtos_preview_editor_i882),
+                    contexto="edição ainda não salva",
+                )
+
                 eb1, eb2 = st.columns(2)
                 if eb1.button("💾 Salvar alterações", type="primary", use_container_width=True, key=prefixo_i88 + "salvar"):
                     if not produtos_editor_i88:
