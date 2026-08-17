@@ -6899,13 +6899,18 @@ def avaliar_pendencias_produto_catalogo(produto):
     if not descricao:
         criticas.append("Descrição")
     if not str(produto.get("Material") or "").strip():
-        criticas.append("Material")
+        if not (
+            bool(produto.get("MaterialNaoSeAplicaTHU"))
+            or thu_i861_alerta_aceito(produto, "critica:material")
+        ):
+            criticas.append("Material")
     if not str(produto.get("Preco") or "").strip():
         criticas.append("Valor")
     if not (produto.get("CampanhasPermitidas", []) or []):
         criticas.append("Campanhas/Datas")
     if not (produto.get("Imagens", []) or []):
-        avisos.append("Foto")
+        if not thu_i861_alerta_aceito(produto, "visual:foto"):
+            avisos.append("Foto")
 
     return {
         "criticas": criticas,
@@ -6917,7 +6922,157 @@ def avaliar_pendencias_produto_catalogo(produto):
 
 
 def auditar_dados_antigos_catalogo(produto):
-    """20.4.9-F — detecta sinais de migração antiga sem modificar o registro."""
+    """Detecta sinais de migração antiga e respeita revisões humanas registradas."""
+    produto = produto or {}
+    alertas = thu_i861_alertas_legado_brutos(produto)
+    return [
+        alerta
+        for alerta in alertas
+        if not thu_i861_alerta_aceito(
+            produto,
+            thu_i861_chave_legado(produto, alerta),
+        )
+    ]
+
+
+
+def thu_i861_chave_alerta(tipo, texto="", outro=""):
+    """Cria uma chave estável para uma decisão humana de saneamento."""
+    tipo_txt = re.sub(r"[^a-z0-9]+", "_", str(tipo or "").casefold()).strip("_")
+    texto_txt = normalizar_identidade_produto(str(texto or "")).replace(" ", "_")
+    outro_txt = normalizar_identidade_produto(str(outro or "")).replace(" ", "_")
+    partes = [x for x in (tipo_txt, texto_txt, outro_txt) if x]
+    return ":".join(partes)
+
+
+def thu_i861_chave_legado(produto, alerta):
+    """Chave do alerta inclui o conteúdo revisado; se o conteúdo mudar, ele volta à fila."""
+    import hashlib
+    produto = produto or {}
+    alerta_txt = str(alerta or "")
+
+    if "Material parece conter" in alerta_txt:
+        contexto = str(produto.get("Material") or "")
+    elif "imagem local" in alerta_txt:
+        contexto = "|".join(
+            str(x) for x in (produto.get("Imagens", []) or [])
+        )
+    elif "Nome e categoria" in alerta_txt:
+        contexto = (
+            str(produto.get("Nome") or "")
+            + "|"
+            + str(produto.get("Categoria") or "")
+        )
+    elif "Descrição muito longa" in alerta_txt:
+        contexto = str(
+            produto.get("DescricaoCompleta")
+            or produto.get("DescricaoCurta")
+            or produto.get("Descricao")
+            or ""
+        )
+    else:
+        contexto = str(produto.get("Nome") or "")
+
+    digest = hashlib.sha1(
+        contexto.encode("utf-8", errors="ignore")
+    ).hexdigest()[:12]
+    return thu_i861_chave_alerta("legado", alerta_txt, digest)
+
+
+def thu_i861_revisoes_ativas(produto):
+    """Retorna a última decisão ativa por alerta, preservando todo o histórico."""
+    ultimas = {}
+    for reg in list((produto or {}).get("RevisoesSaneamentoTHU", []) or []):
+        if not isinstance(reg, dict):
+            continue
+        chave = str(reg.get("chave_alerta") or "").strip()
+        if chave:
+            ultimas[chave] = reg
+    return {
+        chave: reg
+        for chave, reg in ultimas.items()
+        if str(reg.get("decisao") or "") in {
+            "aceito_como_esta",
+            "nao_se_aplica",
+            "nao_sao_duplicados",
+        }
+    }
+
+
+def thu_i861_alerta_aceito(produto, chave_alerta):
+    return str(chave_alerta or "") in thu_i861_revisoes_ativas(produto)
+
+
+def thu_i861_registrar_decisao(
+    indice_produto,
+    chave_alerta,
+    tipo,
+    texto,
+    decisao,
+    justificativa="",
+):
+    """Registra decisão humana sem apagar decisões anteriores."""
+    catalogo = carregar_catalogo()
+    if indice_produto is None or not (0 <= int(indice_produto) < len(catalogo)):
+        raise ValueError("Produto não localizado no Catálogo Oficial.")
+
+    idx = int(indice_produto)
+    produto = dict(catalogo[idx] or {})
+    hist = list(produto.get("RevisoesSaneamentoTHU", []) or [])
+    hist.append({
+        "chave_alerta": str(chave_alerta or ""),
+        "tipo": str(tipo or ""),
+        "texto": str(texto or ""),
+        "decisao": str(decisao or ""),
+        "justificativa": str(justificativa or "").strip(),
+        "revisado_em": agora_local().isoformat(timespec="seconds"),
+        "usuario": obter_usuario_atual(),
+        "versao_regra": "20.4.9-I8.6.1",
+    })
+    produto["RevisoesSaneamentoTHU"] = hist[-250:]
+    if (
+        str(chave_alerta or "") == "critica:material"
+        and str(decisao or "") == "nao_se_aplica"
+    ):
+        produto["MaterialNaoSeAplicaTHU"] = True
+    produto["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+    catalogo[idx] = produto
+    salvar_catalogo(catalogo)
+    return produto
+
+
+def thu_i861_reabrir_decisao(indice_produto, chave_alerta):
+    catalogo = carregar_catalogo()
+    if indice_produto is None or not (0 <= int(indice_produto) < len(catalogo)):
+        raise ValueError("Produto não localizado.")
+    idx = int(indice_produto)
+    produto = dict(catalogo[idx] or {})
+    ativa = thu_i861_revisoes_ativas(produto).get(str(chave_alerta or ""))
+    if not ativa:
+        return produto
+
+    hist = list(produto.get("RevisoesSaneamentoTHU", []) or [])
+    hist.append({
+        "chave_alerta": str(chave_alerta or ""),
+        "tipo": str(ativa.get("tipo") or ""),
+        "texto": str(ativa.get("texto") or ""),
+        "decisao": "reaberto",
+        "justificativa": "Decisão reaberta para nova conferência",
+        "revisado_em": agora_local().isoformat(timespec="seconds"),
+        "usuario": obter_usuario_atual(),
+        "versao_regra": "20.4.9-I8.6.1",
+    })
+    produto["RevisoesSaneamentoTHU"] = hist[-250:]
+    if str(chave_alerta or "") == "critica:material":
+        produto["MaterialNaoSeAplicaTHU"] = False
+    produto["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+    catalogo[idx] = produto
+    salvar_catalogo(catalogo)
+    return produto
+
+
+def thu_i861_alertas_legado_brutos(produto):
+    """Mesmas regras de legado da auditoria, sem ocultar decisões humanas."""
     produto = produto or {}
     alertas = []
 
@@ -6932,7 +7087,11 @@ def auditar_dados_antigos_catalogo(produto):
         if len(material) > 120 or sum(1 for m in marcadores if m in material_cf) >= 2:
             alertas.append("Material parece conter dados antigos concatenados")
 
-    imagens = [str(x).strip() for x in (produto.get("Imagens", []) or []) if str(x).strip()]
+    imagens = [
+        str(x).strip()
+        for x in (produto.get("Imagens", []) or [])
+        if str(x).strip()
+    ]
     for img in imagens:
         if img.startswith(("http://", "https://", "data:image/")):
             continue
@@ -6955,6 +7114,85 @@ def auditar_dados_antigos_catalogo(produto):
         alertas.append("Descrição muito longa; pode conter dados de migração")
 
     return list(dict.fromkeys(alertas))
+
+
+def thu_i861_aplicar_permanente(indice_produto):
+    """Confirma explicitamente elegibilidade permanente no campo oficial."""
+    catalogo = carregar_catalogo()
+    if indice_produto is None or not (0 <= int(indice_produto) < len(catalogo)):
+        raise ValueError("Produto não localizado.")
+
+    idx = int(indice_produto)
+    produto = dict(catalogo[idx] or {})
+    campanhas = [
+        str(x).strip()
+        for x in (produto.get("CampanhasPermitidas", []) or [])
+        if str(x).strip()
+    ]
+    permanente = "Permanente / Todas as épocas"
+    if permanente not in campanhas:
+        campanhas.insert(0, permanente)
+    produto["CampanhasPermitidas"] = list(dict.fromkeys(campanhas))
+
+    hist = list(produto.get("RevisoesSaneamentoTHU", []) or [])
+    hist.append({
+        "chave_alerta": "critica:campanhas_datas",
+        "tipo": "Campanhas/Datas",
+        "texto": "Campanhas/Datas",
+        "decisao": "corrigido_no_cadastro",
+        "justificativa": "Elegibilidade confirmada como Permanente / Todas as épocas",
+        "revisado_em": agora_local().isoformat(timespec="seconds"),
+        "usuario": obter_usuario_atual(),
+        "versao_regra": "20.4.9-I8.6.1",
+    })
+    produto["RevisoesSaneamentoTHU"] = hist[-250:]
+    produto["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+    catalogo[idx] = produto
+    salvar_catalogo(catalogo)
+    return produto
+
+
+def thu_i861_chave_duplicidade(nome_a, nome_b):
+    nomes = sorted([
+        normalizar_identidade_produto(nome_a),
+        normalizar_identidade_produto(nome_b),
+    ])
+    return "duplicidade:" + "|".join(nomes)
+
+
+def thu_i861_confirmar_nao_duplicados(indice_a, indice_b, justificativa):
+    catalogo = carregar_catalogo()
+    if not (0 <= int(indice_a) < len(catalogo)) or not (0 <= int(indice_b) < len(catalogo)):
+        raise ValueError("Um dos produtos não foi localizado.")
+    if not str(justificativa or "").strip():
+        raise ValueError("Informe por que os produtos são diferentes.")
+
+    a = int(indice_a)
+    b = int(indice_b)
+    nome_a = str((catalogo[a] or {}).get("Nome") or "")
+    nome_b = str((catalogo[b] or {}).get("Nome") or "")
+    chave = thu_i861_chave_duplicidade(nome_a, nome_b)
+
+    for idx, outro in ((a, nome_b), (b, nome_a)):
+        produto = dict(catalogo[idx] or {})
+        hist = list(produto.get("RevisoesSaneamentoTHU", []) or [])
+        hist.append({
+            "chave_alerta": chave,
+            "tipo": "Possível duplicidade",
+            "texto": f"Produto revisado em relação a: {outro}",
+            "decisao": "nao_sao_duplicados",
+            "justificativa": str(justificativa or "").strip(),
+            "revisado_em": agora_local().isoformat(timespec="seconds"),
+            "usuario": obter_usuario_atual(),
+            "versao_regra": "20.4.9-I8.6.1",
+        })
+        produto["RevisoesSaneamentoTHU"] = hist[-250:]
+        produto["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+        catalogo[idx] = produto
+
+    salvar_catalogo(catalogo)
+    return True
+
 
 
 def thu_i86_nome_flexivel(nome):
@@ -7021,6 +7259,13 @@ def thu_i86_possiveis_duplicidades(catalogo):
             if not motivo:
                 continue
 
+            chave_revisao = thu_i861_chave_duplicidade(nome_a, nome_b)
+            if (
+                thu_i861_alerta_aceito(produto_a, chave_revisao)
+                and thu_i861_alerta_aceito(produto_b, chave_revisao)
+            ):
+                continue
+
             chave = tuple(sorted((i, j)))
             if chave in vistos:
                 continue
@@ -7057,6 +7302,7 @@ def thu_i86_diagnosticar_catalogo(catalogo):
         for item in rev["criticas"]:
             peso += 18
             motivos.append({
+                "chave": thu_i861_chave_alerta("critica", item),
                 "tipo": item,
                 "severidade": "critica",
                 "texto": f"Completar: {item}",
@@ -7065,6 +7311,7 @@ def thu_i86_diagnosticar_catalogo(catalogo):
         for item in rev["avisos"]:
             peso += 7
             motivos.append({
+                "chave": thu_i861_chave_alerta("visual", item),
                 "tipo": item,
                 "severidade": "visual",
                 "texto": f"Revisar: {item}",
@@ -7073,6 +7320,7 @@ def thu_i86_diagnosticar_catalogo(catalogo):
         for alerta in legado:
             peso += 10
             motivos.append({
+                "chave": thu_i861_chave_legado(produto, alerta),
                 "tipo": "Dados antigos",
                 "severidade": "legado",
                 "texto": alerta,
@@ -7086,9 +7334,18 @@ def thu_i86_diagnosticar_catalogo(catalogo):
                 else par["nomes"][0]
             )
             motivos.append({
+                "chave": thu_i861_chave_duplicidade(
+                    par["nomes"][0],
+                    par["nomes"][1],
+                ),
                 "tipo": "Possível duplicidade",
                 "severidade": "duplicidade",
                 "texto": f"{par.get('motivo')}: {outro}",
+                "outro_indice": (
+                    par["indices"][1]
+                    if par["indices"][0] == idx
+                    else par["indices"][0]
+                ),
             })
 
         score = max(0, 100 - min(100, peso))
@@ -7180,15 +7437,293 @@ def thu_i86_progresso_acervo():
 
 
 
+
+@st.dialog("✅ THU • Revisão humana do saneamento", width="large")
+def dialog_thu_i861_revisar_saneamento(indice_produto):
+    catalogo = carregar_catalogo()
+    if indice_produto is None or not (0 <= int(indice_produto) < len(catalogo)):
+        st.error("Produto não localizado no Catálogo Oficial.")
+        return
+
+    idx = int(indice_produto)
+    produto = dict(catalogo[idx] or {})
+    nome = str(produto.get("Nome") or "Produto")
+
+    st.markdown(f"### {nome}")
+    st.caption(
+        "Aqui você pode corrigir no cadastro oficial ou registrar uma decisão humana. "
+        "Decisões aceitas ficam auditadas com usuário, data e justificativa."
+    )
+
+    analise = thu_i86_diagnosticar_catalogo(catalogo)
+    diag = next(
+        (d for d in (analise.get("diagnosticos") or []) if d.get("indice") == idx),
+        None,
+    )
+    motivos = list((diag or {}).get("motivos") or [])
+
+    if not motivos:
+        st.success("Nenhuma pendência ativa foi detectada para este produto.")
+    else:
+        labels = []
+        mapa = {}
+        for pos_m, motivo in enumerate(motivos, 1):
+            label = f"{pos_m}. {motivo.get('texto') or motivo.get('tipo') or 'Alerta'}"
+            labels.append(label)
+            mapa[label] = motivo
+
+        escolhido = st.selectbox(
+            "Alerta para revisar",
+            labels,
+            key=f"thu_i861_alerta_{idx}",
+        )
+        motivo = mapa[escolhido]
+        tipo = str(motivo.get("tipo") or "")
+        severidade = str(motivo.get("severidade") or "")
+        texto = str(motivo.get("texto") or "")
+        chave = str(motivo.get("chave") or "")
+
+        if severidade in ("critica", "duplicidade"):
+            st.warning(texto)
+        elif severidade == "legado":
+            st.info("🧹 " + texto)
+        else:
+            st.info(texto)
+
+        justificativa = st.text_area(
+            "Justificativa da revisão",
+            placeholder=(
+                "Ex.: classificação está correta para a operação atual; "
+                "serviço não utiliza material físico; foto será mantida fora por enquanto..."
+            ),
+            key=f"thu_i861_justificativa_{idx}_{abs(hash(chave))}",
+        ).strip()
+
+        ac1, ac2 = st.columns(2)
+
+        if tipo == "Campanhas/Datas":
+            st.caption(
+                "Se este produto pode ser divulgado durante todo o ano, use a opção abaixo. "
+                "Ela grava **Permanente / Todas as épocas** no campo oficial CampanhasPermitidas."
+            )
+            if ac1.button(
+                "🌐 Definir Permanente / Todas as épocas",
+                type="primary",
+                use_container_width=True,
+                key=f"thu_i861_permanente_{idx}",
+            ):
+                thu_i861_aplicar_permanente(idx)
+                st.session_state["_thu_i861_feedback"] = (
+                    f"📅 {nome}: elegibilidade confirmada como Permanente / Todas as épocas."
+                )
+                st.rerun()
+
+            if ac2.button(
+                "✏️ Abrir cadastro e escolher datas",
+                use_container_width=True,
+                key=f"thu_i861_editar_campanhas_{idx}",
+            ):
+                st.session_state.catalogo_edit_index = idx
+                st.rerun()
+
+        elif tipo == "Material":
+            st.caption(
+                "Material continua sendo um dado importante para produtos físicos. "
+                "Use **Não se aplica** somente quando este cadastro realmente representar "
+                "um serviço ou situação sem material físico."
+            )
+            if ac1.button(
+                "🚫 Confirmar que Material não se aplica",
+                type="primary",
+                use_container_width=True,
+                disabled=not bool(justificativa),
+                key=f"thu_i861_nao_aplica_material_{idx}",
+            ):
+                thu_i861_registrar_decisao(
+                    idx,
+                    "critica:material",
+                    "Material",
+                    "Material não informado",
+                    "nao_se_aplica",
+                    justificativa,
+                )
+                st.session_state["_thu_i861_feedback"] = (
+                    f"✅ {nome}: Material marcado como não aplicável com justificativa."
+                )
+                st.rerun()
+
+            if ac2.button(
+                "✏️ Informar material no cadastro",
+                use_container_width=True,
+                key=f"thu_i861_editar_material_{idx}",
+            ):
+                st.session_state.catalogo_edit_index = idx
+                st.rerun()
+
+        elif tipo == "Foto":
+            st.caption(
+                "Foto é um ajuste visual. Você pode manter o produto sem foto por enquanto, "
+                "desde que registre a razão."
+            )
+            if ac1.button(
+                "✅ Revisado — manter sem foto",
+                type="primary",
+                use_container_width=True,
+                disabled=not bool(justificativa),
+                key=f"thu_i861_aceitar_foto_{idx}",
+            ):
+                thu_i861_registrar_decisao(
+                    idx,
+                    "visual:foto",
+                    "Foto",
+                    "Produto sem foto",
+                    "aceito_como_esta",
+                    justificativa,
+                )
+                st.session_state["_thu_i861_feedback"] = (
+                    f"✅ {nome}: ausência de foto revisada e aceita."
+                )
+                st.rerun()
+
+            if ac2.button(
+                "✏️ Adicionar foto no cadastro",
+                use_container_width=True,
+                key=f"thu_i861_editar_foto_{idx}",
+            ):
+                st.session_state.catalogo_edit_index = idx
+                st.rerun()
+
+        elif tipo == "Dados antigos":
+            st.caption(
+                "Este é um alerta de revisão, não uma prova de erro. "
+                "Se você conferir o cadastro e concluir que a informação está correta, "
+                "registre a decisão para o alerta não voltar."
+            )
+            if ac1.button(
+                "✅ Revisado e aceito como está",
+                type="primary",
+                use_container_width=True,
+                disabled=not bool(justificativa),
+                key=f"thu_i861_aceitar_legado_{idx}_{abs(hash(chave))}",
+            ):
+                thu_i861_registrar_decisao(
+                    idx,
+                    chave,
+                    "Dados antigos",
+                    texto,
+                    "aceito_como_esta",
+                    justificativa,
+                )
+                st.session_state["_thu_i861_feedback"] = (
+                    f"✅ {nome}: alerta revisado e aceito com registro de auditoria."
+                )
+                st.rerun()
+
+            if ac2.button(
+                "✏️ Corrigir no cadastro",
+                use_container_width=True,
+                key=f"thu_i861_editar_legado_{idx}_{abs(hash(chave))}",
+            ):
+                st.session_state.catalogo_edit_index = idx
+                st.rerun()
+
+        elif tipo == "Possível duplicidade":
+            outro_idx = motivo.get("outro_indice")
+            outro_nome = ""
+            if outro_idx is not None and 0 <= int(outro_idx) < len(catalogo):
+                outro_nome = str((catalogo[int(outro_idx)] or {}).get("Nome") or "")
+            st.caption(
+                f"Se **{nome}** e **{outro_nome or 'o outro cadastro'}** são realmente produtos diferentes, "
+                "registre isso para o par não voltar como duplicidade."
+            )
+            if ac1.button(
+                "✅ Confirmar que são produtos diferentes",
+                type="primary",
+                use_container_width=True,
+                disabled=not bool(justificativa) or outro_idx is None,
+                key=f"thu_i861_nao_dup_{idx}_{outro_idx}",
+            ):
+                thu_i861_confirmar_nao_duplicados(
+                    idx,
+                    int(outro_idx),
+                    justificativa,
+                )
+                st.session_state["_thu_i861_feedback"] = (
+                    f"✅ Revisão registrada: {nome} e {outro_nome} não são duplicados."
+                )
+                st.rerun()
+
+            if ac2.button(
+                "✏️ Abrir este cadastro",
+                use_container_width=True,
+                key=f"thu_i861_editar_dup_{idx}_{outro_idx}",
+            ):
+                st.session_state.catalogo_edit_index = idx
+                st.rerun()
+
+        else:
+            st.caption(
+                "Este campo é estrutural para o Catálogo Oficial e não deve ser ocultado "
+                "por uma simples aceitação. Corrija no cadastro."
+            )
+            if st.button(
+                "✏️ Abrir cadastro oficial",
+                type="primary",
+                use_container_width=True,
+                key=f"thu_i861_editar_estrutural_{idx}_{abs(hash(chave))}",
+            ):
+                st.session_state.catalogo_edit_index = idx
+                st.rerun()
+
+    ativos = thu_i861_revisoes_ativas(produto)
+    if ativos:
+        st.divider()
+        with st.expander(
+            f"🧾 Decisões humanas ativas ({len(ativos)})",
+            expanded=False,
+        ):
+            st.caption(
+                "Uma decisão pode ser reaberta a qualquer momento. "
+                "O histórico anterior permanece preservado."
+            )
+            for pos_a, (chave_a, reg) in enumerate(ativos.items(), 1):
+                st.markdown(
+                    f"**{reg.get('tipo') or 'Revisão'}** — "
+                    f"{reg.get('texto') or chave_a}"
+                )
+                st.caption(
+                    f"Decisão: {reg.get('decisao')} • "
+                    f"{reg.get('usuario') or '—'} • "
+                    f"{reg.get('revisado_em') or '—'}"
+                )
+                if reg.get("justificativa"):
+                    st.caption("Justificativa: " + str(reg.get("justificativa")))
+                if st.button(
+                    "↩️ Reabrir este alerta",
+                    key=f"thu_i861_reabrir_{idx}_{pos_a}_{abs(hash(chave_a))}",
+                    use_container_width=True,
+                ):
+                    thu_i861_reabrir_decisao(idx, chave_a)
+                    st.session_state["_thu_i861_feedback"] = (
+                        f"↩️ {nome}: decisão reaberta para nova conferência."
+                    )
+                    st.rerun()
+
+
+
 def renderizar_saneamento_catalogo(catalogo):
-    """I8.6 — fila única para saneamento do Catálogo Oficial."""
+    """I8.6.1 — saneamento com decisões humanas auditáveis."""
     catalogo = list(catalogo or [])
     st.subheader("🧹 THU • Saneamento do Catálogo Oficial")
     st.caption(
         "Organiza as pendências do Catálogo por prioridade. "
-        "O THU não corrige, apaga, une ou inventa dados sozinho; "
-        "toda alteração continua sendo feita no cadastro oficial."
+        "O THU não corrige, apaga, une ou inventa dados sozinho. "
+        "Alertas revisáveis podem ser aceitos com justificativa e ficam registrados no histórico."
     )
+
+    _feedback_i861 = st.session_state.pop("_thu_i861_feedback", "")
+    if _feedback_i861:
+        st.success(_feedback_i861)
 
     if not catalogo:
         st.info("Cadastre produtos para iniciar o saneamento.")
@@ -7217,6 +7752,16 @@ def renderizar_saneamento_catalogo(catalogo):
     m5.metric("📷 Sem foto", sem_foto)
     m6.metric("🔁 Possíveis duplicidades", len(duplicidades))
 
+    decisoes_humanas = sum(
+        len(thu_i861_revisoes_ativas(p))
+        for p in catalogo
+    )
+    if decisoes_humanas:
+        st.caption(
+            f"✅ {decisoes_humanas} decisão(ões) humana(s) ativa(s) de saneamento. "
+            "Todas possuem usuário, data e histórico reabrível."
+        )
+
     percentual = saneados / len(catalogo) if catalogo else 0.0
     st.progress(percentual)
     st.caption(
@@ -7244,6 +7789,10 @@ def renderizar_saneamento_catalogo(catalogo):
         )
 
     st.markdown("#### Fila de saneamento")
+    st.caption(
+        "Para produtos válidos o ano inteiro, **Permanente / Todas as épocas** é uma elegibilidade oficial válida "
+        "e pode ser confirmada diretamente na revisão humana."
+    )
 
     f1, f2, f3 = st.columns([1.35, 1.55, 2.3])
     filtro_status = f1.selectbox(
@@ -7403,6 +7952,13 @@ def renderizar_saneamento_catalogo(catalogo):
                         st.session_state.catalogo_edit_index = idx
                         st.rerun()
 
+                    if st.button(
+                        "✅ Revisar / aceitar",
+                        key=f"thu_i861_revisar_{idx}",
+                        use_container_width=True,
+                    ):
+                        dialog_thu_i861_revisar_saneamento(idx)
+
                     if d.get("duplicidades"):
                         st.caption("🔁 Conferir duplicidade antes de excluir ou unir qualquer cadastro.")
 
@@ -7432,7 +7988,7 @@ def renderizar_saneamento_catalogo(catalogo):
                     d1.caption(str(p1.get("Categoria") or "Sem categoria"))
                     d2.caption(str(p2.get("Categoria") or "Sem categoria"))
                     d3.caption(par.get("motivo") or "")
-                    b1, b2 = st.columns(2)
+                    b1, b2, b3 = st.columns(3)
                     if b1.button(
                         "✏️ Abrir A",
                         key=f"thu_i86_dup_a_{pos_dup}_{i}_{j}",
@@ -7447,6 +8003,12 @@ def renderizar_saneamento_catalogo(catalogo):
                     ):
                         st.session_state.catalogo_edit_index = j
                         st.rerun()
+                    if b3.button(
+                        "✅ Revisar par",
+                        key=f"thu_i861_dup_revisar_{pos_dup}_{i}_{j}",
+                        use_container_width=True,
+                    ):
+                        dialog_thu_i861_revisar_saneamento(i)
 
 
 def imagem_data_uri(path):
