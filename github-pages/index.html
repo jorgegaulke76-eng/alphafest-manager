@@ -19,11 +19,21 @@
 
 <script>
 (() => {
-  const SUPABASE_BASE = "https://guejrwblcxptzlobhit.supabase.co";
+  const DEFAULT_SUPABASE_BASE = "https://guejrwlblcxptzlobhit.supabase.co";
   const BUCKET = "catalogo";
   const params = new URLSearchParams(window.location.search);
   const rawPath = (params.get("path") || "").trim().replace(/^\/+/, "");
+  const rawBase = (params.get("base") || DEFAULT_SUPABASE_BASE).trim().replace(/\/+$/, "");
   const allowed = /^catalogos-publicos\/[A-Za-z0-9_-]+\/[A-Za-z0-9_.-]+\.html$/;
+
+  function supabaseBaseOk(value) {
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && /^[-a-z0-9]+\.supabase\.co$/i.test(url.hostname) && !url.pathname.replace(/\//g, "");
+    } catch (_) {
+      return false;
+    }
+  }
 
   function fail(message) {
     document.getElementById("status").innerHTML =
@@ -40,6 +50,12 @@
     return;
   }
 
+  if (!supabaseBaseOk(rawBase)) {
+    fail("Origem do catálogo inválida.");
+    return;
+  }
+
+  const SUPABASE_BASE = rawBase;
   const encodedPath = rawPath.split("/").map(encodeURIComponent).join("/");
   const storageUrl =
     `${SUPABASE_BASE}/storage/v1/object/public/${BUCKET}/${encodedPath}`;

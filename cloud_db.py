@@ -28,7 +28,7 @@ except Exception:
 TIMEOUT = 10
 _SESSION = requests.Session()
 
-# 20.4.9-I8.9.2 — visualizador público já homologado no GitHub Pages.
+# 20.4.9-I8.9.2.1 — hotfix da URL real do Supabase no visualizador público.
 # Pode ser sobrescrito por st.secrets/env sem alterar o código.
 DEFAULT_CATALOG_VIEWER_URL = "https://jorgegaulke76-eng.github.io/alphafest-catalogos/"
 
@@ -298,7 +298,7 @@ def _catalog_viewer_url() -> str:
 
 
 def catalog_render_url(object_path: str) -> str:
-    """URL que o cliente abre no GitHub Pages (I8.9.2).
+    """URL que o cliente abre no GitHub Pages (I8.9.2.1).
 
     Publicações antigas continuam compatíveis porque a URL é reconstruída
     a partir do ``object_path`` já persistido na Central.
@@ -313,12 +313,21 @@ def catalog_render_url(object_path: str) -> str:
     viewer = _catalog_viewer_url()
     if not viewer:
         return ""
-    return f"{viewer}?path={quote(caminho, safe='')}"
+    # I8.9.2.1: a URL real do Supabase acompanha o link. O visualizador
+    # deixa de depender de um project-ref hardcoded e continua validando
+    # que a origem pertence ao domínio oficial supabase.co.
+    supabase_url, _ = _config()
+    if not supabase_url:
+        return ""
+    return (
+        f"{viewer}?path={quote(caminho, safe='')}"
+        f"&base={quote(supabase_url.rstrip('/'), safe='')}"
+    )
 
 
 @st.cache_data(ttl=300, show_spinner=False)
 def catalog_render_available() -> bool:
-    """Indica se o visualizador GitHub Pages I8.9.2 está configurado.
+    """Indica se o visualizador GitHub Pages I8.9.2.1 está configurado.
 
     A publicação não fica dependente de um teste de rede a cada rerun do
     Streamlit. O endereço padrão já foi homologado e pode ser substituído por

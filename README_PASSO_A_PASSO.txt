@@ -78,3 +78,9 @@ O botão BAIXAR BACKUP continua disponível. Faça backups periódicos, mesmo us
 --------------------
 Caso o Supabase fique temporariamente indisponível, o sistema tenta usar a cópia JSON local.
 Na barra lateral aparece o estado da conexão.
+
+
+I8.9.2.1 - GITHUB PAGES
+Substitua o index.html do repositorio alphafest-catalogos pelo arquivo github-pages/index.html desta versao.
+O visualizador usa como fallback: https://guejrwlblcxptzlobhit.supabase.co
+Links novos tambem recebem automaticamente a SUPABASE_URL configurada no Manager.

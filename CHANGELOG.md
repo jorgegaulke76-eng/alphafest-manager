@@ -1,3 +1,10 @@
+## 20.4.9-I8.9.2.1 — Hotfix URL Supabase
+- Corrige o project URL do visualizador público para `https://guejrwlblcxptzlobhit.supabase.co`.
+- Links novos passam a carregar também `base=<SUPABASE_URL>` usando a configuração real do Manager.
+- GitHub Pages valida que `base` é HTTPS e pertence a `*.supabase.co` antes de buscar o HTML.
+- Links antigos continuam compatíveis pelo endereço oficial usado como fallback no `index.html`.
+- QR Code, WhatsApp, PDF, validade, histórico e Catálogo Oficial permanecem inalterados.
+
 ## 20.4.9-I8.9.2 — Link Público via GitHub Pages
 - Link do cliente passa a usar o GitHub Pages homologado da AlphaFest.
 - Supabase Storage continua sendo o armazenamento dos HTMLs publicados.

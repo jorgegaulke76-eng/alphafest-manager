@@ -9204,7 +9204,7 @@ def _i88_duplicar_registro(registro):
     copia["revisao"] = 1
     return copia
 
-# --- 20.4.9-I8.9.2: Link público renderizado via GitHub Pages ---
+# --- 20.4.9-I8.9.2.1: Link público renderizado via GitHub Pages ---
 def _i89_qr_png_bytes(conteudo):
     texto = str(conteudo or "").strip()
     if not texto or qrcode is None:
@@ -21332,7 +21332,7 @@ if pagina_atual == "catalogo":
             aba_gerador, aba_modelos, aba_central, aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_cliente = st.tabs([
                 "✨ Gerador I8.7.1",
                 "🧩 Modelos I8.8.3",
-                "📤 Central I8.9.2",
+                "📤 Central I8.9.2.1",
                 "➕ Cadastrar",
                 "📋 Produtos",
                 "🧹 Saneamento",
@@ -21347,7 +21347,7 @@ if pagina_atual == "catalogo":
                 "📚 Acervo histórico",
                 "✨ Gerador I8.7.1",
                 "🧩 Modelos I8.8.3",
-                "📤 Central I8.9.2",
+                "📤 Central I8.9.2.1",
                 "📤 Catálogo para cliente",
             ])
 
@@ -22215,7 +22215,7 @@ if pagina_atual == "catalogo":
                             st.rerun()
 
         with aba_central:
-            st.markdown("### 📤 I8.9.2 • Central e Compartilhamento de Catálogos AlphaFest")
+            st.markdown("### 📤 I8.9.2.1 • Central e Compartilhamento de Catálogos AlphaFest")
             st.caption(
                 "Catálogos agora são objetos operacionais reutilizáveis. Cada item salvo guarda somente "
                 "configuração e referências; ao gerar novamente, os dados vêm do Catálogo Oficial atual."
@@ -22535,7 +22535,7 @@ if pagina_atual == "catalogo":
             if compartilhar_reg_i89:
                 st.divider()
                 share_id_i89 = str(compartilhar_reg_i89.get("id") or "")
-                st.markdown(f"### 📤 I8.9.2 • Compartilhar {compartilhar_reg_i89.get('nome_interno') or 'Catálogo'}")
+                st.markdown(f"### 📤 I8.9.2.1 • Compartilhar {compartilhar_reg_i89.get('nome_interno') or 'Catálogo'}")
                 st.caption(
                     "A publicação gera uma versão comercial estática usando os dados atuais do Catálogo Oficial. "
                     "A Central guarda somente URL e rastreabilidade da publicação; não vira uma segunda fonte de preço."
@@ -22653,7 +22653,7 @@ if pagina_atual == "catalogo":
                         n1_i89.caption("Link público exige o Supabase online configurado. HTML e PDF continuam disponíveis sem publicação.")
                     elif not renderer_disponivel_i891:
                         n1_i89.caption(
-                            "I8.9.2: o visualizador público via GitHub Pages não está configurado. "
+                            "I8.9.2.1: o visualizador público via GitHub Pages não está configurado. "
                             "O armazenamento no Supabase continua preservado."
                         )
 
