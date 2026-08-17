@@ -8311,6 +8311,172 @@ def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True):
     </style></head><body><div class="layout"><aside>{logo_tag}<h1>{html.escape(titulo)}</h1><nav>{links}</nav></aside><main><div class="intro"><h1>{html.escape(titulo)}</h1><p>Seleção preparada por {html.escape(str(empresa.get("nome", "Empresa")))}. Consulte disponibilidade, personalização e prazo pelo WhatsApp.</p></div>{corpo}<footer>{html.escape(str(empresa.get("nome", "Empresa")))} - {html.escape(str(empresa.get("slogan", "")))}</footer></main></div><div id="modal" onclick="this.style.display='none'"><img id="modal-img"></div><script>function abrirImagem(src){{document.getElementById('modal-img').src=src;document.getElementById('modal').style.display='flex';}}</script></body></html>'''
 
 
+
+# --- 20.4.9-I8.7: Gerador de Catálogos AlphaFest (somente leitura) ---
+def gerar_html_catalogo_i87(
+    produtos,
+    titulo="Catálogo AlphaFest",
+    subtitulo="",
+    mostrar_precos=True,
+    mostrar_material=True,
+    mostrar_descricao=True,
+    mostrar_whatsapp=True,
+    mostrar_sem_foto=True,
+    observacao_rodape="",
+):
+    """Gera catálogo comercial responsivo sem alterar o Catálogo Oficial.
+
+    A I8.7 é deliberadamente somente leitura: todos os dados exibidos vêm do
+    registro oficial recebido em ``produtos`` e das configurações da empresa.
+    Nenhum preço, campanha, foto ou texto é persistido por esta função.
+    """
+    empresa = carregar_config_empresa()
+    produtos = [dict(p or {}) for p in (produtos or []) if (p or {}).get("Ativo", True)]
+    if not mostrar_sem_foto:
+        produtos = [p for p in produtos if (p.get("Imagens") or [])]
+    produtos.sort(
+        key=lambda p: (
+            normalizar_identidade_produto(p.get("Categoria", "")),
+            normalizar_identidade_produto(p.get("Nome", "")),
+        )
+    )
+
+    logo_b64, logo_ext = encontrar_logo_base64()
+    ext = (logo_ext or ".png").replace(".", "").lower()
+    if ext == "jpg":
+        ext = "jpeg"
+    logo_src = f"data:image/{ext};base64,{logo_b64}" if logo_b64 else ""
+
+    numero_wpp = re.sub(r"\D", "", str(empresa.get("whatsapp_catalogo", "")))
+    if numero_wpp and not numero_wpp.startswith("55"):
+        numero_wpp = "55" + numero_wpp
+
+    categorias = []
+    for p in produtos:
+        cat = str(p.get("Categoria") or "Sem categoria").strip() or "Sem categoria"
+        if cat not in categorias:
+            categorias.append(cat)
+
+    secoes = []
+    for categoria in categorias:
+        cards = []
+        selecionados = [
+            p for p in produtos
+            if (str(p.get("Categoria") or "Sem categoria").strip() or "Sem categoria") == categoria
+        ]
+        for produto in selecionados:
+            nome_raw = str(produto.get("Nome") or "Produto").strip() or "Produto"
+            nome = html.escape(nome_raw)
+            descricao_raw = str(produto.get("DescricaoCurta") or produto.get("Descricao") or "").strip()
+            descricao = html.escape(descricao_raw)
+            material = html.escape(str(produto.get("Material") or "").strip())
+            subcategoria = html.escape(str(produto.get("Subcategoria") or "").strip())
+            variacoes = [str(x).strip() for x in (produto.get("Variacoes") or []) if str(x).strip()]
+            imagens = [x for x in (produto.get("Imagens") or []) if str(x).strip()]
+            primeira = imagens[0] if imagens else ""
+            if primeira and str(primeira).startswith(("http://", "https://", "data:image/")):
+                src = str(primeira)
+            else:
+                src = imagem_data_uri(primeira)
+
+            if src:
+                imagem_html = f'<img class="produto-img" src="{html.escape(src, quote=True)}" alt="{nome}">'
+            else:
+                imagem_html = '<div class="sem-imagem"><span>AlphaFest</span><small>Imagem em preparação</small></div>'
+
+            meta = []
+            if subcategoria:
+                meta.append(f'<span class="chip">{subcategoria}</span>')
+            if mostrar_material and material:
+                meta.append(f'<span class="chip">{material}</span>')
+            meta_html = f'<div class="chips">{"".join(meta)}</div>' if meta else ""
+
+            variacoes_html = ""
+            if variacoes:
+                limite = variacoes[:8]
+                variacoes_html = (
+                    '<div class="opcoes"><strong>Opções:</strong> '
+                    + html.escape(" • ".join(limite))
+                    + (" …" if len(variacoes) > 8 else "")
+                    + '</div>'
+                )
+
+            descricao_html = f'<p class="descricao">{descricao}</p>' if mostrar_descricao and descricao else ""
+            preco_html = ""
+            if mostrar_precos:
+                preco_html = f'<div class="preco">{html.escape(formatar_preco_catalogo(produto.get("Preco")))}</div>'
+
+            botao_html = ""
+            if mostrar_whatsapp and numero_wpp:
+                msg = quote(f"Olá! Gostaria de informações sobre {nome_raw}.")
+                botao_html = (
+                    f'<a class="btn-whatsapp" href="https://wa.me/{numero_wpp}?text={msg}" '
+                    'target="_blank" rel="noopener">Consultar no WhatsApp</a>'
+                )
+
+            cards.append(
+                '<article class="produto-card">'
+                f'{imagem_html}'
+                '<div class="produto-body">'
+                f'{meta_html}<h3>{nome}</h3>{descricao_html}{variacoes_html}'
+                f'<div class="produto-footer">{preco_html}{botao_html}</div>'
+                '</div></article>'
+            )
+        secoes.append(
+            f'<section class="categoria" id="cat-{slug_html(categoria)}">'
+            f'<div class="categoria-titulo"><span>{html.escape(categoria)}</span><small>{len(cards)} produto(s)</small></div>'
+            f'<div class="grid">{"".join(cards)}</div></section>'
+        )
+
+    nav = "".join(f'<a href="#cat-{slug_html(c)}">{html.escape(c)}</a>' for c in categorias)
+    titulo_seguro = html.escape(str(titulo or "Catálogo AlphaFest").strip())
+    subtitulo_seguro = html.escape(str(subtitulo or "").strip())
+    nome_empresa = html.escape(str(empresa.get("nome") or "AlphaFest"))
+    slogan = html.escape(str(empresa.get("slogan") or ""))
+    contato = html.escape(str(empresa.get("celular") or ""))
+    rodape_extra = html.escape(str(observacao_rodape or "").strip())
+    logo_html = (
+        f'<img class="logo" src="{logo_src}" alt="{nome_empresa}">'
+        if logo_src else f'<div class="logo-texto">{nome_empresa}</div>'
+    )
+    subtitulo_html = f'<p class="hero-sub">{subtitulo_seguro}</p>' if subtitulo_seguro else ""
+    rodape_obs_html = f'<p>{rodape_extra}</p>' if rodape_extra else ""
+    corpo = "".join(secoes) if secoes else '<div class="vazio">Nenhum produto selecionado para este catálogo.</div>'
+
+    return f'''<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{titulo_seguro}</title>
+<style>
+:root{{--azul:#0f4c81;--azul2:#1e78b6;--rosa:#ed4f91;--texto:#17324a;--muted:#6d7f8f;--fundo:#f4f8fb;--card:#fff;--linha:#dce8f1}}
+*{{box-sizing:border-box}} html{{scroll-behavior:smooth}} body{{margin:0;font-family:Inter,Arial,Helvetica,sans-serif;background:var(--fundo);color:var(--texto)}}
+.topbar{{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);backdrop-filter:blur(10px);border-bottom:1px solid var(--linha)}}
+.topbar-inner{{max-width:1240px;margin:auto;display:flex;gap:18px;align-items:center;padding:11px 20px}} .topbar .mini-logo{{font-weight:900;color:var(--azul);white-space:nowrap}}
+.nav{{display:flex;gap:8px;overflow:auto;padding-bottom:2px}} .nav a{{color:var(--azul);text-decoration:none;border:1px solid var(--linha);border-radius:999px;padding:7px 11px;font-size:13px;white-space:nowrap;background:#fff}}
+.hero{{background:linear-gradient(135deg,#eef8ff 0%,#fff 48%,#fff0f7 100%);border-bottom:1px solid var(--linha)}} .hero-inner{{max-width:1240px;margin:auto;padding:48px 20px 38px;display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:30px;align-items:center}}
+.logo{{max-width:230px;max-height:120px;object-fit:contain;justify-self:end}} .logo-texto{{font-size:34px;font-weight:900;color:var(--azul);justify-self:end}}
+.kicker{{display:inline-block;background:#e7f3fb;color:var(--azul);font-weight:800;border-radius:999px;padding:7px 12px;font-size:13px;letter-spacing:.02em}} h1{{font-size:clamp(34px,5vw,62px);line-height:.98;margin:15px 0 12px;letter-spacing:-.04em;color:var(--azul)}} .hero-sub{{font-size:19px;line-height:1.5;margin:0;max-width:760px;color:#415c72}}
+.hero-meta{{margin-top:20px;display:flex;gap:10px;flex-wrap:wrap}} .hero-meta span{{background:#fff;border:1px solid var(--linha);border-radius:12px;padding:9px 12px;font-weight:700;color:#3b5870}}
+main{{max-width:1240px;margin:auto;padding:32px 20px 70px}} .categoria{{margin:0 0 48px;scroll-margin-top:76px}} .categoria-titulo{{display:flex;align-items:end;justify-content:space-between;gap:15px;border-bottom:3px solid var(--azul);padding:0 2px 9px;margin-bottom:20px}} .categoria-titulo span{{font-size:27px;font-weight:900;color:var(--azul)}} .categoria-titulo small{{color:var(--muted);font-weight:700}}
+.grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}} .produto-card{{background:var(--card);border:1px solid var(--linha);border-radius:20px;overflow:hidden;box-shadow:0 10px 28px rgba(26,71,105,.08);display:flex;flex-direction:column;break-inside:avoid}}
+.produto-img,.sem-imagem{{width:100%;aspect-ratio:4/3;object-fit:cover;background:#edf3f7}} .sem-imagem{{display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--azul);gap:6px}} .sem-imagem span{{font-weight:900;font-size:24px}} .sem-imagem small{{color:var(--muted)}}
+.produto-body{{padding:18px;display:flex;flex-direction:column;gap:10px;flex:1}} .chips{{display:flex;gap:6px;flex-wrap:wrap}} .chip{{font-size:11px;font-weight:800;background:#eef6fb;color:#2d6289;border-radius:999px;padding:5px 8px}} .produto-card h3{{font-size:21px;line-height:1.13;margin:2px 0;color:#153b5a}} .descricao{{line-height:1.5;color:#536a7d;margin:0;white-space:pre-line}} .opcoes{{font-size:13px;line-height:1.45;color:#617385}}
+.produto-footer{{margin-top:auto;padding-top:4px}} .preco{{font-size:23px;font-weight:900;color:var(--rosa);margin:4px 0 12px}} .btn-whatsapp{{display:block;text-align:center;text-decoration:none;background:#25d366;color:white;font-weight:900;border-radius:12px;padding:12px 14px}}
+.vazio{{background:white;border:1px solid var(--linha);border-radius:18px;padding:30px;text-align:center;color:var(--muted)}} footer{{background:#123b5d;color:#eaf5fc;padding:28px 20px;text-align:center}} footer strong{{font-size:18px}} footer p{{margin:5px 0;color:#c8dcea}}
+@media(max-width:920px){{.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}} .hero-inner{{grid-template-columns:1fr}} .logo,.logo-texto{{justify-self:start}}}}
+@media(max-width:620px){{.grid{{grid-template-columns:1fr}} .hero-inner{{padding-top:32px}} .topbar-inner{{align-items:flex-start;flex-direction:column;gap:8px}} .categoria{{scroll-margin-top:125px}}}}
+@media print{{.topbar,.btn-whatsapp{{display:none!important}} body{{background:#fff}} .hero-inner,main{{max-width:none}} .hero{{break-after:page}} .grid{{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}} .produto-card{{box-shadow:none}}}}
+</style>
+</head>
+<body>
+<div class="topbar"><div class="topbar-inner"><div class="mini-logo">{nome_empresa}</div><nav class="nav">{nav}</nav></div></div>
+<header class="hero"><div class="hero-inner"><div><span class="kicker">Catálogo AlphaFest</span><h1>{titulo_seguro}</h1>{subtitulo_html}<div class="hero-meta"><span>{len(produtos)} produto(s)</span><span>{len(categorias)} categoria(s)</span></div></div>{logo_html}</div></header>
+<main>{corpo}</main>
+<footer><strong>{nome_empresa}</strong><p>{slogan}</p><p>{contato}</p>{rodape_obs_html}</footer>
+</body></html>'''
+
 def salvar_upload_catalogo(upload):
     """Salva a imagem no Supabase Storage, com fallback para a pasta uploads."""
     return upload_catalog_image(upload, PASTA_UPLOADS)
@@ -20132,11 +20298,12 @@ if pagina_atual == "catalogo":
     elif _thu_i8_prefill_ativo:
         formulario_catalogo(None)
     else:
-        aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_cliente = st.tabs([
+        aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_gerador, aba_cliente = st.tabs([
             "➕ Cadastrar",
             "📋 Produtos",
             "🧹 Saneamento",
             "📚 Acervo histórico",
+            "✨ Gerador I8.7",
             "📤 Catálogo para cliente",
         ])
 
@@ -20251,6 +20418,161 @@ if pagina_atual == "catalogo":
 
         with aba_acervo:
             renderizar_acervo_catalogos_legados()
+
+        with aba_gerador:
+            st.markdown("### ✨ I8.7 • Gerador de Catálogos AlphaFest")
+            st.caption(
+                "Monta uma seleção comercial usando somente dados do Catálogo Oficial. "
+                "Esta etapa não altera produtos, preços, campanhas, fotos ou saneamento."
+            )
+            catalogo_ativo_i87 = [p for p in catalogo if (p or {}).get("Ativo", True)]
+            if not catalogo_ativo_i87:
+                st.info("Não há produtos ativos disponíveis para gerar catálogo.")
+            else:
+                g1, g2 = st.columns(2)
+                titulo_i87 = g1.text_input(
+                    "Título",
+                    value="Catálogo AlphaFest",
+                    key="i87_catalogo_titulo",
+                )
+                subtitulo_i87 = g2.text_input(
+                    "Subtítulo",
+                    value="Personalizados & Balões",
+                    key="i87_catalogo_subtitulo",
+                )
+
+                categorias_i87 = sorted(
+                    {
+                        str(p.get("Categoria") or "Sem categoria").strip() or "Sem categoria"
+                        for p in catalogo_ativo_i87
+                    },
+                    key=normalizar_identidade_produto,
+                )
+                campanhas_i87 = sorted(
+                    {
+                        str(c).strip()
+                        for p in catalogo_ativo_i87
+                        for c in (p.get("CampanhasPermitidas") or [])
+                        if str(c).strip() and str(c).strip() != "Permanente / Todas as épocas"
+                    },
+                    key=normalizar_identidade_produto,
+                )
+
+                f1, f2 = st.columns(2)
+                categorias_sel_i87 = f1.multiselect(
+                    "Categorias incluídas",
+                    categorias_i87,
+                    default=categorias_i87,
+                    key="i87_catalogo_categorias",
+                )
+                campanha_sel_i87 = f2.selectbox(
+                    "Filtrar por campanha/data",
+                    ["Todas as campanhas"] + campanhas_i87,
+                    key="i87_catalogo_campanha",
+                    help=(
+                        "Quando uma campanha é escolhida, entram produtos oficialmente habilitados "
+                        "para ela e produtos marcados como Permanente / Todas as épocas."
+                    ),
+                )
+
+                base_i87 = [
+                    p for p in catalogo_ativo_i87
+                    if (str(p.get("Categoria") or "Sem categoria").strip() or "Sem categoria")
+                    in categorias_sel_i87
+                ]
+                if campanha_sel_i87 != "Todas as campanhas":
+                    campanha_norm_i87 = normalizar_identidade_produto(campanha_sel_i87)
+                    permanente_norm_i87 = normalizar_identidade_produto("Permanente / Todas as épocas")
+                    base_i87 = [
+                        p for p in base_i87
+                        if any(
+                            normalizar_identidade_produto(c) in {campanha_norm_i87, permanente_norm_i87}
+                            for c in (p.get("CampanhasPermitidas") or [])
+                        )
+                    ]
+
+                nomes_base_i87 = [
+                    str(p.get("Nome") or "Produto")
+                    for p in sorted(
+                        base_i87,
+                        key=lambda p: normalizar_identidade_produto((p or {}).get("Nome", "")),
+                    )
+                ]
+                nomes_sel_i87 = st.multiselect(
+                    "Produtos",
+                    nomes_base_i87,
+                    default=nomes_base_i87,
+                    key="i87_catalogo_produtos",
+                )
+                selecao_i87 = [
+                    p for p in base_i87
+                    if str(p.get("Nome") or "Produto") in nomes_sel_i87
+                ]
+
+                st.markdown("#### Conteúdo exibido")
+                o1, o2, o3, o4 = st.columns(4)
+                mostrar_precos_i87 = o1.checkbox("Preços", value=True, key="i87_mostrar_precos")
+                mostrar_descricao_i87 = o2.checkbox("Descrição", value=True, key="i87_mostrar_descricao")
+                mostrar_material_i87 = o3.checkbox("Material", value=True, key="i87_mostrar_material")
+                mostrar_whatsapp_i87 = o4.checkbox("WhatsApp", value=True, key="i87_mostrar_whatsapp")
+                mostrar_sem_foto_i87 = st.checkbox(
+                    "Incluir produtos sem foto",
+                    value=True,
+                    key="i87_mostrar_sem_foto",
+                    help="Desmarque para gerar uma versão estritamente visual, sem produtos que ainda não têm foto cadastrada.",
+                )
+                observacao_i87 = st.text_input(
+                    "Observação opcional no rodapé",
+                    value="Consulte disponibilidade, personalização e prazo de produção.",
+                    key="i87_catalogo_rodape",
+                )
+
+                sem_foto_i87 = sum(1 for p in selecao_i87 if not (p.get("Imagens") or []))
+                selecao_saida_i87 = (
+                    selecao_i87
+                    if mostrar_sem_foto_i87
+                    else [p for p in selecao_i87 if (p.get("Imagens") or [])]
+                )
+                sem_preco_i87 = sum(1 for p in selecao_saida_i87 if not str(p.get("Preco") or "").strip())
+                m1, m2, m3 = st.columns(3)
+                m1.metric("Produtos no arquivo", len(selecao_saida_i87))
+                m2.metric("Sem foto", sem_foto_i87)
+                m3.metric("Sem preço atual", sem_preco_i87)
+                if mostrar_precos_i87 and sem_preco_i87:
+                    st.warning(
+                        f"{sem_preco_i87} produto(s) selecionado(s) não têm preço atual preenchido. "
+                        "O gerador mostrará 'Preço sob consulta'; nenhum valor será inventado."
+                    )
+                if mostrar_sem_foto_i87 and sem_foto_i87:
+                    st.info(
+                        f"{sem_foto_i87} produto(s) estão sem foto. O catálogo usará um espaço neutro "
+                        "'Imagem em preparação' nesses cards."
+                    )
+
+                html_i87 = gerar_html_catalogo_i87(
+                    selecao_saida_i87,
+                    titulo=titulo_i87 or "Catálogo AlphaFest",
+                    subtitulo=subtitulo_i87,
+                    mostrar_precos=mostrar_precos_i87,
+                    mostrar_material=mostrar_material_i87,
+                    mostrar_descricao=mostrar_descricao_i87,
+                    mostrar_whatsapp=mostrar_whatsapp_i87,
+                    mostrar_sem_foto=mostrar_sem_foto_i87,
+                    observacao_rodape=observacao_i87,
+                )
+                st.download_button(
+                    "📥 Baixar catálogo I8.7 em HTML",
+                    data=html_i87,
+                    file_name=f"{slug_html(titulo_i87 or 'catalogo_alphafest').lower()}_i87.html",
+                    mime="text/html",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=not bool(selecao_saida_i87),
+                )
+                st.caption(
+                    "O HTML é responsivo para celular e computador e também possui estilo de impressão. "
+                    "A aba antiga 'Catálogo para cliente' foi preservada integralmente como fallback."
+                )
 
         with aba_cliente:
             if not catalogo:
