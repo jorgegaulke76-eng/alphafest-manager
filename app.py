@@ -11712,38 +11712,17 @@ def thu_i83_recuperar_fotos_historicas_seguras(
 
 
 def thu_i83_garantir_fotos_historicas_sessao(catalogo=None):
-    """Executa uma vez por sessão para recuperar fotos ausentes e referências locais quebradas."""
-    chave = "_thu_i83_fotos_historicas_verificadas"
-    if st.session_state.get(chave):
-        return {
-            "catalogo": list(catalogo or carregar_catalogo()),
-            "alterados": 0,
-            "produtos": [],
-            "ignorados_multiproduto": 0,
-            "falhas": 0,
-        }
-
-    resultado = thu_i83_recuperar_fotos_historicas_seguras(
-        catalogo=catalogo,
-        salvar=True,
-    )
-    st.session_state[chave] = True
-    if resultado.get("alterados"):
-        partes = []
-        if resultado.get("recuperados"):
-            partes.append(f"{resultado['recuperados']} foto(s) recuperada(s)")
-        if resultado.get("referencias_quebradas"):
-            partes.append(
-                f"{resultado['referencias_quebradas']} referência(s) quebrada(s) arquivada(s)"
-            )
-        if resultado.get("sem_fonte"):
-            partes.append(
-                f"{resultado['sem_fonte']} produto(s) ainda precisam de nova foto"
-            )
-        st.session_state["_thu_i83_feedback_fotos"] = (
-            "📸 Auditoria de imagens concluída: " + " • ".join(partes or ["cadastros revisados"])
-        )
-    return resultado
+    """I8.4.1 — compatibilidade: não executa reparo durante render/boot."""
+    return {
+        "catalogo": list(catalogo or carregar_catalogo()),
+        "alterados": 0,
+        "recuperados": 0,
+        "referencias_quebradas": 0,
+        "produtos": [],
+        "ignorados_multiproduto": 0,
+        "sem_fonte": 0,
+        "falhas": 0,
+    }
 
 
 def _thu_i8_limpar_candidato(valor):
@@ -12285,37 +12264,45 @@ def renderizar_acervo_catalogos_legados():
         use_container_width=True,
         key="thu_i83_recuperar_fotos_manual",
         help=(
-            "Valida referências de imagem, inclusive URLs remotas, arquiva links quebrados "
-            "e tenta recuperar uma foto histórica segura sem tocar em fotos válidas."
+            "Executa somente quando você clicar. Valida referências de imagem, arquiva links "
+            "comprovadamente quebrados e tenta recuperar uma foto histórica segura."
         ),
     ):
-        st.session_state.pop("_thu_i83_fotos_historicas_verificadas", None)
-        _res_i83_manual = thu_i83_recuperar_fotos_historicas_seguras(
-            catalogo=carregar_catalogo(),
-            salvar=True,
-            verificar_remotas=True,
-        )
-        st.session_state["_thu_i83_fotos_historicas_verificadas"] = True
-        if _res_i83_manual.get("alterados"):
-            st.success(
-                "📸 Auditoria concluída. "
-                f"Recuperadas: {_res_i83_manual.get('recuperados', 0)} • "
-                f"Referências quebradas arquivadas: {_res_i83_manual.get('referencias_quebradas', 0)} • "
-                f"Ainda sem fonte recuperável: {_res_i83_manual.get('sem_fonte', 0)}."
-            )
-            if _res_i83_manual.get("produtos"):
-                st.caption(
-                    "Produtos revisados: "
-                    + " • ".join(_res_i83_manual.get("produtos", [])[:20])
+        try:
+            with st.spinner("Auditando as imagens somente agora, sob seu comando..."):
+                _res_i83_manual = thu_i83_recuperar_fotos_historicas_seguras(
+                    catalogo=carregar_catalogo(),
+                    salvar=True,
+                    verificar_remotas=True,
                 )
-        elif _res_i83_manual.get("falhas"):
-            st.warning(
-                "As fontes foram localizadas, mas algumas imagens não puderam ser persistidas. "
-                "Nenhum cadastro foi perdido."
+            if _res_i83_manual.get("alterados"):
+                st.success(
+                    "📸 Auditoria concluída. "
+                    f"Recuperadas: {_res_i83_manual.get('recuperados', 0)} • "
+                    f"Referências quebradas arquivadas: {_res_i83_manual.get('referencias_quebradas', 0)} • "
+                    f"Ainda sem fonte recuperável: {_res_i83_manual.get('sem_fonte', 0)}."
+                )
+                if _res_i83_manual.get("produtos"):
+                    st.caption(
+                        "Produtos revisados: "
+                        + " • ".join(_res_i83_manual.get("produtos", [])[:20])
+                    )
+            elif _res_i83_manual.get("falhas"):
+                st.warning(
+                    "As fontes foram localizadas, mas algumas imagens não puderam ser persistidas. "
+                    "Nenhum cadastro foi perdido."
+                )
+            else:
+                st.info("Nenhuma foto pendente foi encontrada nesta auditoria.")
+        except Exception as _exc_i841:
+            st.error(
+                "A auditoria de fotos encontrou um erro e foi interrompida sem bloquear o Manager. "
+                "Os demais dados do Catálogo permanecem preservados."
             )
-        else:
-            st.info(
-                "Nenhum produto sem foto com página histórica de produto único ficou pendente."
+            registrar_boot(
+                "thu_i841_auditoria_fotos_manual",
+                "erro",
+                str(_exc_i841)[:500],
             )
 
     _rf2.caption(
@@ -13276,14 +13263,10 @@ def dialog_catalogo_visualizar_anna():
     registrar_atividade(obter_usuario_atual(), "Consultando e corrigindo o catálogo", "Catálogo")
     mostrar_orientacao_thu("atualizar_catalogo", token="catalogo_visualizar")
     catalogo = carregar_catalogo()
-    _i83_anna = thu_i83_garantir_fotos_historicas_sessao(catalogo)
-    if _i83_anna.get("alterados"):
-        catalogo = carregar_catalogo()
 
-    _i83_msg_anna = st.session_state.pop("_thu_i83_feedback_fotos", None)
-    if _i83_msg_anna:
-        st.success(_i83_msg_anna)
-
+    # I8.4.1: auditoria de fotos não roda automaticamente ao abrir a Central da Anna.
+    # O reparo fica disponível somente sob comando no Acervo Histórico, evitando
+    # qualquer escrita/validação de mídia durante a inicialização da interface.
     revisoes_anna = [(i, p, avaliar_pendencias_produto_catalogo(p)) for i, p in enumerate(catalogo)]
     qtd_prontos_anna = sum(1 for _, _, r in revisoes_anna if r["pronto_thu"])
     qtd_pendentes_anna = len(revisoes_anna) - qtd_prontos_anna
@@ -17877,14 +17860,9 @@ if pagina_atual == "catalogo":
     st.header("📦 Catálogo Alphafest")
     st.caption("Cadastro interno e geração de seleções específicas para consulta do cliente.")
     catalogo = carregar_catalogo()
-    _i83_catalogo = thu_i83_garantir_fotos_historicas_sessao(catalogo)
-    if _i83_catalogo.get("alterados"):
-        catalogo = carregar_catalogo()
 
-    _i83_msg_catalogo = st.session_state.pop("_thu_i83_feedback_fotos", None)
-    if _i83_msg_catalogo:
-        st.success(_i83_msg_catalogo)
-
+    # I8.4.1: nenhuma auditoria/reparação de fotos é executada automaticamente.
+    # Isso mantém o boot do Catálogo leve e somente leitura.
     _produto_auditar_catalogo = st.session_state.get("_thu_auditar_produto_nome")
     if _produto_auditar_catalogo:
         renderizar_auditoria_thu_pos_cadastro(
