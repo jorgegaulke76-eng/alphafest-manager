@@ -444,3 +444,11 @@ hangelog
 
 ## 20.4.3
 - Recalibração conservadora das zonas do Feed no Anna Base Dinâmica.
+
+## 20.4.9-I8.8 — Central de Catálogos AlphaFest
+- Gerador I8.7.1 passa a salvar configurações reutilizáveis na nova Central de Catálogos.
+- Catálogos salvos guardam referências e configuração, sem duplicar preço, foto, descrição ou material do Catálogo Oficial.
+- Nova gestão com abrir, editar, duplicar, gerar novamente, arquivar/reativar e excluir com Lixeira.
+- Geração posterior sempre consulta os dados atuais do Catálogo Oficial.
+- Referências não resolvidas são sinalizadas como pendentes, sem substituição silenciosa.
+- Central incluída no backup completo, integridade e auditoria do sistema.

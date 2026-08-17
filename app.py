@@ -307,6 +307,7 @@ ARQUIVO_SYSTEM_META = "system_meta.json"
 ARQUIVO_COMPONENTES = "componentes_db.json"
 ARQUIVO_MARKETING = "marketing_db.json"
 ARQUIVO_CATALOGOS_LEGADOS = "catalogos_legados_db.json"
+ARQUIVO_CATALOGOS_GERADOS = "catalogos_gerados_db.json"
 ARQUIVO_INTEGRACOES = "integracoes_db.json"
 ARQUIVO_INTELIGENCIA = "alpha_intelligence_db.json"
 ARQUIVO_USUARIOS = "usuarios_config.json"
@@ -8556,6 +8557,222 @@ main{{max-width:1240px;margin:auto;padding:32px 20px 70px}} .categoria{{margin:0
 <footer><strong>{nome_empresa}</strong><p>{slogan}</p><p>{contato}</p>{rodape_obs_html}</footer>
 </body></html>'''
 
+
+# --- 20.4.9-I8.8: Central de Catálogos AlphaFest ---
+def carregar_catalogos_gerados():
+    """Carrega somente as configurações dos catálogos salvos.
+
+    Nenhum dado comercial de produto é duplicado aqui: preço, foto, descrição,
+    material e campanhas continuam pertencendo exclusivamente ao Catálogo Oficial.
+    """
+    dados = load_document("catalogos_gerados_db", ARQUIVO_CATALOGOS_GERADOS, [])
+    return dados if isinstance(dados, list) else []
+
+
+def salvar_catalogos_gerados(lista):
+    if not isinstance(lista, list):
+        raise ValueError("A Central de Catálogos precisa ser uma lista de configurações.")
+    return save_document("catalogos_gerados_db", lista, ARQUIVO_CATALOGOS_GERADOS)
+
+
+def _i88_novo_id():
+    return agora_local().strftime("CAT%Y%m%d%H%M%S") + secrets.token_hex(3).upper()
+
+
+def _i88_ref_produto(produto, indice):
+    """Cria referência leve para reencontrar o produto oficial sem copiar seus dados."""
+    produto = produto or {}
+    nome = str(produto.get("Nome") or "").strip()
+    categoria = str(produto.get("Categoria") or "Sem categoria").strip() or "Sem categoria"
+    codigo = str(produto.get("CodigoInterno") or "").strip()
+    return {
+        "codigo_interno": codigo,
+        "nome_ref": nome,
+        "categoria_ref": categoria,
+        "nome_chave": normalizar_identidade_produto(nome),
+        "categoria_chave": normalizar_identidade_produto(categoria),
+        "indice_ref": int(indice),
+    }
+
+
+def _i88_resolver_ref_produto(ref, catalogo):
+    """Resolve uma referência salva contra o Catálogo Oficial atual.
+
+    A ordem privilegia código interno e identidade nome+categoria. O índice antigo
+    só é usado como confirmação segura; nunca retorna um produto diferente apenas
+    porque passou a ocupar a mesma posição da lista.
+    """
+    ref = ref or {}
+    catalogo = catalogo or []
+    codigo = str(ref.get("codigo_interno") or "").strip()
+    nome_chave = str(ref.get("nome_chave") or normalizar_identidade_produto(ref.get("nome_ref"))).strip()
+    categoria_chave = str(ref.get("categoria_chave") or normalizar_identidade_produto(ref.get("categoria_ref"))).strip()
+
+    if codigo:
+        candidatos = [
+            i for i, p in enumerate(catalogo)
+            if str((p or {}).get("CodigoInterno") or "").strip().casefold() == codigo.casefold()
+        ]
+        if len(candidatos) == 1:
+            return candidatos[0], "codigo"
+
+    candidatos_exatos = [
+        i for i, p in enumerate(catalogo)
+        if normalizar_identidade_produto((p or {}).get("Nome")) == nome_chave
+        and _i871_categoria_chave(p) == (categoria_chave or _i871_categoria_chave({"Categoria": ref.get("categoria_ref")}))
+    ]
+    if len(candidatos_exatos) == 1:
+        return candidatos_exatos[0], "nome_categoria"
+
+    try:
+        indice_ref = int(ref.get("indice_ref"))
+    except (TypeError, ValueError):
+        indice_ref = -1
+    if 0 <= indice_ref < len(catalogo):
+        produto_indice = catalogo[indice_ref] or {}
+        if (
+            normalizar_identidade_produto(produto_indice.get("Nome")) == nome_chave
+            and _i871_categoria_chave(produto_indice)
+            == (categoria_chave or _i871_categoria_chave({"Categoria": ref.get("categoria_ref")}))
+        ):
+            return indice_ref, "indice_confirmado"
+
+    candidatos_nome = [
+        i for i, p in enumerate(catalogo)
+        if normalizar_identidade_produto((p or {}).get("Nome")) == nome_chave
+    ]
+    if len(candidatos_nome) == 1:
+        return candidatos_nome[0], "nome_unico"
+    return None, "nao_encontrado"
+
+
+def _i88_resolver_catalogo_salvo(registro, catalogo):
+    indices = []
+    ausentes = []
+    vistos = set()
+    for ref in (registro or {}).get("produtos_ref", []) or []:
+        indice, metodo = _i88_resolver_ref_produto(ref, catalogo)
+        if indice is None:
+            ausentes.append(ref)
+            continue
+        if indice not in vistos:
+            vistos.add(indice)
+            indices.append(indice)
+    return indices, ausentes
+
+
+def _i88_config_opcoes(
+    mostrar_precos=True,
+    mostrar_material=True,
+    mostrar_descricao=True,
+    mostrar_whatsapp=True,
+    mostrar_sem_foto=True,
+):
+    return {
+        "mostrar_precos": bool(mostrar_precos),
+        "mostrar_material": bool(mostrar_material),
+        "mostrar_descricao": bool(mostrar_descricao),
+        "mostrar_whatsapp": bool(mostrar_whatsapp),
+        "mostrar_sem_foto": bool(mostrar_sem_foto),
+    }
+
+
+def _i88_criar_registro_catalogo(
+    catalogo_oficial,
+    indices_produtos,
+    *,
+    nome_interno,
+    titulo,
+    subtitulo,
+    observacao_rodape,
+    campanha_chave="__todas__",
+    campanha_rotulo="Todas as campanhas",
+    categorias_chaves=None,
+    opcoes=None,
+    registro_existente=None,
+):
+    """Cria/atualiza o objeto operacional sem snapshot de dados comerciais."""
+    agora = agora_local().isoformat(timespec="seconds")
+    existente = dict(registro_existente or {})
+    refs = [
+        _i88_ref_produto(catalogo_oficial[idx], idx)
+        for idx in indices_produtos or []
+        if 0 <= int(idx) < len(catalogo_oficial)
+    ]
+    registro = {
+        "id": existente.get("id") or _i88_novo_id(),
+        "schema_version": 1,
+        "nome_interno": str(nome_interno or titulo or "Catálogo AlphaFest").strip() or "Catálogo AlphaFest",
+        "titulo": str(titulo or "Catálogo AlphaFest").strip() or "Catálogo AlphaFest",
+        "subtitulo": str(subtitulo or "").strip(),
+        "observacao_rodape": str(observacao_rodape or "").strip(),
+        "campanha_chave": str(campanha_chave or "__todas__"),
+        "campanha_rotulo": str(campanha_rotulo or "Todas as campanhas"),
+        "categorias_chaves": list(dict.fromkeys(str(x) for x in (categorias_chaves or []) if str(x).strip())),
+        "produtos_ref": refs,
+        "opcoes": dict(opcoes or _i88_config_opcoes()),
+        "status": str(existente.get("status") or "ativo"),
+        "criado_em": existente.get("criado_em") or agora,
+        "criado_por": existente.get("criado_por") or _usuario_auditoria(),
+        "atualizado_em": agora,
+        "atualizado_por": _usuario_auditoria(),
+        "revisao": int(existente.get("revisao", 0) or 0) + 1,
+    }
+    return registro
+
+
+def _i88_produto_elegivel_campanha(registro, produto):
+    campanha_chave = str((registro or {}).get("campanha_chave") or "__todas__")
+    if campanha_chave == "__todas__":
+        return True
+    permanente = normalizar_identidade_produto("Permanente / Todas as épocas")
+    permitidas = {
+        normalizar_identidade_produto(x)
+        for x in _i871_lista_textos((produto or {}).get("CampanhasPermitidas"))
+        if normalizar_identidade_produto(x)
+    }
+    return campanha_chave in permitidas or permanente in permitidas
+
+
+def _i88_html_catalogo_salvo(registro, catalogo_oficial):
+    indices, ausentes = _i88_resolver_catalogo_salvo(registro, catalogo_oficial)
+    produtos = [
+        catalogo_oficial[i]
+        for i in indices
+        if (catalogo_oficial[i] or {}).get("Ativo", True)
+        and _i88_produto_elegivel_campanha(registro, catalogo_oficial[i])
+    ]
+    opcoes = dict((registro or {}).get("opcoes") or {})
+    mostrar_sem_foto = bool(opcoes.get("mostrar_sem_foto", True))
+    if not mostrar_sem_foto:
+        produtos = [p for p in produtos if _i871_lista_textos((p or {}).get("Imagens"))]
+    conteudo = gerar_html_catalogo_i87(
+        produtos,
+        titulo=(registro or {}).get("titulo") or "Catálogo AlphaFest",
+        subtitulo=(registro or {}).get("subtitulo") or "",
+        mostrar_precos=bool(opcoes.get("mostrar_precos", True)),
+        mostrar_material=bool(opcoes.get("mostrar_material", True)),
+        mostrar_descricao=bool(opcoes.get("mostrar_descricao", True)),
+        mostrar_whatsapp=bool(opcoes.get("mostrar_whatsapp", True)),
+        mostrar_sem_foto=mostrar_sem_foto,
+        observacao_rodape=(registro or {}).get("observacao_rodape") or "",
+    )
+    return conteudo, indices, ausentes, produtos
+
+
+def _i88_duplicar_registro(registro):
+    copia = copy.deepcopy(registro or {})
+    agora = agora_local().isoformat(timespec="seconds")
+    copia["id"] = _i88_novo_id()
+    copia["nome_interno"] = (str(copia.get("nome_interno") or copia.get("titulo") or "Catálogo").strip() + " (cópia)")
+    copia["status"] = "ativo"
+    copia["criado_em"] = agora
+    copia["criado_por"] = _usuario_auditoria()
+    copia["atualizado_em"] = agora
+    copia["atualizado_por"] = _usuario_auditoria()
+    copia["revisao"] = 1
+    return copia
+
 def salvar_upload_catalogo(upload):
     """Salva a imagem no Supabase Storage, com fallback para a pasta uploads."""
     return upload_catalog_image(upload, PASTA_UPLOADS)
@@ -8733,6 +8950,11 @@ def restaurar_item_lixeira(registro):
         dados = carregar_campanhas()
         if not any(x.get("id") == item.get("id") for x in dados): dados.append(item)
         salvar_campanhas(dados)
+    elif tipo == "Catálogo gerado":
+        dados = carregar_catalogos_gerados()
+        if not any(x.get("id") == item.get("id") for x in dados):
+            dados.append(item)
+        salvar_catalogos_gerados(dados)
     else:
         raise ValueError(f"Tipo de item ainda não restaurável: {tipo}")
     remover_da_lixeira(registro.get("id_lixeira"))
@@ -8911,6 +9133,7 @@ DOCUMENTOS_BACKUP = [
     ("componentes_db", ARQUIVO_COMPONENTES, COMPONENTES_PADRAO),
     ("marketing_db", ARQUIVO_MARKETING, {"conteudos": [], "config": {}}),
     ("catalogos_legados_db", ARQUIVO_CATALOGOS_LEGADOS, {"revisoes": {}, "config": {}}),
+    ("catalogos_gerados_db", ARQUIVO_CATALOGOS_GERADOS, []),
 ]
 
 def carregar_config_backup():
@@ -9000,7 +9223,7 @@ def verificar_integridade_dados():
     documentos, contagens = coletar_dados_backup()
     problemas = []
     # componentes_db é uma biblioteca categorizada e, por definição, usa objeto/dicionário.
-    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db"}
+    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db", "catalogos_gerados_db"}
     for chave in esperados_lista:
         if not isinstance(documentos.get(chave), list):
             problemas.append(f"{chave}: estrutura inválida (esperada lista).")
@@ -20377,12 +20600,13 @@ if pagina_atual == "catalogo":
     elif _thu_i8_prefill_ativo:
         formulario_catalogo(None)
     else:
-        aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_gerador, aba_cliente = st.tabs([
+        aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_gerador, aba_central, aba_cliente = st.tabs([
             "➕ Cadastrar",
             "📋 Produtos",
             "🧹 Saneamento",
             "📚 Acervo histórico",
             "✨ Gerador I8.7.1",
+            "🗂️ Central I8.8",
             "📤 Catálogo para cliente",
         ])
 
@@ -20775,6 +20999,460 @@ if pagina_atual == "catalogo":
                         "HTML responsivo para celular e computador, com estilo de impressão. "
                         "A aba antiga 'Catálogo para cliente' permanece preservada como fallback."
                     )
+
+                st.divider()
+                st.markdown("#### 🗂️ Salvar na Central I8.8")
+                st.caption(
+                    "A Central salva somente esta configuração e as referências aos produtos. "
+                    "Preço, foto, descrição e material continuam exclusivamente no Catálogo Oficial."
+                )
+                nome_interno_i88 = st.text_input(
+                    "Nome interno do catálogo",
+                    value=titulo_i871 or "Catálogo AlphaFest",
+                    key="i88_nome_interno_novo",
+                    help="Este nome aparece somente na Central e ajuda a localizar o catálogo depois.",
+                )
+                if st.button(
+                    "💾 Salvar catálogo na Central I8.8",
+                    type="primary",
+                    use_container_width=True,
+                    key="i88_salvar_novo_do_gerador",
+                    disabled=not bool(indices_sel_i871),
+                ):
+                    opcoes_i88 = _i88_config_opcoes(
+                        mostrar_precos_i871,
+                        mostrar_material_i871,
+                        mostrar_descricao_i871,
+                        mostrar_whatsapp_i871,
+                        mostrar_sem_foto_i871,
+                    )
+                    campanha_rotulo_i88 = (
+                        "Todas as campanhas"
+                        if campanha_sel_i871 == "__todas__"
+                        else rotulos_campanhas_i871.get(campanha_sel_i871, campanha_sel_i871)
+                    )
+                    novo_catalogo_i88 = _i88_criar_registro_catalogo(
+                        catalogo,
+                        indices_sel_i871,
+                        nome_interno=nome_interno_i88,
+                        titulo=titulo_i871,
+                        subtitulo=subtitulo_i871,
+                        observacao_rodape=observacao_i871,
+                        campanha_chave=campanha_sel_i871,
+                        campanha_rotulo=campanha_rotulo_i88,
+                        categorias_chaves=categorias_sel_i871,
+                        opcoes=opcoes_i88,
+                    )
+                    catalogos_salvos_i88 = carregar_catalogos_gerados()
+                    catalogos_salvos_i88.insert(0, novo_catalogo_i88)
+                    salvar_catalogos_gerados(catalogos_salvos_i88)
+                    registrar_auditoria(
+                        "Salvar catálogo na Central",
+                        "Catálogo gerado",
+                        novo_catalogo_i88.get("id"),
+                        {
+                            "nome": novo_catalogo_i88.get("nome_interno"),
+                            "produtos_referenciados": len(novo_catalogo_i88.get("produtos_ref") or []),
+                        },
+                    )
+                    st.success(
+                        f"Catálogo '{novo_catalogo_i88.get('nome_interno')}' salvo na Central. "
+                        "Nenhum dado do Catálogo Oficial foi duplicado."
+                    )
+
+        with aba_central:
+            st.markdown("### 🗂️ I8.8 • Central de Catálogos AlphaFest")
+            st.caption(
+                "Catálogos agora são objetos operacionais reutilizáveis. Cada item salvo guarda somente "
+                "configuração e referências; ao gerar novamente, os dados vêm do Catálogo Oficial atual."
+            )
+            if st.session_state.pop("i88_flash", None):
+                st.success(st.session_state.pop("i88_flash_texto", "Operação concluída."))
+
+            catalogos_i88 = carregar_catalogos_gerados()
+            ativos_i88 = [x for x in catalogos_i88 if str(x.get("status") or "ativo") == "ativo"]
+            arquivados_i88 = [x for x in catalogos_i88 if str(x.get("status") or "ativo") == "arquivado"]
+            pendentes_i88 = 0
+            for reg_i88 in catalogos_i88:
+                _, ausentes_reg_i88 = _i88_resolver_catalogo_salvo(reg_i88, catalogo)
+                if ausentes_reg_i88:
+                    pendentes_i88 += 1
+            cm1, cm2, cm3, cm4 = st.columns(4)
+            cm1.metric("Catálogos salvos", len(catalogos_i88))
+            cm2.metric("Ativos", len(ativos_i88))
+            cm3.metric("Arquivados", len(arquivados_i88))
+            cm4.metric("Com referência pendente", pendentes_i88)
+
+            cf1, cf2 = st.columns([2, 1])
+            busca_i88 = cf1.text_input(
+                "🔎 Pesquisar na Central",
+                key="i88_busca_central",
+                placeholder="Nome interno, título ou campanha",
+            ).strip().casefold()
+            filtro_status_i88 = cf2.selectbox(
+                "Status",
+                ["Ativos", "Todos", "Arquivados"],
+                key="i88_filtro_status",
+            )
+
+            def _i88_visivel(reg):
+                status = str(reg.get("status") or "ativo")
+                if filtro_status_i88 == "Ativos" and status != "ativo":
+                    return False
+                if filtro_status_i88 == "Arquivados" and status != "arquivado":
+                    return False
+                if busca_i88:
+                    alvo = " ".join([
+                        str(reg.get("nome_interno") or ""),
+                        str(reg.get("titulo") or ""),
+                        str(reg.get("subtitulo") or ""),
+                        str(reg.get("campanha_rotulo") or ""),
+                    ]).casefold()
+                    if busca_i88 not in alvo:
+                        return False
+                return True
+
+            lista_visivel_i88 = [x for x in catalogos_i88 if _i88_visivel(x)]
+            lista_visivel_i88.sort(
+                key=lambda x: str(x.get("atualizado_em") or x.get("criado_em") or ""),
+                reverse=True,
+            )
+            st.caption(f"{len(lista_visivel_i88)} catálogo(s) nesta visualização.")
+
+            if not catalogos_i88:
+                st.info(
+                    "A Central ainda está vazia. Monte uma seleção na aba **Gerador I8.7.1** e clique em "
+                    "**Salvar catálogo na Central I8.8**."
+                )
+            elif not lista_visivel_i88:
+                st.info("Nenhum catálogo corresponde ao filtro atual.")
+
+            for reg_i88 in lista_visivel_i88:
+                reg_id_i88 = str(reg_i88.get("id") or "")
+                html_reg_i88, indices_reg_i88, ausentes_reg_i88, produtos_saida_reg_i88 = _i88_html_catalogo_salvo(reg_i88, catalogo)
+                inativos_reg_i88 = sum(
+                    1 for idx in indices_reg_i88
+                    if not bool((catalogo[idx] or {}).get("Ativo", True))
+                )
+                with st.container(border=True):
+                    cab1, cab2 = st.columns([4, 1])
+                    status_reg_i88 = str(reg_i88.get("status") or "ativo")
+                    cab1.markdown(
+                        f"### {'📦 ' if status_reg_i88 == 'arquivado' else '📘 '}"
+                        f"{html.escape(str(reg_i88.get('nome_interno') or reg_i88.get('titulo') or 'Catálogo'))}"
+                    )
+                    cab1.caption(
+                        f"ID {reg_id_i88} • revisão {int(reg_i88.get('revisao', 1) or 1)} • "
+                        f"atualizado em {str(reg_i88.get('atualizado_em') or '—').replace('T', ' ')[:19]}"
+                    )
+                    cab2.markdown("**ARQUIVADO**" if status_reg_i88 == "arquivado" else "**ATIVO**")
+
+                    ci1, ci2, ci3, ci4 = st.columns(4)
+                    ci1.metric("Referências", len(reg_i88.get("produtos_ref") or []))
+                    ci2.metric("Encontrados", len(indices_reg_i88))
+                    ci3.metric("Na saída atual", len(produtos_saida_reg_i88))
+                    ci4.metric("Pendentes", len(ausentes_reg_i88) + inativos_reg_i88)
+                    st.caption(
+                        f"Campanha: {reg_i88.get('campanha_rotulo') or 'Todas as campanhas'} • "
+                        f"Título público: {reg_i88.get('titulo') or 'Catálogo AlphaFest'}"
+                    )
+                    if ausentes_reg_i88:
+                        st.warning(
+                            f"{len(ausentes_reg_i88)} referência(s) não foram localizadas no Catálogo Oficial atual. "
+                            "A Central não usa cópia antiga do produto no lugar delas."
+                        )
+                    if inativos_reg_i88:
+                        st.info(
+                            f"{inativos_reg_i88} produto(s) referenciado(s) estão inativos no Catálogo Oficial e "
+                            "não entram na geração atual."
+                        )
+                    fora_campanha_reg_i88 = sum(
+                        1 for idx in indices_reg_i88
+                        if (catalogo[idx] or {}).get("Ativo", True)
+                        and not _i88_produto_elegivel_campanha(reg_i88, catalogo[idx])
+                    )
+                    if fora_campanha_reg_i88:
+                        st.info(
+                            f"{fora_campanha_reg_i88} produto(s) não estão mais elegíveis para "
+                            f"'{reg_i88.get('campanha_rotulo') or 'a campanha salva'}' no Catálogo Oficial e "
+                            "foram retirados desta geração atual."
+                        )
+
+                    ac1, ac2, ac3, ac4, ac5 = st.columns(5)
+                    if ac1.button("👁️ Abrir", key=f"i88_abrir_{reg_id_i88}", use_container_width=True):
+                        atual = st.session_state.get("i88_aberto_id")
+                        st.session_state["i88_aberto_id"] = None if atual == reg_id_i88 else reg_id_i88
+                        st.rerun()
+                    if ac2.button("✏️ Editar", key=f"i88_editar_{reg_id_i88}", use_container_width=True):
+                        st.session_state["i88_editor_id"] = reg_id_i88
+                        st.rerun()
+                    if ac3.button("📑 Duplicar", key=f"i88_dup_{reg_id_i88}", use_container_width=True):
+                        copia_i88 = _i88_duplicar_registro(reg_i88)
+                        novos_i88 = carregar_catalogos_gerados()
+                        novos_i88.insert(0, copia_i88)
+                        salvar_catalogos_gerados(novos_i88)
+                        registrar_auditoria("Duplicar catálogo", "Catálogo gerado", copia_i88.get("id"), {"origem": reg_id_i88})
+                        st.session_state["i88_flash"] = True
+                        st.session_state["i88_flash_texto"] = f"Cópia criada: {copia_i88.get('nome_interno')}."
+                        st.rerun()
+                    label_arquivo_i88 = "♻️ Reativar" if status_reg_i88 == "arquivado" else "📦 Arquivar"
+                    if ac4.button(label_arquivo_i88, key=f"i88_arq_{reg_id_i88}", use_container_width=True):
+                        novos_i88 = carregar_catalogos_gerados()
+                        for item_i88 in novos_i88:
+                            if item_i88.get("id") == reg_id_i88:
+                                item_i88["status"] = "ativo" if status_reg_i88 == "arquivado" else "arquivado"
+                                item_i88["atualizado_em"] = agora_local().isoformat(timespec="seconds")
+                                item_i88["atualizado_por"] = _usuario_auditoria()
+                                break
+                        salvar_catalogos_gerados(novos_i88)
+                        registrar_auditoria(
+                            "Reativar catálogo" if status_reg_i88 == "arquivado" else "Arquivar catálogo",
+                            "Catálogo gerado",
+                            reg_id_i88,
+                        )
+                        st.rerun()
+                    if ac5.button("🗑️ Excluir", key=f"i88_del_{reg_id_i88}", use_container_width=True):
+                        st.session_state["i88_confirmar_exclusao"] = reg_id_i88
+                        st.rerun()
+
+                    if st.session_state.get("i88_confirmar_exclusao") == reg_id_i88:
+                        st.warning(
+                            "Excluir remove este catálogo da Central e envia sua configuração para a Lixeira. "
+                            "O Catálogo Oficial e os produtos não serão alterados."
+                        )
+                        ex1, ex2 = st.columns(2)
+                        if ex1.button("Confirmar exclusão", key=f"i88_del_ok_{reg_id_i88}", type="primary", use_container_width=True):
+                            novos_i88 = [x for x in carregar_catalogos_gerados() if x.get("id") != reg_id_i88]
+                            salvar_catalogos_gerados(novos_i88)
+                            enviar_para_lixeira("Catálogo gerado", reg_i88, reg_id_i88)
+                            st.session_state.pop("i88_confirmar_exclusao", None)
+                            if st.session_state.get("i88_editor_id") == reg_id_i88:
+                                st.session_state.pop("i88_editor_id", None)
+                            st.rerun()
+                        if ex2.button("Cancelar", key=f"i88_del_cancel_{reg_id_i88}", use_container_width=True):
+                            st.session_state.pop("i88_confirmar_exclusao", None)
+                            st.rerun()
+
+                    if st.session_state.get("i88_aberto_id") == reg_id_i88:
+                        st.markdown("#### Conteúdo atual")
+                        if indices_reg_i88:
+                            for idx in indices_reg_i88:
+                                prod_aberto_i88 = catalogo[idx] or {}
+                                estado_prod_i88 = "ativo" if prod_aberto_i88.get("Ativo", True) else "inativo"
+                                st.write(
+                                    f"• **{prod_aberto_i88.get('Nome', 'Produto')}** — "
+                                    f"{prod_aberto_i88.get('Categoria', 'Sem categoria')} • {estado_prod_i88}"
+                                )
+                        else:
+                            st.caption("Nenhum produto oficial disponível para esta configuração no momento.")
+
+                    st.download_button(
+                        "📥 Gerar novamente com dados atuais",
+                        data=html_reg_i88,
+                        file_name=f"{slug_html(reg_i88.get('titulo') or reg_i88.get('nome_interno') or 'catalogo').lower()}_i88.html",
+                        mime="text/html",
+                        use_container_width=True,
+                        disabled=not bool(produtos_saida_reg_i88),
+                        key=f"i88_download_{reg_id_i88}",
+                    )
+
+            editor_id_i88 = st.session_state.get("i88_editor_id")
+            editor_reg_i88 = next((x for x in catalogos_i88 if x.get("id") == editor_id_i88), None)
+            if editor_reg_i88:
+                st.divider()
+                st.markdown(f"### ✏️ Editar • {editor_reg_i88.get('nome_interno') or 'Catálogo'}")
+                st.caption(
+                    "A edição altera somente a configuração deste catálogo salvo. Os dados dos produtos continuam no Catálogo Oficial."
+                )
+                prefixo_i88 = f"i88_edit_{editor_id_i88}_"
+                ativos_catalogo_editor_i88 = [(i, p) for i, p in enumerate(catalogo) if (p or {}).get("Ativo", True)]
+                indices_resolvidos_editor_i88, ausentes_editor_i88 = _i88_resolver_catalogo_salvo(editor_reg_i88, catalogo)
+                indices_resolvidos_editor_i88 = [i for i in indices_resolvidos_editor_i88 if (catalogo[i] or {}).get("Ativo", True)]
+
+                ed1, ed2 = st.columns(2)
+                nome_editor_i88 = ed1.text_input(
+                    "Nome interno",
+                    value=str(editor_reg_i88.get("nome_interno") or "Catálogo"),
+                    key=prefixo_i88 + "nome",
+                )
+                titulo_editor_i88 = ed2.text_input(
+                    "Título público",
+                    value=str(editor_reg_i88.get("titulo") or "Catálogo AlphaFest"),
+                    key=prefixo_i88 + "titulo",
+                )
+                subtitulo_editor_i88 = st.text_input(
+                    "Subtítulo",
+                    value=str(editor_reg_i88.get("subtitulo") or ""),
+                    key=prefixo_i88 + "subtitulo",
+                )
+
+                rotulos_cat_editor_i88 = _i871_mapa_rotulos(
+                    [p.get("Categoria") for _, p in ativos_catalogo_editor_i88], fallback="Sem categoria"
+                )
+                chaves_cat_editor_i88 = sorted(
+                    rotulos_cat_editor_i88,
+                    key=lambda x: normalizar_identidade_produto(rotulos_cat_editor_i88.get(x, x)),
+                )
+                default_cat_editor_i88 = [
+                    x for x in (editor_reg_i88.get("categorias_chaves") or []) if x in chaves_cat_editor_i88
+                ]
+                if not default_cat_editor_i88:
+                    default_cat_editor_i88 = list(dict.fromkeys(
+                        _i871_categoria_chave(catalogo[i]) for i in indices_resolvidos_editor_i88
+                    ))
+                chave_cat_editor_i88 = prefixo_i88 + "categorias"
+                if chave_cat_editor_i88 in st.session_state:
+                    st.session_state[chave_cat_editor_i88] = [
+                        x for x in st.session_state.get(chave_cat_editor_i88, []) if x in chaves_cat_editor_i88
+                    ]
+                kwargs_cat_editor_i88 = {"default": default_cat_editor_i88} if chave_cat_editor_i88 not in st.session_state else {}
+
+                campanhas_editor_brutas_i88 = [
+                    camp
+                    for _, p in ativos_catalogo_editor_i88
+                    for camp in _i871_lista_textos(p.get("CampanhasPermitidas"))
+                    if normalizar_identidade_produto(camp) != normalizar_identidade_produto("Permanente / Todas as épocas")
+                ]
+                rotulos_camp_editor_i88 = _i871_mapa_rotulos(campanhas_editor_brutas_i88, fallback="Campanha")
+                chaves_camp_editor_i88 = sorted(
+                    rotulos_camp_editor_i88,
+                    key=lambda x: normalizar_identidade_produto(rotulos_camp_editor_i88.get(x, x)),
+                )
+                campanha_salva_editor_i88 = str(editor_reg_i88.get("campanha_chave") or "__todas__")
+                opcoes_camp_editor_i88 = ["__todas__"] + chaves_camp_editor_i88
+                campanha_salva_indisponivel_i88 = campanha_salva_editor_i88 not in opcoes_camp_editor_i88
+                if campanha_salva_indisponivel_i88:
+                    campanha_salva_editor_i88 = "__todas__"
+                chave_camp_editor_i88 = prefixo_i88 + "campanha"
+                if chave_camp_editor_i88 in st.session_state and st.session_state.get(chave_camp_editor_i88) not in opcoes_camp_editor_i88:
+                    st.session_state[chave_camp_editor_i88] = campanha_salva_editor_i88
+
+                ef1, ef2 = st.columns(2)
+                categorias_editor_i88 = ef1.multiselect(
+                    "Categorias incluídas",
+                    options=chaves_cat_editor_i88,
+                    format_func=lambda x: rotulos_cat_editor_i88.get(x, x),
+                    key=chave_cat_editor_i88,
+                    **kwargs_cat_editor_i88,
+                )
+                campanha_editor_i88 = ef2.selectbox(
+                    "Campanha/data",
+                    options=opcoes_camp_editor_i88,
+                    index=opcoes_camp_editor_i88.index(campanha_salva_editor_i88),
+                    format_func=lambda x: "Todas as campanhas" if x == "__todas__" else rotulos_camp_editor_i88.get(x, x),
+                    key=chave_camp_editor_i88,
+                )
+                if campanha_salva_indisponivel_i88:
+                    st.info(
+                        "A campanha originalmente salva não existe mais entre as campanhas atuais do Catálogo Oficial. "
+                        "Revise o filtro antes de salvar esta edição."
+                    )
+
+                base_editor_i88 = [
+                    (i, p) for i, p in ativos_catalogo_editor_i88
+                    if _i871_categoria_chave(p) in categorias_editor_i88
+                ]
+                if campanha_editor_i88 != "__todas__":
+                    permanente_editor_i88 = normalizar_identidade_produto("Permanente / Todas as épocas")
+                    base_editor_i88 = [
+                        (i, p) for i, p in base_editor_i88
+                        if any(
+                            normalizar_identidade_produto(camp) in {campanha_editor_i88, permanente_editor_i88}
+                            for camp in _i871_lista_textos(p.get("CampanhasPermitidas"))
+                        )
+                    ]
+                base_editor_i88.sort(key=lambda item: (
+                    _i871_categoria_chave(item[1]),
+                    normalizar_identidade_produto((item[1] or {}).get("Nome")),
+                    item[0],
+                ))
+                indices_base_editor_i88 = [i for i, _ in base_editor_i88]
+                chave_prod_editor_i88 = prefixo_i88 + "produtos"
+                if chave_prod_editor_i88 in st.session_state:
+                    st.session_state[chave_prod_editor_i88] = [
+                        i for i in st.session_state.get(chave_prod_editor_i88, []) if i in indices_base_editor_i88
+                    ]
+                default_prod_editor_i88 = [i for i in indices_resolvidos_editor_i88 if i in indices_base_editor_i88]
+                kwargs_prod_editor_i88 = {"default": default_prod_editor_i88} if chave_prod_editor_i88 not in st.session_state else {}
+                produtos_editor_i88 = st.multiselect(
+                    "Produtos",
+                    options=indices_base_editor_i88,
+                    format_func=lambda i: f"{(catalogo[i] or {}).get('Nome', 'Produto')} — {(catalogo[i] or {}).get('Categoria', 'Sem categoria')} • item {i + 1}",
+                    key=chave_prod_editor_i88,
+                    **kwargs_prod_editor_i88,
+                )
+                if ausentes_editor_i88:
+                    st.warning(
+                        f"{len(ausentes_editor_i88)} referência(s) antiga(s) não foram localizadas. "
+                        "Ao salvar, somente os produtos selecionados acima permanecerão vinculados."
+                    )
+
+                op_editor_i88 = dict(editor_reg_i88.get("opcoes") or {})
+                eo1, eo2, eo3, eo4 = st.columns(4)
+                precos_editor_i88 = eo1.checkbox("Preços", value=bool(op_editor_i88.get("mostrar_precos", True)), key=prefixo_i88 + "precos")
+                descricao_editor_i88 = eo2.checkbox("Descrição", value=bool(op_editor_i88.get("mostrar_descricao", True)), key=prefixo_i88 + "descricao")
+                material_editor_i88 = eo3.checkbox("Material", value=bool(op_editor_i88.get("mostrar_material", True)), key=prefixo_i88 + "material")
+                whatsapp_editor_i88 = eo4.checkbox("WhatsApp", value=bool(op_editor_i88.get("mostrar_whatsapp", True)), key=prefixo_i88 + "whatsapp")
+                sem_foto_editor_i88 = st.checkbox(
+                    "Incluir produtos sem foto",
+                    value=bool(op_editor_i88.get("mostrar_sem_foto", True)),
+                    key=prefixo_i88 + "sem_foto",
+                )
+                rodape_editor_i88 = st.text_input(
+                    "Observação no rodapé",
+                    value=str(editor_reg_i88.get("observacao_rodape") or ""),
+                    key=prefixo_i88 + "rodape",
+                )
+                eb1, eb2 = st.columns(2)
+                if eb1.button("💾 Salvar alterações", type="primary", use_container_width=True, key=prefixo_i88 + "salvar"):
+                    if not produtos_editor_i88:
+                        st.warning("Selecione pelo menos um produto para salvar o catálogo.")
+                    else:
+                        campanha_rotulo_editor_i88 = (
+                            "Todas as campanhas"
+                            if campanha_editor_i88 == "__todas__"
+                            else rotulos_camp_editor_i88.get(campanha_editor_i88, campanha_editor_i88)
+                        )
+                        atualizado_i88 = _i88_criar_registro_catalogo(
+                            catalogo,
+                            produtos_editor_i88,
+                            nome_interno=nome_editor_i88,
+                            titulo=titulo_editor_i88,
+                            subtitulo=subtitulo_editor_i88,
+                            observacao_rodape=rodape_editor_i88,
+                            campanha_chave=campanha_editor_i88,
+                            campanha_rotulo=campanha_rotulo_editor_i88,
+                            categorias_chaves=categorias_editor_i88,
+                            opcoes=_i88_config_opcoes(
+                                precos_editor_i88, material_editor_i88, descricao_editor_i88, whatsapp_editor_i88, sem_foto_editor_i88
+                            ),
+                            registro_existente=editor_reg_i88,
+                        )
+                        novos_i88 = carregar_catalogos_gerados()
+                        for pos_i88, item_i88 in enumerate(novos_i88):
+                            if item_i88.get("id") == editor_id_i88:
+                                novos_i88[pos_i88] = atualizado_i88
+                                break
+                        salvar_catalogos_gerados(novos_i88)
+                        registrar_auditoria(
+                            "Editar catálogo",
+                            "Catálogo gerado",
+                            editor_id_i88,
+                            {"revisao": atualizado_i88.get("revisao"), "produtos_referenciados": len(produtos_editor_i88)},
+                        )
+                        for chave_estado_i88 in list(st.session_state.keys()):
+                            if str(chave_estado_i88).startswith(prefixo_i88):
+                                st.session_state.pop(chave_estado_i88, None)
+                        st.session_state.pop("i88_editor_id", None)
+                        st.session_state["i88_flash"] = True
+                        st.session_state["i88_flash_texto"] = f"Catálogo '{atualizado_i88.get('nome_interno')}' atualizado."
+                        st.rerun()
+                if eb2.button("↩️ Cancelar edição", use_container_width=True, key=prefixo_i88 + "cancelar"):
+                    for chave_estado_i88 in list(st.session_state.keys()):
+                        if str(chave_estado_i88).startswith(prefixo_i88):
+                            st.session_state.pop(chave_estado_i88, None)
+                    st.session_state.pop("i88_editor_id", None)
+                    st.rerun()
 
         with aba_cliente:
             if not catalogo:
