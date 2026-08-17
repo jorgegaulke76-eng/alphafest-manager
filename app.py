@@ -11402,6 +11402,494 @@ def thu_i8_salvar_preview_como_foto(preview_relativo, produto_nome="produto"):
     return salvar_upload_catalogo(upload)
 
 
+
+def thu_i85_recortar_preview(preview_relativo, faixa_x, faixa_y):
+    """Recorta a página histórica por percentuais, sem alterar o arquivo original."""
+    if Image is None:
+        raise RuntimeError("Pillow não está disponível para realizar o recorte.")
+
+    rel = str(preview_relativo or "").strip()
+    origem = Path(__file__).resolve().parent / rel
+    if not rel or not origem.exists() or not origem.is_file():
+        raise FileNotFoundError("Prévia histórica não localizada.")
+
+    with Image.open(origem) as _img:
+        _img = ImageOps.exif_transpose(_img).convert("RGB")
+        largura, altura = _img.size
+
+        x1p, x2p = [int(x) for x in faixa_x]
+        y1p, y2p = [int(y) for y in faixa_y]
+
+        x1 = max(0, min(largura - 1, round(largura * x1p / 100)))
+        x2 = max(x1 + 1, min(largura, round(largura * x2p / 100)))
+        y1 = max(0, min(altura - 1, round(altura * y1p / 100)))
+        y2 = max(y1 + 1, min(altura, round(altura * y2p / 100)))
+
+        if (x2 - x1) < max(20, largura * 0.03) or (y2 - y1) < max(20, altura * 0.03):
+            raise ValueError("A área selecionada ficou pequena demais.")
+
+        recorte = _img.crop((x1, y1, x2, y2))
+
+        # Evita arquivos exageradamente grandes sem fazer upscale.
+        if max(recorte.size) > 1800:
+            recorte.thumbnail((1800, 1800), getattr(getattr(Image, "Resampling", Image), "LANCZOS", 1))
+
+        saida = io.BytesIO()
+        recorte.save(saida, format="WEBP", quality=92, method=6)
+
+        return {
+            "bytes": saida.getvalue(),
+            "imagem": recorte.copy(),
+            "original_size": (largura, altura),
+            "crop_box": (x1, y1, x2, y2),
+            "crop_percent": {
+                "x": [x1p, x2p],
+                "y": [y1p, y2p],
+            },
+        }
+
+
+def thu_i85_preview_marcado(preview_relativo, faixa_x, faixa_y):
+    """Gera uma prévia visual com o retângulo do recorte."""
+    if Image is None or ImageDraw is None:
+        return None
+    rel = str(preview_relativo or "").strip()
+    origem = Path(__file__).resolve().parent / rel
+    if not origem.exists():
+        return None
+
+    with Image.open(origem) as _img:
+        _img = ImageOps.exif_transpose(_img).convert("RGB")
+        largura, altura = _img.size
+        x1 = round(largura * int(faixa_x[0]) / 100)
+        x2 = round(largura * int(faixa_x[1]) / 100)
+        y1 = round(altura * int(faixa_y[0]) / 100)
+        y2 = round(altura * int(faixa_y[1]) / 100)
+
+        marcado = _img.copy()
+        draw = ImageDraw.Draw(marcado)
+        espessura = max(3, round(min(largura, altura) * 0.008))
+        # Branco/preto alternado dá contraste sem depender da cor do catálogo.
+        draw.rectangle((x1, y1, x2, y2), outline="white", width=espessura + 2)
+        draw.rectangle((x1, y1, x2, y2), outline="black", width=espessura)
+
+        if max(marcado.size) > 1200:
+            marcado.thumbnail((1200, 1200), getattr(getattr(Image, "Resampling", Image), "LANCZOS", 1))
+        return marcado
+
+
+def thu_i85_persistir_recorte(
+    catalogo_id,
+    pagina,
+    nome_destino,
+    faixa_x,
+    faixa_y,
+):
+    """Recorta, envia ao armazenamento persistente e devolve a URL/data URL."""
+    acervo = thu_i8_carregar_acervo_estatico()
+    cat_fonte, pg = thu_i8_pagina(catalogo_id, pagina, acervo=acervo)
+    if not cat_fonte or not pg:
+        raise ValueError("Página histórica não localizada.")
+
+    preview_rel = str(pg.get("preview") or "").strip()
+    resultado = thu_i85_recortar_preview(preview_rel, faixa_x, faixa_y)
+
+    nome_seguro = re.sub(
+        r"[^A-Za-z0-9._-]+",
+        "_",
+        str(nome_destino or "produto").strip(),
+    ) or "produto"
+
+    upload = _DriveImageUpload(
+        resultado["bytes"],
+        f"recorte_catalogo_{catalogo_id}_p{int(pagina):03d}_{nome_seguro}.webp",
+        "image/webp",
+    )
+    url = salvar_upload_catalogo(upload)
+    if not url:
+        raise RuntimeError("Não foi possível persistir o recorte.")
+
+    return {
+        **resultado,
+        "url": url,
+        "catalogo": str(cat_fonte.get("titulo") or ""),
+        "filename": str(cat_fonte.get("filename") or ""),
+        "preview": preview_rel,
+    }
+
+
+def thu_i85_salvar_recorte_pendente(
+    catalogo_id,
+    pagina,
+    nome_produto,
+    recorte,
+):
+    """Guarda um recorte persistente para ser usado quando o produto novo for criado."""
+    dados = carregar_catalogos_legados_status()
+    revisoes = dict(dados.get("revisoes") or {})
+    chave = _thu_i8_chave_pagina(catalogo_id, pagina)
+    registro = dict(revisoes.get(chave) or {})
+
+    pendentes = list(registro.get("recortes_pendentes") or [])
+    identidade = normalizar_identidade_produto(nome_produto)
+
+    # Substitui apenas o recorte pendente do mesmo produto/página.
+    pendentes = [
+        x for x in pendentes
+        if normalizar_identidade_produto((x or {}).get("produto")) != identidade
+    ]
+    pendentes.append({
+        "produto": str(nome_produto or "").strip(),
+        "url": str(recorte.get("url") or ""),
+        "catalogo": str(recorte.get("catalogo") or ""),
+        "pagina": int(pagina or 0),
+        "preview": str(recorte.get("preview") or ""),
+        "crop_box": list(recorte.get("crop_box") or []),
+        "crop_percent": dict(recorte.get("crop_percent") or {}),
+        "criado_em": agora_local().isoformat(timespec="seconds"),
+        "usuario": obter_usuario_atual(),
+        "status": "Aguardando cadastro oficial",
+    })
+
+    registro["recortes_pendentes"] = pendentes[-80:]
+    registro["catalogo_id"] = str(catalogo_id or "")
+    registro["pagina"] = int(pagina or 0)
+    if not registro.get("status"):
+        registro["status"] = "Em revisão"
+
+    revisoes[chave] = registro
+    dados["revisoes"] = revisoes
+    salvar_catalogos_legados_status(dados)
+    return pendentes[-1]
+
+
+def thu_i85_recorte_pendente(catalogo_id, pagina, nome_produto):
+    status = thu_i8_status_pagina(catalogo_id, pagina)
+    identidade = normalizar_identidade_produto(nome_produto)
+    return next(
+        (
+            dict(x)
+            for x in reversed(list(status.get("recortes_pendentes") or []))
+            if normalizar_identidade_produto((x or {}).get("produto")) == identidade
+            and str((x or {}).get("url") or "").strip()
+        ),
+        None,
+    )
+
+
+def thu_i85_aplicar_recorte_produto(
+    catalogo_id,
+    pagina,
+    produto_nome,
+    recorte,
+    adicionar_galeria=True,
+    primeira_foto=False,
+):
+    """Vincula o recorte a produto oficial, com histórico e sem mexer em outros dados."""
+    catalogo = carregar_catalogo()
+    idx_prod = next(
+        (
+            i for i, p in enumerate(catalogo)
+            if normalizar_identidade_produto((p or {}).get("Nome"))
+            == normalizar_identidade_produto(produto_nome)
+        ),
+        None,
+    )
+    if idx_prod is None:
+        raise ValueError("Produto oficial não localizado.")
+
+    produto = dict(catalogo[idx_prod])
+    url = str(recorte.get("url") or "").strip()
+    if not url:
+        raise ValueError("Recorte sem arquivo persistente.")
+
+    if adicionar_galeria:
+        imagens = [
+            str(x).strip()
+            for x in (produto.get("Imagens", []) or [])
+            if str(x).strip()
+        ]
+        imagens = [x for x in imagens if x != url]
+        if primeira_foto:
+            imagens.insert(0, url)
+        else:
+            imagens.append(url)
+        produto["Imagens"] = imagens
+
+    banco = list(produto.get("BancoImagensHistorico", []) or [])
+    banco.append({
+        "origem": "Recorte Assistido • Acervo Histórico de Catálogos",
+        "catalogo": str(recorte.get("catalogo") or ""),
+        "pagina": int(pagina or 0),
+        "preview": str(recorte.get("preview") or ""),
+        "crop_box": list(recorte.get("crop_box") or []),
+        "crop_percent": dict(recorte.get("crop_percent") or {}),
+        "fotos": [url],
+        "acao": (
+            "Recorte adicionado à galeria oficial"
+            if adicionar_galeria
+            else "Recorte preservado somente como referência histórica"
+        ),
+        "adicionado_em": agora_local().isoformat(timespec="seconds"),
+        "usuario": obter_usuario_atual(),
+    })
+    produto["BancoImagensHistorico"] = banco[-180:]
+
+    recortes = list(produto.get("RecortesCatalogosHistoricos") or [])
+    recortes.append({
+        "catalogo_id": str(catalogo_id or ""),
+        "catalogo": str(recorte.get("catalogo") or ""),
+        "pagina": int(pagina or 0),
+        "url": url,
+        "preview": str(recorte.get("preview") or ""),
+        "crop_box": list(recorte.get("crop_box") or []),
+        "crop_percent": dict(recorte.get("crop_percent") or {}),
+        "na_galeria": bool(adicionar_galeria),
+        "primeira_foto": bool(primeira_foto and adicionar_galeria),
+        "criado_em": agora_local().isoformat(timespec="seconds"),
+        "usuario": obter_usuario_atual(),
+    })
+    produto["RecortesCatalogosHistoricos"] = recortes[-180:]
+    produto["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+
+    catalogo[idx_prod] = produto
+    salvar_catalogo(catalogo)
+    thu_i8_marcar_pagina(
+        catalogo_id,
+        pagina,
+        "Em revisão",
+        produtos=[produto.get("Nome")],
+    )
+    return produto
+
+
+@st.dialog("✂️ THU • Recortar imagem do catálogo histórico", width="large")
+def dialog_thu_i85_recortar_catalogo(
+    catalogo_id,
+    pagina,
+    nome_sugerido="",
+):
+    if Image is None:
+        st.error("O recurso de imagem não está disponível nesta instalação.")
+        return
+
+    acervo = thu_i8_carregar_acervo_estatico()
+    cat_fonte, pg = thu_i8_pagina(catalogo_id, pagina, acervo=acervo)
+    if not cat_fonte or not pg:
+        st.error("Página histórica não localizada.")
+        return
+
+    preview_rel = str(pg.get("preview") or "").strip()
+    preview_path = thu_i8_preview_path(pg)
+    if not preview_path:
+        st.error("A prévia visual desta página não está disponível.")
+        return
+
+    nome_sugerido = _thu_i8_limpar_candidato(nome_sugerido)
+    chave_base = f"thu_i85_{catalogo_id}_{pagina}_{abs(hash(nome_sugerido or 'pagina'))}"
+
+    st.caption(
+        f"Fonte: **{cat_fonte.get('titulo')}** • página **{pagina}**. "
+        "A página original nunca é alterada."
+    )
+    st.info(
+        "Ajuste a área para deixar **somente o produto** dentro do retângulo. "
+        "Preço antigo, balão de valor, textos e outros produtos podem ficar para fora."
+    )
+
+    x_range = st.slider(
+        "↔️ Faixa horizontal • esquerda → direita",
+        min_value=0,
+        max_value=100,
+        value=(0, 100),
+        step=1,
+        key=f"{chave_base}_x",
+    )
+    y_range = st.slider(
+        "↕️ Faixa vertical • topo → base",
+        min_value=0,
+        max_value=100,
+        value=(0, 100),
+        step=1,
+        key=f"{chave_base}_y",
+    )
+
+    if (x_range[1] - x_range[0]) < 4 or (y_range[1] - y_range[0]) < 4:
+        st.warning("Abra um pouco mais a área do recorte.")
+        return
+
+    try:
+        marcado = thu_i85_preview_marcado(preview_rel, x_range, y_range)
+        recorte_temp = thu_i85_recortar_preview(preview_rel, x_range, y_range)
+    except Exception as exc:
+        st.error(f"Não foi possível preparar o recorte: {exc}")
+        return
+
+    pv1, pv2 = st.columns(2)
+    with pv1:
+        st.markdown("##### Página + área selecionada")
+        st.image(marcado or str(preview_path), use_container_width=True)
+    with pv2:
+        st.markdown("##### Resultado do recorte")
+        st.image(recorte_temp["imagem"], use_container_width=True)
+        st.caption(
+            f"Recorte: {recorte_temp['imagem'].size[0]} × "
+            f"{recorte_temp['imagem'].size[1]} px"
+        )
+
+    catalogo = carregar_catalogo()
+    nomes_oficiais = sorted(
+        [
+            str(p.get("Nome") or "").strip()
+            for p in catalogo
+            if str(p.get("Nome") or "").strip()
+        ],
+        key=normalizar_identidade_produto,
+    )
+
+    sugestao = (
+        thu_site_sugerir_produto(
+            nome_sugerido,
+            catalogo,
+            alternativas=thu_i8_candidatos_pagina(pg),
+        )
+        if nome_sugerido and catalogo
+        else {}
+    )
+    sugestao_nome = str(sugestao.get("nome") or "").strip()
+
+    destino_padrao = (
+        "Produto já cadastrado"
+        if sugestao_nome in nomes_oficiais
+        else "Guardar para cadastro novo"
+    )
+    destinos = ["Produto já cadastrado", "Guardar para cadastro novo"]
+    destino = st.radio(
+        "Onde salvar este recorte?",
+        destinos,
+        index=destinos.index(destino_padrao),
+        horizontal=True,
+        key=f"{chave_base}_destino",
+    )
+
+    if destino == "Produto já cadastrado":
+        if not nomes_oficiais:
+            st.warning("O Catálogo Oficial ainda não possui produtos.")
+            return
+        idx_default = (
+            nomes_oficiais.index(sugestao_nome)
+            if sugestao_nome in nomes_oficiais
+            else 0
+        )
+        produto_destino = st.selectbox(
+            "Produto oficial",
+            nomes_oficiais,
+            index=idx_default,
+            key=f"{chave_base}_produto_oficial",
+        )
+        modo = st.radio(
+            "Uso do recorte",
+            [
+                "Adicionar à galeria do produto",
+                "Guardar somente como referência histórica",
+            ],
+            horizontal=True,
+            key=f"{chave_base}_modo",
+        )
+        adicionar_galeria = modo == "Adicionar à galeria do produto"
+        produto_reg = next(
+            (
+                p for p in catalogo
+                if normalizar_identidade_produto(p.get("Nome"))
+                == normalizar_identidade_produto(produto_destino)
+            ),
+            {},
+        )
+        primeira_foto = False
+        if adicionar_galeria:
+            primeira_foto = st.checkbox(
+                "⭐ Usar como primeira foto do produto",
+                value=not bool(produto_reg.get("Imagens")),
+                key=f"{chave_base}_primeira",
+            )
+
+        if st.button(
+            "💾 Salvar recorte no produto",
+            type="primary",
+            use_container_width=True,
+            key=f"{chave_base}_salvar_existente",
+        ):
+            try:
+                recorte = thu_i85_persistir_recorte(
+                    catalogo_id,
+                    pagina,
+                    produto_destino,
+                    x_range,
+                    y_range,
+                )
+                produto_salvo = thu_i85_aplicar_recorte_produto(
+                    catalogo_id,
+                    pagina,
+                    produto_destino,
+                    recorte,
+                    adicionar_galeria=adicionar_galeria,
+                    primeira_foto=primeira_foto,
+                )
+                st.session_state["_thu_i8_feedback"] = (
+                    f"✂️ Recorte salvo para {produto_salvo.get('Nome')}. "
+                    + (
+                        "Ele já entrou na galeria do produto."
+                        if adicionar_galeria
+                        else "Ele ficou preservado somente no histórico de imagens."
+                    )
+                )
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Não foi possível salvar o recorte: {exc}")
+
+    else:
+        nome_novo = st.text_input(
+            "Nome do produto que será cadastrado",
+            value=nome_sugerido,
+            key=f"{chave_base}_produto_novo",
+        ).strip()
+        st.caption(
+            "O recorte será persistido agora e ficará aguardando o cadastro oficial. "
+            "Quando você clicar em **Preparar cadastro**, ele será oferecido como foto do produto."
+        )
+
+        if st.button(
+            "💾 Guardar recorte para o novo cadastro",
+            type="primary",
+            use_container_width=True,
+            key=f"{chave_base}_salvar_novo",
+        ):
+            if not nome_novo:
+                st.warning("Informe o nome do produto.")
+            else:
+                try:
+                    recorte = thu_i85_persistir_recorte(
+                        catalogo_id,
+                        pagina,
+                        nome_novo,
+                        x_range,
+                        y_range,
+                    )
+                    pendente = thu_i85_salvar_recorte_pendente(
+                        catalogo_id,
+                        pagina,
+                        nome_novo,
+                        recorte,
+                    )
+                    st.session_state["_thu_i8_feedback"] = (
+                        f"✂️ Recorte de '{nome_novo}' guardado. "
+                        "Agora você pode usar Preparar cadastro; a foto recortada ficará vinculada ao formulário."
+                    )
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Não foi possível guardar o recorte: {exc}")
+
+
 def thu_i84_imagem_referencia_utilizavel(origem, verificar_remota=False):
     """Valida referências locais/data URL e, opcionalmente, URLs remotas.
 
@@ -11923,6 +12411,7 @@ def thu_i8_preparar_cadastro_novo(catalogo_id, pagina, nome_candidato=""):
         str(x).strip() for x in (pg.get("medidas_variacoes_detectadas") or []) if str(x).strip()
     ]
     fonte = thu_i8_fonte_historica(cat_fonte, pg, nome)
+    recorte_pendente = thu_i85_recorte_pendente(catalogo_id, pagina, nome)
 
     # Limpa somente widgets do novo cadastro para o prefill entrar de forma previsível.
     for chave in list(st.session_state.keys()):
@@ -11945,6 +12434,8 @@ def thu_i8_preparar_cadastro_novo(catalogo_id, pagina, nome_candidato=""):
         "precos_historicos": list(pg.get("precos_historicos", []) or []),
         "preview_historico": str(pg.get("preview") or ""),
         "pagina_multiproduto": bool(_multiproduto),
+        "recorte_historico_url": str((recorte_pendente or {}).get("url") or ""),
+        "recorte_historico_meta": dict(recorte_pendente or {}),
         "fonte": fonte,
     }
     st.session_state["_thu_i8_fonte_pendente_novo"] = fonte
@@ -12420,6 +12911,16 @@ def renderizar_acervo_catalogos_legados():
         prev = thu_i8_preview_path(pg)
         if prev:
             st.image(str(prev), use_container_width=True)
+            if st.button(
+                "✂️ Recortar produto desta página",
+                key=f"thu_i85_recorte_pagina_{catalogo_id}_{pg.get('pagina')}",
+                use_container_width=True,
+            ):
+                dialog_thu_i85_recortar_catalogo(
+                    catalogo_id,
+                    pg.get("pagina"),
+                    "",
+                )
         st.caption(
             f"Fonte preservada: {cat_fonte.get('filename')} • página {pg.get('pagina')}"
         )
@@ -12536,7 +13037,7 @@ def renderizar_acervo_catalogos_legados():
     if nomes:
         for pos, nome in enumerate(nomes[:12], 1):
             with st.container(border=True):
-                n1, n2, n3 = st.columns([3.3, 1.35, 1.35])
+                n1, n2, n3, n4 = st.columns([3.0, 1.25, 1.25, 1.25])
                 n1.markdown(f"**{nome}**")
                 sug = thu_site_sugerir_produto(nome, catalogo_atual, alternativas=candidatos)
                 if sug.get("status") in ("oficial", "provavel") and sug.get("nome"):
@@ -12546,12 +13047,31 @@ def renderizar_acervo_catalogos_legados():
                 else:
                     n1.caption("Sem correspondência forte; confirme se é um produto novo.")
 
+                _recorte_pendente_item = thu_i85_recorte_pendente(
+                    catalogo_id,
+                    pg.get("pagina"),
+                    nome,
+                )
+                if _recorte_pendente_item:
+                    n1.success("✂️ Recorte de foto já preparado para este produto.")
+
                 if n2.button(
                     "🔗 Revisar existente",
                     key=f"thu_i8_existente_{catalogo_id}_{pg.get('pagina')}_{pos}_{abs(hash(nome))}",
                     use_container_width=True,
                 ):
                     dialog_thu_i8_revisar_produto(catalogo_id, pg.get("pagina"), nome)
+
+                if n4.button(
+                    "✂️ Recortar foto",
+                    key=f"thu_i85_recortar_item_{catalogo_id}_{pg.get('pagina')}_{pos}_{abs(hash(nome))}",
+                    use_container_width=True,
+                ):
+                    dialog_thu_i85_recortar_catalogo(
+                        catalogo_id,
+                        pg.get("pagina"),
+                        nome,
+                    )
 
                 _match_exato = sug.get("status") == "oficial"
                 if n3.button(
@@ -17937,6 +18457,7 @@ if pagina_atual == "catalogo":
 
         _i8_usar_foto_historica = False
         _i8_preview_historico = None
+        _i85_usar_recorte_historico = False
 
         tab_info, tab_producao, tab_marketing, tab_midias = st.tabs([
             "📦 Informações", "⚙️ Produção", "📣 Marketing", "🧠 Arquivos, artes e fotos"
@@ -18234,6 +18755,26 @@ if pagina_atual == "catalogo":
             st.divider()
             st.markdown("#### 🖼️ Galeria e publicação")
 
+            if prefill_i8 and prefill_i8.get("recorte_historico_url"):
+                st.markdown("##### ✂️ Recorte preparado no Acervo Histórico")
+                _rc1, _rc2 = st.columns([1.25, 3.75])
+                try:
+                    _rc1.image(
+                        imagem_streamlit_catalogo(prefill_i8.get("recorte_historico_url")),
+                        use_container_width=True,
+                    )
+                except Exception:
+                    _rc1.caption("Recorte histórico preparado")
+                _rc2.success(
+                    "Este recorte já exclui as áreas que você deixou para fora — "
+                    "como etiqueta de preço, textos e outros produtos."
+                )
+                _i85_usar_recorte_historico = _rc2.checkbox(
+                    "✂️ Usar este recorte como foto do produto",
+                    value=True,
+                    key=f"cat_i85_recorte_historico_{sufixo}",
+                )
+
             if prefill_i8 and prefill_i8.get("preview_historico"):
                 _i8_preview_rel = str(prefill_i8.get("preview_historico") or "")
                 _i8_preview_historico = Path(__file__).resolve().parent / _i8_preview_rel
@@ -18255,7 +18796,10 @@ if pagina_atual == "catalogo":
                     )
                     _i8_usar_foto_historica = _fh2.checkbox(
                         "📸 Aproveitar esta imagem no banco de fotos do produto",
-                        value=not _pagina_multi_foto,
+                        value=(
+                            not _pagina_multi_foto
+                            and not bool(prefill_i8.get("recorte_historico_url"))
+                        ),
                         key=f"cat_i8_foto_historica_{sufixo}",
                         help=(
                             "A imagem será copiada para o armazenamento persistente do Catálogo Oficial ao salvar. "
@@ -18356,6 +18900,15 @@ if pagina_atual == "catalogo":
                 if drive_erros:
                     st.warning("Google Drive: " + " ".join(dict.fromkeys(drive_erros)))
 
+                if (
+                    prefill_i8
+                    and _i85_usar_recorte_historico
+                    and prefill_i8.get("recorte_historico_url")
+                ):
+                    _url_recorte_i85 = str(prefill_i8.get("recorte_historico_url") or "").strip()
+                    if _url_recorte_i85:
+                        imagens.insert(0, _url_recorte_i85)
+
                 if prefill_i8 and _i8_usar_foto_historica and prefill_i8.get("preview_historico"):
                     try:
                         _foto_hist_salva = thu_i8_salvar_preview_como_foto(
@@ -18430,10 +18983,40 @@ if pagina_atual == "catalogo":
                         "foto_historica_aproveitada": bool(
                             prefill_i8.get("preview_historico") and _i8_usar_foto_historica
                         ),
+                        "recorte_historico_aproveitado": bool(
+                            prefill_i8.get("recorte_historico_url") and _i85_usar_recorte_historico
+                        ),
+                        "recorte_historico_meta": dict(
+                            prefill_i8.get("recorte_historico_meta") or {}
+                        ),
                         "confirmado_em": agora_local().isoformat(timespec="seconds"),
                         "usuario": obter_usuario_atual(),
                     })
                     registro["HistoricoEnriquecimentoCatalogos"] = _hist_i8_novo[-150:]
+
+                    if (
+                        prefill_i8.get("recorte_historico_url")
+                        and _i85_usar_recorte_historico
+                    ):
+                        _meta_recorte_novo = dict(
+                            prefill_i8.get("recorte_historico_meta") or {}
+                        )
+                        _banco_recorte_novo = list(
+                            registro.get("BancoImagensHistorico", []) or []
+                        )
+                        _banco_recorte_novo.append({
+                            "origem": "Recorte Assistido • Acervo Histórico de Catálogos",
+                            "catalogo": str(_meta_recorte_novo.get("catalogo") or ""),
+                            "pagina": int(_meta_recorte_novo.get("pagina") or 0),
+                            "preview": str(_meta_recorte_novo.get("preview") or ""),
+                            "crop_box": list(_meta_recorte_novo.get("crop_box") or []),
+                            "crop_percent": dict(_meta_recorte_novo.get("crop_percent") or {}),
+                            "fotos": [str(prefill_i8.get("recorte_historico_url") or "")],
+                            "acao": "Recorte preparado antes do cadastro e usado como foto oficial",
+                            "adicionado_em": agora_local().isoformat(timespec="seconds"),
+                            "usuario": obter_usuario_atual(),
+                        })
+                        registro["BancoImagensHistorico"] = _banco_recorte_novo[-180:]
 
                 if item_edicao:
                     catalogo[indice_edicao] = registro
