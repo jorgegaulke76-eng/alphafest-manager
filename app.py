@@ -7200,7 +7200,13 @@ def formatar_preco_catalogo(valor):
 
 
 def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True):
-    produtos = produtos or []
+    produtos = sorted(
+        list(produtos or []),
+        key=lambda p: (
+            normalizar_identidade_produto((p or {}).get("Categoria", "")),
+            normalizar_identidade_produto((p or {}).get("Nome", "")),
+        ),
+    )
     empresa = carregar_config_empresa()
     if not titulo:
         titulo = f"Catálogo {empresa.get('nome', 'Empresa')}"
@@ -7210,11 +7216,13 @@ def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True):
         ext = "jpeg"
     logo_src = f"data:image/{ext};base64,{logo_b64}" if logo_b64 else ""
 
-    categorias = []
-    for produto in produtos:
-        categoria = str(produto.get("Categoria", "Sem categoria")).strip() or "Sem categoria"
-        if categoria not in categorias:
-            categorias.append(categoria)
+    categorias = sorted(
+        {
+            str(produto.get("Categoria", "Sem categoria")).strip() or "Sem categoria"
+            for produto in produtos
+        },
+        key=normalizar_identidade_produto,
+    )
 
     cards_por_categoria = []
     for categoria in categorias:
@@ -11365,6 +11373,35 @@ def thu_i8_preview_path(pagina):
     return caminho if caminho.exists() else None
 
 
+def thu_i8_salvar_preview_como_foto(preview_relativo, produto_nome="produto"):
+    """Persiste uma prévia do catálogo histórico usando o mesmo pipeline das fotos oficiais."""
+    rel = str(preview_relativo or "").strip()
+    if not rel:
+        return ""
+    origem = Path(__file__).resolve().parent / rel
+    if not origem.exists() or not origem.is_file():
+        return ""
+
+    mime_map = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }
+    mime = mime_map.get(origem.suffix.lower(), "image/jpeg")
+    nome_seguro = re.sub(
+        r"[^A-Za-z0-9._-]+",
+        "_",
+        str(produto_nome or "produto").strip(),
+    ) or "produto"
+    upload = _DriveImageUpload(
+        origem.read_bytes(),
+        f"historico_{nome_seguro}{origem.suffix.lower() or '.jpg'}",
+        mime,
+    )
+    return salvar_upload_catalogo(upload)
+
+
 def _thu_i8_limpar_candidato(valor):
     texto = re.sub(r"\s+", " ", str(valor or "")).strip(" -—:;,.\t")
     if not texto:
@@ -11583,6 +11620,8 @@ def thu_i8_preparar_cadastro_novo(catalogo_id, pagina, nome_candidato=""):
             if x in CAMPANHAS_PRODUTO_OPCOES
         ],
         "precos_historicos": list(pg.get("precos_historicos", []) or []),
+        "preview_historico": str(pg.get("preview") or ""),
+        "pagina_multiproduto": bool(_multiproduto),
         "fonte": fonte,
     }
     st.session_state["_thu_i8_fonte_pendente_novo"] = fonte
@@ -11741,6 +11780,19 @@ def dialog_thu_i8_revisar_produto(catalogo_id, pagina, nome_candidato=""):
         key=f"thu_i8_var_{catalogo_id}_{pagina}",
     )
 
+    _preview_existente_i8 = thu_i8_preview_path(pg)
+    usar_foto_historica = False
+    if _preview_existente_i8:
+        usar_foto_historica = st.checkbox(
+            "📸 Adicionar a imagem histórica ao banco de fotos do produto",
+            value=bool(not pg.get("multiproduto") and not (produto.get("Imagens") or [])),
+            key=f"thu_i8_foto_chk_{catalogo_id}_{pagina}",
+            help=(
+                "Em página de produto único, o THU sugere a foto quando o cadastro ainda está sem imagem. "
+                "Em página com vários itens, a opção fica desmarcada por segurança."
+            ),
+        )
+
     confirmar_campanha = st.checkbox(
         "Confirmar elegibilidade sugerida por este catálogo",
         value=False,
@@ -11804,6 +11856,23 @@ def dialog_thu_i8_revisar_produto(catalogo_id, pagina, nome_candidato=""):
                 atuais + [x for x in campanhas_confirmadas if x in CAMPANHAS_PRODUTO_OPCOES]
             ))
 
+        _foto_hist_existente_salva = ""
+        if usar_foto_historica and pg.get("preview"):
+            try:
+                _foto_hist_existente_salva = thu_i8_salvar_preview_como_foto(
+                    pg.get("preview"),
+                    atualizado.get("Nome") or nome_candidato or "produto",
+                )
+                if _foto_hist_existente_salva:
+                    _imgs_existentes_i8 = list(atualizado.get("Imagens", []) or [])
+                    if _foto_hist_existente_salva not in _imgs_existentes_i8:
+                        _imgs_existentes_i8.insert(0, _foto_hist_existente_salva)
+                    atualizado["Imagens"] = _imgs_existentes_i8
+                else:
+                    st.warning("Não foi possível copiar a imagem histórica para o banco de fotos.")
+            except Exception:
+                st.warning("Não foi possível copiar a imagem histórica para o banco de fotos.")
+
         fonte = thu_i8_fonte_historica(cat_fonte, pg, nome_candidato)
         atualizado = thu_i8_adicionar_fonte_ao_produto(atualizado, fonte)
         hist = list(atualizado.get("HistoricoEnriquecimentoCatalogos", []) or [])
@@ -11816,6 +11885,7 @@ def dialog_thu_i8_revisar_produto(catalogo_id, pagina, nome_candidato=""):
                     ("Descrição", usar_desc),
                     ("Material", usar_material),
                     ("Variações", usar_variacoes),
+                    ("Foto histórica", bool(_foto_hist_existente_salva)),
                     ("Campanhas", confirmar_campanha),
                 ) if ok
             ],
@@ -12841,7 +12911,12 @@ def dialog_catalogo_visualizar_anna():
         ).casefold())
         and (not somente_pendentes or not avaliar_pendencias_produto_catalogo(p)["pronto_thu"])
     ]
-    st.caption(f"{len(filtrados)} produto(s) encontrado(s)")
+    filtrados.sort(
+        key=lambda item: normalizar_identidade_produto(
+            (item[1] or {}).get("Nome", "")
+        )
+    )
+    st.caption(f"{len(filtrados)} produto(s) encontrado(s) • ordem alfabética")
 
     for i, produto in filtrados[:100]:
         imagens_atuais = [str(x).strip() for x in (produto.get("Imagens", []) or []) if str(x).strip()]
@@ -17479,6 +17554,9 @@ if pagina_atual == "catalogo":
                     + ". Marque abaixo somente as que continuam válidas hoje."
                 )
 
+        _i8_usar_foto_historica = False
+        _i8_preview_historico = None
+
         tab_info, tab_producao, tab_marketing, tab_midias = st.tabs([
             "📦 Informações", "⚙️ Produção", "📣 Marketing", "🧠 Arquivos, artes e fotos"
         ])
@@ -17774,6 +17852,36 @@ if pagina_atual == "catalogo":
 
             st.divider()
             st.markdown("#### 🖼️ Galeria e publicação")
+
+            if prefill_i8 and prefill_i8.get("preview_historico"):
+                _i8_preview_rel = str(prefill_i8.get("preview_historico") or "")
+                _i8_preview_historico = Path(__file__).resolve().parent / _i8_preview_rel
+                if _i8_preview_historico.exists():
+                    st.markdown("##### 📚 Foto encontrada no catálogo histórico")
+                    _fh1, _fh2 = st.columns([1.25, 3.75])
+                    try:
+                        _fh1.image(str(_i8_preview_historico), use_container_width=True)
+                    except Exception:
+                        _fh1.caption("Prévia histórica")
+                    _pagina_multi_foto = bool(prefill_i8.get("pagina_multiproduto"))
+                    _fh2.caption(
+                        "Esta imagem é a página original do catálogo antigo. "
+                        + (
+                            "Como esta página representa um único produto, ela pode entrar como primeira foto/referência do cadastro."
+                            if not _pagina_multi_foto
+                            else "Como esta página contém vários produtos, o THU não a seleciona automaticamente como foto deste item."
+                        )
+                    )
+                    _i8_usar_foto_historica = _fh2.checkbox(
+                        "📸 Aproveitar esta imagem no banco de fotos do produto",
+                        value=not _pagina_multi_foto,
+                        key=f"cat_i8_foto_historica_{sufixo}",
+                        help=(
+                            "A imagem será copiada para o armazenamento persistente do Catálogo Oficial ao salvar. "
+                            "Em páginas com vários produtos, confirme somente quando a página inteira for uma referência adequada para este item."
+                        ),
+                    )
+
             imagens_cadastradas = list(item_edicao.get("Imagens", []) or [])
 
             remover_indices = []
@@ -17867,6 +17975,25 @@ if pagina_atual == "catalogo":
                 if drive_erros:
                     st.warning("Google Drive: " + " ".join(dict.fromkeys(drive_erros)))
 
+                if prefill_i8 and _i8_usar_foto_historica and prefill_i8.get("preview_historico"):
+                    try:
+                        _foto_hist_salva = thu_i8_salvar_preview_como_foto(
+                            prefill_i8.get("preview_historico"),
+                            nome_cat.strip(),
+                        )
+                        if _foto_hist_salva:
+                            imagens.insert(0, _foto_hist_salva)
+                        else:
+                            st.warning(
+                                "A foto histórica não pôde ser copiada para o banco de imagens. "
+                                "O produto poderá ser salvo normalmente e a fonte histórica continuará vinculada."
+                            )
+                    except Exception as _exc_i8_foto:
+                        st.warning(
+                            "Não foi possível incorporar a foto histórica neste momento. "
+                            "O cadastro será preservado sem alterar as demais informações."
+                        )
+
                 imagens = list(dict.fromkeys(imagens))
                 variacoes_digitadas_cat = list(dict.fromkeys(
                     x.strip() for x in variacoes_cat.splitlines() if x.strip()
@@ -17919,6 +18046,9 @@ if pagina_atual == "catalogo":
                         "preco_historico_importado_como_oficial": False,
                         "preco_oficial_informado": preco_cat.strip(),
                         "quantidade_minima_ignorada": bool(_fonte_i8_novo.get("quantidades_minimas_historicas_ignoradas")),
+                        "foto_historica_aproveitada": bool(
+                            prefill_i8.get("preview_historico") and _i8_usar_foto_historica
+                        ),
                         "confirmado_em": agora_local().isoformat(timespec="seconds"),
                         "usuario": obter_usuario_atual(),
                     })
@@ -18071,7 +18201,12 @@ if pagina_atual == "catalogo":
                     for a in (p.get('ArquivosBiblioteca', []) or [])
                 )).lower()
             ]
-            st.write(f"**{len(filtrados)} produto(s)**")
+            filtrados.sort(
+                key=lambda item: normalizar_identidade_produto(
+                    (item[1] or {}).get("Nome", "")
+                )
+            )
+            st.write(f"**{len(filtrados)} produto(s)** • ordem alfabética")
             for i, produto_cat in filtrados:
                 with st.container(border=True):
                     cimg, cinfo, cacoes = st.columns([1, 5, 2])
@@ -18178,11 +18313,16 @@ if pagina_atual == "catalogo":
                     default=categorias_disponiveis[:1],
                     key="categorias_catalogo_cliente",
                 )
-                produtos_base = [
-                    p for p in catalogo
-                    if (str(p.get("Categoria", "Sem categoria")).strip() or "Sem categoria")
-                    in categorias_cliente
-                ]
+                produtos_base = sorted(
+                    [
+                        p for p in catalogo
+                        if (str(p.get("Categoria", "Sem categoria")).strip() or "Sem categoria")
+                        in categorias_cliente
+                    ],
+                    key=lambda p: normalizar_identidade_produto(
+                        (p or {}).get("Nome", "")
+                    ),
+                )
                 nomes_disponiveis = [str(p.get("Nome", "Produto")) for p in produtos_base]
                 nomes_selecionados = st.multiselect(
                     "Produtos específicos",
