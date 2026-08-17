@@ -11402,6 +11402,163 @@ def thu_i8_salvar_preview_como_foto(preview_relativo, produto_nome="produto"):
     return salvar_upload_catalogo(upload)
 
 
+def thu_i83_recuperar_fotos_historicas_seguras(catalogo=None, salvar=True):
+    """Recupera fotos para cadastros históricos antigos sem imagem.
+
+    Só atua quando:
+    - produto ainda não possui Imagens;
+    - existe FontesHistoricasCatalogos;
+    - a fonte aponta para página de produto único;
+    - o preview existe no pacote.
+    """
+    catalogo = list(catalogo if catalogo is not None else carregar_catalogo())
+    acervo = thu_i8_carregar_acervo_estatico()
+    alterados = 0
+    ignorados_multi = 0
+    falhas = 0
+    produtos_alterados = []
+
+    for idx, produto in enumerate(catalogo):
+        registro = dict(produto or {})
+        imagens = [
+            str(x).strip()
+            for x in (registro.get("Imagens", []) or [])
+            if str(x).strip()
+        ]
+        if imagens:
+            continue
+
+        fontes = list(registro.get("FontesHistoricasCatalogos", []) or [])
+        if not fontes:
+            continue
+
+        fonte_escolhida = None
+        preview_rel = ""
+
+        for fonte in reversed(fontes):
+            if not isinstance(fonte, dict):
+                continue
+            if bool(fonte.get("pagina_multiproduto")):
+                ignorados_multi += 1
+                continue
+
+            _cat_id = str(fonte.get("catalogo_id") or "").strip()
+            _pagina = int(fonte.get("pagina") or 0)
+            _preview = str(fonte.get("preview") or "").strip()
+
+            # Se a fonte antiga não tinha o campo preview completo, reconstrói
+            # a referência a partir do acervo estático.
+            if not _preview and _cat_id and _pagina:
+                _cat_fonte, _pg = thu_i8_pagina(
+                    _cat_id,
+                    _pagina,
+                    acervo=acervo,
+                )
+                if _pg:
+                    _preview = str(_pg.get("preview") or "").strip()
+
+            if not _preview:
+                continue
+
+            _path = Path(__file__).resolve().parent / _preview
+            if not _path.exists() or not _path.is_file():
+                continue
+
+            fonte_escolhida = fonte
+            preview_rel = _preview
+            break
+
+        if not fonte_escolhida or not preview_rel:
+            continue
+
+        try:
+            foto_salva = thu_i8_salvar_preview_como_foto(
+                preview_rel,
+                registro.get("Nome") or "produto",
+            )
+        except Exception:
+            foto_salva = ""
+
+        if not foto_salva:
+            falhas += 1
+            continue
+
+        registro["Imagens"] = [foto_salva]
+
+        banco_hist = list(registro.get("BancoImagensHistorico", []) or [])
+        banco_hist.append({
+            "origem": "Acervo Histórico de Catálogos AlphaFest",
+            "catalogo_id": str(fonte_escolhida.get("catalogo_id") or ""),
+            "catalogo": str(fonte_escolhida.get("catalogo") or ""),
+            "pagina": int(fonte_escolhida.get("pagina") or 0),
+            "preview": preview_rel,
+            "acao": "Foto histórica recuperada automaticamente para cadastro sem imagem",
+            "fotos": [foto_salva],
+            "adicionado_em": agora_local().isoformat(timespec="seconds"),
+            "usuario": obter_usuario_atual(),
+            "regra": "Somente página de produto único e produto sem foto",
+        })
+        registro["BancoImagensHistorico"] = banco_hist[-150:]
+
+        hist = list(registro.get("HistoricoEnriquecimentoCatalogos", []) or [])
+        hist.append({
+            "fonte": (
+                f"{fonte_escolhida.get('catalogo') or 'Catálogo histórico'} "
+                f"• p.{fonte_escolhida.get('pagina') or '—'}"
+            ),
+            "produto": registro.get("Nome"),
+            "acao": "Recuperação retroativa de foto histórica",
+            "campos_aplicados": ["Foto histórica"],
+            "confirmado_em": agora_local().isoformat(timespec="seconds"),
+            "usuario": obter_usuario_atual(),
+            "preco_oficial_alterado": False,
+            "quantidade_minima_criada": False,
+        })
+        registro["HistoricoEnriquecimentoCatalogos"] = hist[-150:]
+        registro["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+        registro["MigracaoFotoHistoricaI83"] = True
+
+        catalogo[idx] = registro
+        alterados += 1
+        produtos_alterados.append(str(registro.get("Nome") or "Produto"))
+
+    if salvar and alterados:
+        salvar_catalogo(catalogo)
+
+    return {
+        "catalogo": catalogo,
+        "alterados": alterados,
+        "produtos": produtos_alterados,
+        "ignorados_multiproduto": ignorados_multi,
+        "falhas": falhas,
+    }
+
+
+def thu_i83_garantir_fotos_historicas_sessao(catalogo=None):
+    """Executa uma vez por sessão para recuperar cadastros I8.1/I8.2 sem foto."""
+    chave = "_thu_i83_fotos_historicas_verificadas"
+    if st.session_state.get(chave):
+        return {
+            "catalogo": list(catalogo or carregar_catalogo()),
+            "alterados": 0,
+            "produtos": [],
+            "ignorados_multiproduto": 0,
+            "falhas": 0,
+        }
+
+    resultado = thu_i83_recuperar_fotos_historicas_seguras(
+        catalogo=catalogo,
+        salvar=True,
+    )
+    st.session_state[chave] = True
+    if resultado.get("alterados"):
+        st.session_state["_thu_i83_feedback_fotos"] = (
+            f"📸 {resultado['alterados']} produto(s) sem foto receberam a imagem "
+            "segura do Acervo Histórico."
+        )
+    return resultado
+
+
 def _thu_i8_limpar_candidato(valor):
     texto = re.sub(r"\s+", " ", str(valor or "")).strip(" -—:;,.\t")
     if not texto:
@@ -11933,6 +12090,42 @@ def renderizar_acervo_catalogos_legados():
     st.caption(
         "Os PDFs antigos viraram uma fonte histórica pesquisável dentro do Manager. "
         "O Catálogo Oficial continua sendo a única fonte atual de produto, preço e campanha."
+    )
+
+    _rf1, _rf2 = st.columns([1.5, 2.5])
+    if _rf1.button(
+        "📸 Recuperar fotos históricas seguras",
+        use_container_width=True,
+        key="thu_i83_recuperar_fotos_manual",
+        help=(
+            "Preenche somente produtos sem foto que já possuem fonte histórica "
+            "de página com um único produto. Páginas multiproduto são ignoradas."
+        ),
+    ):
+        st.session_state.pop("_thu_i83_fotos_historicas_verificadas", None)
+        _res_i83_manual = thu_i83_recuperar_fotos_historicas_seguras(
+            catalogo=carregar_catalogo(),
+            salvar=True,
+        )
+        st.session_state["_thu_i83_fotos_historicas_verificadas"] = True
+        if _res_i83_manual.get("alterados"):
+            st.success(
+                f"📸 {_res_i83_manual['alterados']} produto(s) receberam foto histórica: "
+                + " • ".join(_res_i83_manual.get("produtos", [])[:12])
+            )
+        elif _res_i83_manual.get("falhas"):
+            st.warning(
+                "As fontes foram localizadas, mas algumas imagens não puderam ser persistidas. "
+                "Nenhum cadastro foi perdido."
+            )
+        else:
+            st.info(
+                "Nenhum produto sem foto com página histórica de produto único ficou pendente."
+            )
+
+    _rf2.caption(
+        "A recuperação nunca altera preço, quantidade mínima, descrição ou campanha. "
+        "Ela atua somente na galeria de produtos sem foto."
     )
 
     m1, m2, m3, m4, m5 = st.columns(5)
@@ -12887,6 +13080,13 @@ def dialog_catalogo_visualizar_anna():
     registrar_atividade(obter_usuario_atual(), "Consultando e corrigindo o catálogo", "Catálogo")
     mostrar_orientacao_thu("atualizar_catalogo", token="catalogo_visualizar")
     catalogo = carregar_catalogo()
+    _i83_anna = thu_i83_garantir_fotos_historicas_sessao(catalogo)
+    if _i83_anna.get("alterados"):
+        catalogo = carregar_catalogo()
+
+    _i83_msg_anna = st.session_state.pop("_thu_i83_feedback_fotos", None)
+    if _i83_msg_anna:
+        st.success(_i83_msg_anna)
 
     revisoes_anna = [(i, p, avaliar_pendencias_produto_catalogo(p)) for i, p in enumerate(catalogo)]
     qtd_prontos_anna = sum(1 for _, _, r in revisoes_anna if r["pronto_thu"])
@@ -17481,6 +17681,13 @@ if pagina_atual == "catalogo":
     st.header("📦 Catálogo Alphafest")
     st.caption("Cadastro interno e geração de seleções específicas para consulta do cliente.")
     catalogo = carregar_catalogo()
+    _i83_catalogo = thu_i83_garantir_fotos_historicas_sessao(catalogo)
+    if _i83_catalogo.get("alterados"):
+        catalogo = carregar_catalogo()
+
+    _i83_msg_catalogo = st.session_state.pop("_thu_i83_feedback_fotos", None)
+    if _i83_msg_catalogo:
+        st.success(_i83_msg_catalogo)
 
     _produto_auditar_catalogo = st.session_state.get("_thu_auditar_produto_nome")
     if _produto_auditar_catalogo:
