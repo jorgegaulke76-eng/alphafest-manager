@@ -9291,6 +9291,165 @@ def _i89_registrar_publicacao(catalogo_id, publicacao):
     return False
 
 
+# --- 20.4.9-I8.10: Inteligência Comercial dos Catálogos ---
+def _i810_token_assinatura(valor):
+    texto = str(valor or "").strip()
+    if len(texto) > 512:
+        return "sha256:" + hashlib.sha256(texto.encode("utf-8")).hexdigest()
+    return texto
+
+
+def _i810_lista_estavel(valor):
+    itens = [_i810_token_assinatura(x) for x in _i871_lista_textos(valor) if str(x).strip()]
+    return sorted(itens, key=normalizar_identidade_produto)
+
+
+def _i810_assinatura_catalogo(registro, catalogo_oficial):
+    """Assina apenas o estado comercial atual; nunca guarda preço/foto antigos.
+
+    A assinatura permite detectar se o Catálogo Oficial mudou depois de uma
+    publicação. É um hash irreversível, não um snapshot comercial.
+    """
+    registro = registro or {}
+    opcoes = dict(registro.get("opcoes") or {})
+    indices, ausentes = _i88_resolver_catalogo_salvo(registro, catalogo_oficial)
+    produtos = []
+    inativos = 0
+    fora_campanha = 0
+    for idx in indices:
+        produto = (catalogo_oficial or [])[idx] or {}
+        if not bool(produto.get("Ativo", True)):
+            inativos += 1
+            continue
+        if not _i88_produto_elegivel_campanha(registro, produto):
+            fora_campanha += 1
+            continue
+        if not bool(opcoes.get("mostrar_sem_foto", True)) and not _i871_lista_textos(produto.get("Imagens")):
+            continue
+        imagens_i810 = [_i810_token_assinatura(x) for x in _i871_lista_textos(produto.get("Imagens")) if str(x).strip()]
+        variacoes_i810 = [str(x).strip() for x in _i871_lista_textos(produto.get("Variacoes")) if str(x).strip()]
+        item = {
+            "codigo": str(produto.get("CodigoInterno") or "").strip(),
+            "nome": str(produto.get("Nome") or "").strip(),
+            "categoria": str(produto.get("Categoria") or "").strip(),
+            "subcategoria": str(produto.get("Subcategoria") or "").strip(),
+            # O HTML I8.7 exibe somente a primeira imagem e até 8 variações.
+            "imagem_principal": imagens_i810[0] if imagens_i810 else "",
+            "variacoes": variacoes_i810[:8],
+            "tem_mais_variacoes": len(variacoes_i810) > 8,
+        }
+        if bool(opcoes.get("mostrar_precos", True)):
+            item["preco"] = formatar_preco_catalogo(produto.get("Preco"))
+        if bool(opcoes.get("mostrar_descricao", True)):
+            item["descricao"] = str(produto.get("DescricaoCurta", produto.get("Descricao", "")) or "").strip()
+        if bool(opcoes.get("mostrar_material", True)):
+            item["material"] = str(produto.get("Material") or "").strip()
+        produtos.append(item)
+
+    produtos.sort(key=lambda x: (
+        normalizar_identidade_produto(x.get("categoria")),
+        normalizar_identidade_produto(x.get("nome")),
+        x.get("codigo", ""),
+    ))
+    payload = {
+        "titulo": str(registro.get("titulo") or "").strip(),
+        "subtitulo": str(registro.get("subtitulo") or "").strip(),
+        "observacao_rodape": str(registro.get("observacao_rodape") or "").strip(),
+        "campanha_chave": str(registro.get("campanha_chave") or "__todas__"),
+        "categorias_chaves": sorted(str(x) for x in (registro.get("categorias_chaves") or [])),
+        "opcoes": {
+            "mostrar_precos": bool(opcoes.get("mostrar_precos", True)),
+            "mostrar_descricao": bool(opcoes.get("mostrar_descricao", True)),
+            "mostrar_material": bool(opcoes.get("mostrar_material", True)),
+            "mostrar_whatsapp": bool(opcoes.get("mostrar_whatsapp", True)),
+            "mostrar_sem_foto": bool(opcoes.get("mostrar_sem_foto", True)),
+        },
+        "produtos": produtos,
+    }
+    bruto = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return {
+        "assinatura": hashlib.sha256(bruto).hexdigest(),
+        "produtos_saida": len(produtos),
+        "referencias_pendentes": len(ausentes),
+        "inativos": inativos,
+        "fora_campanha": fora_campanha,
+    }
+
+
+def _i810_diagnostico_catalogo(registro, catalogo_oficial):
+    registro = registro or {}
+    pubs = _i89_publicacoes(registro)
+    ultima = pubs[0] if pubs else None
+    atual = _i810_assinatura_catalogo(registro, catalogo_oficial)
+    status_registro = str(registro.get("status") or "ativo")
+    resultado = {
+        "id": str(registro.get("id") or ""),
+        "nome": str(registro.get("nome_interno") or registro.get("titulo") or "Catálogo"),
+        "status_registro": status_registro,
+        "publicacoes": len(pubs),
+        "ultima_publicacao": ultima,
+        "assinatura_atual": atual.get("assinatura"),
+        "produtos_saida": atual.get("produtos_saida", 0),
+        "pendentes": atual.get("referencias_pendentes", 0) + atual.get("inativos", 0),
+        "fora_campanha": atual.get("fora_campanha", 0),
+        "mudou_conteudo": None,
+        "dias_validade": None,
+        "status_validade": "⚪ Nunca publicado",
+        "prioridade": 0,
+        "acao": "Sem ação",
+        "motivos": [],
+    }
+    if status_registro == "arquivado":
+        resultado["acao"] = "Arquivado"
+        return resultado
+
+    if not ultima:
+        resultado["prioridade"] = 80
+        resultado["acao"] = "Publicar primeira versão"
+        resultado["motivos"].append("Catálogo ativo ainda não possui link público.")
+    else:
+        meta = _i884_metadados_geracao(ultima.get("gerado_em"), ultima.get("gerado_por"))
+        status_val, dias = _i884_status_validade(meta)
+        resultado["status_validade"] = status_val
+        resultado["dias_validade"] = dias
+        resultado["meta_publicacao"] = meta
+        assinatura_publicada = str(ultima.get("assinatura_conteudo") or "").strip()
+        if assinatura_publicada:
+            resultado["mudou_conteudo"] = assinatura_publicada != atual.get("assinatura")
+        if dias < 0:
+            resultado["prioridade"] = max(resultado["prioridade"], 100)
+            resultado["acao"] = "Republicar agora"
+            resultado["motivos"].append(f"Link comercial vencido há {abs(dias)} dia(s).")
+        elif dias <= 5:
+            resultado["prioridade"] = max(resultado["prioridade"], 70)
+            resultado["acao"] = "Renovar em breve"
+            resultado["motivos"].append(f"Validade termina em {dias} dia(s).")
+        if resultado["mudou_conteudo"] is True:
+            resultado["prioridade"] = max(resultado["prioridade"], 95)
+            resultado["acao"] = "Republicar com dados atuais"
+            resultado["motivos"].append("O conteúdo comercial do Catálogo Oficial mudou após a última publicação.")
+        elif resultado["mudou_conteudo"] is None:
+            resultado["motivos"].append("Publicação anterior à I8.10: comparação automática de alterações ainda sem baseline.")
+
+    if resultado["pendentes"]:
+        resultado["prioridade"] = max(resultado["prioridade"], 90)
+        if resultado["acao"] in ("Sem ação", "Renovar em breve"):
+            resultado["acao"] = "Revisar referências"
+        resultado["motivos"].append(f"{resultado['pendentes']} referência(s) ausente(s) ou inativa(s) no Catálogo Oficial.")
+    if resultado["fora_campanha"]:
+        resultado["prioridade"] = max(resultado["prioridade"], 75)
+        resultado["motivos"].append(f"{resultado['fora_campanha']} produto(s) deixaram de ser elegíveis para a campanha salva.")
+    if resultado["prioridade"] == 0:
+        resultado["acao"] = "Em dia"
+    return resultado
+
+
+def _i810_diagnosticos(catalogos, catalogo_oficial):
+    itens = [_i810_diagnostico_catalogo(x, catalogo_oficial) for x in (catalogos or [])]
+    itens.sort(key=lambda x: (int(x.get("prioridade", 0)), str(x.get("nome") or "").casefold()), reverse=True)
+    return itens
+
+
 def _i89_imagem_bytes(origem):
     origem = str(origem or "").strip()
     if not origem:
@@ -21329,10 +21488,11 @@ if pagina_atual == "catalogo":
         if usuario_em_operacao_protegida(obter_usuario_atual()):
             # I8.8.4: ao entrar pelo atalho da Central da Anna, as ferramentas
             # liberadas aparecem primeiro e o Gerador já abre como aba padrão.
-            aba_gerador, aba_modelos, aba_central, aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_cliente = st.tabs([
+            aba_gerador, aba_modelos, aba_central, aba_inteligencia, aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_cliente = st.tabs([
                 "✨ Gerador I8.7.1",
                 "🧩 Modelos I8.8.3",
                 "📤 Central I8.9.2.1",
+                "📊 Inteligência I8.10",
                 "➕ Cadastrar",
                 "📋 Produtos",
                 "🧹 Saneamento",
@@ -21340,7 +21500,7 @@ if pagina_atual == "catalogo":
                 "📤 Catálogo para cliente",
             ])
         else:
-            aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_gerador, aba_modelos, aba_central, aba_cliente = st.tabs([
+            aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_gerador, aba_modelos, aba_central, aba_inteligencia, aba_cliente = st.tabs([
                 "➕ Cadastrar",
                 "📋 Produtos",
                 "🧹 Saneamento",
@@ -21348,6 +21508,7 @@ if pagina_atual == "catalogo":
                 "✨ Gerador I8.7.1",
                 "🧩 Modelos I8.8.3",
                 "📤 Central I8.9.2.1",
+                "📊 Inteligência I8.10",
                 "📤 Catálogo para cliente",
             ])
 
@@ -22625,6 +22786,7 @@ if pagina_atual == "catalogo":
                         storage_url_i89 = publish_catalog_html(html_publico_i89, object_path_i89)
                         url_publicada_i89 = catalog_render_url(object_path_i89) if storage_url_i89 else ""
                         if url_publicada_i89:
+                            assinatura_pub_i810 = _i810_assinatura_catalogo(compartilhar_reg_i89, catalogo)
                             publicacao_i89 = {
                                 "id": f"PUB-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
                                 "url": url_publicada_i89,
@@ -22633,6 +22795,10 @@ if pagina_atual == "catalogo":
                                 "gerado_em": meta_pub_i89["gerado_em"],
                                 "gerado_por": meta_pub_i89["gerado_por"],
                                 "validade_ate": meta_pub_i89["validade_ate"],
+                                # I8.10: hash irreversível para detectar alteração futura sem guardar preço antigo.
+                                "assinatura_conteudo": assinatura_pub_i810.get("assinatura", ""),
+                                "revisao_catalogo": int(compartilhar_reg_i89.get("revisao", 1) or 1),
+                                "produtos_publicados": int(assinatura_pub_i810.get("produtos_saida", len(produtos_share_i89)) or 0),
                             }
                             _i89_registrar_publicacao(share_id_i89, publicacao_i89)
                             _i884_atualizar_ultima_geracao(share_id_i89, meta_pub_i89)
@@ -22937,6 +23103,191 @@ if pagina_atual == "catalogo":
                             st.session_state.pop(chave_estado_i88, None)
                     st.session_state.pop("i88_editor_id", None)
                     st.rerun()
+
+        with aba_inteligencia:
+            st.markdown("### 📊 I8.10 • Inteligência Comercial dos Catálogos")
+            st.caption(
+                "Painel operacional baseado somente em fatos registrados pelo AlphaFest Manager. "
+                "Ele não inventa cliques ou visualizações do cliente: prioriza validade, publicações, "
+                "referências e mudanças reais do Catálogo Oficial."
+            )
+
+            catalogos_i810 = carregar_catalogos_gerados()
+            diagnosticos_i810 = _i810_diagnosticos(catalogos_i810, catalogo)
+            ativos_i810 = [d for d in diagnosticos_i810 if d.get("status_registro") == "ativo"]
+            publicados_i810 = [d for d in ativos_i810 if d.get("ultima_publicacao")]
+            sem_publicacao_i810 = [d for d in ativos_i810 if not d.get("ultima_publicacao")]
+            vencidos_i810 = [d for d in publicados_i810 if isinstance(d.get("dias_validade"), int) and d.get("dias_validade") < 0]
+            proximos_i810 = [d for d in publicados_i810 if isinstance(d.get("dias_validade"), int) and 0 <= d.get("dias_validade") <= 5]
+            mudaram_i810 = [d for d in publicados_i810 if d.get("mudou_conteudo") is True]
+            pendentes_i810 = [d for d in ativos_i810 if int(d.get("pendentes", 0) or 0) > 0]
+            baseline_antigo_i810 = [d for d in publicados_i810 if d.get("mudou_conteudo") is None]
+            saudaveis_i810 = [
+                d for d in ativos_i810
+                if d.get("ultima_publicacao")
+                and isinstance(d.get("dias_validade"), int) and d.get("dias_validade") >= 0
+                and not int(d.get("pendentes", 0) or 0)
+                and d.get("mudou_conteudo") is not True
+            ]
+            saude_pct_i810 = round((len(saudaveis_i810) / len(ativos_i810) * 100), 0) if ativos_i810 else 100
+
+            k1, k2, k3, k4, k5, k6 = st.columns(6)
+            k1.metric("Ativos", len(ativos_i810))
+            k2.metric("Publicados", len(publicados_i810))
+            k3.metric("Sem publicação", len(sem_publicacao_i810))
+            k4.metric("Vencidos", len(vencidos_i810))
+            k5.metric("Mudou conteúdo", len(mudaram_i810))
+            k6.metric("Saúde comercial", f"{int(saude_pct_i810)}%")
+
+            if baseline_antigo_i810:
+                st.info(
+                    f"ℹ️ {len(baseline_antigo_i810)} publicação(ões) foram criadas antes da I8.10. "
+                    "Elas continuam válidas normalmente, mas a comparação automática de alteração do conteúdo "
+                    "começa nas novas publicações feitas a partir desta versão."
+                )
+
+            atencao_total_i810 = len({d.get("id") for d in (vencidos_i810 + mudaram_i810 + pendentes_i810 + sem_publicacao_i810)})
+            if atencao_total_i810:
+                st.warning(
+                    f"⚠️ {atencao_total_i810} catálogo(s) ativo(s) merecem ação comercial. "
+                    "A fila abaixo já está ordenada por prioridade."
+                )
+            elif ativos_i810:
+                st.success("✅ Todos os catálogos ativos estão operacionalmente em dia pelos critérios atuais.")
+
+            f1_i810, f2_i810 = st.columns([2, 1])
+            filtro_texto_i810 = f1_i810.text_input(
+                "🔎 Pesquisar na Inteligência",
+                key="i810_busca",
+                placeholder="Nome do catálogo",
+            ).strip().casefold()
+            filtro_i810 = f2_i810.selectbox(
+                "Mostrar",
+                ["Precisa ação", "Todos ativos", "Vencidos", "Mudou conteúdo", "Sem publicação", "Próximo do vencimento"],
+                key="i810_filtro",
+            )
+
+            def _i810_visivel_ui(diag):
+                if diag.get("status_registro") != "ativo":
+                    return False
+                if filtro_texto_i810 and filtro_texto_i810 not in str(diag.get("nome") or "").casefold():
+                    return False
+                if filtro_i810 == "Precisa ação":
+                    return int(diag.get("prioridade", 0) or 0) > 0
+                if filtro_i810 == "Vencidos":
+                    return isinstance(diag.get("dias_validade"), int) and diag.get("dias_validade") < 0
+                if filtro_i810 == "Mudou conteúdo":
+                    return diag.get("mudou_conteudo") is True
+                if filtro_i810 == "Sem publicação":
+                    return not diag.get("ultima_publicacao")
+                if filtro_i810 == "Próximo do vencimento":
+                    return isinstance(diag.get("dias_validade"), int) and 0 <= diag.get("dias_validade") <= 5
+                return True
+
+            fila_i810 = [d for d in diagnosticos_i810 if _i810_visivel_ui(d)]
+            st.markdown("#### 🎯 Fila inteligente")
+            st.caption(f"{len(fila_i810)} catálogo(s) nesta visualização.")
+            if not fila_i810:
+                st.info("Nenhum catálogo corresponde ao filtro atual.")
+
+            for diag_i810 in fila_i810[:30]:
+                reg_i810 = next((r for r in catalogos_i810 if str(r.get("id") or "") == str(diag_i810.get("id") or "")), {})
+                with st.container(border=True):
+                    d1_i810, d2_i810 = st.columns([4, 1])
+                    d1_i810.markdown(f"#### {html.escape(str(diag_i810.get('nome') or 'Catálogo'))}")
+                    d1_i810.caption(
+                        f"{diag_i810.get('status_validade')} • {diag_i810.get('publicacoes', 0)} publicação(ões) • "
+                        f"{diag_i810.get('produtos_saida', 0)} produto(s) na saída atual"
+                    )
+                    prioridade_i810 = int(diag_i810.get("prioridade", 0) or 0)
+                    if prioridade_i810 >= 95:
+                        d2_i810.error("AÇÃO AGORA")
+                    elif prioridade_i810 >= 70:
+                        d2_i810.warning("ATENÇÃO")
+                    else:
+                        d2_i810.success("EM DIA")
+                    st.markdown(f"**Recomendação:** {diag_i810.get('acao')}")
+                    for motivo_i810 in diag_i810.get("motivos") or []:
+                        st.write(f"• {motivo_i810}")
+                    if diag_i810.get("ultima_publicacao"):
+                        meta_diag_i810 = diag_i810.get("meta_publicacao") or _i884_metadados_geracao(
+                            diag_i810["ultima_publicacao"].get("gerado_em"),
+                            diag_i810["ultima_publicacao"].get("gerado_por"),
+                        )
+                        st.caption(
+                            f"Última publicação: {meta_diag_i810.get('data')} às {meta_diag_i810.get('hora')} • "
+                            f"{meta_diag_i810.get('gerado_por')} • válido até {meta_diag_i810.get('validade_texto')}"
+                        )
+                    a1_i810, a2_i810 = st.columns(2)
+                    if a1_i810.button(
+                        "📤 Preparar na Central para compartilhar",
+                        key=f"i810_share_{diag_i810.get('id')}",
+                        use_container_width=True,
+                    ):
+                        st.session_state["i89_compartilhar_id"] = str(diag_i810.get("id") or "")
+                        st.session_state["i810_flash"] = (
+                            f"Catálogo '{diag_i810.get('nome')}' preparado. Abra a aba Central I8.9.2.1 para publicar/renovar."
+                        )
+                    ultima_diag_i810 = diag_i810.get("ultima_publicacao") or {}
+                    url_diag_i810 = _i891_url_cliente(ultima_diag_i810)
+                    if url_diag_i810 and catalog_render_available():
+                        a2_i810.link_button("🌐 Abrir último link", url_diag_i810, use_container_width=True)
+                    else:
+                        a2_i810.caption("Sem link público disponível.")
+
+            if st.session_state.get("i810_flash"):
+                st.success(st.session_state.pop("i810_flash"))
+
+            st.divider()
+            st.markdown("#### 🕘 Histórico comercial de publicações")
+            historico_i810 = []
+            por_usuario_i810 = {}
+            for reg_i810 in catalogos_i810:
+                for pub_i810 in _i89_publicacoes(reg_i810):
+                    meta_i810 = _i884_metadados_geracao(pub_i810.get("gerado_em"), pub_i810.get("gerado_por"))
+                    status_i810, dias_i810 = _i884_status_validade(meta_i810)
+                    historico_i810.append({
+                        "catalogo": str(reg_i810.get("nome_interno") or reg_i810.get("titulo") or "Catálogo"),
+                        "gerado_em": str(pub_i810.get("gerado_em") or ""),
+                        "data": f"{meta_i810.get('data')} {meta_i810.get('hora')}",
+                        "usuario": str(meta_i810.get("gerado_por") or "Não informado"),
+                        "validade": str(meta_i810.get("validade_texto") or ""),
+                        "status": status_i810,
+                        "url": _i891_url_cliente(pub_i810),
+                    })
+                    usuario_hist_i810 = str(meta_i810.get("gerado_por") or "Não informado")
+                    por_usuario_i810[usuario_hist_i810] = por_usuario_i810.get(usuario_hist_i810, 0) + 1
+            historico_i810.sort(key=lambda x: x.get("gerado_em", ""), reverse=True)
+            if historico_i810:
+                for item_hist_i810 in historico_i810[:20]:
+                    h1_i810, h2_i810 = st.columns([4, 1])
+                    h1_i810.write(
+                        f"{item_hist_i810['status']} **{item_hist_i810['catalogo']}** • "
+                        f"{item_hist_i810['data']} • {item_hist_i810['usuario']} • válido até {item_hist_i810['validade']}"
+                    )
+                    if item_hist_i810.get("url") and catalog_render_available():
+                        h2_i810.link_button("Abrir", item_hist_i810["url"], use_container_width=True)
+            else:
+                st.info("Ainda não há publicações registradas.")
+
+            if por_usuario_i810:
+                with st.expander("👥 Publicações por responsável"):
+                    for usuario_i810, qtd_i810 in sorted(por_usuario_i810.items(), key=lambda x: (-x[1], x[0].casefold())):
+                        st.write(f"**{usuario_i810}:** {qtd_i810} publicação(ões)")
+
+            contagem_produtos_i810 = {}
+            for reg_i810 in catalogos_i810:
+                if str(reg_i810.get("status") or "ativo") != "ativo":
+                    continue
+                for ref_i810 in reg_i810.get("produtos_ref") or []:
+                    nome_ref_i810 = str((ref_i810 or {}).get("nome_ref") or "").strip()
+                    if nome_ref_i810:
+                        contagem_produtos_i810[nome_ref_i810] = contagem_produtos_i810.get(nome_ref_i810, 0) + 1
+            if contagem_produtos_i810:
+                with st.expander("📦 Produtos mais presentes nos catálogos salvos"):
+                    st.caption("Presença em catálogos não significa visualização ou venda; é apenas uso operacional nas seleções salvas.")
+                    for nome_prod_i810, qtd_prod_i810 in sorted(contagem_produtos_i810.items(), key=lambda x: (-x[1], x[0].casefold()))[:15]:
+                        st.write(f"**{nome_prod_i810}:** presente em {qtd_prod_i810} catálogo(s) ativo(s)")
 
         with aba_cliente:
             if not catalogo:

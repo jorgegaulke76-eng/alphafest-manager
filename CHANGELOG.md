@@ -1,3 +1,10 @@
+## 20.4.9-I8.10 — Inteligência Comercial dos Catálogos
+- Nova aba de inteligência operacional de catálogos.
+- Fila priorizada por validade, publicação, referências e divergência com o Catálogo Oficial.
+- Novas publicações recebem assinatura SHA-256 irreversível do conteúdo comercial para detectar mudanças futuras sem armazenar preços antigos.
+- Histórico consolidado de publicações e responsáveis.
+- Sem telemetria fictícia: nenhuma métrica de clique/visualização é inferida sem fonte real.
+
 ## 20.4.9-I8.9.2.1 — Hotfix URL Supabase
 - Corrige o project URL do visualizador público para `https://guejrwlblcxptzlobhit.supabase.co`.
 - Links novos passam a carregar também `base=<SUPABASE_URL>` usando a configuração real do Manager.
