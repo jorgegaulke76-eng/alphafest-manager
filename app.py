@@ -309,6 +309,7 @@ ARQUIVO_COMPONENTES = "componentes_db.json"
 ARQUIVO_MARKETING = "marketing_db.json"
 ARQUIVO_CATALOGOS_LEGADOS = "catalogos_legados_db.json"
 ARQUIVO_CATALOGOS_GERADOS = "catalogos_gerados_db.json"
+ARQUIVO_MODELOS_CATALOGO = "catalogo_modelos_db.json"
 ARQUIVO_INTEGRACOES = "integracoes_db.json"
 ARQUIVO_INTELIGENCIA = "alpha_intelligence_db.json"
 ARQUIVO_USUARIOS = "usuarios_config.json"
@@ -8803,6 +8804,219 @@ def _i882_render_preview_catalogo(conteudo_html, *, key_prefix, habilitado=True,
         components.html(str(conteudo_html), height=780, scrolling=True)
 
 
+
+# --- 20.4.9-I8.8.3: Modelos de Catálogo ---
+def carregar_modelos_catalogo():
+    """Carrega somente modelos personalizados persistidos pelo usuário.
+
+    Modelos de sistema, categoria e campanha são calculados em tempo real a partir
+    do Catálogo Oficial e não precisam ser gravados no banco.
+    """
+    dados = load_document("catalogo_modelos_db", ARQUIVO_MODELOS_CATALOGO, [])
+    return dados if isinstance(dados, list) else []
+
+
+def salvar_modelos_catalogo(lista):
+    if not isinstance(lista, list):
+        raise ValueError("A biblioteca de modelos precisa ser uma lista de configurações.")
+    return save_document("catalogo_modelos_db", lista, ARQUIVO_MODELOS_CATALOGO)
+
+
+def _i883_novo_id():
+    return agora_local().strftime("MOD%Y%m%d%H%M%S") + secrets.token_hex(3).upper()
+
+
+def _i883_criar_modelo_personalizado(
+    *,
+    nome,
+    descricao="",
+    titulo="Catálogo AlphaFest",
+    subtitulo="",
+    observacao_rodape="",
+    campanha_chave="__todas__",
+    campanha_rotulo="Todas as campanhas",
+    categorias_modo="selecionadas",
+    categorias_chaves=None,
+    opcoes=None,
+    registro_existente=None,
+):
+    """Cria/atualiza um modelo sem referências de produto e sem snapshot comercial."""
+    agora = agora_local().isoformat(timespec="seconds")
+    existente = dict(registro_existente or {})
+    modo = "todas" if str(categorias_modo) == "todas" else "selecionadas"
+    return {
+        "id": existente.get("id") or _i883_novo_id(),
+        "schema_version": 1,
+        "origem": "personalizado",
+        "status": str(existente.get("status") or "ativo"),
+        "nome": str(nome or "Modelo de catálogo").strip() or "Modelo de catálogo",
+        "descricao": str(descricao or "").strip(),
+        "titulo": str(titulo or "Catálogo AlphaFest").strip() or "Catálogo AlphaFest",
+        "subtitulo": str(subtitulo or "").strip(),
+        "observacao_rodape": str(observacao_rodape or "").strip(),
+        "campanha_chave": str(campanha_chave or "__todas__"),
+        "campanha_rotulo": str(campanha_rotulo or "Todas as campanhas"),
+        "categorias_modo": modo,
+        "categorias_chaves": list(dict.fromkeys(str(x) for x in (categorias_chaves or []) if str(x).strip())),
+        "opcoes": dict(opcoes or _i88_config_opcoes()),
+        "criado_em": existente.get("criado_em") or agora,
+        "criado_por": existente.get("criado_por") or _usuario_auditoria(),
+        "atualizado_em": agora,
+        "atualizado_por": _usuario_auditoria(),
+        "revisao": int(existente.get("revisao", 0) or 0) + 1,
+    }
+
+
+def _i883_duplicar_modelo(registro):
+    copia = copy.deepcopy(registro or {})
+    agora = agora_local().isoformat(timespec="seconds")
+    copia["id"] = _i883_novo_id()
+    copia["nome"] = str(copia.get("nome") or "Modelo").strip() + " (cópia)"
+    copia["origem"] = "personalizado"
+    copia["status"] = "ativo"
+    copia["criado_em"] = agora
+    copia["criado_por"] = _usuario_auditoria()
+    copia["atualizado_em"] = agora
+    copia["atualizado_por"] = _usuario_auditoria()
+    copia["revisao"] = 1
+    return copia
+
+
+def _i883_modelos_sistema(catalogo_oficial):
+    """Gera modelos seguros e dinâmicos usando apenas identidades do catálogo atual."""
+    ativos = [(i, p) for i, p in enumerate(catalogo_oficial or []) if (p or {}).get("Ativo", True)]
+    rotulos_cat = _i871_mapa_rotulos([p.get("Categoria") for _, p in ativos], fallback="Sem categoria")
+    categorias = sorted(rotulos_cat, key=lambda x: normalizar_identidade_produto(rotulos_cat.get(x, x)))
+    campanhas_brutas = [
+        camp
+        for _, p in ativos
+        for camp in _i871_lista_textos((p or {}).get("CampanhasPermitidas"))
+        if normalizar_identidade_produto(camp) != normalizar_identidade_produto("Permanente / Todas as épocas")
+    ]
+    rotulos_camp = _i871_mapa_rotulos(campanhas_brutas, fallback="Campanha")
+    campanhas = sorted(rotulos_camp, key=lambda x: normalizar_identidade_produto(rotulos_camp.get(x, x)))
+
+    def base(mid, nome, descricao, *, titulo="Catálogo AlphaFest", subtitulo="Personalizados & Balões",
+             campanha_chave="__todas__", campanha_rotulo="Todas as campanhas", categorias_modo="todas",
+             categorias_chaves=None, opcoes=None, origem="sistema"):
+        return {
+            "id": mid,
+            "schema_version": 1,
+            "origem": origem,
+            "status": "ativo",
+            "somente_leitura": True,
+            "nome": nome,
+            "descricao": descricao,
+            "titulo": titulo,
+            "subtitulo": subtitulo,
+            "observacao_rodape": "Consulte disponibilidade, personalização e prazo de produção.",
+            "campanha_chave": campanha_chave,
+            "campanha_rotulo": campanha_rotulo,
+            "categorias_modo": categorias_modo,
+            "categorias_chaves": list(categorias_chaves or []),
+            "opcoes": dict(opcoes or _i88_config_opcoes()),
+        }
+
+    modelos = [
+        base(
+            "SYS_COMPLETO",
+            "Catálogo Completo",
+            "Todas as categorias atuais e futuras, com preços, descrição, material e WhatsApp.",
+        ),
+        base(
+            "SYS_SEM_PRECOS",
+            "Catálogo sem preços",
+            "Todas as categorias, mantendo o conteúdo comercial e ocultando somente os preços.",
+            opcoes=_i88_config_opcoes(False, True, True, True, True),
+        ),
+        base(
+            "SYS_CORPORATIVO",
+            "Catálogo Corporativo",
+            "Apresentação mais limpa: sem preços e somente produtos que já possuem foto oficial.",
+            titulo="Catálogo Corporativo AlphaFest",
+            opcoes=_i88_config_opcoes(False, True, True, True, False),
+        ),
+    ]
+    for chave in campanhas:
+        rotulo = rotulos_camp.get(chave, chave)
+        modelos.append(base(
+            f"CAMP_{hashlib.sha1(chave.encode('utf-8')).hexdigest()[:12]}",
+            f"Campanha • {rotulo}",
+            f"Seleciona automaticamente os produtos atualmente elegíveis para {rotulo}.",
+            titulo=f"Catálogo {rotulo}",
+            campanha_chave=chave,
+            campanha_rotulo=rotulo,
+            origem="campanha",
+        ))
+    for chave in categorias:
+        rotulo = rotulos_cat.get(chave, chave)
+        modelos.append(base(
+            f"CAT_{hashlib.sha1(chave.encode('utf-8')).hexdigest()[:12]}",
+            f"Categoria • {rotulo}",
+            f"Inclui a categoria oficial {rotulo}; os produtos são recalculados ao aplicar.",
+            titulo=f"Catálogo {rotulo}",
+            categorias_modo="selecionadas",
+            categorias_chaves=[chave],
+            origem="categoria",
+        ))
+    return modelos
+
+
+def _i883_modelos_disponiveis(catalogo_oficial, *, incluir_arquivados=False):
+    sistema = _i883_modelos_sistema(catalogo_oficial)
+    personalizados = carregar_modelos_catalogo()
+    if not incluir_arquivados:
+        personalizados = [m for m in personalizados if str(m.get("status") or "ativo") == "ativo"]
+    return sistema + personalizados
+
+
+def _i883_validar_modelo(modelo, categorias_validas, campanhas_validas):
+    modelo = modelo or {}
+    problemas = []
+    campanha = str(modelo.get("campanha_chave") or "__todas__")
+    if campanha != "__todas__" and campanha not in set(campanhas_validas or []):
+        problemas.append(f"A campanha '{modelo.get('campanha_rotulo') or campanha}' não existe mais no Catálogo Oficial atual.")
+    if str(modelo.get("categorias_modo") or "selecionadas") != "todas":
+        pedidas = list(modelo.get("categorias_chaves") or [])
+        existentes = [x for x in pedidas if x in set(categorias_validas or [])]
+        if pedidas and not existentes:
+            problemas.append("Nenhuma categoria deste modelo existe mais no Catálogo Oficial atual.")
+    return problemas
+
+
+def _i883_aplicar_modelo_sessao(modelo, categorias_validas, campanhas_validas):
+    """Prepara os widgets do Gerador antes de sua criação no rerun atual."""
+    problemas = _i883_validar_modelo(modelo, categorias_validas, campanhas_validas)
+    if problemas:
+        raise ValueError(" ".join(problemas))
+    opcoes = dict((modelo or {}).get("opcoes") or {})
+    modo_cat = str((modelo or {}).get("categorias_modo") or "selecionadas")
+    if modo_cat == "todas":
+        categorias = list(categorias_validas or [])
+    else:
+        categorias = [x for x in ((modelo or {}).get("categorias_chaves") or []) if x in set(categorias_validas or [])]
+    campanha = str((modelo or {}).get("campanha_chave") or "__todas__")
+    st.session_state["i871_catalogo_titulo"] = str((modelo or {}).get("titulo") or "Catálogo AlphaFest")
+    st.session_state["i871_catalogo_subtitulo"] = str((modelo or {}).get("subtitulo") or "")
+    st.session_state["i871_catalogo_categorias"] = categorias
+    st.session_state["i871_catalogo_campanha"] = campanha
+    st.session_state["i871_mostrar_precos"] = bool(opcoes.get("mostrar_precos", True))
+    st.session_state["i871_mostrar_descricao"] = bool(opcoes.get("mostrar_descricao", True))
+    st.session_state["i871_mostrar_material"] = bool(opcoes.get("mostrar_material", True))
+    st.session_state["i871_mostrar_whatsapp"] = bool(opcoes.get("mostrar_whatsapp", True))
+    st.session_state["i871_mostrar_sem_foto"] = bool(opcoes.get("mostrar_sem_foto", True))
+    st.session_state["i871_catalogo_rodape"] = str((modelo or {}).get("observacao_rodape") or "")
+    # Produto não pertence ao modelo: no rerun o Gerador recalcula e seleciona os elegíveis.
+    st.session_state.pop("i871_catalogo_produtos", None)
+    for chave_modelo_form in ["i883_novo_nome_modelo", "i883_nova_descricao_modelo", "i883_modelo_todas_categorias"]:
+        st.session_state.pop(chave_modelo_form, None)
+    st.session_state["i883_modelo_aplicado_id"] = str((modelo or {}).get("id") or "")
+    st.session_state["i883_modelo_flash"] = (
+        f"Modelo '{(modelo or {}).get('nome') or 'Modelo'}' aplicado. "
+        "Os produtos foram recalculados pelo Catálogo Oficial atual."
+    )
+
+
 def _i88_duplicar_registro(registro):
     copia = copy.deepcopy(registro or {})
     agora = agora_local().isoformat(timespec="seconds")
@@ -8998,6 +9212,11 @@ def restaurar_item_lixeira(registro):
         if not any(x.get("id") == item.get("id") for x in dados):
             dados.append(item)
         salvar_catalogos_gerados(dados)
+    elif tipo == "Modelo de catálogo":
+        dados = carregar_modelos_catalogo()
+        if not any(x.get("id") == item.get("id") for x in dados):
+            dados.append(item)
+        salvar_modelos_catalogo(dados)
     else:
         raise ValueError(f"Tipo de item ainda não restaurável: {tipo}")
     remover_da_lixeira(registro.get("id_lixeira"))
@@ -9177,6 +9396,7 @@ DOCUMENTOS_BACKUP = [
     ("marketing_db", ARQUIVO_MARKETING, {"conteudos": [], "config": {}}),
     ("catalogos_legados_db", ARQUIVO_CATALOGOS_LEGADOS, {"revisoes": {}, "config": {}}),
     ("catalogos_gerados_db", ARQUIVO_CATALOGOS_GERADOS, []),
+    ("catalogo_modelos_db", ARQUIVO_MODELOS_CATALOGO, []),
 ]
 
 def carregar_config_backup():
@@ -9266,7 +9486,7 @@ def verificar_integridade_dados():
     documentos, contagens = coletar_dados_backup()
     problemas = []
     # componentes_db é uma biblioteca categorizada e, por definição, usa objeto/dicionário.
-    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db", "catalogos_gerados_db"}
+    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db", "catalogos_gerados_db", "catalogo_modelos_db"}
     for chave in esperados_lista:
         if not isinstance(documentos.get(chave), list):
             problemas.append(f"{chave}: estrutura inválida (esperada lista).")
@@ -20643,13 +20863,14 @@ if pagina_atual == "catalogo":
     elif _thu_i8_prefill_ativo:
         formulario_catalogo(None)
     else:
-        aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_gerador, aba_central, aba_cliente = st.tabs([
+        aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_gerador, aba_modelos, aba_central, aba_cliente = st.tabs([
             "➕ Cadastrar",
             "📋 Produtos",
             "🧹 Saneamento",
             "📚 Acervo histórico",
             "✨ Gerador I8.7.1",
-            "🗂️ Central I8.8.2",
+            "🧩 Modelos I8.8.3",
+            "🗂️ Central I8.8.3",
             "📤 Catálogo para cliente",
         ])
 
@@ -20778,18 +20999,6 @@ if pagina_atual == "catalogo":
             if not catalogo_ativo_i871:
                 st.info("Não há produtos ativos disponíveis para gerar catálogo.")
             else:
-                g1, g2 = st.columns(2)
-                titulo_i871 = g1.text_input(
-                    "Título",
-                    value="Catálogo AlphaFest",
-                    key="i871_catalogo_titulo",
-                )
-                subtitulo_i871 = g2.text_input(
-                    "Subtítulo",
-                    value="Personalizados & Balões",
-                    key="i871_catalogo_subtitulo",
-                )
-
                 rotulos_categorias_i871 = _i871_mapa_rotulos(
                     [p.get("Categoria") for _, p in catalogo_ativo_i871],
                     fallback="Sem categoria",
@@ -20819,6 +21028,80 @@ if pagina_atual == "catalogo":
                 campanhas_chaves_i871 = sorted(
                     rotulos_campanhas_i871,
                     key=lambda chave: normalizar_identidade_produto(rotulos_campanhas_i871[chave]),
+                )
+
+                modelo_pendente_i883 = st.session_state.pop("i883_modelo_pendente", None)
+                if isinstance(modelo_pendente_i883, dict):
+                    try:
+                        _i883_aplicar_modelo_sessao(
+                            modelo_pendente_i883, categorias_chaves_i871, campanhas_chaves_i871
+                        )
+                        st.session_state["i883_modelo_seletor"] = str(modelo_pendente_i883.get("id") or "__manual__")
+                    except Exception as exc:
+                        st.session_state["i883_modelo_flash_erro"] = f"Não foi possível aplicar o modelo: {exc}"
+
+                st.markdown("#### 🧩 Modelo de catálogo I8.8.3")
+                st.caption(
+                    "Modelos guardam somente configuração. Nenhum produto, preço, foto, descrição ou material é copiado. "
+                    "Ao aplicar, a seleção é recalculada pelo Catálogo Oficial atual."
+                )
+                modelos_disp_i883 = _i883_modelos_disponiveis(catalogo)
+                mapa_modelos_i883 = {str(m.get("id")): m for m in modelos_disp_i883}
+                opcoes_modelo_i883 = ["__manual__"] + list(mapa_modelos_i883)
+                if (
+                    "i883_modelo_seletor" in st.session_state
+                    and st.session_state.get("i883_modelo_seletor") not in opcoes_modelo_i883
+                ):
+                    st.session_state["i883_modelo_seletor"] = "__manual__"
+                modelo_sel_id_i883 = st.selectbox(
+                    "Usar modelo",
+                    opcoes_modelo_i883,
+                    format_func=lambda mid: (
+                        "Configuração manual" if mid == "__manual__"
+                        else f"{mapa_modelos_i883[mid].get('nome')}" +
+                             (" • meu modelo" if mapa_modelos_i883[mid].get("origem") == "personalizado" else "")
+                    ),
+                    key="i883_modelo_seletor",
+                )
+                modelo_sel_i883 = mapa_modelos_i883.get(modelo_sel_id_i883)
+                if modelo_sel_i883:
+                    problemas_modelo_i883 = _i883_validar_modelo(
+                        modelo_sel_i883, categorias_chaves_i871, campanhas_chaves_i871
+                    )
+                    mc1, mc2 = st.columns([3, 1])
+                    mc1.caption(str(modelo_sel_i883.get("descricao") or "Modelo de configuração do catálogo."))
+                    if problemas_modelo_i883:
+                        mc1.warning(" ".join(problemas_modelo_i883))
+                    if mc2.button(
+                        "Aplicar modelo",
+                        key="i883_aplicar_modelo",
+                        use_container_width=True,
+                        disabled=bool(problemas_modelo_i883),
+                    ):
+                        try:
+                            _i883_aplicar_modelo_sessao(
+                                modelo_sel_i883, categorias_chaves_i871, campanhas_chaves_i871
+                            )
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Não foi possível aplicar o modelo: {exc}")
+                if st.session_state.get("i883_modelo_flash"):
+                    st.success(st.session_state.pop("i883_modelo_flash"))
+                if st.session_state.get("i883_modelo_flash_erro"):
+                    st.error(st.session_state.pop("i883_modelo_flash_erro"))
+
+                g1, g2 = st.columns(2)
+                titulo_kwargs_i871 = ({"value": "Catálogo AlphaFest"} if "i871_catalogo_titulo" not in st.session_state else {})
+                subtitulo_kwargs_i871 = ({"value": "Personalizados & Balões"} if "i871_catalogo_subtitulo" not in st.session_state else {})
+                titulo_i871 = g1.text_input(
+                    "Título",
+                    key="i871_catalogo_titulo",
+                    **titulo_kwargs_i871,
+                )
+                subtitulo_i871 = g2.text_input(
+                    "Subtítulo",
+                    key="i871_catalogo_subtitulo",
+                    **subtitulo_kwargs_i871,
                 )
 
                 f1, f2 = st.columns(2)
@@ -20940,20 +21223,29 @@ if pagina_atual == "catalogo":
 
                 st.markdown("#### Conteúdo exibido")
                 o1, o2, o3, o4 = st.columns(4)
-                mostrar_precos_i871 = o1.checkbox("Preços", value=True, key="i871_mostrar_precos")
-                mostrar_descricao_i871 = o2.checkbox("Descrição", value=True, key="i871_mostrar_descricao")
-                mostrar_material_i871 = o3.checkbox("Material", value=True, key="i871_mostrar_material")
-                mostrar_whatsapp_i871 = o4.checkbox("WhatsApp", value=True, key="i871_mostrar_whatsapp")
+                kw_preco_i871 = ({"value": True} if "i871_mostrar_precos" not in st.session_state else {})
+                kw_desc_i871 = ({"value": True} if "i871_mostrar_descricao" not in st.session_state else {})
+                kw_mat_i871 = ({"value": True} if "i871_mostrar_material" not in st.session_state else {})
+                kw_whats_i871 = ({"value": True} if "i871_mostrar_whatsapp" not in st.session_state else {})
+                kw_sem_foto_i871 = ({"value": True} if "i871_mostrar_sem_foto" not in st.session_state else {})
+                kw_rodape_i871 = (
+                    {"value": "Consulte disponibilidade, personalização e prazo de produção."}
+                    if "i871_catalogo_rodape" not in st.session_state else {}
+                )
+                mostrar_precos_i871 = o1.checkbox("Preços", key="i871_mostrar_precos", **kw_preco_i871)
+                mostrar_descricao_i871 = o2.checkbox("Descrição", key="i871_mostrar_descricao", **kw_desc_i871)
+                mostrar_material_i871 = o3.checkbox("Material", key="i871_mostrar_material", **kw_mat_i871)
+                mostrar_whatsapp_i871 = o4.checkbox("WhatsApp", key="i871_mostrar_whatsapp", **kw_whats_i871)
                 mostrar_sem_foto_i871 = st.checkbox(
                     "Incluir produtos sem foto",
-                    value=True,
                     key="i871_mostrar_sem_foto",
                     help="Desmarque para gerar uma versão estritamente visual, sem produtos que ainda não têm foto cadastrada.",
+                    **kw_sem_foto_i871,
                 )
                 observacao_i871 = st.text_input(
                     "Observação opcional no rodapé",
-                    value="Consulte disponibilidade, personalização e prazo de produção.",
                     key="i871_catalogo_rodape",
+                    **kw_rodape_i871,
                 )
 
                 sem_foto_selecao_i871 = sum(
@@ -21050,6 +21342,109 @@ if pagina_atual == "catalogo":
                     )
 
                 st.divider()
+                with st.expander("🧩 Salvar esta configuração como modelo I8.8.3"):
+                    st.caption(
+                        "O modelo não salva os produtos selecionados. Ele salva somente filtros e apresentação; "
+                        "os produtos serão recalculados toda vez que o modelo for usado."
+                    )
+                    aplicado_id_i883 = str(st.session_state.get("i883_modelo_aplicado_id") or "")
+                    personalizado_aplicado_i883 = next(
+                        (m for m in carregar_modelos_catalogo() if str(m.get("id")) == aplicado_id_i883),
+                        None,
+                    )
+                    nome_default_i883 = (
+                        str(personalizado_aplicado_i883.get("nome"))
+                        if personalizado_aplicado_i883 else f"Modelo • {titulo_i871 or 'Catálogo AlphaFest'}"
+                    )
+                    modelo_nome_i883 = st.text_input(
+                        "Nome do modelo",
+                        value=nome_default_i883,
+                        key="i883_novo_nome_modelo",
+                    )
+                    modelo_desc_i883 = st.text_input(
+                        "Descrição interna opcional",
+                        value=str((personalizado_aplicado_i883 or {}).get("descricao") or ""),
+                        key="i883_nova_descricao_modelo",
+                    )
+                    todas_categorias_i883 = st.checkbox(
+                        "Usar todas as categorias atuais e futuras",
+                        value=(set(categorias_sel_i871) == set(categorias_chaves_i871)),
+                        key="i883_modelo_todas_categorias",
+                        help="Marcado: novas categorias oficiais também entrarão quando este modelo for usado no futuro.",
+                    )
+                    campanha_rotulo_modelo_i883 = (
+                        "Todas as campanhas"
+                        if campanha_sel_i871 == "__todas__"
+                        else rotulos_campanhas_i871.get(campanha_sel_i871, campanha_sel_i871)
+                    )
+                    kwargs_modelo_i883 = dict(
+                        nome=modelo_nome_i883,
+                        descricao=modelo_desc_i883,
+                        titulo=titulo_i871,
+                        subtitulo=subtitulo_i871,
+                        observacao_rodape=observacao_i871,
+                        campanha_chave=campanha_sel_i871,
+                        campanha_rotulo=campanha_rotulo_modelo_i883,
+                        categorias_modo="todas" if todas_categorias_i883 else "selecionadas",
+                        categorias_chaves=[] if todas_categorias_i883 else categorias_sel_i871,
+                        opcoes=_i88_config_opcoes(
+                            mostrar_precos_i871,
+                            mostrar_material_i871,
+                            mostrar_descricao_i871,
+                            mostrar_whatsapp_i871,
+                            mostrar_sem_foto_i871,
+                        ),
+                    )
+                    mb1, mb2 = st.columns(2)
+                    if mb1.button(
+                        "💾 Salvar como novo modelo",
+                        type="primary",
+                        use_container_width=True,
+                        key="i883_salvar_novo_modelo",
+                    ):
+                        if not str(modelo_nome_i883).strip():
+                            st.warning("Informe um nome para o modelo.")
+                        elif not todas_categorias_i883 and not categorias_sel_i871:
+                            st.warning("Selecione pelo menos uma categoria ou marque 'todas as categorias'.")
+                        else:
+                            novo_modelo_i883 = _i883_criar_modelo_personalizado(**kwargs_modelo_i883)
+                            lista_modelos_i883 = carregar_modelos_catalogo()
+                            lista_modelos_i883.insert(0, novo_modelo_i883)
+                            salvar_modelos_catalogo(lista_modelos_i883)
+                            registrar_auditoria(
+                                "Salvar modelo de catálogo", "Modelo de catálogo", novo_modelo_i883.get("id"),
+                                {"nome": novo_modelo_i883.get("nome")},
+                            )
+                            st.session_state["i883_modelo_aplicado_id"] = novo_modelo_i883.get("id")
+                            st.success(
+                                f"Modelo '{novo_modelo_i883.get('nome')}' salvo sem copiar nenhum produto ou dado comercial."
+                            )
+                    if personalizado_aplicado_i883:
+                        if mb2.button(
+                            "🔄 Atualizar modelo aplicado",
+                            use_container_width=True,
+                            key="i883_atualizar_modelo",
+                        ):
+                            atualizado_modelo_i883 = _i883_criar_modelo_personalizado(
+                                **kwargs_modelo_i883, registro_existente=personalizado_aplicado_i883
+                            )
+                            lista_modelos_i883 = carregar_modelos_catalogo()
+                            for pos_modelo_i883, item_modelo_i883 in enumerate(lista_modelos_i883):
+                                if item_modelo_i883.get("id") == atualizado_modelo_i883.get("id"):
+                                    lista_modelos_i883[pos_modelo_i883] = atualizado_modelo_i883
+                                    break
+                            salvar_modelos_catalogo(lista_modelos_i883)
+                            registrar_auditoria(
+                                "Atualizar modelo de catálogo", "Modelo de catálogo", atualizado_modelo_i883.get("id"),
+                                {"nome": atualizado_modelo_i883.get("nome"), "revisao": atualizado_modelo_i883.get("revisao")},
+                            )
+                            st.success(
+                                f"Modelo '{atualizado_modelo_i883.get('nome')}' atualizado. Produtos continuam fora do modelo."
+                            )
+                    else:
+                        mb2.caption("A opção de atualizar aparece quando um modelo personalizado é aplicado no Gerador.")
+
+                st.divider()
                 st.markdown("#### 🗂️ Salvar na Central I8.8")
                 st.caption(
                     "A Central salva somente esta configuração e as referências aos produtos. "
@@ -21109,8 +21504,180 @@ if pagina_atual == "catalogo":
                         "Nenhum dado do Catálogo Oficial foi duplicado."
                     )
 
+        with aba_modelos:
+            st.markdown("### 🧩 I8.8.3 • Modelos de Catálogo AlphaFest")
+            st.caption(
+                "Modelos aceleram a montagem sem criar uma segunda fonte de dados. Eles guardam apenas configuração; "
+                "produtos, preços, fotos, descrições e materiais continuam exclusivamente no Catálogo Oficial."
+            )
+            modelos_sistema_i883 = _i883_modelos_sistema(catalogo)
+            modelos_personalizados_i883 = carregar_modelos_catalogo()
+            modelos_ativos_i883 = [m for m in modelos_personalizados_i883 if str(m.get("status") or "ativo") == "ativo"]
+            modelos_arquivados_i883 = [m for m in modelos_personalizados_i883 if str(m.get("status") or "ativo") == "arquivado"]
+            modelos_lixeira_i883 = [
+                reg for reg in carregar_lixeira() if str(reg.get("tipo") or "") == "Modelo de catálogo"
+            ]
+            modelos_campanha_i883 = [m for m in modelos_sistema_i883 if m.get("origem") == "campanha"]
+            modelos_categoria_i883 = [m for m in modelos_sistema_i883 if m.get("origem") == "categoria"]
+            mm1, mm2, mm3, mm4, mm5 = st.columns(5)
+            mm1.metric("Fixos do sistema", 3)
+            mm2.metric("Por campanha", len(modelos_campanha_i883))
+            mm3.metric("Por categoria", len(modelos_categoria_i883))
+            mm4.metric("Meus modelos", len(modelos_personalizados_i883))
+            mm5.metric("Na lixeira", len(modelos_lixeira_i883))
+
+            with st.expander("⚙️ Modelos inteligentes do sistema", expanded=True):
+                st.caption(
+                    "Os modelos por campanha e categoria são regenerados do Catálogo Oficial. Se surgir uma nova campanha "
+                    "ou categoria, o modelo correspondente aparece automaticamente."
+                )
+                for modelo_sis_i883 in modelos_sistema_i883:
+                    origem_sis_i883 = str(modelo_sis_i883.get("origem") or "sistema")
+                    icone_sis_i883 = "📅" if origem_sis_i883 == "campanha" else ("🏷️" if origem_sis_i883 == "categoria" else "⚙️")
+                    with st.container(border=True):
+                        ms1, ms2 = st.columns([4, 1])
+                        ms1.markdown(f"**{icone_sis_i883} {html.escape(str(modelo_sis_i883.get('nome') or 'Modelo'))}**")
+                        ms1.caption(str(modelo_sis_i883.get("descricao") or ""))
+                        if ms2.button(
+                            "Usar no Gerador",
+                            key=f"i883_sys_apply_{modelo_sis_i883.get('id')}",
+                            use_container_width=True,
+                        ):
+                            st.session_state["i883_modelo_pendente"] = copy.deepcopy(modelo_sis_i883)
+                            st.rerun()
+
+            st.markdown("#### 👤 Meus modelos")
+            st.caption(
+                "Crie modelos personalizados no Gerador. Eles podem ser duplicados, arquivados ou enviados para a Lixeira."
+            )
+            if not modelos_personalizados_i883:
+                st.info("Nenhum modelo personalizado salvo ainda.")
+            for modelo_usr_i883 in sorted(
+                modelos_personalizados_i883,
+                key=lambda m: str(m.get("atualizado_em") or m.get("criado_em") or ""),
+                reverse=True,
+            ):
+                mid_i883 = str(modelo_usr_i883.get("id") or "")
+                status_i883 = str(modelo_usr_i883.get("status") or "ativo")
+                with st.container(border=True):
+                    mu1, mu2 = st.columns([4, 1])
+                    mu1.markdown(
+                        f"### {'📦 ' if status_i883 == 'arquivado' else '🧩 '}"
+                        f"{html.escape(str(modelo_usr_i883.get('nome') or 'Modelo'))}"
+                    )
+                    mu1.caption(
+                        f"ID {mid_i883} • revisão {int(modelo_usr_i883.get('revisao', 1) or 1)} • "
+                        f"{modelo_usr_i883.get('campanha_rotulo') or 'Todas as campanhas'}"
+                    )
+                    mu2.markdown("**ARQUIVADO**" if status_i883 == "arquivado" else "**ATIVO**")
+                    if modelo_usr_i883.get("descricao"):
+                        st.caption(str(modelo_usr_i883.get("descricao")))
+                    op_usr_i883 = dict(modelo_usr_i883.get("opcoes") or {})
+                    escopo_cat_usr_i883 = (
+                        "Todas as categorias atuais e futuras"
+                        if modelo_usr_i883.get("categorias_modo") == "todas"
+                        else f"{len(modelo_usr_i883.get('categorias_chaves') or [])} categoria(s) configurada(s)"
+                    )
+                    st.caption(
+                        f"Escopo: {escopo_cat_usr_i883} • "
+                        f"Preço {'sim' if op_usr_i883.get('mostrar_precos', True) else 'não'} • "
+                        f"Descrição {'sim' if op_usr_i883.get('mostrar_descricao', True) else 'não'} • "
+                        f"Material {'sim' if op_usr_i883.get('mostrar_material', True) else 'não'} • "
+                        f"WhatsApp {'sim' if op_usr_i883.get('mostrar_whatsapp', True) else 'não'}"
+                    )
+                    ma1, ma2, ma3, ma4 = st.columns(4)
+                    problemas_usr_i883 = _i883_validar_modelo(
+                        modelo_usr_i883,
+                        sorted(_i871_mapa_rotulos([p.get("Categoria") for p in catalogo if (p or {}).get("Ativo", True)], fallback="Sem categoria")),
+                        sorted(_i871_mapa_rotulos([
+                            camp for p in catalogo if (p or {}).get("Ativo", True)
+                            for camp in _i871_lista_textos((p or {}).get("CampanhasPermitidas"))
+                            if normalizar_identidade_produto(camp) != normalizar_identidade_produto("Permanente / Todas as épocas")
+                        ], fallback="Campanha")),
+                    )
+                    if problemas_usr_i883:
+                        st.warning(" ".join(problemas_usr_i883))
+                    if ma1.button(
+                        "Usar no Gerador",
+                        key=f"i883_usr_apply_{mid_i883}",
+                        use_container_width=True,
+                        disabled=bool(problemas_usr_i883) or status_i883 == "arquivado",
+                    ):
+                        st.session_state["i883_modelo_pendente"] = copy.deepcopy(modelo_usr_i883)
+                        st.rerun()
+                    if ma2.button("📑 Duplicar", key=f"i883_usr_dup_{mid_i883}", use_container_width=True):
+                        copia_modelo_i883 = _i883_duplicar_modelo(modelo_usr_i883)
+                        lista_modelos_i883 = carregar_modelos_catalogo()
+                        lista_modelos_i883.insert(0, copia_modelo_i883)
+                        salvar_modelos_catalogo(lista_modelos_i883)
+                        registrar_auditoria(
+                            "Duplicar modelo de catálogo", "Modelo de catálogo", copia_modelo_i883.get("id"), {"origem": mid_i883}
+                        )
+                        st.rerun()
+                    label_arq_modelo_i883 = "♻️ Reativar" if status_i883 == "arquivado" else "📦 Arquivar"
+                    if ma3.button(label_arq_modelo_i883, key=f"i883_usr_arq_{mid_i883}", use_container_width=True):
+                        lista_modelos_i883 = carregar_modelos_catalogo()
+                        for item_modelo_i883 in lista_modelos_i883:
+                            if str(item_modelo_i883.get("id")) == mid_i883:
+                                item_modelo_i883["status"] = "ativo" if status_i883 == "arquivado" else "arquivado"
+                                item_modelo_i883["atualizado_em"] = agora_local().isoformat(timespec="seconds")
+                                item_modelo_i883["atualizado_por"] = _usuario_auditoria()
+                                break
+                        salvar_modelos_catalogo(lista_modelos_i883)
+                        registrar_auditoria(
+                            "Reativar modelo de catálogo" if status_i883 == "arquivado" else "Arquivar modelo de catálogo",
+                            "Modelo de catálogo", mid_i883,
+                        )
+                        st.rerun()
+                    if ma4.button("🗑️ Excluir", key=f"i883_usr_del_{mid_i883}", use_container_width=True):
+                        st.session_state["i883_confirmar_exclusao"] = mid_i883
+                        st.rerun()
+                    if st.session_state.get("i883_confirmar_exclusao") == mid_i883:
+                        st.warning("O modelo irá para a Lixeira. Nenhum catálogo salvo e nenhum produto oficial será alterado.")
+                        md1, md2 = st.columns(2)
+                        if md1.button("Confirmar exclusão", key=f"i883_usr_del_ok_{mid_i883}", type="primary", use_container_width=True):
+                            restantes_i883 = [m for m in carregar_modelos_catalogo() if str(m.get("id")) != mid_i883]
+                            salvar_modelos_catalogo(restantes_i883)
+                            enviar_para_lixeira("Modelo de catálogo", modelo_usr_i883, mid_i883)
+                            st.session_state.pop("i883_confirmar_exclusao", None)
+                            if st.session_state.get("i883_modelo_aplicado_id") == mid_i883:
+                                st.session_state.pop("i883_modelo_aplicado_id", None)
+                            st.rerun()
+                        if md2.button("Cancelar", key=f"i883_usr_del_cancel_{mid_i883}", use_container_width=True):
+                            st.session_state.pop("i883_confirmar_exclusao", None)
+                            st.rerun()
+
+            with st.expander(f"🗑️ Lixeira de modelos ({len(modelos_lixeira_i883)})", expanded=bool(modelos_lixeira_i883)):
+                if not modelos_lixeira_i883:
+                    st.success("A Lixeira de modelos está vazia.")
+                for lix_modelo_i883 in modelos_lixeira_i883[:100]:
+                    item_lix_modelo_i883 = lix_modelo_i883.get("item") if isinstance(lix_modelo_i883.get("item"), dict) else {}
+                    lid_modelo_i883 = str(lix_modelo_i883.get("id_lixeira") or "")
+                    nome_lix_modelo_i883 = str(item_lix_modelo_i883.get("nome") or "Modelo")
+                    with st.container(border=True):
+                        st.markdown(f"**🗑️ {html.escape(nome_lix_modelo_i883)}**")
+                        lm1, lm2 = st.columns(2)
+                        if lm1.button("♻️ Restaurar modelo", key=f"i883_lix_restore_{lid_modelo_i883}", use_container_width=True):
+                            try:
+                                restaurar_item_lixeira(lix_modelo_i883)
+                                st.rerun()
+                            except Exception as exc:
+                                st.error(f"Não foi possível restaurar: {exc}")
+                        confirmar_purge_modelo_i883 = lm2.checkbox(
+                            "Confirmar exclusão definitiva", key=f"i883_lix_confirm_{lid_modelo_i883}"
+                        )
+                        if st.button(
+                            "❌ Remover modelo definitivamente",
+                            key=f"i883_lix_purge_{lid_modelo_i883}",
+                            disabled=not confirmar_purge_modelo_i883,
+                            use_container_width=True,
+                        ):
+                            remover_da_lixeira(lid_modelo_i883)
+                            registrar_auditoria("Remover definitivamente", "Modelo de catálogo", lix_modelo_i883.get("identificador", ""))
+                            st.rerun()
+
         with aba_central:
-            st.markdown("### 🗂️ I8.8.2 • Central de Catálogos AlphaFest")
+            st.markdown("### 🗂️ I8.8.3 • Central de Catálogos AlphaFest")
             st.caption(
                 "Catálogos agora são objetos operacionais reutilizáveis. Cada item salvo guarda somente "
                 "configuração e referências; ao gerar novamente, os dados vêm do Catálogo Oficial atual."

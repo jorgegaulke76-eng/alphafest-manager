@@ -1,3 +1,12 @@
+## 20.4.9-I8.8.3 — Modelos de Catálogo AlphaFest
+
+- Nova biblioteca de modelos sem snapshot comercial.
+- Modelos fixos: Completo, Sem Preços e Corporativo.
+- Modelos automáticos por categoria e campanha do Catálogo Oficial atual.
+- Modelos personalizados podem ser salvos, atualizados, duplicados, arquivados e restaurados pela Lixeira.
+- Aplicar modelo recalcula os produtos elegíveis; nenhum produto é gravado dentro do modelo.
+- Modelos personalizados entram no backup, integridade e auditoria.
+
 ## 20.4.9-I8.8.2 — Prévia Interna do Catálogo
 
 - Prévia interna usa exatamente o mesmo HTML da exportação.
