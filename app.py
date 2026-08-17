@@ -545,6 +545,18 @@ def obter_perfil_configurado(usuario=None):
     dados = carregar_config_usuarios().get("usuarios", {})
     cfg = dados.get(email)
     if cfg:
+        cfg = copy.deepcopy(cfg)
+        # 20.4.9-I8.8.4 — Catálogo avançado liberado para a Anna.
+        # Esta sobreposição garante a liberação mesmo quando o cadastro de
+        # usuários veio de uma base/cloud antiga com ações vazias.
+        if str(cfg.get("nome") or usuario.get("nome") or "").strip().casefold() == "anna":
+            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"catalogo"})
+            acoes = dict(cfg.get("acoes") or {})
+            acoes["catalogo"] = sorted(
+                set(acoes.get("catalogo") or [])
+                | {"visualizar", "criar", "editar", "aprovar", "exportar"}
+            )
+            cfg["acoes"] = acoes
         return cfg
     nome = str(usuario.get("nome", "")).casefold()
     if nome == "jorge":
@@ -571,12 +583,10 @@ def aplicar_visibilidade_abas(usuario=None):
     # A Anna trabalha exclusivamente pela Central Operacional. A barra horizontal
     # completa fica escondida para reduzir distrações e deixar a tela mais enxuta.
     # Os módulos continuam preservados no código e permanecem visíveis ao Jorge.
-    if usuario_em_operacao_protegida(usuario):
-        # No perfil operacional da Anna não existe navegação por abas. A regra
-        # anterior dependia da posição do marcador no DOM e deixou de funcionar
-        # após uma atualização do Streamlit. Esta regra direta é proposital:
-        # na Central da Anna não há st.tabs internos necessários, portanto
-        # ocultar a lista de abas garante uma interface realmente enxuta.
+    if usuario_em_operacao_protegida(usuario) and st.session_state.get("_pagina_principal", "central") != "catalogo":
+        # No perfil operacional da Anna a Central continua enxuta. A exceção
+        # I8.8.4 é o módulo Catálogo, que agora pode exibir suas abas internas
+        # (Gerador, Modelos e Central) quando a Anna entra nele deliberadamente.
         regras.append('div[data-baseweb="tab-list"], .stTabs [role="tablist"], [data-testid="stTabs"] [role="tablist"] { display:none !important; visibility:hidden !important; height:0 !important; min-height:0 !important; max-height:0 !important; margin:0 !important; padding:0 !important; overflow:hidden !important; border:0 !important; }')
         regras.append('div[data-testid="stTabs"], .stTabs { margin-top:0 !important; padding-top:0 !important; }')
         regras.append('div[data-testid="stTabs"] > div:first-child, .stTabs > div:first-child { height:0 !important; min-height:0 !important; margin:0 !important; padding:0 !important; overflow:hidden !important; }')
@@ -8257,7 +8267,104 @@ def formatar_preco_catalogo(valor):
         return f"R$ {texto}" if texto else "Preço sob consulta"
 
 
-def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True):
+# --- 20.4.9-I8.8.4: Validade comercial dos catálogos ---
+I884_VALIDADE_DIAS = 30
+
+
+def _i884_usuario_geracao(usuario=None):
+    usuario = usuario or obter_usuario_atual()
+    nome = str((usuario or {}).get("nome") or "").strip()
+    return nome or "Usuário não informado"
+
+
+def _i884_datetime_seguro(valor=None):
+    if isinstance(valor, datetime):
+        dt = valor
+    elif valor:
+        try:
+            dt = datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+        except Exception:
+            dt = agora_local()
+    else:
+        dt = agora_local()
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=agora_local().tzinfo)
+    else:
+        try:
+            dt = dt.astimezone(agora_local().tzinfo)
+        except Exception:
+            pass
+    return dt
+
+
+def _i884_metadados_geracao(gerado_em=None, gerado_por=None):
+    """Metadados imutáveis de uma geração comercial de catálogo."""
+    dt = _i884_datetime_seguro(gerado_em)
+    validade = dt + timedelta(days=I884_VALIDADE_DIAS)
+    return {
+        "gerado_em": dt.isoformat(timespec="seconds"),
+        "gerado_por": str(gerado_por or _i884_usuario_geracao()).strip() or "Usuário não informado",
+        "data": dt.strftime("%d/%m/%Y"),
+        "hora": dt.strftime("%H:%M"),
+        "validade_ate": validade.date().isoformat(),
+        "validade_texto": validade.strftime("%d/%m/%Y"),
+    }
+
+
+def _i884_metadados_registro_catalogo(registro):
+    registro = registro or {}
+    return _i884_metadados_geracao(
+        registro.get("ultima_geracao_em") or registro.get("atualizado_em") or registro.get("criado_em"),
+        registro.get("ultima_geracao_por") or registro.get("atualizado_por") or registro.get("criado_por"),
+    )
+
+
+def _i884_status_validade(metadados):
+    metadados = metadados or {}
+    try:
+        limite = date.fromisoformat(str(metadados.get("validade_ate") or ""))
+    except Exception:
+        limite = hoje_local()
+    dias = (limite - hoje_local()).days
+    if dias < 0:
+        return "🔴 Vencido", dias
+    if dias <= 5:
+        return "🟡 Próximo do vencimento", dias
+    return "🟢 Válido", dias
+
+
+def _i884_rodape_comercial_html(metadados):
+    meta = metadados or _i884_metadados_geracao()
+    gerado_por = html.escape(str(meta.get("gerado_por") or "Usuário não informado"))
+    return (
+        '<div class="validade-comercial">'
+        f'<p><strong>Gerado em:</strong> {html.escape(str(meta.get("data") or ""))} às {html.escape(str(meta.get("hora") or ""))}</p>'
+        f'<p><strong>Responsável:</strong> {gerado_por}</p>'
+        f'<p><strong>Validade do catálogo:</strong> até {html.escape(str(meta.get("validade_texto") or ""))}</p>'
+        f'<p class="aviso-validade">Este catálogo possui validade de {I884_VALIDADE_DIAS} dias. '
+        'Após esse período, valores e condições devem ser reconfirmados junto à AlphaFest.</p>'
+        '</div>'
+    )
+
+
+def _i884_atualizar_ultima_geracao(catalogo_id, metadados):
+    """Persiste somente a rastreabilidade da geração; não cria snapshot comercial."""
+    catalogo_id = str(catalogo_id or "")
+    lista = carregar_catalogos_gerados()
+    alterou = False
+    for item in lista:
+        if str(item.get("id") or "") == catalogo_id:
+            item["ultima_geracao_em"] = str((metadados or {}).get("gerado_em") or "")
+            item["ultima_geracao_por"] = str((metadados or {}).get("gerado_por") or "")
+            item["validade_ate"] = str((metadados or {}).get("validade_ate") or "")
+            alterou = True
+            break
+    if alterou:
+        salvar_catalogos_gerados(lista)
+    return alterou
+
+
+def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True, metadados_geracao=None):
     produtos = sorted(
         list(produtos or []),
         key=lambda p: (
@@ -8266,6 +8373,8 @@ def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True):
         ),
     )
     empresa = carregar_config_empresa()
+    meta_geracao = dict(metadados_geracao or _i884_metadados_geracao())
+    rodape_comercial = _i884_rodape_comercial_html(meta_geracao)
     if not titulo:
         titulo = f"Catálogo {empresa.get('nome', 'Empresa')}"
     logo_b64, logo_ext = encontrar_logo_base64()
@@ -8310,8 +8419,8 @@ def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True):
     logo_tag = f'<img class="logo" src="{logo_src}">' if logo_src else ''
     corpo = ''.join(cards_por_categoria) if cards_por_categoria else '<div class="intro">Nenhum produto selecionado.</div>'
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(titulo)}</title><style>
-    *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f5f6f8;color:#20252b}} .layout{{display:flex;min-height:100vh}} aside{{width:260px;background:#18222d;color:#fff;padding:24px 18px;position:sticky;top:0;height:100vh;overflow:auto}} .logo{{max-width:180px;max-height:95px;display:block;margin:0 auto 18px;object-fit:contain}} aside h1{{font-size:20px;text-align:center;margin:8px 0 22px}} nav a{{display:block;color:#eef2f7;text-decoration:none;padding:11px 10px;border-bottom:1px solid rgba(255,255,255,.12)}} main{{flex:1;padding:32px;max-width:1400px}} .intro{{background:#fff;padding:22px;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.06);margin-bottom:28px}} section{{scroll-margin-top:20px;margin-bottom:42px}} section h2{{border-bottom:3px solid #202b36;padding-bottom:9px}} .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:22px}} .card{{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 5px 18px rgba(0,0,0,.08);display:flex;flex-direction:column}} .card img,.sem-imagem{{width:100%;height:220px;object-fit:cover;background:#e9edf2;display:flex;align-items:center;justify-content:center;cursor:pointer}} .card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .card h3{{margin:0 0 10px}} .card p{{line-height:1.45;flex:1}} .variacoes{{font-size:13px;line-height:1.45;color:#4b5563;margin:2px 0 10px}} .preco{{font-size:22px;font-weight:800;margin:12px 0;color:#147a42}} .btn{{display:block;text-align:center;background:#25d366;color:#fff;text-decoration:none;padding:12px;border-radius:9px;font-weight:800}} footer{{text-align:center;color:#6b7280;padding:30px}} #modal{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:999;align-items:center;justify-content:center}} #modal img{{max-width:92vw;max-height:90vh}} @media(max-width:760px){{.layout{{display:block}}aside{{width:100%;height:auto;position:relative}}main{{padding:18px}}nav{{display:flex;gap:5px;overflow:auto}}nav a{{white-space:nowrap;border:1px solid rgba(255,255,255,.18);border-radius:8px}}}}
-    </style></head><body><div class="layout"><aside>{logo_tag}<h1>{html.escape(titulo)}</h1><nav>{links}</nav></aside><main><div class="intro"><h1>{html.escape(titulo)}</h1><p>Seleção preparada por {html.escape(str(empresa.get("nome", "Empresa")))}. Consulte disponibilidade, personalização e prazo pelo WhatsApp.</p></div>{corpo}<footer>{html.escape(str(empresa.get("nome", "Empresa")))} - {html.escape(str(empresa.get("slogan", "")))}</footer></main></div><div id="modal" onclick="this.style.display='none'"><img id="modal-img"></div><script>function abrirImagem(src){{document.getElementById('modal-img').src=src;document.getElementById('modal').style.display='flex';}}</script></body></html>'''
+    *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f5f6f8;color:#20252b}} .layout{{display:flex;min-height:100vh}} aside{{width:260px;background:#18222d;color:#fff;padding:24px 18px;position:sticky;top:0;height:100vh;overflow:auto}} .logo{{max-width:180px;max-height:95px;display:block;margin:0 auto 18px;object-fit:contain}} aside h1{{font-size:20px;text-align:center;margin:8px 0 22px}} nav a{{display:block;color:#eef2f7;text-decoration:none;padding:11px 10px;border-bottom:1px solid rgba(255,255,255,.12)}} main{{flex:1;padding:32px;max-width:1400px}} .intro{{background:#fff;padding:22px;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.06);margin-bottom:28px}} section{{scroll-margin-top:20px;margin-bottom:42px}} section h2{{border-bottom:3px solid #202b36;padding-bottom:9px}} .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:22px}} .card{{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 5px 18px rgba(0,0,0,.08);display:flex;flex-direction:column}} .card img,.sem-imagem{{width:100%;height:220px;object-fit:cover;background:#e9edf2;display:flex;align-items:center;justify-content:center;cursor:pointer}} .card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .card h3{{margin:0 0 10px}} .card p{{line-height:1.45;flex:1}} .variacoes{{font-size:13px;line-height:1.45;color:#4b5563;margin:2px 0 10px}} .preco{{font-size:22px;font-weight:800;margin:12px 0;color:#147a42}} .btn{{display:block;text-align:center;background:#25d366;color:#fff;text-decoration:none;padding:12px;border-radius:9px;font-weight:800}} footer{{text-align:center;color:#6b7280;padding:30px}} .validade-comercial{{margin:18px auto 0;max-width:760px;padding:16px;border:1px solid #d1d5db;border-radius:12px;background:#fff;color:#374151}} .validade-comercial p{{margin:5px 0}} .validade-comercial .aviso-validade{{font-weight:700;color:#7c2d12}} #modal{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:999;align-items:center;justify-content:center}} #modal img{{max-width:92vw;max-height:90vh}} @media(max-width:760px){{.layout{{display:block}}aside{{width:100%;height:auto;position:relative}}main{{padding:18px}}nav{{display:flex;gap:5px;overflow:auto}}nav a{{white-space:nowrap;border:1px solid rgba(255,255,255,.18);border-radius:8px}}}}
+    </style></head><body><div class="layout"><aside>{logo_tag}<h1>{html.escape(titulo)}</h1><nav>{links}</nav></aside><main><div class="intro"><h1>{html.escape(titulo)}</h1><p>Seleção preparada por {html.escape(str(empresa.get("nome", "Empresa")))}. Consulte disponibilidade, personalização e prazo pelo WhatsApp.</p></div>{corpo}<footer>{html.escape(str(empresa.get("nome", "Empresa")))} - {html.escape(str(empresa.get("slogan", "")))}{rodape_comercial}</footer></main></div><div id="modal" onclick="this.style.display='none'"><img id="modal-img"></div><script>function abrirImagem(src){{document.getElementById('modal-img').src=src;document.getElementById('modal').style.display='flex';}}</script></body></html>'''
 
 
 
@@ -8391,6 +8500,7 @@ def gerar_html_catalogo_i87(
     mostrar_whatsapp=True,
     mostrar_sem_foto=True,
     observacao_rodape="",
+    metadados_geracao=None,
 ):
     """Gera catálogo responsivo em modo somente leitura sobre o Catálogo Oficial.
 
@@ -8399,6 +8509,8 @@ def gerar_html_catalogo_i87(
     alterar ou persistir nenhum dado comercial.
     """
     empresa = carregar_config_empresa()
+    meta_geracao = dict(metadados_geracao or _i884_metadados_geracao())
+    rodape_comercial = _i884_rodape_comercial_html(meta_geracao)
     produtos = [dict(p or {}) for p in (produtos or []) if (p or {}).get("Ativo", True)]
     if not mostrar_sem_foto:
         produtos = [p for p in produtos if _i871_lista_textos(p.get("Imagens"))]
@@ -8546,7 +8658,7 @@ main{{max-width:1240px;margin:auto;padding:32px 20px 70px}} .categoria{{margin:0
 .produto-img,.sem-imagem{{width:100%;aspect-ratio:4/3;object-fit:cover;background:#edf3f7}} .sem-imagem{{display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--azul);gap:6px}} .sem-imagem span{{font-weight:900;font-size:24px}} .sem-imagem small{{color:var(--muted)}}
 .produto-body{{padding:18px;display:flex;flex-direction:column;gap:10px;flex:1}} .chips{{display:flex;gap:6px;flex-wrap:wrap}} .chip{{font-size:11px;font-weight:800;background:#eef6fb;color:#2d6289;border-radius:999px;padding:5px 8px}} .produto-card h3{{font-size:21px;line-height:1.13;margin:2px 0;color:#153b5a}} .descricao{{line-height:1.5;color:#536a7d;margin:0;white-space:pre-line}} .opcoes{{font-size:13px;line-height:1.45;color:#617385}}
 .produto-footer{{margin-top:auto;padding-top:4px}} .preco{{font-size:23px;font-weight:900;color:var(--rosa);margin:4px 0 12px}} .btn-whatsapp{{display:block;text-align:center;text-decoration:none;background:#25d366;color:white;font-weight:900;border-radius:12px;padding:12px 14px}}
-.vazio{{background:white;border:1px solid var(--linha);border-radius:18px;padding:30px;text-align:center;color:var(--muted)}} footer{{background:#123b5d;color:#eaf5fc;padding:28px 20px;text-align:center}} footer strong{{font-size:18px}} footer p{{margin:5px 0;color:#c8dcea}}
+.vazio{{background:white;border:1px solid var(--linha);border-radius:18px;padding:30px;text-align:center;color:var(--muted)}} footer{{background:#123b5d;color:#eaf5fc;padding:28px 20px;text-align:center}} footer strong{{font-size:18px}} footer p{{margin:5px 0;color:#c8dcea}} .validade-comercial{{max-width:760px;margin:18px auto 0;padding:15px 18px;border:1px solid rgba(255,255,255,.28);border-radius:14px;background:rgba(255,255,255,.08)}} .validade-comercial p{{margin:5px 0;color:#eaf5fc}} .validade-comercial .aviso-validade{{font-weight:800;color:#fff}}
 @media(max-width:920px){{.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}} .hero-inner{{grid-template-columns:1fr}} .logo,.logo-texto{{justify-self:start}}}}
 @media(max-width:620px){{.grid{{grid-template-columns:1fr}} .hero-inner{{padding-top:32px}} .topbar-inner{{align-items:flex-start;flex-direction:column;gap:8px}} .categoria{{scroll-margin-top:125px}}}}
 @media print{{.topbar,.btn-whatsapp{{display:none!important}} body{{background:#fff}} .hero-inner,main{{max-width:none}} .hero{{break-after:page}} .grid{{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}} .produto-card{{box-shadow:none}}}}
@@ -8556,7 +8668,7 @@ main{{max-width:1240px;margin:auto;padding:32px 20px 70px}} .categoria{{margin:0
 <div class="topbar"><div class="topbar-inner"><div class="mini-logo">{nome_empresa}</div><nav class="nav">{nav}</nav></div></div>
 <header class="hero"><div class="hero-inner"><div><span class="kicker">Catálogo AlphaFest</span><h1>{titulo_seguro}</h1>{subtitulo_html}<div class="hero-meta"><span>{len(produtos)} produto(s)</span><span>{len(grupos_categoria)} categoria(s)</span></div></div>{logo_html}</div></header>
 <main>{corpo}</main>
-<footer><strong>{nome_empresa}</strong><p>{slogan}</p><p>{contato}</p>{rodape_obs_html}</footer>
+<footer><strong>{nome_empresa}</strong><p>{slogan}</p><p>{contato}</p>{rodape_obs_html}{rodape_comercial}</footer>
 </body></html>'''
 
 
@@ -8695,6 +8807,7 @@ def _i88_criar_registro_catalogo(
 ):
     """Cria/atualiza o objeto operacional sem snapshot de dados comerciais."""
     agora = agora_local().isoformat(timespec="seconds")
+    meta_geracao = _i884_metadados_geracao(agora, _i884_usuario_geracao())
     existente = dict(registro_existente or {})
     refs = [
         _i88_ref_produto(catalogo_oficial[idx], idx)
@@ -8718,6 +8831,9 @@ def _i88_criar_registro_catalogo(
         "criado_por": existente.get("criado_por") or _usuario_auditoria(),
         "atualizado_em": agora,
         "atualizado_por": _usuario_auditoria(),
+        "ultima_geracao_em": meta_geracao["gerado_em"],
+        "ultima_geracao_por": meta_geracao["gerado_por"],
+        "validade_ate": meta_geracao["validade_ate"],
         "revisao": int(existente.get("revisao", 0) or 0) + 1,
     }
     return registro
@@ -8736,7 +8852,7 @@ def _i88_produto_elegivel_campanha(registro, produto):
     return campanha_chave in permitidas or permanente in permitidas
 
 
-def _i88_html_catalogo_salvo(registro, catalogo_oficial):
+def _i88_html_catalogo_salvo(registro, catalogo_oficial, metadados_geracao=None):
     indices, ausentes = _i88_resolver_catalogo_salvo(registro, catalogo_oficial)
     produtos = [
         catalogo_oficial[i]
@@ -8745,6 +8861,7 @@ def _i88_html_catalogo_salvo(registro, catalogo_oficial):
         and _i88_produto_elegivel_campanha(registro, catalogo_oficial[i])
     ]
     opcoes = dict((registro or {}).get("opcoes") or {})
+    meta_saida = dict(metadados_geracao or _i884_metadados_registro_catalogo(registro))
     mostrar_sem_foto = bool(opcoes.get("mostrar_sem_foto", True))
     if not mostrar_sem_foto:
         produtos = [p for p in produtos if _i871_lista_textos((p or {}).get("Imagens"))]
@@ -8758,6 +8875,7 @@ def _i88_html_catalogo_salvo(registro, catalogo_oficial):
         mostrar_whatsapp=bool(opcoes.get("mostrar_whatsapp", True)),
         mostrar_sem_foto=mostrar_sem_foto,
         observacao_rodape=(registro or {}).get("observacao_rodape") or "",
+        metadados_geracao=meta_saida,
     )
     return conteudo, indices, ausentes, produtos
 
@@ -8878,6 +8996,10 @@ def _i883_duplicar_modelo(registro):
     copia["criado_por"] = _usuario_auditoria()
     copia["atualizado_em"] = agora
     copia["atualizado_por"] = _usuario_auditoria()
+    meta_copia_i884 = _i884_metadados_geracao(agora, _i884_usuario_geracao())
+    copia["ultima_geracao_em"] = meta_copia_i884["gerado_em"]
+    copia["ultima_geracao_por"] = meta_copia_i884["gerado_por"]
+    copia["validade_ate"] = meta_copia_i884["validade_ate"]
     copia["revisao"] = 1
     return copia
 
@@ -15948,11 +16070,13 @@ def renderizar_workspace_anna_isolado():
         rerun_na_aba("historico")
 
     st.markdown("### 📚 Catálogo")
-    k1, k2, k3, k4 = st.columns(4)
+    k1, k2, k3, k4, k5 = st.columns(5)
     if k1.button("➕ Cadastrar produto", use_container_width=True): dialog_catalogo_cadastro_anna()
     if k2.button("📋 Visualizar produtos", use_container_width=True): dialog_catalogo_visualizar_anna()
-    if k3.button("📤 Gerar catálogos", use_container_width=True): dialog_catalogo_gerar_anna()
+    if k3.button("📤 Gerar rápido", use_container_width=True): dialog_catalogo_gerar_anna()
     if k4.button("📅 Revisar campanhas", use_container_width=True): dialog_thu_revisar_elegibilidade()
+    if k5.button("✨ Gerador / Modelos / Central", use_container_width=True):
+        rerun_na_aba("catalogo")
 
     entregas_hoje = [p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]
     propostas_hoje = _ordenar_propostas_recentes([p for p in historico if proposta_ativa_operacional(p) and _proposta_eh_de_hoje(p)])
@@ -15985,7 +16109,10 @@ def renderizar_workspace_anna_isolado():
 
 
 # O conjunto de abas continua estável no código; a exibição é personalizada por usuário.
-if usuario_em_operacao_protegida(obter_usuario_atual()) and st.session_state.get("_pagina_principal", "central") != "historico":
+if (
+    usuario_em_operacao_protegida(obter_usuario_atual())
+    and st.session_state.get("_pagina_principal", "central") not in {"historico", "catalogo"}
+):
     renderizar_workspace_anna_isolado()
     st.stop()
 
@@ -20165,6 +20292,14 @@ if pagina_atual == "executivo":
 if pagina_atual == "catalogo":
     st.header("📦 Catálogo Alphafest")
     st.caption("Cadastro interno e geração de seleções específicas para consulta do cliente.")
+    if usuario_em_operacao_protegida(obter_usuario_atual()):
+        ac_anna_i884, info_anna_i884 = st.columns([1, 3])
+        if ac_anna_i884.button("⬅️ Voltar para Central da Anna", use_container_width=True, key="i884_anna_voltar_central"):
+            rerun_na_aba("central")
+        info_anna_i884.success(
+            "👩‍💼 I8.8.4: Gerador, Prévia, Modelos e Central de Catálogos liberados para a Anna. "
+            "Exclusões definitivas continuam restritas ao Jorge."
+        )
     catalogo = carregar_catalogo()
 
     # I8.4.1: nenhuma auditoria/reparação de fotos é executada automaticamente.
@@ -20863,16 +20998,30 @@ if pagina_atual == "catalogo":
     elif _thu_i8_prefill_ativo:
         formulario_catalogo(None)
     else:
-        aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_gerador, aba_modelos, aba_central, aba_cliente = st.tabs([
-            "➕ Cadastrar",
-            "📋 Produtos",
-            "🧹 Saneamento",
-            "📚 Acervo histórico",
-            "✨ Gerador I8.7.1",
-            "🧩 Modelos I8.8.3",
-            "🗂️ Central I8.8.3",
-            "📤 Catálogo para cliente",
-        ])
+        if usuario_em_operacao_protegida(obter_usuario_atual()):
+            # I8.8.4: ao entrar pelo atalho da Central da Anna, as ferramentas
+            # liberadas aparecem primeiro e o Gerador já abre como aba padrão.
+            aba_gerador, aba_modelos, aba_central, aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_cliente = st.tabs([
+                "✨ Gerador I8.7.1",
+                "🧩 Modelos I8.8.3",
+                "🗂️ Central I8.8.4",
+                "➕ Cadastrar",
+                "📋 Produtos",
+                "🧹 Saneamento",
+                "📚 Acervo histórico",
+                "📤 Catálogo para cliente",
+            ])
+        else:
+            aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_gerador, aba_modelos, aba_central, aba_cliente = st.tabs([
+                "➕ Cadastrar",
+                "📋 Produtos",
+                "🧹 Saneamento",
+                "📚 Acervo histórico",
+                "✨ Gerador I8.7.1",
+                "🧩 Modelos I8.8.3",
+                "🗂️ Central I8.8.4",
+                "📤 Catálogo para cliente",
+            ])
 
         with aba_cad:
             formulario_catalogo(None)
@@ -21307,6 +21456,7 @@ if pagina_atual == "catalogo":
                         "- **Persistência:** esta tela não grava nenhuma alteração comercial."
                     )
 
+                meta_geracao_i884 = _i884_metadados_geracao()
                 html_i871 = gerar_html_catalogo_i87(
                     selecao_saida_i871,
                     titulo=titulo_i871 or "Catálogo AlphaFest",
@@ -21317,6 +21467,11 @@ if pagina_atual == "catalogo":
                     mostrar_whatsapp=mostrar_whatsapp_i871,
                     mostrar_sem_foto=mostrar_sem_foto_i871,
                     observacao_rodape=observacao_i871,
+                    metadados_geracao=meta_geracao_i884,
+                )
+                st.info(
+                    f"🛡️ Validade comercial I8.8.4: gerado em {meta_geracao_i884['data']} às {meta_geracao_i884['hora']} "
+                    f"por {meta_geracao_i884['gerado_por']} • válido até {meta_geracao_i884['validade_texto']}."
                 )
                 _i882_render_preview_catalogo(
                     html_i871,
@@ -21445,7 +21600,7 @@ if pagina_atual == "catalogo":
                         mb2.caption("A opção de atualizar aparece quando um modelo personalizado é aplicado no Gerador.")
 
                 st.divider()
-                st.markdown("#### 🗂️ Salvar na Central I8.8")
+                st.markdown("#### 🗂️ Salvar na Central I8.8.4")
                 st.caption(
                     "A Central salva somente esta configuração e as referências aos produtos. "
                     "Preço, foto, descrição e material continuam exclusivamente no Catálogo Oficial."
@@ -21457,7 +21612,7 @@ if pagina_atual == "catalogo":
                     help="Este nome aparece somente na Central e ajuda a localizar o catálogo depois.",
                 )
                 if st.button(
-                    "💾 Salvar catálogo na Central I8.8",
+                    "💾 Salvar catálogo na Central I8.8.4",
                     type="primary",
                     use_container_width=True,
                     key="i88_salvar_novo_do_gerador",
@@ -21501,6 +21656,7 @@ if pagina_atual == "catalogo":
                     )
                     st.success(
                         f"Catálogo '{novo_catalogo_i88.get('nome_interno')}' salvo na Central. "
+                        f"Validade comercial até {_i884_metadados_registro_catalogo(novo_catalogo_i88)['validade_texto']}. "
                         "Nenhum dado do Catálogo Oficial foi duplicado."
                     )
 
@@ -21663,13 +21819,19 @@ if pagina_atual == "catalogo":
                                 st.rerun()
                             except Exception as exc:
                                 st.error(f"Não foi possível restaurar: {exc}")
+                        pode_purge_modelo_i884 = pode_executar_acoes_tecnicas()
                         confirmar_purge_modelo_i883 = lm2.checkbox(
-                            "Confirmar exclusão definitiva", key=f"i883_lix_confirm_{lid_modelo_i883}"
+                            "Confirmar exclusão definitiva",
+                            key=f"i883_lix_confirm_{lid_modelo_i883}",
+                            disabled=not pode_purge_modelo_i884,
+                            help="Exclusão definitiva fica restrita ao Jorge.",
                         )
+                        if not pode_purge_modelo_i884:
+                            lm2.caption("🔒 Exclusão definitiva: somente Jorge.")
                         if st.button(
                             "❌ Remover modelo definitivamente",
                             key=f"i883_lix_purge_{lid_modelo_i883}",
-                            disabled=not confirmar_purge_modelo_i883,
+                            disabled=(not confirmar_purge_modelo_i883) or (not pode_purge_modelo_i884),
                             use_container_width=True,
                         ):
                             remover_da_lixeira(lid_modelo_i883)
@@ -21677,7 +21839,7 @@ if pagina_atual == "catalogo":
                             st.rerun()
 
         with aba_central:
-            st.markdown("### 🗂️ I8.8.3 • Central de Catálogos AlphaFest")
+            st.markdown("### 🗂️ I8.8.4 • Central de Catálogos AlphaFest")
             st.caption(
                 "Catálogos agora são objetos operacionais reutilizáveis. Cada item salvo guarda somente "
                 "configuração e referências; ao gerar novamente, os dados vêm do Catálogo Oficial atual."
@@ -21750,14 +21912,19 @@ if pagina_atual == "catalogo":
                                     st.rerun()
                                 except Exception as exc:
                                     st.error(f"Não foi possível restaurar: {exc}")
+                            pode_purge_i884 = pode_executar_acoes_tecnicas()
                             confirmar_purge_i881 = lr2.checkbox(
                                 "Confirmar exclusão definitiva",
                                 key=f"i881_lix_confirm_{id_lix_i881}",
+                                disabled=not pode_purge_i884,
+                                help="Exclusão definitiva fica restrita ao Jorge.",
                             )
+                            if not pode_purge_i884:
+                                lr2.caption("🔒 Exclusão definitiva: somente Jorge.")
                             if st.button(
                                 "❌ Remover definitivamente",
                                 key=f"i881_lix_purge_{id_lix_i881}",
-                                disabled=not confirmar_purge_i881,
+                                disabled=(not confirmar_purge_i881) or (not pode_purge_i884),
                                 use_container_width=True,
                             ):
                                 remover_da_lixeira(id_lix_i881)
@@ -21809,13 +21976,15 @@ if pagina_atual == "catalogo":
             if not catalogos_i88:
                 st.info(
                     "A Central ainda está vazia. Monte uma seleção na aba **Gerador I8.7.1** e clique em "
-                    "**Salvar catálogo na Central I8.8**."
+                    "**Salvar catálogo na Central I8.8.4**."
                 )
             elif not lista_visivel_i88:
                 st.info("Nenhum catálogo corresponde ao filtro atual.")
 
             for reg_i88 in lista_visivel_i88:
                 reg_id_i88 = str(reg_i88.get("id") or "")
+                meta_reg_i884 = _i884_metadados_registro_catalogo(reg_i88)
+                status_validade_i884, dias_validade_i884 = _i884_status_validade(meta_reg_i884)
                 html_reg_i88, indices_reg_i88, ausentes_reg_i88, produtos_saida_reg_i88 = _i88_html_catalogo_salvo(reg_i88, catalogo)
                 inativos_reg_i88 = sum(
                     1 for idx in indices_reg_i88
@@ -21842,6 +22011,10 @@ if pagina_atual == "catalogo":
                     st.caption(
                         f"Campanha: {reg_i88.get('campanha_rotulo') or 'Todas as campanhas'} • "
                         f"Título público: {reg_i88.get('titulo') or 'Catálogo AlphaFest'}"
+                    )
+                    st.caption(
+                        f"{status_validade_i884} • Última geração: {meta_reg_i884['data']} às {meta_reg_i884['hora']} "
+                        f"• por {meta_reg_i884['gerado_por']} • válido até {meta_reg_i884['validade_texto']}"
                     )
                     if ausentes_reg_i88:
                         st.warning(
@@ -21939,15 +22112,37 @@ if pagina_atual == "catalogo":
                         else:
                             st.caption("Nenhum produto oficial disponível para esta configuração no momento.")
 
-                    st.download_button(
+                    meta_download_i884 = _i884_metadados_geracao()
+                    html_download_i884, _, _, _ = _i88_html_catalogo_salvo(
+                        reg_i88,
+                        catalogo,
+                        metadados_geracao=meta_download_i884,
+                    )
+                    gerou_download_i884 = st.download_button(
                         "📥 Gerar novamente com dados atuais",
-                        data=html_reg_i88,
-                        file_name=f"{slug_html(reg_i88.get('titulo') or reg_i88.get('nome_interno') or 'catalogo').lower()}_i88.html",
+                        data=html_download_i884,
+                        file_name=f"{slug_html(reg_i88.get('titulo') or reg_i88.get('nome_interno') or 'catalogo').lower()}_i884.html",
                         mime="text/html",
                         use_container_width=True,
                         disabled=not bool(produtos_saida_reg_i88),
                         key=f"i88_download_{reg_id_i88}",
                     )
+                    if gerou_download_i884:
+                        _i884_atualizar_ultima_geracao(reg_id_i88, meta_download_i884)
+                        registrar_auditoria(
+                            "Gerar catálogo com dados atuais",
+                            "Catálogo gerado",
+                            reg_id_i88,
+                            {
+                                "gerado_em": meta_download_i884["gerado_em"],
+                                "gerado_por": meta_download_i884["gerado_por"],
+                                "validade_ate": meta_download_i884["validade_ate"],
+                            },
+                        )
+                        st.success(
+                            f"Nova geração registrada: {meta_download_i884['data']} às {meta_download_i884['hora']} "
+                            f"• validade até {meta_download_i884['validade_texto']}."
+                        )
 
             editor_id_i88 = st.session_state.get("i88_editor_id")
             editor_reg_i88 = next((x for x in catalogos_i88 if x.get("id") == editor_id_i88), None)

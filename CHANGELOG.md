@@ -1,3 +1,15 @@
+## 20.4.9-I8.8.4 — Validade Comercial + Liberação Anna
+
+- Todo catálogo HTML passa a exibir no rodapé data, horário e usuário da geração.
+- Validade comercial automática de 30 dias a partir da geração.
+- Aviso obrigatório no rodapé para reconfirmação de valores e condições após a validade.
+- Catálogos salvos registram última geração, responsável e validade.
+- `Gerar novamente com dados atuais` cria nova data de geração e renova os 30 dias.
+- Central exibe status de validade, última geração, usuário e data limite.
+- Ferramentas Gerador, Prévia, Modelos e Central liberadas para o perfil da Anna.
+- Exclusão definitiva de catálogos e modelos permanece restrita ao Jorge.
+- Catálogo Oficial segue como única fonte de preço, foto, descrição, material e campanha.
+
 ## 20.4.9-I8.8.3 — Modelos de Catálogo AlphaFest
 
 - Nova biblioteca de modelos sem snapshot comercial.
