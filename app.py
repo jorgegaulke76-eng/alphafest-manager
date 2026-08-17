@@ -8312,7 +8312,72 @@ def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True):
 
 
 
-# --- 20.4.9-I8.7: Gerador de Catálogos AlphaFest (somente leitura) ---
+# --- 20.4.9-I8.7.1: Homologação e blindagem do Gerador de Catálogos ---
+def _i871_lista_textos(valor):
+    """Normaliza campos que podem chegar como lista ou texto único, sem alterar a origem."""
+    if valor is None:
+        return []
+    if isinstance(valor, (list, tuple, set)):
+        itens = valor
+    else:
+        itens = [valor]
+    return [str(x).strip() for x in itens if str(x).strip()]
+
+
+def _i871_rotulo_preferido(valores, fallback="Sem categoria"):
+    """Escolhe um rótulo apenas para apresentação entre grafias equivalentes."""
+    unicos = []
+    vistos = set()
+    for valor in valores or []:
+        texto = str(valor or "").strip() or fallback
+        if texto not in vistos:
+            vistos.add(texto)
+            unicos.append(texto)
+    if not unicos:
+        return fallback
+    if len(unicos) == 1:
+        return unicos[0]
+
+    def qualidade(texto):
+        letras = [c for c in texto if c.isalpha()]
+        tudo_maiusculo = bool(letras) and all(c.isupper() for c in letras)
+        tudo_minusculo = bool(letras) and all(c.islower() for c in letras)
+        estilo_titulo = texto.istitle()
+        return (
+            1 if tudo_maiusculo else 0,
+            1 if tudo_minusculo else 0,
+            0 if estilo_titulo else 1,
+            len(texto),
+            texto.casefold(),
+        )
+
+    return min(unicos, key=qualidade)
+
+
+def _i871_mapa_rotulos(valores, fallback="Sem categoria"):
+    """Retorna identidade normalizada -> rótulo de apresentação, sem persistência."""
+    grupos = {}
+    for valor in valores or []:
+        texto = str(valor or "").strip() or fallback
+        chave = normalizar_identidade_produto(texto) or normalizar_identidade_produto(fallback)
+        grupos.setdefault(chave, []).append(texto)
+    return {
+        chave: _i871_rotulo_preferido(rotulos, fallback=fallback)
+        for chave, rotulos in grupos.items()
+    }
+
+
+def _i871_categoria_chave(produto):
+    texto = str((produto or {}).get("Categoria") or "Sem categoria").strip() or "Sem categoria"
+    return normalizar_identidade_produto(texto) or "sem categoria"
+
+
+def _i871_anchor_categoria(chave, rotulo):
+    """Gera âncora estável e sem colisão para a navegação do HTML."""
+    digest = hashlib.sha1(str(chave).encode("utf-8")).hexdigest()[:6]
+    return f"cat-{slug_html(rotulo)}-{digest}"
+
+
 def gerar_html_catalogo_i87(
     produtos,
     titulo="Catálogo AlphaFest",
@@ -8324,19 +8389,19 @@ def gerar_html_catalogo_i87(
     mostrar_sem_foto=True,
     observacao_rodape="",
 ):
-    """Gera catálogo comercial responsivo sem alterar o Catálogo Oficial.
+    """Gera catálogo responsivo em modo somente leitura sobre o Catálogo Oficial.
 
-    A I8.7 é deliberadamente somente leitura: todos os dados exibidos vêm do
-    registro oficial recebido em ``produtos`` e das configurações da empresa.
-    Nenhum preço, campanha, foto ou texto é persistido por esta função.
+    A I8.7.1 mantém a I8.7 e adiciona blindagens de apresentação: categorias
+    equivalentes são agrupadas e campos de lista malformados são tratados sem
+    alterar ou persistir nenhum dado comercial.
     """
     empresa = carregar_config_empresa()
     produtos = [dict(p or {}) for p in (produtos or []) if (p or {}).get("Ativo", True)]
     if not mostrar_sem_foto:
-        produtos = [p for p in produtos if (p.get("Imagens") or [])]
+        produtos = [p for p in produtos if _i871_lista_textos(p.get("Imagens"))]
     produtos.sort(
         key=lambda p: (
-            normalizar_identidade_produto(p.get("Categoria", "")),
+            _i871_categoria_chave(p),
             normalizar_identidade_produto(p.get("Nome", "")),
         )
     )
@@ -8347,23 +8412,34 @@ def gerar_html_catalogo_i87(
         ext = "jpeg"
     logo_src = f"data:image/{ext};base64,{logo_b64}" if logo_b64 else ""
 
-    numero_wpp = re.sub(r"\D", "", str(empresa.get("whatsapp_catalogo", "")))
+    numero_wpp = re.sub(
+        r"\D",
+        "",
+        str(empresa.get("whatsapp_catalogo") or empresa.get("celular") or ""),
+    )
     if numero_wpp and not numero_wpp.startswith("55"):
         numero_wpp = "55" + numero_wpp
 
-    categorias = []
-    for p in produtos:
-        cat = str(p.get("Categoria") or "Sem categoria").strip() or "Sem categoria"
-        if cat not in categorias:
-            categorias.append(cat)
+    rotulos_categoria = _i871_mapa_rotulos(
+        [p.get("Categoria") for p in produtos],
+        fallback="Sem categoria",
+    )
+    grupos_categoria = {}
+    for produto in produtos:
+        chave = _i871_categoria_chave(produto)
+        grupos_categoria.setdefault(chave, []).append(produto)
 
     secoes = []
-    for categoria in categorias:
+    nav_itens = []
+    for chave_categoria in sorted(
+        grupos_categoria,
+        key=lambda k: normalizar_identidade_produto(rotulos_categoria.get(k, k)),
+    ):
+        categoria = rotulos_categoria.get(chave_categoria, "Sem categoria")
+        anchor = _i871_anchor_categoria(chave_categoria, categoria)
+        nav_itens.append(f'<a href="#{anchor}">{html.escape(categoria)}</a>')
         cards = []
-        selecionados = [
-            p for p in produtos
-            if (str(p.get("Categoria") or "Sem categoria").strip() or "Sem categoria") == categoria
-        ]
+        selecionados = grupos_categoria[chave_categoria]
         for produto in selecionados:
             nome_raw = str(produto.get("Nome") or "Produto").strip() or "Produto"
             nome = html.escape(nome_raw)
@@ -8371,8 +8447,8 @@ def gerar_html_catalogo_i87(
             descricao = html.escape(descricao_raw)
             material = html.escape(str(produto.get("Material") or "").strip())
             subcategoria = html.escape(str(produto.get("Subcategoria") or "").strip())
-            variacoes = [str(x).strip() for x in (produto.get("Variacoes") or []) if str(x).strip()]
-            imagens = [x for x in (produto.get("Imagens") or []) if str(x).strip()]
+            variacoes = _i871_lista_textos(produto.get("Variacoes"))
+            imagens = _i871_lista_textos(produto.get("Imagens"))
             primeira = imagens[0] if imagens else ""
             if primeira and str(primeira).startswith(("http://", "https://", "data:image/")):
                 src = str(primeira)
@@ -8380,7 +8456,10 @@ def gerar_html_catalogo_i87(
                 src = imagem_data_uri(primeira)
 
             if src:
-                imagem_html = f'<img class="produto-img" src="{html.escape(src, quote=True)}" alt="{nome}">'
+                imagem_html = (
+                    f'<img class="produto-img" src="{html.escape(src, quote=True)}" '
+                    f'alt="{nome}" loading="lazy">'
+                )
             else:
                 imagem_html = '<div class="sem-imagem"><span>AlphaFest</span><small>Imagem em preparação</small></div>'
 
@@ -8423,17 +8502,17 @@ def gerar_html_catalogo_i87(
                 '</div></article>'
             )
         secoes.append(
-            f'<section class="categoria" id="cat-{slug_html(categoria)}">'
+            f'<section class="categoria" id="{anchor}">'
             f'<div class="categoria-titulo"><span>{html.escape(categoria)}</span><small>{len(cards)} produto(s)</small></div>'
             f'<div class="grid">{"".join(cards)}</div></section>'
         )
 
-    nav = "".join(f'<a href="#cat-{slug_html(c)}">{html.escape(c)}</a>' for c in categorias)
+    nav = "".join(nav_itens)
     titulo_seguro = html.escape(str(titulo or "Catálogo AlphaFest").strip())
     subtitulo_seguro = html.escape(str(subtitulo or "").strip())
     nome_empresa = html.escape(str(empresa.get("nome") or "AlphaFest"))
     slogan = html.escape(str(empresa.get("slogan") or ""))
-    contato = html.escape(str(empresa.get("celular") or ""))
+    contato = html.escape(str(empresa.get("celular") or empresa.get("whatsapp_catalogo") or ""))
     rodape_extra = html.escape(str(observacao_rodape or "").strip())
     logo_html = (
         f'<img class="logo" src="{logo_src}" alt="{nome_empresa}">'
@@ -8472,7 +8551,7 @@ main{{max-width:1240px;margin:auto;padding:32px 20px 70px}} .categoria{{margin:0
 </head>
 <body>
 <div class="topbar"><div class="topbar-inner"><div class="mini-logo">{nome_empresa}</div><nav class="nav">{nav}</nav></div></div>
-<header class="hero"><div class="hero-inner"><div><span class="kicker">Catálogo AlphaFest</span><h1>{titulo_seguro}</h1>{subtitulo_html}<div class="hero-meta"><span>{len(produtos)} produto(s)</span><span>{len(categorias)} categoria(s)</span></div></div>{logo_html}</div></header>
+<header class="hero"><div class="hero-inner"><div><span class="kicker">Catálogo AlphaFest</span><h1>{titulo_seguro}</h1>{subtitulo_html}<div class="hero-meta"><span>{len(produtos)} produto(s)</span><span>{len(grupos_categoria)} categoria(s)</span></div></div>{logo_html}</div></header>
 <main>{corpo}</main>
 <footer><strong>{nome_empresa}</strong><p>{slogan}</p><p>{contato}</p>{rodape_obs_html}</footer>
 </body></html>'''
@@ -20303,7 +20382,7 @@ if pagina_atual == "catalogo":
             "📋 Produtos",
             "🧹 Saneamento",
             "📚 Acervo histórico",
-            "✨ Gerador I8.7",
+            "✨ Gerador I8.7.1",
             "📤 Catálogo para cliente",
         ])
 
@@ -20420,159 +20499,282 @@ if pagina_atual == "catalogo":
             renderizar_acervo_catalogos_legados()
 
         with aba_gerador:
-            st.markdown("### ✨ I8.7 • Gerador de Catálogos AlphaFest")
+            st.markdown("### ✨ I8.7.1 • Gerador de Catálogos AlphaFest")
             st.caption(
-                "Monta uma seleção comercial usando somente dados do Catálogo Oficial. "
-                "Esta etapa não altera produtos, preços, campanhas, fotos ou saneamento."
+                "Homologação e blindagem da I8.7. O gerador continua somente leitura sobre o "
+                "Catálogo Oficial: nenhuma seleção desta tela altera produto, preço, foto, campanha ou saneamento."
             )
-            catalogo_ativo_i87 = [p for p in catalogo if (p or {}).get("Ativo", True)]
-            if not catalogo_ativo_i87:
+            catalogo_ativo_i871 = [
+                (idx, p) for idx, p in enumerate(catalogo)
+                if (p or {}).get("Ativo", True)
+            ]
+            if not catalogo_ativo_i871:
                 st.info("Não há produtos ativos disponíveis para gerar catálogo.")
             else:
                 g1, g2 = st.columns(2)
-                titulo_i87 = g1.text_input(
+                titulo_i871 = g1.text_input(
                     "Título",
                     value="Catálogo AlphaFest",
-                    key="i87_catalogo_titulo",
+                    key="i871_catalogo_titulo",
                 )
-                subtitulo_i87 = g2.text_input(
+                subtitulo_i871 = g2.text_input(
                     "Subtítulo",
                     value="Personalizados & Balões",
-                    key="i87_catalogo_subtitulo",
+                    key="i871_catalogo_subtitulo",
                 )
 
-                categorias_i87 = sorted(
-                    {
-                        str(p.get("Categoria") or "Sem categoria").strip() or "Sem categoria"
-                        for p in catalogo_ativo_i87
-                    },
-                    key=normalizar_identidade_produto,
+                rotulos_categorias_i871 = _i871_mapa_rotulos(
+                    [p.get("Categoria") for _, p in catalogo_ativo_i871],
+                    fallback="Sem categoria",
                 )
-                campanhas_i87 = sorted(
-                    {
-                        str(c).strip()
-                        for p in catalogo_ativo_i87
-                        for c in (p.get("CampanhasPermitidas") or [])
-                        if str(c).strip() and str(c).strip() != "Permanente / Todas as épocas"
-                    },
-                    key=normalizar_identidade_produto,
+                categorias_chaves_i871 = sorted(
+                    rotulos_categorias_i871,
+                    key=lambda chave: normalizar_identidade_produto(rotulos_categorias_i871[chave]),
+                )
+                chave_categorias_widget = "i871_catalogo_categorias"
+                if chave_categorias_widget in st.session_state:
+                    st.session_state[chave_categorias_widget] = [
+                        chave for chave in st.session_state.get(chave_categorias_widget, [])
+                        if chave in categorias_chaves_i871
+                    ]
+
+                campanhas_brutas_i871 = [
+                    campanha
+                    for _, p in catalogo_ativo_i871
+                    for campanha in _i871_lista_textos(p.get("CampanhasPermitidas"))
+                    if normalizar_identidade_produto(campanha)
+                    != normalizar_identidade_produto("Permanente / Todas as épocas")
+                ]
+                rotulos_campanhas_i871 = _i871_mapa_rotulos(
+                    campanhas_brutas_i871,
+                    fallback="Campanha",
+                )
+                campanhas_chaves_i871 = sorted(
+                    rotulos_campanhas_i871,
+                    key=lambda chave: normalizar_identidade_produto(rotulos_campanhas_i871[chave]),
                 )
 
                 f1, f2 = st.columns(2)
-                categorias_sel_i87 = f1.multiselect(
-                    "Categorias incluídas",
-                    categorias_i87,
-                    default=categorias_i87,
-                    key="i87_catalogo_categorias",
+                categorias_kwargs_i871 = (
+                    {"default": categorias_chaves_i871}
+                    if chave_categorias_widget not in st.session_state
+                    else {}
                 )
-                campanha_sel_i87 = f2.selectbox(
+                categorias_sel_i871 = f1.multiselect(
+                    "Categorias incluídas",
+                    options=categorias_chaves_i871,
+                    format_func=lambda chave: rotulos_categorias_i871.get(chave, chave),
+                    key=chave_categorias_widget,
+                    **categorias_kwargs_i871,
+                )
+                campanha_sel_i871 = f2.selectbox(
                     "Filtrar por campanha/data",
-                    ["Todas as campanhas"] + campanhas_i87,
-                    key="i87_catalogo_campanha",
+                    options=["__todas__"] + campanhas_chaves_i871,
+                    format_func=lambda chave: (
+                        "Todas as campanhas"
+                        if chave == "__todas__"
+                        else rotulos_campanhas_i871.get(chave, chave)
+                    ),
+                    key="i871_catalogo_campanha",
                     help=(
                         "Quando uma campanha é escolhida, entram produtos oficialmente habilitados "
                         "para ela e produtos marcados como Permanente / Todas as épocas."
                     ),
                 )
 
-                base_i87 = [
-                    p for p in catalogo_ativo_i87
-                    if (str(p.get("Categoria") or "Sem categoria").strip() or "Sem categoria")
-                    in categorias_sel_i87
+                base_i871 = [
+                    (idx, p) for idx, p in catalogo_ativo_i871
+                    if _i871_categoria_chave(p) in categorias_sel_i871
                 ]
-                if campanha_sel_i87 != "Todas as campanhas":
-                    campanha_norm_i87 = normalizar_identidade_produto(campanha_sel_i87)
-                    permanente_norm_i87 = normalizar_identidade_produto("Permanente / Todas as épocas")
-                    base_i87 = [
-                        p for p in base_i87
+                if campanha_sel_i871 != "__todas__":
+                    permanente_norm_i871 = normalizar_identidade_produto("Permanente / Todas as épocas")
+                    base_i871 = [
+                        (idx, p) for idx, p in base_i871
                         if any(
-                            normalizar_identidade_produto(c) in {campanha_norm_i87, permanente_norm_i87}
-                            for c in (p.get("CampanhasPermitidas") or [])
+                            normalizar_identidade_produto(campanha)
+                            in {campanha_sel_i871, permanente_norm_i871}
+                            for campanha in _i871_lista_textos(p.get("CampanhasPermitidas"))
                         )
                     ]
 
-                nomes_base_i87 = [
-                    str(p.get("Nome") or "Produto")
-                    for p in sorted(
-                        base_i87,
-                        key=lambda p: normalizar_identidade_produto((p or {}).get("Nome", "")),
-                    )
-                ]
-                nomes_sel_i87 = st.multiselect(
-                    "Produtos",
-                    nomes_base_i87,
-                    default=nomes_base_i87,
-                    key="i87_catalogo_produtos",
+                base_i871 = sorted(
+                    base_i871,
+                    key=lambda item: (
+                        _i871_categoria_chave(item[1]),
+                        normalizar_identidade_produto((item[1] or {}).get("Nome", "")),
+                        item[0],
+                    ),
                 )
-                selecao_i87 = [
-                    p for p in base_i87
-                    if str(p.get("Nome") or "Produto") in nomes_sel_i87
-                ]
+                indices_base_i871 = [idx for idx, _ in base_i871]
+
+                contagem_nomes_i871 = {}
+                for _, produto in base_i871:
+                    nome_chave = normalizar_identidade_produto(produto.get("Nome") or "Produto")
+                    contagem_nomes_i871[nome_chave] = contagem_nomes_i871.get(nome_chave, 0) + 1
+
+                rotulos_produtos_i871 = {}
+                rotulos_repetidos_i871 = {}
+                for idx, produto in base_i871:
+                    nome_produto = str(produto.get("Nome") or "Produto").strip() or "Produto"
+                    nome_chave = normalizar_identidade_produto(nome_produto)
+                    rotulo = nome_produto
+                    if contagem_nomes_i871.get(nome_chave, 0) > 1:
+                        cat_chave = _i871_categoria_chave(produto)
+                        categoria_produto = rotulos_categorias_i871.get(
+                            cat_chave,
+                            str(produto.get("Categoria") or "Sem categoria"),
+                        )
+                        rotulo = f"{nome_produto} — {categoria_produto}"
+                    rotulos_repetidos_i871[rotulo] = rotulos_repetidos_i871.get(rotulo, 0) + 1
+                    rotulos_produtos_i871[idx] = rotulo
+                for idx, rotulo in list(rotulos_produtos_i871.items()):
+                    if rotulos_repetidos_i871.get(rotulo, 0) > 1:
+                        rotulos_produtos_i871[idx] = f"{rotulo} • item {idx + 1}"
+
+                chave_produtos_widget = "i871_catalogo_produtos"
+                if chave_produtos_widget in st.session_state:
+                    st.session_state[chave_produtos_widget] = [
+                        idx for idx in st.session_state.get(chave_produtos_widget, [])
+                        if idx in indices_base_i871
+                    ]
+
+                a1, a2, a3 = st.columns([1, 1, 2])
+                if a1.button(
+                    "Selecionar todos",
+                    key="i871_selecionar_todos",
+                    use_container_width=True,
+                    disabled=not bool(indices_base_i871),
+                ):
+                    st.session_state[chave_produtos_widget] = list(indices_base_i871)
+                if a2.button(
+                    "Limpar seleção",
+                    key="i871_limpar_produtos",
+                    use_container_width=True,
+                    disabled=not bool(indices_base_i871),
+                ):
+                    st.session_state[chave_produtos_widget] = []
+                a3.caption(
+                    "A I8.7.1 identifica cada registro separadamente; produtos com o mesmo nome não são mais confundidos."
+                )
+
+                produtos_kwargs_i871 = (
+                    {"default": indices_base_i871}
+                    if chave_produtos_widget not in st.session_state
+                    else {}
+                )
+                indices_sel_i871 = st.multiselect(
+                    "Produtos",
+                    options=indices_base_i871,
+                    format_func=lambda idx: rotulos_produtos_i871.get(idx, f"Produto {idx + 1}"),
+                    key=chave_produtos_widget,
+                    **produtos_kwargs_i871,
+                )
+                selecao_i871 = [catalogo[idx] for idx in indices_sel_i871 if 0 <= idx < len(catalogo)]
 
                 st.markdown("#### Conteúdo exibido")
                 o1, o2, o3, o4 = st.columns(4)
-                mostrar_precos_i87 = o1.checkbox("Preços", value=True, key="i87_mostrar_precos")
-                mostrar_descricao_i87 = o2.checkbox("Descrição", value=True, key="i87_mostrar_descricao")
-                mostrar_material_i87 = o3.checkbox("Material", value=True, key="i87_mostrar_material")
-                mostrar_whatsapp_i87 = o4.checkbox("WhatsApp", value=True, key="i87_mostrar_whatsapp")
-                mostrar_sem_foto_i87 = st.checkbox(
+                mostrar_precos_i871 = o1.checkbox("Preços", value=True, key="i871_mostrar_precos")
+                mostrar_descricao_i871 = o2.checkbox("Descrição", value=True, key="i871_mostrar_descricao")
+                mostrar_material_i871 = o3.checkbox("Material", value=True, key="i871_mostrar_material")
+                mostrar_whatsapp_i871 = o4.checkbox("WhatsApp", value=True, key="i871_mostrar_whatsapp")
+                mostrar_sem_foto_i871 = st.checkbox(
                     "Incluir produtos sem foto",
                     value=True,
-                    key="i87_mostrar_sem_foto",
+                    key="i871_mostrar_sem_foto",
                     help="Desmarque para gerar uma versão estritamente visual, sem produtos que ainda não têm foto cadastrada.",
                 )
-                observacao_i87 = st.text_input(
+                observacao_i871 = st.text_input(
                     "Observação opcional no rodapé",
                     value="Consulte disponibilidade, personalização e prazo de produção.",
-                    key="i87_catalogo_rodape",
+                    key="i871_catalogo_rodape",
                 )
 
-                sem_foto_i87 = sum(1 for p in selecao_i87 if not (p.get("Imagens") or []))
-                selecao_saida_i87 = (
-                    selecao_i87
-                    if mostrar_sem_foto_i87
-                    else [p for p in selecao_i87 if (p.get("Imagens") or [])]
+                sem_foto_selecao_i871 = sum(
+                    1 for p in selecao_i871 if not _i871_lista_textos(p.get("Imagens"))
                 )
-                sem_preco_i87 = sum(1 for p in selecao_saida_i87 if not str(p.get("Preco") or "").strip())
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Produtos no arquivo", len(selecao_saida_i87))
-                m2.metric("Sem foto", sem_foto_i87)
-                m3.metric("Sem preço atual", sem_preco_i87)
-                if mostrar_precos_i87 and sem_preco_i87:
-                    st.warning(
-                        f"{sem_preco_i87} produto(s) selecionado(s) não têm preço atual preenchido. "
-                        "O gerador mostrará 'Preço sob consulta'; nenhum valor será inventado."
-                    )
-                if mostrar_sem_foto_i87 and sem_foto_i87:
+                selecao_saida_i871 = (
+                    selecao_i871
+                    if mostrar_sem_foto_i871
+                    else [p for p in selecao_i871 if _i871_lista_textos(p.get("Imagens"))]
+                )
+                sem_foto_arquivo_i871 = sum(
+                    1 for p in selecao_saida_i871 if not _i871_lista_textos(p.get("Imagens"))
+                )
+                sem_preco_i871 = sum(
+                    1 for p in selecao_saida_i871 if not str(p.get("Preco") or "").strip()
+                )
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Selecionados", len(selecao_i871))
+                m2.metric("Produtos no arquivo", len(selecao_saida_i871))
+                m3.metric("Sem foto no arquivo", sem_foto_arquivo_i871)
+                m4.metric("Sem preço atual", sem_preco_i871)
+
+                if not mostrar_sem_foto_i871 and sem_foto_selecao_i871:
                     st.info(
-                        f"{sem_foto_i87} produto(s) estão sem foto. O catálogo usará um espaço neutro "
+                        f"{sem_foto_selecao_i871} produto(s) sem foto foram retirados somente desta saída. "
+                        "O Catálogo Oficial não foi alterado."
+                    )
+                elif mostrar_sem_foto_i871 and sem_foto_arquivo_i871:
+                    st.info(
+                        f"{sem_foto_arquivo_i871} produto(s) estão sem foto. O catálogo usará o espaço neutro "
                         "'Imagem em preparação' nesses cards."
                     )
+                if mostrar_precos_i871 and sem_preco_i871:
+                    st.warning(
+                        f"{sem_preco_i871} produto(s) selecionado(s) não têm preço atual preenchido. "
+                        "O gerador mostrará 'Preço sob consulta'; nenhum valor será inventado."
+                    )
 
-                html_i87 = gerar_html_catalogo_i87(
-                    selecao_saida_i87,
-                    titulo=titulo_i87 or "Catálogo AlphaFest",
-                    subtitulo=subtitulo_i87,
-                    mostrar_precos=mostrar_precos_i87,
-                    mostrar_material=mostrar_material_i87,
-                    mostrar_descricao=mostrar_descricao_i87,
-                    mostrar_whatsapp=mostrar_whatsapp_i87,
-                    mostrar_sem_foto=mostrar_sem_foto_i87,
-                    observacao_rodape=observacao_i87,
+                grupos_grafia_i871 = {}
+                for _, produto in catalogo_ativo_i871:
+                    chave = _i871_categoria_chave(produto)
+                    grupos_grafia_i871.setdefault(chave, set()).add(
+                        str(produto.get("Categoria") or "Sem categoria").strip() or "Sem categoria"
+                    )
+                categorias_unificadas_i871 = sum(1 for valores in grupos_grafia_i871.values() if len(valores) > 1)
+                if categorias_unificadas_i871:
+                    st.success(
+                        f"🛡️ Blindagem ativa: {categorias_unificadas_i871} identidade(s) de categoria com grafias "
+                        "equivalentes serão unificadas somente na apresentação do catálogo."
+                    )
+
+                with st.expander("🛡️ Ver blindagens da I8.7.1"):
+                    st.markdown(
+                        "- **Fonte única:** dados continuam vindo do Catálogo Oficial.\n"
+                        "- **Categorias equivalentes:** diferenças de maiúsculas, acentos ou espaços não criam categorias duplicadas na saída.\n"
+                        "- **Produtos homônimos:** cada registro é selecionado individualmente.\n"
+                        "- **Preço:** ausente = `Preço sob consulta`; nenhum preço histórico ou estimado é usado.\n"
+                        "- **Campos de lista:** imagem, variação e campanha em formato textual são tratados sem quebrar o gerador.\n"
+                        "- **Persistência:** esta tela não grava nenhuma alteração comercial."
+                    )
+
+                html_i871 = gerar_html_catalogo_i87(
+                    selecao_saida_i871,
+                    titulo=titulo_i871 or "Catálogo AlphaFest",
+                    subtitulo=subtitulo_i871,
+                    mostrar_precos=mostrar_precos_i871,
+                    mostrar_material=mostrar_material_i871,
+                    mostrar_descricao=mostrar_descricao_i871,
+                    mostrar_whatsapp=mostrar_whatsapp_i871,
+                    mostrar_sem_foto=mostrar_sem_foto_i871,
+                    observacao_rodape=observacao_i871,
                 )
                 st.download_button(
-                    "📥 Baixar catálogo I8.7 em HTML",
-                    data=html_i87,
-                    file_name=f"{slug_html(titulo_i87 or 'catalogo_alphafest').lower()}_i87.html",
+                    "📥 Baixar catálogo I8.7.1 em HTML",
+                    data=html_i871,
+                    file_name=f"{slug_html(titulo_i871 or 'catalogo_alphafest').lower()}_i871.html",
                     mime="text/html",
                     type="primary",
                     use_container_width=True,
-                    disabled=not bool(selecao_saida_i87),
+                    disabled=not bool(selecao_saida_i871),
                 )
-                st.caption(
-                    "O HTML é responsivo para celular e computador e também possui estilo de impressão. "
-                    "A aba antiga 'Catálogo para cliente' foi preservada integralmente como fallback."
-                )
+                if not selecao_saida_i871:
+                    st.caption("Selecione ao menos um produto elegível para liberar o arquivo.")
+                else:
+                    st.caption(
+                        "HTML responsivo para celular e computador, com estilo de impressão. "
+                        "A aba antiga 'Catálogo para cliente' permanece preservada como fallback."
+                    )
 
         with aba_cliente:
             if not catalogo:

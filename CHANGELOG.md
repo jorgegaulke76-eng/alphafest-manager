@@ -1,3 +1,10 @@
+## 20.4.9-I8.7.1 — Homologação e Blindagem do Gerador de Catálogos
+
+- Unifica categorias equivalentes somente na apresentação (ex.: BUBBLE/Bubble), sem alterar o Catálogo Oficial.
+- Seleção individual segura para produtos com nomes repetidos.
+- Blindagem de campos de lista, navegação HTML e WhatsApp.
+- Mantém preço oficial como única fonte e `Preço sob consulta` quando ausente.
+- Preserva integralmente os módulos homologados e a aba antiga de catálogo como fallback.
 
 ## 20.3.2 — Persistência das fotos locais do catálogo
 
