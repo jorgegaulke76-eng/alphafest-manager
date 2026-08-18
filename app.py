@@ -20990,12 +20990,18 @@ if pagina_atual == "faturamento_mensal":
         op_comp_i8111 = ["Todas"] + competencias_i8111
         comp_sel_i8111 = fc2.selectbox("Competência", op_comp_i8111, format_func=lambda x: "Todas" if x == "Todas" else _i8111_competencia_rotulo(x), key="i8111_filtro_comp")
         status_sel_i8111 = fc3.selectbox("Situação", ["Todos", "Em aberto", "Fechado", "Faturado", "Vencido", "Recebido"], key="i8111_filtro_status")
-        termo_fin_i8111 = normalizar_texto_busca(busca_fin_i8111).strip()
+        def _normalizar_filtro_i8111(valor):
+            import unicodedata
+            texto = unicodedata.normalize("NFKD", str(valor or "").strip())
+            texto = "".join(c for c in texto if not unicodedata.combining(c)).casefold()
+            return re.sub(r"\s+", " ", texto)
+
+        termo_fin_i8111 = _normalizar_filtro_i8111(busca_fin_i8111)
 
         def _passa_cliente_i8111(nome, wa=""):
             if not termo_fin_i8111:
                 return True
-            return termo_fin_i8111 in normalizar_texto_busca(f"{nome} {wa}")
+            return termo_fin_i8111 in _normalizar_filtro_i8111(f"{nome} {wa}")
 
         mostrar_abertos_i8111 = status_sel_i8111 in {"Todos", "Em aberto"}
         grupos_filtrados_i8111 = [
