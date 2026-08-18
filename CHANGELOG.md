@@ -1,3 +1,10 @@
+# 20.4.9-I8.11.1-HF3 — Fonte Única de Status
+- Unifica a regra de status entre Anna, Jorge, THU, Alpha Core e indicadores.
+- Mensalistas concluem operação com Aprovado + Entregue; pagamento individual não aparece como pendência.
+- Atualizações de status usam leitura fresca e gravação condicional/retry para reduzir conflitos entre sessões.
+- Auditoria registra o usuário real e o perfil Jorge recebe diagnóstico de sincronização.
+- Nenhum JSON comercial alterado.
+
 # 20.4.9-I8.11.1 — Central de Faturamento Mensal
 - Central mensal no perfil Jorge com competência, fechamento, faturado e recebido.
 - Recebimento mensal atualiza automaticamente as propostas vinculadas.

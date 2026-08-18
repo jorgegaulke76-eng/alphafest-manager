@@ -37,6 +37,7 @@ __all__ = [
     "connection_test",
     "load_document",
     "save_document",
+    "mutate_list_record",
     "upload_catalog_image",
     "upload_library_file",
     "catalog_public_url",
@@ -144,6 +145,105 @@ def save_document(document_key: str, value: Any, local_path: str) -> bool:
     except requests.RequestException:
         return False
 
+
+
+def mutate_list_record(document_key: str, local_path: str, default: Any, identity_field: str, identity_value: Any, updater, retries: int = 3):
+    """Atualiza um registro dentro de uma lista com leitura fresca e CAS no Supabase.
+
+    Evita que duas sessões (ex.: Jorge e Anna) sobrescrevam silenciosamente o
+    documento inteiro a partir de caches diferentes. Em caso de conflito, lê a
+    versão mais nova e reaplica somente a alteração do registro-alvo.
+
+    Retorna ``(ok, registro_atualizado, documento_atualizado, motivo)``.
+    """
+    if not callable(updater):
+        return False, None, None, "updater inválido"
+
+    def aplicar(lista):
+        if not isinstance(lista, list):
+            return None, None
+        copia = json.loads(json.dumps(lista, ensure_ascii=False))
+        for idx, item in enumerate(copia):
+            if isinstance(item, dict) and str(item.get(identity_field)) == str(identity_value):
+                alvo = item
+                resultado = updater(alvo)
+                if isinstance(resultado, dict) and resultado is not alvo:
+                    copia[idx] = resultado
+                    alvo = resultado
+                return copia, alvo
+        return None, None
+
+    if not online_configured():
+        atual = _read_local(local_path, default)
+        novo_doc, alvo = aplicar(atual)
+        if novo_doc is None:
+            return False, None, atual, "registro não encontrado"
+        try:
+            _write_local(local_path, novo_doc)
+            return True, alvo, novo_doc, "local"
+        except OSError:
+            return False, None, atual, "falha ao gravar contingência local"
+
+    url, _ = _config()
+    ultimo_erro = "conflito de concorrência"
+    for _ in range(max(1, int(retries or 1))):
+        try:
+            leitura = _SESSION.get(
+                f"{url}/rest/v1/app_data",
+                headers=_headers(),
+                params={"select": "value,updated_at", "key": f"eq.{document_key}", "limit": "1"},
+                timeout=TIMEOUT,
+            )
+            leitura.raise_for_status()
+            rows = leitura.json()
+            if not rows:
+                # Mantém compatibilidade com bases ainda não importadas.
+                base = _read_local(local_path, default)
+                if not save_document(document_key, base, local_path):
+                    return False, None, base, "documento não encontrado"
+                continue
+            row = rows[0]
+            atual = row.get("value", default)
+            updated_at = row.get("updated_at")
+            novo_doc, alvo = aplicar(atual)
+            if novo_doc is None:
+                return False, None, atual, "registro não encontrado"
+
+            novo_updated_at = datetime.now(timezone.utc).isoformat()
+            params = {"key": f"eq.{document_key}", "select": "key"}
+            if updated_at:
+                params["updated_at"] = f"eq.{updated_at}"
+            resposta = _SESSION.patch(
+                f"{url}/rest/v1/app_data",
+                headers=_headers({"Prefer": "return=representation"}),
+                params=params,
+                json={"value": novo_doc, "updated_at": novo_updated_at},
+                timeout=TIMEOUT,
+            )
+            resposta.raise_for_status()
+            confirmacao = resposta.json()
+            if confirmacao:
+                try:
+                    _write_local(local_path, novo_doc)
+                except OSError:
+                    pass
+                return True, alvo, novo_doc, "online"
+            ultimo_erro = "conflito detectado; nova tentativa realizada"
+        except (requests.RequestException, ValueError, TypeError) as exc:
+            ultimo_erro = f"{exc.__class__.__name__}"
+            break
+
+    # Compatibilidade: se PATCH condicional não estiver disponível na política
+    # atual do projeto, faz uma última leitura fresca + gravação. Ainda reduz a
+    # janela de conflito em relação ao comportamento antigo baseado em cache.
+    try:
+        atual = load_document(document_key, local_path, default)
+        novo_doc, alvo = aplicar(atual)
+        if novo_doc is not None and save_document(document_key, novo_doc, local_path):
+            return True, alvo, novo_doc, "fallback-fresh"
+    except Exception:
+        pass
+    return False, None, None, ultimo_erro
 
 def connection_test() -> tuple[bool, str]:
     if not online_configured():

@@ -9,6 +9,12 @@ from dataclasses import dataclass, asdict
 from datetime import date, datetime
 from typing import Any, Callable
 
+from proposal_status import (
+    proposta_concluida as _status_concluida,
+    proposta_encerrada as _status_encerrada,
+    proposta_faturamento_mensal as _status_mensal,
+)
+
 
 def _bool(value: Any) -> bool:
     if isinstance(value, bool):
@@ -44,25 +50,11 @@ def _date(value: Any) -> date | None:
 
 
 def _encerrada(record: dict[str, Any]) -> bool:
-    status = str(
-        record.get("status_comercial")
-        or record.get("situacao_comercial")
-        or record.get("status")
-        or ""
-    ).strip().casefold()
-    motivo_nao_fechado = _bool(record.get("nao_fechado_pagamento")) or _bool(record.get("nao_fechado_sem_retorno"))
-    return motivo_nao_fechado or _bool(record.get("encerrado")) or status in {
-        "encerrado", "encerrada", "encerrado sem retorno", "encerrado por preço",
-        "encerrado por preco", "encerrado pelo cliente", "encerrado por prazo",
-        "cancelado", "cancelada", "recusado", "recusada", "arquivado", "arquivada",
-        "excluído", "excluida", "excluída",
-        "nao_fechado_pagamento", "não fechado — falta de pagamento",
-        "nao_fechado_sem_retorno", "não fechado — sem retorno do cliente",
-    }
+    return _status_encerrada(record)
 
 
 def _concluida(record: dict[str, Any]) -> bool:
-    return _bool(record.get("aprovado")) and _bool(record.get("pago")) and _bool(record.get("entregue"))
+    return _status_concluida(record)
 
 
 def _total(record: dict[str, Any], calculator: Callable[[dict[str, Any]], tuple[Any, Any, Any]] | None) -> float:
@@ -120,7 +112,7 @@ def calcular_alpha_core(
     ativas = [p for p in validas if not _concluida(p)]
     aguardando = [p for p in ativas if not _bool(p.get("aprovado"))]
     aprovadas_abertas = [p for p in ativas if _bool(p.get("aprovado"))]
-    pagamentos_pendentes = [p for p in aprovadas_abertas if not _bool(p.get("pago"))]
+    pagamentos_pendentes = [p for p in aprovadas_abertas if not _status_mensal(p) and not _bool(p.get("pago"))]
 
     previstas_hoje_lista = [p for p in ativas if _date(p.get("data_entrega")) == hoje]
     pendentes_hoje_lista = [p for p in aprovadas_abertas if not _bool(p.get("entregue")) and _date(p.get("data_entrega")) == hoje]

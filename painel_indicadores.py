@@ -3,6 +3,12 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Iterable
 
+from proposal_status import (
+    proposta_concluida as _status_concluida,
+    proposta_encerrada as _status_encerrada,
+    proposta_faturamento_mensal as _status_mensal,
+)
+
 
 def _bool(value: Any) -> bool:
     if isinstance(value, bool):
@@ -51,20 +57,11 @@ def _status_text(record: dict[str, Any]) -> str:
 
 
 def _encerrada(record: dict[str, Any]) -> bool:
-    status = _status_text(record)
-    motivo_nao_fechado = _bool(record.get("nao_fechado_pagamento")) or _bool(record.get("nao_fechado_sem_retorno"))
-    return motivo_nao_fechado or _bool(record.get("encerrado")) or status in {
-        "encerrado", "encerrada", "encerrado sem retorno", "encerrado por preço",
-        "encerrado por preco", "encerrado pelo cliente", "encerrado por prazo",
-        "cancelado", "cancelada", "recusado", "recusada", "arquivado", "arquivada",
-        "excluído", "excluida", "excluído", "excluída",
-        "nao_fechado_pagamento", "não fechado — falta de pagamento",
-        "nao_fechado_sem_retorno", "não fechado — sem retorno do cliente",
-    }
+    return _status_encerrada(record)
 
 
 def _concluida(record: dict[str, Any]) -> bool:
-    return _bool(record.get("aprovado")) and _bool(record.get("pago")) and _bool(record.get("entregue"))
+    return _status_concluida(record)
 
 
 def _numero(record: dict[str, Any]) -> str:
@@ -113,7 +110,7 @@ def calcular_indicadores_unificados(
     propostas_abertas = [p for p in propostas_validas if not _concluida(p)]
     aguardando_aprovacao = [p for p in propostas_abertas if not _bool(p.get("aprovado"))]
     aprovadas_em_andamento = [p for p in propostas_abertas if _bool(p.get("aprovado")) and not _bool(p.get("entregue"))]
-    pagamentos_pendentes = [p for p in aprovadas_em_andamento if not _bool(p.get("pago"))]
+    pagamentos_pendentes = [p for p in propostas_abertas if _bool(p.get("aprovado")) and not _status_mensal(p) and not _bool(p.get("pago"))]
 
     entregas_hoje_abertas = [
         p for p in aprovadas_em_andamento

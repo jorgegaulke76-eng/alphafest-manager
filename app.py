@@ -50,6 +50,14 @@ from painel_indicadores import calcular_indicadores_unificados
 from alpha_live import registrar_atividade, obter_operacao_online
 from thu_executivo import calcular_briefing, renderizar_briefing_thu
 from alpha_core import calcular_alpha_core
+from proposal_status import (
+    proposta_faturamento_mensal as _status_proposta_mensal,
+    proposta_encerrada as _status_proposta_encerrada,
+    proposta_concluida as _status_proposta_concluida,
+    proposta_ativa_operacional as _status_proposta_ativa,
+    pagamento_individual_pendente as _status_pagamento_pendente,
+    resumo_status as _status_resumo,
+)
 from executive_center import renderizar_centro_executivo
 try:
     from thu_embedded import THU_AVATAR_B64
@@ -1315,6 +1323,46 @@ def salvar_historico_completo(historico):
         st.session_state.pop("_thu_i7_periodo_analisado", None)
     return ok
 
+def atualizar_proposta_com_leitura_fresca(numero, updater):
+    """HF3: altera somente uma proposta sobre a versão mais recente do banco.
+
+    Quando o Supabase suporta PATCH condicional, usa compare-and-swap para que
+    Jorge e Anna não sobrescrevam silenciosamente alterações simultâneas.
+    """
+    numero = str(numero or "").strip()
+    if not numero:
+        return False, None, "Número da proposta não informado."
+
+    func = getattr(_cloud_db, "mutate_list_record", None) if _cloud_db else None
+    if callable(func):
+        ok, atualizado, documento, motivo = func(
+            "historico_orcamentos",
+            ARQUIVO_HISTORICO,
+            [],
+            "numero_proposta",
+            numero,
+            updater,
+            retries=4,
+        )
+        invalidate_document_cache("historico_orcamentos")
+        if ok and isinstance(documento, list):
+            _document_cache()["historico_orcamentos"] = {
+                "time": time.monotonic(),
+                "value": copy.deepcopy(documento),
+            }
+        return bool(ok), atualizado, str(motivo or "")
+
+    # Fallback local/compatibilidade: sempre começa por leitura fresca.
+    historico = carregar_historico(force_refresh=True)
+    alvo = next((p for p in historico if str(p.get("numero_proposta")) == numero), None)
+    if alvo is None:
+        return False, None, "Proposta não encontrada no histórico."
+    updater(alvo)
+    ok = salvar_historico_completo(historico)
+    invalidate_document_cache("historico_orcamentos")
+    return bool(ok), alvo, "fallback"
+
+
 def registrar_evento_proposta(proposta, descricao, usuario="Sistema"):
     timeline = proposta.get("timeline") if isinstance(proposta.get("timeline"), list) else []
     timeline.append({
@@ -1327,20 +1375,23 @@ def registrar_evento_proposta(proposta, descricao, usuario="Sistema"):
 
 
 def alternar_status(num_proposta, campo, novo_valor):
-    historico = carregar_historico()
-    proposta_alterada = None
-    for p in historico:
-        if p.get("numero_proposta") == num_proposta:
-            valor_anterior = bool(p.get(campo, False))
-            p[campo] = novo_valor
-            proposta_alterada = p
-            if valor_anterior != bool(novo_valor):
-                rotulos = {"pago": "Pagamento confirmado", "entregue": "Entrega concluída", "aprovado": "Orçamento aprovado"}
-                acao = rotulos.get(campo, campo.replace("_", " ").title())
-                registrar_evento_proposta(p, acao if novo_valor else f"{acao} desmarcado")
-            break
-    salvar_historico_completo(historico)
-    if proposta_alterada and campo == "aprovado" and novo_valor:
+    usuario_status = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
+    alterou_aprovacao = {"valor": False}
+
+    def _mutar(p):
+        valor_anterior = valor_bool(p.get(campo, False))
+        p[campo] = bool(novo_valor)
+        if valor_anterior != bool(novo_valor):
+            rotulos = {"pago": "Pagamento confirmado", "entregue": "Entrega concluída", "aprovado": "Orçamento aprovado"}
+            acao = rotulos.get(campo, campo.replace("_", " ").title())
+            registrar_evento_proposta(p, acao if novo_valor else f"{acao} desmarcado", usuario=usuario_status)
+            if campo == "aprovado" and bool(novo_valor):
+                alterou_aprovacao["valor"] = True
+
+    ok, proposta_alterada, _ = atualizar_proposta_com_leitura_fresca(num_proposta, _mutar)
+    if not ok:
+        return False
+    if proposta_alterada and alterou_aprovacao["valor"]:
         sincronizar_producao_com_propostas()
         tarefas = carregar_producao()
         mudou = False
@@ -1354,40 +1405,37 @@ def alternar_status(num_proposta, campo, novo_valor):
                     mudou = True
         if mudou:
             salvar_producao(tarefas)
+    return True
+
 
 def alternar_motivo_nao_fechado(num_proposta, motivo, novo_valor):
-    """Marca/desmarca um motivo comercial de proposta não fechada.
-
-    Os dois motivos são mutuamente exclusivos e encerram a proposta apenas no
-    fluxo comercial, sem apagar os marcos Aprovado/Pago/Entregue já registrados.
-    """
-    historico = carregar_historico()
+    """Marca/desmarca motivo comercial usando a versão mais nova do banco."""
     campos = {
         "pagamento": ("nao_fechado_pagamento", "Não fechado — falta de pagamento"),
         "sem_retorno": ("nao_fechado_sem_retorno", "Não fechado — sem retorno do cliente"),
     }
     if motivo not in campos:
-        return
+        return False
     campo, rotulo = campos[motivo]
     outro_campo = "nao_fechado_sem_retorno" if campo == "nao_fechado_pagamento" else "nao_fechado_pagamento"
-    for proposta in historico:
-        if proposta.get("numero_proposta") != num_proposta:
-            continue
+    usuario_status = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
+
+    def _mutar(proposta):
         anterior = valor_bool(proposta.get(campo))
         proposta[campo] = bool(novo_valor)
         if novo_valor:
             proposta[outro_campo] = False
             proposta["status_comercial"] = "nao_fechado_pagamento" if motivo == "pagamento" else "nao_fechado_sem_retorno"
             proposta["encerrado"] = True
-        else:
-            if not valor_bool(proposta.get(outro_campo)):
-                proposta["encerrado"] = False
-                if str(proposta.get("status_comercial", "")).startswith("nao_fechado_"):
-                    proposta["status_comercial"] = ""
+        elif not valor_bool(proposta.get(outro_campo)):
+            proposta["encerrado"] = False
+            if str(proposta.get("status_comercial", "")).startswith("nao_fechado_"):
+                proposta["status_comercial"] = ""
         if anterior != bool(novo_valor):
-            registrar_evento_proposta(proposta, rotulo if novo_valor else f"{rotulo} desmarcado")
-        break
-    salvar_historico_completo(historico)
+            registrar_evento_proposta(proposta, rotulo if novo_valor else f"{rotulo} desmarcado", usuario=usuario_status)
+
+    ok, _, _ = atualizar_proposta_com_leitura_fresca(num_proposta, _mutar)
+    return ok
 
 
 def excluir_proposta(num_proposta):
@@ -2308,11 +2356,8 @@ def perfil_comercial_cliente(cliente):
 
 
 def proposta_faturamento_mensal(prop):
-    prop = prop or {}
-    if valor_bool(prop.get("faturamento_mensal")):
-        return True
-    modalidade = str(prop.get("modalidade_cobranca", "") or "").strip().casefold()
-    return modalidade in {"faturamento mensal", "mensal", "mensalista"}
+    """Alias da fonte única de status (I8.11.1-HF3)."""
+    return _status_proposta_mensal(prop)
 
 
 def _i811_digitos(valor):
@@ -2508,33 +2553,56 @@ def resumo_perfil_comercial(cliente):
 
 
 def proposta_encerrada(prop):
-    status = str(prop.get("status_comercial") or prop.get("situacao_comercial") or prop.get("status") or "").strip().casefold()
-    motivo_nao_fechado = valor_bool(prop.get("nao_fechado_pagamento")) or valor_bool(prop.get("nao_fechado_sem_retorno"))
-    return motivo_nao_fechado or valor_bool(prop.get("encerrado")) or status in {
-        "encerrado", "encerrada", "encerrado sem retorno", "encerrado por preço", "encerrado por preco",
-        "encerrado pelo cliente", "encerrado por prazo", "cancelado", "cancelada", "recusado", "recusada",
-        "nao_fechado_pagamento", "não fechado — falta de pagamento", "nao_fechado_sem_retorno",
-        "não fechado — sem retorno do cliente", "arquivado", "arquivada", "excluído", "excluida", "excluída",
-    }
+    """Fonte única compartilhada com Alpha Core, THU e painéis."""
+    return _status_proposta_encerrada(prop)
 
 
 def proposta_concluida(prop):
-    """Separa conclusão operacional de recebimento financeiro.
-
-    Clientes por proposta concluem após aprovado + pago + entregue.
-    Clientes de faturamento mensal concluem a operação após aprovado + entregue;
-    o recebimento será controlado no fechamento mensal (I8.11.1).
-    """
-    aprovado = valor_bool(prop.get("aprovado"))
-    entregue = valor_bool(prop.get("entregue"))
-    if proposta_faturamento_mensal(prop):
-        return aprovado and entregue
-    return aprovado and valor_bool(prop.get("pago")) and entregue
+    """Fonte única compartilhada com Alpha Core, THU e painéis."""
+    return _status_proposta_concluida(prop)
 
 
 def proposta_ativa_operacional(prop):
     """Fonte única para listas e contadores operacionais da Anna, Jorge e THU."""
-    return not proposta_encerrada(prop) and not proposta_concluida(prop)
+    return _status_proposta_ativa(prop)
+
+
+def diagnosticar_sincronizacao_status(historico):
+    """HF3: compara a antiga regra fixa com a fonte única atual.
+
+    Serve somente como diagnóstico executivo; não altera nenhuma proposta.
+    """
+    divergencias = []
+    contradicoes = []
+    for prop in (historico or []):
+        if not isinstance(prop, dict):
+            continue
+        numero = str(prop.get("numero_proposta") or "SEM-NÚMERO")
+        cliente = str(prop.get("cliente_nome") or prop.get("cliente") or "Cliente")
+        aprovado = valor_bool(prop.get("aprovado"))
+        pago = valor_bool(prop.get("pago"))
+        entregue = valor_bool(prop.get("entregue"))
+        legado_concluido = aprovado and pago and entregue
+        oficial_concluido = proposta_concluida(prop)
+        if legado_concluido != oficial_concluido:
+            divergencias.append({
+                "Proposta": numero,
+                "Cliente": cliente,
+                "Cobrança": "Mensal" if proposta_faturamento_mensal(prop) else "Por proposta",
+                "Aprovado": "Sim" if aprovado else "Não",
+                "Pago": "Sim" if pago else "Não",
+                "Entregue": "Sim" if entregue else "Não",
+                "Regra oficial": "Concluída" if oficial_concluido else "Ativa",
+            })
+        if entregue and not aprovado:
+            contradicoes.append({"Proposta": numero, "Cliente": cliente, "Problema": "Entregue sem aprovação"})
+        if pago and not aprovado:
+            contradicoes.append({"Proposta": numero, "Cliente": cliente, "Problema": "Pago sem aprovação"})
+    return {
+        "avaliadas": len([p for p in (historico or []) if isinstance(p, dict)]),
+        "divergencias_legadas": divergencias,
+        "contradicoes": contradicoes,
+    }
 
 
 def calcular_valores_proposta(prop):
@@ -3628,7 +3696,7 @@ def criar_fechamento_mensal(grupo):
     salvar_faturamentos_mensais(registros)
 
     numeros = {x.get("numero_proposta") for x in propostas_snap if x.get("numero_proposta")}
-    historico = carregar_historico()
+    historico = carregar_historico(force_refresh=True)
     for prop in historico:
         if str(prop.get("numero_proposta") or "") in numeros:
             prop["faturamento_mensal_id"] = registro_id
@@ -3708,7 +3776,7 @@ def reabrir_fechamento_mensal(registro_id, motivo):
     salvar_faturamentos_mensais(registros)
 
     numeros = {str(x.get("numero_proposta") or "") for x in registro.get("propostas", []) if str(x.get("numero_proposta") or "")}
-    historico = carregar_historico()
+    historico = carregar_historico(force_refresh=True)
     for prop in historico:
         if str(prop.get("numero_proposta") or "") not in numeros:
             continue
@@ -3731,7 +3799,7 @@ def sincronizar_fechamento_reaberto(registro_id):
         raise ValueError("Fechamento mensal não localizado.")
     if str(registro.get("status") or "") != I8111_STATUS_REABERTO:
         raise ValueError("Somente um fechamento reaberto pode ser sincronizado para correção.")
-    historico = carregar_historico()
+    historico = carregar_historico(force_refresh=True)
     por_numero = {str(p.get("numero_proposta") or ""): p for p in historico if isinstance(p, dict) and str(p.get("numero_proposta") or "")}
     novos = []
     faltantes = []
@@ -3803,7 +3871,7 @@ def atualizar_status_faturamento_mensal(registro_id, novo_status):
     salvar_faturamentos_mensais(registros)
 
     numeros = {str(x.get("numero_proposta") or "") for x in registro.get("propostas", []) if str(x.get("numero_proposta") or "")}
-    historico = carregar_historico()
+    historico = carregar_historico(force_refresh=True)
     for prop in historico:
         if str(prop.get("numero_proposta") or "") not in numeros:
             continue
@@ -11465,7 +11533,7 @@ def _anna_salvar_proposta(dados, numero_original=None):
         usuario="Anna",
     )
 
-    historico = carregar_historico()
+    historico = carregar_historico(force_refresh=True)
     if not isinstance(historico, list):
         historico = []
 
@@ -11843,63 +11911,72 @@ def dialog_cliente_anna():
 
 
 def salvar_andamento_proposta(numero, aprovado, pago, entregue):
-    """Atualiza os três status, confirma a gravação e preserva todos os demais campos."""
-    historico = carregar_historico()
-    proposta = next((p for p in historico if p.get("numero_proposta") == numero), None)
-    if proposta is None:
-        return False, "Proposta não encontrada no histórico."
-
-    anteriores = {
-        "aprovado": valor_bool(proposta.get("aprovado", False)),
-        "pago": valor_bool(proposta.get("pago", False)),
-        "entregue": valor_bool(proposta.get("entregue", False)),
-    }
+    """HF3: atualiza status sobre leitura fresca, com autoria real e confirmação."""
     novos = {"aprovado": valor_bool(aprovado), "pago": valor_bool(pago), "entregue": valor_bool(entregue)}
-    proposta.update(novos)
-    agora_status = agora_local().strftime("%d/%m/%Y %H:%M")
-    for campo, campo_data in (("aprovado", "aprovado_em"), ("pago", "pago_em"), ("entregue", "entregue_em")):
-        if novos[campo] and not anteriores[campo] and not proposta.get(campo_data):
-            proposta[campo_data] = agora_status
-        elif not novos[campo] and anteriores[campo]:
-            proposta.pop(campo_data, None)
+    usuario_status = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
+    controle = {"anteriores": None, "nova_conclusao": False, "aprovou_agora": False}
 
-    rotulos = {
-        "aprovado": "Orçamento aprovado",
-        "pago": "Pagamento confirmado",
-        "entregue": "Entrega concluída",
-    }
-    for campo, valor in novos.items():
-        if anteriores[campo] != valor:
-            texto = rotulos[campo] if valor else f"{rotulos[campo]} desmarcado"
-            registrar_evento_proposta(proposta, texto, usuario="Anna")
+    def _mutar(proposta):
+        anteriores = {
+            "aprovado": valor_bool(proposta.get("aprovado", False)),
+            "pago": valor_bool(proposta.get("pago", False)),
+            "entregue": valor_bool(proposta.get("entregue", False)),
+        }
+        controle["anteriores"] = anteriores
+        antes_concluida = proposta_concluida(proposta)
+        proposta.update(novos)
+        agora_status = agora_local().strftime("%d/%m/%Y %H:%M")
+        for campo, campo_data in (("aprovado", "aprovado_em"), ("pago", "pago_em"), ("entregue", "entregue_em")):
+            if novos[campo] and not anteriores[campo] and not proposta.get(campo_data):
+                proposta[campo_data] = agora_status
+            elif not novos[campo] and anteriores[campo]:
+                proposta.pop(campo_data, None)
 
-    salvar_historico_completo(historico)
+        rotulos = {
+            "aprovado": "Orçamento aprovado",
+            "pago": "Pagamento confirmado",
+            "entregue": "Entrega concluída",
+        }
+        for campo, valor in novos.items():
+            if anteriores[campo] != valor:
+                texto = rotulos[campo] if valor else f"{rotulos[campo]} desmarcado"
+                registrar_evento_proposta(proposta, texto, usuario=usuario_status)
 
-    # Confirma a persistência antes de informar sucesso.
-    confirmado = next((p for p in carregar_historico() if p.get("numero_proposta") == numero), None)
+        controle["aprovou_agora"] = novos["aprovado"] and not anteriores["aprovado"]
+        depois_concluida = proposta_concluida(proposta)
+        controle["nova_conclusao"] = depois_concluida and not antes_concluida
+        if controle["nova_conclusao"]:
+            if proposta_faturamento_mensal(proposta):
+                descricao = "Aprovado e entregue — operação concluída; pagamento segue para Faturamento Mensal"
+            else:
+                descricao = "Aprovado, pago e entregue — proposta movida para o Histórico"
+            registrar_evento_proposta(proposta, descricao, usuario=usuario_status)
+
+    ok, atualizado, motivo = atualizar_proposta_com_leitura_fresca(numero, _mutar)
+    if not ok:
+        return False, f"Não foi possível atualizar a proposta com segurança ({motivo or 'falha de gravação'}). Tente novamente."
+
+    # Confirma com leitura realmente fresca para que a tela do outro usuário veja
+    # o mesmo estado que acabou de ser persistido.
+    confirmado = next((p for p in carregar_historico(force_refresh=True) if p.get("numero_proposta") == numero), None)
     if confirmado is None:
         return False, "A proposta não foi localizada após a gravação."
     if any(valor_bool(confirmado.get(campo, False)) != valor for campo, valor in novos.items()):
-        return False, "O banco não confirmou a atualização. Tente novamente."
+        return False, "O banco recebeu outra atualização simultânea. Reabra a proposta e confirme os status atuais."
 
-    if novos["aprovado"] and not anteriores["aprovado"]:
+    if controle["aprovou_agora"]:
         sincronizar_producao_com_propostas()
     if proposta_concluida(confirmado):
-        if not proposta_concluida({**confirmado, **anteriores}):
-            # Registra uma única vez a conclusão operacional.
-            historico_final = carregar_historico()
-            alvo = next((p for p in historico_final if p.get("numero_proposta") == numero), None)
-            if alvo is not None:
-                registrar_evento_proposta(alvo, "Aprovado, pago e entregue — proposta movida para o Histórico", usuario="Sistema")
-                salvar_historico_completo(historico_final)
+        if proposta_faturamento_mensal(confirmado):
+            return True, f"{numero} com operação concluída; pagamento segue para o Faturamento Mensal."
         return True, f"{numero} concluída e movida para o Histórico."
-    return True, f"Andamento de {numero} atualizado."
+    return True, f"Andamento de {numero} atualizado por {usuario_status}."
 
 
 @st.dialog("📦 Fluxo de pedidos", width="large")
 def dialog_fluxo_anna():
     registrar_atividade(obter_usuario_atual(), "Atualizando fluxo de pedidos", "Fluxo de Pedidos")
-    historico = carregar_historico()
+    historico = carregar_historico(force_refresh=True)
     if not historico:
         st.info("Nenhuma proposta cadastrada.")
         return
@@ -11958,7 +12035,13 @@ def dialog_fluxo_anna():
             with st.form(f"dlg_fluxo_form_{chave_segura}"):
                 c1, c2, c3 = st.columns(3)
                 aprovado = c1.checkbox("Aprovado", value=valor_bool(prop.get("aprovado", False)))
-                pago = c2.checkbox("Pago", value=valor_bool(prop.get("pago", False)))
+                mensal_fluxo = proposta_faturamento_mensal(prop)
+                pago = c2.checkbox(
+                    "💳 Pago no fechamento mensal" if mensal_fluxo else "Pago",
+                    value=valor_bool(prop.get("pago", False)),
+                    disabled=mensal_fluxo,
+                    help="Mensalistas recebem baixa somente pela Central de Faturamento Mensal." if mensal_fluxo else None,
+                )
                 entregue = c3.checkbox("Entregue", value=valor_bool(prop.get("entregue", False)))
                 nf1, nf2 = st.columns(2)
                 nao_pagto = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"nf_pag_{prop.get('numero_proposta')}")
@@ -17533,7 +17616,13 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
         with st.form(f"{prefixo}_status_form_{numero}"):
             s1, s2, s3 = st.columns(3)
             aprovado = s1.checkbox("✅ Aprovado", value=valor_bool(prop.get("aprovado")))
-            pago = s2.checkbox("💰 Pago", value=valor_bool(prop.get("pago")))
+            mensal_linha = proposta_faturamento_mensal(prop)
+            pago = s2.checkbox(
+                "💳 Pago no fechamento mensal" if mensal_linha else "💰 Pago",
+                value=valor_bool(prop.get("pago")),
+                disabled=mensal_linha,
+                help="Mensalistas recebem baixa somente pela Central de Faturamento Mensal." if mensal_linha else None,
+            )
             entregue = s3.checkbox("📦 Entregue", value=valor_bool(prop.get("entregue")))
             nf1, nf2 = st.columns(2)
             nao_pagto = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"{prefixo}_nf_pag_{numero}")
@@ -17584,7 +17673,7 @@ def dialog_entregas_hoje_anna(propostas):
             st.caption(f"{numero} · {principal}")
             d1, d2, d3 = st.columns(3)
             d1.metric("Valor", _anna_fmt_moeda(total))
-            d2.metric("Pagamento", "Pago" if valor_bool(prop.get("pago")) else "Pendente")
+            d2.metric("Pagamento", "Mensal" if proposta_faturamento_mensal(prop) else ("Pago" if valor_bool(prop.get("pago")) else "Pendente"))
             d3.metric("Situação", "Entregue" if valor_bool(prop.get("entregue")) else "Entrega hoje")
             _renderizar_linha_proposta_anna(prop, f"entrega_hoje_{idx}")
 
@@ -17606,7 +17695,7 @@ def renderizar_workspace_anna_isolado():
     # Os indicadores são carregados uma única vez e também alimentam a recepção.
     atendimentos = carregar_atendimentos()
     fila = [x for x in atendimentos.get("itens", []) if x.get("status") not in ("Arquivado", "Entregue", "Pós-venda") and str(x.get("responsavel", "")).strip() in ("", "Anna")]
-    historico = carregar_historico()
+    historico = carregar_historico(force_refresh=True)
     ativos = [p for p in historico if proposta_ativa_operacional(p)]
     qtd_novos = len([x for x in fila if x.get("status") == "Novo contato"])
     qtd_aguardando = len([x for x in fila if x.get("status") == "Aguardando cliente"])
@@ -17951,7 +18040,7 @@ if pagina_atual == "central":
     if ac5.button("📦 Fluxo de pedidos", key="acao_rapida_fluxo", use_container_width=True):
         solicitar_navegacao_aba(indice_aba("fluxo"))
 
-    historico_central = carregar_historico()
+    historico_central = carregar_historico(force_refresh=True)
     tarefas_central = sincronizar_producao_com_propostas()
     tarefas_ativas_central = [t for t in tarefas_central if t.get("ativa", True)]
 
@@ -17974,7 +18063,7 @@ if pagina_atual == "central":
     ]
     em_producao_central = [t for t in tarefas_ativas_central if normalizar_status_fluxo(t.get("status")) in ["Pedido recebido", "Arte pendente", "Aguardando aprovação", "Pronto para produzir", "Em produção"]]
     prontos_central = [t for t in tarefas_ativas_central if normalizar_status_fluxo(t.get("status")) == "Pronto"]
-    pendentes_pagamento_central = [p for p in propostas_aprovadas_abertas_central if not valor_bool(p.get("pago"))]
+    pendentes_pagamento_central = [p for p in historico_central if _status_pagamento_pendente(p)]
     valor_previsto_hoje = sum(calcular_valores_proposta(p)[2] for p in entregas_hoje_central)
 
     dados_atendimento_central = carregar_atendimentos()
@@ -18005,6 +18094,28 @@ if pagina_atual == "central":
             calcular_valores_proposta,
         )
         renderizar_centro_executivo(snapshot_alpha_core, indicadores_unificados_central)
+
+        diagnostico_hf3 = diagnosticar_sincronizacao_status(historico_central)
+        with st.expander("🔎 Sincronização de status · HF3", expanded=False):
+            st.caption(
+                "Anna, Jorge, THU e Alpha Core estão usando a mesma regra oficial. "
+                "Esta leitura é atualizada diretamente do banco ao abrir a Central."
+            )
+            d1, d2, d3 = st.columns(3)
+            d1.metric("Propostas verificadas", diagnostico_hf3["avaliadas"])
+            d2.metric("Divergências da regra antiga", len(diagnostico_hf3["divergencias_legadas"]))
+            d3.metric("Estados contraditórios", len(diagnostico_hf3["contradicoes"]))
+            if diagnostico_hf3["divergencias_legadas"]:
+                st.info(
+                    "As propostas abaixo eram justamente casos em que a regra antiga poderia mostrar pendência em uma tela e conclusão em outra. "
+                    "Com o HF3, a regra oficial já é usada por todas as telas."
+                )
+                st.dataframe(pd.DataFrame(diagnostico_hf3["divergencias_legadas"]), use_container_width=True, hide_index=True)
+            if diagnostico_hf3["contradicoes"]:
+                st.warning("Há registros com combinação de status que merece revisão operacional.")
+                st.dataframe(pd.DataFrame(diagnostico_hf3["contradicoes"]), use_container_width=True, hide_index=True)
+            if not diagnostico_hf3["divergencias_legadas"] and not diagnostico_hf3["contradicoes"]:
+                st.success("Nenhuma divergência de status detectada nesta leitura.")
 
 
     nome_usuario_central = str(usuario_atual.get("nome", "")).strip()
@@ -18201,7 +18312,7 @@ if pagina_atual == "central":
     numero_central_selecionado = st.session_state.get("alerta_proposta_numero")
     if numero_central_selecionado:
         proposta_central_selecionada = next(
-            (p for p in carregar_historico() if str(p.get("numero_proposta")) == str(numero_central_selecionado)),
+            (p for p in carregar_historico(force_refresh=True) if str(p.get("numero_proposta")) == str(numero_central_selecionado)),
             None,
         )
         if proposta_central_selecionada:
@@ -18220,7 +18331,14 @@ if pagina_atual == "central":
                 st.markdown("**Atualização rápida**")
                 up1, up2, up3 = st.columns(3)
                 aprovado_central = up1.checkbox("✅ Aprovado", value=valor_bool(proposta_central_selecionada.get("aprovado")), key=f"central_aprov_{numero_central_selecionado}")
-                pago_central = up2.checkbox("💰 Pago", value=valor_bool(proposta_central_selecionada.get("pago")), key=f"central_pago_{numero_central_selecionado}")
+                mensal_central_sel = proposta_faturamento_mensal(proposta_central_selecionada)
+                pago_central = up2.checkbox(
+                    "💳 Pago no fechamento mensal" if mensal_central_sel else "💰 Pago",
+                    value=valor_bool(proposta_central_selecionada.get("pago")),
+                    key=f"central_pago_{numero_central_selecionado}",
+                    disabled=mensal_central_sel,
+                    help="Mensalistas recebem baixa somente pela Central de Faturamento Mensal." if mensal_central_sel else None,
+                )
                 entregue_central = up3.checkbox("📦 Entregue", value=valor_bool(proposta_central_selecionada.get("entregue")), key=f"central_entregue_{numero_central_selecionado}")
                 nf1, nf2 = st.columns(2)
                 nao_pagto_central = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(proposta_central_selecionada.get("nao_fechado_pagamento")), key=f"central_nf_pag_{numero_central_selecionado}")
@@ -20980,7 +21098,7 @@ if pagina_atual == "novo_orcamento":
             if st.session_state.editar_numero:
                 atualizar_proposta(numero, dados)
             else:
-                h = carregar_historico()
+                h = carregar_historico(force_refresh=True)
                 h.insert(0, dados)
                 salvar_historico_completo(h)
 
@@ -21020,7 +21138,7 @@ if pagina_atual == "historico":
             rerun_na_aba("central")
     renderizar_painel_alertas("historico")
 
-    historico = carregar_historico()
+    historico = carregar_historico(force_refresh=True)
     busca = st.text_input("🔎 Pesquisar por cliente, proposta, telefone ou produto")
     if busca.strip():
         termo = busca.strip().lower()
