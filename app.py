@@ -1213,7 +1213,7 @@ def formatar_msg_whatsapp(prop):
     linhas.extend([
         sep,
         f"*Subtotal:* {moeda(subtotal)}",
-        f"*Desconto:* - {moeda(desconto)}",
+        f"*Desconto adicional:* - {moeda(desconto)}",
         f"*Taxa de Entrega:* {moeda(taxa_entrega)}",
         f"*VALOR TOTAL DO PEDIDO:* {moeda(total)}",
         sep,
@@ -1222,16 +1222,24 @@ def formatar_msg_whatsapp(prop):
         f"*Frete/Entrega:* {frete}",
         f"*Validade:* {validade} {unidade_validade}",
         sep,
-        "*PAGAMENTO VIA PIX:*",
-        f"*Clique no link para pagar:* {empresa.get('pix_link', '')}",
-        "",
-        f"* Titular: {empresa.get('pix_titular', '')}",
-        f"* Banco: {empresa.get('pix_banco', '')}",
-        f"* Agência: {empresa.get('pix_agencia', '')} | Conta: {empresa.get('pix_conta', '')}",
-        f"* Empresa: {empresa.get('pix_empresa', '')}",
-        "",
-        "*Somente após realizado o pagamento e nos enviando o comprovante daremos seguimento ao seu pedido!*",
     ])
+    if proposta_faturamento_mensal(prop):
+        linhas.extend([
+            "*CONDIÇÃO DE PAGAMENTO:* Faturamento mensal",
+            "Pedido incluído no fechamento mensal conforme condição comercial cadastrada para este cliente.",
+        ])
+    else:
+        linhas.extend([
+            "*PAGAMENTO VIA PIX:*",
+            f"*Clique no link para pagar:* {empresa.get('pix_link', '')}",
+            "",
+            f"* Titular: {empresa.get('pix_titular', '')}",
+            f"* Banco: {empresa.get('pix_banco', '')}",
+            f"* Agência: {empresa.get('pix_agencia', '')} | Conta: {empresa.get('pix_conta', '')}",
+            f"* Empresa: {empresa.get('pix_empresa', '')}",
+            "",
+            "*Somente após realizado o pagamento e nos enviando o comprovante daremos seguimento ao seu pedido!*",
+        ])
     return "\n".join(linhas)
 
 def get_image_base64(path):
@@ -1436,7 +1444,8 @@ def gerar_html(proposta):
     desconto = proposta.get("desconto", proposta.get("desconto_valor", 0))
     taxa_entrega = proposta.get("taxa_entrega", 0)
     total = proposta.get("valor_total", proposta.get("total", 0))
-    pagamento = proposta.get("pagamento", "Pagamento via PIX: https://linkspix.app/alphafestitatiba")
+    mensal_i811 = proposta_faturamento_mensal(proposta)
+    pagamento = proposta.get("pagamento", "Faturamento mensal conforme condição comercial cadastrada." if mensal_i811 else "Pagamento via PIX: https://linkspix.app/alphafestitatiba")
     observacoes = proposta.get("observacoes", "")
     prazo_dias = str(proposta.get("prazo_dias", "10")).strip() or "10"
     frete_tipo = str(proposta.get("frete_tipo", "Retirada em Itatiba")).strip() or "Retirada em Itatiba"
@@ -1557,6 +1566,8 @@ def gerar_html(proposta):
 
     observacoes_txt = esc(observacoes, "Nenhuma observação adicional.")
     pagamento_txt = esc(pagamento, "A combinar")
+    pagamento_titulo = "Faturamento mensal" if mensal_i811 else "Pagamento via PIX"
+    pix_qr_visivel = "" if mensal_i811 else None
 
     empresa = carregar_config_empresa()
     empresa_nome = str(empresa.get("nome", "Empresa"))
@@ -2173,10 +2184,10 @@ def gerar_html(proposta):
                 <div class="payment-highlight">
                     <div class="payment-layout">
                         <div class="payment-copy">
-                            <div class="info-card-title">Pagamento via PIX</div>
+                            <div class="info-card-title">{pagamento_titulo}</div>
                             <div class="info-text">{pagamento_txt}</div>
                         </div>
-                        {pix_qr_html}
+                        {'' if mensal_i811 else pix_qr_html}
                     </div>
                 </div>
 
@@ -2257,6 +2268,157 @@ def valor_bool(valor):
     return str(valor or "").strip().casefold() in {"1", "true", "sim", "yes", "ok", "pago", "aprovado", "entregue"}
 
 
+
+# --- 20.4.9-I8.11: Perfil Comercial do Cliente ---
+I811_MODALIDADE_NORMAL = "Por proposta"
+I811_MODALIDADE_MENSAL = "Faturamento mensal"
+
+
+def perfil_comercial_cliente(cliente):
+    """Normaliza o perfil comercial sem inventar condições para cadastros antigos."""
+    cliente = cliente or {}
+    perfil = cliente.get("perfil_comercial", {}) if isinstance(cliente.get("perfil_comercial", {}), dict) else {}
+    regras = perfil.get("abatimentos_produto", []) if isinstance(perfil.get("abatimentos_produto", []), list) else []
+    return {
+        "faturamento_mensal": bool(perfil.get("faturamento_mensal", False)),
+        "dia_fechamento": int(perfil.get("dia_fechamento", 1) or 1),
+        "dia_vencimento": int(perfil.get("dia_vencimento", 10) or 10),
+        "observacao_faturamento": str(perfil.get("observacao_faturamento", "") or "").strip(),
+        "abatimentos_produto": [r for r in regras if isinstance(r, dict)],
+    }
+
+
+def proposta_faturamento_mensal(prop):
+    prop = prop or {}
+    if valor_bool(prop.get("faturamento_mensal")):
+        return True
+    modalidade = str(prop.get("modalidade_cobranca", "") or "").strip().casefold()
+    return modalidade in {"faturamento mensal", "mensal", "mensalista"}
+
+
+def _i811_digitos(valor):
+    return re.sub(r"\D", "", str(valor or ""))
+
+
+def localizar_cliente_comercial(nome="", documento="", whatsapp=""):
+    """Localiza o cadastro mestre para aplicar a regra comercial correta na proposta."""
+    clientes = carregar_clientes()
+    doc = _i811_digitos(documento)
+    wa = _telefone_chave(whatsapp)
+    nome_norm = normalizar_texto_cliente(nome).casefold()
+    if doc:
+        achado = next((c for c in clientes if _i811_digitos(c.get("documento")) == doc), None)
+        if achado:
+            return achado
+    if wa:
+        achado = next((c for c in clientes if _telefone_chave(c.get("whatsapp")) == wa), None)
+        if achado:
+            return achado
+    if nome_norm:
+        return next((c for c in clientes if normalizar_texto_cliente(c.get("nome")).casefold() == nome_norm), None)
+    return None
+
+
+def _i811_data_regra(valor):
+    texto = str(valor or "").strip()
+    if not texto:
+        return None
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(texto[:10], fmt).date()
+        except (TypeError, ValueError):
+            pass
+    return None
+
+
+def _i811_preco_catalogo_float(produto):
+    texto = str((produto or {}).get("Preco", (produto or {}).get("preco", "")) or "").replace("R$", "").strip()
+    if not texto:
+        return 0.0
+    try:
+        return float(texto.replace(".", "").replace(",", ".")) if "," in texto else float(texto)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def regra_abatimento_cliente(cliente, produto_nome, referencia=None):
+    """Retorna a regra ativa do produto. O desconto é sempre valor absoluto em reais."""
+    if not cliente or not str(produto_nome or "").strip():
+        return None
+    perfil = perfil_comercial_cliente(cliente)
+    referencia = referencia or hoje_local()
+    catalogo = carregar_catalogo()
+    oficial = nome_produto_oficial_catalogo(produto_nome, catalogo)
+    chave = normalizar_identidade_produto(oficial)
+    for regra in perfil.get("abatimentos_produto", []):
+        if not valor_bool(regra.get("ativo", True)):
+            continue
+        if normalizar_identidade_produto(regra.get("produto")) != chave:
+            continue
+        inicio = _i811_data_regra(regra.get("validade_inicio"))
+        fim = _i811_data_regra(regra.get("validade_fim"))
+        if inicio and referencia < inicio:
+            continue
+        if fim and referencia > fim:
+            continue
+        abatimento = max(valor_float(regra.get("abatimento", 0)), 0.0)
+        if abatimento <= 0:
+            continue
+        return {**regra, "produto": oficial, "abatimento": abatimento}
+    return None
+
+
+def calcular_preco_cliente_item(cliente, produto_nome, valor_digitado=0.0):
+    """Calcula preço especial sem alterar o Catálogo Oficial.
+
+    Base preferencial = preço oficial atual. Se o produto não puder ser resolvido,
+    não aplicamos automaticamente uma regra especial para evitar desconto no item errado.
+    """
+    regra = regra_abatimento_cliente(cliente, produto_nome)
+    if not regra:
+        return None
+    catalogo = carregar_catalogo()
+    _, produto = _produto_catalogo_da_proposta(produto_nome, catalogo)
+    if not produto:
+        return None
+    base = _i811_preco_catalogo_float(produto)
+    if base <= 0:
+        base = max(valor_float(valor_digitado), 0.0)
+    if base <= 0:
+        return None
+    abatimento = max(valor_float(regra.get("abatimento")), 0.0)
+    if abatimento > base:
+        return {
+            "produto_oficial": str(produto.get("Nome") or regra.get("produto") or produto_nome),
+            "preco_base": base,
+            "abatimento": abatimento,
+            "preco_final": None,
+            "bloqueado": True,
+            "mensagem": "O abatimento cadastrado é maior que o preço oficial atual. Revise o Perfil Comercial antes de gerar a proposta.",
+            "regra": regra,
+        }
+    final = base - abatimento
+    return {
+        "produto_oficial": str(produto.get("Nome") or regra.get("produto") or produto_nome),
+        "preco_base": base,
+        "abatimento": abatimento,
+        "preco_final": final,
+        "bloqueado": False,
+        "regra": regra,
+    }
+
+
+def resumo_perfil_comercial(cliente):
+    perfil = perfil_comercial_cliente(cliente)
+    regras_ativas = [r for r in perfil.get("abatimentos_produto", []) if valor_bool(r.get("ativo", True)) and valor_float(r.get("abatimento")) > 0]
+    return {
+        **perfil,
+        "regras_ativas": regras_ativas,
+        "qtd_regras_ativas": len(regras_ativas),
+        "modalidade": I811_MODALIDADE_MENSAL if perfil.get("faturamento_mensal") else I811_MODALIDADE_NORMAL,
+    }
+
+
 def proposta_encerrada(prop):
     status = str(prop.get("status_comercial") or prop.get("situacao_comercial") or prop.get("status") or "").strip().casefold()
     motivo_nao_fechado = valor_bool(prop.get("nao_fechado_pagamento")) or valor_bool(prop.get("nao_fechado_sem_retorno"))
@@ -2269,12 +2431,17 @@ def proposta_encerrada(prop):
 
 
 def proposta_concluida(prop):
-    """Uma proposta só deixa a operação quando os três marcos estão confirmados."""
-    return (
-        valor_bool(prop.get("aprovado"))
-        and valor_bool(prop.get("pago"))
-        and valor_bool(prop.get("entregue"))
-    )
+    """Separa conclusão operacional de recebimento financeiro.
+
+    Clientes por proposta concluem após aprovado + pago + entregue.
+    Clientes de faturamento mensal concluem a operação após aprovado + entregue;
+    o recebimento será controlado no fechamento mensal (I8.11.1).
+    """
+    aprovado = valor_bool(prop.get("aprovado"))
+    entregue = valor_bool(prop.get("entregue"))
+    if proposta_faturamento_mensal(prop):
+        return aprovado and entregue
+    return aprovado and valor_bool(prop.get("pago")) and entregue
 
 
 def proposta_ativa_operacional(prop):
@@ -2349,7 +2516,8 @@ def calcular_resultados_oficiais(historico, referencia=None):
     validas = [p for p in propostas if not proposta_encerrada(p)]
     aprovadas = [p for p in validas if valor_bool(p.get("aprovado"))]
     pagas = [p for p in validas if valor_bool(p.get("pago"))]
-    a_receber = [p for p in aprovadas if not valor_bool(p.get("pago"))]
+    mensais_a_faturar = [p for p in aprovadas if proposta_faturamento_mensal(p) and not valor_bool(p.get("pago"))]
+    a_receber = [p for p in aprovadas if not proposta_faturamento_mensal(p) and not valor_bool(p.get("pago"))]
 
     def total_lista(lista):
         return sum(calcular_valores_proposta(p)[2] for p in lista)
@@ -2413,11 +2581,13 @@ def calcular_resultados_oficiais(historico, referencia=None):
         "aprovadas_total": len(aprovadas),
         "pagas_total": len(pagas),
         "a_receber_total_qtd": len(a_receber),
+        "mensais_a_faturar_qtd": len(mensais_a_faturar),
         "total_orcado": total_lista(propostas),
         "total_orcado_valido": total_lista(validas),
         "total_aprovado": total_lista(aprovadas),
         "total_recebido": total_lista(pagas),
         "a_receber": total_lista(a_receber),
+        "mensais_a_faturar": total_lista(mensais_a_faturar),
         "orcado_hoje": total_lista(criadas_hoje),
         "confirmado_hoje": total_lista(aprovadas_hoje),
         "recebido_hoje": total_lista(pagas_hoje),
@@ -2436,6 +2606,7 @@ def calcular_resultados_oficiais(historico, referencia=None):
             "aprovadas": aprovadas,
             "pagas": pagas,
             "a_receber": a_receber,
+            "mensais_a_faturar": mensais_a_faturar,
             "criadas_hoje": criadas_hoje,
             "aprovadas_hoje": aprovadas_hoje,
             "pagas_hoje": pagas_hoje,
@@ -2477,7 +2648,7 @@ def auditar_integridade_resultados(historico):
                 "proposta": numero or f"registro {indice + 1}",
                 "problema": "Marcada como entregue, mas não aprovada",
             })
-        if entregue and not pago:
+        if entregue and not pago and not proposta_faturamento_mensal(p):
             achados.append({
                 "nivel": "Atenção",
                 "proposta": numero or f"registro {indice + 1}",
@@ -19797,6 +19968,13 @@ if pagina_atual == "novo_orcamento":
                 st.session_state.pop("_ultima_proposta_salva", None)
                 st.rerun()
 
+    aviso_preco_i811 = st.session_state.pop("_i811_aviso_preco", None)
+    if aviso_preco_i811:
+        st.success(aviso_preco_i811)
+    aviso_perfil_i811 = st.session_state.pop("_i811_aviso_perfil", None)
+    if aviso_perfil_i811:
+        st.info(aviso_perfil_i811)
+
     # O formulário evita reruns enquanto a Anna digita. O processamento ocorre
     # somente ao clicar em Adicionar Item, deixando a digitação muito mais ágil.
     with st.form(key=f"form_item_orcamento_{st.session_state.form_key}", clear_on_submit=False):
@@ -19823,22 +20001,97 @@ if pagina_atual == "novo_orcamento":
             st.warning("Informe o produto antes de adicionar.")
         else:
             detalhes = f"Tema: {et} | Nome: {en} | Idade: {ei} | Cor: {ec} | Obs: {eg}"
-            st.session_state.temp_itens.append({"produto": prod, "especificacoes": detalhes, "quantidade": q, "valor_unitario": v})
-            st.session_state.form_key += 1
-            rerun_na_aba("novo_orcamento")
+            cliente_i811 = localizar_cliente_comercial(nome, doc, wa)
+            preco_i811 = calcular_preco_cliente_item(cliente_i811, prod, v) if cliente_i811 else None
+            item_novo = {"produto": prod, "especificacoes": detalhes, "quantidade": q, "valor_unitario": v}
+            if preco_i811 and preco_i811.get("bloqueado"):
+                st.error(
+                    f"🛑 Regra comercial inválida para {preco_i811.get('produto_oficial')}: "
+                    f"preço oficial R$ {preco_i811.get('preco_base', 0):.2f} e abatimento R$ {preco_i811.get('abatimento', 0):.2f}. "
+                    "Revise o Perfil Comercial do cliente antes de adicionar este item."
+                )
+            else:
+                if preco_i811:
+                    item_novo.update({
+                        "produto": preco_i811["produto_oficial"],
+                        "valor_unitario": preco_i811["preco_final"],
+                        "valor_base_oficial": preco_i811["preco_base"],
+                        "abatimento_fixo_cliente": preco_i811["abatimento"],
+                        "preco_especial_aplicado": True,
+                        "perfil_comercial_cliente_id": (cliente_i811 or {}).get("id", ""),
+                    })
+                    st.session_state["_i811_aviso_preco"] = (
+                        f"💰 Preço especial aplicado a {preco_i811['produto_oficial']}: "
+                        f"R$ {preco_i811['preco_base']:.2f} - R$ {preco_i811['abatimento']:.2f} = R$ {preco_i811['preco_final']:.2f}"
+                    ).replace(".", ",")
+                if cliente_i811:
+                    perfil_i811 = resumo_perfil_comercial(cliente_i811)
+                    if perfil_i811.get("faturamento_mensal"):
+                        st.session_state["_i811_aviso_perfil"] = "💳 Cliente identificado com faturamento mensal. A proposta será marcada automaticamente como mensalista."
+                st.session_state.temp_itens.append(item_novo)
+                st.session_state.form_key += 1
+                rerun_na_aba("novo_orcamento")
 
     if st.session_state.temp_itens:
+        cliente_atual_i811 = localizar_cliente_comercial(
+            st.session_state.get("form_cliente", ""),
+            st.session_state.get("form_documento", ""),
+            st.session_state.get("form_whatsapp", ""),
+        )
+        if cliente_atual_i811:
+            resumo_atual_i811 = resumo_perfil_comercial(cliente_atual_i811)
+            if resumo_atual_i811.get("faturamento_mensal"):
+                st.info(
+                    f"💳 **{cliente_atual_i811.get('nome', 'Cliente')} é mensalista.** "
+                    f"Fechamento dia {resumo_atual_i811.get('dia_fechamento')} · vencimento dia {resumo_atual_i811.get('dia_vencimento')}. "
+                    "Esta proposta ficará identificada para o controle mensal."
+                )
+            if resumo_atual_i811.get("qtd_regras_ativas", 0):
+                st.caption(f"💰 Perfil Comercial encontrado: {resumo_atual_i811.get('qtd_regras_ativas')} abatimento(s) fixo(s) ativo(s) por produto.")
+                if st.button("💼 Recalcular itens pelo Perfil Comercial", key="i811_recalcular_itens", use_container_width=True):
+                    alterados_i811 = 0
+                    bloqueados_i811 = []
+                    for item_i811 in st.session_state.temp_itens:
+                        calc_i811 = calcular_preco_cliente_item(cliente_atual_i811, item_i811.get("produto"), item_i811.get("valor_unitario", 0))
+                        if calc_i811 and calc_i811.get("bloqueado"):
+                            bloqueados_i811.append(calc_i811.get("produto_oficial") or item_i811.get("produto"))
+                            continue
+                        if calc_i811:
+                            item_i811.update({
+                                "produto": calc_i811["produto_oficial"],
+                                "valor_unitario": calc_i811["preco_final"],
+                                "valor_base_oficial": calc_i811["preco_base"],
+                                "abatimento_fixo_cliente": calc_i811["abatimento"],
+                                "preco_especial_aplicado": True,
+                                "perfil_comercial_cliente_id": cliente_atual_i811.get("id", ""),
+                            })
+                            alterados_i811 += 1
+                    if bloqueados_i811:
+                        st.error("🛑 Revise o Perfil Comercial antes de continuar: abatimento maior que o preço oficial em " + ", ".join(bloqueados_i811))
+                    elif alterados_i811:
+                        st.success(f"{alterados_i811} item(ns) recalculado(s) com abatimento fixo em R$.")
+                    else:
+                        st.info("Nenhum item atual possui regra de abatimento ativa para este cliente.")
+                    if not bloqueados_i811:
+                        st.rerun()
         st.write("📋 **Itens da proposta:**")
         for idx, item in enumerate(st.session_state.temp_itens):
             col_info, col_remover = st.columns([8, 1])
             col_info.write(f"**{idx + 1}. {item.get('produto')}** — Qtd: {item.get('quantidade')} — R$ {valor_float(item.get('valor_unitario')):,.2f}")
             col_info.caption(item.get("especificacoes", ""))
+            if valor_bool(item.get("preco_especial_aplicado")):
+                base_i811 = valor_float(item.get("valor_base_oficial"))
+                abat_i811 = valor_float(item.get("abatimento_fixo_cliente"))
+                final_i811 = valor_float(item.get("valor_unitario"))
+                col_info.caption(
+                    (f"💼 Preço especial: R$ {base_i811:.2f} - abatimento fixo R$ {abat_i811:.2f} = R$ {final_i811:.2f}").replace(".", ",")
+                )
             if col_remover.button("🗑️", key=f"remover_item_{idx}", help="Remover item"):
                 remover_item_temp(idx, "novo_orcamento")
 
         st.divider()
         c1, c2, c3 = st.columns(3)
-        desc = c1.number_input("Desconto (R$)", min_value=0.0, step=0.5, key="form_desconto")
+        desc = c1.number_input("Desconto adicional da proposta (R$)", min_value=0.0, step=0.5, key="form_desconto", help="Este campo é separado dos abatimentos fixos por produto do Perfil Comercial do Cliente.")
         dt_entrega = c2.date_input("📅 Data Entrega", key="form_entrega")
         prazo = c3.text_input("Prazo de Produção (dias úteis)", key="form_prazo")
         c4, c5 = st.columns(2)
@@ -19863,6 +20116,11 @@ if pagina_atual == "novo_orcamento":
             if st.session_state.editar_numero:
                 antigo = next((p for p in carregar_historico() if p.get("numero_proposta") == numero), {})
 
+            cliente_comercial_i811 = localizar_cliente_comercial(nome, doc, wa)
+            perfil_i811 = resumo_perfil_comercial(cliente_comercial_i811) if cliente_comercial_i811 else resumo_perfil_comercial({})
+            mensal_i811 = bool(perfil_i811.get("faturamento_mensal"))
+            modalidade_i811 = I811_MODALIDADE_MENSAL if mensal_i811 else I811_MODALIDADE_NORMAL
+
             dados = {
                 **antigo,
                 "numero_proposta": numero,
@@ -19874,6 +20132,11 @@ if pagina_atual == "novo_orcamento":
                 # Mantém também os nomes antigos para compatibilidade com registros e telas antigas.
                 "cliente_cpf_cnpj": doc.strip(),
                 "cliente_wa": wa.strip(),
+                "relacionamento_id": (cliente_comercial_i811 or {}).get("id", antigo.get("relacionamento_id", "")),
+                "modalidade_cobranca": modalidade_i811,
+                "faturamento_mensal": mensal_i811,
+                "financeiro_status": (antigo.get("financeiro_status") or "Aguardando fechamento mensal") if mensal_i811 else antigo.get("financeiro_status", ""),
+                "pagamento": "Faturamento mensal conforme condição comercial cadastrada." if mensal_i811 else antigo.get("pagamento", "Pagamento via PIX: https://linkspix.app/alphafestitatiba"),
                 "itens": list(st.session_state.temp_itens),
                 "subtotal": subtotal,
                 "desconto": desc,
@@ -19950,21 +20213,30 @@ if pagina_atual == "historico":
         pago_p = valor_bool(prop.get("pago", False))
         entregue_p = valor_bool(prop.get("entregue", False))
         aprovado_p = valor_bool(prop.get("aprovado", False))
-        proposta_fechada = pago_p and entregue_p
+        mensal_p = proposta_faturamento_mensal(prop)
+        proposta_fechada = proposta_concluida(prop)
 
-        if proposta_fechada:
+        if proposta_fechada and mensal_p:
+            status_txt = "✅ OPERACIONAL CONCLUÍDA • 💳 MENSAL"
+        elif proposta_fechada:
             status_txt = "✅ FECHADA"
         else:
             status = []
-            if pago_p:
+            if mensal_p:
+                status.append("💳 Faturamento mensal")
+            elif pago_p:
                 status.append("Pago")
             if entregue_p:
                 status.append("Entregue")
             status_txt = " • ".join(status) if status else "Pendente"
 
         with st.expander(f"{num_p} - {cliente_p} | R$ {total_p:,.2f} | {status_txt}"):
-            if proposta_fechada:
+            if proposta_fechada and mensal_p:
+                st.success("✅ Operação concluída. 💳 Pagamento segue para o controle de faturamento mensal.")
+            elif proposta_fechada:
                 st.success("✅ Pedido fechado: pagamento recebido e entrega concluída.")
+            if mensal_p:
+                st.info("💳 **Cliente mensalista:** esta proposta não exige marcação individual de Pago. O recebimento será controlado no fechamento mensal.")
             st.write(f"📅 **Entrega:** {prop.get('data_entrega', 'Não informada')}")
             whatsapp_hist = prop_atual.get("whatsapp", prop_atual.get("cliente_wa", "")) or "Não informado"
             documento_hist = prop_atual.get("documento", prop_atual.get("cliente_cpf_cnpj", "")) or "Não informado"
@@ -19997,16 +20269,26 @@ if pagina_atual == "historico":
 
             s1, s2, s3 = st.columns(3)
             s1.checkbox("Aprovado", value=valor_bool(prop.get("aprovado", False)), key=f"a_{num_p}", on_change=alternar_status, args=(num_p, "aprovado", not valor_bool(prop.get("aprovado", False))))
-            s2.checkbox("Pago", value=valor_bool(prop.get("pago", False)), key=f"p_{num_p}", on_change=alternar_status, args=(num_p, "pago", not valor_bool(prop.get("pago", False))))
+            if mensal_p:
+                s2.checkbox("💳 Pago no fechamento mensal", value=False, key=f"p_mensal_{num_p}", disabled=True, help="O pagamento não é marcado nesta proposta; será controlado no módulo de faturamento mensal.")
+            else:
+                s2.checkbox("Pago", value=valor_bool(prop.get("pago", False)), key=f"p_{num_p}", on_change=alternar_status, args=(num_p, "pago", not valor_bool(prop.get("pago", False))))
             s3.checkbox("Entregue", value=valor_bool(prop.get("entregue", False)), key=f"e_{num_p}", on_change=alternar_status, args=(num_p, "entregue", not valor_bool(prop.get("entregue", False))))
             nf1, nf2 = st.columns(2)
-            nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"legacy_nf_pag_{num_p}", on_change=alternar_motivo_nao_fechado, args=(num_p, "pagamento", not valor_bool(prop.get("nao_fechado_pagamento"))))
+            if mensal_p:
+                nf1.checkbox("❌ Não fechado — falta de pagamento", value=False, key=f"legacy_nf_pag_mensal_{num_p}", disabled=True, help="Não se aplica a clientes de faturamento mensal.")
+            else:
+                nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"legacy_nf_pag_{num_p}", on_change=alternar_motivo_nao_fechado, args=(num_p, "pagamento", not valor_bool(prop.get("nao_fechado_pagamento"))))
             nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(prop.get("nao_fechado_sem_retorno")), key=f"legacy_nf_ret_{num_p}", on_change=alternar_motivo_nao_fechado, args=(num_p, "sem_retorno", not valor_bool(prop.get("nao_fechado_sem_retorno"))))
 
-            if entregue_p:
+            if mensal_p and entregue_p and aprovado_p:
+                proxima_acao = "Aguardar fechamento mensal e registrar pós-venda"
+            elif entregue_p:
                 proxima_acao = "Registrar pós-venda"
             elif not aprovado_p:
                 proxima_acao = "Aguardar ou registrar aprovação do cliente"
+            elif mensal_p:
+                proxima_acao = "Acompanhar produção; pagamento será tratado no fechamento mensal"
             elif not pago_p:
                 proxima_acao = "Confirmar pagamento e acompanhar produção"
             else:
@@ -23648,17 +23930,36 @@ if pagina_atual == "relacionamentos":
 
         filtrados_cli = []
         for cli in clientes:
-            base = " ".join(str(cli.get(c, "")) for c in ["nome", "documento", "whatsapp", "email", "observacoes", "cidade", "origem_cliente", "segmentos", "interesses", "campanhas_interesse", "papeis", "classificacao_relacionamento", "politica_atendimento", "fornecedor"]).lower()
+            base = " ".join(str(cli.get(c, "")) for c in ["nome", "documento", "whatsapp", "email", "observacoes", "cidade", "origem_cliente", "segmentos", "interesses", "campanhas_interesse", "papeis", "classificacao_relacionamento", "politica_atendimento", "fornecedor", "perfil_comercial"]).lower()
             if not termo_cli or termo_cli in base:
                 filtrados_cli.append(cli)
 
+        filtro_comercial_i811 = st.selectbox(
+            "Perfil comercial",
+            ["Todos", "Faturamento mensal", "Com abatimento especial", "Sem regra especial"],
+            key="filtro_perfil_comercial_i811",
+        )
+        if filtro_comercial_i811 != "Todos":
+            filtrados_tmp = []
+            for cli in filtrados_cli:
+                resumo_pc = resumo_perfil_comercial(cli)
+                if filtro_comercial_i811 == "Faturamento mensal" and resumo_pc.get("faturamento_mensal"):
+                    filtrados_tmp.append(cli)
+                elif filtro_comercial_i811 == "Com abatimento especial" and resumo_pc.get("qtd_regras_ativas", 0) > 0:
+                    filtrados_tmp.append(cli)
+                elif filtro_comercial_i811 == "Sem regra especial" and not resumo_pc.get("faturamento_mensal") and resumo_pc.get("qtd_regras_ativas", 0) == 0:
+                    filtrados_tmp.append(cli)
+            filtrados_cli = filtrados_tmp
+
         total_clientes = len(clientes)
         clientes_com_pedidos = sum(1 for cli in clientes if propostas_do_cliente(cli))
-        total_propostas_clientes = sum(len(propostas_do_cliente(cli)) for cli in clientes)
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Relacionamentos cadastrados", total_clientes)
-        m2.metric("Clientes com propostas", clientes_com_pedidos)
-        m3.metric("Propostas vinculadas", total_propostas_clientes)
+        mensalistas_i811 = sum(1 for cli in clientes if resumo_perfil_comercial(cli).get("faturamento_mensal"))
+        especiais_i811 = sum(1 for cli in clientes if resumo_perfil_comercial(cli).get("qtd_regras_ativas", 0) > 0)
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Relacionamentos", total_clientes)
+        m2.metric("Com propostas", clientes_com_pedidos)
+        m3.metric("💳 Mensalistas", mensalistas_i811)
+        m4.metric("💰 Preços especiais", especiais_i811)
 
         st.write(f"**{len(filtrados_cli)} relacionamento(s) encontrado(s)**")
         for cli in sorted(filtrados_cli, key=lambda x: str(x.get("nome", "")).lower()):
@@ -23686,6 +23987,13 @@ if pagina_atual == "relacionamentos":
                     st.write(f"**Cidade:** {cli.get('cidade') or 'Não informado'}")
                     st.write("**Papéis:** " + ", ".join(papeis_relacionamento(cli)))
                     st.write(f"**Classificação:** {cli.get('classificacao_relacionamento') or 'Não classificado'}")
+                    pc_cli = resumo_perfil_comercial(cli)
+                    if pc_cli.get("faturamento_mensal"):
+                        st.success(f"💳 **Faturamento mensal** · fechamento dia {pc_cli.get('dia_fechamento')} · vencimento dia {pc_cli.get('dia_vencimento')}")
+                    if pc_cli.get("qtd_regras_ativas", 0):
+                        st.info(f"💰 **{pc_cli.get('qtd_regras_ativas')} abatimento(s) fixo(s) por produto** cadastrado(s).")
+                        for regra_pc in pc_cli.get("regras_ativas", [])[:8]:
+                            st.caption(f"• {regra_pc.get('produto', 'Produto')} — abatimento R$ {valor_float(regra_pc.get('abatimento')):.2f}".replace(".", ","))
                     pol_cli = politica_atendimento(cli)
                     if pol_cli.get("nivel") != "Normal":
                         st.warning(f"🛡️ Atendimento: {pol_cli.get('nivel')}" + (f" — {pol_cli.get('motivo')}" if pol_cli.get('motivo') else ""))
@@ -23738,7 +24046,8 @@ if pagina_atual == "relacionamentos":
                             "Emissão": pcli.get("data_geracao", ""),
                             "Entrega": pcli.get("data_entrega", ""),
                             "Total": total_cli,
-                            "Pago": "Sim" if pcli.get("pago") else "Não",
+                            "Cobrança": I811_MODALIDADE_MENSAL if proposta_faturamento_mensal(pcli) else I811_MODALIDADE_NORMAL,
+                            "Pago": "Mensal" if proposta_faturamento_mensal(pcli) else ("Sim" if pcli.get("pago") else "Não"),
                             "Entregue": "Sim" if pcli.get("entregue") else "Não",
                         })
                     st.dataframe(
@@ -23782,6 +24091,60 @@ if pagina_atual == "relacionamentos":
         cli_permitir_campanhas = pp2.checkbox("Pode receber campanhas", value=politica_atual.get("permitir_campanhas", True), key=f"cli_permitir_campanhas_{edit_id}")
         cli_pagamento_antecipado = pp3.checkbox("Exigir pagamento antecipado", value=politica_atual.get("exigir_pagamento_antecipado", False), key=f"cli_pagamento_antecipado_{edit_id}")
         cli_aprovacao_gestor = pp3.checkbox("Exigir aprovação do gestor", value=politica_atual.get("exigir_aprovacao_gestor", False), key=f"cli_aprovacao_gestor_{edit_id}")
+
+        st.markdown("#### 💼 Perfil Comercial do Cliente · I8.11")
+        perfil_atual_i811 = perfil_comercial_cliente(cliente_edicao or {})
+        pc1, pc2, pc3 = st.columns(3)
+        cli_faturamento_mensal = pc1.checkbox(
+            "💳 Faturamento mensal",
+            value=perfil_atual_i811.get("faturamento_mensal", False),
+            key=f"cli_faturamento_mensal_{edit_id}",
+            help="A proposta não exigirá marcação individual de Pago; o recebimento será tratado no fechamento mensal.",
+        )
+        cli_dia_fechamento = pc2.number_input(
+            "Dia de fechamento", min_value=1, max_value=31, value=max(1, min(31, int(perfil_atual_i811.get("dia_fechamento", 1)))), step=1, key=f"cli_dia_fechamento_{edit_id}"
+        )
+        cli_dia_vencimento = pc3.number_input(
+            "Dia de vencimento", min_value=1, max_value=31, value=max(1, min(31, int(perfil_atual_i811.get("dia_vencimento", 10)))), step=1, key=f"cli_dia_vencimento_{edit_id}"
+        )
+        cli_obs_faturamento = st.text_input(
+            "Observação de faturamento (opcional)",
+            value=perfil_atual_i811.get("observacao_faturamento", ""),
+            key=f"cli_obs_faturamento_{edit_id}",
+            placeholder="Ex.: enviar fechamento para financeiro@cliente.com.br",
+        )
+
+        st.markdown("##### 💰 Abatimentos fixos por produto")
+        st.caption("Regra oficial: sem porcentagem. Preço da proposta = preço oficial atual − abatimento fixo em R$. O Catálogo Oficial não é alterado.")
+        catalogo_i811 = carregar_catalogo()
+        produtos_i811 = sorted({str(p.get("Nome") or "").strip() for p in catalogo_i811 if str(p.get("Nome") or "").strip()}, key=str.casefold)
+        linhas_i811 = []
+        for regra in perfil_atual_i811.get("abatimentos_produto", []):
+            linhas_i811.append({
+                "Produto": regra.get("produto", ""),
+                "Abatimento (R$)": valor_float(regra.get("abatimento", 0)),
+                "Ativo": valor_bool(regra.get("ativo", True)),
+                "Validade inicial": regra.get("validade_inicio", ""),
+                "Validade final": regra.get("validade_fim", ""),
+                "Motivo": regra.get("motivo", ""),
+            })
+        df_regras_i811 = pd.DataFrame(linhas_i811, columns=["Produto", "Abatimento (R$)", "Ativo", "Validade inicial", "Validade final", "Motivo"])
+        regras_editadas_i811 = st.data_editor(
+            df_regras_i811,
+            num_rows="dynamic",
+            use_container_width=True,
+            hide_index=True,
+            key=f"cli_regras_i811_{edit_id}",
+            column_config={
+                "Produto": st.column_config.SelectboxColumn("Produto", options=produtos_i811, required=True),
+                "Abatimento (R$)": st.column_config.NumberColumn("Abatimento fixo (R$)", min_value=0.0, step=0.5, format="R$ %.2f", required=True),
+                "Ativo": st.column_config.CheckboxColumn("Ativo", default=True),
+                "Validade inicial": st.column_config.TextColumn("Início", help="Opcional · dd/mm/aaaa"),
+                "Validade final": st.column_config.TextColumn("Fim", help="Opcional · dd/mm/aaaa"),
+                "Motivo": st.column_config.TextColumn("Motivo / autorização"),
+            },
+        )
+        st.caption("Use + para adicionar uma linha. Para remover uma regra, selecione a linha no editor e exclua. A proposta guarda o preço final aplicado no momento da emissão.")
 
         fornecedor_atual = (cliente_edicao or {}).get("fornecedor", {}) or {}
         if "Fornecedor" in cli_papeis:
@@ -23829,6 +24192,63 @@ if pagina_atual == "relacionamentos":
             if not cli_nome.strip():
                 st.warning("Informe o nome ou a identificação do relacionamento.")
             else:
+                regras_salvar_i811 = []
+                erros_regras_i811 = []
+                vistos_i811 = set()
+                regras_antigas_i811 = {normalizar_identidade_produto(r.get("produto")): r for r in perfil_atual_i811.get("abatimentos_produto", []) if isinstance(r, dict)}
+                for _, linha_i811 in regras_editadas_i811.fillna("").iterrows():
+                    produto_regra = str(linha_i811.get("Produto", "") or "").strip()
+                    abat_regra = max(valor_float(linha_i811.get("Abatimento (R$)", 0)), 0.0)
+                    if not produto_regra and abat_regra <= 0:
+                        continue
+                    if not produto_regra:
+                        erros_regras_i811.append("Há uma regra de abatimento sem produto selecionado.")
+                        continue
+                    chave_regra = normalizar_identidade_produto(produto_regra)
+                    if chave_regra in vistos_i811:
+                        erros_regras_i811.append(f"O produto '{produto_regra}' aparece mais de uma vez nos abatimentos.")
+                        continue
+                    vistos_i811.add(chave_regra)
+                    if abat_regra <= 0:
+                        continue
+                    _, produto_cat_regra = _produto_catalogo_da_proposta(produto_regra, catalogo_i811)
+                    preco_oficial_regra = _i811_preco_catalogo_float(produto_cat_regra) if produto_cat_regra else 0.0
+                    if preco_oficial_regra > 0 and abat_regra > preco_oficial_regra:
+                        erros_regras_i811.append(
+                            f"Abatimento de {produto_regra} (R$ {abat_regra:.2f}) é maior que o preço oficial atual (R$ {preco_oficial_regra:.2f})."
+                        )
+                        continue
+                    inicio_regra = str(linha_i811.get("Validade inicial", "") or "").strip()
+                    fim_regra = str(linha_i811.get("Validade final", "") or "").strip()
+                    if inicio_regra and not _i811_data_regra(inicio_regra):
+                        erros_regras_i811.append(f"Data inicial inválida em {produto_regra}. Use dd/mm/aaaa.")
+                        continue
+                    if fim_regra and not _i811_data_regra(fim_regra):
+                        erros_regras_i811.append(f"Data final inválida em {produto_regra}. Use dd/mm/aaaa.")
+                        continue
+                    anterior_regra = regras_antigas_i811.get(chave_regra, {})
+                    mudou_regra = (
+                        valor_float(anterior_regra.get("abatimento")) != abat_regra
+                        or valor_bool(anterior_regra.get("ativo", True)) != bool(linha_i811.get("Ativo", True))
+                        or str(anterior_regra.get("validade_inicio", "")) != inicio_regra
+                        or str(anterior_regra.get("validade_fim", "")) != fim_regra
+                        or str(anterior_regra.get("motivo", "")) != str(linha_i811.get("Motivo", "") or "").strip()
+                    )
+                    regras_salvar_i811.append({
+                        "produto": produto_regra,
+                        "abatimento": abat_regra,
+                        "ativo": bool(linha_i811.get("Ativo", True)),
+                        "validade_inicio": inicio_regra,
+                        "validade_fim": fim_regra,
+                        "motivo": str(linha_i811.get("Motivo", "") or "").strip(),
+                        "autorizado_por": obter_usuario_atual() if mudou_regra else anterior_regra.get("autorizado_por", obter_usuario_atual()),
+                        "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M") if mudou_regra else anterior_regra.get("atualizado_em", agora_local().strftime("%d/%m/%Y %H:%M")),
+                    })
+                if erros_regras_i811:
+                    for erro_i811 in erros_regras_i811:
+                        st.error(erro_i811)
+                    st.stop()
+
                 registro_cli = {
                     "id": cliente_edicao.get("id") if cliente_edicao else f"CLI-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
                     "nome": cli_nome.strip(),
@@ -23842,6 +24262,13 @@ if pagina_atual == "relacionamentos":
                     "campanhas_interesse": cli_campanhas,
                     "papeis": cli_papeis or ["Cliente"],
                     "classificacao_relacionamento": cli_classificacao,
+                    "perfil_comercial": {
+                        "faturamento_mensal": bool(cli_faturamento_mensal),
+                        "dia_fechamento": int(cli_dia_fechamento),
+                        "dia_vencimento": int(cli_dia_vencimento),
+                        "observacao_faturamento": cli_obs_faturamento.strip(),
+                        "abatimentos_produto": regras_salvar_i811,
+                    },
                     "politica_atendimento": {
                         "nivel": cli_nivel_atendimento,
                         "motivo": cli_motivo_restricao.strip(),
@@ -23875,8 +24302,20 @@ if pagina_atual == "relacionamentos":
                         st.stop()
                     clientes.append(registro_cli)
                 salvar_clientes(clientes)
+                registrar_auditoria(
+                    "Atualizar perfil comercial",
+                    "Relacionamentos",
+                    registro_cli.get("id", ""),
+                    {
+                        "faturamento_mensal": bool(cli_faturamento_mensal),
+                        "dia_fechamento": int(cli_dia_fechamento),
+                        "dia_vencimento": int(cli_dia_vencimento),
+                        "regras_abatimento": len(regras_salvar_i811),
+                        "tipo_desconto": "valor_absoluto",
+                    },
+                )
                 st.session_state.cliente_edit_id = None
-                st.success("Relacionamento salvo.")
+                st.success("Relacionamento e Perfil Comercial salvos.")
                 st.rerun()
         if cliente_edicao and ac2.button("Cancelar edição", use_container_width=True):
             st.session_state.cliente_edit_id = None

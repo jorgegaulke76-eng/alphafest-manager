@@ -1,3 +1,7 @@
+## 20.4.9-I8.11
+- Perfil Comercial do Cliente: faturamento mensal e abatimentos fixos em R$ por produto.
+- Propostas mensalistas sem exigência de Pago individual; preço especial calculado sem alterar o Catálogo Oficial.
+
 ## 20.4.9-I8.10 — Inteligência Comercial dos Catálogos
 - Nova aba de inteligência operacional de catálogos.
 - Fila priorizada por validade, publicação, referências e divergência com o Catálogo Oficial.
