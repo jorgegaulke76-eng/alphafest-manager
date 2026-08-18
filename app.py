@@ -1254,6 +1254,7 @@ def formatar_msg_whatsapp(prop):
     data_emissao = str(prop.get("data_geracao", prop.get("data", ""))).strip() or "N/A"
     cliente = str(prop.get("cliente_nome", prop.get("cliente", ""))).strip() or "N/A"
     documento = str(prop.get("documento", prop.get("cliente_cpf_cnpj", ""))).strip() or "N/A"
+    evento = str(prop.get("evento", "")).strip()
     entrega = str(prop.get("data_entrega", "")).strip() or "A combinar"
     prazo = str(prop.get("prazo_dias", empresa.get("prazo_padrao", "10"))).strip() or str(empresa.get("prazo_padrao", "10"))
     frete = str(prop.get("frete_tipo", empresa.get("frete_padrao", "Retirada em Itatiba"))).strip() or str(empresa.get("frete_padrao", "Retirada em Itatiba"))
@@ -1314,10 +1315,14 @@ def formatar_msg_whatsapp(prop):
         "",
         f"*CLIENTE:* {cliente}",
         f"*CPF/CNPJ:* {documento}",
+    ]
+    if evento:
+        linhas.append(f"*EVENTO:* {evento}")
+    linhas.extend([
         sep,
         "*ITENS DO PEDIDO*",
         "",
-    ]
+    ])
     linhas.extend(itens_txt)
     linhas.extend([
         sep,
@@ -1592,6 +1597,7 @@ def gerar_html(proposta):
     cliente = proposta.get("cliente_nome", proposta.get("cliente", ""))
     documento = proposta.get("documento", proposta.get("cliente_cpf_cnpj", ""))
     whatsapp = proposta.get("whatsapp", proposta.get("cliente_wa", ""))
+    evento = proposta.get("evento", "")
     data_entrega = proposta.get("data_entrega", "")
     itens = proposta.get("itens", []) or []
     subtotal = proposta.get("subtotal", 0)
@@ -1640,6 +1646,7 @@ def gerar_html(proposta):
     cliente_txt = esc(cliente)
     documento_txt = esc(documento)
     whatsapp_txt = esc(whatsapp)
+    evento_txt = esc(evento)
     entrega_txt = data_br(data_entrega) or "A combinar"
 
     linhas = []
@@ -2296,6 +2303,11 @@ def gerar_html(proposta):
                 <div>
                     <div class="field-label">WhatsApp</div>
                     <div class="field-value">{whatsapp_txt}</div>
+                </div>
+
+                <div>
+                    <div class="field-label">Evento</div>
+                    <div class="field-value">{evento_txt}</div>
                 </div>
 
                 <div>
@@ -3052,6 +3064,7 @@ def aplicar_proposta_pendente_no_formulario():
     st.session_state.form_cliente = prop.get("cliente_nome", prop.get("cliente", ""))
     st.session_state.form_documento = prop.get("documento", prop.get("cliente_cpf_cnpj", ""))
     st.session_state.form_whatsapp = prop.get("whatsapp", prop.get("cliente_wa", ""))
+    st.session_state.form_evento = str(prop.get("evento", ""))
     st.session_state.form_desconto = valor_float(prop.get("desconto", prop.get("desconto_valor", 0)))
     st.session_state.form_prazo = str(prop.get("prazo_dias", "10"))
     frete_salvo = str(prop.get("frete_tipo", "Retirada")).strip()
@@ -3083,6 +3096,7 @@ def aplicar_limpeza_formulario_pendente():
     st.session_state.form_cliente = ""
     st.session_state.form_documento = ""
     st.session_state.form_whatsapp = ""
+    st.session_state.form_evento = ""
     st.session_state.form_desconto = 0.0
     st.session_state.form_entrega = hoje_local()
     st.session_state.form_prazo = "10"
@@ -11820,6 +11834,7 @@ def iniciar_estado(nome, valor):
 iniciar_estado("form_cliente", "")
 iniciar_estado("form_documento", "")
 iniciar_estado("form_whatsapp", "")
+iniciar_estado("form_evento", "")
 iniciar_estado("form_desconto", 0.0)
 iniciar_estado("form_entrega", hoje_local())
 iniciar_estado("form_prazo", str(empresa_form.get("prazo_padrao", "10")))
@@ -12046,6 +12061,7 @@ def dialog_orcamento_anna(proposta=None):
         st.session_state["anna_modal_cliente"] = str(proposta.get("cliente_nome", proposta.get("cliente", "")))
         st.session_state["anna_modal_documento"] = str(proposta.get("documento", proposta.get("cliente_cpf_cnpj", "")))
         st.session_state["anna_modal_whatsapp"] = str(proposta.get("whatsapp", proposta.get("cliente_wa", "")))
+        st.session_state["anna_modal_evento"] = str(proposta.get("evento", ""))
         st.session_state["anna_modal_itens"] = [dict(x) for x in proposta.get("itens", []) or []]
         st.session_state["anna_modal_item_key"] = int(st.session_state.get("anna_modal_item_key", 0)) + 1
         st.session_state["anna_modal_desconto"] = float(valor_float(proposta.get("desconto", proposta.get("desconto_valor", 0))))
@@ -12106,6 +12122,12 @@ def dialog_orcamento_anna(proposta=None):
         on_change=autopreencher_cliente_whatsapp_anna_i811hf2,
         help="Ao confirmar um número já cadastrado, os dados e o Perfil Comercial do cliente são carregados automaticamente.",
     )
+    evento = st.text_input(
+        "🎉 Evento",
+        key="anna_modal_evento",
+        placeholder="Ex.: Chá Revelação, Aniversário da Maria, Confraternização Empresa X",
+        help="Identifica o orçamento inteiro. Tema/Ocasião continua sendo uma informação de cada item.",
+    )
 
     cliente_modal_i811 = localizar_cliente_comercial(nome, doc, wa)
     msg_modal_i811 = st.session_state.pop("_i811hf2_anna_cliente_reconhecido_msg", None)
@@ -12126,19 +12148,46 @@ def dialog_orcamento_anna(proposta=None):
     elif msg_modal_i811 == "nao_encontrado":
         st.info("ℹ️ WhatsApp ainda não localizado nos Relacionamentos. A proposta pode ser criada normalmente e o cliente pode ser cadastrado depois.")
 
-    # Formulário isolado do item, espelhando a regra comercial já homologada no Jorge.
-    with st.form(key=f"anna_modal_item_{st.session_state.get('anna_modal_item_key', 0)}", clear_on_submit=False):
-        prod = st.text_input("Produto", key=f"anna_modal_prod_{st.session_state.get('anna_modal_item_key', 0)}")
-        with st.expander("🎨 Personalização & Especificações", expanded=True):
-            e1, e2 = st.columns(2)
-            tema = e1.text_input("Tema / Ocasião", key=f"anna_modal_tema_{st.session_state.get('anna_modal_item_key', 0)}")
-            nome_item = e1.text_input("Nome(s) Personalizado(s)", key=f"anna_modal_nome_item_{st.session_state.get('anna_modal_item_key', 0)}")
-            cor = e1.text_input("Cor / Material", key=f"anna_modal_cor_{st.session_state.get('anna_modal_item_key', 0)}")
-            idade = e2.text_input("Idade / Data do Evento", key=f"anna_modal_idade_{st.session_state.get('anna_modal_item_key', 0)}")
-            obs = e2.text_input("Outros Detalhes", key=f"anna_modal_obs_{st.session_state.get('anna_modal_item_key', 0)}")
-        q = st.number_input("Qtd", min_value=1, value=1, key=f"anna_modal_qtd_{st.session_state.get('anna_modal_item_key', 0)}")
-        v = st.number_input("Valor Unitário (R$)", min_value=0.0, value=0.0, step=0.5, key=f"anna_modal_valor_{st.session_state.get('anna_modal_item_key', 0)}")
-        adicionar = st.form_submit_button("➕ Adicionar Item", use_container_width=True)
+    # I8.11.3 — digitação viva do item no modal da Anna. O diálogo do Streamlit
+    # já executa isoladamente; por isso quantidade e valor podem recalcular a prévia
+    # sem atualizar os indicadores e sem sair da janela.
+    chave_item_i8113 = st.session_state.get("anna_modal_item_key", 0)
+    prod = st.text_input("Produto", key=f"anna_modal_prod_{chave_item_i8113}")
+    with st.expander("🎨 Personalização & Especificações", expanded=True):
+        e1, e2 = st.columns(2)
+        tema = e1.text_input("Tema / Ocasião", key=f"anna_modal_tema_{chave_item_i8113}")
+        nome_item = e1.text_input("Nome(s) Personalizado(s)", key=f"anna_modal_nome_item_{chave_item_i8113}")
+        cor = e1.text_input("Cor / Material", key=f"anna_modal_cor_{chave_item_i8113}")
+        idade = e2.text_input("Idade / Data do Evento", key=f"anna_modal_idade_{chave_item_i8113}")
+        obs = e2.text_input("Outros Detalhes", key=f"anna_modal_obs_{chave_item_i8113}")
+    q = st.number_input("Qtd", min_value=1, value=1, key=f"anna_modal_qtd_{chave_item_i8113}")
+    v = st.number_input("Valor Unitário (R$)", min_value=0.0, value=0.0, step=0.5, key=f"anna_modal_valor_{chave_item_i8113}")
+
+    itens_previa_i8113 = st.session_state.get("anna_modal_itens", []) or []
+    subtotal_atual_i8113 = sum(valor_float(i.get("quantidade")) * valor_float(i.get("valor_unitario")) for i in itens_previa_i8113)
+    cliente_previa_i8113 = localizar_cliente_comercial(nome, doc, wa)
+    preco_previa_i8113 = calcular_preco_cliente_item(cliente_previa_i8113, prod.strip(), v) if cliente_previa_i8113 and prod.strip() else None
+    valor_unitario_previa_i8113 = valor_float(v)
+    if preco_previa_i8113 and not preco_previa_i8113.get("bloqueado"):
+        valor_unitario_previa_i8113 = valor_float(preco_previa_i8113.get("preco_final"))
+    total_item_previa_i8113 = valor_float(q) * valor_unitario_previa_i8113
+    subtotal_com_item_i8113 = subtotal_atual_i8113 + total_item_previa_i8113
+    desc_previa_i8113 = valor_float(st.session_state.get("anna_modal_desconto", 0))
+    frete_previa_i8113 = str(st.session_state.get("anna_modal_frete", "Retirada"))
+    taxa_previa_i8113 = valor_float(st.session_state.get("anna_modal_taxa_entrega", 0)) if frete_previa_i8113 == "Entrega" else 0.0
+    total_proposta_previa_i8113 = max(subtotal_com_item_i8113 - desc_previa_i8113, 0.0) + taxa_previa_i8113
+
+    st.caption("💡 Prévia enquanto você digita — o item ainda não foi adicionado à proposta.")
+    pv1, pv2, pv3 = st.columns(3)
+    pv1.metric("Total deste item", _anna_fmt_moeda(total_item_previa_i8113))
+    pv2.metric("Itens já adicionados", _anna_fmt_moeda(subtotal_atual_i8113))
+    pv3.metric("Prévia do total da proposta", _anna_fmt_moeda(total_proposta_previa_i8113))
+    if preco_previa_i8113 and preco_previa_i8113.get("bloqueado"):
+        st.error("🛑 A prévia detectou abatimento maior que o preço oficial. Revise o Perfil Comercial antes de adicionar o item.")
+    elif preco_previa_i8113:
+        st.caption((f"💼 Prévia com preço especial: R$ {preco_previa_i8113['preco_base']:.2f} - R$ {preco_previa_i8113['abatimento']:.2f} = R$ {preco_previa_i8113['preco_final']:.2f} por unidade").replace(".", ","))
+
+    adicionar = st.button("➕ Adicionar Item", use_container_width=True, key=f"anna_modal_adicionar_{chave_item_i8113}")
 
     if adicionar:
         registrar_atividade(obter_usuario_atual(), "Adicionando item ao orçamento", "Orçamentos")
@@ -12207,7 +12256,10 @@ def dialog_orcamento_anna(proposta=None):
         st.write("📋 **Itens da proposta:**")
         for idx, item in enumerate(itens):
             ci, cr = st.columns([8, 1])
-            ci.write(f"**{idx + 1}. {item.get('produto')}** — Qtd: {item.get('quantidade')} — R$ {valor_float(item.get('valor_unitario')):,.2f}")
+            qtd_item_i8113 = valor_float(item.get("quantidade"))
+            unit_item_i8113 = valor_float(item.get("valor_unitario"))
+            total_item_i8113 = qtd_item_i8113 * unit_item_i8113
+            ci.write(f"**{idx + 1}. {item.get('produto')}** — Qtd: {item.get('quantidade')} × {_anna_fmt_moeda(unit_item_i8113)} = **{_anna_fmt_moeda(total_item_i8113)}**")
             ci.caption(item.get("especificacoes", ""))
             if valor_bool(item.get("preco_especial_aplicado")):
                 base_i811 = valor_float(item.get("valor_base_oficial"))
@@ -12271,6 +12323,7 @@ def dialog_orcamento_anna(proposta=None):
                 "data_geracao": proposta.get("data_geracao", agora_local().strftime("%d/%m/%Y")),
                 "data_entrega": entrega.strftime("%d/%m/%Y"),
                 "cliente_nome": nome.strip(), "documento": doc.strip(), "whatsapp": wa.strip(),
+                "evento": evento.strip(),
                 "cliente_cpf_cnpj": doc.strip(), "cliente_wa": wa.strip(),
                 "relacionamento_id": (cliente_comercial_i811 or {}).get("id", proposta.get("relacionamento_id", "")),
                 "modalidade_cobranca": modalidade_salvar_i811,
@@ -21422,6 +21475,12 @@ if pagina_atual == "novo_orcamento":
         on_change=autopreencher_cliente_whatsapp_i8111,
         help="Ao confirmar um número já cadastrado, os dados e o Perfil Comercial do cliente são carregados automaticamente.",
     )
+    evento = st.text_input(
+        "🎉 Evento",
+        key="form_evento",
+        placeholder="Ex.: Chá Revelação, Aniversário da Maria, Confraternização Empresa X",
+        help="Identifica a proposta inteira; Tema/Ocasião continua sendo específico de cada item.",
+    )
 
     cliente_reconhecido_i8111 = localizar_cliente_comercial(nome, doc, wa)
     msg_identificacao_i8111 = st.session_state.pop("_i8111_cliente_reconhecido_msg", None)
@@ -21530,7 +21589,10 @@ if pagina_atual == "novo_orcamento":
         st.write("📋 **Itens da proposta:**")
         for idx, item in enumerate(st.session_state.temp_itens):
             col_info, col_remover = st.columns([8, 1])
-            col_info.write(f"**{idx + 1}. {item.get('produto')}** — Qtd: {item.get('quantidade')} — R$ {valor_float(item.get('valor_unitario')):,.2f}")
+            qtd_item_i8113 = valor_float(item.get("quantidade"))
+            unit_item_i8113 = valor_float(item.get("valor_unitario"))
+            total_item_i8113 = qtd_item_i8113 * unit_item_i8113
+            col_info.write(f"**{idx + 1}. {item.get('produto')}** — Qtd: {item.get('quantidade')} × {_anna_fmt_moeda(unit_item_i8113)} = **{_anna_fmt_moeda(total_item_i8113)}**")
             col_info.caption(item.get("especificacoes", ""))
             if valor_bool(item.get("preco_especial_aplicado")):
                 base_i811 = valor_float(item.get("valor_base_oficial"))
@@ -21582,6 +21644,7 @@ if pagina_atual == "novo_orcamento":
                 "cliente_nome": nome.strip(),
                 "documento": doc.strip(),
                 "whatsapp": wa.strip(),
+                "evento": evento.strip(),
                 # Mantém também os nomes antigos para compatibilidade com registros e telas antigas.
                 "cliente_cpf_cnpj": doc.strip(),
                 "cliente_wa": wa.strip(),
@@ -21691,6 +21754,9 @@ if pagina_atual == "historico":
             if mensal_p:
                 st.info("💳 **Cliente mensalista:** esta proposta não exige marcação individual de Pago. O recebimento será controlado no fechamento mensal.")
             st.write(f"📅 **Entrega:** {prop.get('data_entrega', 'Não informada')}")
+            evento_hist = str(prop.get("evento", "") or "").strip()
+            if evento_hist:
+                st.write(f"🎉 **Evento:** {evento_hist}")
             whatsapp_hist = prop_atual.get("whatsapp", prop_atual.get("cliente_wa", "")) or "Não informado"
             documento_hist = prop_atual.get("documento", prop_atual.get("cliente_cpf_cnpj", "")) or "Não informado"
             st.write(f"📱 **WhatsApp:** {whatsapp_hist}")

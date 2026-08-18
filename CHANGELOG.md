@@ -606,3 +606,11 @@ hangelog
 - Prioridade executiva e alertas da Central passam a apontar exatamente os mesmos pedidos do Alpha Core.
 - Hotfix somente de leitura; bancos comerciais e interface da Anna preservados.
 
+
+## 20.4.9-I8.11.3 — Experiência de Digitação da Proposta
+- Prévia em tempo de digitação no modal da Anna com total do item e novo total previsto da proposta.
+- A prévia respeita preço especial por abatimento fixo em R$ do Perfil Comercial.
+- Itens exibem quantidade × valor unitário = total do item.
+- Novo campo `Evento` no cabeçalho da proposta, separado de Tema/Ocasião.
+- Evento propagado para WhatsApp, HTML/PDF e Histórico.
+- Edição e duplicação preservam Evento; propostas antigas continuam compatíveis.
