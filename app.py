@@ -1531,6 +1531,14 @@ def alternar_motivo_nao_fechado(num_proposta, motivo, novo_valor):
 
 
 def excluir_proposta(num_proposta):
+    # I8.11.3-HF1 — exclusão de proposta é uma ação administrativa exclusiva do Jorge.
+    # A proteção existe também na função (não apenas no botão) para impedir que a
+    # Central da Anna consiga executar a exclusão por algum caminho indireto.
+    usuario_exclusao = str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold()
+    if usuario_exclusao != "jorge":
+        st.error("🔒 Exclusão de proposta disponível somente no perfil Jorge.")
+        return False
+
     historico_atual = carregar_historico()
     proposta = next((p for p in historico_atual if p.get("numero_proposta") == num_proposta), None)
     if proposta:
@@ -1538,6 +1546,7 @@ def excluir_proposta(num_proposta):
     historico = [p for p in historico_atual if p.get("numero_proposta") != num_proposta]
     salvar_historico_completo(historico)
     st.rerun()
+    return True
 
 def criar_grafico_profissional(df, campo_categoria, campo_valor, titulo, horizontal=False, formato=",.2f"):
     """Cria gráfico Altair com validação para evitar erros nos relatórios."""
@@ -12259,7 +12268,13 @@ def dialog_orcamento_anna(proposta=None):
             qtd_item_i8113 = valor_float(item.get("quantidade"))
             unit_item_i8113 = valor_float(item.get("valor_unitario"))
             total_item_i8113 = qtd_item_i8113 * unit_item_i8113
-            ci.write(f"**{idx + 1}. {item.get('produto')}** — Qtd: {item.get('quantidade')} × {_anna_fmt_moeda(unit_item_i8113)} = **{_anna_fmt_moeda(total_item_i8113)}**")
+            ci.markdown(
+                f"<strong>{idx + 1}. {html.escape(str(item.get('produto') or 'Produto'))}</strong> "
+                f"— Qtd: {html.escape(str(item.get('quantidade')))} × "
+                f"{html.escape(_anna_fmt_moeda(unit_item_i8113))} = "
+                f"<strong>{html.escape(_anna_fmt_moeda(total_item_i8113))}</strong>",
+                unsafe_allow_html=True,
+            )
             ci.caption(item.get("especificacoes", ""))
             if valor_bool(item.get("preco_especial_aplicado")):
                 base_i811 = valor_float(item.get("valor_base_oficial"))
@@ -21455,6 +21470,36 @@ if pagina_atual == "novo_orcamento":
                 st.session_state.pop("_ultima_proposta_salva", None)
                 st.rerun()
 
+            # HF1 — restaura as ações administrativas que o Jorge usa logo após
+            # salvar uma proposta de teste/correção. A Anna não passa por este
+            # bloco e a função de exclusão ainda possui uma trava de permissão.
+            if str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold() == "jorge":
+                aa1, aa2, aa3 = st.columns(3)
+                if aa1.button(
+                    "✏️ Editar proposta",
+                    key=f"editar_pos_salvar_{ultima_salva.get('numero_proposta', 'orcamento')}",
+                    use_container_width=True,
+                ):
+                    carregar_proposta_no_formulario(ultima_salva, duplicar=False)
+                    st.session_state.pop("_ultima_proposta_salva", None)
+                    st.rerun()
+                if aa2.button(
+                    "📋 Duplicar pedido",
+                    key=f"duplicar_pos_salvar_{ultima_salva.get('numero_proposta', 'orcamento')}",
+                    use_container_width=True,
+                ):
+                    carregar_proposta_no_formulario(ultima_salva, duplicar=True)
+                    st.session_state.pop("_ultima_proposta_salva", None)
+                    st.rerun()
+                if aa3.button(
+                    "🗑️ Excluir proposta",
+                    key=f"excluir_pos_salvar_{ultima_salva.get('numero_proposta', 'orcamento')}",
+                    use_container_width=True,
+                ):
+                    numero_excluir_hf1 = str(ultima_salva.get("numero_proposta") or "")
+                    st.session_state.pop("_ultima_proposta_salva", None)
+                    excluir_proposta(numero_excluir_hf1)
+
     aviso_preco_i811 = st.session_state.pop("_i811_aviso_preco", None)
     if aviso_preco_i811:
         st.success(aviso_preco_i811)
@@ -21592,7 +21637,13 @@ if pagina_atual == "novo_orcamento":
             qtd_item_i8113 = valor_float(item.get("quantidade"))
             unit_item_i8113 = valor_float(item.get("valor_unitario"))
             total_item_i8113 = qtd_item_i8113 * unit_item_i8113
-            col_info.write(f"**{idx + 1}. {item.get('produto')}** — Qtd: {item.get('quantidade')} × {_anna_fmt_moeda(unit_item_i8113)} = **{_anna_fmt_moeda(total_item_i8113)}**")
+            col_info.markdown(
+                f"<strong>{idx + 1}. {html.escape(str(item.get('produto') or 'Produto'))}</strong> "
+                f"— Qtd: {html.escape(str(item.get('quantidade')))} × "
+                f"{html.escape(_anna_fmt_moeda(unit_item_i8113))} = "
+                f"<strong>{html.escape(_anna_fmt_moeda(total_item_i8113))}</strong>",
+                unsafe_allow_html=True,
+            )
             col_info.caption(item.get("especificacoes", ""))
             if valor_bool(item.get("preco_especial_aplicado")):
                 base_i811 = valor_float(item.get("valor_base_oficial"))
@@ -21776,14 +21827,19 @@ if pagina_atual == "historico":
             c1.link_button("📱 Enviar WhatsApp", f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop_atual))}", use_container_width=True)
             c2.download_button("📄 Gerar HTML", gerar_html(prop_atual), file_name=f"{num_p}.html", mime="text/html", use_container_width=True, key=f"html_historico_{num_p}")
 
-            c3, c4, c5 = st.columns(3)
+            usuario_historico_jorge_hf1 = str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold() == "jorge"
+            if usuario_historico_jorge_hf1:
+                c3, c4, c5 = st.columns(3)
+            else:
+                c3, c4 = st.columns(2)
+                c5 = None
             if c3.button("✏️ Editar", key=f"editar_{num_p}", use_container_width=True):
                 carregar_proposta_no_formulario(prop, duplicar=False)
                 rerun_na_aba("novo_orcamento", "Proposta carregada para correção.")
             if c4.button("📋 Duplicar pedido", key=f"duplicar_{num_p}", use_container_width=True):
                 carregar_proposta_no_formulario(prop_atual, duplicar=True)
                 rerun_na_aba("novo_orcamento", "Cópia carregada como novo orçamento.")
-            if c5.button("🗑️ Excluir", key=f"del_{num_p}", use_container_width=True):
+            if c5 is not None and c5.button("🗑️ Excluir", key=f"del_{num_p}", use_container_width=True):
                 excluir_proposta(num_p)
 
             s1, s2, s3 = st.columns(3)
