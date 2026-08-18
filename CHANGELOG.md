@@ -1,3 +1,11 @@
+## 20.4.9-I8.11.2 — Resumo Mensal Executivo
+- Novo bloco 📅 Resumo mensal no perfil Jorge, preservando o Resumo de hoje.
+- Seletor de competência com propostas emitidas, total orçado, aprovadas, entregas, recebido, ticket médio e conversão.
+- Integração com a Central de Faturamento Mensal: valor mensal em aberto e recebido por competência.
+- Comparação automática com o mês anterior para os principais indicadores.
+- Pedidos ativos, carteira aberta, aprovações pendentes e atrasados aparecem identificados como fotografia atual.
+- Mantém Fonte Única de Status do HF3 e Radar de Atualizações do HF4; Anna não é alterada nesta versão.
+
 ## 20.4.9-I8.11.1-HF4
 - Radar de Atualizações no Jorge com polling leve de eventos da Anna a cada 15s.
 - Aviso de dados potencialmente desatualizados e botão de atualização manual do painel.

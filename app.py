@@ -3618,6 +3618,287 @@ def _i8111_competencia_rotulo(competencia):
     return f"{meses[mes - 1].capitalize()}/{ano}"
 
 
+# --- 20.4.9-I8.11.2: Resumo Mensal Executivo ---
+def _i8112_competencia_mes(data_base):
+    data_base = data_base or hoje_local()
+    return f"{data_base.year:04d}-{data_base.month:02d}"
+
+
+def _i8112_mes_anterior(competencia):
+    ano, mes = _i8111_competencia_partes(competencia)
+    if mes == 1:
+        return f"{ano - 1:04d}-12"
+    return f"{ano:04d}-{mes - 1:02d}"
+
+
+def _i8112_intervalo_mes(competencia, referencia=None):
+    referencia = referencia or hoje_local()
+    ano, mes = _i8111_competencia_partes(competencia)
+    inicio = date(ano, mes, 1)
+    fim = date(ano, mes, calendar.monthrange(ano, mes)[1])
+    if ano == referencia.year and mes == referencia.month:
+        fim = min(fim, referencia)
+    return inicio, fim
+
+
+def _i8112_data_no_intervalo(valor, inicio, fim):
+    data_evento = _data_resultado(valor)
+    return bool(data_evento and inicio <= data_evento <= fim)
+
+
+def _i8112_data_evento_mes(prop, campos, inicio, fim):
+    for campo in campos:
+        data_evento = _data_resultado((prop or {}).get(campo))
+        if data_evento:
+            return data_evento if inicio <= data_evento <= fim else None
+    return None
+
+
+def _i8112_moeda(valor):
+    return f"R$ {valor_float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _i8112_delta_moeda(atual, anterior):
+    diferenca = round(valor_float(atual) - valor_float(anterior), 2)
+    sinal = "+" if diferenca > 0 else ""
+    return f"{sinal}{_i8112_moeda(diferenca)} vs mês anterior"
+
+
+def _i8112_delta_numero(atual, anterior):
+    diferenca = int(atual or 0) - int(anterior or 0)
+    sinal = "+" if diferenca > 0 else ""
+    return f"{sinal}{diferenca} vs mês anterior"
+
+
+def _i8112_delta_percentual(atual, anterior):
+    diferenca = round(float(atual or 0) - float(anterior or 0), 1)
+    sinal = "+" if diferenca > 0 else ""
+    return f"{sinal}{diferenca:.1f} p.p. vs mês anterior".replace(".", ",")
+
+
+def _i8112_valor_recebido_fechamento(registro):
+    """Valor efetivamente recebido, preservando ajustes após reabertura."""
+    registro = registro or {}
+    if registro.get("valor_recebido_preservado") not in (None, ""):
+        base = valor_float(registro.get("valor_recebido_preservado"))
+        adicional = valor_float(registro.get("saldo_adicional_recebido"))
+        return base + adicional
+    return valor_float(registro.get("total_fechado"))
+
+
+def _i8112_competencias_resumo(historico, registros, referencia=None):
+    referencia = referencia or hoje_local()
+    competencias = set()
+    ano, mes = referencia.year, referencia.month
+    for _ in range(13):
+        competencias.add(f"{ano:04d}-{mes:02d}")
+        if mes == 1:
+            ano, mes = ano - 1, 12
+        else:
+            mes -= 1
+
+    for prop in historico or []:
+        if not isinstance(prop, dict):
+            continue
+        d = _data_resultado(
+            prop.get("data_geracao")
+            or prop.get("data")
+            or prop.get("criado_em")
+            or prop.get("created_at")
+        )
+        if d:
+            competencias.add(f"{d.year:04d}-{d.month:02d}")
+
+    for registro in registros or []:
+        competencia = str((registro or {}).get("competencia") or "").strip()
+        if re.fullmatch(r"\d{4}-\d{2}", competencia):
+            competencias.add(competencia)
+
+    return sorted(competencias, reverse=True)
+
+
+def calcular_resumo_mensal_executivo_i8112(historico, registros, competencia, referencia=None):
+    """Resumo mensal com a mesma fonte de propostas/status já homologada no HF3/HF4."""
+    referencia = referencia or hoje_local()
+    inicio, fim = _i8112_intervalo_mes(competencia, referencia)
+    propostas = [p for p in (historico or []) if isinstance(p, dict)]
+    validas = [p for p in propostas if not proposta_encerrada(p)]
+
+    propostas_mes = []
+    for prop in propostas:
+        data_emissao = _data_resultado(
+            prop.get("data_geracao")
+            or prop.get("data")
+            or prop.get("criado_em")
+            or prop.get("created_at")
+        )
+        if data_emissao and inicio <= data_emissao <= fim:
+            propostas_mes.append(prop)
+
+    propostas_mes_validas = [p for p in propostas_mes if not proposta_encerrada(p)]
+    aprovadas_das_emitidas = [p for p in propostas_mes_validas if valor_bool(p.get("aprovado"))]
+
+    entregues_mes = []
+    recebidas_mes = []
+    for prop in validas:
+        if valor_bool(prop.get("entregue")):
+            if _i8112_data_evento_mes(prop, ("entregue_em", "data_entrega_real"), inicio, fim):
+                entregues_mes.append(prop)
+        if valor_bool(prop.get("pago")):
+            if _i8112_data_evento_mes(prop, ("pago_em", "data_pagamento"), inicio, fim):
+                recebidas_mes.append(prop)
+
+    total_orcado = sum(calcular_valores_proposta(p)[2] for p in propostas_mes)
+    total_aprovado = sum(calcular_valores_proposta(p)[2] for p in aprovadas_das_emitidas)
+    total_recebido = sum(calcular_valores_proposta(p)[2] for p in recebidas_mes)
+    ticket_medio = total_orcado / len(propostas_mes) if propostas_mes else 0.0
+    conversao = (len(aprovadas_das_emitidas) / len(propostas_mes_validas) * 100.0) if propostas_mes_validas else 0.0
+
+    registros_competencia = [
+        r for r in (registros or [])
+        if isinstance(r, dict) and str(r.get("competencia") or "") == str(competencia)
+    ]
+    mensal_recebido = sum(
+        _i8112_valor_recebido_fechamento(r)
+        for r in registros_competencia
+        if str(r.get("status") or "") == I8111_STATUS_RECEBIDO
+    )
+    mensal_registrado_aberto = sum(
+        valor_float(r.get("total_fechado"))
+        for r in registros_competencia
+        if str(r.get("status") or "") in {I8111_STATUS_FECHADO, I8111_STATUS_FATURADO, I8111_STATUS_REABERTO}
+    )
+
+    grupos_abertos = montar_grupos_faturamento_mensal(historico, registros)
+    mensal_em_composicao = sum(
+        valor_float(g.get("total_elegivel"))
+        for g in grupos_abertos
+        if str(g.get("competencia") or "") == str(competencia)
+    )
+    mensal_em_aberto = mensal_registrado_aberto + mensal_em_composicao
+
+    return {
+        "competencia": competencia,
+        "inicio": inicio,
+        "fim": fim,
+        "propostas_emitidas": len(propostas_mes),
+        "total_orcado": total_orcado,
+        "aprovadas_das_emitidas": len(aprovadas_das_emitidas),
+        "total_aprovado": total_aprovado,
+        "entregas_concluidas": len(entregues_mes),
+        "recebimentos_qtd": len(recebidas_mes),
+        "total_recebido": total_recebido,
+        "ticket_medio": ticket_medio,
+        "conversao": conversao,
+        "mensal_em_aberto": mensal_em_aberto,
+        "mensal_recebido": mensal_recebido,
+        "mensal_fechamentos": len(registros_competencia),
+        "mensal_em_composicao": mensal_em_composicao,
+        "mensal_registrado_aberto": mensal_registrado_aberto,
+    }
+
+
+def renderizar_resumo_mensal_executivo_i8112(historico, snapshot_alpha_core=None):
+    """Visão mensal do Jorge; Anna permanece sem alteração nesta versão."""
+    registros = carregar_faturamentos_mensais()
+    referencia = hoje_local()
+    competencias = _i8112_competencias_resumo(historico, registros, referencia)
+    competencia_atual = _i8112_competencia_mes(referencia)
+    indice_atual = competencias.index(competencia_atual) if competencia_atual in competencias else 0
+
+    st.markdown("### 📅 Resumo mensal")
+    competencia = st.selectbox(
+        "Competência do resumo",
+        competencias,
+        index=indice_atual,
+        format_func=_i8111_competencia_rotulo,
+        key="i8112_resumo_mensal_competencia",
+        help="Altera somente a competência exibida. Não modifica propostas, fechamentos ou indicadores.",
+    )
+
+    atual = calcular_resumo_mensal_executivo_i8112(historico, registros, competencia, referencia)
+    anterior_comp = _i8112_mes_anterior(competencia)
+    anterior = calcular_resumo_mensal_executivo_i8112(historico, registros, anterior_comp, referencia)
+
+    rm1, rm2, rm3, rm4 = st.columns(4)
+    rm1.metric(
+        "📄 Propostas emitidas",
+        atual["propostas_emitidas"],
+        _i8112_delta_numero(atual["propostas_emitidas"], anterior["propostas_emitidas"]),
+        help="Propostas emitidas dentro da competência selecionada.",
+    )
+    rm2.metric(
+        "💼 Total orçado",
+        _i8112_moeda(atual["total_orcado"]),
+        _i8112_delta_moeda(atual["total_orcado"], anterior["total_orcado"]),
+        help="Soma do valor final das propostas emitidas no período.",
+    )
+    rm3.metric(
+        "✅ Pedidos aprovados",
+        atual["aprovadas_das_emitidas"],
+        _i8112_delta_numero(atual["aprovadas_das_emitidas"], anterior["aprovadas_das_emitidas"]),
+        help="Das propostas emitidas no período, quantas estão atualmente aprovadas.",
+    )
+    rm4.metric(
+        "🚚 Entregas concluídas",
+        atual["entregas_concluidas"],
+        _i8112_delta_numero(atual["entregas_concluidas"], anterior["entregas_concluidas"]),
+        help="Entregas com data própria de conclusão registrada dentro do mês.",
+    )
+
+    rf1, rf2, rf3, rf4 = st.columns(4)
+    rf1.metric(
+        "💵 Recebido no mês",
+        _i8112_moeda(atual["total_recebido"]),
+        _i8112_delta_moeda(atual["total_recebido"], anterior["total_recebido"]),
+        help="Pagamentos com data de recebimento registrada dentro do mês, incluindo propostas mensalistas baixadas pelo fechamento.",
+    )
+    rf2.metric(
+        "🟡 Mensal em aberto",
+        _i8112_moeda(atual["mensal_em_aberto"]),
+        help="Faturamento mensal da competência ainda em composição, fechado, faturado ou reaberto e não recebido.",
+    )
+    rf3.metric(
+        "🟢 Mensal recebido",
+        _i8112_moeda(atual["mensal_recebido"]),
+        help="Fechamentos mensais recebidos pertencentes à competência selecionada.",
+    )
+    rf4.metric(
+        "🎟️ Ticket médio",
+        _i8112_moeda(atual["ticket_medio"]),
+        _i8112_delta_moeda(atual["ticket_medio"], anterior["ticket_medio"]),
+        help="Valor médio das propostas emitidas na competência.",
+    )
+
+    core = snapshot_alpha_core.to_dict() if hasattr(snapshot_alpha_core, "to_dict") else dict(snapshot_alpha_core or {})
+    rc1, rc2, rc3, rc4, rc5 = st.columns(5)
+    rc1.metric(
+        "📈 Conversão",
+        f"{atual['conversao']:.1f}%".replace(".", ","),
+        _i8112_delta_percentual(atual["conversao"], anterior["conversao"]),
+        help="Percentual das propostas emitidas no mês que estão aprovadas.",
+    )
+    rc2.metric("📦 Pedidos ativos · agora", int(core.get("pedidos_ativos") or 0))
+    rc3.metric("📊 Carteira aberta · agora", _i8112_moeda(core.get("carteira_aberta") or 0))
+    rc4.metric("🟡 Aprovação pendente · agora", int(core.get("aguardando_aprovacao") or 0))
+    rc5.metric("🔴 Atrasados · agora", int(core.get("atrasados") or 0))
+
+    with st.expander("🔎 Como ler o resumo mensal", expanded=False):
+        st.caption(
+            f"Período exibido: {atual['inicio'].strftime('%d/%m/%Y')} a {atual['fim'].strftime('%d/%m/%Y')}. "
+            "Propostas e valores do mês usam a data de emissão. Entregas e recebimentos usam a data própria do evento registrada no histórico."
+        )
+        st.write(
+            f"**Faturamento mensal da competência:** {_i8112_moeda(atual['mensal_em_composicao'])} em composição + "
+            f"{_i8112_moeda(atual['mensal_registrado_aberto'])} já fechado/faturado/reaberto = "
+            f"**{_i8112_moeda(atual['mensal_em_aberto'])} em aberto**."
+        )
+        st.caption(
+            "Os indicadores com “· agora” são uma fotografia operacional atual, mesmo quando você consulta um mês passado. "
+            "Essa distinção evita fingir um histórico que o sistema não registrava naquela época."
+        )
+
+
 def _i8111_data_proposta_mensal(prop):
     # A entrega efetiva/planejada define o ciclo. Em bases legadas sem data de
     # entrega, usa a emissão somente para não perder a proposta do controle.
@@ -18212,6 +18493,8 @@ if pagina_atual == "central":
             calcular_valores_proposta,
         )
         renderizar_centro_executivo(snapshot_alpha_core, indicadores_unificados_central)
+
+        renderizar_resumo_mensal_executivo_i8112(historico_central, snapshot_alpha_core)
 
         diagnostico_hf3 = diagnosticar_sincronizacao_status(historico_central)
         with st.expander("🔎 Sincronização de status · HF3", expanded=False):
