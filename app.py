@@ -47,7 +47,7 @@ from marketing_ai_engine import generate_premium_square, apply_official_logo, ad
 from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
 from painel_indicadores import calcular_indicadores_unificados
-from alpha_live import registrar_atividade, obter_operacao_online
+from alpha_live import registrar_atividade, obter_operacao_online, obter_eventos_recentes
 from thu_executivo import calcular_briefing, renderizar_briefing_thu
 from alpha_core import calcular_alpha_core
 from proposal_status import (
@@ -797,6 +797,88 @@ except Exception:
     renderizar_alpha_live_auto = renderizar_alpha_live
 
 
+# --- 20.4.9-I8.11.1-HF4: Radar leve de atualizações da equipe ---
+def _hf4_dt_evento(valor):
+    try:
+        dt = datetime.fromisoformat(str(valor or ""))
+        agora = agora_local()
+        if dt.tzinfo is None and agora.tzinfo is not None:
+            dt = dt.replace(tzinfo=agora.tzinfo)
+        return dt
+    except Exception:
+        return None
+
+
+def _hf4_evento_relevante(evento):
+    if not isinstance(evento, dict):
+        return False
+    nome = str(evento.get("nome") or "").strip().casefold()
+    if nome != "anna":
+        return False
+    modulo = str(evento.get("modulo") or "").strip().casefold()
+    acao = str(evento.get("acao") or "").strip().casefold()
+    # Somente mudanças que podem alterar gestão/indicadores. Não mostra cada clique.
+    if modulo in {"orçamentos", "propostas", "catálogo", "clientes", "relacionamentos", "faturamento mensal"}:
+        return True
+    termos = ("proposta", "orçamento", "produto", "preço", "cliente", "perfil comercial", "faturamento")
+    return any(t in acao for t in termos)
+
+
+def _hf4_tempo_evento(dt):
+    if not dt:
+        return "agora"
+    segundos = max(0, int((agora_local() - dt).total_seconds()))
+    if segundos < 10:
+        return "agora"
+    if segundos < 60:
+        return f"há {segundos}s"
+    if segundos < 3600:
+        return f"há {max(1, segundos // 60)} min"
+    return dt.strftime("%d/%m %H:%M")
+
+
+def renderizar_radar_atualizacoes_hf4():
+    """Consulta só eventos leves; os indicadores continuam sob atualização manual."""
+    referencia = _hf4_dt_evento(st.session_state.get("_hf4_painel_atualizado_em"))
+    eventos = obter_eventos_recentes(80)
+    novos = []
+    for evento in eventos:
+        if not _hf4_evento_relevante(evento):
+            continue
+        dt = _hf4_dt_evento(evento.get("em"))
+        if referencia is not None and dt is not None and dt <= referencia:
+            continue
+        novos.append((dt, evento))
+    novos.sort(key=lambda item: item[0] or datetime.min.replace(tzinfo=agora_local().tzinfo), reverse=True)
+
+    if not novos:
+        st.caption("🟢 Radar: nenhuma alteração nova da Anna desde a última atualização desta tela.")
+        return
+
+    st.warning(f"🔔 **{len(novos)} alteração(ões) da Anna desde a última atualização do seu painel.** Seus indicadores podem estar usando os dados anteriores.")
+    with st.expander("🔔 Ver atualizações da Anna", expanded=True):
+        for dt, evento in novos[:8]:
+            acao = html.escape(str(evento.get("acao") or "Atualização"))
+            detalhe = html.escape(str(evento.get("detalhe") or "").strip())
+            modulo = html.escape(str(evento.get("modulo") or "AlphaFest"))
+            sufixo = f" — {detalhe}" if detalhe else ""
+            st.markdown(f"**{_hf4_tempo_evento(dt)}** · **{acao}** · {modulo}{sufixo}")
+        if len(novos) > 8:
+            st.caption(f"+ {len(novos) - 8} atualização(ões) recente(s).")
+        if st.button("🔄 Atualizar painel agora", type="primary", use_container_width=True, key="hf4_atualizar_painel"):
+            st.session_state["_hf4_painel_atualizado_em"] = agora_local().isoformat()
+            try:
+                st.rerun(scope="app")
+            except TypeError:
+                st.rerun()
+
+
+try:
+    renderizar_radar_atualizacoes_hf4_auto = st.fragment(run_every="15s")(renderizar_radar_atualizacoes_hf4)
+except Exception:
+    renderizar_radar_atualizacoes_hf4_auto = renderizar_radar_atualizacoes_hf4
+
+
 def frase_motivacional_anna():
     """Retorna uma mensagem original, firme e positiva, estável durante todo o dia."""
     frases = [
@@ -1377,6 +1459,7 @@ def registrar_evento_proposta(proposta, descricao, usuario="Sistema"):
 def alternar_status(num_proposta, campo, novo_valor):
     usuario_status = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
     alterou_aprovacao = {"valor": False}
+    evento_status_hf4 = {"texto": ""}
 
     def _mutar(p):
         valor_anterior = valor_bool(p.get(campo, False))
@@ -1384,13 +1467,17 @@ def alternar_status(num_proposta, campo, novo_valor):
         if valor_anterior != bool(novo_valor):
             rotulos = {"pago": "Pagamento confirmado", "entregue": "Entrega concluída", "aprovado": "Orçamento aprovado"}
             acao = rotulos.get(campo, campo.replace("_", " ").title())
-            registrar_evento_proposta(p, acao if novo_valor else f"{acao} desmarcado", usuario=usuario_status)
+            evento_status_hf4["texto"] = acao if novo_valor else f"{acao} desmarcado"
+            registrar_evento_proposta(p, evento_status_hf4["texto"], usuario=usuario_status)
             if campo == "aprovado" and bool(novo_valor):
                 alterou_aprovacao["valor"] = True
 
     ok, proposta_alterada, _ = atualizar_proposta_com_leitura_fresca(num_proposta, _mutar)
     if not ok:
         return False
+    if proposta_alterada and evento_status_hf4["texto"]:
+        cliente_evt = str(proposta_alterada.get("cliente_nome") or proposta_alterada.get("cliente") or "Cliente").strip()
+        registrar_atividade(obter_usuario_atual(), "Status da proposta atualizado", "Propostas", detalhe=f"{num_proposta} · {cliente_evt} · {evento_status_hf4['texto']}", evento=True)
     if proposta_alterada and alterou_aprovacao["valor"]:
         sincronizar_producao_com_propostas()
         tarefas = carregar_producao()
@@ -11850,7 +11937,7 @@ def dialog_orcamento_anna(proposta=None):
             }
             ok_salvar, retorno_salvar = _anna_salvar_proposta(dados, numero_original)
             if ok_salvar:
-                registrar_atividade(obter_usuario_atual(), "Orçamento salvo", "Orçamentos", detalhe=str(retorno_salvar), evento=True)
+                registrar_atividade(obter_usuario_atual(), "Proposta salva", "Orçamentos", detalhe=f"{retorno_salvar} · {nome.strip()}", evento=True)
                 st.session_state["anna_modal_itens"] = []
                 st.session_state[chave_modal] = False
                 st.rerun()
@@ -11906,6 +11993,13 @@ def dialog_cliente_anna():
         else:
             clientes.insert(0, dados)
         salvar_clientes(clientes)
+        registrar_atividade(
+            obter_usuario_atual(),
+            "Cliente atualizado" if existente else "Cliente cadastrado",
+            "Clientes",
+            detalhe=nome.strip() or whatsapp.strip() or documento.strip(),
+            evento=True,
+        )
         st.session_state["_mensagem_sucesso_pendente"] = "Cliente salvo."
         st.rerun()
 
@@ -11914,7 +12008,7 @@ def salvar_andamento_proposta(numero, aprovado, pago, entregue):
     """HF3: atualiza status sobre leitura fresca, com autoria real e confirmação."""
     novos = {"aprovado": valor_bool(aprovado), "pago": valor_bool(pago), "entregue": valor_bool(entregue)}
     usuario_status = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
-    controle = {"anteriores": None, "nova_conclusao": False, "aprovou_agora": False}
+    controle = {"anteriores": None, "nova_conclusao": False, "aprovou_agora": False, "mudancas": []}
 
     def _mutar(proposta):
         anteriores = {
@@ -11940,6 +12034,7 @@ def salvar_andamento_proposta(numero, aprovado, pago, entregue):
         for campo, valor in novos.items():
             if anteriores[campo] != valor:
                 texto = rotulos[campo] if valor else f"{rotulos[campo]} desmarcado"
+                controle["mudancas"].append(texto)
                 registrar_evento_proposta(proposta, texto, usuario=usuario_status)
 
         controle["aprovou_agora"] = novos["aprovado"] and not anteriores["aprovado"]
@@ -11964,6 +12059,15 @@ def salvar_andamento_proposta(numero, aprovado, pago, entregue):
     if any(valor_bool(confirmado.get(campo, False)) != valor for campo, valor in novos.items()):
         return False, "O banco recebeu outra atualização simultânea. Reabra a proposta e confirme os status atuais."
 
+    if controle["mudancas"]:
+        cliente_evt = str(confirmado.get("cliente_nome") or confirmado.get("cliente") or "Cliente").strip()
+        registrar_atividade(
+            obter_usuario_atual(),
+            "Status da proposta atualizado",
+            "Propostas",
+            detalhe=f"{numero} · {cliente_evt} · " + " / ".join(controle["mudancas"]),
+            evento=True,
+        )
     if controle["aprovou_agora"]:
         sincronizar_producao_com_propostas()
     if proposta_concluida(confirmado):
@@ -16952,6 +17056,10 @@ def dialog_catalogo_cadastro_anna(
         salvar_catalogo(catalogo)
         confirmado = any(str(x.get("Nome", "")).strip() == nome.strip() for x in carregar_catalogo())
         if confirmado:
+            preco_anterior_evt = str(produto.get("Preco", "") or "").strip()
+            preco_novo_evt = str(preco or "").strip()
+            acao_evt = "Produto cadastrado no Catálogo" if produto_indice is None else ("Preço do produto atualizado" if preco_anterior_evt != preco_novo_evt else "Produto atualizado no Catálogo")
+            registrar_atividade(obter_usuario_atual(), acao_evt, "Catálogo", detalhe=nome.strip(), evento=True)
             st.session_state["_thu_auditar_produto_nome"] = nome.strip()
             if retorno_padronizacao:
                 st.session_state["_abrir_padronizacao_h2"] = True
@@ -17546,6 +17654,10 @@ def dialog_catalogo_visualizar_anna():
                         confirmado = carregar_catalogo()
                         ok = i < len(confirmado) and str(confirmado[i].get("Nome", "")).strip() == nome.strip()
                         if ok:
+                            preco_anterior_evt = str(produto.get("Preco", "") or "").strip()
+                            preco_novo_evt = str(preco or "").strip()
+                            acao_evt = "Preço do produto atualizado" if preco_anterior_evt != preco_novo_evt else "Produto atualizado no Catálogo"
+                            registrar_atividade(obter_usuario_atual(), acao_evt, "Catálogo", detalhe=nome.strip(), evento=True)
                             st.session_state["_thu_auditar_produto_nome"] = nome.strip()
                             st.session_state["_mensagem_sucesso_pendente"] = f"Produto {nome.strip()} e suas fotos foram atualizados."
                             st.rerun()
@@ -17553,8 +17665,10 @@ def dialog_catalogo_visualizar_anna():
                             st.error("Não foi possível confirmar a atualização do produto.")
 
                 if st.button("🗑️ Excluir este produto", key=f"anna_cat_del_{i}", use_container_width=True):
+                    nome_excluido_evt = str(produto.get("Nome") or "Produto").strip()
                     catalogo.pop(i)
                     salvar_catalogo(catalogo)
+                    registrar_atividade(obter_usuario_atual(), "Produto excluído do Catálogo", "Catálogo", detalhe=nome_excluido_evt, evento=True)
                     st.session_state["_mensagem_sucesso_pendente"] = "Produto excluído do catálogo."
                     st.rerun()
 
@@ -17882,6 +17996,10 @@ if pagina_atual == "central":
         st.info("👩‍💼 **Central Operacional da Anna** — Atendimento multicanal, orçamentos, artes/projetos, controle de pedidos, entregas, pagamentos e catálogo. O canal de origem permanece identificado em cada atendimento.")
     else:
         st.info("👨‍💼 **Central de Gestão do Jorge** — visão completa da operação, inteligência, conexões, marketing, indicadores e configurações.")
+        # Um rerun completo significa que os indicadores desta tela acabaram de ser recalculados.
+        # O fragmento do Radar roda sozinho depois e NÃO altera esta referência.
+        st.session_state["_hf4_painel_atualizado_em"] = agora_local().isoformat()
+        renderizar_radar_atualizacoes_hf4_auto()
         renderizar_alpha_live_auto()
     favoritos_central = perfil_central.get("favoritos", []) or []
     if favoritos_central:
@@ -25567,6 +25685,7 @@ if pagina_atual == "relacionamentos":
                         "tipo_desconto": "valor_absoluto",
                     },
                 )
+                registrar_atividade(obter_usuario_atual(), "Perfil Comercial atualizado", "Relacionamentos", detalhe=registro_cli.get("nome", "Cliente"), evento=True)
                 st.session_state.cliente_edit_id = None
                 st.success("Relacionamento e Perfil Comercial salvos.")
                 st.rerun()

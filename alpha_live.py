@@ -75,13 +75,14 @@ def registrar_atividade(usuario: dict[str, Any] | str, acao: str, modulo: str = 
     }
     if evento:
         dados["eventos"].insert(0, {
+            "id": f"EVT-{agora.strftime('%Y%m%d%H%M%S%f')}-{secrets.token_hex(2)}",
             "nome": nome,
             "acao": str(acao),
             "modulo": str(modulo),
             "detalhe": str(detalhe),
             "em": agora.isoformat(),
         })
-        dados["eventos"] = dados["eventos"][:80]
+        dados["eventos"] = dados["eventos"][:120]
 
     # Remove sessões abandonadas há mais de 24h para o documento não crescer.
     limite = agora - timedelta(hours=24)
@@ -127,3 +128,12 @@ def obter_operacao_online(expira_segundos: int = 180) -> tuple[list[dict[str, An
     online.sort(key=lambda x: (str(x.get("nome")), int(x.get("segundos", 0))))
     eventos = list(dados.get("eventos", []))[:20]
     return online, eventos
+
+
+def obter_eventos_recentes(limite: int = 80) -> list[dict[str, Any]]:
+    """HF4: retorna somente a trilha leve de eventos concluídos da equipe."""
+    dados = _carregar()
+    eventos = dados.get("eventos", []) if isinstance(dados, dict) else []
+    if not isinstance(eventos, list):
+        return []
+    return [dict(x) for x in eventos[:max(1, min(int(limite or 80), 120))] if isinstance(x, dict)]

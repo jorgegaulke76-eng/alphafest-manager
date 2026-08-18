@@ -1,3 +1,9 @@
+## 20.4.9-I8.11.1-HF4
+- Radar de Atualizações no Jorge com polling leve de eventos da Anna a cada 15s.
+- Aviso de dados potencialmente desatualizados e botão de atualização manual do painel.
+- Registro de eventos relevantes em propostas/status, catálogo/preço, cliente e Perfil Comercial.
+- Indicadores permanecem sem atualização automática.
+
 # 20.4.9-I8.11.1-HF3 — Fonte Única de Status
 - Unifica a regra de status entre Anna, Jorge, THU, Alpha Core e indicadores.
 - Mensalistas concluem operação com Aprovado + Entregue; pagamento individual não aparece como pendência.
