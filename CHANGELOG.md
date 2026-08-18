@@ -1,3 +1,11 @@
+## 20.4.9-I8.11.2-HF1 — Auditoria dos Indicadores Mensais e Diários
+- Conversão mensal corrigida para aprovadas ÷ todas as propostas emitidas da competência.
+- Propostas encerradas/não fechadas permanecem no denominador da conversão.
+- Resumo diário do Jorge diferencia movimentações registradas hoje da situação operacional atual.
+- Auditoria sinaliza regularizações de status históricos feitas no dia.
+- Situação operacional agora separa pedidos ativos, aprovação, produção, prontos, atrasados e carteira.
+- Perfil Anna preservado sem alteração visual nesta etapa.
+
 ## 20.4.9-I8.11.2 — Resumo Mensal Executivo
 - Novo bloco 📅 Resumo mensal no perfil Jorge, preservando o Resumo de hoje.
 - Seletor de competência com propostas emitidas, total orçado, aprovadas, entregas, recebido, ticket médio e conversão.

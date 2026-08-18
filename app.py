@@ -3736,7 +3736,14 @@ def calcular_resumo_mensal_executivo_i8112(historico, registros, competencia, re
             propostas_mes.append(prop)
 
     propostas_mes_validas = [p for p in propostas_mes if not proposta_encerrada(p)]
-    aprovadas_das_emitidas = [p for p in propostas_mes_validas if valor_bool(p.get("aprovado"))]
+    propostas_mes_encerradas = [p for p in propostas_mes if proposta_encerrada(p)]
+    # HF1: conversão comercial deve partir de tudo que foi efetivamente emitido.
+    # Propostas não fechadas/encerradas representam oportunidades que não converteram
+    # e, portanto, permanecem no denominador.
+    aprovadas_das_emitidas = [
+        p for p in propostas_mes
+        if valor_bool(p.get("aprovado")) and not proposta_encerrada(p)
+    ]
 
     entregues_mes = []
     recebidas_mes = []
@@ -3752,7 +3759,7 @@ def calcular_resumo_mensal_executivo_i8112(historico, registros, competencia, re
     total_aprovado = sum(calcular_valores_proposta(p)[2] for p in aprovadas_das_emitidas)
     total_recebido = sum(calcular_valores_proposta(p)[2] for p in recebidas_mes)
     ticket_medio = total_orcado / len(propostas_mes) if propostas_mes else 0.0
-    conversao = (len(aprovadas_das_emitidas) / len(propostas_mes_validas) * 100.0) if propostas_mes_validas else 0.0
+    conversao = (len(aprovadas_das_emitidas) / len(propostas_mes) * 100.0) if propostas_mes else 0.0
 
     registros_competencia = [
         r for r in (registros or [])
@@ -3784,6 +3791,9 @@ def calcular_resumo_mensal_executivo_i8112(historico, registros, competencia, re
         "propostas_emitidas": len(propostas_mes),
         "total_orcado": total_orcado,
         "aprovadas_das_emitidas": len(aprovadas_das_emitidas),
+        "nao_aprovadas_das_emitidas": max(len(propostas_mes) - len(aprovadas_das_emitidas), 0),
+        "encerradas_das_emitidas": len(propostas_mes_encerradas),
+        "base_conversao": len(propostas_mes),
         "total_aprovado": total_aprovado,
         "entregas_concluidas": len(entregues_mes),
         "recebimentos_qtd": len(recebidas_mes),
@@ -3795,6 +3805,60 @@ def calcular_resumo_mensal_executivo_i8112(historico, registros, competencia, re
         "mensal_fechamentos": len(registros_competencia),
         "mensal_em_composicao": mensal_em_composicao,
         "mensal_registrado_aberto": mensal_registrado_aberto,
+    }
+
+
+def auditar_eventos_diarios_i8112hf1(historico, referencia=None):
+    """Explica quando o status registrado hoje pode representar regularização de histórico.
+
+    Não tenta adivinhar a data real de um evento antigo. Apenas diferencia a data
+    em que o Manager recebeu o status da data operacional planejada/emissão.
+    """
+    referencia = referencia or hoje_local()
+    propostas = [p for p in (historico or []) if isinstance(p, dict)]
+    aprovacoes_hoje = []
+    entregas_hoje = []
+    pagamentos_hoje = []
+    aprovacoes_de_emitidas_antes = []
+    entregas_com_prevista_anterior = []
+
+    for prop in propostas:
+        if valor_bool(prop.get("aprovado")):
+            d_aprov = _data_resultado(prop.get("aprovado_em") or prop.get("data_aprovacao"))
+            if d_aprov == referencia:
+                aprovacoes_hoje.append(prop)
+                d_emissao = _data_resultado(
+                    prop.get("data_geracao") or prop.get("data") or prop.get("criado_em") or prop.get("created_at")
+                )
+                if d_emissao and d_emissao < referencia:
+                    aprovacoes_de_emitidas_antes.append(prop)
+
+        if valor_bool(prop.get("entregue")):
+            d_entrega = _data_resultado(prop.get("entregue_em") or prop.get("data_entrega_real"))
+            if d_entrega == referencia:
+                entregas_hoje.append(prop)
+                d_prevista = _data_resultado(prop.get("data_entrega"))
+                if d_prevista and d_prevista < referencia:
+                    entregas_com_prevista_anterior.append(prop)
+
+        if valor_bool(prop.get("pago")):
+            d_pag = _data_resultado(prop.get("pago_em") or prop.get("data_pagamento"))
+            if d_pag == referencia:
+                pagamentos_hoje.append(prop)
+
+    def _rotulo(prop):
+        numero = str(prop.get("numero_proposta") or "—")
+        cliente = str(prop.get("cliente_nome") or prop.get("cliente") or "Cliente")
+        return f"{numero} · {cliente}"
+
+    return {
+        "aprovacoes_registradas_hoje": len(aprovacoes_hoje),
+        "entregas_registradas_hoje": len(entregas_hoje),
+        "pagamentos_registrados_hoje": len(pagamentos_hoje),
+        "aprovacoes_de_emitidas_antes": len(aprovacoes_de_emitidas_antes),
+        "entregas_com_prevista_anterior": len(entregas_com_prevista_anterior),
+        "exemplos_aprovacoes": [_rotulo(p) for p in aprovacoes_de_emitidas_antes[:8]],
+        "exemplos_entregas": [_rotulo(p) for p in entregas_com_prevista_anterior[:8]],
     }
 
 
@@ -3876,7 +3940,7 @@ def renderizar_resumo_mensal_executivo_i8112(historico, snapshot_alpha_core=None
         "📈 Conversão",
         f"{atual['conversao']:.1f}%".replace(".", ","),
         _i8112_delta_percentual(atual["conversao"], anterior["conversao"]),
-        help="Percentual das propostas emitidas no mês que estão aprovadas.",
+        help="Conversão comercial = propostas emitidas no mês que estão aprovadas ÷ todas as propostas emitidas no mês. Não fechadas/encerradas permanecem no denominador.",
     )
     rc2.metric("📦 Pedidos ativos · agora", int(core.get("pedidos_ativos") or 0))
     rc3.metric("📊 Carteira aberta · agora", _i8112_moeda(core.get("carteira_aberta") or 0))
@@ -3888,6 +3952,13 @@ def renderizar_resumo_mensal_executivo_i8112(historico, snapshot_alpha_core=None
             f"Período exibido: {atual['inicio'].strftime('%d/%m/%Y')} a {atual['fim'].strftime('%d/%m/%Y')}. "
             "Propostas e valores do mês usam a data de emissão. Entregas e recebimentos usam a data própria do evento registrada no histórico."
         )
+        if atual["base_conversao"]:
+            st.write(
+                f"**Conversão comercial:** {atual['aprovadas_das_emitidas']} aprovada(s) ÷ "
+                f"{atual['base_conversao']} emitida(s) = **{atual['conversao']:.1f}%**. "
+                f"Há {atual['nao_aprovadas_das_emitidas']} proposta(s) ainda não convertida(s); "
+                f"{atual['encerradas_das_emitidas']} delas estão encerradas/não fechadas e continuam no denominador."
+            )
         st.write(
             f"**Faturamento mensal da competência:** {_i8112_moeda(atual['mensal_em_composicao'])} em composição + "
             f"{_i8112_moeda(atual['mensal_registrado_aberto'])} já fechado/faturado/reaberto = "
@@ -18582,13 +18653,41 @@ if pagina_atual == "central":
             st.success("🎉 Sua fila está organizada. Aproveite para revisar catálogos, artes e retornos de clientes.")
         st.divider()
 
+    usuario_eh_jorge_i8112hf1 = str(usuario_atual.get("nome", "")).strip().casefold() == "jorge"
     st.markdown("#### 📊 Resumo de hoje")
     rs1, rs2, rs3, rs4 = st.columns(4)
-    rs1.metric("Orçamentos criados", indicadores_unificados_central["propostas_hoje"])
-    rs2.metric("Pedidos aprovados", indicadores_unificados_central["aprovadas_hoje"])
-    rs3.metric("Entregas concluídas", indicadores_unificados_central["entregues_hoje"])
-    rs4.metric("Minha fila", len(minha_fila_central))
-    st.caption("Indicadores calculados pela fonte única da Central, CRM e THU.")
+    if usuario_eh_jorge_i8112hf1:
+        core_diario_i8112hf1 = snapshot_alpha_core.to_dict() if hasattr(snapshot_alpha_core, "to_dict") else dict(snapshot_alpha_core or {})
+        auditoria_diaria_i8112hf1 = auditar_eventos_diarios_i8112hf1(historico_central, hoje_central)
+        rs1.metric("📄 Orçamentos emitidos hoje", indicadores_unificados_central["propostas_hoje"], help="Propostas cuja data de emissão registrada é hoje.")
+        rs2.metric("✅ Aprovações registradas hoje", indicadores_unificados_central["aprovadas_hoje"], help="Status de aprovação registrado hoje. Pode incluir regularização hoje de proposta emitida em data anterior.")
+        rs3.metric("🚚 Entregas registradas hoje", indicadores_unificados_central["entregues_hoje"], help="Status de entrega concluída registrado hoje. Pode incluir regularização de entrega antiga.")
+        rs4.metric("💵 Recebido registrado hoje", _i8112_moeda(core_diario_i8112hf1.get("recebido_hoje") or 0), help="Valor das propostas cujo pagamento foi registrado hoje.")
+        st.caption(
+            "HF1: o Resumo de hoje mostra movimentações **registradas hoje**. Isso evita confundir a regularização de um status antigo com a data real em que o evento aconteceu."
+        )
+        if auditoria_diaria_i8112hf1["aprovacoes_de_emitidas_antes"] or auditoria_diaria_i8112hf1["entregas_com_prevista_anterior"]:
+            st.info(
+                f"🔎 Auditoria: {auditoria_diaria_i8112hf1['aprovacoes_de_emitidas_antes']} aprovação(ões) registrada(s) hoje pertencem a propostas emitidas antes de hoje; "
+                f"{auditoria_diaria_i8112hf1['entregas_com_prevista_anterior']} entrega(s) registrada(s) hoje tinham data prevista anterior. "
+                "Isso pode acontecer durante a atualização de status históricos e não será tratado como um evento passado sem uma data confiável."
+            )
+            with st.expander("Ver registros que merecem conferência", expanded=False):
+                if auditoria_diaria_i8112hf1["exemplos_aprovacoes"]:
+                    st.write("**Aprovações registradas hoje de propostas anteriores**")
+                    for item in auditoria_diaria_i8112hf1["exemplos_aprovacoes"]:
+                        st.write(f"• {item}")
+                if auditoria_diaria_i8112hf1["exemplos_entregas"]:
+                    st.write("**Entregas registradas hoje com previsão anterior**")
+                    for item in auditoria_diaria_i8112hf1["exemplos_entregas"]:
+                        st.write(f"• {item}")
+    else:
+        # Anna permanece com a visualização homologada anterior nesta etapa.
+        rs1.metric("Orçamentos criados", indicadores_unificados_central["propostas_hoje"])
+        rs2.metric("Pedidos aprovados", indicadores_unificados_central["aprovadas_hoje"])
+        rs3.metric("Entregas concluídas", indicadores_unificados_central["entregues_hoje"])
+        rs4.metric("Minha fila", len(minha_fila_central))
+        st.caption("Indicadores calculados pela fonte única da Central, CRM e THU.")
 
     if minha_fila_central:
         with st.expander(f"👤 Minha fila — {nome_usuario_central} ({len(minha_fila_central)})", expanded=False):
@@ -18618,14 +18717,29 @@ if pagina_atual == "central":
         st.caption("Abra a aba Atendimento para responder, classificar ou criar orçamento.")
         st.divider()
 
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
-    c1.metric("🚨 Atrasados", indicadores_unificados_central["atrasados_operacionais"], help="Pedidos aprovados, ainda não entregues e com data de entrega vencida.")
-    c2.metric("📦 Entregas hoje", indicadores_unificados_central["entregas_hoje_abertas"], help="Pedidos aprovados e ainda não entregues com entrega marcada para hoje.")
-    c3.metric("🟡 Aprovação", indicadores_unificados_central["aguardando_aprovacao"], help="Orçamentos abertos que ainda não foram aprovados nem encerrados.")
-    c4.metric("🔵 Em produção", indicadores_unificados_central["em_producao_operacional"], help="Pedidos aprovados e ativos que ainda não estão prontos ou entregues.")
-    c5.metric("✅ Prontos", indicadores_unificados_central["prontos_operacionais"], help="Pedidos aprovados cujos itens estão marcados como Pronto.")
-    c6.metric("💰 Previsto hoje", f"R$ {valor_previsto_hoje:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), help="Soma dos pedidos aprovados, ainda não entregues, previstos para hoje.")
-    st.caption("Atrasados, entregas e valor previsto consideram somente pedidos aprovados. Aprovação considera orçamentos ainda abertos.")
+    if usuario_eh_jorge_i8112hf1:
+        st.markdown("#### 📌 Situação operacional agora")
+        core_agora_i8112hf1 = snapshot_alpha_core.to_dict() if hasattr(snapshot_alpha_core, "to_dict") else dict(snapshot_alpha_core or {})
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        c1.metric("📦 Pedidos ativos", indicadores_unificados_central["pedidos_ativos"], help="Propostas atualmente abertas segundo a Fonte Única de Status.")
+        c2.metric("🟡 Aprovação pendente", indicadores_unificados_central["aguardando_aprovacao"], help="Orçamentos abertos que ainda não foram aprovados nem encerrados.")
+        c3.metric("🔵 Em produção", indicadores_unificados_central["em_producao_operacional"], help="Pedidos aprovados e ativos que ainda não estão prontos ou entregues.")
+        c4.metric("✅ Prontos", indicadores_unificados_central["prontos_operacionais"], help="Pedidos aprovados cujos itens estão marcados como Pronto.")
+        c5.metric("🚨 Atrasados", indicadores_unificados_central["atrasados_operacionais"], help="Pedidos aprovados, ainda não entregues e com data de entrega vencida.")
+        c6.metric("📊 Carteira aberta", _i8112_moeda(core_agora_i8112hf1.get("carteira_aberta") or 0), help="Valor atual dos pedidos aprovados que permanecem operacionalmente abertos.")
+        st.caption(
+            f"Agenda de hoje: {indicadores_unificados_central['entregas_hoje_abertas']} entrega(s) ainda prevista(s) · "
+            f"{_i8112_moeda(valor_previsto_hoje)} previsto(s). Estes números são uma fotografia atual, não um histórico do dia."
+        )
+    else:
+        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        c1.metric("🚨 Atrasados", indicadores_unificados_central["atrasados_operacionais"], help="Pedidos aprovados, ainda não entregues e com data de entrega vencida.")
+        c2.metric("📦 Entregas hoje", indicadores_unificados_central["entregas_hoje_abertas"], help="Pedidos aprovados e ainda não entregues com entrega marcada para hoje.")
+        c3.metric("🟡 Aprovação", indicadores_unificados_central["aguardando_aprovacao"], help="Orçamentos abertos que ainda não foram aprovados nem encerrados.")
+        c4.metric("🔵 Em produção", indicadores_unificados_central["em_producao_operacional"], help="Pedidos aprovados e ativos que ainda não estão prontos ou entregues.")
+        c5.metric("✅ Prontos", indicadores_unificados_central["prontos_operacionais"], help="Pedidos aprovados cujos itens estão marcados como Pronto.")
+        c6.metric("💰 Previsto hoje", f"R$ {valor_previsto_hoje:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), help="Soma dos pedidos aprovados, ainda não entregues, previstos para hoje.")
+        st.caption("Atrasados, entregas e valor previsto consideram somente pedidos aprovados. Aprovação considera orçamentos ainda abertos.")
 
     st.divider()
     st.subheader("🎯 O que fazer agora")
