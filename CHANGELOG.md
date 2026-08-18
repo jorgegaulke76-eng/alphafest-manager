@@ -599,3 +599,10 @@ hangelog
 - Recebimentos já registrados são preservados; correções posteriores calculam saldo adicional ou crédito do cliente.
 - PDF do fechamento é preparado somente sob demanda.
 - Homologação desta etapa continua restrita ao perfil Jorge.
+
+## 20.4.9-I8.11.2-HF2 — Unificação final de Atrasados
+- THU, Alpha Core, Resumo Mensal e Central passam a consumir a mesma lista oficial de pedidos atrasados.
+- Removida a regra paralela do THU que podia contar proposta encerrada como atraso.
+- Prioridade executiva e alertas da Central passam a apontar exatamente os mesmos pedidos do Alpha Core.
+- Hotfix somente de leitura; bancos comerciais e interface da Anna preservados.
+

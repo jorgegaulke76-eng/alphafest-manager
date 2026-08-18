@@ -49,7 +49,7 @@ from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
 from painel_indicadores import calcular_indicadores_unificados
 from alpha_live import registrar_atividade, obter_operacao_online, obter_eventos_recentes
 from thu_executivo import calcular_briefing, renderizar_briefing_thu
-from alpha_core import calcular_alpha_core
+from alpha_core import calcular_alpha_core, listar_atrasados_operacionais
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_encerrada as _status_proposta_encerrada,
@@ -18523,10 +18523,8 @@ if pagina_atual == "central":
         p for p in propostas_aprovadas_abertas_central
         if data_entrega_segura(p.get("data_entrega")) == hoje_central
     ]
-    pedidos_atrasados_central = [
-        p for p in propostas_aprovadas_abertas_central
-        if (data_entrega_segura(p.get("data_entrega")) or date.max) < hoje_central
-    ]
+    # HF2: Central/THU/Alpha Core usam a mesma lista oficial de atrasados.
+    pedidos_atrasados_central = listar_atrasados_operacionais(historico_central, hoje_central)
     aguardando_aprovacao_central = [
         p for p in propostas_operacionais_central
         if not valor_bool(p.get("aprovado")) and not valor_bool(p.get("entregue"))

@@ -57,6 +57,29 @@ def _concluida(record: dict[str, Any]) -> bool:
     return _status_concluida(record)
 
 
+def listar_atrasados_operacionais(
+    historico: list[dict[str, Any]] | None,
+    hoje: date,
+) -> list[dict[str, Any]]:
+    """Lista oficial de pedidos atrasados do Alpha Core.
+
+    Esta função é a fonte única para THU, Alpha Core, Central e painel de
+    indicadores. Um pedido só está atrasado quando a proposta é válida, ainda
+    está operacionalmente ativa, foi aprovada, não foi entregue e sua data de
+    entrega já venceu. Propostas encerradas/canceladas e mensalistas concluídos
+    operacionalmente não entram na lista.
+    """
+    propostas = [p for p in list(historico or []) if isinstance(p, dict)]
+    validas = [p for p in propostas if not _encerrada(p)]
+    ativas = [p for p in validas if not _concluida(p)]
+    return [
+        p for p in ativas
+        if _bool(p.get("aprovado"))
+        and not _bool(p.get("entregue"))
+        and (_date(p.get("data_entrega")) or date.max) < hoje
+    ]
+
+
 def _total(record: dict[str, Any], calculator: Callable[[dict[str, Any]], tuple[Any, Any, Any]] | None) -> float:
     if calculator:
         try:
@@ -121,10 +144,7 @@ def calcular_alpha_core(
         if _bool(p.get("entregue"))
         and _date(p.get("entregue_em") or p.get("data_entrega_real")) == hoje
     ]
-    atrasadas_lista = [
-        p for p in aprovadas_abertas
-        if not _bool(p.get("entregue")) and (_date(p.get("data_entrega")) or date.max) < hoje
-    ]
+    atrasadas_lista = listar_atrasados_operacionais(propostas, hoje)
     pagos_hoje = [
         p for p in validas
         if _bool(p.get("pago"))

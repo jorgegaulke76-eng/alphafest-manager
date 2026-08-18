@@ -10,6 +10,8 @@ from typing import Any, Callable
 
 import streamlit as st
 
+from alpha_core import listar_atrasados_operacionais
+
 
 def _bool(value: Any) -> bool:
     if isinstance(value, bool):
@@ -70,7 +72,9 @@ def calcular_briefing(
     previsto_aberto = sum(_valor_total(p, calcular_valores) for p in aprovados_abertos)
 
     entregas_hoje = [p for p in aprovados_abertos if _data(p.get("data_entrega")) == hoje]
-    atrasados = [p for p in aprovados_abertos if (_data(p.get("data_entrega")) or date.max) < hoje]
+    # HF2: não recalcular atraso com regra própria. O THU consome a lista
+    # oficial do Alpha Core para garantir os mesmos pedidos e a mesma contagem.
+    atrasados = listar_atrasados_operacionais(propostas, hoje)
 
     alertas: list[str] = []
     if atrasados:

@@ -8,6 +8,7 @@ from proposal_status import (
     proposta_encerrada as _status_encerrada,
     proposta_faturamento_mensal as _status_mensal,
 )
+from alpha_core import listar_atrasados_operacionais
 
 
 def _bool(value: Any) -> bool:
@@ -116,10 +117,9 @@ def calcular_indicadores_unificados(
         p for p in aprovadas_em_andamento
         if _parse_date(p.get("data_entrega")) == hoje
     ]
-    atrasadas = [
-        p for p in aprovadas_em_andamento
-        if (_parse_date(p.get("data_entrega")) or date.max) < hoje
-    ]
+    # HF2: a contagem de atrasados vem exatamente da mesma lista oficial
+    # utilizada pelo Alpha Core e pelo THU.
+    atrasadas = listar_atrasados_operacionais(propostas, hoje)
 
     tarefas_ativas = [t for t in tarefas_lista if _bool(t.get("ativa", True))]
     aprovadas_abertas_ids = {_numero(p) for p in aprovadas_em_andamento if _numero(p)}
