@@ -1,3 +1,10 @@
+## 20.4.9-I8.11-HF2
+- Extende para a Anna o fluxo comercial homologado no Jorge.
+- WhatsApp reconhece cliente cadastrado e carrega o Perfil Comercial no modal de orçamento.
+- Mensalista e abatimentos fixos em R$ passam a ser aplicados automaticamente nas novas propostas da Anna.
+- Propostas da Anna salvam modalidade mensal, relacionamento e preço final aplicado sem alterar o Catálogo Oficial.
+- Jorge permanece com a lógica HF1 homologada sem mudança de regra.
+
 ## 20.4.9-I8.11-HF1
 - Hotfix da navegação: Novo Orçamento volta a abrir corretamente no perfil Jorge a partir de qualquer atalho/tela.
 - Identificação automática de cliente por WhatsApp no Novo Orçamento do Jorge.

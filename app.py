@@ -2353,6 +2353,31 @@ def autopreencher_cliente_whatsapp_i8111():
     st.session_state["_i8111_cliente_reconhecido_msg"] = "encontrado"
 
 
+def autopreencher_cliente_whatsapp_anna_i811hf2():
+    """HF2: espelha no modal da Anna a identificação por WhatsApp homologada no Jorge.
+
+    Mantém chaves próprias do modal para não interferir no formulário principal.
+    O callback apenas lê o cadastro mestre e preenche identificação do cliente;
+    nenhuma condição comercial é criada ou alterada aqui.
+    """
+    whatsapp = str(st.session_state.get("anna_modal_whatsapp", "") or "").strip()
+    digitos = _telefone_chave(whatsapp)
+    if len(digitos) < 8:
+        st.session_state.pop("_i811hf2_anna_cliente_reconhecido_id", None)
+        st.session_state.pop("_i811hf2_anna_cliente_reconhecido_msg", None)
+        return
+    cliente = localizar_cliente_comercial(whatsapp=whatsapp)
+    if not cliente:
+        st.session_state.pop("_i811hf2_anna_cliente_reconhecido_id", None)
+        st.session_state["_i811hf2_anna_cliente_reconhecido_msg"] = "nao_encontrado"
+        return
+    st.session_state["anna_modal_cliente"] = str(cliente.get("nome", "") or "").strip()
+    st.session_state["anna_modal_documento"] = str(cliente.get("documento", "") or "").strip()
+    # Preserva exatamente o número confirmado pela Anna no campo que disparou o callback.
+    st.session_state["_i811hf2_anna_cliente_reconhecido_id"] = cliente.get("id", "")
+    st.session_state["_i811hf2_anna_cliente_reconhecido_msg"] = "encontrado"
+
+
 def resumo_cliente_reconhecido_i8111(cliente):
     if not cliente:
         return ""
@@ -10911,6 +10936,8 @@ def dialog_orcamento_anna(proposta=None):
         st.session_state["anna_modal_frete"] = "Entrega" if _frete_modal_salvo.casefold() == "entrega" else "Retirada"
         st.session_state["anna_modal_taxa_entrega"] = valor_float(proposta.get("taxa_entrega", 0))
         st.session_state["anna_modal_validade"] = str(proposta.get("validade_dias", "5"))
+        st.session_state.pop("_i811hf2_anna_cliente_reconhecido_msg", None)
+        st.session_state.pop("_i811hf2_anna_cliente_reconhecido_id", None)
 
     logo_b64, _ = encontrar_logo_base64()
     if logo_b64:
@@ -10944,13 +10971,41 @@ def dialog_orcamento_anna(proposta=None):
                 st.session_state.pop("_ultima_proposta_salva_anna", None)
                 st.rerun()
 
-    # Mesmo desenho do orçamento principal: cliente + um item por vez.
-    with st.form(key=f"anna_modal_item_{st.session_state.get('anna_modal_item_key', 0)}", clear_on_submit=False):
-        nome = st.text_input("Nome / Razão Social", key="anna_modal_cliente")
-        c1, c2 = st.columns(2)
-        doc = c1.text_input("CPF / CNPJ", key="anna_modal_documento")
-        wa = c2.text_input("WhatsApp", key="anna_modal_whatsapp")
+    # HF2 — extensão do fluxo homologado no Jorge para a Anna.
+    # A identificação do cliente fica fora do form de item para permitir o callback
+    # do WhatsApp sem recalcular tema, personalização e demais campos do produto.
+    st.markdown("#### 👤 Cliente")
+    nome = st.text_input("Nome / Razão Social", key="anna_modal_cliente")
+    c1, c2 = st.columns(2)
+    doc = c1.text_input("CPF / CNPJ", key="anna_modal_documento")
+    wa = c2.text_input(
+        "WhatsApp",
+        key="anna_modal_whatsapp",
+        on_change=autopreencher_cliente_whatsapp_anna_i811hf2,
+        help="Ao confirmar um número já cadastrado, os dados e o Perfil Comercial do cliente são carregados automaticamente.",
+    )
 
+    cliente_modal_i811 = localizar_cliente_comercial(nome, doc, wa)
+    msg_modal_i811 = st.session_state.pop("_i811hf2_anna_cliente_reconhecido_msg", None)
+    if cliente_modal_i811:
+        resumo_modal_rec_i811 = resumo_cliente_reconhecido_i8111(cliente_modal_i811)
+        st.success(f"✅ Cliente cadastrado reconhecido: **{cliente_modal_i811.get('nome', 'Cliente')}**")
+        if resumo_modal_rec_i811:
+            st.caption(resumo_modal_rec_i811)
+        perfil_modal_i811 = resumo_perfil_comercial(cliente_modal_i811)
+        if perfil_modal_i811.get("faturamento_mensal"):
+            st.info(
+                f"💳 **{cliente_modal_i811.get('nome', 'Cliente')} é mensalista.** "
+                f"Fechamento dia {perfil_modal_i811.get('dia_fechamento')} · vencimento dia {perfil_modal_i811.get('dia_vencimento')}. "
+                "Esta proposta ficará identificada para o controle mensal."
+            )
+        if perfil_modal_i811.get("qtd_regras_ativas", 0):
+            st.caption(f"💰 Perfil Comercial encontrado: {perfil_modal_i811.get('qtd_regras_ativas')} abatimento(s) fixo(s) ativo(s) por produto.")
+    elif msg_modal_i811 == "nao_encontrado":
+        st.info("ℹ️ WhatsApp ainda não localizado nos Relacionamentos. A proposta pode ser criada normalmente e o cliente pode ser cadastrado depois.")
+
+    # Formulário isolado do item, espelhando a regra comercial já homologada no Jorge.
+    with st.form(key=f"anna_modal_item_{st.session_state.get('anna_modal_item_key', 0)}", clear_on_submit=False):
         prod = st.text_input("Produto", key=f"anna_modal_prod_{st.session_state.get('anna_modal_item_key', 0)}")
         with st.expander("🎨 Personalização & Especificações", expanded=True):
             e1, e2 = st.columns(2)
@@ -10969,18 +11024,76 @@ def dialog_orcamento_anna(proposta=None):
             st.warning("Informe o produto antes de adicionar.")
         else:
             detalhes = f"Tema: {tema} | Nome: {nome_item} | Idade: {idade} | Cor: {cor} | Obs: {obs}"
-            st.session_state["anna_modal_itens"].append({"produto": prod.strip(), "especificacoes": detalhes, "quantidade": q, "valor_unitario": v})
-            st.session_state["anna_modal_item_key"] += 1
-            # Não executar rerun global dentro do diálogo: isso fecha o popup e apaga a experiência visual.
-            # A lista abaixo já usa o session_state atualizado e mostra o item imediatamente.
+            item_novo = {"produto": prod.strip(), "especificacoes": detalhes, "quantidade": q, "valor_unitario": v}
+            cliente_item_i811 = localizar_cliente_comercial(nome, doc, wa)
+            preco_item_i811 = calcular_preco_cliente_item(cliente_item_i811, prod.strip(), v) if cliente_item_i811 else None
+            if preco_item_i811 and preco_item_i811.get("bloqueado"):
+                st.error(
+                    f"🛑 Não foi possível aplicar o preço especial de {preco_item_i811.get('produto_oficial', prod.strip())}. "
+                    f"Preço oficial R$ {preco_item_i811.get('preco_base', 0):.2f} e abatimento R$ {preco_item_i811.get('abatimento', 0):.2f}. "
+                    "Revise o Perfil Comercial do cliente antes de adicionar este item."
+                )
+            else:
+                if preco_item_i811:
+                    item_novo.update({
+                        "produto": preco_item_i811["produto_oficial"],
+                        "valor_unitario": preco_item_i811["preco_final"],
+                        "valor_base_oficial": preco_item_i811["preco_base"],
+                        "abatimento_fixo_cliente": preco_item_i811["abatimento"],
+                        "preco_especial_aplicado": True,
+                        "perfil_comercial_cliente_id": (cliente_item_i811 or {}).get("id", ""),
+                    })
+                    st.success(
+                        (f"💰 Preço especial aplicado a {preco_item_i811['produto_oficial']}: "
+                         f"R$ {preco_item_i811['preco_base']:.2f} - R$ {preco_item_i811['abatimento']:.2f} = R$ {preco_item_i811['preco_final']:.2f}").replace(".", ",")
+                    )
+                st.session_state["anna_modal_itens"].append(item_novo)
+                st.session_state["anna_modal_item_key"] += 1
+                # Não executar rerun global dentro do diálogo: a lista abaixo já
+                # usa o session_state atualizado e mostra o item imediatamente.
 
     itens = st.session_state.get("anna_modal_itens", [])
     if itens:
+        cliente_itens_i811 = localizar_cliente_comercial(nome, doc, wa)
+        perfil_itens_i811 = resumo_perfil_comercial(cliente_itens_i811) if cliente_itens_i811 else resumo_perfil_comercial({})
+        if cliente_itens_i811 and perfil_itens_i811.get("qtd_regras_ativas", 0):
+            if st.button("💼 Recalcular itens pelo Perfil Comercial", key="anna_i811hf2_recalcular_itens", use_container_width=True):
+                alterados_i811 = 0
+                bloqueados_i811 = []
+                for item_i811 in itens:
+                    calc_i811 = calcular_preco_cliente_item(cliente_itens_i811, item_i811.get("produto"), item_i811.get("valor_unitario", 0))
+                    if calc_i811 and calc_i811.get("bloqueado"):
+                        bloqueados_i811.append(calc_i811.get("produto_oficial") or item_i811.get("produto"))
+                        continue
+                    if calc_i811:
+                        item_i811.update({
+                            "produto": calc_i811["produto_oficial"],
+                            "valor_unitario": calc_i811["preco_final"],
+                            "valor_base_oficial": calc_i811["preco_base"],
+                            "abatimento_fixo_cliente": calc_i811["abatimento"],
+                            "preco_especial_aplicado": True,
+                            "perfil_comercial_cliente_id": cliente_itens_i811.get("id", ""),
+                        })
+                        alterados_i811 += 1
+                if bloqueados_i811:
+                    st.error("🛑 Revise o Perfil Comercial antes de continuar: abatimento maior que o preço oficial em " + ", ".join(bloqueados_i811))
+                elif alterados_i811:
+                    st.success(f"{alterados_i811} item(ns) recalculado(s) com abatimento fixo em R$.")
+                else:
+                    st.info("Nenhum item atual possui regra de abatimento ativa para este cliente.")
+
         st.write("📋 **Itens da proposta:**")
         for idx, item in enumerate(itens):
             ci, cr = st.columns([8, 1])
             ci.write(f"**{idx + 1}. {item.get('produto')}** — Qtd: {item.get('quantidade')} — R$ {valor_float(item.get('valor_unitario')):,.2f}")
             ci.caption(item.get("especificacoes", ""))
+            if valor_bool(item.get("preco_especial_aplicado")):
+                base_i811 = valor_float(item.get("valor_base_oficial"))
+                abat_i811 = valor_float(item.get("abatimento_fixo_cliente"))
+                final_i811 = valor_float(item.get("valor_unitario"))
+                ci.caption(
+                    (f"💼 Preço especial: R$ {base_i811:.2f} - abatimento fixo R$ {abat_i811:.2f} = R$ {final_i811:.2f}").replace(".", ",")
+                )
             if cr.button("🗑️", key=f"anna_modal_remover_{idx}", help="Remover item"):
                 itens.pop(idx)
                 try:
@@ -10990,7 +11103,7 @@ def dialog_orcamento_anna(proposta=None):
 
         st.divider()
         d1, d2, d3 = st.columns(3)
-        desconto = d1.number_input("Desconto (R$)", min_value=0.0, step=0.5, key="anna_modal_desconto")
+        desconto = d1.number_input("Desconto adicional da proposta (R$)", min_value=0.0, step=0.5, key="anna_modal_desconto", help="Separado dos abatimentos fixos por produto do Perfil Comercial do Cliente.")
         entrega = d2.date_input("📅 Data Entrega", key="anna_modal_entrega")
         prazo = d3.text_input("Prazo de Produção (dias úteis)", key="anna_modal_prazo")
         f1, f2 = st.columns(2)
@@ -11026,6 +11139,10 @@ def dialog_orcamento_anna(proposta=None):
                 st.error("Informe o nome do cliente.")
                 return
             numero = numero_original or ""
+            cliente_comercial_i811 = localizar_cliente_comercial(nome, doc, wa)
+            perfil_salvar_i811 = resumo_perfil_comercial(cliente_comercial_i811) if cliente_comercial_i811 else resumo_perfil_comercial({})
+            mensal_salvar_i811 = bool(perfil_salvar_i811.get("faturamento_mensal"))
+            modalidade_salvar_i811 = I811_MODALIDADE_MENSAL if mensal_salvar_i811 else I811_MODALIDADE_NORMAL
             dados = {
                 **proposta,
                 "numero_proposta": numero,
@@ -11033,6 +11150,11 @@ def dialog_orcamento_anna(proposta=None):
                 "data_entrega": entrega.strftime("%d/%m/%Y"),
                 "cliente_nome": nome.strip(), "documento": doc.strip(), "whatsapp": wa.strip(),
                 "cliente_cpf_cnpj": doc.strip(), "cliente_wa": wa.strip(),
+                "relacionamento_id": (cliente_comercial_i811 or {}).get("id", proposta.get("relacionamento_id", "")),
+                "modalidade_cobranca": modalidade_salvar_i811,
+                "faturamento_mensal": mensal_salvar_i811,
+                "financeiro_status": (proposta.get("financeiro_status") or "Aguardando fechamento mensal") if mensal_salvar_i811 else proposta.get("financeiro_status", ""),
+                "pagamento": "Faturamento mensal conforme condição comercial cadastrada." if mensal_salvar_i811 else proposta.get("pagamento", "Pagamento via PIX: https://linkspix.app/alphafestitatiba"),
                 "itens": list(itens), "subtotal": subtotal, "desconto": desconto, "desconto_valor": desconto,
                 "valor_total": total, "prazo_dias": prazo, "frete_tipo": frete,
                 "taxa_entrega": valor_float(taxa_entrega) if frete == "Entrega" else 0.0,
