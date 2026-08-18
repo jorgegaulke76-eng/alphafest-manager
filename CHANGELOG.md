@@ -1,3 +1,9 @@
+# 20.4.9-I8.11.1 — Central de Faturamento Mensal
+- Central mensal no perfil Jorge com competência, fechamento, faturado e recebido.
+- Recebimento mensal atualiza automaticamente as propostas vinculadas.
+- `faturamento_mensal_db.json` adicionado ao backup e integridade.
+- Nenhuma alteração no Catálogo Oficial ou na fórmula de abatimento fixo homologada.
+
 ## 20.4.9-I8.11-HF2
 - Extende para a Anna o fluxo comercial homologado no Jorge.
 - WhatsApp reconhece cliente cadastrado e carrega o Perfil Comercial no modal de orçamento.

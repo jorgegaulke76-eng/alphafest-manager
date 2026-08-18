@@ -18,6 +18,7 @@ import zipfile
 import hashlib
 import time
 import copy
+import calendar
 import requests
 
 _BOOT_PROCESS_STARTED_AT = time.perf_counter()
@@ -351,6 +352,7 @@ ARQUIVO_INTEGRACOES = "integracoes_db.json"
 ARQUIVO_INTELIGENCIA = "alpha_intelligence_db.json"
 ARQUIVO_USUARIOS = "usuarios_config.json"
 ARQUIVO_ORIENTACOES_THU = "orientacoes_thu.json"
+ARQUIVO_FATURAMENTO_MENSAL = "faturamento_mensal_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -480,6 +482,7 @@ ABAS_SISTEMA = [
     ("executivo", "📈 Executivo"),
     ("catalogo", "📦 Catálogo"),
     ("relacionamentos", "🌐 Relacionamentos"),
+    ("faturamento_mensal", "💳 Faturamento Mensal"),
     ("memoria", "🧠 Memória"),
     ("conhecimento", "🧩 Conhecimento"),
     ("calendario", "📅 Calendário Comercial"),
@@ -592,13 +595,21 @@ def obter_perfil_configurado(usuario=None):
         # 20.4.9-I8.8.4 — Catálogo avançado liberado para a Anna.
         # Esta sobreposição garante a liberação mesmo quando o cadastro de
         # usuários veio de uma base/cloud antiga com ações vazias.
-        if str(cfg.get("nome") or usuario.get("nome") or "").strip().casefold() == "anna":
+        nome_cfg = str(cfg.get("nome") or usuario.get("nome") or "").strip().casefold()
+        if nome_cfg == "anna":
             cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"catalogo"})
             acoes = dict(cfg.get("acoes") or {})
             acoes["catalogo"] = sorted(
                 set(acoes.get("catalogo") or [])
                 | {"visualizar", "criar", "editar", "aprovar", "exportar"}
             )
+            cfg["acoes"] = acoes
+        elif nome_cfg == "jorge":
+            # I8.11.1 nasce primeiro no perfil Jorge. A sobreposição garante
+            # acesso mesmo quando usuarios_config.json veio de uma base antiga.
+            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"faturamento_mensal"})
+            acoes = dict(cfg.get("acoes") or {})
+            acoes["faturamento_mensal"] = list(ACOES_PADRAO)
             cfg["acoes"] = acoes
         return cfg
     nome = str(usuario.get("nome", "")).casefold()
@@ -3377,6 +3388,329 @@ def propostas_do_cliente(cliente):
         if pchave == chave:
             propostas.append(prop)
     return propostas
+
+
+# --- 20.4.9-I8.11.1: Central de Faturamento Mensal ---
+I8111_STATUS_FECHADO = "Fechado"
+I8111_STATUS_FATURADO = "Faturado"
+I8111_STATUS_RECEBIDO = "Recebido"
+I8111_STATUS_REABERTO = "Reaberto"
+
+
+def carregar_faturamentos_mensais():
+    dados = load_document("faturamento_mensal_db", ARQUIVO_FATURAMENTO_MENSAL, [])
+    return dados if isinstance(dados, list) else []
+
+
+def salvar_faturamentos_mensais(lista):
+    if not isinstance(lista, list):
+        raise ValueError("A Central de Faturamento Mensal precisa ser uma lista.")
+    return bool(save_document("faturamento_mensal_db", lista, ARQUIVO_FATURAMENTO_MENSAL))
+
+
+def _i8111_usuario_nome():
+    return str((obter_usuario_atual() or {}).get("nome") or "Usuário").strip() or "Usuário"
+
+
+def _i8111_data_limite_mes(ano, mes, dia):
+    ultimo = calendar.monthrange(int(ano), int(mes))[1]
+    return date(int(ano), int(mes), max(1, min(int(dia or 1), ultimo)))
+
+
+def _i8111_mes_seguinte(ano, mes):
+    return (ano + 1, 1) if mes == 12 else (ano, mes + 1)
+
+
+def _i8111_competencia_data(data_base, dia_fechamento):
+    """Define a competência pelo ciclo de fechamento do cliente.
+
+    Exemplo: fechamento dia 1 -> entrega em 18/08 pertence à competência 09/2026,
+    cujo fechamento previsto será 01/09. Isso evita colocar uma entrega posterior
+    dentro de um fechamento que já teria ocorrido.
+    """
+    data_base = data_base or hoje_local()
+    dia = max(1, min(31, int(dia_fechamento or 1)))
+    ano, mes = data_base.year, data_base.month
+    if data_base.day > dia:
+        ano, mes = _i8111_mes_seguinte(ano, mes)
+    return f"{ano:04d}-{mes:02d}"
+
+
+def _i8111_competencia_partes(competencia):
+    try:
+        ano, mes = [int(x) for x in str(competencia).split("-")[:2]]
+        if 1 <= mes <= 12:
+            return ano, mes
+    except Exception:
+        pass
+    hoje = hoje_local()
+    return hoje.year, hoje.month
+
+
+def _i8111_datas_competencia(competencia, dia_fechamento, dia_vencimento):
+    ano, mes = _i8111_competencia_partes(competencia)
+    fechamento = _i8111_data_limite_mes(ano, mes, dia_fechamento)
+    vencimento = _i8111_data_limite_mes(ano, mes, dia_vencimento)
+    if vencimento < fechamento:
+        a2, m2 = _i8111_mes_seguinte(ano, mes)
+        vencimento = _i8111_data_limite_mes(a2, m2, dia_vencimento)
+    return fechamento, vencimento
+
+
+def _i8111_competencia_rotulo(competencia):
+    meses = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"]
+    ano, mes = _i8111_competencia_partes(competencia)
+    return f"{meses[mes - 1].capitalize()}/{ano}"
+
+
+def _i8111_data_proposta_mensal(prop):
+    # A entrega efetiva/planejada define o ciclo. Em bases legadas sem data de
+    # entrega, usa a emissão somente para não perder a proposta do controle.
+    return (
+        _data_resultado((prop or {}).get("data_entrega"))
+        or _data_resultado((prop or {}).get("data_geracao"))
+        or hoje_local()
+    )
+
+
+def _i8111_cliente_proposta(prop):
+    cliente = relacionamento_da_proposta(prop)
+    if cliente:
+        return cliente
+    return localizar_cliente_comercial(
+        (prop or {}).get("cliente_nome", ""),
+        (prop or {}).get("documento", (prop or {}).get("cliente_cpf_cnpj", "")),
+        (prop or {}).get("whatsapp", (prop or {}).get("cliente_wa", "")),
+    ) or {}
+
+
+def _i8111_cliente_id(cliente, prop=None):
+    cid = str((cliente or {}).get("id") or "").strip()
+    if cid:
+        return cid
+    rid = str((prop or {}).get("relacionamento_id") or "").strip()
+    if rid:
+        return rid
+    wa = _telefone_chave((cliente or {}).get("whatsapp") or (prop or {}).get("whatsapp") or (prop or {}).get("cliente_wa"))
+    if wa:
+        return f"WA-{wa}"
+    nome = normalizar_texto_cliente((cliente or {}).get("nome") or (prop or {}).get("cliente_nome") or "CLIENTE")
+    return f"NOME-{hashlib.sha1(nome.encode('utf-8')).hexdigest()[:12]}"
+
+
+def _i8111_propostas_vinculadas(registros=None):
+    vinculadas = {}
+    for reg in (registros if isinstance(registros, list) else carregar_faturamentos_mensais()):
+        if str(reg.get("status") or "") not in {I8111_STATUS_FECHADO, I8111_STATUS_FATURADO, I8111_STATUS_RECEBIDO}:
+            continue
+        for item in reg.get("propostas", []) if isinstance(reg.get("propostas"), list) else []:
+            numero = str(item.get("numero_proposta") or "").strip()
+            if numero:
+                vinculadas[numero] = str(reg.get("id") or "")
+    return vinculadas
+
+
+def montar_grupos_faturamento_mensal(historico=None, registros=None):
+    """Monta os ciclos em aberto sem duplicar valores já fechados.
+
+    Somente propostas mensais aprovadas + entregues entram no valor elegível para
+    fechamento. Propostas aprovadas aguardando entrega continuam visíveis, mas
+    não podem ser faturadas antes da conclusão operacional.
+    """
+    historico = historico if isinstance(historico, list) else carregar_historico()
+    registros = registros if isinstance(registros, list) else carregar_faturamentos_mensais()
+    vinculadas = _i8111_propostas_vinculadas(registros)
+    grupos = {}
+    for prop in historico:
+        if not isinstance(prop, dict) or not proposta_faturamento_mensal(prop) or proposta_encerrada(prop):
+            continue
+        numero = str(prop.get("numero_proposta") or "").strip()
+        if numero and numero in vinculadas:
+            continue
+        cliente = _i8111_cliente_proposta(prop)
+        perfil = resumo_perfil_comercial(cliente) if cliente else resumo_perfil_comercial({})
+        dia_fecha = int(perfil.get("dia_fechamento") or 1)
+        dia_vence = int(perfil.get("dia_vencimento") or 10)
+        competencia = str(prop.get("competencia_faturamento") or "").strip() or _i8111_competencia_data(_i8111_data_proposta_mensal(prop), dia_fecha)
+        cliente_id = _i8111_cliente_id(cliente, prop)
+        chave = (cliente_id, competencia)
+        if chave not in grupos:
+            fechamento, vencimento = _i8111_datas_competencia(competencia, dia_fecha, dia_vence)
+            grupos[chave] = {
+                "cliente_id": cliente_id,
+                "cliente_nome": str((cliente or {}).get("nome") or prop.get("cliente_nome") or "Cliente").strip(),
+                "whatsapp": str((cliente or {}).get("whatsapp") or prop.get("whatsapp") or prop.get("cliente_wa") or "").strip(),
+                "competencia": competencia,
+                "dia_fechamento": dia_fecha,
+                "dia_vencimento": dia_vence,
+                "data_fechamento": fechamento,
+                "data_vencimento": vencimento,
+                "propostas": [],
+                "elegiveis": [],
+                "aguardando_entrega": [],
+                "aguardando_aprovacao": [],
+                "pagas_individualmente": [],
+            }
+        grupo = grupos[chave]
+        total = calcular_valores_proposta(prop)[2]
+        info = {
+            "numero_proposta": numero,
+            "valor": total,
+            "data_entrega": str(prop.get("data_entrega") or ""),
+            "aprovado": valor_bool(prop.get("aprovado")),
+            "entregue": valor_bool(prop.get("entregue")),
+            "pago": valor_bool(prop.get("pago")),
+            "cliente_nome": str(prop.get("cliente_nome") or grupo["cliente_nome"]),
+        }
+        grupo["propostas"].append(info)
+        if info["pago"]:
+            grupo["pagas_individualmente"].append(info)
+        elif not info["aprovado"]:
+            grupo["aguardando_aprovacao"].append(info)
+        elif not info["entregue"]:
+            grupo["aguardando_entrega"].append(info)
+        else:
+            grupo["elegiveis"].append(info)
+    saida = list(grupos.values())
+    for grupo in saida:
+        grupo["total_elegivel"] = sum(valor_float(x.get("valor")) for x in grupo["elegiveis"])
+        grupo["total_aguardando_entrega"] = sum(valor_float(x.get("valor")) for x in grupo["aguardando_entrega"])
+    saida.sort(key=lambda g: (str(g.get("competencia")), str(g.get("cliente_nome", "")).casefold()), reverse=True)
+    return saida
+
+
+def _i8111_snapshot_proposta(info):
+    # Snapshot financeiro do fechamento: guarda número e total negociado da
+    # proposta. Não duplica preço de produto, foto, descrição ou Catálogo Oficial.
+    return {
+        "numero_proposta": str(info.get("numero_proposta") or ""),
+        "valor": round(valor_float(info.get("valor")), 2),
+        "data_entrega": str(info.get("data_entrega") or ""),
+    }
+
+
+def criar_fechamento_mensal(grupo):
+    elegiveis = list((grupo or {}).get("elegiveis") or [])
+    if not elegiveis:
+        raise ValueError("Não existem propostas aprovadas e entregues elegíveis para este fechamento.")
+    instante = agora_local()
+    registro_id = f"FM-{instante.strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3)}"
+    propostas_snap = [_i8111_snapshot_proposta(x) for x in elegiveis]
+    registro = {
+        "id": registro_id,
+        "cliente_id": str(grupo.get("cliente_id") or ""),
+        "cliente_nome": str(grupo.get("cliente_nome") or "Cliente"),
+        "whatsapp": str(grupo.get("whatsapp") or ""),
+        "competencia": str(grupo.get("competencia") or ""),
+        "dia_fechamento": int(grupo.get("dia_fechamento") or 1),
+        "dia_vencimento": int(grupo.get("dia_vencimento") or 10),
+        "data_fechamento_prevista": grupo.get("data_fechamento").isoformat() if isinstance(grupo.get("data_fechamento"), date) else str(grupo.get("data_fechamento") or ""),
+        "data_vencimento_prevista": grupo.get("data_vencimento").isoformat() if isinstance(grupo.get("data_vencimento"), date) else str(grupo.get("data_vencimento") or ""),
+        "status": I8111_STATUS_FECHADO,
+        "propostas": propostas_snap,
+        "total_fechado": round(sum(valor_float(x.get("valor")) for x in propostas_snap), 2),
+        "fechado_em": instante.isoformat(timespec="seconds"),
+        "fechado_por": _i8111_usuario_nome(),
+        "atualizado_em": instante.isoformat(timespec="seconds"),
+        "atualizado_por": _i8111_usuario_nome(),
+    }
+    registros = carregar_faturamentos_mensais()
+    registros.insert(0, registro)
+    salvar_faturamentos_mensais(registros)
+
+    numeros = {x.get("numero_proposta") for x in propostas_snap if x.get("numero_proposta")}
+    historico = carregar_historico()
+    for prop in historico:
+        if str(prop.get("numero_proposta") or "") in numeros:
+            prop["faturamento_mensal_id"] = registro_id
+            prop["competencia_faturamento"] = registro["competencia"]
+            prop["financeiro_status"] = "Fechado mensal · aguardando faturamento"
+            registrar_evento_proposta(prop, f"Incluída no fechamento mensal {registro['competencia']} ({registro_id})", _i8111_usuario_nome())
+    salvar_historico_completo(historico)
+    registrar_auditoria("Fechar faturamento mensal", "Faturamento mensal", registro_id, {"cliente": registro["cliente_nome"], "competencia": registro["competencia"], "total": registro["total_fechado"], "propostas": len(propostas_snap)})
+    return registro
+
+
+def atualizar_status_faturamento_mensal(registro_id, novo_status):
+    registros = carregar_faturamentos_mensais()
+    registro = next((r for r in registros if str(r.get("id")) == str(registro_id)), None)
+    if not registro:
+        raise ValueError("Fechamento mensal não localizado.")
+    atual = str(registro.get("status") or "")
+    permitidos = {
+        I8111_STATUS_FECHADO: {I8111_STATUS_FATURADO, I8111_STATUS_REABERTO},
+        I8111_STATUS_FATURADO: {I8111_STATUS_RECEBIDO},
+    }
+    if novo_status not in permitidos.get(atual, set()):
+        raise ValueError(f"Transição não permitida: {atual} → {novo_status}.")
+    instante = agora_local()
+    usuario = _i8111_usuario_nome()
+    registro["status"] = novo_status
+    registro["atualizado_em"] = instante.isoformat(timespec="seconds")
+    registro["atualizado_por"] = usuario
+    if novo_status == I8111_STATUS_FATURADO:
+        registro["faturado_em"] = instante.isoformat(timespec="seconds")
+        registro["faturado_por"] = usuario
+    elif novo_status == I8111_STATUS_RECEBIDO:
+        registro["recebido_em"] = instante.isoformat(timespec="seconds")
+        registro["recebido_por"] = usuario
+    elif novo_status == I8111_STATUS_REABERTO:
+        registro["reaberto_em"] = instante.isoformat(timespec="seconds")
+        registro["reaberto_por"] = usuario
+    salvar_faturamentos_mensais(registros)
+
+    numeros = {str(x.get("numero_proposta") or "") for x in registro.get("propostas", []) if str(x.get("numero_proposta") or "")}
+    historico = carregar_historico()
+    for prop in historico:
+        if str(prop.get("numero_proposta") or "") not in numeros:
+            continue
+        if novo_status == I8111_STATUS_FATURADO:
+            prop["financeiro_status"] = "Faturado mensal · aguardando recebimento"
+            registrar_evento_proposta(prop, f"Fechamento mensal {registro_id} marcado como faturado", usuario)
+        elif novo_status == I8111_STATUS_RECEBIDO:
+            prop["financeiro_status"] = "Recebido no fechamento mensal"
+            prop["pago"] = True
+            prop["pago_em"] = instante.strftime("%d/%m/%Y %H:%M")
+            prop["pagamento_faturamento_mensal_id"] = registro_id
+            registrar_evento_proposta(prop, f"Pagamento recebido pelo fechamento mensal {registro_id}", usuario)
+        elif novo_status == I8111_STATUS_REABERTO:
+            if str(prop.get("faturamento_mensal_id") or "") == str(registro_id):
+                prop.pop("faturamento_mensal_id", None)
+                prop["financeiro_status"] = "Aguardando fechamento mensal"
+                registrar_evento_proposta(prop, f"Fechamento mensal {registro_id} reaberto", usuario)
+    salvar_historico_completo(historico)
+    registrar_auditoria(f"Faturamento mensal: {novo_status}", "Faturamento mensal", registro_id, {"cliente": registro.get("cliente_nome"), "competencia": registro.get("competencia"), "total": registro.get("total_fechado")})
+    return registro
+
+
+def _i8111_status_visual_registro(registro):
+    status = str((registro or {}).get("status") or "")
+    if status == I8111_STATUS_RECEBIDO:
+        return "🟢 Recebido", "recebido"
+    try:
+        vencimento = date.fromisoformat(str((registro or {}).get("data_vencimento_prevista") or ""))
+    except Exception:
+        vencimento = None
+    if status == I8111_STATUS_FATURADO and vencimento and vencimento < hoje_local():
+        return "🔴 Vencido", "vencido"
+    if status == I8111_STATUS_FATURADO:
+        return "🟡 Faturado", "faturado"
+    if status == I8111_STATUS_FECHADO:
+        return "🔵 Fechado", "fechado"
+    if status == I8111_STATUS_REABERTO:
+        return "⚪ Reaberto", "reaberto"
+    return status or "—", status.casefold()
+
+
+def _i8111_formatar_data_iso(valor):
+    try:
+        return date.fromisoformat(str(valor)).strftime("%d/%m/%Y")
+    except Exception:
+        return str(valor or "—")
+
+
+def _i8111_formatar_moeda(valor):
+    return f"R$ {valor_float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def carregar_cliente_no_orcamento(cliente):
@@ -10394,6 +10728,7 @@ DOCUMENTOS_BACKUP = [
     ("catalogos_legados_db", ARQUIVO_CATALOGOS_LEGADOS, {"revisoes": {}, "config": {}}),
     ("catalogos_gerados_db", ARQUIVO_CATALOGOS_GERADOS, []),
     ("catalogo_modelos_db", ARQUIVO_MODELOS_CATALOGO, []),
+    ("faturamento_mensal_db", ARQUIVO_FATURAMENTO_MENSAL, []),
 ]
 
 def carregar_config_backup():
@@ -10483,7 +10818,7 @@ def verificar_integridade_dados():
     documentos, contagens = coletar_dados_backup()
     problemas = []
     # componentes_db é uma biblioteca categorizada e, por definição, usa objeto/dicionário.
-    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db", "catalogos_gerados_db", "catalogo_modelos_db"}
+    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db", "catalogos_gerados_db", "catalogo_modelos_db", "faturamento_mensal_db"}
     for chave in esperados_lista:
         if not isinstance(documentos.get(chave), list):
             problemas.append(f"{chave}: estrutura inválida (esperada lista).")
@@ -17097,7 +17432,7 @@ GRUPOS_NAVEGACAO = {
     "📋 Operação": ["novo_orcamento", "historico", "fluxo", "catalogo", "projeto", "jornada"],
     "👥 Clientes": ["atendimento", "crm", "clientes_360", "relacionamentos"],
     "🧠 Inteligência": ["alpha", "intelligence", "memoria", "conhecimento"],
-    "📈 Gestão": ["executivo", "relatorios"],
+    "📈 Gestão": ["executivo", "relatorios", "faturamento_mensal"],
     "📢 Marketing": ["crescimento", "calendario"],
     "⚙️ Administração": ["configuracoes"],
 }
@@ -20618,6 +20953,190 @@ if pagina_atual == "fluxo":
     with entregas:
         lista_entregas = [t for t in tarefas_ativas if normalizar_status_fluxo(t.get("status")) in ["Pronto", "Entregue"]]
         renderizar_cartoes_fluxo(lista_entregas, "entregas")
+
+
+if pagina_atual == "faturamento_mensal":
+    st.header("💳 I8.11.1 · Central de Faturamento Mensal")
+    st.caption("Controle separado para clientes mensalistas. A proposta não precisa ser marcada como paga individualmente: o recebimento é registrado no fechamento mensal e propagado automaticamente ao histórico.")
+
+    usuario_fin_i8111 = obter_usuario_atual()
+    if str(usuario_fin_i8111.get("nome") or "").strip().casefold() != "jorge":
+        st.info("Esta primeira versão está em homologação no perfil Jorge. Depois de aprovada, o acesso poderá ser estendido para a Anna sem alterar a lógica validada.")
+    else:
+        clientes_fin_i8111 = carregar_clientes()
+        mensalistas_i8111 = [c for c in clientes_fin_i8111 if resumo_perfil_comercial(c).get("faturamento_mensal")]
+        registros_i8111 = carregar_faturamentos_mensais()
+        grupos_i8111 = montar_grupos_faturamento_mensal(registros=registros_i8111)
+        registros_ativos_i8111 = [r for r in registros_i8111 if str(r.get("status") or "") in {I8111_STATUS_FECHADO, I8111_STATUS_FATURADO, I8111_STATUS_RECEBIDO}]
+
+        total_aberto_i8111 = sum(valor_float(g.get("total_elegivel")) for g in grupos_i8111)
+        total_faturado_i8111 = sum(valor_float(r.get("total_fechado")) for r in registros_ativos_i8111 if str(r.get("status")) == I8111_STATUS_FATURADO)
+        total_recebido_i8111 = sum(valor_float(r.get("total_fechado")) for r in registros_ativos_i8111 if str(r.get("status")) == I8111_STATUS_RECEBIDO)
+        vencidos_i8111 = [r for r in registros_ativos_i8111 if _i8111_status_visual_registro(r)[1] == "vencido"]
+
+        m1, m2, m3, m4, m5, m6 = st.columns(6)
+        m1.metric("Mensalistas", len(mensalistas_i8111))
+        m2.metric("Ciclos em aberto", len([g for g in grupos_i8111 if g.get("elegiveis") or g.get("aguardando_entrega")]))
+        m3.metric("A fechar", _i8111_formatar_moeda(total_aberto_i8111))
+        m4.metric("Faturado", _i8111_formatar_moeda(total_faturado_i8111))
+        m5.metric("Vencidos", len(vencidos_i8111))
+        m6.metric("Recebido", _i8111_formatar_moeda(total_recebido_i8111))
+
+        st.info("📌 Regra do ciclo: a competência é definida pelo dia de fechamento do cliente. Ex.: fechamento dia 1 → uma entrega em 18/08 entra na competência Setembro/2026, fecha em 01/09 e vence no dia configurado. Somente propostas **aprovadas e entregues** entram no valor do fechamento.")
+
+        competencias_i8111 = sorted({str(g.get("competencia")) for g in grupos_i8111} | {str(r.get("competencia")) for r in registros_ativos_i8111}, reverse=True)
+        fc1, fc2, fc3 = st.columns([1.6, 1.1, 1.1])
+        busca_fin_i8111 = fc1.text_input("🔎 Cliente", placeholder="Nome ou WhatsApp", key="i8111_busca_cliente")
+        op_comp_i8111 = ["Todas"] + competencias_i8111
+        comp_sel_i8111 = fc2.selectbox("Competência", op_comp_i8111, format_func=lambda x: "Todas" if x == "Todas" else _i8111_competencia_rotulo(x), key="i8111_filtro_comp")
+        status_sel_i8111 = fc3.selectbox("Situação", ["Todos", "Em aberto", "Fechado", "Faturado", "Vencido", "Recebido"], key="i8111_filtro_status")
+        termo_fin_i8111 = normalizar_texto_busca(busca_fin_i8111).strip()
+
+        def _passa_cliente_i8111(nome, wa=""):
+            if not termo_fin_i8111:
+                return True
+            return termo_fin_i8111 in normalizar_texto_busca(f"{nome} {wa}")
+
+        mostrar_abertos_i8111 = status_sel_i8111 in {"Todos", "Em aberto"}
+        grupos_filtrados_i8111 = [
+            g for g in grupos_i8111
+            if (comp_sel_i8111 == "Todas" or str(g.get("competencia")) == comp_sel_i8111)
+            and _passa_cliente_i8111(g.get("cliente_nome"), g.get("whatsapp"))
+            and (g.get("elegiveis") or g.get("aguardando_entrega") or g.get("aguardando_aprovacao"))
+        ] if mostrar_abertos_i8111 else []
+
+        if grupos_filtrados_i8111:
+            st.subheader("📂 Em composição / aguardando fechamento")
+            for idx_i8111, grupo_i8111 in enumerate(grupos_filtrados_i8111):
+                competencia_i8111 = str(grupo_i8111.get("competencia"))
+                titulo_i8111 = f"{grupo_i8111.get('cliente_nome')} · {_i8111_competencia_rotulo(competencia_i8111)}"
+                with st.container(border=True):
+                    h1, h2 = st.columns([4, 1])
+                    h1.markdown(f"### 💳 {titulo_i8111}")
+                    h2.markdown("**EM ABERTO**")
+                    st.caption(
+                        f"Fechamento previsto: {grupo_i8111.get('data_fechamento').strftime('%d/%m/%Y')} · "
+                        f"Vencimento previsto: {grupo_i8111.get('data_vencimento').strftime('%d/%m/%Y')} · "
+                        f"WhatsApp: {grupo_i8111.get('whatsapp') or 'não informado'}"
+                    )
+                    c1, c2, c3, c4 = st.columns(4)
+                    c1.metric("Elegíveis", len(grupo_i8111.get("elegiveis") or []))
+                    c2.metric("Valor a fechar", _i8111_formatar_moeda(grupo_i8111.get("total_elegivel")))
+                    c3.metric("Aguardando entrega", len(grupo_i8111.get("aguardando_entrega") or []))
+                    c4.metric("Aguardando aprovação", len(grupo_i8111.get("aguardando_aprovacao") or []))
+
+                    with st.expander("📋 Propostas deste ciclo", expanded=True):
+                        for info_i8111 in grupo_i8111.get("propostas") or []:
+                            if info_i8111.get("pago"):
+                                situacao_prop_i8111 = "🟢 já paga individualmente (fora do fechamento)"
+                            elif not info_i8111.get("aprovado"):
+                                situacao_prop_i8111 = "⚪ aguardando aprovação"
+                            elif not info_i8111.get("entregue"):
+                                situacao_prop_i8111 = "🟡 aprovada · aguardando entrega"
+                            else:
+                                situacao_prop_i8111 = "🔵 elegível para fechar"
+                            st.write(f"• **{info_i8111.get('numero_proposta') or 'Sem número'}** · entrega {info_i8111.get('data_entrega') or '—'} · {_i8111_formatar_moeda(info_i8111.get('valor'))} · {situacao_prop_i8111}")
+
+                    if grupo_i8111.get("elegiveis"):
+                        confirmar_i8111 = st.checkbox(
+                            f"Confirmo o fechamento de {len(grupo_i8111.get('elegiveis'))} proposta(s) elegível(is)",
+                            key=f"i8111_conf_fechar_{grupo_i8111.get('cliente_id')}_{competencia_i8111}_{idx_i8111}",
+                        )
+                        if st.button(
+                            "🔒 Fechar competência",
+                            type="primary",
+                            use_container_width=True,
+                            disabled=not confirmar_i8111,
+                            key=f"i8111_fechar_{grupo_i8111.get('cliente_id')}_{competencia_i8111}_{idx_i8111}",
+                        ):
+                            try:
+                                novo_i8111 = criar_fechamento_mensal(grupo_i8111)
+                                st.session_state["_mensagem_sucesso_pendente"] = f"Fechamento {novo_i8111.get('id')} criado com {_i8111_formatar_moeda(novo_i8111.get('total_fechado'))}."
+                                st.rerun()
+                            except Exception as exc_i8111:
+                                st.error(f"Não foi possível fechar esta competência: {exc_i8111}")
+                    else:
+                        st.warning("Ainda não há proposta aprovada e entregue para fechar. O ciclo permanece visível para acompanhamento.")
+        elif status_sel_i8111 == "Em aberto":
+            st.info("Nenhum ciclo em aberto corresponde aos filtros atuais.")
+
+        registros_filtrados_i8111 = []
+        for reg_i8111 in registros_ativos_i8111:
+            visual_i8111, chave_status_i8111 = _i8111_status_visual_registro(reg_i8111)
+            if comp_sel_i8111 != "Todas" and str(reg_i8111.get("competencia")) != comp_sel_i8111:
+                continue
+            if not _passa_cliente_i8111(reg_i8111.get("cliente_nome"), reg_i8111.get("whatsapp")):
+                continue
+            if status_sel_i8111 != "Todos":
+                esperado_i8111 = {
+                    "Fechado": "fechado", "Faturado": "faturado", "Vencido": "vencido", "Recebido": "recebido"
+                }.get(status_sel_i8111)
+                if esperado_i8111 and chave_status_i8111 != esperado_i8111:
+                    continue
+                if status_sel_i8111 == "Em aberto":
+                    continue
+            registros_filtrados_i8111.append((reg_i8111, visual_i8111, chave_status_i8111))
+
+        if registros_filtrados_i8111:
+            st.subheader("🧾 Fechamentos registrados")
+            for reg_i8111, visual_i8111, chave_status_i8111 in registros_filtrados_i8111:
+                with st.container(border=True):
+                    r1, r2 = st.columns([4, 1])
+                    r1.markdown(f"### {reg_i8111.get('cliente_nome')} · {_i8111_competencia_rotulo(reg_i8111.get('competencia'))}")
+                    r2.markdown(f"**{visual_i8111}**")
+                    st.caption(
+                        f"ID {reg_i8111.get('id')} · fechado em {str(reg_i8111.get('fechado_em') or '')[:16].replace('T', ' ')} por {reg_i8111.get('fechado_por') or '—'} · "
+                        f"vencimento {_i8111_formatar_data_iso(reg_i8111.get('data_vencimento_prevista'))}"
+                    )
+                    rr1, rr2, rr3 = st.columns(3)
+                    rr1.metric("Propostas", len(reg_i8111.get("propostas") or []))
+                    rr2.metric("Total do fechamento", _i8111_formatar_moeda(reg_i8111.get("total_fechado")))
+                    rr3.metric("Status financeiro", visual_i8111)
+                    with st.expander("📋 Propostas incluídas"):
+                        for p_i8111 in reg_i8111.get("propostas") or []:
+                            st.write(f"• **{p_i8111.get('numero_proposta')}** · entrega {p_i8111.get('data_entrega') or '—'} · {_i8111_formatar_moeda(p_i8111.get('valor'))}")
+
+                    status_real_i8111 = str(reg_i8111.get("status") or "")
+                    if status_real_i8111 == I8111_STATUS_FECHADO:
+                        a1, a2 = st.columns(2)
+                        if a1.button("🧾 Marcar como faturado", type="primary", use_container_width=True, key=f"i8111_faturar_{reg_i8111.get('id')}"):
+                            try:
+                                atualizar_status_faturamento_mensal(reg_i8111.get("id"), I8111_STATUS_FATURADO)
+                                st.session_state["_mensagem_sucesso_pendente"] = "Fechamento marcado como faturado."
+                                st.rerun()
+                            except Exception as exc_i8111:
+                                st.error(str(exc_i8111))
+                        confirma_reabrir_i8111 = a2.checkbox("Confirmar reabertura", key=f"i8111_conf_reabrir_{reg_i8111.get('id')}")
+                        if a2.button("↩️ Reabrir fechamento", use_container_width=True, disabled=not confirma_reabrir_i8111, key=f"i8111_reabrir_{reg_i8111.get('id')}"):
+                            try:
+                                atualizar_status_faturamento_mensal(reg_i8111.get("id"), I8111_STATUS_REABERTO)
+                                st.session_state["_mensagem_sucesso_pendente"] = "Fechamento reaberto; as propostas voltaram para a composição mensal."
+                                st.rerun()
+                            except Exception as exc_i8111:
+                                st.error(str(exc_i8111))
+                    elif status_real_i8111 == I8111_STATUS_FATURADO:
+                        st.warning("Ao confirmar o recebimento, o Manager marcará automaticamente as propostas deste fechamento como pagas no histórico. Você não precisa abrir uma por uma.")
+                        conf_rec_i8111 = st.checkbox("Confirmo que o valor total deste fechamento foi recebido", key=f"i8111_conf_receber_{reg_i8111.get('id')}")
+                        if st.button("✅ Registrar recebimento mensal", type="primary", use_container_width=True, disabled=not conf_rec_i8111, key=f"i8111_receber_{reg_i8111.get('id')}"):
+                            try:
+                                atualizar_status_faturamento_mensal(reg_i8111.get("id"), I8111_STATUS_RECEBIDO)
+                                st.session_state["_mensagem_sucesso_pendente"] = "Recebimento mensal registrado e propostas atualizadas automaticamente."
+                                st.rerun()
+                            except Exception as exc_i8111:
+                                st.error(str(exc_i8111))
+                    elif status_real_i8111 == I8111_STATUS_RECEBIDO:
+                        st.success(f"✅ Recebido em {str(reg_i8111.get('recebido_em') or '')[:16].replace('T', ' ')} por {reg_i8111.get('recebido_por') or '—'}. As propostas vinculadas foram marcadas como pagas automaticamente.")
+        elif status_sel_i8111 not in {"Em aberto"}:
+            st.info("Nenhum fechamento registrado corresponde aos filtros atuais.")
+
+        with st.expander("ℹ️ Como esta Central funciona"):
+            st.markdown(
+                "- **Em aberto:** propostas mensais aparecem automaticamente conforme entram no sistema.\n"
+                "- **Fechar:** somente propostas aprovadas e entregues são congeladas no fechamento. O registro guarda número e total da proposta, não duplica preços de produto.\n"
+                "- **Faturado:** indica que o fechamento já foi enviado/cobrado.\n"
+                "- **Recebido:** registra o pagamento do fechamento e marca automaticamente as propostas vinculadas como pagas.\n"
+                "- Se uma nova proposta elegível entrar depois de um fechamento, ela reaparece em um novo ciclo aberto da mesma competência e pode formar um complemento, sem alterar o fechamento anterior."
+            )
 
 
 if pagina_atual == "relatorios":
