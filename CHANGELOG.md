@@ -531,3 +531,11 @@ hangelog
 - Hotfix de usabilidade: Lixeira de catálogos agora visível dentro da Central I8.8.
 - Indicador de quantidade na lixeira, restauração e exclusão definitiva com confirmação.
 - Lixeira geral do sistema preservada.
+
+## 20.4.9-I8.10.1 — Refinamento Operacional da Inteligência
+- Fila inteligente ganha Publicar/Republicar em um clique.
+- Filtros combináveis por situação, prioridade e validade.
+- Novas publicações registram hashes individuais por produto, sem snapshots comerciais.
+- Mudanças futuras podem apontar o produto envolvido e abrir o cadastro para revisão pelo Jorge.
+- Anna mantém acesso à Inteligência e vê o produto alterado, sem ganhar permissão técnica de edição do Catálogo Oficial.
+- Motor de detecção I8.10, Central, validade, QR, WhatsApp, PDF, Supabase e GitHub Pages preservados.

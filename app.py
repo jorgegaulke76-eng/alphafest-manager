@@ -9367,13 +9367,147 @@ def _i810_assinatura_catalogo(registro, catalogo_oficial):
         "produtos": produtos,
     }
     bruto = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    assinaturas_produtos_i8101 = []
+    for item_i8101 in produtos:
+        chave_i8101 = str(item_i8101.get("codigo") or "").strip()
+        if chave_i8101:
+            chave_i8101 = "codigo:" + chave_i8101.casefold()
+        else:
+            chave_i8101 = "nome:" + normalizar_identidade_produto(
+                f"{item_i8101.get('categoria','')}|{item_i8101.get('nome','')}"
+            )
+        bruto_item_i8101 = json.dumps(
+            item_i8101, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        assinaturas_produtos_i8101.append({
+            "chave": chave_i8101,
+            "codigo": str(item_i8101.get("codigo") or "").strip(),
+            "nome": str(item_i8101.get("nome") or "").strip(),
+            "categoria": str(item_i8101.get("categoria") or "").strip(),
+            "hash": hashlib.sha256(bruto_item_i8101).hexdigest(),
+        })
+
     return {
         "assinatura": hashlib.sha256(bruto).hexdigest(),
         "produtos_saida": len(produtos),
         "referencias_pendentes": len(ausentes),
         "inativos": inativos,
         "fora_campanha": fora_campanha,
+        # I8.10.1: hashes por produto permitem localizar o item alterado sem
+        # armazenar preço, descrição, material ou foto antigos.
+        "assinaturas_produtos": assinaturas_produtos_i8101,
     }
+
+
+def _i8101_detalhar_mudancas(assinaturas_publicadas, assinaturas_atuais):
+    publicadas = {
+        str(x.get("chave") or ""): dict(x)
+        for x in (assinaturas_publicadas or [])
+        if isinstance(x, dict) and str(x.get("chave") or "").strip()
+    }
+    atuais = {
+        str(x.get("chave") or ""): dict(x)
+        for x in (assinaturas_atuais or [])
+        if isinstance(x, dict) and str(x.get("chave") or "").strip()
+    }
+    alterados = []
+    adicionados = []
+    removidos = []
+    for chave in sorted(set(publicadas) & set(atuais)):
+        if str(publicadas[chave].get("hash") or "") != str(atuais[chave].get("hash") or ""):
+            item = dict(atuais[chave])
+            item["tipo_mudanca"] = "alterado"
+            alterados.append(item)
+    for chave in sorted(set(atuais) - set(publicadas)):
+        item = dict(atuais[chave])
+        item["tipo_mudanca"] = "adicionado"
+        adicionados.append(item)
+    for chave in sorted(set(publicadas) - set(atuais)):
+        item = dict(publicadas[chave])
+        item["tipo_mudanca"] = "removido_da_saida"
+        removidos.append(item)
+    return {
+        "alterados": alterados,
+        "adicionados": adicionados,
+        "removidos": removidos,
+        "todos": alterados + adicionados + removidos,
+    }
+
+
+def _i8101_indice_produto_catalogo(produto_ref, catalogo_oficial):
+    produto_ref = produto_ref or {}
+    codigo = str(produto_ref.get("codigo") or "").strip()
+    if codigo:
+        for idx, produto in enumerate(catalogo_oficial or []):
+            if str((produto or {}).get("CodigoInterno") or "").strip().casefold() == codigo.casefold():
+                return idx
+    nome = normalizar_identidade_produto(produto_ref.get("nome"))
+    categoria = normalizar_identidade_produto(produto_ref.get("categoria"))
+    candidatos = []
+    for idx, produto in enumerate(catalogo_oficial or []):
+        if normalizar_identidade_produto((produto or {}).get("Nome")) != nome:
+            continue
+        if categoria and normalizar_identidade_produto((produto or {}).get("Categoria")) != categoria:
+            continue
+        candidatos.append(idx)
+    return candidatos[0] if len(candidatos) == 1 else None
+
+
+def _i8101_publicar_agora(registro, catalogo_oficial):
+    """Publica uma nova versão direto da fila inteligente usando o mesmo motor da Central."""
+    registro = dict(registro or {})
+    catalogo_id = str(registro.get("id") or "")
+    if not catalogo_id:
+        return False, "Catálogo inválido."
+    if not catalog_public_url("catalogos-publicos/verificacao.html"):
+        return False, "Supabase indisponível para publicação."
+    if not catalog_render_available():
+        return False, "Visualizador público do GitHub Pages indisponível."
+
+    meta = _i884_metadados_geracao()
+    object_path = _i89_objeto_publicacao(registro, meta)
+    url_planejada = catalog_render_url(object_path)
+    qr_data = _i89_qr_data_uri(url_planejada)
+    html_publico, _, _, _ = _i88_html_catalogo_salvo(
+        registro,
+        catalogo_oficial,
+        metadados_geracao=meta,
+        url_publica=url_planejada,
+        qr_data_uri=qr_data,
+    )
+    storage_url = publish_catalog_html(html_publico, object_path)
+    url_publicada = catalog_render_url(object_path) if storage_url else ""
+    if not url_publicada:
+        return False, "Não foi possível publicar no armazenamento online."
+
+    assinatura = _i810_assinatura_catalogo(registro, catalogo_oficial)
+    publicacao = {
+        "id": f"PUB-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
+        "url": url_publicada,
+        "storage_url": storage_url,
+        "object_path": object_path,
+        "gerado_em": meta["gerado_em"],
+        "gerado_por": meta["gerado_por"],
+        "validade_ate": meta["validade_ate"],
+        "assinatura_conteudo": assinatura.get("assinatura", ""),
+        "assinaturas_produtos": assinatura.get("assinaturas_produtos", []),
+        "revisao_catalogo": int(registro.get("revisao", 1) or 1),
+        "produtos_publicados": int(assinatura.get("produtos_saida", 0) or 0),
+    }
+    _i89_registrar_publicacao(catalogo_id, publicacao)
+    _i884_atualizar_ultima_geracao(catalogo_id, meta)
+    registrar_auditoria(
+        "Republicar catálogo pela Inteligência",
+        "Catálogo gerado",
+        catalogo_id,
+        {
+            "url": url_publicada,
+            "validade_ate": meta["validade_ate"],
+            "gerado_por": meta["gerado_por"],
+            "origem": "Inteligência I8.10.1",
+        },
+    )
+    return True, f"Nova versão publicada e válida até {meta['validade_texto']}."
 
 
 def _i810_diagnostico_catalogo(registro, catalogo_oficial):
@@ -9393,6 +9527,7 @@ def _i810_diagnostico_catalogo(registro, catalogo_oficial):
         "pendentes": atual.get("referencias_pendentes", 0) + atual.get("inativos", 0),
         "fora_campanha": atual.get("fora_campanha", 0),
         "mudou_conteudo": None,
+        "detalhes_mudanca": {"alterados": [], "adicionados": [], "removidos": [], "todos": []},
         "dias_validade": None,
         "status_validade": "⚪ Nunca publicado",
         "prioridade": 0,
@@ -9416,6 +9551,11 @@ def _i810_diagnostico_catalogo(registro, catalogo_oficial):
         assinatura_publicada = str(ultima.get("assinatura_conteudo") or "").strip()
         if assinatura_publicada:
             resultado["mudou_conteudo"] = assinatura_publicada != atual.get("assinatura")
+            if resultado["mudou_conteudo"] is True and ultima.get("assinaturas_produtos"):
+                resultado["detalhes_mudanca"] = _i8101_detalhar_mudancas(
+                    ultima.get("assinaturas_produtos"),
+                    atual.get("assinaturas_produtos"),
+                )
         if dias < 0:
             resultado["prioridade"] = max(resultado["prioridade"], 100)
             resultado["acao"] = "Republicar agora"
@@ -21492,7 +21632,7 @@ if pagina_atual == "catalogo":
                 "✨ Gerador I8.7.1",
                 "🧩 Modelos I8.8.3",
                 "📤 Central I8.9.2.1",
-                "📊 Inteligência I8.10",
+                "📊 Inteligência I8.10.1",
                 "➕ Cadastrar",
                 "📋 Produtos",
                 "🧹 Saneamento",
@@ -21508,7 +21648,7 @@ if pagina_atual == "catalogo":
                 "✨ Gerador I8.7.1",
                 "🧩 Modelos I8.8.3",
                 "📤 Central I8.9.2.1",
-                "📊 Inteligência I8.10",
+                "📊 Inteligência I8.10.1",
                 "📤 Catálogo para cliente",
             ])
 
@@ -22797,6 +22937,9 @@ if pagina_atual == "catalogo":
                                 "validade_ate": meta_pub_i89["validade_ate"],
                                 # I8.10: hash irreversível para detectar alteração futura sem guardar preço antigo.
                                 "assinatura_conteudo": assinatura_pub_i810.get("assinatura", ""),
+                                # I8.10.1: hashes por produto permitem apontar qual item mudou
+                                # sem persistir o valor, texto, material ou imagem antigos.
+                                "assinaturas_produtos": assinatura_pub_i810.get("assinaturas_produtos", []),
                                 "revisao_catalogo": int(compartilhar_reg_i89.get("revisao", 1) or 1),
                                 "produtos_publicados": int(assinatura_pub_i810.get("produtos_saida", len(produtos_share_i89)) or 0),
                             }
@@ -23105,7 +23248,7 @@ if pagina_atual == "catalogo":
                     st.rerun()
 
         with aba_inteligencia:
-            st.markdown("### 📊 I8.10 • Inteligência Comercial dos Catálogos")
+            st.markdown("### 📊 I8.10.1 • Inteligência Comercial dos Catálogos")
             st.caption(
                 "Painel operacional baseado somente em fatos registrados pelo AlphaFest Manager. "
                 "Ele não inventa cliques ou visualizações do cliente: prioriza validade, publicações, "
@@ -23155,16 +23298,26 @@ if pagina_atual == "catalogo":
             elif ativos_i810:
                 st.success("✅ Todos os catálogos ativos estão operacionalmente em dia pelos critérios atuais.")
 
-            f1_i810, f2_i810 = st.columns([2, 1])
+            f1_i810, f2_i810, f3_i810, f4_i810 = st.columns([2, 1, 1, 1])
             filtro_texto_i810 = f1_i810.text_input(
                 "🔎 Pesquisar na Inteligência",
                 key="i810_busca",
                 placeholder="Nome do catálogo",
             ).strip().casefold()
             filtro_i810 = f2_i810.selectbox(
-                "Mostrar",
-                ["Precisa ação", "Todos ativos", "Vencidos", "Mudou conteúdo", "Sem publicação", "Próximo do vencimento"],
+                "Situação",
+                ["Precisa ação", "Todos ativos", "Vencidos", "Mudou conteúdo", "Sem publicação", "Próximo do vencimento", "Em dia"],
                 key="i810_filtro",
+            )
+            filtro_prioridade_i8101 = f3_i810.selectbox(
+                "Prioridade",
+                ["Todas", "Ação agora", "Atenção", "Em dia"],
+                key="i8101_filtro_prioridade",
+            )
+            filtro_validade_i8101 = f4_i810.selectbox(
+                "Validade",
+                ["Todas", "Vencido", "Até 5 dias", "Até 15 dias", "Mais de 15 dias", "Nunca publicado"],
+                key="i8101_filtro_validade",
             )
 
             def _i810_visivel_ui(diag):
@@ -23172,16 +23325,52 @@ if pagina_atual == "catalogo":
                     return False
                 if filtro_texto_i810 and filtro_texto_i810 not in str(diag.get("nome") or "").casefold():
                     return False
-                if filtro_i810 == "Precisa ação":
-                    return int(diag.get("prioridade", 0) or 0) > 0
-                if filtro_i810 == "Vencidos":
-                    return isinstance(diag.get("dias_validade"), int) and diag.get("dias_validade") < 0
-                if filtro_i810 == "Mudou conteúdo":
-                    return diag.get("mudou_conteudo") is True
-                if filtro_i810 == "Sem publicação":
-                    return not diag.get("ultima_publicacao")
-                if filtro_i810 == "Próximo do vencimento":
-                    return isinstance(diag.get("dias_validade"), int) and 0 <= diag.get("dias_validade") <= 5
+
+                prioridade_diag_i8101 = int(diag.get("prioridade", 0) or 0)
+                dias_diag_i8101 = diag.get("dias_validade")
+
+                if filtro_i810 == "Precisa ação" and prioridade_diag_i8101 <= 0:
+                    return False
+                if filtro_i810 == "Vencidos" and not (
+                    isinstance(dias_diag_i8101, int) and dias_diag_i8101 < 0
+                ):
+                    return False
+                if filtro_i810 == "Mudou conteúdo" and diag.get("mudou_conteudo") is not True:
+                    return False
+                if filtro_i810 == "Sem publicação" and diag.get("ultima_publicacao"):
+                    return False
+                if filtro_i810 == "Próximo do vencimento" and not (
+                    isinstance(dias_diag_i8101, int) and 0 <= dias_diag_i8101 <= 5
+                ):
+                    return False
+                if filtro_i810 == "Em dia" and prioridade_diag_i8101 != 0:
+                    return False
+
+                if filtro_prioridade_i8101 == "Ação agora" and prioridade_diag_i8101 < 95:
+                    return False
+                if filtro_prioridade_i8101 == "Atenção" and not (70 <= prioridade_diag_i8101 < 95):
+                    return False
+                if filtro_prioridade_i8101 == "Em dia" and prioridade_diag_i8101 != 0:
+                    return False
+
+                if filtro_validade_i8101 == "Nunca publicado" and diag.get("ultima_publicacao"):
+                    return False
+                if filtro_validade_i8101 == "Vencido" and not (
+                    isinstance(dias_diag_i8101, int) and dias_diag_i8101 < 0
+                ):
+                    return False
+                if filtro_validade_i8101 == "Até 5 dias" and not (
+                    isinstance(dias_diag_i8101, int) and 0 <= dias_diag_i8101 <= 5
+                ):
+                    return False
+                if filtro_validade_i8101 == "Até 15 dias" and not (
+                    isinstance(dias_diag_i8101, int) and 0 <= dias_diag_i8101 <= 15
+                ):
+                    return False
+                if filtro_validade_i8101 == "Mais de 15 dias" and not (
+                    isinstance(dias_diag_i8101, int) and dias_diag_i8101 > 15
+                ):
+                    return False
                 return True
 
             fila_i810 = [d for d in diagnosticos_i810 if _i810_visivel_ui(d)]
@@ -23218,25 +23407,93 @@ if pagina_atual == "catalogo":
                             f"Última publicação: {meta_diag_i810.get('data')} às {meta_diag_i810.get('hora')} • "
                             f"{meta_diag_i810.get('gerado_por')} • válido até {meta_diag_i810.get('validade_texto')}"
                         )
-                    a1_i810, a2_i810 = st.columns(2)
+                    detalhes_i8101 = dict(diag_i810.get("detalhes_mudanca") or {})
+                    produtos_mudanca_i8101 = list(detalhes_i8101.get("todos") or [])
+                    produto_escolhido_i8101 = None
+                    if produtos_mudanca_i8101:
+                        opcoes_mudanca_i8101 = list(range(len(produtos_mudanca_i8101)))
+                        idx_mudanca_i8101 = st.selectbox(
+                            "Produto envolvido na alteração",
+                            opcoes_mudanca_i8101,
+                            format_func=lambda pos: (
+                                f"{produtos_mudanca_i8101[pos].get('nome') or 'Produto'} • "
+                                f"{str(produtos_mudanca_i8101[pos].get('tipo_mudanca') or '').replace('_', ' ')}"
+                            ),
+                            key=f"i8101_produto_mudanca_{diag_i810.get('id')}",
+                        )
+                        produto_escolhido_i8101 = produtos_mudanca_i8101[int(idx_mudanca_i8101)]
+                    elif diag_i810.get("mudou_conteudo") is True:
+                        st.caption(
+                            "ℹ️ Esta publicação possui assinatura geral da I8.10, mas ainda não tem detalhamento por produto. "
+                            "Após a próxima republicação pela I8.10.1, futuras mudanças poderão apontar o item exato."
+                        )
+
+                    a1_i810, a2_i810, a3_i810, a4_i810 = st.columns(4)
+                    acao_publicar_i8101 = "🌐 Publicar agora" if not diag_i810.get("ultima_publicacao") else "🔄 Republicar agora"
+                    pode_publicar_i8101 = bool(catalog_public_url("catalogos-publicos/verificacao.html")) and catalog_render_available()
                     if a1_i810.button(
-                        "📤 Preparar na Central para compartilhar",
+                        acao_publicar_i8101,
+                        key=f"i8101_publicar_{diag_i810.get('id')}",
+                        use_container_width=True,
+                        type="primary" if prioridade_i810 >= 70 else "secondary",
+                        disabled=not pode_publicar_i8101,
+                        help="Gera uma nova versão pública com os dados atuais e nova validade de 30 dias.",
+                    ):
+                        ok_i8101, msg_i8101 = _i8101_publicar_agora(reg_i810, catalogo)
+                        if ok_i8101:
+                            st.session_state["i8101_flash"] = f"✅ {msg_i8101}"
+                        else:
+                            st.session_state["i8101_flash"] = f"⚠️ {msg_i8101}"
+                        st.rerun()
+
+                    if a2_i810.button(
+                        "📤 Preparar na Central",
                         key=f"i810_share_{diag_i810.get('id')}",
                         use_container_width=True,
                     ):
                         st.session_state["i89_compartilhar_id"] = str(diag_i810.get("id") or "")
                         st.session_state["i810_flash"] = (
-                            f"Catálogo '{diag_i810.get('nome')}' preparado. Abra a aba Central I8.9.2.1 para publicar/renovar."
+                            f"Catálogo '{diag_i810.get('nome')}' preparado. Abra a aba Central I8.9.2.1 para revisar, gerar PDF, QR ou WhatsApp."
                         )
+
                     ultima_diag_i810 = diag_i810.get("ultima_publicacao") or {}
                     url_diag_i810 = _i891_url_cliente(ultima_diag_i810)
                     if url_diag_i810 and catalog_render_available():
-                        a2_i810.link_button("🌐 Abrir último link", url_diag_i810, use_container_width=True)
+                        a3_i810.link_button("🌐 Abrir catálogo", url_diag_i810, use_container_width=True)
                     else:
-                        a2_i810.caption("Sem link público disponível.")
+                        a3_i810.caption("Sem link público.")
+
+                    indice_produto_i8101 = (
+                        _i8101_indice_produto_catalogo(produto_escolhido_i8101, catalogo)
+                        if produto_escolhido_i8101
+                        else None
+                    )
+                    if produto_escolhido_i8101 and indice_produto_i8101 is not None:
+                        if pode_executar_acoes_tecnicas(obter_usuario_atual()):
+                            if a4_i810.button(
+                                "✏️ Abrir produto",
+                                key=f"i8101_abrir_produto_{diag_i810.get('id')}_{indice_produto_i8101}",
+                                use_container_width=True,
+                            ):
+                                st.session_state.catalogo_edit_index = int(indice_produto_i8101)
+                                st.rerun()
+                        else:
+                            a4_i810.caption(
+                                f"Produto alterado: {produto_escolhido_i8101.get('nome') or 'Produto'} • revisão do cadastro reservada ao Jorge."
+                            )
+                    elif produto_escolhido_i8101:
+                        a4_i810.caption("Produto não localizado para edição.")
+                    else:
+                        a4_i810.caption("Sem produto detalhado.")
 
             if st.session_state.get("i810_flash"):
                 st.success(st.session_state.pop("i810_flash"))
+            if st.session_state.get("i8101_flash"):
+                msg_flash_i8101 = str(st.session_state.pop("i8101_flash") or "")
+                if msg_flash_i8101.startswith("✅"):
+                    st.success(msg_flash_i8101)
+                else:
+                    st.warning(msg_flash_i8101)
 
             st.divider()
             st.markdown("#### 🕘 Histórico comercial de publicações")
