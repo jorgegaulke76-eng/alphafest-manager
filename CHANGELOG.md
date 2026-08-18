@@ -562,3 +562,11 @@ hangelog
 - Mudanças futuras podem apontar o produto envolvido e abrir o cadastro para revisão pelo Jorge.
 - Anna mantém acesso à Inteligência e vê o produto alterado, sem ganhar permissão técnica de edição do Catálogo Oficial.
 - Motor de detecção I8.10, Central, validade, QR, WhatsApp, PDF, Supabase e GitHub Pages preservados.
+
+## 20.4.9-I8.11.1-HF2 — Fechamento comercial e reabertura auditada
+- Propagação de recebimento mensal agora aparece corretamente na proposta como Pago no fechamento mensal.
+- Fechamento mensal ganhou mensagem de WhatsApp, HTML, PDF e observação comercial.
+- Reabertura permitida após Fechado, Faturado ou Recebido, sempre com motivo e histórico auditável.
+- Recebimentos já registrados são preservados; correções posteriores calculam saldo adicional ou crédito do cliente.
+- PDF do fechamento é preparado somente sob demanda.
+- Homologação desta etapa continua restrita ao perfil Jorge.
