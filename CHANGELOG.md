@@ -1,3 +1,9 @@
+## 20.4.9-I8.11-HF1
+- Hotfix da navegação: Novo Orçamento volta a abrir corretamente no perfil Jorge a partir de qualquer atalho/tela.
+- Identificação automática de cliente por WhatsApp no Novo Orçamento do Jorge.
+- Preenchimento de nome/documento e leitura imediata do Perfil Comercial cadastrado.
+- Anna permanece sem esta extensão até homologação do Jorge.
+
 ## 20.4.9-I8.11
 - Perfil Comercial do Cliente: faturamento mensal e abatimentos fixos em R$ por produto.
 - Propostas mensalistas sem exigência de Pago individual; preço especial calculado sem alterar o Catálogo Oficial.

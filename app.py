@@ -496,9 +496,15 @@ def indice_aba(chave):
 
 
 def rerun_na_aba(chave, mensagem=None):
-    """Reabre somente o módulo solicitado, sem renderizar todas as páginas."""
-    st.session_state["_pagina_principal"] = str(chave)
+    """Reabre somente o módulo solicitado, sem renderizar todas as páginas.
+
+    I8.11.1: marca a navegação como programática para que os selectboxes
+    persistidos da navegação executiva não sobrescrevam o destino solicitado.
+    """
+    chave = str(chave)
+    st.session_state["_pagina_principal"] = chave
     st.session_state["_aba_principal_destino"] = indice_aba(chave)
+    st.session_state["_navegacao_forcada_chave"] = chave
     if mensagem:
         st.session_state["_mensagem_sucesso_pendente"] = mensagem
     st.rerun()
@@ -642,8 +648,10 @@ def solicitar_navegacao_aba(indice, mensagem=None):
     except (TypeError, ValueError):
         idx = 0
     idx = max(0, min(idx, len(ABAS_SISTEMA) - 1))
-    st.session_state["_pagina_principal"] = ABAS_SISTEMA[idx][0]
+    chave = ABAS_SISTEMA[idx][0]
+    st.session_state["_pagina_principal"] = chave
     st.session_state["_aba_principal_destino"] = idx
+    st.session_state["_navegacao_forcada_chave"] = chave
     if mensagem:
         st.session_state["_mensagem_sucesso_pendente"] = mensagem
     st.rerun()
@@ -2317,6 +2325,50 @@ def localizar_cliente_comercial(nome="", documento="", whatsapp=""):
     if nome_norm:
         return next((c for c in clientes if normalizar_texto_cliente(c.get("nome")).casefold() == nome_norm), None)
     return None
+
+
+def autopreencher_cliente_whatsapp_i8111():
+    """Reconhece cliente cadastrado pelo WhatsApp no formulário do Jorge.
+
+    O callback roda antes do rerun do Streamlit, então os demais campos podem
+    ser preenchidos com segurança antes da criação dos widgets no novo ciclo.
+    A Anna não usa este fluxo nesta versão; sua extensão depende de homologação.
+    """
+    whatsapp = str(st.session_state.get("form_whatsapp", "") or "").strip()
+    digitos = _telefone_chave(whatsapp)
+    if len(digitos) < 8:
+        st.session_state.pop("_i8111_cliente_reconhecido_id", None)
+        st.session_state.pop("_i8111_cliente_reconhecido_msg", None)
+        return
+    cliente = localizar_cliente_comercial(whatsapp=whatsapp)
+    if not cliente:
+        st.session_state.pop("_i8111_cliente_reconhecido_id", None)
+        st.session_state["_i8111_cliente_reconhecido_msg"] = "nao_encontrado"
+        return
+    st.session_state["form_cliente"] = str(cliente.get("nome", "") or "").strip()
+    st.session_state["form_documento"] = str(cliente.get("documento", "") or "").strip()
+    # Não reescreve a própria chave form_whatsapp dentro do callback que foi
+    # disparado por ela; preserva exatamente o número confirmado pelo usuário.
+    st.session_state["_i8111_cliente_reconhecido_id"] = cliente.get("id", "")
+    st.session_state["_i8111_cliente_reconhecido_msg"] = "encontrado"
+
+
+def resumo_cliente_reconhecido_i8111(cliente):
+    if not cliente:
+        return ""
+    partes = []
+    cidade = str(cliente.get("cidade", "") or "").strip()
+    if cidade:
+        partes.append(cidade)
+    classificacao = str(cliente.get("classificacao_relacionamento", "") or "").strip()
+    if classificacao:
+        partes.append(classificacao)
+    perfil = resumo_perfil_comercial(cliente)
+    if perfil.get("faturamento_mensal"):
+        partes.append(f"mensalista · fecha dia {perfil.get('dia_fechamento')} · vence dia {perfil.get('dia_vencimento')}")
+    if perfil.get("qtd_regras_ativas"):
+        partes.append(f"{perfil.get('qtd_regras_ativas')} preço(s) especial(is)")
+    return " · ".join(partes)
 
 
 def _i811_data_regra(valor):
@@ -10560,7 +10612,7 @@ with st.sidebar:
                 a, b = st.columns(2)
                 if a.button("Orçamento", key=f"gcli_orc_{cliente.get('id')}", use_container_width=True):
                     carregar_cliente_no_orcamento(cliente)
-                    st.success("Cliente preparado. Abra Novo Orçamento.")
+                    rerun_na_aba("novo_orcamento", f"Cliente {cliente.get('nome', 'Cliente')} carregado no Novo Orçamento.")
                 telefone = re.sub(r"\D", "", str(cliente.get("whatsapp", "")))
                 numero = telefone if telefone.startswith("55") else f"55{telefone}"
                 if telefone:
@@ -16929,15 +16981,29 @@ GRUPOS_NAVEGACAO = {
 }
 ROTULOS_ABAS = dict(ABAS_SISTEMA)
 permitidas_exec = set(obter_perfil_configurado(obter_usuario_atual()).get("abas", []))
-pagina_pendente = st.session_state.get("_pagina_principal", "central")
+
+# I8.11.1 hotfix: resolve o destino antes de criar os selectboxes. Na I8.11
+# isto ocorria depois, permitindo que o valor persistido do selectbox da área
+# sobrescrevesse atalhos como "Novo orçamento".
+executar_navegacao_aba_pendente()
+destino_forcado_i8111 = st.session_state.pop("_navegacao_forcada_chave", None)
+pagina_pendente = destino_forcado_i8111 or st.session_state.get("_pagina_principal", "central")
 if pagina_pendente not in permitidas_exec:
     pagina_pendente = "central"
+    destino_forcado_i8111 = None
+st.session_state["_pagina_principal"] = pagina_pendente
 
 # Descobre o grupo atual e oferece dois controles compactos, sem a antiga fila de abas.
 grupo_atual = next((g for g, itens in GRUPOS_NAVEGACAO.items() if pagina_pendente in itens), "🏠 Central")
 grupos_disponiveis = [g for g, itens in GRUPOS_NAVEGACAO.items() if any(x in permitidas_exec for x in itens)]
 if grupo_atual not in grupos_disponiveis:
     grupo_atual = grupos_disponiveis[0]
+
+# Quando a navegação veio de um botão/atalho, sincroniza os estados dos
+# selectboxes ANTES de instanciá-los. Navegação manual continua livre.
+if destino_forcado_i8111:
+    st.session_state["nav_grupo_executivo"] = grupo_atual
+    st.session_state[f"nav_modulo_{grupo_atual}"] = pagina_pendente
 
 nav_col1, nav_col2 = st.columns([1.15, 2.15])
 grupo_escolhido = nav_col1.selectbox(
@@ -16948,6 +17014,8 @@ grupo_escolhido = nav_col1.selectbox(
 )
 opcoes_modulo = [x for x in GRUPOS_NAVEGACAO[grupo_escolhido] if x in permitidas_exec]
 modulo_padrao = pagina_pendente if pagina_pendente in opcoes_modulo else opcoes_modulo[0]
+if destino_forcado_i8111 and pagina_pendente in opcoes_modulo:
+    st.session_state[f"nav_modulo_{grupo_escolhido}"] = pagina_pendente
 pagina_atual = nav_col2.selectbox(
     "Módulo", opcoes_modulo,
     index=opcoes_modulo.index(modulo_padrao),
@@ -16965,8 +17033,6 @@ st.caption(f"📍 {grupo_escolhido} › {ROTULOS_ABAS.get(pagina_atual, pagina_a
 
 
 # A Central da Anna já foi encerrada acima com st.stop(); nenhuma alteração visual nela.
-
-executar_navegacao_aba_pendente()
 
 if pagina_atual == "central":
     usuario_atual = obter_usuario_atual()
@@ -19975,14 +20041,33 @@ if pagina_atual == "novo_orcamento":
     if aviso_perfil_i811:
         st.info(aviso_perfil_i811)
 
-    # O formulário evita reruns enquanto a Anna digita. O processamento ocorre
-    # somente ao clicar em Adicionar Item, deixando a digitação muito mais ágil.
-    with st.form(key=f"form_item_orcamento_{st.session_state.form_key}", clear_on_submit=False):
-        nome = st.text_input("Nome / Razão Social", key="form_cliente")
-        c1, c2 = st.columns(2)
-        doc = c1.text_input("CPF / CNPJ", key="form_documento")
-        wa = c2.text_input("WhatsApp", key="form_whatsapp")
+    # I8.11.1 — identificação do cliente fica fora do form de itens para o Jorge.
+    # Assim, ao informar/confirmar um WhatsApp já cadastrado, o Streamlit pode
+    # reconhecer o relacionamento e preencher os demais dados antes do item.
+    st.markdown("#### 👤 Cliente")
+    cli1, cli2, cli3 = st.columns([2.2, 1.5, 1.5])
+    nome = cli1.text_input("Nome / Razão Social", key="form_cliente")
+    doc = cli2.text_input("CPF / CNPJ", key="form_documento")
+    wa = cli3.text_input(
+        "WhatsApp",
+        key="form_whatsapp",
+        on_change=autopreencher_cliente_whatsapp_i8111,
+        help="Ao confirmar um número já cadastrado, os dados e o Perfil Comercial do cliente são carregados automaticamente.",
+    )
 
+    cliente_reconhecido_i8111 = localizar_cliente_comercial(nome, doc, wa)
+    msg_identificacao_i8111 = st.session_state.pop("_i8111_cliente_reconhecido_msg", None)
+    if cliente_reconhecido_i8111:
+        resumo_rec_i8111 = resumo_cliente_reconhecido_i8111(cliente_reconhecido_i8111)
+        st.success(f"✅ Cliente cadastrado reconhecido: **{cliente_reconhecido_i8111.get('nome', 'Cliente')}**")
+        if resumo_rec_i8111:
+            st.caption(resumo_rec_i8111)
+    elif msg_identificacao_i8111 == "nao_encontrado":
+        st.info("ℹ️ WhatsApp ainda não localizado nos Relacionamentos. A proposta pode ser criada normalmente e o cliente pode ser cadastrado depois.")
+
+    # O formulário de ITEM continua isolado para não recalcular a tela enquanto
+    # Jorge digita tema, nome, cor e demais especificações.
+    with st.form(key=f"form_item_orcamento_{st.session_state.form_key}", clear_on_submit=False):
         prod = st.text_input("Produto", key=f"produto_novo_{st.session_state.form_key}")
         with st.expander("🎨 Personalização & Especificações", expanded=True):
             c1, c2 = st.columns(2)
@@ -24026,7 +24111,7 @@ if pagina_atual == "relacionamentos":
                 pol_acao_cli = politica_atendimento(cli)
                 if b1.button("➕ Novo orçamento", key=f"cli_orc_{cli.get('id')}", use_container_width=True, disabled=not pol_acao_cli.get("permitir_orcamento", True)):
                     carregar_cliente_no_orcamento(cli)
-                    st.rerun()
+                    rerun_na_aba("novo_orcamento", f"Cliente {cli.get('nome', 'Cliente')} carregado no Novo Orçamento.")
                 if b2.button("✏️ Editar cliente", key=f"cli_edit_{cli.get('id')}", use_container_width=True):
                     st.session_state.cliente_edit_id = cli.get("id")
                     st.rerun()
