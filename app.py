@@ -51,6 +51,7 @@ from alpha_live import registrar_atividade, obter_operacao_online, obter_eventos
 from thu_executivo import calcular_briefing, renderizar_briefing_thu
 from alpha_core import calcular_alpha_core, listar_atrasados_operacionais
 from consumo_estoque_engine import resumo_consumo as _i8124_engine_resumo, pendencia_material as _i8124_engine_pendencia_material, planejar_regularizacao as _i8124_engine_planejar
+from necessidades_compras_engine import agregar_necessidades_compra as _i8125_engine_agregar
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_encerrada as _status_proposta_encerrada,
@@ -4392,6 +4393,77 @@ def _i8124_pendencia_material(material_id, consumos=None, estoque=None):
     consumos = carregar_consumos_pedidos() if consumos is None else consumos
     estoque = carregar_estoque() if estoque is None else estoque
     return _i8124_engine_pendencia_material(consumos, (estoque or {}).get("movimentacoes") or [], str(material_id or ""))
+
+
+def _i8125_parse_data_entrega(valor):
+    texto = str(valor or "").strip()
+    if not texto:
+        return None
+    for formato in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(texto[:10], formato).date()
+        except Exception:
+            pass
+    return None
+
+
+def _i8125_prioridade_entrega(data_entrega):
+    if not isinstance(data_entrega, date):
+        return "⚪ Sem data", 999999
+    dias = (data_entrega - hoje_local()).days
+    if dias < 0:
+        return f"🔴 Atrasada {abs(dias)}d", dias
+    if dias == 0:
+        return "🔴 Entrega hoje", dias
+    if dias <= 2:
+        return f"🟠 Em {dias}d", dias
+    if dias <= 7:
+        return f"🟡 Em {dias}d", dias
+    return f"🟢 Em {dias}d", dias
+
+
+def _i8125_central_necessidades(consumos=None, estoque=None, compras=None, historico=None, fornecedores=None):
+    """Central derivada das fontes oficiais; não persiste uma segunda fila de compras."""
+    consumos = carregar_consumos_pedidos() if consumos is None else consumos
+    estoque = carregar_estoque() if estoque is None else estoque
+    compras = carregar_compras() if compras is None else compras
+    historico = carregar_historico() if historico is None else historico
+    fornecedores = _i8121_fornecedores() if fornecedores is None else fornecedores
+    linhas = _i8125_engine_agregar(consumos, (estoque or {}).get("movimentacoes") or [], historico)
+    mapa_forn = {str(f.get("id") or ""): f for f in (fornecedores or []) if isinstance(f, dict)}
+    resultado = []
+    for linha in linhas:
+        material = _i8122_material_destino_ativo(estoque, linha.get("material_id")) or _i8122_material_por_id(estoque, linha.get("material_id")) or {
+            "id": linha.get("material_id"), "nome": linha.get("material_nome"), "unidade": linha.get("unidade")
+        }
+        ultima = _i8122_ultimo_custo(material, compras, estoque=estoque)
+        custo = valor_float((ultima or {}).get("custo_unitario", 0)) if ultima else 0.0
+        fornecedor_id = str((ultima or {}).get("fornecedor_id") or "")
+        fornecedor = mapa_forn.get(fornecedor_id, {})
+        fornecedor_nome = str((ultima or {}).get("fornecedor_nome") or fornecedor.get("nome") or "").strip()
+        meta_forn = fornecedor.get("fornecedor", {}) if isinstance(fornecedor, dict) else {}
+        datas = [_i8125_parse_data_entrega(p.get("data_entrega")) for p in (linha.get("pedidos") or [])]
+        datas = [d for d in datas if isinstance(d, date)]
+        proxima = min(datas) if datas else None
+        prioridade, dias = _i8125_prioridade_entrega(proxima)
+        qtd = max(0.0, valor_float(linha.get("quantidade_pendente", 0)))
+        enriquecida = dict(linha)
+        enriquecida.update({
+            "material_nome": str(material.get("nome") or linha.get("material_nome") or "Material"),
+            "unidade": str(material.get("unidade") or linha.get("unidade") or ""),
+            "proxima_entrega": proxima,
+            "prioridade": prioridade,
+            "dias_ate_entrega": dias,
+            "fornecedor_id": fornecedor_id,
+            "fornecedor_nome": fornecedor_nome,
+            "fornecedor_prazo": str((meta_forn or {}).get("prazo_medio") or ""),
+            "ultimo_custo": custo if custo > 0 else None,
+            "ultima_compra_data": _i8121_data_compra(ultima.get("data_compra")) if ultima else None,
+            "valor_estimado": round(qtd * custo, 2) if custo > 0 else None,
+        })
+        resultado.append(enriquecida)
+    resultado.sort(key=lambda x: (int(x.get("dias_ate_entrega", 999999)), -valor_float(x.get("quantidade_pendente")), str(x.get("material_nome") or "").casefold()))
+    return resultado
 
 
 def _i8124_resumo_pedido(numero_proposta, consumos=None, estoque=None):
@@ -20168,6 +20240,34 @@ if pagina_atual == "central":
                         )
                 st.write(f"• **{consumo_central_i8124.get('numero_proposta')} — {consumo_central_i8124.get('cliente_nome', 'Cliente')}** · " + " · ".join(faltas_txt_i8124))
 
+    # I8.12.5 — mesma fonte de pendências, agora agregada como necessidade de compra no Centro do Jorge.
+    necessidades_compra_central_i8125 = _i8125_central_necessidades(
+        consumos=consumos_central_i8124, estoque=estoque_central_i8124,
+        compras=carregar_compras(), historico=historico_central, fornecedores=_i8121_fornecedores(),
+    )
+    if necessidades_compra_central_i8125:
+        pedidos_compra_central_i8125 = {
+            str(p.get("numero_proposta") or "")
+            for n in necessidades_compra_central_i8125 for p in (n.get("pedidos") or [])
+            if str(p.get("numero_proposta") or "")
+        }
+        valor_compra_central_i8125 = sum(
+            valor_float(n.get("valor_estimado")) for n in necessidades_compra_central_i8125 if n.get("valor_estimado") is not None
+        )
+        texto_estimativa_central_i8125 = f" · estimativa conhecida {_i8121_moeda_md(valor_compra_central_i8125)}" if valor_compra_central_i8125 > 0 else ""
+        st.warning(
+            f"🛒 **Central de Compras: {len(necessidades_compra_central_i8125)} material(is) faltante(s) em {len(pedidos_compra_central_i8125)} pedido(s)**"
+            f"{texto_estimativa_central_i8125}."
+        )
+        with st.expander("🛒 Ver materiais para comprar", expanded=False):
+            for nec_central_i8125 in necessidades_compra_central_i8125[:8]:
+                forn_central_i8125 = nec_central_i8125.get("fornecedor_nome") or "fornecedor ainda não conhecido"
+                st.write(
+                    f"• **{nec_central_i8125.get('material_nome')}** · {_i8121_quantidade(nec_central_i8125.get('quantidade_pendente'))} {nec_central_i8125.get('unidade', '')} "
+                    f"· {nec_central_i8125.get('quantidade_pedidos', 0)} pedido(s) · {nec_central_i8125.get('prioridade')} · {forn_central_i8125}"
+                )
+            st.caption("Detalhes, custos e preparação da compra: Gestão → Compras, Custos & Estoque.")
+
     numeros_consumo_ativos_central_i8124 = {
         str(c.get("numero_proposta") or "").strip()
         for c in consumos_central_i8124
@@ -23648,10 +23748,10 @@ if pagina_atual == "faturamento_mensal":
 
 
 if pagina_atual == "compras_custos":
-    st.header("📦 I8.12.4 · Compras, Custos, Estoque, Ficha Técnica & Pedidos")
+    st.header("📦 I8.12.5 · Compras, Custos, Estoque, Ficha Técnica & Pedidos")
     st.caption(
         "Registre custos reais, transforme compras em entradas de estoque, controle materiais e defina o consumo técnico por produto. "
-        "A I8.12.4 confirma o consumo por pedido: baixa somente o saldo físico disponível e mantém eventual falta como pendência que novas entradas regularizam automaticamente. O módulo nunca altera sozinho o preço do Catálogo Oficial."
+        "A I8.12.4 confirma o consumo por pedido e a I8.12.5 transforma as faltas confirmadas em uma Central de Necessidades de Compras. Entradas de estoque regularizam as pendências automaticamente; o módulo nunca altera sozinho o preço do Catálogo Oficial."
     )
 
     usuario_compras = obter_usuario_atual()
@@ -23857,6 +23957,120 @@ if pagina_atual == "compras_custos":
                 else:
                     st.error(msg_arq_i8122)
 
+    # I8.12.5 — Central de Necessidades de Compras: visão derivada das pendências confirmadas.
+    necessidades_i8125 = _i8125_central_necessidades(
+        consumos=consumos_i8124, estoque=estoque_i8122, compras=compras_i8121,
+        historico=carregar_historico(), fornecedores=fornecedores_i8121,
+    )
+    st.markdown("### 🛒 Central de Necessidades de Compras · I8.12.5")
+    st.caption(
+        "Fonte única: esta Central não cria uma lista paralela. Ela soma somente as faltas reais dos consumos de pedidos já confirmados. "
+        "Quando uma entrada de estoque regulariza a pendência, a necessidade diminui ou desaparece automaticamente desta tela."
+    )
+    if not necessidades_i8125:
+        st.success("✅ Nenhum material está pendente para pedidos confirmados neste momento.")
+    else:
+        pedidos_unicos_i8125 = {
+            str(p.get("numero_proposta") or "")
+            for n in necessidades_i8125 for p in (n.get("pedidos") or [])
+            if str(p.get("numero_proposta") or "")
+        }
+        estimativa_conhecida_i8125 = sum(valor_float(n.get("valor_estimado")) for n in necessidades_i8125 if n.get("valor_estimado") is not None)
+        sem_custo_i8125 = sum(1 for n in necessidades_i8125 if n.get("ultimo_custo") is None)
+        urgentes_i8125 = sum(1 for n in necessidades_i8125 if int(n.get("dias_ate_entrega", 999999)) <= 2)
+        nc1, nc2, nc3, nc4 = st.columns(4)
+        nc1.metric("Materiais para comprar", len(necessidades_i8125))
+        nc2.metric("Pedidos envolvidos", len(pedidos_unicos_i8125))
+        nc3.metric("Urgentes / até 2 dias", urgentes_i8125)
+        nc4.metric("Valor estimado", _i8121_moeda(estimativa_conhecida_i8125) if estimativa_conhecida_i8125 > 0 else "Sem base")
+        if sem_custo_i8125:
+            st.caption(f"ℹ️ A estimativa é parcial: {sem_custo_i8125} material(is) ainda não têm custo de compra conhecido. Nenhum preço de venda é alterado por esta Central.")
+
+        linhas_central_i8125 = []
+        for nec_i8125 in necessidades_i8125:
+            proxima_i8125 = nec_i8125.get("proxima_entrega")
+            linhas_central_i8125.append({
+                "Prioridade": nec_i8125.get("prioridade", ""),
+                "Material": nec_i8125.get("material_nome", ""),
+                "Comprar": f"{_i8121_quantidade(nec_i8125.get('quantidade_pendente'))} {nec_i8125.get('unidade', '')}",
+                "Pedidos": nec_i8125.get("quantidade_pedidos", 0),
+                "Próxima entrega": proxima_i8125.strftime("%d/%m/%Y") if isinstance(proxima_i8125, date) else "—",
+                "Último fornecedor": nec_i8125.get("fornecedor_nome") or "Sem histórico",
+                "Último custo": _i8121_moeda(nec_i8125.get("ultimo_custo")) if nec_i8125.get("ultimo_custo") is not None else "Sem custo",
+                "Estimativa": _i8121_moeda(nec_i8125.get("valor_estimado")) if nec_i8125.get("valor_estimado") is not None else "—",
+            })
+        st.dataframe(pd.DataFrame(linhas_central_i8125), use_container_width=True, hide_index=True)
+
+        st.markdown("#### 🔎 Materiais e pedidos envolvidos")
+        for nec_i8125 in necessidades_i8125:
+            qtd_txt_i8125 = f"{_i8121_quantidade(nec_i8125.get('quantidade_pendente'))} {nec_i8125.get('unidade', '')}"
+            with st.expander(f"{nec_i8125.get('prioridade', '')} · {nec_i8125.get('material_nome')} · comprar {qtd_txt_i8125}", expanded=False):
+                nd1, nd2, nd3 = st.columns(3)
+                nd1.metric("Quantidade pendente", qtd_txt_i8125)
+                nd2.metric("Pedidos", nec_i8125.get("quantidade_pedidos", 0))
+                nd3.metric("Estimativa", _i8121_moeda(nec_i8125.get("valor_estimado")) if nec_i8125.get("valor_estimado") is not None else "Sem custo conhecido")
+                if nec_i8125.get("fornecedor_nome"):
+                    info_forn_i8125 = f"🏭 Último fornecedor: **{nec_i8125.get('fornecedor_nome')}**"
+                    if nec_i8125.get("fornecedor_prazo"):
+                        info_forn_i8125 += f" · prazo médio cadastrado: {nec_i8125.get('fornecedor_prazo')}"
+                    if nec_i8125.get("ultima_compra_data"):
+                        info_forn_i8125 += f" · última compra: {nec_i8125.get('ultima_compra_data').strftime('%d/%m/%Y')}"
+                    st.info(info_forn_i8125)
+                else:
+                    st.warning("Ainda não existe fornecedor de compra conhecido para este material. A necessidade é real, mas o fornecedor deve ser definido antes da compra.")
+
+                linhas_ped_i8125 = []
+                for ped_i8125 in nec_i8125.get("pedidos") or []:
+                    entrega_dt_i8125 = _i8125_parse_data_entrega(ped_i8125.get("data_entrega"))
+                    linhas_ped_i8125.append({
+                        "Pedido": ped_i8125.get("numero_proposta", ""),
+                        "Cliente": ped_i8125.get("cliente_nome", ""),
+                        "Entrega": entrega_dt_i8125.strftime("%d/%m/%Y") if isinstance(entrega_dt_i8125, date) else (ped_i8125.get("data_entrega") or "—"),
+                        "Falta deste material": f"{_i8121_quantidade(ped_i8125.get('quantidade_pendente'))} {nec_i8125.get('unidade', '')}",
+                        "Produto(s)": ", ".join(ped_i8125.get("produtos") or []) or "—",
+                    })
+                if linhas_ped_i8125:
+                    st.dataframe(pd.DataFrame(linhas_ped_i8125), use_container_width=True, hide_index=True)
+
+                fornecedor_pode_prefill_i8125 = bool(nec_i8125.get("fornecedor_id")) and any(
+                    str(f.get("id") or "") == str(nec_i8125.get("fornecedor_id") or "") for f in fornecedores_i8121
+                )
+                if fornecedor_pode_prefill_i8125:
+                    if st.button(
+                        "🧾 Preparar compra deste material",
+                        key=f"i8125_preparar_{nec_i8125.get('material_id')}",
+                        use_container_width=True,
+                        help="Preenche a compra com o material, quantidade pendente, último fornecedor/custo e destino correto de estoque. Você ainda revisa e confirma o registro.",
+                    ):
+                        unidade_pref_i8125 = str(nec_i8125.get("unidade") or "un")
+                        catalogo_pref_i8125 = carregar_catalogo()
+                        nomes_catalogo_pref_i8125 = {str(p.get("Nome") or "").strip() for p in catalogo_pref_i8125 if str(p.get("Nome") or "").strip()}
+                        produtos_pref_i8125 = [
+                            str(x) for x in (nec_i8125.get("produtos") or [])
+                            if str(x).strip() and str(x).strip() in nomes_catalogo_pref_i8125
+                        ]
+                        st.session_state["i8121_nova_fornecedor"] = str(nec_i8125.get("fornecedor_id"))
+                        st.session_state["i8121_novo_item"] = str(nec_i8125.get("material_nome") or "")
+                        st.session_state["i8121_nova_qtd"] = float(valor_float(nec_i8125.get("quantidade_pendente")))
+                        if unidade_pref_i8125 in I8121_UNIDADES:
+                            st.session_state["i8121_nova_unidade"] = unidade_pref_i8125
+                        st.session_state["i8121_novo_custo"] = float(valor_float(nec_i8125.get("ultimo_custo", 0)))
+                        st.session_state["i8122_compra_gera_estoque"] = True
+                        st.session_state["i8121_novos_relacionados"] = produtos_pref_i8125
+                        assinatura_pref_i8125 = hashlib.sha1(
+                            ("|".join(sorted(produtos_pref_i8125)) + "|" + unidade_pref_i8125).encode("utf-8")
+                        ).hexdigest()[:10]
+                        st.session_state[f"i8124hf3_destino_compra_{assinatura_pref_i8125}"] = str(nec_i8125.get("material_id") or "")
+                        st.session_state["_i8125_expandir_compra"] = True
+                        st.session_state["_i8125_msg_preparo"] = (
+                            f"Compra preparada para {nec_i8125.get('material_nome')}: {_i8121_quantidade(nec_i8125.get('quantidade_pendente'))} {unidade_pref_i8125}. "
+                            "Revise fornecedor, custo e documento antes de registrar."
+                        )
+                        st.rerun()
+                else:
+                    st.caption("Para preparar a compra automaticamente, primeiro registre uma compra/fornecedor conhecido para este material ou escolha o fornecedor manualmente no formulário abaixo.")
+
+    st.divider()
     # I8.12.3 — ficha técnica por produto, somente configuração e simulação.
     st.markdown("### 🧩 Ficha Técnica de Consumo · I8.12.3")
     catalogo_i8123 = carregar_catalogo()
@@ -24386,7 +24600,11 @@ if pagina_atual == "compras_custos":
 
     st.divider()
     st.markdown("### 🧾 Compras por fornecedor")
-    with st.expander("➕ Registrar nova compra", expanded=not bool(compras_i8121)):
+    msg_preparo_i8125 = st.session_state.pop("_i8125_msg_preparo", None)
+    if msg_preparo_i8125:
+        st.success(msg_preparo_i8125)
+    expandir_compra_i8125 = bool(st.session_state.pop("_i8125_expandir_compra", False))
+    with st.expander("➕ Registrar nova compra", expanded=expandir_compra_i8125 or not bool(compras_i8121)):
         if not fornecedores_i8121:
             st.warning("Nenhum relacionamento com papel **Fornecedor** foi encontrado. Cadastre o fornecedor primeiro em Relacionamentos para manter uma única fonte de cadastro.")
             if st.button("🏭 Abrir Relacionamentos para cadastrar fornecedor", key="i8121_ir_fornecedores", use_container_width=True):
