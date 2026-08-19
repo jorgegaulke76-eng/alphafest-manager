@@ -1,3 +1,9 @@
+## 20.4.9-I8.12.4-HF4 — Materiais Inativos / Históricos
+- Materiais consolidados passam a ser identificados explicitamente como Inativo/Histórico.
+- Inativos deixam as listas operacionais sem perder histórico.
+- Nova seção de consulta de materiais inativos e arquivamento seguro de cadastros sem uso.
+- Arquivamento bloqueado quando há saldo, pendência ou vínculo ativo em Ficha Técnica.
+
 ## 20.4.9-I8.12.4-HF3 — Compras integradas à Ficha Técnica
 - Entrada por compra passa a exigir destino de estoque explícito e prioriza o material definido na Ficha Técnica do produto relacionado.
 - Nomes digitados na compra deixam de criar materiais duplicados silenciosamente.

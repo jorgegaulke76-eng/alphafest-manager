@@ -4040,10 +4040,15 @@ def _i8122_consolidar_material_duplicado(origem_id, destino_id, motivo, usuario=
             observacao=f"{motivo} ← {origem.get('nome')}", origem_tipo="Saneamento estoque", origem_id=ref, usuario=usuario,
         )
     origem["ativo"] = False
+    origem["status_registro"] = "Inativo/Histórico"
+    origem["tipo_inativacao"] = "Consolidação"
     origem["consolidado_para_id"] = str(destino.get("id") or "")
     origem["consolidado_para_nome"] = str(destino.get("nome") or "")
     origem["consolidado_em"] = agora_local().isoformat()
     origem["consolidado_por"] = str(usuario or "Jorge")
+    origem["inativado_em"] = origem["consolidado_em"]
+    origem["inativado_por"] = origem["consolidado_por"]
+    origem["motivo_inativacao"] = motivo
     origem["motivo_consolidacao"] = motivo
     destino.setdefault("materiais_consolidados", [])
     if origem_id not in destino["materiais_consolidados"]:
@@ -4063,6 +4068,71 @@ def _i8122_consolidar_material_duplicado(origem_id, destino_id, motivo, usuario=
         f"Material {origem.get('nome')} consolidado em {destino.get('nome')}. "
         f"Saldo reclassificado: {_i8121_quantidade(max(0.0, saldo_origem))} {destino.get('unidade')}. "
         "O histórico original foi preservado e eventuais pendências do destino foram reconciliadas automaticamente."
+    )
+
+
+def _i8122_inativar_material_historico(material_id, motivo, usuario="Jorge"):
+    """Arquiva um material sem uso operacional, preservando todo o histórico.
+
+    Proteções: saldo físico zerado, nenhuma pendência de pedido e nenhuma Ficha
+    Técnica ativa pode apontar para o material. O registro permanece no banco
+    apenas como Inativo/Histórico e deixa de aparecer nas listas operacionais.
+    """
+    material_id = str(material_id or "").strip()
+    motivo = str(motivo or "").strip() or "Material sem uso operacional"
+    if not material_id:
+        return False, "Selecione um material para arquivar."
+
+    dados = carregar_estoque(force_refresh=True)
+    material = _i8122_material_por_id(dados, material_id)
+    if not material:
+        return False, "Material não encontrado."
+    if not material.get("ativo", True):
+        return False, "Este material já está inativo/histórico."
+
+    saldo = _i8122_saldo_material(dados, material_id)
+    if abs(saldo) > 0.000001:
+        return False, (
+            f"{material.get('nome')} ainda possui saldo {_i8121_quantidade(saldo)} {material.get('unidade')}. "
+            "Zere/reclassifique o saldo antes de arquivar."
+        )
+
+    consumos = carregar_consumos_pedidos(force_refresh=True)
+    pendente = _i8124_pendencia_material(material_id, consumos=consumos, estoque=dados)
+    if pendente > 0.000001:
+        return False, (
+            f"{material.get('nome')} ainda possui {_i8121_quantidade(pendente)} {material.get('unidade')} "
+            "pendente(s) em pedidos e não pode ser arquivado."
+        )
+
+    fichas = carregar_fichas_tecnicas(force_refresh=True)
+    produtos_usando = []
+    for ficha in fichas:
+        if any(str(c.get("material_id") or "") == material_id for c in _i8123_componentes_ativos(ficha)):
+            produtos_usando.append(str(ficha.get("produto_nome_snapshot") or ficha.get("produto_nome") or "Produto"))
+    if produtos_usando:
+        nomes = " • ".join(dict.fromkeys(produtos_usando))
+        return False, f"Este material ainda é usado por Ficha Técnica: {nomes}. Atualize a ficha antes de arquivar."
+
+    agora = agora_local().isoformat()
+    material["ativo"] = False
+    material["status_registro"] = "Inativo/Histórico"
+    material["tipo_inativacao"] = "Arquivamento manual"
+    material["inativado_em"] = agora
+    material["inativado_por"] = str(usuario or "Jorge")
+    material["motivo_inativacao"] = motivo
+
+    if not salvar_estoque(dados, regularizar_pendencias=False):
+        return False, "Não foi possível arquivar o material."
+    registrar_auditoria("Arquivar material", "Estoque", material_id, {
+        "material": material.get("nome"),
+        "unidade": material.get("unidade"),
+        "motivo": motivo,
+        "status": "Inativo/Histórico",
+    })
+    return True, (
+        f"{material.get('nome')} foi movido para Inativos/Históricos. "
+        "O histórico foi preservado e o material saiu das listas operacionais."
     )
 
 
@@ -4155,7 +4225,7 @@ def _i8123_capacidade_estimada(ficha, estoque):
     return max(0, int(capacidade + 0.0000001)), gargalo
 
 
-# --- 20.4.9-I8.12.4-HF3: Compras → Ficha Técnica → material de estoque + fila homologada ---
+# --- 20.4.9-I8.12.4-HF4: Materiais Inativos/Históricos + base homologada HF3 ---
 I8124_CONSUMOS_PADRAO = []
 
 
@@ -23634,7 +23704,7 @@ if pagina_atual == "compras_custos":
         and _i8121_data_compra(mov.get("data_movimento")).month == hoje_i8121.month
     ]
 
-    st.markdown("### 📦 Estoque de materiais · I8.12.4-HF3")
+    st.markdown("### 📦 Estoque de materiais · I8.12.4-HF4")
     es1, es2, es3, es4 = st.columns(4)
     es1.metric("Materiais controlados", len(materiais_i8122))
     es2.metric("No/abaixo do mínimo", len(baixos_i8122))
@@ -23722,6 +23792,70 @@ if pagina_atual == "compras_custos":
                     st.rerun()
                 else:
                     st.error(msg_cons_i8122)
+
+    # HF4 — materiais fora de uso deixam as listas operacionais, mas nunca somem do histórico.
+    materiais_inativos_i8122 = [m for m in (estoque_i8122.get("materiais") or []) if not m.get("ativo", True)]
+    with st.expander(f"🗂️ Inativos / Históricos ({len(materiais_inativos_i8122)})", expanded=False):
+        st.caption(
+            "Materiais consolidados ou arquivados não aparecem em novas compras, movimentações ou Fichas Técnicas. "
+            "Os registros e movimentos anteriores permanecem disponíveis para rastreabilidade."
+        )
+        if materiais_inativos_i8122:
+            linhas_inativos_i8122 = []
+            for mat_hist_i8122 in sorted(materiais_inativos_i8122, key=lambda m: str(m.get("nome") or "").casefold()):
+                destino_hist_i8122 = str(mat_hist_i8122.get("consolidado_para_nome") or "")
+                motivo_hist_i8122 = str(mat_hist_i8122.get("motivo_inativacao") or mat_hist_i8122.get("motivo_consolidacao") or "Histórico")
+                data_hist_i8122 = str(mat_hist_i8122.get("inativado_em") or mat_hist_i8122.get("consolidado_em") or "")[:10]
+                linhas_inativos_i8122.append({
+                    "Material": mat_hist_i8122.get("nome", ""),
+                    "Unidade": mat_hist_i8122.get("unidade", ""),
+                    "Situação": "Inativo / Histórico",
+                    "Destino consolidado": destino_hist_i8122 or "—",
+                    "Motivo": motivo_hist_i8122,
+                    "Inativado em": data_hist_i8122 or "—",
+                })
+            st.dataframe(pd.DataFrame(linhas_inativos_i8122), use_container_width=True, hide_index=True)
+        else:
+            st.caption("Nenhum material inativo/histórico registrado até o momento.")
+
+        if materiais_i8122:
+            st.markdown("**Arquivar material sem uso**")
+            st.caption(
+                "Use para um cadastro antigo que não representa mais um material operacional. Só é permitido com saldo 0, "
+                "sem pendências de pedidos e sem uso em Ficha Técnica."
+            )
+            mapa_arq_i8122 = {str(m.get("id")): m for m in materiais_i8122}
+            ids_arq_i8122 = sorted(mapa_arq_i8122, key=lambda mid: str(mapa_arq_i8122[mid].get("nome") or "").casefold())
+            mat_arq_i8122 = st.selectbox(
+                "Material ativo a arquivar", ids_arq_i8122,
+                format_func=lambda mid: f"{mapa_arq_i8122[mid].get('nome')} · {mapa_arq_i8122[mid].get('unidade')}",
+                key="i8124hf4_arquivar_material",
+            )
+            saldo_arq_i8122 = _i8122_saldo_material(estoque_i8122, mat_arq_i8122)
+            pend_arq_i8122 = _i8124_pendencia_material(mat_arq_i8122, consumos=consumos_i8124, estoque=estoque_i8122)
+            aa1, aa2 = st.columns(2)
+            aa1.metric("Saldo atual", f"{_i8121_quantidade(saldo_arq_i8122)} {mapa_arq_i8122[mat_arq_i8122].get('unidade', '')}")
+            aa2.metric("Pendente em pedidos", f"{_i8121_quantidade(pend_arq_i8122)} {mapa_arq_i8122[mat_arq_i8122].get('unidade', '')}")
+            motivo_arq_i8122 = st.text_input(
+                "Motivo do arquivamento", value="Cadastro antigo/duplicado sem uso operacional",
+                key="i8124hf4_motivo_arquivar",
+            )
+            confirma_arq_i8122 = st.checkbox(
+                "Confirmo que este material não deve mais ser usado operacionalmente",
+                key="i8124hf4_confirma_arquivar",
+            )
+            if st.button(
+                "🗂️ Mover para Inativos/Históricos", key="i8124hf4_salvar_arquivamento", use_container_width=True,
+                disabled=not confirma_arq_i8122,
+            ):
+                ok_arq_i8122, msg_arq_i8122 = _i8122_inativar_material_historico(
+                    mat_arq_i8122, motivo_arq_i8122, usuario=str(usuario_compras.get("nome") or "Jorge")
+                )
+                if ok_arq_i8122:
+                    st.session_state["_mensagem_sucesso_pendente"] = msg_arq_i8122
+                    st.rerun()
+                else:
+                    st.error(msg_arq_i8122)
 
     # I8.12.3 — ficha técnica por produto, somente configuração e simulação.
     st.markdown("### 🧩 Ficha Técnica de Consumo · I8.12.3")
@@ -23927,7 +24061,7 @@ if pagina_atual == "compras_custos":
                 st.success(f"Estoque suficiente para simular {_i8121_quantidade(qtd_sim_i8123)} unidade(s) deste produto. Nenhuma baixa foi realizada.")
 
     st.divider()
-    st.markdown("### 🧾 Consumo de estoque por pedido · I8.12.4-HF3")
+    st.markdown("### 🧾 Consumo de estoque por pedido · I8.12.4-HF4")
     st.info(
         "📌 A aprovação do cliente não baixa estoque sozinha. Você revisa a prévia e confirma o consumo do pedido. "
         "Se faltar material, o saldo físico vai até zero e a diferença fica pendente. Novas entradas quitam essa pendência automaticamente, sem estoque negativo."
