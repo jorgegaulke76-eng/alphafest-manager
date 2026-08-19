@@ -11928,7 +11928,12 @@ def renderizar_painel_alertas(prefixo):
         st.write(
             f"**Total:** R$ {total_alerta:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
+        # I8.11.3-HF2 — o painel rápido de proposta é um caminho diferente do
+        # Histórico. No HF1 o Excluir havia voltado no Histórico, mas ainda não
+        # neste painel. Mantemos a ação administrativa exclusivamente no Jorge.
+        usuario_alerta_jorge_hf2 = str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold() == "jorge"
         a1, a2, a3, a4 = st.columns(4)
+
         if a1.button("✏️ Editar proposta", key=f"editar_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}", use_container_width=True):
             carregar_proposta_no_formulario(proposta_alerta, duplicar=False)
             st.session_state.alerta_proposta_numero = None
@@ -11950,6 +11955,28 @@ def renderizar_painel_alertas(prefixo):
             st.session_state.alerta_proposta_numero = None
             st.rerun()
 
+        # Ações administrativas da proposta ficam em uma linha própria para não
+        # comprimir os botões comerciais. Excluir continua exclusivo do Jorge.
+        if usuario_alerta_jorge_hf2:
+            adm1, adm2 = st.columns(2)
+            if adm1.button(
+                "📋 Duplicar pedido",
+                key=f"duplicar_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}",
+                use_container_width=True,
+            ):
+                carregar_proposta_no_formulario(proposta_alerta, duplicar=True)
+                st.session_state.alerta_proposta_numero = None
+                rerun_na_aba("novo_orcamento", "Cópia carregada como novo orçamento.")
+            if adm2.button(
+                "🗑️ Excluir proposta",
+                key=f"excluir_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}",
+                use_container_width=True,
+                help="Envia a proposta para a Lixeira. Disponível somente no perfil Jorge.",
+            ):
+                numero_excluir_alerta_hf2 = str(proposta_alerta.get("numero_proposta") or "")
+                st.session_state.alerta_proposta_numero = None
+                excluir_proposta(numero_excluir_alerta_hf2)
+
 mensagem_sucesso = st.session_state.pop("_mensagem_sucesso_pendente", None)
 if mensagem_sucesso:
     st.success(mensagem_sucesso)
@@ -11970,6 +11997,13 @@ _rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_ate
 # -----------------------------------------------------------------------------
 def _anna_fmt_moeda(valor):
     return f"R$ {valor_float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _anna_fmt_moeda_html(valor):
+    # I8.11.3-HF2 — em st.markdown o caractere $ pode abrir uma expressão
+    # matemática antes de o HTML ser processado. A entidade HTML evita que
+    # trechos como "R$ 4,00 = R$ 120,00" engulam o <strong> seguinte.
+    return html.escape(_anna_fmt_moeda(valor)).replace("$", "&#36;")
 
 
 def _anna_numero_whatsapp(valor):
@@ -12271,8 +12305,8 @@ def dialog_orcamento_anna(proposta=None):
             ci.markdown(
                 f"<strong>{idx + 1}. {html.escape(str(item.get('produto') or 'Produto'))}</strong> "
                 f"— Qtd: {html.escape(str(item.get('quantidade')))} × "
-                f"{html.escape(_anna_fmt_moeda(unit_item_i8113))} = "
-                f"<strong>{html.escape(_anna_fmt_moeda(total_item_i8113))}</strong>",
+                f"{_anna_fmt_moeda_html(unit_item_i8113)} = "
+                f"<strong>{_anna_fmt_moeda_html(total_item_i8113)}</strong>",
                 unsafe_allow_html=True,
             )
             ci.caption(item.get("especificacoes", ""))
@@ -21640,8 +21674,8 @@ if pagina_atual == "novo_orcamento":
             col_info.markdown(
                 f"<strong>{idx + 1}. {html.escape(str(item.get('produto') or 'Produto'))}</strong> "
                 f"— Qtd: {html.escape(str(item.get('quantidade')))} × "
-                f"{html.escape(_anna_fmt_moeda(unit_item_i8113))} = "
-                f"<strong>{html.escape(_anna_fmt_moeda(total_item_i8113))}</strong>",
+                f"{_anna_fmt_moeda_html(unit_item_i8113)} = "
+                f"<strong>{_anna_fmt_moeda_html(total_item_i8113)}</strong>",
                 unsafe_allow_html=True,
             )
             col_info.caption(item.get("especificacoes", ""))
