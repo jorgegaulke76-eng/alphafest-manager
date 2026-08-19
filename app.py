@@ -3800,6 +3800,74 @@ def _i8122_adicionar_movimento(dados, material, delta, tipo, data_movimento=None
     return registro
 
 
+def _i8122_material_destino_ativo(dados, material_id):
+    """Resolve um material de estoque, seguindo consolidações sem ressuscitar duplicatas."""
+    atual = str(material_id or "").strip()
+    visitados = set()
+    while atual and atual not in visitados:
+        visitados.add(atual)
+        material = _i8122_material_por_id(dados, atual)
+        if material is None:
+            return None
+        if material.get("ativo", True):
+            return material
+        proximo = str(material.get("consolidado_para_id") or "").strip()
+        if not proximo:
+            return None
+        atual = proximo
+    return None
+
+
+def _i8122_candidatos_materiais_por_produtos(produtos_relacionados, catalogo=None, fichas=None, estoque=None):
+    """Retorna materiais técnicos das fichas dos produtos de venda relacionados.
+
+    A compra nunca cria um segundo conceito de produto: o produto relacionado é
+    resolvido no Catálogo Oficial e sua Ficha Técnica aponta para o material de
+    estoque já controlado. Se houver mais de um material, a UI exige escolha.
+    """
+    catalogo = carregar_catalogo() if catalogo is None else catalogo
+    fichas = carregar_fichas_tecnicas() if fichas is None else fichas
+    estoque = carregar_estoque() if estoque is None else estoque
+    por_id = {}
+    diagnosticos = []
+    for nome_rel in (produtos_relacionados or []):
+        idx_prod, produto, resolucao = _resolver_produto_catalogo_saneado(nome_rel, catalogo)
+        if produto is None:
+            diagnosticos.append({"produto": str(nome_rel or ""), "situacao": "sem_catalogo"})
+            continue
+        ficha = _i8123_ficha_para_produto(fichas, produto, idx_prod)
+        componentes = _i8123_componentes_ativos(ficha) if ficha else []
+        if not ficha or not componentes:
+            diagnosticos.append({
+                "produto": str((produto or {}).get("Nome") or nome_rel),
+                "situacao": "sem_ficha",
+                "resolucao": resolucao or {},
+            })
+            continue
+        for comp in componentes:
+            mat = _i8122_material_destino_ativo(estoque, comp.get("material_id"))
+            if not mat:
+                diagnosticos.append({
+                    "produto": str((produto or {}).get("Nome") or nome_rel),
+                    "situacao": "material_inativo_ou_ausente",
+                    "material": str(comp.get("material_nome_snapshot") or "Material"),
+                })
+                continue
+            mid = str(mat.get("id") or "")
+            reg = por_id.setdefault(mid, {
+                "material_id": mid,
+                "material_nome": str(mat.get("nome") or ""),
+                "unidade": str(mat.get("unidade") or ""),
+                "produtos": [],
+                "origem": "ficha_tecnica",
+            })
+            nome_oficial = str((produto or {}).get("Nome") or nome_rel)
+            if nome_oficial not in reg["produtos"]:
+                reg["produtos"].append(nome_oficial)
+    candidatos = sorted(por_id.values(), key=lambda x: (str(x.get("material_nome") or "").casefold(), str(x.get("material_id") or "")))
+    return candidatos, diagnosticos
+
+
 def _i8122_registrar_entrada_compra(compra, force_refresh=True, motivo="Entrada automática da compra"):
     if not isinstance(compra, dict) or not str(compra.get("id") or "").strip():
         return False, "Compra inválida para entrada de estoque."
@@ -3812,9 +3880,33 @@ def _i8122_registrar_entrada_compra(compra, force_refresh=True, motivo="Entrada 
     ativos = [m for m in existentes if not _i8122_movimento_estornado(dados, m.get("id"))]
     if ativos:
         return True, "Entrada de estoque desta compra já registrada."
-    material, _ = _i8122_garantir_material(
-        dados, compra.get("item"), compra.get("unidade"), usuario=compra.get("criado_por") or "Jorge"
-    )
+
+    # HF3: novas compras gravam explicitamente qual material recebe a entrada.
+    # Registros antigos, sem esse campo, mantêm o comportamento legado para não
+    # quebrar restaurações ou históricos existentes.
+    material_id_destino = str(compra.get("material_estoque_id") or "").strip()
+    material = _i8122_material_destino_ativo(dados, material_id_destino) if material_id_destino else None
+    if material_id_destino and material is None and compra.get("material_estoque_criar_novo"):
+        nome_novo = str(compra.get("material_estoque_nome") or compra.get("item") or "").strip()
+        unidade_nova = str(compra.get("unidade") or "un").strip() or "un"
+        id_esperado = _i8122_material_id(nome_novo, unidade_nova)
+        if material_id_destino != id_esperado:
+            return False, "Destino de estoque novo inválido; revise o material selecionado."
+        material, _ = _i8122_garantir_material(
+            dados, nome_novo, unidade_nova, usuario=compra.get("criado_por") or "Jorge"
+        )
+    elif material_id_destino and material is None:
+        return False, "O material de estoque escolhido para esta compra não está mais ativo. Revise o destino antes de lançar a entrada."
+    elif material is None:
+        material, _ = _i8122_garantir_material(
+            dados, compra.get("item"), compra.get("unidade"), usuario=compra.get("criado_por") or "Jorge"
+        )
+
+    unidade_compra = str(compra.get("unidade") or "").strip().casefold()
+    unidade_material = str(material.get("unidade") or "").strip().casefold()
+    if unidade_compra and unidade_material and unidade_compra != unidade_material:
+        return False, f"A unidade da compra ({compra.get('unidade')}) não corresponde à unidade do material {material.get('nome')} ({material.get('unidade')})."
+
     qtd = valor_float(compra.get("quantidade", 0))
     if qtd <= 0:
         return False, "A compra não possui quantidade válida para estoque."
@@ -3822,12 +3914,20 @@ def _i8122_registrar_entrada_compra(compra, force_refresh=True, motivo="Entrada 
         dados, material, qtd, "Entrada por compra", _i8121_data_compra(compra.get("data_compra")),
         observacao=motivo, origem_tipo="Compra", origem_id=compra_id, usuario=compra.get("criado_por") or "Jorge"
     )
+    mov["compra_item_original"] = str(compra.get("item") or "")
+    mov["material_destino_origem"] = str(compra.get("material_estoque_origem") or "legado")
     if not salvar_estoque(dados):
         return False, "Não foi possível salvar a entrada de estoque."
     registrar_auditoria("Entrada de estoque por compra", "Estoque", mov.get("id"), {
-        "compra_id": compra_id, "material": material.get("nome"), "quantidade": qtd, "unidade": material.get("unidade")
+        "compra_id": compra_id,
+        "item_comprado": str(compra.get("item") or ""),
+        "material": material.get("nome"),
+        "material_id": material.get("id"),
+        "origem_destino": str(compra.get("material_estoque_origem") or "legado"),
+        "quantidade": qtd,
+        "unidade": material.get("unidade"),
     })
-    return True, "Entrada de estoque registrada."
+    return True, f"Entrada de estoque registrada em {material.get('nome')}."
 
 
 def _i8122_estornar_entrada_compra(compra_id, motivo="Compra removida", usuario="Jorge"):
@@ -3862,20 +3962,108 @@ def _i8122_estornar_entrada_compra(compra_id, motivo="Compra removida", usuario=
     return bool(salvar_estoque(dados)), "Entrada de estoque estornada."
 
 
-def _i8122_ultimo_custo(material, compras):
+def _i8122_ultimo_custo(material, compras, estoque=None):
+    """Último custo do material pela referência explícita da compra.
+
+    Também herda custos de materiais antigos consolidados para o material atual,
+    preservando o item original da compra e sem reescrever histórico.
+    """
     candidatos = []
-    chave = _i8121_chave_item(material.get("nome"))
-    unidade = str(material.get("unidade") or "").strip().casefold()
-    for compra in compras or []:
-        if _i8121_chave_item(compra.get("item")) != chave:
+    estoque = carregar_estoque() if estoque is None else estoque
+    material_id = str((material or {}).get("id") or "")
+    unidade = str((material or {}).get("unidade") or "").strip().casefold()
+    ids_validos = {material_id} if material_id else set()
+    nomes_validos = {_i8121_chave_item((material or {}).get("nome"))}
+    for mat in (estoque.get("materiais") or []):
+        mid = str(mat.get("id") or "")
+        if not mid or mid == material_id or mat.get("ativo", True):
             continue
+        destino_final = _i8122_material_destino_ativo(estoque, mid)
+        if destino_final and str(destino_final.get("id") or "") == material_id:
+            ids_validos.add(mid)
+            nomes_validos.add(_i8121_chave_item(mat.get("nome")))
+    nomes_validos.discard("")
+
+    for compra in compras or []:
         if str(compra.get("unidade") or "").strip().casefold() != unidade:
+            continue
+        compra_mid = str(compra.get("material_estoque_id") or "").strip()
+        corresponde = bool(compra_mid and compra_mid in ids_validos)
+        if not corresponde and not compra_mid:
+            corresponde = _i8121_chave_item(compra.get("item")) in nomes_validos
+        if not corresponde:
             continue
         candidatos.append((_i8121_data_compra(compra.get("data_compra")), str(compra.get("criado_em") or ""), compra))
     if not candidatos:
         return None
     candidatos.sort(key=lambda x: (x[0], x[1]), reverse=True)
     return candidatos[0][2]
+
+
+def _i8122_consolidar_material_duplicado(origem_id, destino_id, motivo, usuario="Jorge"):
+    """Consolida saldo de uma duplicata em um material oficial sem apagar histórico."""
+    origem_id = str(origem_id or "").strip()
+    destino_id = str(destino_id or "").strip()
+    motivo = str(motivo or "").strip() or "Consolidação de material duplicado"
+    if not origem_id or not destino_id or origem_id == destino_id:
+        return False, "Escolha materiais diferentes para origem e destino."
+
+    dados = carregar_estoque(force_refresh=True)
+    origem = _i8122_material_por_id(dados, origem_id)
+    destino = _i8122_material_destino_ativo(dados, destino_id)
+    if not origem or not destino:
+        return False, "Material de origem ou destino não encontrado/ativo."
+    if not origem.get("ativo", True):
+        return False, "O material de origem já está inativo ou consolidado."
+    if str(origem.get("unidade") or "").strip().casefold() != str(destino.get("unidade") or "").strip().casefold():
+        return False, "A consolidação exige a mesma unidade. Faça conversões de unidade separadamente."
+
+    # Não desativa um material ainda usado por Ficha Técnica ou pendência ativa.
+    fichas = carregar_fichas_tecnicas(force_refresh=True)
+    if any(str(c.get("material_id") or "") == origem_id for f in fichas for c in _i8123_componentes_ativos(f)):
+        return False, f"{origem.get('nome')} ainda é usado por uma Ficha Técnica. Atualize a ficha antes de consolidar este material."
+    pendente_origem = _i8124_pendencia_material(origem_id, consumos=carregar_consumos_pedidos(force_refresh=True), estoque=dados)
+    if pendente_origem > 0.000001:
+        return False, f"{origem.get('nome')} possui {_i8121_quantidade(pendente_origem)} {origem.get('unidade')} pendente(s) em pedidos. Regularize/revise esses pedidos antes da consolidação."
+
+    saldo_origem = _i8122_saldo_material(dados, origem_id)
+    if saldo_origem < -0.000001:
+        return False, "A origem possui saldo negativo inconsistente e não pode ser consolidada automaticamente."
+    ref = agora_local().strftime("SAN%Y%m%d%H%M%S%f")
+    if saldo_origem > 0.000001:
+        _i8122_adicionar_movimento(
+            dados, origem, -saldo_origem, "Reclassificação de material — saída", hoje_local(),
+            observacao=f"{motivo} → {destino.get('nome')}", origem_tipo="Saneamento estoque", origem_id=ref, usuario=usuario,
+        )
+        _i8122_adicionar_movimento(
+            dados, destino, saldo_origem, "Reclassificação de material — entrada", hoje_local(),
+            observacao=f"{motivo} ← {origem.get('nome')}", origem_tipo="Saneamento estoque", origem_id=ref, usuario=usuario,
+        )
+    origem["ativo"] = False
+    origem["consolidado_para_id"] = str(destino.get("id") or "")
+    origem["consolidado_para_nome"] = str(destino.get("nome") or "")
+    origem["consolidado_em"] = agora_local().isoformat()
+    origem["consolidado_por"] = str(usuario or "Jorge")
+    origem["motivo_consolidacao"] = motivo
+    destino.setdefault("materiais_consolidados", [])
+    if origem_id not in destino["materiais_consolidados"]:
+        destino["materiais_consolidados"].append(origem_id)
+    destino["atualizado_em"] = agora_local().isoformat()
+    destino["atualizado_por"] = str(usuario or "Jorge")
+
+    if not salvar_estoque(dados):
+        return False, "Não foi possível salvar a consolidação do material."
+    registrar_auditoria("Consolidar material duplicado", "Estoque", ref, {
+        "origem_id": origem_id, "origem": origem.get("nome"),
+        "destino_id": destino.get("id"), "destino": destino.get("nome"),
+        "saldo_transferido": round(max(0.0, saldo_origem), 6), "unidade": destino.get("unidade"),
+        "motivo": motivo,
+    })
+    return True, (
+        f"Material {origem.get('nome')} consolidado em {destino.get('nome')}. "
+        f"Saldo reclassificado: {_i8121_quantidade(max(0.0, saldo_origem))} {destino.get('unidade')}. "
+        "O histórico original foi preservado e eventuais pendências do destino foram reconciliadas automaticamente."
+    )
 
 
 def _i8122_status_material(saldo, minimo):
@@ -3967,7 +4155,7 @@ def _i8123_capacidade_estimada(ficha, estoque):
     return max(0, int(capacidade + 0.0000001)), gargalo
 
 
-# --- 20.4.9-I8.12.4-HF2: fila oficial de liberação + Saneamento integrado ---
+# --- 20.4.9-I8.12.4-HF3: Compras → Ficha Técnica → material de estoque + fila homologada ---
 I8124_CONSUMOS_PADRAO = []
 
 
@@ -19878,7 +20066,7 @@ if pagina_atual == "central":
     else:
         st.success("Nenhuma prioridade crítica neste momento. Tudo em dia!")
 
-    # I8.12.4-HF2 — comunicação operacional do estoque e da fila de liberação na Central do Jorge.
+    # I8.12.4-HF3 — comunicação operacional do estoque, fila e compras pela Ficha Técnica.
     consumos_central_i8124 = carregar_consumos_pedidos()
     estoque_central_i8124 = carregar_estoque()
     pendentes_central_i8124 = []
@@ -23446,7 +23634,7 @@ if pagina_atual == "compras_custos":
         and _i8121_data_compra(mov.get("data_movimento")).month == hoje_i8121.month
     ]
 
-    st.markdown("### 📦 Estoque de materiais · I8.12.2")
+    st.markdown("### 📦 Estoque de materiais · I8.12.4-HF3")
     es1, es2, es3, es4 = st.columns(4)
     es1.metric("Materiais controlados", len(materiais_i8122))
     es2.metric("No/abaixo do mínimo", len(baixos_i8122))
@@ -23462,7 +23650,7 @@ if pagina_atual == "compras_custos":
         for mat_i8122 in sorted(materiais_i8122, key=lambda m: str(m.get("nome") or "").casefold()):
             saldo_i8122 = saldos_i8122.get(str(mat_i8122.get("id")), 0)
             minimo_i8122 = valor_float(mat_i8122.get("estoque_minimo", 0))
-            ultima_compra_i8122 = _i8122_ultimo_custo(mat_i8122, compras_i8121)
+            ultima_compra_i8122 = _i8122_ultimo_custo(mat_i8122, compras_i8121, estoque=estoque_i8122)
             pendente_i8124 = pendencias_mat_i8124.get(str(mat_i8122.get("id")), 0)
             linhas_estoque_i8122.append({
                 "Material": mat_i8122.get("nome", ""),
@@ -23476,6 +23664,64 @@ if pagina_atual == "compras_custos":
         st.dataframe(pd.DataFrame(linhas_estoque_i8122), use_container_width=True, hide_index=True)
     else:
         st.info("Nenhum material em estoque ainda. Registre uma compra com entrada de estoque ou cadastre o primeiro material abaixo.")
+
+    # HF3 — correção segura de duplicatas já criadas por nomes de compra diferentes.
+    if len(materiais_i8122) >= 2:
+        with st.expander("🧹 Consolidar material duplicado", expanded=False):
+            st.caption(
+                "Use quando dois nomes representam o mesmo insumo físico. O saldo é reclassificado por novas movimentações, "
+                "o registro antigo fica inativo e o histórico original não é apagado."
+            )
+            mapa_cons_i8122 = {str(m.get("id")): m for m in materiais_i8122}
+            ids_cons_i8122 = sorted(mapa_cons_i8122, key=lambda mid: str(mapa_cons_i8122[mid].get("nome") or "").casefold())
+            cc1, cc2 = st.columns(2)
+            origem_cons_i8122 = cc1.selectbox(
+                "Material duplicado / origem", ids_cons_i8122,
+                format_func=lambda mid: f"{mapa_cons_i8122[mid].get('nome')} · {mapa_cons_i8122[mid].get('unidade')}",
+                key="i8124hf3_cons_origem",
+            )
+            destinos_cons_i8122 = [
+                mid for mid in ids_cons_i8122
+                if mid != origem_cons_i8122
+                and str(mapa_cons_i8122[mid].get("unidade") or "").strip().casefold()
+                == str(mapa_cons_i8122[origem_cons_i8122].get("unidade") or "").strip().casefold()
+            ]
+            destino_cons_i8122 = cc2.selectbox(
+                "Material oficial / destino", destinos_cons_i8122,
+                format_func=lambda mid: f"{mapa_cons_i8122[mid].get('nome')} · {mapa_cons_i8122[mid].get('unidade')}",
+                key="i8124hf3_cons_destino",
+                disabled=not bool(destinos_cons_i8122),
+            ) if destinos_cons_i8122 else None
+            mat_origem_cons_i8122 = mapa_cons_i8122.get(str(origem_cons_i8122), {})
+            mat_destino_cons_i8122 = mapa_cons_i8122.get(str(destino_cons_i8122), {}) if destino_cons_i8122 else {}
+            saldo_origem_cons_i8122 = _i8122_saldo_material(estoque_i8122, origem_cons_i8122)
+            saldo_destino_cons_i8122 = _i8122_saldo_material(estoque_i8122, destino_cons_i8122) if destino_cons_i8122 else 0
+            pend_destino_cons_i8122 = _i8124_pendencia_material(destino_cons_i8122, consumos=consumos_i8124, estoque=estoque_i8122) if destino_cons_i8122 else 0
+            cs1, cs2, cs3 = st.columns(3)
+            cs1.metric("Saldo na duplicata", f"{_i8121_quantidade(saldo_origem_cons_i8122)} {mat_origem_cons_i8122.get('unidade', '')}")
+            cs2.metric("Saldo no destino", f"{_i8121_quantidade(saldo_destino_cons_i8122)} {mat_destino_cons_i8122.get('unidade', '')}")
+            cs3.metric("Pendente no destino", f"{_i8121_quantidade(pend_destino_cons_i8122)} {mat_destino_cons_i8122.get('unidade', '')}")
+            motivo_cons_i8122 = st.text_input(
+                "Motivo da consolidação", value="Mesmo material cadastrado com nomes diferentes",
+                key="i8124hf3_cons_motivo",
+            )
+            confirma_cons_i8122 = st.checkbox(
+                "Confirmo que os dois nomes representam o mesmo material físico",
+                key="i8124hf3_cons_confirma",
+            )
+            if st.button(
+                "🧹 Consolidar sem apagar histórico", key="i8124hf3_cons_salvar", use_container_width=True,
+                disabled=not confirma_cons_i8122 or not destino_cons_i8122,
+            ):
+                ok_cons_i8122, msg_cons_i8122 = _i8122_consolidar_material_duplicado(
+                    origem_cons_i8122, destino_cons_i8122, motivo_cons_i8122,
+                    usuario=str(usuario_compras.get("nome") or "Jorge"),
+                )
+                if ok_cons_i8122:
+                    st.session_state["_mensagem_sucesso_pendente"] = msg_cons_i8122
+                    st.rerun()
+                else:
+                    st.error(msg_cons_i8122)
 
     # I8.12.3 — ficha técnica por produto, somente configuração e simulação.
     st.markdown("### 🧩 Ficha Técnica de Consumo · I8.12.3")
@@ -23681,7 +23927,7 @@ if pagina_atual == "compras_custos":
                 st.success(f"Estoque suficiente para simular {_i8121_quantidade(qtd_sim_i8123)} unidade(s) deste produto. Nenhuma baixa foi realizada.")
 
     st.divider()
-    st.markdown("### 🧾 Consumo de estoque por pedido · I8.12.4-HF2")
+    st.markdown("### 🧾 Consumo de estoque por pedido · I8.12.4-HF3")
     st.info(
         "📌 A aprovação do cliente não baixa estoque sozinha. Você revisa a prévia e confirma o consumo do pedido. "
         "Se faltar material, o saldo físico vai até zero e a diferença fica pendente. Novas entradas quitam essa pendência automaticamente, sem estoque negativo."
@@ -24051,8 +24297,94 @@ if pagina_atual == "compras_custos":
                 "Produto(s) de venda relacionado(s) (opcional)",
                 nomes_produtos_i8121,
                 key="i8121_novos_relacionados",
-                help="Cria somente a referência para futura análise de margem. Não altera o Catálogo Oficial.",
+                help="Relaciona a compra ao produto oficial e, quando houver Ficha Técnica, ajuda a direcionar a entrada para o material correto. Não altera o Catálogo Oficial.",
             )
+
+            # HF3 — a entrada de estoque precisa de um destino explícito. O nome
+            # digitado na nota/compra deixa de criar duplicata silenciosamente.
+            material_destino_id_i8122 = ""
+            material_destino_nome_i8122 = ""
+            material_destino_origem_i8122 = ""
+            material_destino_criar_i8122 = False
+            bloqueio_destino_i8122 = False
+            if lancar_estoque_i8122:
+                estoque_destino_i8122 = carregar_estoque()
+                materiais_destino_i8122 = [m for m in (estoque_destino_i8122.get("materiais") or []) if m.get("ativo", True)]
+                candidatos_ft_i8122, diagnosticos_ft_i8122 = _i8122_candidatos_materiais_por_produtos(
+                    relacionados_i8121, catalogo=catalogo_i8121, fichas=carregar_fichas_tecnicas(), estoque=estoque_destino_i8122
+                )
+                ids_cand_i8122 = [str(c.get("material_id") or "") for c in candidatos_ft_i8122 if str(c.get("material_id") or "")]
+                mapa_dest_i8122 = {str(m.get("id")): m for m in materiais_destino_i8122}
+                opcoes_dest_i8122 = []
+                rotulos_dest_i8122 = {}
+                for cand_i8122 in candidatos_ft_i8122:
+                    mid_i8122 = str(cand_i8122.get("material_id") or "")
+                    if mid_i8122 and mid_i8122 in mapa_dest_i8122 and mid_i8122 not in opcoes_dest_i8122:
+                        opcoes_dest_i8122.append(mid_i8122)
+                        rotulos_dest_i8122[mid_i8122] = (
+                            f"🧩 {cand_i8122.get('material_nome')} · {cand_i8122.get('unidade')} · Ficha Técnica de "
+                            + ", ".join(cand_i8122.get("produtos") or [])
+                        )
+                for mat_i8122_dest in sorted(materiais_destino_i8122, key=lambda m: str(m.get("nome") or "").casefold()):
+                    mid_i8122 = str(mat_i8122_dest.get("id") or "")
+                    if mid_i8122 and mid_i8122 not in opcoes_dest_i8122:
+                        opcoes_dest_i8122.append(mid_i8122)
+                        rotulos_dest_i8122[mid_i8122] = f"📦 {mat_i8122_dest.get('nome')} · {mat_i8122_dest.get('unidade')}"
+                opcoes_dest_i8122.append("__NOVO__")
+                rotulos_dest_i8122["__NOVO__"] = "➕ Novo material — usar o nome digitado nesta compra"
+
+                precisa_escolha_i8122 = len(ids_cand_i8122) != 1
+                if precisa_escolha_i8122:
+                    opcoes_widget_i8122 = ["__SELECIONE__"] + opcoes_dest_i8122
+                    rotulos_dest_i8122["__SELECIONE__"] = "— Selecione o material que realmente entrou no estoque —"
+                    indice_dest_padrao_i8122 = 0
+                else:
+                    opcoes_widget_i8122 = opcoes_dest_i8122
+                    indice_dest_padrao_i8122 = opcoes_widget_i8122.index(ids_cand_i8122[0]) if ids_cand_i8122[0] in opcoes_widget_i8122 else 0
+
+                assinatura_dest_i8122 = hashlib.sha1(
+                    ("|".join(sorted(str(x) for x in relacionados_i8121)) + "|" + str(unidade_i8121)).encode("utf-8")
+                ).hexdigest()[:10]
+                destino_sel_i8122 = st.selectbox(
+                    "Material de estoque que receberá esta entrada",
+                    opcoes_widget_i8122,
+                    index=indice_dest_padrao_i8122,
+                    format_func=lambda x: rotulos_dest_i8122.get(x, x),
+                    key=f"i8124hf3_destino_compra_{assinatura_dest_i8122}",
+                    help="Quando o produto relacionado tem Ficha Técnica, o material técnico aparece primeiro. Se houver vários materiais, escolha exatamente qual foi comprado.",
+                )
+                if destino_sel_i8122 == "__SELECIONE__":
+                    bloqueio_destino_i8122 = True
+                    st.warning("Escolha o material de estoque que corresponde fisicamente a esta compra antes de registrar.")
+                elif destino_sel_i8122 == "__NOVO__":
+                    material_destino_nome_i8122 = item_i8121.strip()
+                    material_destino_id_i8122 = _i8122_material_id(material_destino_nome_i8122, unidade_i8121) if material_destino_nome_i8122 else ""
+                    material_destino_origem_i8122 = "novo_material_explicito"
+                    material_destino_criar_i8122 = True
+                    bloqueio_destino_i8122 = not bool(material_destino_nome_i8122)
+                    st.warning("Será criado um novo material controlado somente porque você escolheu explicitamente esta opção. Confirme que ele realmente não existe no estoque.")
+                else:
+                    mat_dest_sel_i8122 = mapa_dest_i8122.get(str(destino_sel_i8122), {})
+                    material_destino_id_i8122 = str(mat_dest_sel_i8122.get("id") or "")
+                    material_destino_nome_i8122 = str(mat_dest_sel_i8122.get("nome") or "")
+                    material_destino_origem_i8122 = "ficha_tecnica" if material_destino_id_i8122 in ids_cand_i8122 else "material_existente"
+                    if str(mat_dest_sel_i8122.get("unidade") or "").strip().casefold() != str(unidade_i8121 or "").strip().casefold():
+                        bloqueio_destino_i8122 = True
+                        st.error(
+                            f"A compra está em {unidade_i8121}, mas {material_destino_nome_i8122} é controlado em {mat_dest_sel_i8122.get('unidade')}. "
+                            "Não há conversão automática de unidades; ajuste a unidade ou escolha outro material."
+                        )
+                    elif material_destino_origem_i8122 == "ficha_tecnica":
+                        st.success(f"🧩 Entrada direcionada pela Ficha Técnica para **{material_destino_nome_i8122}**. Se houver pedido pendente, esta entrada será usada automaticamente.")
+                    else:
+                        st.info(f"📦 A entrada será registrada no material existente **{material_destino_nome_i8122}**.")
+
+                for diag_i8122 in diagnosticos_ft_i8122:
+                    if diag_i8122.get("situacao") == "sem_ficha":
+                        st.caption(f"ℹ️ {diag_i8122.get('produto')}: ainda sem Ficha Técnica; por isso o destino deve ser escolhido manualmente.")
+                    elif diag_i8122.get("situacao") == "sem_catalogo":
+                        st.caption(f"ℹ️ {diag_i8122.get('produto')}: sem correspondência segura no Catálogo Oficial.")
+
             obs_i8121 = st.text_area("Observação da compra (opcional)", key="i8121_nova_obs", placeholder="Condição, lote, prazo, mudança de qualidade, frete já incluso etc.")
 
             pr1, pr2, pr3 = st.columns(3)
@@ -24083,6 +24415,8 @@ if pagina_atual == "compras_custos":
                     st.warning("Informe o produto ou material comprado.")
                 elif custo_unit_i8121 <= 0:
                     st.warning("Informe um custo unitário maior que zero.")
+                elif lancar_estoque_i8122 and (bloqueio_destino_i8122 or not material_destino_id_i8122):
+                    st.warning("Defina um material de estoque válido para receber esta entrada.")
                 else:
                     compras_frescas_i8121 = carregar_compras(force_refresh=True)
                     registro_i8121 = {
@@ -24099,6 +24433,10 @@ if pagina_atual == "compras_custos":
                         "produtos_relacionados": relacionados_i8121,
                         "observacao": obs_i8121.strip(),
                         "estoque_lancado": bool(lancar_estoque_i8122),
+                        "material_estoque_id": material_destino_id_i8122 if lancar_estoque_i8122 else "",
+                        "material_estoque_nome": material_destino_nome_i8122 if lancar_estoque_i8122 else "",
+                        "material_estoque_origem": material_destino_origem_i8122 if lancar_estoque_i8122 else "",
+                        "material_estoque_criar_novo": bool(material_destino_criar_i8122) if lancar_estoque_i8122 else False,
                         "criado_em": agora_local().isoformat(),
                         "criado_por": str(usuario_compras.get("nome") or usuario_compras.get("email") or "Jorge"),
                     }
@@ -24119,6 +24457,9 @@ if pagina_atual == "compras_custos":
                             "custo_unitario": registro_i8121["custo_unitario"],
                             "valor_total": registro_i8121["valor_total"],
                             "produtos_relacionados": len(registro_i8121["produtos_relacionados"]),
+                            "material_estoque_id": registro_i8121.get("material_estoque_id"),
+                            "material_estoque_nome": registro_i8121.get("material_estoque_nome"),
+                            "material_estoque_origem": registro_i8121.get("material_estoque_origem"),
                         },
                     )
                     if registro_i8121.get("estoque_lancado") and not estoque_ok_i8122:
@@ -24167,6 +24508,7 @@ if pagina_atual == "compras_custos":
                 "Data": _i8121_data_compra(compra_i8121.get("data_compra")).strftime("%d/%m/%Y"),
                 "Fornecedor": compra_i8121.get("fornecedor_nome", ""),
                 "Item / material": compra_i8121.get("item", ""),
+                "Entrada no estoque": compra_i8121.get("material_estoque_nome") or (compra_i8121.get("item", "") if compra_i8121.get("estoque_lancado") else "—"),
                 "Qtd.": f"{_i8121_quantidade(compra_i8121.get('quantidade', 0))} {compra_i8121.get('unidade', '')}",
                 "Custo unit.": _i8121_moeda(compra_i8121.get("custo_unitario", 0)),
                 "Total": _i8121_moeda(compra_i8121.get("valor_total", 0)),
@@ -24188,6 +24530,10 @@ if pagina_atual == "compras_custos":
                     st.write(f"**Pedido/NF/referência:** {compra_i8121.get('documento')}")
                 if compra_i8121.get("produtos_relacionados"):
                     st.write("**Produtos de venda relacionados:** " + ", ".join(compra_i8121.get("produtos_relacionados") or []))
+                if compra_i8121.get("estoque_lancado"):
+                    destino_hist_i8121 = compra_i8121.get("material_estoque_nome") or compra_i8121.get("item") or "Material"
+                    origem_hist_i8121 = str(compra_i8121.get("material_estoque_origem") or "legado").replace("_", " ")
+                    st.write(f"**Entrada de estoque:** {destino_hist_i8121} · origem do vínculo: {origem_hist_i8121}")
                 if compra_i8121.get("observacao"):
                     st.write(f"**Observação:** {compra_i8121.get('observacao')}")
                 if anterior_i8121:

@@ -1,3 +1,11 @@
+## 20.4.9-I8.12.4-HF3 — Compras integradas à Ficha Técnica
+- Entrada por compra passa a exigir destino de estoque explícito e prioriza o material definido na Ficha Técnica do produto relacionado.
+- Nomes digitados na compra deixam de criar materiais duplicados silenciosamente.
+- Quando houver vários materiais técnicos, o usuário escolhe qual foi comprado; unidade incompatível é bloqueada.
+- Nova ferramenta de consolidação transfere saldo de duplicatas por movimentações auditadas, inativa a origem e preserva o histórico.
+- Último custo do material oficial reconhece compras vinculadas e nomes antigos já consolidados.
+- Entradas no material correto continuam quitando pendências de pedidos automaticamente, sem estoque negativo.
+
 ## 20.4.9-I8.12.4-HF2 — Fila oficial de liberação de consumo
 - Fila usa exclusivamente Aprovado = SIM, Entregue = NÃO e consumo ainda não confirmado.
 - Confirmação do consumo ou marcação de Entregue remove imediatamente a proposta da fila.
