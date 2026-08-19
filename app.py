@@ -3967,7 +3967,7 @@ def _i8123_capacidade_estimada(ficha, estoque):
     return max(0, int(capacidade + 0.0000001)), gargalo
 
 
-# --- 20.4.9-I8.12.4-HF1: Baixa por pedido + Saneamento integrado ---
+# --- 20.4.9-I8.12.4-HF2: fila oficial de liberação + Saneamento integrado ---
 I8124_CONSUMOS_PADRAO = []
 
 
@@ -3993,6 +3993,40 @@ def _i8124_consumo_ativo_pedido(numero_proposta, consumos=None):
         return None
     candidatos.sort(key=lambda c: (str(c.get("confirmado_em") or ""), str(c.get("id") or "")), reverse=True)
     return candidatos[0]
+
+
+def _i8124_valor_status_proposta(proposta, campo):
+    """Lê o status canônico e mantém compatibilidade com registros legados capitalizados."""
+    proposta = proposta or {}
+    if campo in proposta:
+        return proposta.get(campo)
+    legado = {"aprovado": "Aprovado", "entregue": "Entregue"}.get(campo)
+    return proposta.get(legado) if legado else None
+
+
+def _i8124_proposta_na_fila_liberacao(proposta, numeros_consumo_ativos=None):
+    """Fonte única da fila de liberação de consumo.
+
+    Regra homologada pelo negócio:
+    - entra somente se Aprovado = SIM;
+    - sai ao confirmar o consumo;
+    - sai também quando Entregue = SIM.
+
+    Nenhum outro status, data ou idade da proposta participa desta decisão.
+    """
+    proposta = proposta or {}
+    numero = str(proposta.get("numero_proposta") or "").strip()
+    if not numero:
+        return False
+    aprovado = valor_bool(_i8124_valor_status_proposta(proposta, "aprovado"))
+    entregue = valor_bool(_i8124_valor_status_proposta(proposta, "entregue"))
+    if not aprovado or entregue:
+        return False
+    if numeros_consumo_ativos is None:
+        consumo_confirmado = _i8124_consumo_ativo_pedido(numero) is not None
+    else:
+        consumo_confirmado = numero in {str(x or "").strip() for x in numeros_consumo_ativos}
+    return not consumo_confirmado
 
 
 def _i8124_assinatura_previa(produtos, necessidades):
@@ -4312,15 +4346,20 @@ def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
         # Só sinaliza ausência quando existe ao menos uma ficha aplicável; evita ruído em serviços sem estoque.
         try:
             previa = _i8124_montar_previa_pedido(proposta)
-            if previa.get("necessidades") and valor_bool(proposta.get("aprovado")):
-                st.caption("📦 Materiais do pedido: ⚪ consumo ainda não confirmado")
+            aprovado_i8124 = valor_bool(_i8124_valor_status_proposta(proposta, "aprovado"))
+            entregue_i8124 = valor_bool(_i8124_valor_status_proposta(proposta, "entregue"))
+            if previa.get("necessidades") and aprovado_i8124:
+                if entregue_i8124:
+                    st.caption("📦 Materiais do pedido: ⚪ fora da fila de liberação (proposta entregue)")
+                else:
+                    st.caption("📦 Materiais do pedido: ⚪ aguardando liberação de consumo")
             if detalhado and previa.get("correlacoes_saneadas"):
                 for corr in previa.get("correlacoes_saneadas") or []:
                     st.caption(f"🧹 Vínculo saneado: {corr.get('item')} → {corr.get('produto_oficial')}")
-            if detalhado and previa.get("sem_catalogo") and valor_bool(proposta.get("aprovado")):
-                st.warning("📦 Item aprovado sem vínculo seguro com o Catálogo: " + " • ".join(previa.get("sem_catalogo") or []))
-            if detalhado and previa.get("sem_ficha") and valor_bool(proposta.get("aprovado")):
-                st.warning("📦 Produto oficial ainda sem Ficha Técnica: " + " • ".join(previa.get("sem_ficha") or []))
+            if detalhado and previa.get("sem_catalogo") and aprovado_i8124 and not entregue_i8124:
+                st.warning("📦 Liberação bloqueada — item aprovado sem vínculo seguro com o Catálogo: " + " • ".join(previa.get("sem_catalogo") or []))
+            if detalhado and previa.get("sem_ficha") and aprovado_i8124 and not entregue_i8124:
+                st.warning("📦 Liberação bloqueada — produto oficial ainda sem Ficha Técnica: " + " • ".join(previa.get("sem_ficha") or []))
         except Exception:
             pass
 
@@ -19839,7 +19878,7 @@ if pagina_atual == "central":
     else:
         st.success("Nenhuma prioridade crítica neste momento. Tudo em dia!")
 
-    # I8.12.4 — comunicação operacional do estoque na Central do Jorge.
+    # I8.12.4-HF2 — comunicação operacional do estoque e da fila de liberação na Central do Jorge.
     consumos_central_i8124 = carregar_consumos_pedidos()
     estoque_central_i8124 = carregar_estoque()
     pendentes_central_i8124 = []
@@ -19870,6 +19909,36 @@ if pagina_atual == "central":
                             f"{nec_central_i8124.get('material_nome')}: {_i8121_quantidade(nec_central_i8124.get('pendente'))} {nec_central_i8124.get('unidade', '')}"
                         )
                 st.write(f"• **{consumo_central_i8124.get('numero_proposta')} — {consumo_central_i8124.get('cliente_nome', 'Cliente')}** · " + " · ".join(faltas_txt_i8124))
+
+    numeros_consumo_ativos_central_i8124 = {
+        str(c.get("numero_proposta") or "").strip()
+        for c in consumos_central_i8124
+        if isinstance(c, dict) and not c.get("estornado") and str(c.get("numero_proposta") or "").strip()
+    }
+    fila_liberacao_central_i8124 = [
+        p for p in historico_central
+        if _i8124_proposta_na_fila_liberacao(p, numeros_consumo_ativos_central_i8124)
+    ]
+    if fila_liberacao_central_i8124:
+        st.info(
+            f"📋 **{len(fila_liberacao_central_i8124)} proposta(s) aprovada(s) aguardam liberação de consumo.** "
+            "Ao confirmar o consumo ou marcar a proposta como Entregue, ela sai automaticamente dessa fila."
+        )
+        with st.expander("📋 Ver propostas aguardando liberação", expanded=False):
+            for prop_fila_central_i8124 in _ordenar_propostas_recentes(fila_liberacao_central_i8124)[:10]:
+                previa_fila_central_i8124 = _i8124_montar_previa_pedido(prop_fila_central_i8124)
+                if previa_fila_central_i8124.get("sem_catalogo"):
+                    situacao_fila_central_i8124 = "🔴 vínculo com Catálogo/Saneamento pendente"
+                elif previa_fila_central_i8124.get("sem_ficha"):
+                    situacao_fila_central_i8124 = "🟡 Ficha Técnica pendente"
+                elif previa_fila_central_i8124.get("necessidades"):
+                    situacao_fila_central_i8124 = "🟢 pronta para liberação"
+                else:
+                    situacao_fila_central_i8124 = "🟡 sem necessidade de material calculada"
+                st.write(
+                    f"• **{prop_fila_central_i8124.get('numero_proposta')} — {prop_fila_central_i8124.get('cliente_nome', 'Cliente')}** · "
+                    f"{situacao_fila_central_i8124}"
+                )
 
     st.divider()
     st.subheader("🚨 Atenção")
@@ -23612,7 +23681,7 @@ if pagina_atual == "compras_custos":
                 st.success(f"Estoque suficiente para simular {_i8121_quantidade(qtd_sim_i8123)} unidade(s) deste produto. Nenhuma baixa foi realizada.")
 
     st.divider()
-    st.markdown("### 🧾 Consumo de estoque por pedido · I8.12.4-HF1")
+    st.markdown("### 🧾 Consumo de estoque por pedido · I8.12.4-HF2")
     st.info(
         "📌 A aprovação do cliente não baixa estoque sozinha. Você revisa a prévia e confirma o consumo do pedido. "
         "Se faltar material, o saldo físico vai até zero e a diferença fica pendente. Novas entradas quitam essa pendência automaticamente, sem estoque negativo."
@@ -23641,19 +23710,30 @@ if pagina_atual == "compras_custos":
             st.info(resultado_recon_i8124.get("mensagem") or "Nenhuma pendência foi alterada.")
 
     historico_pedidos_i8124 = carregar_historico(force_refresh=True)
-    numeros_consumo_ativos_i8124 = {str(c.get("numero_proposta") or "") for c in consumos_i8124 if isinstance(c, dict) and not c.get("estornado")}
+    numeros_consumo_ativos_i8124 = {
+        str(c.get("numero_proposta") or "").strip()
+        for c in consumos_i8124
+        if isinstance(c, dict) and not c.get("estornado") and str(c.get("numero_proposta") or "").strip()
+    }
     elegiveis_i8124 = [
         p for p in historico_pedidos_i8124
-        if (valor_bool(p.get("aprovado")) and not proposta_encerrada(p))
-        or str(p.get("numero_proposta") or "") in numeros_consumo_ativos_i8124
+        if _i8124_proposta_na_fila_liberacao(p, numeros_consumo_ativos_i8124)
     ]
-    elegiveis_i8124.sort(key=lambda p: (data_entrega_segura(p.get("data_entrega")) or date.max, str(p.get("numero_proposta") or "")))
+    # Ordenação é somente visual: propostas mais recentes primeiro. Não altera a elegibilidade.
+    elegiveis_i8124 = _ordenar_propostas_recentes(elegiveis_i8124)
+    st.caption(
+        f"Fila de liberação: {len(elegiveis_i8124)} proposta(s) com Aprovado = SIM, Entregue = NÃO e consumo ainda não confirmado."
+    )
     if not elegiveis_i8124:
-        st.caption("Nenhum pedido aprovado disponível para confirmação de consumo.")
+        st.caption("Nenhuma proposta aguarda liberação de consumo neste momento.")
     else:
         mapa_pedidos_i8124 = {str(p.get("numero_proposta")): p for p in elegiveis_i8124 if str(p.get("numero_proposta") or "")}
+        # Evita manter no widget uma seleção que acabou de sair da fila após confirmação/entrega.
+        selecao_anterior_i8124 = st.session_state.get("i8124_pedido_consumo")
+        if selecao_anterior_i8124 not in mapa_pedidos_i8124:
+            st.session_state.pop("i8124_pedido_consumo", None)
         numero_pedido_i8124 = st.selectbox(
-            "Pedido aprovado",
+            "Proposta aprovada aguardando liberação",
             list(mapa_pedidos_i8124),
             format_func=lambda n: f"{n} · {mapa_pedidos_i8124[n].get('cliente_nome', 'Cliente')} · entrega {mapa_pedidos_i8124[n].get('data_entrega', '—')}",
             key="i8124_pedido_consumo",
@@ -23722,20 +23802,20 @@ if pagina_atual == "compras_custos":
                 if previa_i8124.get("sem_ficha"):
                     st.warning("Item(ns) sem Ficha Técnica: " + " • ".join(previa_i8124.get("sem_ficha")))
                 faltas_ficha_i8124 = bool(previa_i8124.get("sem_catalogo") or previa_i8124.get("sem_ficha"))
-                confirma_sem_ficha_i8124 = False
                 if faltas_ficha_i8124:
-                    confirma_sem_ficha_i8124 = st.checkbox(
-                        "Confirmo que os itens acima não devem gerar consumo de materiais controlados nesta confirmação",
-                        key=f"i8124_conf_sem_ficha_{numero_pedido_i8124}",
+                    st.error(
+                        "Liberação bloqueada: corrija primeiro o vínculo pelo Saneamento/Catálogo e a Ficha Técnica. "
+                        "A proposta permanece nesta fila até ficar apta, ser entregue ou ter o consumo confirmado."
                     )
                 confirma_consumo_i8124 = st.checkbox(
                     "Confirmo esta necessidade de materiais para o pedido",
                     key=f"i8124_conf_consumo_{numero_pedido_i8124}",
+                    disabled=faltas_ficha_i8124 or not bool(previa_i8124.get("necessidades")),
                 )
-                pode_confirmar_i8124 = bool(previa_i8124.get("necessidades")) and confirma_consumo_i8124 and (not faltas_ficha_i8124 or confirma_sem_ficha_i8124)
+                pode_confirmar_i8124 = bool(previa_i8124.get("necessidades")) and confirma_consumo_i8124 and not faltas_ficha_i8124
                 if st.button("✅ Confirmar consumo do pedido", key=f"i8124_confirmar_{numero_pedido_i8124}", type="primary", use_container_width=True, disabled=not pode_confirmar_i8124):
                     ok_conf_i8124, msg_conf_i8124, _ = _i8124_confirmar_consumo_pedido(
-                        proposta_i8124, aceitar_sem_ficha=confirma_sem_ficha_i8124, usuario=usuario_compras
+                        proposta_i8124, aceitar_sem_ficha=False, usuario=usuario_compras
                     )
                     if ok_conf_i8124:
                         st.session_state["_mensagem_sucesso_pendente"] = msg_conf_i8124

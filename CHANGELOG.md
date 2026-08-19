@@ -1,3 +1,9 @@
+## 20.4.9-I8.12.4-HF2 — Fila oficial de liberação de consumo
+- Fila usa exclusivamente Aprovado = SIM, Entregue = NÃO e consumo ainda não confirmado.
+- Confirmação do consumo ou marcação de Entregue remove imediatamente a proposta da fila.
+- Saneamento/Ficha Técnica deixam de filtrar a visibilidade: problemas ficam visíveis e bloqueiam apenas a confirmação.
+- Central do Jorge passa a comunicar propostas aguardando liberação.
+
 ## 20.4.9-I8.12.3 — Ficha Técnica de Consumo
 - Ficha técnica por produto do Catálogo Oficial, vinculada aos materiais controlados do estoque.
 - Consumo por unidade, capacidade estimada e identificação de gargalo.
