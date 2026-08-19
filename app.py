@@ -363,6 +363,7 @@ ARQUIVO_ORIENTACOES_THU = "orientacoes_thu.json"
 ARQUIVO_FATURAMENTO_MENSAL = "faturamento_mensal_db.json"
 ARQUIVO_COMPRAS = "compras_db.json"
 ARQUIVO_ESTOQUE = "estoque_db.json"
+ARQUIVO_FICHAS_TECNICAS = "fichas_tecnicas_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -3862,6 +3863,85 @@ def _i8122_status_material(saldo, minimo):
     if minimo > 0 and saldo <= minimo + 0.000001:
         return "🟡 No/abaixo do mínimo"
     return "🟢 OK"
+
+
+# --- 20.4.9-I8.12.3: Ficha Técnica de Consumo ---
+I8123_FICHAS_PADRAO = []
+
+
+def carregar_fichas_tecnicas(force_refresh=False):
+    dados = load_document("fichas_tecnicas_db", ARQUIVO_FICHAS_TECNICAS, I8123_FICHAS_PADRAO, force_refresh=force_refresh)
+    return dados if isinstance(dados, list) else []
+
+
+def salvar_fichas_tecnicas(lista):
+    if not isinstance(lista, list):
+        raise ValueError("As fichas técnicas precisam ser uma lista.")
+    return bool(save_document("fichas_tecnicas_db", lista, ARQUIVO_FICHAS_TECNICAS))
+
+
+def _i8123_chave_produto_ref(ref):
+    ref = ref or {}
+    codigo = str(ref.get("codigo_interno") or "").strip().casefold()
+    nome = str(ref.get("nome_chave") or normalizar_identidade_produto(ref.get("nome_ref"))).strip()
+    categoria = str(ref.get("categoria_chave") or normalizar_identidade_produto(ref.get("categoria_ref"))).strip()
+    return f"{codigo}|{nome}|{categoria}"
+
+
+def _i8123_ficha_id(ref):
+    chave = _i8123_chave_produto_ref(ref)
+    return "FT" + hashlib.sha1(chave.encode("utf-8")).hexdigest()[:16].upper()
+
+
+def _i8123_ficha_para_produto(fichas, produto, indice):
+    ref = _i88_ref_produto(produto, indice)
+    chave = _i8123_chave_produto_ref(ref)
+    for ficha in (fichas or []):
+        if _i8123_chave_produto_ref((ficha or {}).get("produto_ref") or {}) == chave:
+            return ficha
+    return None
+
+
+def _i8123_resolver_ficha(ficha, catalogo):
+    indice, metodo = _i88_resolver_ref_produto((ficha or {}).get("produto_ref") or {}, catalogo or [])
+    if indice is None:
+        return None, metodo
+    return (catalogo or [])[indice], metodo
+
+
+def _i8123_componentes_ativos(ficha):
+    return [
+        c for c in ((ficha or {}).get("componentes") or [])
+        if c.get("ativo", True) and valor_float(c.get("consumo_por_unidade", 0)) > 0.0000001
+    ]
+
+
+def _i8123_status_ficha(ficha, estoque):
+    componentes = _i8123_componentes_ativos(ficha)
+    if not componentes:
+        return "Sem materiais"
+    materiais = {str(m.get("id")): m for m in ((estoque or {}).get("materiais") or []) if m.get("ativo", True)}
+    ausentes = [c for c in componentes if str(c.get("material_id")) not in materiais]
+    return "Atenção: material ausente" if ausentes else "Pronta para simulação"
+
+
+def _i8123_capacidade_estimada(ficha, estoque):
+    componentes = _i8123_componentes_ativos(ficha)
+    if not componentes:
+        return None, None
+    capacidades = []
+    for comp in componentes:
+        consumo = valor_float(comp.get("consumo_por_unidade", 0))
+        material_id = str(comp.get("material_id") or "")
+        material = _i8122_material_por_id(estoque or {}, material_id)
+        if not material or consumo <= 0:
+            return 0, comp
+        saldo = max(0.0, _i8122_saldo_material(estoque or {}, material_id))
+        capacidades.append((saldo / consumo, comp))
+    if not capacidades:
+        return None, None
+    capacidade, gargalo = min(capacidades, key=lambda x: x[0])
+    return max(0, int(capacidade + 0.0000001)), gargalo
 
 
 # --- 20.4.9-I8.11.1: Central de Faturamento Mensal ---
@@ -11847,6 +11927,7 @@ DOCUMENTOS_BACKUP = [
     ("faturamento_mensal_db", ARQUIVO_FATURAMENTO_MENSAL, []),
     ("compras_db", ARQUIVO_COMPRAS, []),
     ("estoque_db", ARQUIVO_ESTOQUE, {"materiais": [], "movimentacoes": []}),
+    ("fichas_tecnicas_db", ARQUIVO_FICHAS_TECNICAS, []),
 ]
 
 def carregar_config_backup():
@@ -11936,7 +12017,7 @@ def verificar_integridade_dados():
     documentos, contagens = coletar_dados_backup()
     problemas = []
     # componentes_db é uma biblioteca categorizada e, por definição, usa objeto/dicionário.
-    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db", "catalogos_gerados_db", "catalogo_modelos_db", "faturamento_mensal_db"}
+    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db", "catalogos_gerados_db", "catalogo_modelos_db", "faturamento_mensal_db", "fichas_tecnicas_db"}
     for chave in esperados_lista:
         if not isinstance(documentos.get(chave), list):
             problemas.append(f"{chave}: estrutura inválida (esperada lista).")
@@ -22644,10 +22725,10 @@ if pagina_atual == "faturamento_mensal":
 
 
 if pagina_atual == "compras_custos":
-    st.header("📦 I8.12.2 · Compras, Custos & Estoque")
+    st.header("📦 I8.12.3 · Compras, Custos, Estoque & Ficha Técnica")
     st.caption(
-        "Registre custos reais, transforme compras em entradas de estoque e controle movimentações de materiais. "
-        "Nesta etapa não existe baixa automática por venda e o módulo nunca altera sozinho o preço do Catálogo Oficial."
+        "Registre custos reais, transforme compras em entradas de estoque, controle materiais e defina o consumo técnico por produto. "
+        "A ficha técnica desta etapa apenas calcula e simula; ainda não existe baixa automática por venda e o módulo nunca altera sozinho o preço do Catálogo Oficial."
     )
 
     usuario_compras = obter_usuario_atual()
@@ -22702,7 +22783,7 @@ if pagina_atual == "compras_custos":
     es4.metric("Movimentações no mês", len(mov_mes_i8122))
     st.caption(
         "🔒 Homologação segura: compras podem gerar entrada de estoque, mas pedidos/vendas ainda não fazem baixa automática. "
-        "Saídas, perdas e ajustes são manuais até existir ficha técnica de consumo por produto."
+        "A I8.12.3 cadastra e simula a ficha técnica; saídas reais continuam manuais até a próxima etapa ser homologada."
     )
 
     if materiais_i8122:
@@ -22722,6 +22803,211 @@ if pagina_atual == "compras_custos":
         st.dataframe(pd.DataFrame(linhas_estoque_i8122), use_container_width=True, hide_index=True)
     else:
         st.info("Nenhum material em estoque ainda. Registre uma compra com entrada de estoque ou cadastre o primeiro material abaixo.")
+
+    # I8.12.3 — ficha técnica por produto, somente configuração e simulação.
+    st.markdown("### 🧩 Ficha Técnica de Consumo · I8.12.3")
+    catalogo_i8123 = carregar_catalogo()
+    fichas_i8123 = carregar_fichas_tecnicas()
+    fichas_resolvidas_i8123 = []
+    fichas_atencao_i8123 = []
+    for ficha_scan_i8123 in fichas_i8123:
+        produto_resolvido_i8123, _ = _i8123_resolver_ficha(ficha_scan_i8123, catalogo_i8123)
+        if produto_resolvido_i8123 is not None:
+            fichas_resolvidas_i8123.append(ficha_scan_i8123)
+        if _i8123_status_ficha(ficha_scan_i8123, estoque_i8122) != "Pronta para simulação":
+            fichas_atencao_i8123.append(ficha_scan_i8123)
+
+    ftm1, ftm2, ftm3, ftm4 = st.columns(4)
+    ftm1.metric("Produtos no Catálogo", len(catalogo_i8123))
+    ftm2.metric("Com ficha técnica", len(fichas_resolvidas_i8123))
+    ftm3.metric("Sem ficha", max(0, len(catalogo_i8123) - len(fichas_resolvidas_i8123)))
+    ftm4.metric("Fichas com atenção", len(fichas_atencao_i8123))
+    st.info(
+        "🛡️ Nesta versão a ficha técnica é somente uma regra de consumo e uma simulação. "
+        "Salvar ou simular uma ficha NÃO movimenta estoque, NÃO altera pedidos e NÃO muda o preço do Catálogo Oficial."
+    )
+
+    if not catalogo_i8123:
+        st.warning("O Catálogo Oficial está vazio ou indisponível. Cadastre produtos antes de criar fichas técnicas.")
+    elif not materiais_i8122:
+        st.warning("Ainda não existem materiais controlados em estoque. Cadastre um material ou registre uma compra com entrada de estoque antes de montar a ficha técnica.")
+    else:
+        opcoes_prod_i8123 = list(range(len(catalogo_i8123)))
+        prod_idx_i8123 = st.selectbox(
+            "Produto do Catálogo Oficial",
+            opcoes_prod_i8123,
+            format_func=lambda idx: f"{(catalogo_i8123[idx] or {}).get('Nome', 'Produto')} · {(catalogo_i8123[idx] or {}).get('Categoria', 'Sem categoria')}",
+            key="i8123_produto_ficha",
+        )
+        produto_i8123 = catalogo_i8123[prod_idx_i8123] or {}
+        ficha_i8123 = _i8123_ficha_para_produto(fichas_i8123, produto_i8123, prod_idx_i8123)
+        componentes_i8123 = _i8123_componentes_ativos(ficha_i8123)
+        status_ficha_i8123 = _i8123_status_ficha(ficha_i8123, estoque_i8122) if ficha_i8123 else "Ainda não criada"
+        capacidade_i8123, gargalo_i8123 = _i8123_capacidade_estimada(ficha_i8123, estoque_i8122) if ficha_i8123 else (None, None)
+
+        pf1, pf2, pf3 = st.columns([1.4, 1, 1])
+        pf1.metric("Materiais na ficha", len(componentes_i8123))
+        pf2.metric("Status", status_ficha_i8123)
+        pf3.metric("Capacidade estimada", f"{capacidade_i8123} un" if capacidade_i8123 is not None else "—")
+        if gargalo_i8123 and capacidade_i8123 is not None:
+            st.caption(f"Gargalo atual: {gargalo_i8123.get('material_nome_snapshot') or 'material'} · capacidade calculada pelo saldo atual e pelo consumo por unidade.")
+
+        if componentes_i8123:
+            linhas_ft_i8123 = []
+            for comp_i8123 in componentes_i8123:
+                mat_ft_i8123 = _i8122_material_por_id(estoque_i8122, comp_i8123.get("material_id")) or {}
+                saldo_ft_i8123 = _i8122_saldo_material(estoque_i8122, comp_i8123.get("material_id")) if mat_ft_i8123 else 0
+                consumo_ft_i8123 = valor_float(comp_i8123.get("consumo_por_unidade", 0))
+                cap_ft_i8123 = int(max(0, saldo_ft_i8123 / consumo_ft_i8123) + 0.0000001) if consumo_ft_i8123 > 0 and mat_ft_i8123 else 0
+                linhas_ft_i8123.append({
+                    "Material": mat_ft_i8123.get("nome") or comp_i8123.get("material_nome_snapshot", "Material não encontrado"),
+                    "Consumo / 1 un produto": f"{_i8121_quantidade(consumo_ft_i8123)} {mat_ft_i8123.get('unidade') or comp_i8123.get('unidade_snapshot', '')}",
+                    "Saldo atual": f"{_i8121_quantidade(saldo_ft_i8123)} {mat_ft_i8123.get('unidade') or comp_i8123.get('unidade_snapshot', '')}",
+                    "Capacidade pelo material": f"{cap_ft_i8123} un",
+                    "Observação": comp_i8123.get("observacao", ""),
+                })
+            st.dataframe(pd.DataFrame(linhas_ft_i8123), use_container_width=True, hide_index=True)
+        else:
+            st.caption("Este produto ainda não possui materiais vinculados na ficha técnica.")
+
+        with st.expander("➕ Adicionar ou atualizar material da ficha", expanded=not bool(componentes_i8123)):
+            mapa_mat_ft_i8123 = {str(m.get("id")): m for m in materiais_i8122}
+            opcoes_mat_ft_i8123 = sorted(mapa_mat_ft_i8123, key=lambda mid: str(mapa_mat_ft_i8123[mid].get("nome") or "").casefold())
+            fm1, fm2 = st.columns([1.5, 1])
+            mat_id_ft_i8123 = fm1.selectbox(
+                "Material controlado",
+                opcoes_mat_ft_i8123,
+                format_func=lambda mid: f"{mapa_mat_ft_i8123[mid].get('nome')} · {mapa_mat_ft_i8123[mid].get('unidade')}",
+                key=f"i8123_mat_{prod_idx_i8123}",
+            )
+            existente_ft_i8123 = next((c for c in componentes_i8123 if str(c.get("material_id")) == str(mat_id_ft_i8123)), None)
+            consumo_padrao_i8123 = max(0.001, valor_float((existente_ft_i8123 or {}).get("consumo_por_unidade", 1.0)))
+            consumo_ft_i8123 = fm2.number_input(
+                "Consumo para produzir 1 unidade",
+                min_value=0.001,
+                value=float(consumo_padrao_i8123),
+                step=0.001,
+                format="%.3f",
+                key=f"i8123_consumo_{prod_idx_i8123}_{mat_id_ft_i8123}",
+            )
+            obs_padrao_i8123 = str((existente_ft_i8123 or {}).get("observacao") or "")
+            obs_ft_i8123 = st.text_input(
+                "Observação técnica (opcional)",
+                value=obs_padrao_i8123,
+                placeholder="Ex.: 1 copo cristal para cada copo personalizado produzido",
+                key=f"i8123_obs_{prod_idx_i8123}_{mat_id_ft_i8123}",
+            )
+            mat_sel_ft_i8123 = mapa_mat_ft_i8123.get(str(mat_id_ft_i8123), {})
+            st.caption(
+                f"Regra prevista: 1 unidade de {produto_i8123.get('Nome', 'produto')} consome "
+                f"{_i8121_quantidade(consumo_ft_i8123)} {mat_sel_ft_i8123.get('unidade', '')} de {mat_sel_ft_i8123.get('nome', 'material')}."
+            )
+            if st.button("💾 Salvar material na ficha", key=f"i8123_salvar_comp_{prod_idx_i8123}", type="primary", use_container_width=True):
+                fichas_frescas_i8123 = carregar_fichas_tecnicas(force_refresh=True)
+                ficha_fresca_i8123 = _i8123_ficha_para_produto(fichas_frescas_i8123, produto_i8123, prod_idx_i8123)
+                agora_ft_i8123 = agora_local().isoformat()
+                usuario_ft_i8123 = str(usuario_compras.get("nome") or "Jorge")
+                if ficha_fresca_i8123 is None:
+                    ref_ft_i8123 = _i88_ref_produto(produto_i8123, prod_idx_i8123)
+                    ficha_fresca_i8123 = {
+                        "id": _i8123_ficha_id(ref_ft_i8123),
+                        "produto_ref": ref_ft_i8123,
+                        "componentes": [],
+                        "ativo": True,
+                        "criado_em": agora_ft_i8123,
+                        "criado_por": usuario_ft_i8123,
+                    }
+                    fichas_frescas_i8123.append(ficha_fresca_i8123)
+                comp_fresco_i8123 = next((c for c in (ficha_fresca_i8123.get("componentes") or []) if str(c.get("material_id")) == str(mat_id_ft_i8123)), None)
+                payload_comp_i8123 = {
+                    "material_id": str(mat_id_ft_i8123),
+                    "material_nome_snapshot": str(mat_sel_ft_i8123.get("nome") or ""),
+                    "unidade_snapshot": str(mat_sel_ft_i8123.get("unidade") or ""),
+                    "consumo_por_unidade": float(consumo_ft_i8123),
+                    "observacao": str(obs_ft_i8123 or "").strip(),
+                    "ativo": True,
+                    "atualizado_em": agora_ft_i8123,
+                    "atualizado_por": usuario_ft_i8123,
+                }
+                if comp_fresco_i8123 is None:
+                    payload_comp_i8123["criado_em"] = agora_ft_i8123
+                    payload_comp_i8123["criado_por"] = usuario_ft_i8123
+                    ficha_fresca_i8123.setdefault("componentes", []).append(payload_comp_i8123)
+                    acao_ft_i8123 = "Adicionar material à ficha técnica"
+                else:
+                    comp_fresco_i8123.update(payload_comp_i8123)
+                    acao_ft_i8123 = "Atualizar material da ficha técnica"
+                ficha_fresca_i8123["atualizado_em"] = agora_ft_i8123
+                ficha_fresca_i8123["atualizado_por"] = usuario_ft_i8123
+                salvar_fichas_tecnicas(fichas_frescas_i8123)
+                registrar_auditoria(acao_ft_i8123, "Ficha técnica", ficha_fresca_i8123.get("id"), {
+                    "produto": produto_i8123.get("Nome"), "material": mat_sel_ft_i8123.get("nome"), "consumo_por_unidade": consumo_ft_i8123
+                })
+                st.success("Ficha técnica atualizada. Nenhuma movimentação de estoque foi feita.")
+                st.rerun()
+
+        if componentes_i8123:
+            with st.expander("🧹 Remover material da ficha", expanded=False):
+                mapa_comp_rem_i8123 = {str(c.get("material_id")): c for c in componentes_i8123}
+                mat_id_rem_i8123 = st.selectbox(
+                    "Material da ficha",
+                    list(mapa_comp_rem_i8123),
+                    format_func=lambda mid: f"{mapa_comp_rem_i8123[mid].get('material_nome_snapshot', mid)} · {_i8121_quantidade(mapa_comp_rem_i8123[mid].get('consumo_por_unidade', 0))} {mapa_comp_rem_i8123[mid].get('unidade_snapshot', '')}/un",
+                    key=f"i8123_rem_{prod_idx_i8123}",
+                )
+                confirma_rem_i8123 = st.checkbox("Confirmo a remoção deste material da ficha", key=f"i8123_conf_rem_{prod_idx_i8123}")
+                if st.button("🧹 Remover da ficha", key=f"i8123_btn_rem_{prod_idx_i8123}", use_container_width=True, disabled=not confirma_rem_i8123):
+                    fichas_frescas_i8123 = carregar_fichas_tecnicas(force_refresh=True)
+                    ficha_fresca_i8123 = _i8123_ficha_para_produto(fichas_frescas_i8123, produto_i8123, prod_idx_i8123)
+                    if ficha_fresca_i8123:
+                        antes_i8123 = len(ficha_fresca_i8123.get("componentes") or [])
+                        ficha_fresca_i8123["componentes"] = [c for c in (ficha_fresca_i8123.get("componentes") or []) if str(c.get("material_id")) != str(mat_id_rem_i8123)]
+                        ficha_fresca_i8123["atualizado_em"] = agora_local().isoformat()
+                        ficha_fresca_i8123["atualizado_por"] = str(usuario_compras.get("nome") or "Jorge")
+                        salvar_fichas_tecnicas(fichas_frescas_i8123)
+                        if len(ficha_fresca_i8123.get("componentes") or []) < antes_i8123:
+                            registrar_auditoria("Remover material da ficha técnica", "Ficha técnica", ficha_fresca_i8123.get("id"), {"material_id": mat_id_rem_i8123})
+                            st.success("Material removido da ficha. O histórico de estoque não foi alterado.")
+                            st.rerun()
+
+        st.markdown("#### 🧮 Simular consumo sem baixar estoque")
+        if not componentes_i8123:
+            st.caption("Adicione pelo menos um material à ficha para simular uma produção.")
+        else:
+            qtd_sim_i8123 = st.number_input(
+                "Quantidade do produto a simular",
+                min_value=1.0,
+                value=1.0,
+                step=1.0,
+                format="%.0f",
+                key=f"i8123_sim_qtd_{prod_idx_i8123}",
+            )
+            linhas_sim_i8123 = []
+            faltantes_sim_i8123 = []
+            for comp_sim_i8123 in componentes_i8123:
+                mat_sim_i8123 = _i8122_material_por_id(estoque_i8122, comp_sim_i8123.get("material_id")) or {}
+                saldo_sim_i8123 = _i8122_saldo_material(estoque_i8122, comp_sim_i8123.get("material_id")) if mat_sim_i8123 else 0
+                consumo_sim_i8123 = valor_float(comp_sim_i8123.get("consumo_por_unidade", 0))
+                necessario_sim_i8123 = consumo_sim_i8123 * float(qtd_sim_i8123)
+                previsto_sim_i8123 = saldo_sim_i8123 - necessario_sim_i8123
+                suficiente_sim_i8123 = bool(mat_sim_i8123) and previsto_sim_i8123 >= -0.000001
+                if not suficiente_sim_i8123:
+                    faltantes_sim_i8123.append((comp_sim_i8123, abs(min(0.0, previsto_sim_i8123))))
+                unidade_sim_i8123 = mat_sim_i8123.get("unidade") or comp_sim_i8123.get("unidade_snapshot", "")
+                linhas_sim_i8123.append({
+                    "Material": mat_sim_i8123.get("nome") or comp_sim_i8123.get("material_nome_snapshot", "Material não encontrado"),
+                    "Saldo atual": f"{_i8121_quantidade(saldo_sim_i8123)} {unidade_sim_i8123}",
+                    "Necessário": f"{_i8121_quantidade(necessario_sim_i8123)} {unidade_sim_i8123}",
+                    "Saldo se produzir": f"{_i8121_quantidade(previsto_sim_i8123)} {unidade_sim_i8123}",
+                    "Situação": "✅ Suficiente" if suficiente_sim_i8123 else "🔴 Insuficiente",
+                })
+            st.dataframe(pd.DataFrame(linhas_sim_i8123), use_container_width=True, hide_index=True)
+            if faltantes_sim_i8123:
+                st.error("A produção simulada excede o estoque disponível de pelo menos um material. Nenhuma baixa foi realizada.")
+            else:
+                st.success(f"Estoque suficiente para simular {_i8121_quantidade(qtd_sim_i8123)} unidade(s) deste produto. Nenhuma baixa foi realizada.")
+
+    st.divider()
 
     with st.expander("➕ Cadastrar material de estoque", expanded=False):
         cm1, cm2, cm3 = st.columns([1.6, 0.8, 1])

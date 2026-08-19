@@ -1,3 +1,9 @@
+## 20.4.9-I8.12.3 — Ficha Técnica de Consumo
+- Ficha técnica por produto do Catálogo Oficial, vinculada aos materiais controlados do estoque.
+- Consumo por unidade, capacidade estimada e identificação de gargalo.
+- Simulação de produção com saldo projetado, sem movimentação automática de estoque.
+- Backup/restauração inclui fichas_tecnicas_db.json.
+
 ## 20.4.9-I8.11.2-HF1 — Auditoria dos Indicadores Mensais e Diários
 - Conversão mensal corrigida para aprovadas ÷ todas as propostas emitidas da competência.
 - Propostas encerradas/não fechadas permanecem no denominador da conversão.
