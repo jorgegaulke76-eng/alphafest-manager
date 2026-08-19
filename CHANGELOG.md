@@ -1,3 +1,9 @@
+## 20.4.9-I8.12.7-HF1 — Comunicação coerente antes da liberação
+- “Aguardando liberação” agora exibe **Material ainda não apurado**.
+- Remove afirmações “Sem falta física” / “Materiais atendidos” quando ainda não houve consumo confirmado.
+- Adiciona orientação única para confirmar a liberação e apurar disponibilidade.
+- Mantém alertas de prazo sem criar status ou banco paralelo.
+
 ## 20.4.9-I8.12.7 — Previsão de Produção e Risco de Entrega
 - Nova leitura derivada dos pedidos aprovados ainda não entregues, sem criar banco ou status paralelo.
 - Classifica pedidos como Liberado para produção, Aguardando material, Compra em andamento, Aguardando liberação ou Risco de atraso.

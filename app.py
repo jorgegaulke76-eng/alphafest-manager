@@ -4621,7 +4621,7 @@ def _i8126_central_necessidades(consumos=None, estoque=None, compras=None, histo
     return _i8126_engine_aplicar(base, planejamentos)
 
 
-# --- 20.4.9-I8.12.7: Previsão de Produção e Risco de Entrega ---
+# --- 20.4.9-I8.12.7-HF1: Previsão de Produção e Risco de Entrega ---
 def _i8127_previsao_producao(historico=None, consumos=None, estoque=None, planejamentos=None):
     """Snapshot derivado das fontes homologadas de pedido, estoque e compras.
 
@@ -4897,7 +4897,9 @@ def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
         previsao_i8127 = _i8127_resumo_pedido(numero)
         if previsao_i8127:
             st.caption(f"🚦 Produção / entrega: {previsao_i8127.get('status')}")
-            if previsao_i8127.get("status_base") != previsao_i8127.get("status"):
+            if previsao_i8127.get("chave_base") == "aguardando_liberacao":
+                st.caption("📦 Situação de materiais: Material ainda não apurado — aguardando liberação de consumo")
+            elif previsao_i8127.get("status_base") != previsao_i8127.get("status"):
                 st.caption(f"Situação de materiais: {previsao_i8127.get('status_base')}")
             if detalhado and previsao_i8127.get("motivos"):
                 st.caption("Motivo(s): " + " · ".join(str(x) for x in previsao_i8127.get("motivos") or []))
@@ -24235,7 +24237,7 @@ if pagina_atual == "compras_custos":
         historico=carregar_historico(), consumos=consumos_i8124, estoque=estoque_i8122,
         planejamentos=carregar_planejamentos_compras(),
     )
-    st.markdown("### 🚦 Previsão de Produção e Risco de Entrega · I8.12.7")
+    st.markdown("### 🚦 Previsão de Produção e Risco de Entrega · I8.12.7-HF1")
     st.caption(
         "Leitura derivada dos pedidos aprovados ainda não entregues. Não cria status paralelo: usa a liberação de consumo, "
         "as pendências reais do estoque, as solicitações ao fornecedor e a data de entrega. Nesta etapa o Manager não inventa "
@@ -24264,13 +24266,20 @@ if pagina_atual == "compras_custos":
                 materiais_pend_i8127.append(
                     f"{nec_i8127.get('material_nome')}: {_i8121_quantidade(nec_i8127.get('pendente'))} {nec_i8127.get('unidade', '')}"
                 )
+            aguardando_liberacao_i8127 = ped_i8127.get("chave_base") == "aguardando_liberacao"
+            if aguardando_liberacao_i8127:
+                materiais_txt_i8127 = "Material ainda não apurado"
+                atencao_txt_i8127 = " · ".join(ped_i8127.get("motivos") or []) or "Confirmar liberação de consumo para verificar disponibilidade dos materiais"
+            else:
+                materiais_txt_i8127 = " · ".join(materiais_pend_i8127) if materiais_pend_i8127 else "Sem falta física"
+                atencao_txt_i8127 = " · ".join(ped_i8127.get("motivos") or []) or "Materiais atendidos"
             linhas_previsao_i8127.append({
                 "Situação": ped_i8127.get("status", ""),
                 "Pedido": ped_i8127.get("numero_proposta", ""),
                 "Cliente": ped_i8127.get("cliente_nome", ""),
                 "Entrega": entrega_i8127.strftime("%d/%m/%Y") if isinstance(entrega_i8127, date) else "Sem data",
-                "Materiais": " · ".join(materiais_pend_i8127) if materiais_pend_i8127 else "Sem falta física",
-                "Motivo / próxima atenção": " · ".join(ped_i8127.get("motivos") or []) or "Materiais atendidos",
+                "Materiais": materiais_txt_i8127,
+                "Motivo / próxima atenção": atencao_txt_i8127,
             })
         st.dataframe(pd.DataFrame(linhas_previsao_i8127), use_container_width=True, hide_index=True)
         if risco_i8127:

@@ -1,4 +1,4 @@
-"""Motor puro da I8.12.7 — Previsão de Produção e Risco de Entrega.
+"""Motor puro da I8.12.7-HF1 — Previsão de Produção e Risco de Entrega.
 
 A previsão não cria uma nova fonte operacional. Ela deriva o estado de pedidos
 aprovados ainda não entregues a partir de três fontes já oficiais:
@@ -209,11 +209,14 @@ def montar_previsao_producao(
         if not consumo:
             chave_base = "aguardando_liberacao"
             status_base = "⚪ Aguardando liberação de materiais"
+            # HF1: antes da liberação não existe apuração física oficial. Nunca
+            # comunicar "sem falta" ou "materiais atendidos" neste estado.
             if isinstance(dias, int) and dias < 0:
                 risco = True
                 motivos.append(f"entrega vencida há {abs(dias)} dia(s) e consumo ainda não foi liberado")
             elif isinstance(dias, int) and dias <= 1:
                 motivos.append("entrega muito próxima e consumo ainda não foi liberado")
+            motivos.append("confirmar liberação de consumo para verificar disponibilidade dos materiais")
         elif not pendencias:
             chave_base = "liberado"
             status_base = "🟢 Liberado para produção"
