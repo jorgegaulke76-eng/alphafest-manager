@@ -53,6 +53,7 @@ from alpha_core import calcular_alpha_core, listar_atrasados_operacionais
 from consumo_estoque_engine import resumo_consumo as _i8124_engine_resumo, pendencia_material as _i8124_engine_pendencia_material, planejar_regularizacao as _i8124_engine_planejar
 from necessidades_compras_engine import agregar_necessidades_compra as _i8125_engine_agregar
 from planejamento_compras_engine import aplicar_planejamento_necessidades as _i8126_engine_aplicar, quantidade_aberta as _i8126_engine_aberta, status_plano as _i8126_engine_status, agregar_aberto_por_material as _i8126_engine_agregar_aberto
+from risco_producao_engine import montar_previsao_producao as _i8127_engine_previsao
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_encerrada as _status_proposta_encerrada,
@@ -4620,6 +4621,35 @@ def _i8126_central_necessidades(consumos=None, estoque=None, compras=None, histo
     return _i8126_engine_aplicar(base, planejamentos)
 
 
+# --- 20.4.9-I8.12.7: Previsão de Produção e Risco de Entrega ---
+def _i8127_previsao_producao(historico=None, consumos=None, estoque=None, planejamentos=None):
+    """Snapshot derivado das fontes homologadas de pedido, estoque e compras.
+
+    Não persiste status novo. A classificação é recalculada a cada leitura para
+    evitar divergência entre Central, Fluxo, Histórico e Compras.
+    """
+    historico = carregar_historico() if historico is None else historico
+    consumos = carregar_consumos_pedidos() if consumos is None else consumos
+    estoque = carregar_estoque() if estoque is None else estoque
+    planejamentos = carregar_planejamentos_compras() if planejamentos is None else planejamentos
+    return _i8127_engine_previsao(
+        historico or [], consumos or [], (estoque or {}).get("movimentacoes") or [],
+        planejamentos or [], hoje=hoje_local(),
+    )
+
+
+def _i8127_resumo_pedido(numero_proposta, historico=None, consumos=None, estoque=None, planejamentos=None):
+    numero = str(numero_proposta or "").strip()
+    if not numero:
+        return None
+    for linha in _i8127_previsao_producao(
+        historico=historico, consumos=consumos, estoque=estoque, planejamentos=planejamentos
+    ):
+        if str(linha.get("numero_proposta") or "").strip() == numero:
+            return linha
+    return None
+
+
 def _i8124_resumo_pedido(numero_proposta, consumos=None, estoque=None):
     consumos = carregar_consumos_pedidos() if consumos is None else consumos
     estoque = carregar_estoque() if estoque is None else estoque
@@ -4859,6 +4889,32 @@ def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
                 st.warning("📦 Liberação bloqueada — produto oficial ainda sem Ficha Técnica: " + " • ".join(previa.get("sem_ficha") or []))
         except Exception:
             pass
+
+    # I8.12.7 — status operacional derivado compartilhado entre todas as telas.
+    # Não é persistido na proposta; assim Central, Anna, Histórico e Fluxo nunca
+    # podem divergir por armazenarem classificações antigas.
+    try:
+        previsao_i8127 = _i8127_resumo_pedido(numero)
+        if previsao_i8127:
+            st.caption(f"🚦 Produção / entrega: {previsao_i8127.get('status')}")
+            if previsao_i8127.get("status_base") != previsao_i8127.get("status"):
+                st.caption(f"Situação de materiais: {previsao_i8127.get('status_base')}")
+            if detalhado and previsao_i8127.get("motivos"):
+                st.caption("Motivo(s): " + " · ".join(str(x) for x in previsao_i8127.get("motivos") or []))
+            if detalhado:
+                for nec_i8127 in previsao_i8127.get("pendencias") or []:
+                    coberto_i8127 = valor_float(nec_i8127.get("quantidade_em_compra_alocada"))
+                    sem_cobertura_i8127 = valor_float(nec_i8127.get("quantidade_sem_cobertura"))
+                    if coberto_i8127 > 0.0000001 or sem_cobertura_i8127 > 0.0000001:
+                        partes_i8127 = []
+                        if coberto_i8127 > 0.0000001:
+                            partes_i8127.append(f"em compra {_i8121_quantidade(coberto_i8127)} {nec_i8127.get('unidade', '')}")
+                        if sem_cobertura_i8127 > 0.0000001:
+                            partes_i8127.append(f"sem cobertura {_i8121_quantidade(sem_cobertura_i8127)} {nec_i8127.get('unidade', '')}")
+                        st.caption(f"• {nec_i8127.get('material_nome') or 'Material'}: " + " · ".join(partes_i8127))
+    except Exception:
+        # A inteligência de previsão jamais pode impedir a tela operacional de abrir.
+        pass
 
 
 # --- 20.4.9-I8.11.1: Central de Faturamento Mensal ---
@@ -20443,6 +20499,38 @@ if pagina_atual == "central":
     elif planos_abertos_central_i8126:
         st.info(f"🛒 Não há falta real pendente, mas existem {len(planos_abertos_central_i8126)} solicitação(ões) ao fornecedor ainda em aberto. Revise recebimento/cancelamento em Gestão → Compras, Custos & Estoque.")
 
+    # I8.12.7 — a Central do Jorge usa a mesma previsão exibida no Fluxo e em Compras.
+    previsao_central_i8127 = _i8127_previsao_producao(
+        historico=historico_central, consumos=consumos_central_i8124, estoque=estoque_central_i8124,
+        planejamentos=carregar_planejamentos_compras(),
+    )
+    risco_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "risco_atraso"]
+    aguardando_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "aguardando_material"]
+    compra_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "compra_em_andamento"]
+    liberados_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "liberado"]
+    if risco_central_i8127:
+        st.error(
+            f"🚦 **Produção: {len(risco_central_i8127)} pedido(s) com risco de atraso** · "
+            f"{len(aguardando_central_i8127)} aguardando material · {len(compra_central_i8127)} com compra em andamento · "
+            f"{len(liberados_central_i8127)} liberado(s) para produção."
+        )
+    elif previsao_central_i8127:
+        st.info(
+            f"🚦 **Previsão de produção:** {len(liberados_central_i8127)} liberado(s) · "
+            f"{len(compra_central_i8127)} com compra em andamento · {len(aguardando_central_i8127)} aguardando material."
+        )
+    if risco_central_i8127 or aguardando_central_i8127 or compra_central_i8127:
+        with st.expander("🚦 Ver previsão de produção e prazo", expanded=False):
+            for ped_central_i8127 in previsao_central_i8127[:10]:
+                entrega_central_i8127 = ped_central_i8127.get("data_entrega")
+                entrega_txt_central_i8127 = entrega_central_i8127.strftime("%d/%m/%Y") if isinstance(entrega_central_i8127, date) else "Sem data"
+                motivo_central_i8127 = " · ".join(ped_central_i8127.get("motivos") or [])
+                st.write(
+                    f"• **{ped_central_i8127.get('numero_proposta')} — {ped_central_i8127.get('cliente_nome', 'Cliente')}** · "
+                    f"{ped_central_i8127.get('status')} · entrega {entrega_txt_central_i8127}" + (f" · {motivo_central_i8127}" if motivo_central_i8127 else "")
+                )
+            st.caption("Detalhes de materiais e compras: Gestão → Compras, Custos & Estoque.")
+
     numeros_consumo_ativos_central_i8124 = {
         str(c.get("numero_proposta") or "").strip()
         for c in consumos_central_i8124
@@ -23517,6 +23605,16 @@ if pagina_atual == "fluxo":
     m4.metric("🔵 Prontos para produzir", produzir)
     m5.metric("✅ Prontos", prontos)
 
+    # I8.12.7 — camada material/prazo, derivada da mesma fonte usada em Compras e Central.
+    previsao_fluxo_i8127 = _i8127_previsao_producao()
+    if previsao_fluxo_i8127:
+        fr1_i8127, fr2_i8127, fr3_i8127, fr4_i8127 = st.columns(4)
+        fr1_i8127.metric("🔴 Risco material/prazo", sum(1 for p in previsao_fluxo_i8127 if p.get("chave") == "risco_atraso"))
+        fr2_i8127.metric("🟠 Aguardando material", sum(1 for p in previsao_fluxo_i8127 if p.get("chave") == "aguardando_material"))
+        fr3_i8127.metric("🛒 Compra em andamento", sum(1 for p in previsao_fluxo_i8127 if p.get("chave") == "compra_em_andamento"))
+        fr4_i8127.metric("🟢 Material liberado", sum(1 for p in previsao_fluxo_i8127 if p.get("chave") == "liberado"))
+        st.caption("I8.12.7: esses indicadores não mudam a etapa manual do Fluxo; apenas mostram disponibilidade de material e risco de entrega com a mesma fonte de Estoque/Compras.")
+
     visao, artes, producao, entregas = st.tabs(["📌 Visão geral", "🎨 Artes", "⚙️ Produção", "📦 Prontos/entregas"])
 
     def renderizar_cartoes_fluxo(lista, prefixo):
@@ -23923,10 +24021,10 @@ if pagina_atual == "faturamento_mensal":
 
 
 if pagina_atual == "compras_custos":
-    st.header("📦 I8.12.6 · Compras, Custos, Estoque, Ficha Técnica & Pedidos")
+    st.header("📦 I8.12.7 · Compras, Custos, Estoque, Ficha Técnica, Pedidos & Produção")
     st.caption(
         "Registre custos reais, transforme compras em entradas de estoque, controle materiais e defina o consumo técnico por produto. "
-        "A I8.12.4 confirma o consumo por pedido; a I8.12.5 consolida as faltas reais; e a I8.12.6 controla o que já foi solicitado ao fornecedor e o que ainda precisa ser comprado. Solicitação não movimenta estoque: somente o recebimento real registrado como compra/entrada regulariza pendências. O módulo nunca altera sozinho o preço do Catálogo Oficial."
+        "A I8.12.4 confirma o consumo por pedido; a I8.12.5 consolida as faltas reais; a I8.12.6 controla o que já foi solicitado ao fornecedor; e a I8.12.7 transforma essas mesmas fontes em previsão operacional de produção e risco de entrega. Solicitação não movimenta estoque: somente o recebimento real registrado como compra/entrada regulariza pendências. O módulo nunca altera sozinho o preço do Catálogo Oficial."
     )
 
     usuario_compras = obter_usuario_atual()
@@ -24131,6 +24229,55 @@ if pagina_atual == "compras_custos":
                     st.rerun()
                 else:
                     st.error(msg_arq_i8122)
+
+    # I8.12.7 — Previsão de Produção e Risco de Entrega.
+    previsao_i8127 = _i8127_previsao_producao(
+        historico=carregar_historico(), consumos=consumos_i8124, estoque=estoque_i8122,
+        planejamentos=carregar_planejamentos_compras(),
+    )
+    st.markdown("### 🚦 Previsão de Produção e Risco de Entrega · I8.12.7")
+    st.caption(
+        "Leitura derivada dos pedidos aprovados ainda não entregues. Não cria status paralelo: usa a liberação de consumo, "
+        "as pendências reais do estoque, as solicitações ao fornecedor e a data de entrega. Nesta etapa o Manager não inventa "
+        "tempo de fabricação; o risco considera somente prazo e disponibilidade/recebimento de materiais."
+    )
+    if not previsao_i8127:
+        st.success("✅ Nenhum pedido aprovado e não entregue precisa de previsão neste momento.")
+    else:
+        risco_i8127 = [p for p in previsao_i8127 if p.get("chave") == "risco_atraso"]
+        aguardando_i8127 = [p for p in previsao_i8127 if p.get("chave") == "aguardando_material"]
+        comprando_i8127 = [p for p in previsao_i8127 if p.get("chave") == "compra_em_andamento"]
+        liberados_i8127 = [p for p in previsao_i8127 if p.get("chave") == "liberado"]
+        liberar_i8127 = [p for p in previsao_i8127 if p.get("chave") == "aguardando_liberacao"]
+        pr1_i8127, pr2_i8127, pr3_i8127, pr4_i8127, pr5_i8127 = st.columns(5)
+        pr1_i8127.metric("🔴 Risco de atraso", len(risco_i8127))
+        pr2_i8127.metric("🟠 Aguardando material", len(aguardando_i8127))
+        pr3_i8127.metric("🛒 Compra em andamento", len(comprando_i8127))
+        pr4_i8127.metric("🟢 Liberados", len(liberados_i8127))
+        pr5_i8127.metric("⚪ Aguardando liberação", len(liberar_i8127))
+
+        linhas_previsao_i8127 = []
+        for ped_i8127 in previsao_i8127:
+            entrega_i8127 = ped_i8127.get("data_entrega")
+            materiais_pend_i8127 = []
+            for nec_i8127 in ped_i8127.get("pendencias") or []:
+                materiais_pend_i8127.append(
+                    f"{nec_i8127.get('material_nome')}: {_i8121_quantidade(nec_i8127.get('pendente'))} {nec_i8127.get('unidade', '')}"
+                )
+            linhas_previsao_i8127.append({
+                "Situação": ped_i8127.get("status", ""),
+                "Pedido": ped_i8127.get("numero_proposta", ""),
+                "Cliente": ped_i8127.get("cliente_nome", ""),
+                "Entrega": entrega_i8127.strftime("%d/%m/%Y") if isinstance(entrega_i8127, date) else "Sem data",
+                "Materiais": " · ".join(materiais_pend_i8127) if materiais_pend_i8127 else "Sem falta física",
+                "Motivo / próxima atenção": " · ".join(ped_i8127.get("motivos") or []) or "Materiais atendidos",
+            })
+        st.dataframe(pd.DataFrame(linhas_previsao_i8127), use_container_width=True, hide_index=True)
+        if risco_i8127:
+            st.error(
+                f"🚨 {len(risco_i8127)} pedido(s) precisam de atenção de prazo. O alerta não altera sozinho a etapa de produção; "
+                "ele sinaliza a situação para Jorge/Anna trabalharem com a mesma informação."
+            )
 
     # I8.12.6 — Central de Necessidades + Planejamento de compras.
     planejamentos_i8126 = carregar_planejamentos_compras()

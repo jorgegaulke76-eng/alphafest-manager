@@ -1,3 +1,11 @@
+## 20.4.9-I8.12.7 — Previsão de Produção e Risco de Entrega
+- Nova leitura derivada dos pedidos aprovados ainda não entregues, sem criar banco ou status paralelo.
+- Classifica pedidos como Liberado para produção, Aguardando material, Compra em andamento, Aguardando liberação ou Risco de atraso.
+- Quantidades já solicitadas ao fornecedor são alocadas FIFO entre pedidos do mesmo material para evitar falsa cobertura dupla.
+- Risco considera data de entrega, material ainda indisponível e previsão de recebimento informada; não inventa tempo de fabricação.
+- A mesma classificação aparece em Compras/Estoque, Central do Jorge, Histórico, Fluxo e componente operacional compartilhado com Anna.
+- Nenhuma classificação altera automaticamente a etapa manual do Fluxo, o estoque, o planejamento de compras ou o preço de venda.
+
 ## 20.4.9-I8.12.6 — Planejamento de Compras por Necessidade
 - Central separa falta real, quantidade já solicitada ao fornecedor e saldo ainda a solicitar.
 - Solicitação ao fornecedor não movimenta estoque; somente recebimento registrado como compra/entrada regulariza pendências.
