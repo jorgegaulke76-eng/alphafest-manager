@@ -3967,7 +3967,7 @@ def _i8123_capacidade_estimada(ficha, estoque):
     return max(0, int(capacidade + 0.0000001)), gargalo
 
 
-# --- 20.4.9-I8.12.4: Baixa de estoque por pedido + pendências automáticas ---
+# --- 20.4.9-I8.12.4-HF1: Baixa por pedido + Saneamento integrado ---
 I8124_CONSUMOS_PADRAO = []
 
 
@@ -4026,15 +4026,24 @@ def _i8124_montar_previa_pedido(proposta, catalogo=None, fichas=None, estoque=No
     produtos = []
     sem_ficha = []
     sem_catalogo = []
+    correlacoes_saneadas = []
     for indice_item, item in enumerate(proposta.get("itens") or []):
         nome_item = str((item or {}).get("produto") or "").strip()
         qtd_produto = max(0.0, valor_float((item or {}).get("quantidade", 0)))
         if not nome_item or qtd_produto <= 0:
             continue
-        idx_prod, produto = _produto_catalogo_da_proposta(nome_item, catalogo)
+        idx_prod, produto, resolucao_prod = _resolver_produto_catalogo_saneado(nome_item, catalogo)
         if produto is None:
             sem_catalogo.append(nome_item)
             continue
+        if (resolucao_prod or {}).get("modo") == "saneamento_seguro":
+            correlacoes_saneadas.append({
+                "item": nome_item,
+                "produto_oficial": str((produto or {}).get("Nome") or nome_item),
+                "campo": str((resolucao_prod or {}).get("campo") or ""),
+                "referencia": str((resolucao_prod or {}).get("referencia") or ""),
+                "confianca": valor_float((resolucao_prod or {}).get("confianca", 0)),
+            })
         ficha = _i8123_ficha_para_produto(fichas, produto, idx_prod)
         componentes = _i8123_componentes_ativos(ficha) if ficha else []
         nome_oficial = str(produto.get("Nome") or nome_item)
@@ -4077,6 +4086,7 @@ def _i8124_montar_previa_pedido(proposta, catalogo=None, fichas=None, estoque=No
         "necessidades": necessidades,
         "sem_ficha": list(dict.fromkeys(sem_ficha)),
         "sem_catalogo": list(dict.fromkeys(sem_catalogo)),
+        "correlacoes_saneadas": correlacoes_saneadas,
         "assinatura": assinatura,
     }
 
@@ -4304,6 +4314,13 @@ def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
             previa = _i8124_montar_previa_pedido(proposta)
             if previa.get("necessidades") and valor_bool(proposta.get("aprovado")):
                 st.caption("📦 Materiais do pedido: ⚪ consumo ainda não confirmado")
+            if detalhado and previa.get("correlacoes_saneadas"):
+                for corr in previa.get("correlacoes_saneadas") or []:
+                    st.caption(f"🧹 Vínculo saneado: {corr.get('item')} → {corr.get('produto_oficial')}")
+            if detalhado and previa.get("sem_catalogo") and valor_bool(proposta.get("aprovado")):
+                st.warning("📦 Item aprovado sem vínculo seguro com o Catálogo: " + " • ".join(previa.get("sem_catalogo") or []))
+            if detalhado and previa.get("sem_ficha") and valor_bool(proposta.get("aprovado")):
+                st.warning("📦 Produto oficial ainda sem Ficha Técnica: " + " • ".join(previa.get("sem_ficha") or []))
         except Exception:
             pass
 
@@ -8930,11 +8947,178 @@ def mapa_identidade_produtos(catalogo):
     return mapa
 
 
-def nome_produto_oficial_catalogo(nome, catalogo):
-    """Resolve um nome histórico/alternativo sem modificar a proposta original."""
-    original = str(nome or "").strip() or "Não informado"
+def _tokens_saneamento_produto(valor):
+    """Tokens conservadores para correlacionar nomes parecidos sem alterar o Catálogo.
+
+    A equivalência exata/alias continua soberana. Esta camada só entra quando não
+    existe identidade direta e exige correspondência forte + única.
+    """
+    texto = normalizar_identidade_produto(valor)
+    if not texto:
+        return []
+
+    ignorar = {
+        "de", "do", "da", "dos", "das", "para", "com", "e", "em",
+        "personalizado", "personalizada", "personalizados", "personalizadas",
+        "produto", "produtos", "linha", "colecao",
+        # Cores/qualificadores visuais não devem separar a identidade comercial.
+        "branco", "branca", "brancos", "brancas", "preto", "preta", "pretos", "pretas",
+        "azul", "rosa", "verde", "vermelho", "vermelha", "dourado", "dourada",
+        "transparente",
+    }
+    equivalencias = {
+        "canecas": "caneca", "copos": "copo", "baloes": "balao",
+        "adesivos": "adesivo", "etiquetas": "etiqueta", "chaveiros": "chaveiro",
+        "camisetas": "camiseta", "lembrancinhas": "lembrancinha",
+        # Para o saneamento de família de canecas, porcelana/cerâmica representam
+        # a mesma família operacional. A resolução só é aceita se o candidato for único.
+        "porcelana": "ceramica",
+    }
+    saida = []
+    tokens_brutos = []
+    for token_bruto in texto.split():
+        numero_unidade = re.match(r"^(\d+)(mm|cm|ml|kg|g|l|m)$", token_bruto)
+        if numero_unidade:
+            tokens_brutos.extend([numero_unidade.group(1), numero_unidade.group(2)])
+        else:
+            tokens_brutos.append(token_bruto)
+    for token in tokens_brutos:
+        if token in ignorar:
+            continue
+        token = equivalencias.get(token, token)
+        if len(token) > 5 and token.endswith("oes"):
+            token = token[:-3] + "ao"
+        elif len(token) > 4 and token.endswith("s"):
+            token = token[:-1]
+        token = equivalencias.get(token, token)
+        if token and token not in saida:
+            saida.append(token)
+    return saida
+
+
+def _resolver_produto_catalogo_saneado(nome, catalogo):
+    """Resolve item histórico/proposta contra o Catálogo usando a fonte única de saneamento.
+
+    Ordem:
+    1) nome oficial/alias confirmado;
+    2) correlação forte e única por nome, alias, categoria/subcategoria/variações.
+
+    Nunca grava alias automaticamente. Em caso de ambiguidade, retorna sem vínculo.
+    """
+    from difflib import SequenceMatcher
+
+    original = str(nome or "").strip()
+    catalogo = catalogo or []
+    if not original or not catalogo:
+        return None, None, {"modo": "ausente", "confianca": 0.0, "original": original}
+
     chave = normalizar_identidade_produto(original)
-    return mapa_identidade_produtos(catalogo).get(chave, original)
+    mapa = mapa_identidade_produtos(catalogo)
+    oficial_exato = mapa.get(chave)
+    if oficial_exato:
+        idx = next((
+            i for i, p in enumerate(catalogo)
+            if normalizar_identidade_produto((p or {}).get("Nome"))
+            == normalizar_identidade_produto(oficial_exato)
+        ), None)
+        if idx is not None:
+            modo = "nome_oficial" if normalizar_identidade_produto((catalogo[idx] or {}).get("Nome")) == chave else "alias_confirmado"
+            return idx, catalogo[idx], {
+                "modo": modo, "confianca": 1.0, "original": original,
+                "oficial": str((catalogo[idx] or {}).get("Nome") or oficial_exato),
+                "campo": "Nome" if modo == "nome_oficial" else "Aliases",
+            }
+
+    tokens_alvo = _tokens_saneamento_produto(original)
+    if not tokens_alvo:
+        return None, None, {"modo": "ausente", "confianca": 0.0, "original": original}
+    set_alvo = set(tokens_alvo)
+
+    candidatos = []
+    for idx, produto in enumerate(catalogo):
+        produto = produto or {}
+        campos = [("Nome", produto.get("Nome"))]
+        campos.extend(("Aliases", x) for x in (produto.get("Aliases", []) or []) if str(x).strip())
+        for campo in ("Categoria", "Subcategoria", "PalavrasChave"):
+            valor = produto.get(campo)
+            if isinstance(valor, (list, tuple, set)):
+                campos.extend((campo, x) for x in valor if str(x).strip())
+            elif str(valor or "").strip():
+                campos.append((campo, valor))
+        for variacao in (produto.get("Variacoes", []) or []):
+            if isinstance(variacao, dict):
+                valor_var = variacao.get("Nome") or variacao.get("nome") or variacao.get("Descricao") or variacao.get("descricao")
+            else:
+                valor_var = variacao
+            if str(valor_var or "").strip():
+                campos.append(("Variacoes", valor_var))
+
+        melhor_prod = None
+        for campo, valor_candidato in campos:
+            tokens_cand = _tokens_saneamento_produto(valor_candidato)
+            if not tokens_cand:
+                continue
+            set_cand = set(tokens_cand)
+            inter = len(set_alvo & set_cand)
+            if inter < 2:
+                continue
+            uniao = max(len(set_alvo | set_cand), 1)
+            menor = max(min(len(set_alvo), len(set_cand)), 1)
+            jac = inter / uniao
+            cobertura = inter / menor
+            seq = SequenceMatcher(None, " ".join(tokens_alvo), " ".join(tokens_cand)).ratio()
+            igualdade = 1.0 if set_alvo == set_cand else 0.0
+            score = max(
+                0.98 if igualdade else 0.0,
+                0.90 if cobertura >= 0.999 and inter >= 2 else 0.0,
+                (cobertura * 0.52) + (jac * 0.28) + (seq * 0.20),
+            )
+            registro = {
+                "indice": idx, "produto": produto, "score": float(score),
+                "campo": campo, "valor_candidato": str(valor_candidato or ""),
+                "inter": inter,
+            }
+            if melhor_prod is None or registro["score"] > melhor_prod["score"]:
+                melhor_prod = registro
+        if melhor_prod is not None:
+            candidatos.append(melhor_prod)
+
+    if not candidatos:
+        return None, None, {"modo": "ausente", "confianca": 0.0, "original": original}
+
+    candidatos.sort(key=lambda x: (x["score"], x["inter"]), reverse=True)
+    melhor = candidatos[0]
+    segundo = candidatos[1] if len(candidatos) > 1 else None
+    margem = melhor["score"] - (segundo["score"] if segundo else 0.0)
+
+    # Saneamento automático só é operacional quando a evidência é forte e não
+    # existe outro produto praticamente empatado. Em dúvida, exige vínculo humano.
+    seguro = melhor["score"] >= 0.88 and (segundo is None or margem >= 0.08 or segundo["score"] < 0.80)
+    if not seguro:
+        return None, None, {
+            "modo": "ambiguo" if melhor["score"] >= 0.80 else "ausente",
+            "confianca": round(melhor["score"], 4), "original": original,
+            "candidato": str((melhor["produto"] or {}).get("Nome") or ""),
+            "margem": round(margem, 4),
+        }
+
+    produto = melhor["produto"]
+    return melhor["indice"], produto, {
+        "modo": "saneamento_seguro",
+        "confianca": round(melhor["score"], 4),
+        "original": original,
+        "oficial": str(produto.get("Nome") or ""),
+        "campo": melhor["campo"],
+        "referencia": melhor["valor_candidato"],
+        "margem": round(margem, 4),
+    }
+
+
+def nome_produto_oficial_catalogo(nome, catalogo):
+    """Resolve nome histórico/alternativo pelo mesmo saneamento usado nas telas operacionais."""
+    original = str(nome or "").strip() or "Não informado"
+    _, produto, _ = _resolver_produto_catalogo_saneado(original, catalogo)
+    return str((produto or {}).get("Nome") or original)
 
 
 def conflito_alias_catalogo(alias, produto_oficial, catalogo):
@@ -8996,9 +9180,8 @@ def filtrar_aliases_validos_produto(produto_oficial, aliases, catalogo, indice_i
 
 
 def produtos_proposta_sem_catalogo(proposta, catalogo=None):
-    """20.4.9-I1 — retorna produtos da proposta sem correspondência oficial/alias no Catálogo."""
+    """20.4.9-I8.12.4-HF1 — ausentes após aplicar a mesma resolução do Saneamento."""
     catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
-    mapa = mapa_identidade_produtos(catalogo)
     ausentes = []
     vistos = set()
 
@@ -9009,7 +9192,8 @@ def produtos_proposta_sem_catalogo(proposta, catalogo=None):
             continue
         if chave in {"produto nao informado", "nao informado"}:
             continue
-        if chave in mapa:
+        _, produto, _ = _resolver_produto_catalogo_saneado(nome, catalogo)
+        if produto is not None:
             continue
         if chave in vistos:
             continue
@@ -9020,10 +9204,31 @@ def produtos_proposta_sem_catalogo(proposta, catalogo=None):
 
 
 def renderizar_alerta_thu_produto_sem_catalogo(proposta, prefixo="thu_sem_catalogo"):
-    """Mostra para a operação um aviso persistente enquanto houver item não cadastrado."""
-    ausentes = produtos_proposta_sem_catalogo(proposta)
+    """Comunica ausência real ou correlação segura do Saneamento sem duplicar produto."""
+    catalogo = carregar_catalogo()
+    ausentes = produtos_proposta_sem_catalogo(proposta, catalogo=catalogo)
+    correlacoes = []
+    vistos_corr = set()
+    for item in (proposta or {}).get("itens", []) or []:
+        nome_item = str((item or {}).get("produto") or "").strip()
+        if not nome_item:
+            continue
+        _, produto, meta = _resolver_produto_catalogo_saneado(nome_item, catalogo)
+        if produto is None or (meta or {}).get("modo") != "saneamento_seguro":
+            continue
+        oficial = str((produto or {}).get("Nome") or "").strip()
+        chave_corr = (normalizar_identidade_produto(nome_item), normalizar_identidade_produto(oficial))
+        if not oficial or chave_corr in vistos_corr:
+            continue
+        vistos_corr.add(chave_corr)
+        correlacoes.append((nome_item, oficial))
+
+    if correlacoes:
+        texto_corr = " • ".join(f"{orig} → {oficial}" for orig, oficial in correlacoes)
+        st.caption(f"🧹 THU Saneamento: {texto_corr}. O item original da proposta foi preservado.")
+
     if not ausentes:
-        return False
+        return bool(correlacoes)
 
     numero = str((proposta or {}).get("numero_proposta") or "").strip()
     plural = len(ausentes) > 1
@@ -9031,11 +9236,11 @@ def renderizar_alerta_thu_produto_sem_catalogo(proposta, prefixo="thu_sem_catalo
 
     st.info(
         "💙 **THU informa:** "
-        + ("Esta proposta contém produtos que ainda não estão cadastrados no Catálogo: "
+        + ("Esta proposta contém produtos sem correspondência segura no Catálogo: "
            if plural else
-           "Esta proposta contém um produto que ainda não está cadastrado no Catálogo: ")
+           "Esta proposta contém um produto sem correspondência segura no Catálogo: ")
         + f"**{texto_produtos}**. "
-        + "Cadastre para que preço, material, campanhas, relatórios e próximas sugestões usem a fonte oficial."
+        + "Revise o Saneamento ou cadastre somente se realmente for um produto novo."
     )
 
     if len(ausentes) == 1:
@@ -9047,7 +9252,7 @@ def renderizar_alerta_thu_produto_sem_catalogo(proposta, prefixo="thu_sem_catalo
         ):
             dialog_catalogo_cadastro_anna(nome_prefill=nome)
     else:
-        st.caption("Cadastre os itens ausentes individualmente:")
+        st.caption("Revise/cadastre os itens ainda sem vínculo seguro individualmente:")
         cols = st.columns(min(len(ausentes), 3))
         for idx, nome in enumerate(ausentes):
             with cols[idx % len(cols)]:
@@ -9059,7 +9264,6 @@ def renderizar_alerta_thu_produto_sem_catalogo(proposta, prefixo="thu_sem_catalo
                     dialog_catalogo_cadastro_anna(nome_prefill=nome)
 
     return True
-
 
 def avaliar_pendencias_produto_catalogo(produto):
     """20.4.9-E — mede se o cadastro possui os dados mínimos para o THU."""
@@ -15099,14 +15303,11 @@ def _thu_i7_nome_produto_oficial(nome, catalogo):
 
 
 def _thu_i7_produto_existe_catalogo(nome, catalogo):
-    chave = normalizar_identidade_produto(nome)
-    if not chave:
+    """Usa a mesma resolução saneada aplicada a propostas/estoque para evitar divergência entre telas."""
+    if not normalizar_identidade_produto(nome):
         return False
-    mapa = mapa_identidade_produtos(catalogo)
-    return chave in mapa or any(
-        normalizar_identidade_produto(p.get("Nome")) == chave
-        for p in (catalogo or [])
-    )
+    _, produto, _ = _resolver_produto_catalogo_saneado(nome, catalogo)
+    return produto is not None
 
 
 def _thu_i7_registro_produto(nome):
@@ -18405,17 +18606,9 @@ def renderizar_auditoria_thu_pos_cadastro(nome_produto, prefixo="thu_auditoria_p
 
 
 def _produto_catalogo_da_proposta(nome_item, catalogo):
-    """Resolve item da proposta para o registro oficial do Catálogo."""
-    oficial = nome_produto_oficial_catalogo(nome_item, catalogo)
-    idx = next(
-        (
-            i for i, p in enumerate(catalogo or [])
-            if normalizar_identidade_produto(p.get("Nome"))
-            == normalizar_identidade_produto(oficial)
-        ),
-        None,
-    )
-    return (idx, catalogo[idx]) if idx is not None else (None, None)
+    """Resolve item da proposta pela fonte única de saneamento/aliases do Catálogo."""
+    idx, produto, _ = _resolver_produto_catalogo_saneado(nome_item, catalogo)
+    return idx, produto
 
 
 def _produto_entrega_ja_revisado(proposta, produto_nome):
@@ -23419,7 +23612,7 @@ if pagina_atual == "compras_custos":
                 st.success(f"Estoque suficiente para simular {_i8121_quantidade(qtd_sim_i8123)} unidade(s) deste produto. Nenhuma baixa foi realizada.")
 
     st.divider()
-    st.markdown("### 🧾 Consumo de estoque por pedido · I8.12.4")
+    st.markdown("### 🧾 Consumo de estoque por pedido · I8.12.4-HF1")
     st.info(
         "📌 A aprovação do cliente não baixa estoque sozinha. Você revisa a prévia e confirma o consumo do pedido. "
         "Se faltar material, o saldo físico vai até zero e a diferença fica pendente. Novas entradas quitam essa pendência automaticamente, sem estoque negativo."
@@ -23516,8 +23709,16 @@ if pagina_atual == "compras_custos":
                     })
                 if linhas_prev_i8124:
                     st.dataframe(pd.DataFrame(linhas_prev_i8124), use_container_width=True, hide_index=True)
+                if previa_i8124.get("correlacoes_saneadas"):
+                    for corr_i8124 in previa_i8124.get("correlacoes_saneadas") or []:
+                        ref_corr_i8124 = str(corr_i8124.get("referencia") or "").strip()
+                        detalhe_corr_i8124 = f" via {corr_i8124.get('campo')}" + (f" ‘{ref_corr_i8124}’" if ref_corr_i8124 else "")
+                        st.success(
+                            f"🧹 Saneamento aplicado: {corr_i8124.get('item')} → {corr_i8124.get('produto_oficial')}"
+                            f"{detalhe_corr_i8124}. A proposta original não foi alterada."
+                        )
                 if previa_i8124.get("sem_catalogo"):
-                    st.error("Produto(s) do pedido sem correspondência no Catálogo Oficial: " + " • ".join(previa_i8124.get("sem_catalogo")))
+                    st.error("Produto(s) do pedido sem correspondência segura no Catálogo Oficial: " + " • ".join(previa_i8124.get("sem_catalogo")))
                 if previa_i8124.get("sem_ficha"):
                     st.warning("Item(ns) sem Ficha Técnica: " + " • ".join(previa_i8124.get("sem_ficha")))
                 faltas_ficha_i8124 = bool(previa_i8124.get("sem_catalogo") or previa_i8124.get("sem_ficha"))
@@ -24367,14 +24568,20 @@ if pagina_atual == "relatorios":
                         f"Restaram {len(suspeitos)} grupo(s) que realmente precisam de conferência."
                     )
 
+                    _mapa_aliases_confirmados_rel = mapa_identidade_produtos(catalogo_rel)
                     for pos_dup, nomes_dup in enumerate(suspeitos[:20], 1):
-                        resolvidos = {
-                            nome_produto_oficial_catalogo(n, catalogo_rel)
+                        # Aqui verificamos somente nome/alias persistido. O saneamento
+                        # operacional automático não deve fingir que um alias já foi gravado.
+                        resolvidos_exatos = {
+                            _mapa_aliases_confirmados_rel.get(
+                                normalizar_identidade_produto(n),
+                                str(n or "").strip(),
+                            )
                             for n in nomes_dup
                         }
                         resolvidos_norm = {
                             normalizar_identidade_produto(n)
-                            for n in resolvidos if n
+                            for n in resolvidos_exatos if n
                         }
 
                         with st.container(border=True):
@@ -24382,7 +24589,7 @@ if pagina_atual == "relatorios":
 
                             # Alias já confirmado anteriormente.
                             if len(resolvidos_norm) == 1:
-                                nome_resolvido = next(iter(resolvidos))
+                                nome_resolvido = next(iter(resolvidos_exatos))
                                 if any(
                                     normalizar_identidade_produto(n) != normalizar_identidade_produto(nome_resolvido)
                                     for n in nomes_dup

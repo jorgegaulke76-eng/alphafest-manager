@@ -630,3 +630,13 @@ hangelog
 - Estorno do consumo é auditado e devolve ao estoque apenas as baixas ativas, preservando histórico.
 - Pedido com consumo ativo não pode ser excluído antes do estorno.
 - Mudança posterior no pedido/Ficha Técnica gera alerta de revisão antes da produção.
+
+## 20.4.9-I8.12.4-HF1 — Saneamento integrado ao consumo por pedido
+- Corrigida a resolução de itens de proposta com nomenclatura diferente do produto oficial.
+- Nome oficial e aliases confirmados continuam com prioridade; o fallback de Saneamento só atua com correspondência forte e única.
+- Categoria/subcategoria/variações podem apoiar a correlação sem duplicar produto nem alterar a proposta histórica.
+- Consumo por pedido passa a localizar a Ficha Técnica pelo produto oficial saneado.
+- THU e avisos operacionais deixam de apontar falsamente como “fora do Catálogo” itens resolvidos com segurança.
+- Correlações automáticas ficam visíveis na comunicação operacional; aliases não são gravados automaticamente.
+- Ambiguidades continuam bloqueadas para evitar baixa no produto errado.
+
