@@ -3656,6 +3656,15 @@ def _i8121_moeda(valor):
     return f"R$ {valor_float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _i8121_moeda_md(valor):
+    """Moeda segura para componentes Streamlit que interpretam Markdown/LaTeX.
+
+    O caractere $ sem escape pode ser interpretado como delimitador matemático,
+    causando textos como **R 0,20** ou exibindo os asteriscos literalmente.
+    """
+    return _i8121_moeda(valor).replace("$", r"\$")
+
+
 def _i8121_quantidade(valor):
     numero = valor_float(valor)
     if abs(numero - round(numero)) < 0.000001:
@@ -22446,7 +22455,7 @@ if pagina_atual == "faturamento_mensal":
 
 
 if pagina_atual == "compras_custos":
-    st.header("🧾 I8.12.1 · Histórico de Compras por Fornecedor")
+    st.header("🧾 I8.12.1-HF1 · Histórico de Compras por Fornecedor")
     st.caption(
         "Registre custos reais de compra e acompanhe variações por fornecedor. "
         "Este módulo nunca altera automaticamente o preço de venda do Catálogo Oficial."
@@ -22539,16 +22548,16 @@ if pagina_atual == "compras_custos":
                 data_ant_i8121 = _i8121_data_compra(anterior_preview_i8121.get("data_compra")).strftime("%d/%m/%Y")
                 if delta_preview_i8121 > 0.005:
                     st.warning(
-                        f"⚠️ Este custo está **{_i8121_moeda(delta_preview_i8121)} por unidade acima** da última compra deste item neste fornecedor "
-                        f"({_i8121_moeda(anterior_custo_i8121)} em {data_ant_i8121}). Vale revisar o preço de venda dos produtos relacionados antes da próxima proposta."
+                        f"⚠️ Este custo está {_i8121_moeda_md(delta_preview_i8121)} por unidade acima da última compra deste item neste fornecedor "
+                        f"({_i8121_moeda_md(anterior_custo_i8121)} em {data_ant_i8121}). Vale revisar o preço de venda dos produtos relacionados antes da próxima proposta."
                     )
                 elif delta_preview_i8121 < -0.005:
                     st.success(
-                        f"⬇️ Este custo está **{_i8121_moeda(abs(delta_preview_i8121))} por unidade abaixo** da última compra deste item neste fornecedor "
-                        f"({_i8121_moeda(anterior_custo_i8121)} em {data_ant_i8121})."
+                        f"⬇️ Este custo está {_i8121_moeda_md(abs(delta_preview_i8121))} por unidade abaixo da última compra deste item neste fornecedor "
+                        f"({_i8121_moeda_md(anterior_custo_i8121)} em {data_ant_i8121})."
                     )
                 else:
-                    st.info(f"Custo unitário igual à última compra deste item neste fornecedor: {_i8121_moeda(anterior_custo_i8121)} em {data_ant_i8121}.")
+                    st.info(f"Custo unitário igual à última compra deste item neste fornecedor: {_i8121_moeda_md(anterior_custo_i8121)} em {data_ant_i8121}.")
 
             if st.button("💾 Registrar compra", type="primary", use_container_width=True, key="i8121_salvar_compra"):
                 if not item_i8121.strip():
@@ -22658,9 +22667,9 @@ if pagina_atual == "compras_custos":
                 if anterior_i8121:
                     data_ant_i8121 = _i8121_data_compra(anterior_i8121.get("data_compra")).strftime("%d/%m/%Y")
                     if delta_i8121 > 0.005:
-                        st.warning(f"⚠️ Custo aumentou {_i8121_moeda(delta_i8121)} por unidade desde a compra de {data_ant_i8121} ({_i8121_moeda(anterior_i8121.get('custo_unitario', 0))}).")
+                        st.warning(f"⚠️ Custo aumentou {_i8121_moeda_md(delta_i8121)} por unidade desde a compra de {data_ant_i8121} ({_i8121_moeda_md(anterior_i8121.get('custo_unitario', 0))}).")
                     elif delta_i8121 < -0.005:
-                        st.success(f"⬇️ Custo caiu {_i8121_moeda(abs(delta_i8121))} por unidade desde a compra de {data_ant_i8121} ({_i8121_moeda(anterior_i8121.get('custo_unitario', 0))}).")
+                        st.success(f"⬇️ Custo caiu {_i8121_moeda_md(abs(delta_i8121))} por unidade desde a compra de {data_ant_i8121} ({_i8121_moeda_md(anterior_i8121.get('custo_unitario', 0))}).")
                     else:
                         st.info(f"Custo unitário sem alteração em relação à compra de {data_ant_i8121}.")
                 else:
