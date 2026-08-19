@@ -54,6 +54,7 @@ from consumo_estoque_engine import resumo_consumo as _i8124_engine_resumo, pende
 from necessidades_compras_engine import agregar_necessidades_compra as _i8125_engine_agregar
 from planejamento_compras_engine import aplicar_planejamento_necessidades as _i8126_engine_aplicar, quantidade_aberta as _i8126_engine_aberta, status_plano as _i8126_engine_status, agregar_aberto_por_material as _i8126_engine_agregar_aberto
 from risco_producao_engine import montar_previsao_producao as _i8127_engine_previsao
+from central_producao_engine import montar_central_producao as _i8128_engine_central, resumo_central as _i8128_engine_resumo
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_encerrada as _status_proposta_encerrada,
@@ -4914,6 +4915,16 @@ def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
                         if sem_cobertura_i8127 > 0.0000001:
                             partes_i8127.append(f"sem cobertura {_i8121_quantidade(sem_cobertura_i8127)} {nec_i8127.get('unidade', '')}")
                         st.caption(f"• {nec_i8127.get('material_nome') or 'Material'}: " + " · ".join(partes_i8127))
+            # I8.12.8 — a etapa manual do Fluxo é exibida junto da mesma previsão,
+            # sem criar um novo status persistido na proposta.
+            try:
+                producao_i8128 = _i8128_engine_central([previsao_i8127], carregar_producao(), hoje=hoje_local())
+                if producao_i8128 and producao_i8128[0].get("tarefas"):
+                    st.caption(f"🏭 Etapa da produção: {producao_i8128[0].get('etapa_manual')}")
+                    if detalhado:
+                        st.caption(f"Próxima ação operacional: {producao_i8128[0].get('proxima_acao_producao')}")
+            except Exception:
+                pass
     except Exception:
         # A inteligência de previsão jamais pode impedir a tela operacional de abrir.
         pass
@@ -7953,6 +7964,88 @@ def classe_prazo_producao(data_txt, status):
     if dias <= 3:
         return "Próximos 3 dias"
     return "Futuro"
+
+
+# --- 20.4.9-I8.12.8: Central de Produção ---
+def _i8128_central_producao(historico=None, tarefas=None, consumos=None, estoque=None, planejamentos=None):
+    """Fila operacional derivada da I8.12.7 + Fluxo de Pedidos existente.
+
+    Não grava uma classificação paralela. O único estado manual persistido
+    continua sendo o andamento já existente em producao_db.
+    """
+    previsao = _i8127_previsao_producao(
+        historico=historico, consumos=consumos, estoque=estoque, planejamentos=planejamentos
+    )
+    tarefas = sincronizar_producao_com_propostas() if tarefas is None else tarefas
+    return _i8128_engine_central(previsao or [], tarefas or [], hoje=hoje_local())
+
+
+def _i8128_resumo_pedido(numero_proposta, historico=None, tarefas=None):
+    numero = str(numero_proposta or "").strip()
+    if not numero:
+        return None
+    for linha in _i8128_central_producao(historico=historico, tarefas=tarefas):
+        if str(linha.get("numero_proposta") or "").strip() == numero:
+            return linha
+    return None
+
+
+def _i8128_atualizar_etapa_pedido(numero_proposta, acao, usuario=None):
+    """Executa somente atalhos seguros da Central, preservando o Fluxo manual."""
+    numero = str(numero_proposta or "").strip()
+    acao = str(acao or "").strip().casefold()
+    if not numero:
+        return False, "Pedido inválido."
+
+    historico = carregar_historico(force_refresh=True)
+    tarefas = sincronizar_producao_com_propostas()
+    linha = _i8128_resumo_pedido(numero, historico=historico, tarefas=tarefas)
+    if not linha:
+        return False, "Pedido não está na fila operacional de produção."
+
+    if acao == "iniciar" and not linha.get("pode_iniciar_producao"):
+        return False, "O pedido ainda não está apto para iniciar produção. Revise materiais e etapa do Fluxo."
+    if acao == "pronto" and not linha.get("pode_marcar_pronto"):
+        return False, "Para marcar o pedido como pronto, todos os itens precisam estar em produção ou já prontos."
+    if acao not in {"iniciar", "pronto"}:
+        return False, "Ação de produção inválida."
+
+    nome_usuario = str((usuario or obter_usuario_atual() or {}).get("nome") if isinstance((usuario or obter_usuario_atual()), dict) else (usuario or "Sistema")) or "Sistema"
+    alteradas = 0
+    for tarefa in tarefas:
+        if not isinstance(tarefa, dict) or not tarefa.get("ativa", True):
+            continue
+        if str(tarefa.get("numero_proposta") or "").strip() != numero:
+            continue
+        status_atual = normalizar_status_fluxo(tarefa.get("status"))
+        novo_status = None
+        if acao == "iniciar" and status_atual == "Pronto para produzir":
+            novo_status = "Em produção"
+        elif acao == "pronto" and status_atual == "Em produção":
+            novo_status = "Pronto"
+        if novo_status and novo_status != status_atual:
+            tarefa["status"] = novo_status
+            tarefa["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+            adicionar_evento_timeline(tarefa, f"Central de Produção: {status_atual} → {novo_status} por {nome_usuario}")
+            alteradas += 1
+
+    if not alteradas:
+        return False, "Nenhum item precisava desta atualização."
+    salvar_producao(tarefas)
+
+    descricao = "Produção iniciada" if acao == "iniciar" else "Pedido marcado como pronto na produção"
+    try:
+        atualizar_proposta_com_leitura_fresca(
+            numero,
+            lambda p: registrar_evento_proposta(p, descricao, usuario=nome_usuario),
+        )
+    except Exception:
+        pass
+    try:
+        registrar_atividade(nome_usuario, descricao, "Produção", detalhe=numero, evento=True)
+    except Exception:
+        pass
+    return True, descricao + "."
 
 # --- CATÁLOGO INTEGRADO ---
 def gerar_conteudo_catalogo_gratuito(nome, categoria, subcategoria="", ideias="", preco="", processos=None):
@@ -20533,6 +20626,33 @@ if pagina_atual == "central":
                 )
             st.caption("Detalhes de materiais e compras: Gestão → Compras, Custos & Estoque.")
 
+    # I8.12.8 — Central do Jorge recebe a mesma fila operacional do Fluxo.
+    central_prod_central_i8128 = _i8128_engine_central(previsao_central_i8127, tarefas_ativas_central, hoje=hoje_local())
+    resumo_prod_central_i8128 = _i8128_engine_resumo(central_prod_central_i8128)
+    if central_prod_central_i8128:
+        st.info(
+            f"🏭 **Produção operacional:** {resumo_prod_central_i8128.get('prontos_iniciar', 0)} pronto(s) para iniciar · "
+            f"{resumo_prod_central_i8128.get('em_producao', 0)} em produção · "
+            f"{resumo_prod_central_i8128.get('prontos_entrega', 0)} pronto(s) para entrega · "
+            f"{resumo_prod_central_i8128.get('bloqueados_material', 0)} bloqueado(s) por liberação/material."
+        )
+        prioridades_central_i8128 = [
+            l for l in central_prod_central_i8128
+            if l.get("risco_atraso") or l.get("situacao_operacional_chave") in {"pronto_iniciar", "em_producao", "pronto_entrega"}
+        ]
+        if prioridades_central_i8128:
+            with st.expander("🏭 Ver fila prioritária de produção", expanded=False):
+                for linha_central_i8128 in prioridades_central_i8128[:8]:
+                    entrega_central_i8128 = linha_central_i8128.get("data_entrega")
+                    entrega_txt_central_i8128 = entrega_central_i8128.strftime("%d/%m/%Y") if isinstance(entrega_central_i8128, date) else "Sem data"
+                    risco_txt_central_i8128 = " · 🔴 risco de atraso" if linha_central_i8128.get("risco_atraso") else ""
+                    st.write(
+                        f"• **{linha_central_i8128.get('numero_proposta')} — {linha_central_i8128.get('cliente_nome', 'Cliente')}** · "
+                        f"{linha_central_i8128.get('etapa_manual')} · entrega {entrega_txt_central_i8128}{risco_txt_central_i8128} · "
+                        f"{linha_central_i8128.get('proxima_acao_producao')}"
+                    )
+                st.caption("Ações rápidas e atualização da etapa: Fluxo de Pedidos → Central de Produção.")
+
     numeros_consumo_ativos_central_i8124 = {
         str(c.get("numero_proposta") or "").strip()
         for c in consumos_central_i8124
@@ -23617,6 +23737,89 @@ if pagina_atual == "fluxo":
         fr4_i8127.metric("🟢 Material liberado", sum(1 for p in previsao_fluxo_i8127 if p.get("chave") == "liberado"))
         st.caption("I8.12.7: esses indicadores não mudam a etapa manual do Fluxo; apenas mostram disponibilidade de material e risco de entrega com a mesma fonte de Estoque/Compras.")
 
+    # I8.12.8 — Central de Produção: mesma previsão + andamento manual já existente.
+    central_prod_i8128 = _i8128_engine_central(previsao_fluxo_i8127, tarefas_ativas, hoje=hoje_local())
+    resumo_prod_i8128 = _i8128_engine_resumo(central_prod_i8128)
+    st.markdown("### 🏭 Central de Produção · I8.12.8")
+    st.caption(
+        "Fila única dos pedidos aprovados e ainda não entregues. Materiais e risco vêm da I8.12.7; "
+        "a etapa de produção continua sendo o Fluxo de Pedidos já existente. Nenhum status paralelo é criado."
+    )
+    cp81, cp82, cp83, cp84, cp85, cp86 = st.columns(6)
+    cp81.metric("Na fila", resumo_prod_i8128.get("total", 0))
+    cp82.metric("🟢 Prontos p/ iniciar", resumo_prod_i8128.get("prontos_iniciar", 0))
+    cp83.metric("🔵 Em produção", resumo_prod_i8128.get("em_producao", 0))
+    cp84.metric("📦 Bloqueados material", resumo_prod_i8128.get("bloqueados_material", 0))
+    cp85.metric("✅ Prontos entrega", resumo_prod_i8128.get("prontos_entrega", 0))
+    cp86.metric("🔴 Em risco", resumo_prod_i8128.get("risco", 0))
+
+    if central_prod_i8128:
+        linhas_tabela_i8128 = []
+        for linha_i8128 in central_prod_i8128:
+            entrega_i8128 = linha_i8128.get("data_entrega")
+            entrega_txt_i8128 = entrega_i8128.strftime("%d/%m/%Y") if isinstance(entrega_i8128, date) else "Sem data"
+            material_txt_i8128 = {
+                "liberado": "🟢 Liberado",
+                "aguardando_liberacao": "⚪ Não apurado",
+                "aguardando_material": "🟠 Falta material",
+                "compra_em_andamento": "🛒 Em compra",
+            }.get(str(linha_i8128.get("chave_base") or ""), str(linha_i8128.get("status_base") or "—"))
+            linhas_tabela_i8128.append({
+                "Prazo": "🔴 Risco" if linha_i8128.get("risco_atraso") else "—",
+                "Pedido": linha_i8128.get("numero_proposta"),
+                "Cliente": linha_i8128.get("cliente_nome"),
+                "Entrega": entrega_txt_i8128,
+                "Materiais": material_txt_i8128,
+                "Produção": linha_i8128.get("etapa_manual"),
+                "Próxima ação": linha_i8128.get("proxima_acao_producao"),
+            })
+        st.dataframe(pd.DataFrame(linhas_tabela_i8128), use_container_width=True, hide_index=True, height=min(420, 44 + 35 * len(linhas_tabela_i8128)))
+
+        opcoes_prod_i8128 = [str(l.get("numero_proposta") or "") for l in central_prod_i8128]
+        rotulos_prod_i8128 = {
+            str(l.get("numero_proposta") or ""): f"{l.get('numero_proposta')} · {l.get('cliente_nome')} · {l.get('situacao_operacional')}"
+            for l in central_prod_i8128
+        }
+        selecionado_prod_i8128 = st.selectbox(
+            "Pedido para ação rápida de produção", opcoes_prod_i8128,
+            format_func=lambda x: rotulos_prod_i8128.get(x, x), key="i8128_pedido_acao_rapida"
+        )
+        linha_sel_i8128 = next((l for l in central_prod_i8128 if str(l.get("numero_proposta") or "") == str(selecionado_prod_i8128)), None)
+        if linha_sel_i8128:
+            with st.container(border=True):
+                st.markdown(f"**{linha_sel_i8128.get('numero_proposta')} — {linha_sel_i8128.get('cliente_nome')}**")
+                st.write(f"**Materiais:** {linha_sel_i8128.get('status_base')}  •  **Produção:** {linha_sel_i8128.get('etapa_manual')}")
+                st.caption(f"Próxima ação: {linha_sel_i8128.get('proxima_acao_producao')}")
+                if linha_sel_i8128.get("motivos"):
+                    st.caption("Prazo/material: " + " · ".join(str(x) for x in linha_sel_i8128.get("motivos") or []))
+                qa1_i8128, qa2_i8128 = st.columns(2)
+                iniciar_i8128 = qa1_i8128.button(
+                    "▶️ Iniciar produção", key=f"i8128_iniciar_{selecionado_prod_i8128}", use_container_width=True,
+                    disabled=not bool(linha_sel_i8128.get("pode_iniciar_producao")),
+                )
+                pronto_i8128 = qa2_i8128.button(
+                    "✅ Marcar pedido pronto", key=f"i8128_pronto_{selecionado_prod_i8128}", use_container_width=True,
+                    disabled=not bool(linha_sel_i8128.get("pode_marcar_pronto")),
+                )
+                if iniciar_i8128:
+                    ok_i8128, msg_i8128 = _i8128_atualizar_etapa_pedido(selecionado_prod_i8128, "iniciar")
+                    if ok_i8128:
+                        st.session_state["_mensagem_sucesso_pendente"] = msg_i8128
+                        st.rerun()
+                    else:
+                        st.error(msg_i8128)
+                if pronto_i8128:
+                    ok_i8128, msg_i8128 = _i8128_atualizar_etapa_pedido(selecionado_prod_i8128, "pronto")
+                    if ok_i8128:
+                        st.session_state["_mensagem_sucesso_pendente"] = msg_i8128
+                        st.rerun()
+                    else:
+                        st.error(msg_i8128)
+                if not linha_sel_i8128.get("pode_iniciar_producao") and not linha_sel_i8128.get("pode_marcar_pronto"):
+                    st.info("A ação rápida fica liberada somente quando materiais e etapa manual permitem avançar com segurança. Use as abas abaixo para ajustar arte, prioridade ou etapa quando necessário.")
+    else:
+        st.success("✅ Nenhum pedido aprovado e não entregue na fila de produção neste momento.")
+
     visao, artes, producao, entregas = st.tabs(["📌 Visão geral", "🎨 Artes", "⚙️ Produção", "📦 Prontos/entregas"])
 
     def renderizar_cartoes_fluxo(lista, prefixo):
@@ -24023,7 +24226,7 @@ if pagina_atual == "faturamento_mensal":
 
 
 if pagina_atual == "compras_custos":
-    st.header("📦 I8.12.7 · Compras, Custos, Estoque, Ficha Técnica, Pedidos & Produção")
+    st.header("📦 I8.12.8 · Compras, Custos, Estoque, Ficha Técnica, Pedidos & Produção")
     st.caption(
         "Registre custos reais, transforme compras em entradas de estoque, controle materiais e defina o consumo técnico por produto. "
         "A I8.12.4 confirma o consumo por pedido; a I8.12.5 consolida as faltas reais; a I8.12.6 controla o que já foi solicitado ao fornecedor; e a I8.12.7 transforma essas mesmas fontes em previsão operacional de produção e risco de entrega. Solicitação não movimenta estoque: somente o recebimento real registrado como compra/entrada regulariza pendências. O módulo nunca altera sozinho o preço do Catálogo Oficial."
