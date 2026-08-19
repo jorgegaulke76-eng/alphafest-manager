@@ -50,6 +50,7 @@ from painel_indicadores import calcular_indicadores_unificados
 from alpha_live import registrar_atividade, obter_operacao_online, obter_eventos_recentes
 from thu_executivo import calcular_briefing, renderizar_briefing_thu
 from alpha_core import calcular_alpha_core, listar_atrasados_operacionais
+from consumo_estoque_engine import resumo_consumo as _i8124_engine_resumo, pendencia_material as _i8124_engine_pendencia_material, planejar_regularizacao as _i8124_engine_planejar
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_encerrada as _status_proposta_encerrada,
@@ -364,6 +365,7 @@ ARQUIVO_FATURAMENTO_MENSAL = "faturamento_mensal_db.json"
 ARQUIVO_COMPRAS = "compras_db.json"
 ARQUIVO_ESTOQUE = "estoque_db.json"
 ARQUIVO_FICHAS_TECNICAS = "fichas_tecnicas_db.json"
+ARQUIVO_CONSUMO_PEDIDOS = "consumo_pedidos_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -1544,6 +1546,13 @@ def excluir_proposta(num_proposta):
     if usuario_exclusao != "jorge":
         st.error("🔒 Exclusão de proposta disponível somente no perfil Jorge.")
         return False
+
+    consumo_ativo_i8124 = globals().get("_i8124_consumo_ativo_pedido")
+    if callable(consumo_ativo_i8124):
+        consumo_i8124 = consumo_ativo_i8124(num_proposta)
+        if consumo_i8124:
+            st.error("📦 Este pedido possui consumo de estoque confirmado. Estorne o consumo em Gestão → Compras, Custos & Estoque antes de excluir a proposta, para preservar a rastreabilidade.")
+            return False
 
     historico_atual = carregar_historico()
     proposta = next((p for p in historico_atual if p.get("numero_proposta") == num_proposta), None)
@@ -3696,14 +3705,28 @@ def carregar_estoque(force_refresh=False):
     return {"materiais": materiais, "movimentacoes": movimentos}
 
 
-def salvar_estoque(dados):
+def salvar_estoque(dados, regularizar_pendencias=True):
     if not isinstance(dados, dict):
         raise ValueError("O estoque precisa ser um objeto com materiais e movimentações.")
     normalizado = {
         "materiais": list(dados.get("materiais") or []),
         "movimentacoes": list(dados.get("movimentacoes") or []),
     }
-    return bool(save_document("estoque_db", normalizado, ARQUIVO_ESTOQUE))
+    ok = bool(save_document("estoque_db", normalizado, ARQUIVO_ESTOQUE))
+    # I8.12.4 — qualquer entrada/ajuste positivo pode atender necessidades já
+    # confirmadas. A regularização usa somente saldo físico disponível e nunca
+    # deixa o estoque negativo. O flag evita recursão durante a própria baixa.
+    if ok and regularizar_pendencias:
+        regularizador = globals().get("_i8124_regularizar_pendencias_automaticamente")
+        if callable(regularizador):
+            try:
+                resultado = regularizador(usuario=obter_usuario_atual())
+                if isinstance(resultado, dict) and resultado.get("movimentos"):
+                    st.session_state["_i8124_msg_regularizacao"] = resultado.get("mensagem") or "Pendências de pedidos atualizadas pelo estoque."
+            except Exception as exc:
+                # Falha na regularização nunca invalida a entrada física já salva.
+                registrar_auditoria("Falha ao regularizar pendências", "Estoque", "", {"erro": str(exc)[:500]})
+    return ok
 
 
 def _i8122_material_id(nome, unidade):
@@ -3942,6 +3965,347 @@ def _i8123_capacidade_estimada(ficha, estoque):
         return None, None
     capacidade, gargalo = min(capacidades, key=lambda x: x[0])
     return max(0, int(capacidade + 0.0000001)), gargalo
+
+
+# --- 20.4.9-I8.12.4: Baixa de estoque por pedido + pendências automáticas ---
+I8124_CONSUMOS_PADRAO = []
+
+
+def carregar_consumos_pedidos(force_refresh=False):
+    dados = load_document("consumo_pedidos_db", ARQUIVO_CONSUMO_PEDIDOS, I8124_CONSUMOS_PADRAO, force_refresh=force_refresh)
+    return dados if isinstance(dados, list) else []
+
+
+def salvar_consumos_pedidos(lista):
+    if not isinstance(lista, list):
+        raise ValueError("O controle de consumo por pedido precisa ser uma lista.")
+    return bool(save_document("consumo_pedidos_db", lista, ARQUIVO_CONSUMO_PEDIDOS))
+
+
+def _i8124_consumo_ativo_pedido(numero_proposta, consumos=None):
+    numero = str(numero_proposta or "").strip()
+    consumos = carregar_consumos_pedidos() if consumos is None else consumos
+    candidatos = [
+        c for c in (consumos or [])
+        if str((c or {}).get("numero_proposta") or "").strip() == numero and not (c or {}).get("estornado")
+    ]
+    if not candidatos:
+        return None
+    candidatos.sort(key=lambda c: (str(c.get("confirmado_em") or ""), str(c.get("id") or "")), reverse=True)
+    return candidatos[0]
+
+
+def _i8124_assinatura_previa(produtos, necessidades):
+    payload = {
+        "produtos": sorted([
+            {
+                "produto": normalizar_identidade_produto(x.get("produto")),
+                "quantidade": round(valor_float(x.get("quantidade")), 6),
+                "ficha_id": str(x.get("ficha_id") or ""),
+            }
+            for x in (produtos or [])
+        ], key=lambda x: (x["produto"], x["ficha_id"], x["quantidade"])),
+        "necessidades": sorted([
+            {
+                "material_id": str(x.get("material_id") or ""),
+                "necessario": round(valor_float(x.get("necessario")), 6),
+            }
+            for x in (necessidades or [])
+        ], key=lambda x: x["material_id"]),
+    }
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def _i8124_montar_previa_pedido(proposta, catalogo=None, fichas=None, estoque=None):
+    """Traduz os itens do pedido em necessidades de materiais sem movimentar estoque."""
+    proposta = proposta or {}
+    catalogo = carregar_catalogo() if catalogo is None else catalogo
+    fichas = carregar_fichas_tecnicas() if fichas is None else fichas
+    estoque = carregar_estoque() if estoque is None else estoque
+    agregadas = {}
+    produtos = []
+    sem_ficha = []
+    sem_catalogo = []
+    for indice_item, item in enumerate(proposta.get("itens") or []):
+        nome_item = str((item or {}).get("produto") or "").strip()
+        qtd_produto = max(0.0, valor_float((item or {}).get("quantidade", 0)))
+        if not nome_item or qtd_produto <= 0:
+            continue
+        idx_prod, produto = _produto_catalogo_da_proposta(nome_item, catalogo)
+        if produto is None:
+            sem_catalogo.append(nome_item)
+            continue
+        ficha = _i8123_ficha_para_produto(fichas, produto, idx_prod)
+        componentes = _i8123_componentes_ativos(ficha) if ficha else []
+        nome_oficial = str(produto.get("Nome") or nome_item)
+        if not ficha or not componentes:
+            sem_ficha.append(nome_oficial)
+            continue
+        produtos.append({
+            "item_indice": indice_item,
+            "produto": nome_oficial,
+            "quantidade": qtd_produto,
+            "ficha_id": str(ficha.get("id") or ""),
+        })
+        for comp in componentes:
+            material_id = str(comp.get("material_id") or "")
+            material = _i8122_material_por_id(estoque, material_id) or {}
+            consumo_unit = max(0.0, valor_float(comp.get("consumo_por_unidade", 0)))
+            necessario = round(qtd_produto * consumo_unit, 6)
+            if necessario <= 0:
+                continue
+            linha = agregadas.setdefault(material_id, {
+                "material_id": material_id,
+                "material_nome": str(material.get("nome") or comp.get("material_nome_snapshot") or "Material"),
+                "unidade": str(material.get("unidade") or comp.get("unidade_snapshot") or ""),
+                "necessario": 0.0,
+                "origens": [],
+            })
+            linha["necessario"] = round(valor_float(linha.get("necessario")) + necessario, 6)
+            linha["origens"].append({
+                "produto": nome_oficial,
+                "quantidade_produto": qtd_produto,
+                "consumo_por_unidade": consumo_unit,
+                "necessario": necessario,
+            })
+    necessidades = list(agregadas.values())
+    necessidades.sort(key=lambda x: str(x.get("material_nome") or "").casefold())
+    assinatura = _i8124_assinatura_previa(produtos, necessidades)
+    return {
+        "numero_proposta": str(proposta.get("numero_proposta") or ""),
+        "produtos": produtos,
+        "necessidades": necessidades,
+        "sem_ficha": list(dict.fromkeys(sem_ficha)),
+        "sem_catalogo": list(dict.fromkeys(sem_catalogo)),
+        "assinatura": assinatura,
+    }
+
+
+def _i8124_resumo_consumo(consumo, estoque=None):
+    estoque = carregar_estoque() if estoque is None else estoque
+    return _i8124_engine_resumo(consumo or {}, (estoque or {}).get("movimentacoes") or [])
+
+
+def _i8124_pendencia_material(material_id, consumos=None, estoque=None):
+    consumos = carregar_consumos_pedidos() if consumos is None else consumos
+    estoque = carregar_estoque() if estoque is None else estoque
+    return _i8124_engine_pendencia_material(consumos, (estoque or {}).get("movimentacoes") or [], str(material_id or ""))
+
+
+def _i8124_resumo_pedido(numero_proposta, consumos=None, estoque=None):
+    consumos = carregar_consumos_pedidos() if consumos is None else consumos
+    estoque = carregar_estoque() if estoque is None else estoque
+    consumo = _i8124_consumo_ativo_pedido(numero_proposta, consumos)
+    if not consumo:
+        return {"status": "⚪ Consumo não confirmado", "chave": "nao_confirmado", "consumo": None, "necessidades": []}
+    resumo = _i8124_resumo_consumo(consumo, estoque)
+    resumo["consumo"] = consumo
+    return resumo
+
+
+def _i8124_regularizar_pendencias_automaticamente(usuario=None):
+    """Usa saldo físico disponível para quitar pendências FIFO, sem permitir negativo."""
+    consumos = carregar_consumos_pedidos(force_refresh=True)
+    ativos = [c for c in consumos if isinstance(c, dict) and not c.get("estornado")]
+    if not ativos:
+        return {"movimentos": 0, "quantidade": 0.0, "mensagem": "Nenhuma pendência ativa."}
+    estoque = carregar_estoque(force_refresh=True)
+    saldos = {
+        str(m.get("id")): max(0.0, _i8122_saldo_material(estoque, m.get("id")))
+        for m in (estoque.get("materiais") or [])
+    }
+    plano = _i8124_engine_planejar(ativos, estoque.get("movimentacoes") or [], saldos)
+    if not plano:
+        return {"movimentos": 0, "quantidade": 0.0, "mensagem": "Nenhuma pendência pôde ser regularizada com o saldo atual."}
+
+    nome_usuario = str((usuario or obter_usuario_atual() or {}).get("nome") if isinstance((usuario or obter_usuario_atual()), dict) else (usuario or "Sistema")) or "Sistema"
+    por_consumo = {str(c.get("id")): c for c in consumos if isinstance(c, dict)}
+    afetados = {}
+    movimentos_criados = []
+    for aloc in plano:
+        material = _i8122_material_por_id(estoque, aloc.get("material_id"))
+        qtd = max(0.0, valor_float(aloc.get("quantidade")))
+        saldo_atual = _i8122_saldo_material(estoque, aloc.get("material_id"))
+        qtd = min(qtd, max(0.0, saldo_atual))
+        if not material or qtd <= 0.0000001:
+            continue
+        mov = _i8122_adicionar_movimento(
+            estoque, material, -qtd, "Baixa automática de pedido", hoje_local(),
+            observacao=f"Regularização automática da necessidade do pedido {aloc.get('numero_proposta')}",
+            origem_tipo="Pedido", origem_id=str(aloc.get("consumo_id") or ""), usuario=nome_usuario,
+        )
+        mov["numero_proposta"] = str(aloc.get("numero_proposta") or "")
+        mov["consumo_id"] = str(aloc.get("consumo_id") or "")
+        movimentos_criados.append(mov)
+        consumo = por_consumo.get(str(aloc.get("consumo_id") or ""))
+        if consumo is not None:
+            consumo.setdefault("eventos", []).append({
+                "em": agora_local().isoformat(),
+                "usuario": nome_usuario,
+                "tipo": "baixa_automatica",
+                "material_id": str(material.get("id") or ""),
+                "material": str(material.get("nome") or ""),
+                "quantidade": qtd,
+                "movimento_id": mov.get("id"),
+            })
+            consumo["atualizado_em"] = agora_local().isoformat()
+            afetados.setdefault(str(consumo.get("numero_proposta") or ""), []).append((str(material.get("nome") or "Material"), qtd, str(material.get("unidade") or "")))
+
+    if not movimentos_criados:
+        return {"movimentos": 0, "quantidade": 0.0, "mensagem": "Nenhuma pendência pôde ser regularizada com o saldo atual."}
+    if not salvar_estoque(estoque, regularizar_pendencias=False):
+        return {"movimentos": 0, "quantidade": 0.0, "mensagem": "Falha ao registrar as baixas automáticas."}
+    salvar_consumos_pedidos(consumos)
+
+    for numero, linhas in afetados.items():
+        qtd_total = sum(x[1] for x in linhas)
+        resumo_atual = _i8124_resumo_pedido(numero, consumos=consumos, estoque=estoque)
+        detalhe_status = resumo_atual.get("status") or "Materiais atualizados"
+        def _mutar_prop_i8124(p, _q=qtd_total, _status=detalhe_status):
+            registrar_evento_proposta(p, f"Estoque: {_i8121_quantidade(_q)} unidade(s) de material regularizada(s) automaticamente · {_status}", usuario=nome_usuario)
+        atualizar_proposta_com_leitura_fresca(numero, _mutar_prop_i8124)
+        registrar_atividade(nome_usuario, "Materiais do pedido atualizados", "Estoque", detalhe=f"{numero} · {detalhe_status}", evento=True)
+    registrar_auditoria("Regularizar pendências de pedidos", "Estoque", "", {
+        "movimentos": len(movimentos_criados),
+        "pedidos": list(afetados),
+        "quantidade_total": round(sum(abs(valor_float(m.get("delta"))) for m in movimentos_criados), 6),
+    })
+    qtd_total = round(sum(abs(valor_float(m.get("delta"))) for m in movimentos_criados), 6)
+    return {
+        "movimentos": len(movimentos_criados),
+        "quantidade": qtd_total,
+        "pedidos": list(afetados),
+        "mensagem": f"📦 Estoque atualizado: {len(afetados)} pedido(s) teve/tiveram pendências regularizadas automaticamente.",
+    }
+
+
+def _i8124_confirmar_consumo_pedido(proposta, aceitar_sem_ficha=False, usuario=None):
+    if not isinstance(proposta, dict) or not str(proposta.get("numero_proposta") or "").strip():
+        return False, "Proposta inválida.", None
+    if not valor_bool(proposta.get("aprovado")):
+        return False, "O consumo só pode ser confirmado depois que o pedido estiver aprovado.", None
+    consumos = carregar_consumos_pedidos(force_refresh=True)
+    if _i8124_consumo_ativo_pedido(proposta.get("numero_proposta"), consumos):
+        return False, "Este pedido já possui consumo ativo. Estorne a confirmação atual antes de confirmar novamente.", None
+    previa = _i8124_montar_previa_pedido(proposta)
+    if not previa.get("necessidades"):
+        return False, "Nenhum item deste pedido possui Ficha Técnica com material controlado.", None
+    faltas = (previa.get("sem_ficha") or []) + (previa.get("sem_catalogo") or [])
+    if faltas and not aceitar_sem_ficha:
+        return False, "Há item(ns) sem Ficha Técnica/Catálogo. Confirme explicitamente que eles não entram neste consumo.", None
+    nome_usuario = str((usuario or obter_usuario_atual() or {}).get("nome") if isinstance((usuario or obter_usuario_atual()), dict) else (usuario or "Jorge")) or "Jorge"
+    agora = agora_local().isoformat()
+    numero = str(proposta.get("numero_proposta") or "")
+    consumo = {
+        "id": agora_local().strftime("CON%Y%m%d%H%M%S%f"),
+        "numero_proposta": numero,
+        "cliente_nome": str(proposta.get("cliente_nome") or ""),
+        "produtos": previa.get("produtos") or [],
+        "necessidades": previa.get("necessidades") or [],
+        "itens_sem_ficha_confirmados": previa.get("sem_ficha") or [],
+        "itens_sem_catalogo_confirmados": previa.get("sem_catalogo") or [],
+        "assinatura_confirmada": previa.get("assinatura") or "",
+        "confirmado_em": agora,
+        "confirmado_por": nome_usuario,
+        "atualizado_em": agora,
+        "estornado": False,
+        "eventos": [{"em": agora, "usuario": nome_usuario, "tipo": "confirmacao", "detalhe": "Consumo do pedido confirmado"}],
+    }
+    consumos.append(consumo)
+    if not salvar_consumos_pedidos(consumos):
+        return False, "Não foi possível salvar a confirmação do consumo.", None
+    registrar_auditoria("Confirmar consumo do pedido", "Estoque", consumo.get("id"), {"numero_proposta": numero, "materiais": len(consumo.get("necessidades") or [])})
+    def _mutar_prop(p):
+        registrar_evento_proposta(p, "Consumo de materiais confirmado para o estoque", usuario=nome_usuario)
+    atualizar_proposta_com_leitura_fresca(numero, _mutar_prop)
+    resultado = _i8124_regularizar_pendencias_automaticamente(usuario=usuario or obter_usuario_atual())
+    registrar_atividade(nome_usuario, "Consumo do pedido confirmado", "Estoque", detalhe=f"{numero} · {resultado.get('mensagem', '')}", evento=True)
+    return True, "Consumo confirmado. O saldo disponível foi baixado e eventual falta ficou como pendência.", consumo
+
+
+def _i8124_estornar_consumo(consumo_id, motivo, usuario=None):
+    motivo = str(motivo or "").strip()
+    if not motivo:
+        return False, "Informe o motivo do estorno."
+    consumos = carregar_consumos_pedidos(force_refresh=True)
+    consumo = next((c for c in consumos if str((c or {}).get("id") or "") == str(consumo_id or "")), None)
+    if not consumo or consumo.get("estornado"):
+        return False, "Consumo ativo não encontrado."
+    estoque = carregar_estoque(force_refresh=True)
+    movimentos_originais = [
+        m for m in (estoque.get("movimentacoes") or [])
+        if str(m.get("origem_tipo") or "") == "Pedido"
+        and str(m.get("origem_id") or "") == str(consumo_id)
+        and valor_float(m.get("delta")) < 0
+        and not _i8122_movimento_estornado(estoque, m.get("id"))
+    ]
+    nome_usuario = str((usuario or obter_usuario_atual() or {}).get("nome") if isinstance((usuario or obter_usuario_atual()), dict) else (usuario or "Jorge")) or "Jorge"
+    for original in movimentos_originais:
+        material = _i8122_material_por_id(estoque, original.get("material_id")) or {
+            "id": original.get("material_id"), "nome": original.get("material_nome"), "unidade": original.get("unidade")
+        }
+        estorno = _i8122_adicionar_movimento(
+            estoque, material, abs(valor_float(original.get("delta"))), "Estorno de consumo do pedido", hoje_local(),
+            observacao=f"Estorno do pedido {consumo.get('numero_proposta')}: {motivo}", origem_tipo="Estorno pedido",
+            origem_id=str(consumo_id), estorno_de=str(original.get("id") or ""), usuario=nome_usuario,
+        )
+        estorno["numero_proposta"] = str(consumo.get("numero_proposta") or "")
+        estorno["consumo_id"] = str(consumo_id)
+    # Primeiro devolve fisicamente sem disparar a mesma pendência; depois encerra o consumo.
+    if movimentos_originais and not salvar_estoque(estoque, regularizar_pendencias=False):
+        return False, "Não foi possível devolver os materiais ao estoque."
+    consumo["estornado"] = True
+    consumo["estornado_em"] = agora_local().isoformat()
+    consumo["estornado_por"] = nome_usuario
+    consumo["motivo_estorno"] = motivo
+    consumo.setdefault("eventos", []).append({"em": agora_local().isoformat(), "usuario": nome_usuario, "tipo": "estorno", "detalhe": motivo})
+    if not salvar_consumos_pedidos(consumos):
+        return False, "Não foi possível concluir o estorno do controle do pedido."
+    numero = str(consumo.get("numero_proposta") or "")
+    def _mutar_prop(p):
+        registrar_evento_proposta(p, f"Consumo de estoque estornado: {motivo}", usuario=nome_usuario)
+    atualizar_proposta_com_leitura_fresca(numero, _mutar_prop)
+    registrar_auditoria("Estornar consumo do pedido", "Estoque", consumo_id, {"numero_proposta": numero, "motivo": motivo, "movimentos_estornados": len(movimentos_originais)})
+    registrar_atividade(nome_usuario, "Consumo do pedido estornado", "Estoque", detalhe=f"{numero} · {motivo}", evento=True)
+    # O material devolvido pode quitar outros pedidos pendentes, nunca o consumo já estornado.
+    _i8124_regularizar_pendencias_automaticamente(usuario=usuario or obter_usuario_atual())
+    return True, "Consumo estornado com histórico preservado."
+
+
+def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
+    """Componente somente leitura reutilizado por Jorge, Anna, Histórico e Fluxo."""
+    if not isinstance(proposta, dict):
+        return
+    numero = str(proposta.get("numero_proposta") or "").strip()
+    if not numero:
+        return
+    consumos = carregar_consumos_pedidos()
+    estoque = carregar_estoque()
+    resumo = _i8124_resumo_pedido(numero, consumos=consumos, estoque=estoque)
+    consumo = resumo.get("consumo")
+    if consumo:
+        st.caption(f"📦 Materiais do pedido: {resumo.get('status')}")
+        if detalhado:
+            for nec in resumo.get("necessidades") or []:
+                unidade = str(nec.get("unidade") or "")
+                st.write(
+                    f"• {nec.get('material_nome') or 'Material'}: necessário {_i8121_quantidade(nec.get('necessario'))} {unidade} · "
+                    f"baixado {_i8121_quantidade(nec.get('baixado'))} {unidade} · pendente {_i8121_quantidade(nec.get('pendente'))} {unidade}"
+                )
+        try:
+            previa_atual = _i8124_montar_previa_pedido(proposta)
+            if previa_atual.get("assinatura") and previa_atual.get("assinatura") != consumo.get("assinatura_confirmada"):
+                st.warning("⚠️ O pedido ou a Ficha Técnica mudou depois da confirmação do consumo. Revise/estorne e confirme novamente antes de produzir.")
+        except Exception:
+            pass
+    else:
+        # Só sinaliza ausência quando existe ao menos uma ficha aplicável; evita ruído em serviços sem estoque.
+        try:
+            previa = _i8124_montar_previa_pedido(proposta)
+            if previa.get("necessidades") and valor_bool(proposta.get("aprovado")):
+                st.caption("📦 Materiais do pedido: ⚪ consumo ainda não confirmado")
+        except Exception:
+            pass
 
 
 # --- 20.4.9-I8.11.1: Central de Faturamento Mensal ---
@@ -11928,6 +12292,7 @@ DOCUMENTOS_BACKUP = [
     ("compras_db", ARQUIVO_COMPRAS, []),
     ("estoque_db", ARQUIVO_ESTOQUE, {"materiais": [], "movimentacoes": []}),
     ("fichas_tecnicas_db", ARQUIVO_FICHAS_TECNICAS, []),
+    ("consumo_pedidos_db", ARQUIVO_CONSUMO_PEDIDOS, []),
 ]
 
 def carregar_config_backup():
@@ -12017,7 +12382,7 @@ def verificar_integridade_dados():
     documentos, contagens = coletar_dados_backup()
     problemas = []
     # componentes_db é uma biblioteca categorizada e, por definição, usa objeto/dicionário.
-    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db", "catalogos_gerados_db", "catalogo_modelos_db", "faturamento_mensal_db", "fichas_tecnicas_db"}
+    esperados_lista = {"historico_orcamentos", "catalogo_db", "clientes_db", "producao_db", "projetos_db", "campanhas_db", "segmentos_db", "catalogos_gerados_db", "catalogo_modelos_db", "faturamento_mensal_db", "fichas_tecnicas_db", "consumo_pedidos_db"}
     for chave in esperados_lista:
         if not isinstance(documentos.get(chave), list):
             problemas.append(f"{chave}: estrutura inválida (esperada lista).")
@@ -18562,6 +18927,7 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
     link = f"https://wa.me/{numero_wa}?text={quote(formatar_msg_whatsapp(prop))}" if numero_wa else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop))}"
     c3.link_button("📱 WhatsApp", link, use_container_width=True)
     c4.download_button("📄 HTML", gerar_html(prop), file_name=f"{numero}.html", mime="text/html", key=f"{prefixo}_html_{numero}", use_container_width=True)
+    _i8124_render_status_pedido(prop, prefixo=f"{prefixo}_estoque", detalhado=False)
 
     # 20.4.9-I1 — THU avisa a Anna enquanto houver produto sem cadastro oficial.
     renderizar_alerta_thu_produto_sem_catalogo(
@@ -19280,6 +19646,38 @@ if pagina_atual == "central":
     else:
         st.success("Nenhuma prioridade crítica neste momento. Tudo em dia!")
 
+    # I8.12.4 — comunicação operacional do estoque na Central do Jorge.
+    consumos_central_i8124 = carregar_consumos_pedidos()
+    estoque_central_i8124 = carregar_estoque()
+    pendentes_central_i8124 = []
+    revisar_central_i8124 = []
+    mapa_hist_central_i8124 = {str(p.get("numero_proposta") or ""): p for p in historico_central}
+    for consumo_central_i8124 in consumos_central_i8124:
+        if not isinstance(consumo_central_i8124, dict) or consumo_central_i8124.get("estornado"):
+            continue
+        resumo_central_i8124 = _i8124_resumo_consumo(consumo_central_i8124, estoque_central_i8124)
+        numero_consumo_central_i8124 = str(consumo_central_i8124.get("numero_proposta") or "")
+        prop_consumo_central_i8124 = mapa_hist_central_i8124.get(numero_consumo_central_i8124)
+        if resumo_central_i8124.get("pendente"):
+            pendentes_central_i8124.append((consumo_central_i8124, resumo_central_i8124))
+        if prop_consumo_central_i8124 is None or proposta_encerrada(prop_consumo_central_i8124) or not valor_bool(prop_consumo_central_i8124.get("aprovado")):
+            revisar_central_i8124.append((consumo_central_i8124, "pedido não está mais aprovado/ativo"))
+        elif _i8124_montar_previa_pedido(prop_consumo_central_i8124).get("assinatura") != consumo_central_i8124.get("assinatura_confirmada"):
+            revisar_central_i8124.append((consumo_central_i8124, "pedido ou Ficha Técnica mudou após a confirmação"))
+    if revisar_central_i8124:
+        st.error(f"📦 **{len(revisar_central_i8124)} consumo(s) de pedido precisam de revisão.** Abra Gestão → Compras, Custos & Estoque antes de produzir ou excluir o pedido.")
+    if pendentes_central_i8124:
+        st.warning(f"📦 **{len(pendentes_central_i8124)} pedido(s) aguardam material.** Novas entradas de estoque regularizam essas pendências automaticamente.")
+        with st.expander("📦 Ver necessidades de material", expanded=False):
+            for consumo_central_i8124, resumo_central_i8124 in pendentes_central_i8124[:10]:
+                faltas_txt_i8124 = []
+                for nec_central_i8124 in resumo_central_i8124.get("necessidades") or []:
+                    if valor_float(nec_central_i8124.get("pendente")) > 0.000001:
+                        faltas_txt_i8124.append(
+                            f"{nec_central_i8124.get('material_nome')}: {_i8121_quantidade(nec_central_i8124.get('pendente'))} {nec_central_i8124.get('unidade', '')}"
+                        )
+                st.write(f"• **{consumo_central_i8124.get('numero_proposta')} — {consumo_central_i8124.get('cliente_nome', 'Cliente')}** · " + " · ".join(faltas_txt_i8124))
+
     st.divider()
     st.subheader("🚨 Atenção")
 
@@ -19331,6 +19729,7 @@ if pagina_atual == "central":
                 st.write("**Itens do pedido**")
                 for item_central_sel in proposta_central_selecionada.get("itens", []) or []:
                     st.write(f"• {item_central_sel.get('produto', 'Produto')} · Qtd.: {item_central_sel.get('quantidade', 0)}")
+                _i8124_render_status_pedido(proposta_central_selecionada, prefixo=f"central_estoque_{numero_central_selecionado}", detalhado=True)
 
                 st.markdown("**Atualização rápida**")
                 up1, up2, up3 = st.columns(3)
@@ -22239,6 +22638,7 @@ if pagina_atual == "historico":
                 st.caption("🌐 Dados pessoais atuais do módulo Relacionamentos. Itens, valores e datas permanecem históricos.")
             for item in prop.get('itens', []):
                 st.write(f"• {item.get('produto', '')} (Qtd: {item.get('quantidade', 0)})")
+            _i8124_render_status_pedido(prop, prefixo=f"hist_estoque_{num_p}", detalhado=True)
 
             if entregue_p:
                 renderizar_sugestao_banco_imagens_entrega(
@@ -22346,6 +22746,9 @@ if pagina_atual == "fluxo":
                     st.write(f"**WhatsApp:** {tarefa.get('whatsapp')}")
                 st.write(f"**Detalhes:** {tarefa.get('especificacoes') or 'Não informado'}")
                 st.caption(f"Prazo: {prazo} • Atualizado em: {tarefa.get('atualizado_em', '—')}")
+                proposta_estoque_fluxo = next((p for p in carregar_historico() if str(p.get("numero_proposta") or "") == str(tarefa.get("numero_proposta") or "")), None)
+                if proposta_estoque_fluxo:
+                    _i8124_render_status_pedido(proposta_estoque_fluxo, prefixo=f"fluxo_estoque_{prefixo}_{tid}", detalhado=False)
 
                 c1, c2 = st.columns(2)
                 novo_status = c1.selectbox("Etapa atual", STATUS_FLUXO, index=STATUS_FLUXO.index(status_atual), key=f"fluxo_status_{prefixo}_{tid}")
@@ -22725,16 +23128,20 @@ if pagina_atual == "faturamento_mensal":
 
 
 if pagina_atual == "compras_custos":
-    st.header("📦 I8.12.3 · Compras, Custos, Estoque & Ficha Técnica")
+    st.header("📦 I8.12.4 · Compras, Custos, Estoque, Ficha Técnica & Pedidos")
     st.caption(
         "Registre custos reais, transforme compras em entradas de estoque, controle materiais e defina o consumo técnico por produto. "
-        "A ficha técnica desta etapa apenas calcula e simula; ainda não existe baixa automática por venda e o módulo nunca altera sozinho o preço do Catálogo Oficial."
+        "A I8.12.4 confirma o consumo por pedido: baixa somente o saldo físico disponível e mantém eventual falta como pendência que novas entradas regularizam automaticamente. O módulo nunca altera sozinho o preço do Catálogo Oficial."
     )
 
     usuario_compras = obter_usuario_atual()
     if str(usuario_compras.get("nome", "")).strip().casefold() != "jorge":
         st.warning("Este módulo está em homologação no perfil Jorge.")
         st.stop()
+
+    msg_regularizacao_i8124 = st.session_state.pop("_i8124_msg_regularizacao", None)
+    if msg_regularizacao_i8124:
+        st.success(msg_regularizacao_i8124)
 
     compras_i8121 = carregar_compras()
     fornecedores_i8121 = _i8121_fornecedores()
@@ -22767,6 +23174,8 @@ if pagina_atual == "compras_custos":
     materiais_i8122 = [m for m in (estoque_i8122.get("materiais") or []) if m.get("ativo", True)]
     movimentos_i8122 = estoque_i8122.get("movimentacoes") or []
     saldos_i8122 = {str(m.get("id")): _i8122_saldo_material(estoque_i8122, m.get("id")) for m in materiais_i8122}
+    consumos_i8124 = carregar_consumos_pedidos()
+    pendencias_mat_i8124 = {str(m.get("id")): _i8124_pendencia_material(m.get("id"), consumos=consumos_i8124, estoque=estoque_i8122) for m in materiais_i8122}
     baixos_i8122 = [m for m in materiais_i8122 if valor_float(m.get("estoque_minimo", 0)) > 0 and saldos_i8122.get(str(m.get("id")), 0) <= valor_float(m.get("estoque_minimo", 0)) + 0.000001]
     zerados_i8122 = [m for m in materiais_i8122 if saldos_i8122.get(str(m.get("id")), 0) <= 0.000001]
     mov_mes_i8122 = [
@@ -22782,8 +23191,8 @@ if pagina_atual == "compras_custos":
     es3.metric("Zerados", len(zerados_i8122))
     es4.metric("Movimentações no mês", len(mov_mes_i8122))
     st.caption(
-        "🔒 Homologação segura: compras podem gerar entrada de estoque, mas pedidos/vendas ainda não fazem baixa automática. "
-        "A I8.12.3 cadastra e simula a ficha técnica; saídas reais continuam manuais até a próxima etapa ser homologada."
+        "🔒 O estoque físico nunca fica negativo. Consumos confirmados usam o saldo disponível; o que faltar vira pendência separada. "
+        "Quando entra material, as pendências mais antigas são atendidas automaticamente em ordem de confirmação."
     )
 
     if materiais_i8122:
@@ -22792,12 +23201,14 @@ if pagina_atual == "compras_custos":
             saldo_i8122 = saldos_i8122.get(str(mat_i8122.get("id")), 0)
             minimo_i8122 = valor_float(mat_i8122.get("estoque_minimo", 0))
             ultima_compra_i8122 = _i8122_ultimo_custo(mat_i8122, compras_i8121)
+            pendente_i8124 = pendencias_mat_i8124.get(str(mat_i8122.get("id")), 0)
             linhas_estoque_i8122.append({
                 "Material": mat_i8122.get("nome", ""),
                 "Unidade": mat_i8122.get("unidade", ""),
-                "Saldo": _i8121_quantidade(saldo_i8122),
+                "Saldo disponível": _i8121_quantidade(saldo_i8122),
+                "Pendente em pedidos": _i8121_quantidade(pendente_i8124),
                 "Estoque mínimo": _i8121_quantidade(minimo_i8122),
-                "Status": _i8122_status_material(saldo_i8122, minimo_i8122),
+                "Status": ("🟠 Pedido(s) aguardando material" if pendente_i8124 > 0.000001 else _i8122_status_material(saldo_i8122, minimo_i8122)),
                 "Último custo": _i8121_moeda(ultima_compra_i8122.get("custo_unitario", 0)) if ultima_compra_i8122 else "Sem compra vinculada",
             })
         st.dataframe(pd.DataFrame(linhas_estoque_i8122), use_container_width=True, hide_index=True)
@@ -23008,6 +23419,145 @@ if pagina_atual == "compras_custos":
                 st.success(f"Estoque suficiente para simular {_i8121_quantidade(qtd_sim_i8123)} unidade(s) deste produto. Nenhuma baixa foi realizada.")
 
     st.divider()
+    st.markdown("### 🧾 Consumo de estoque por pedido · I8.12.4")
+    st.info(
+        "📌 A aprovação do cliente não baixa estoque sozinha. Você revisa a prévia e confirma o consumo do pedido. "
+        "Se faltar material, o saldo físico vai até zero e a diferença fica pendente. Novas entradas quitam essa pendência automaticamente, sem estoque negativo."
+    )
+
+    consumos_i8124 = carregar_consumos_pedidos(force_refresh=True)
+    estoque_i8124 = carregar_estoque(force_refresh=True)
+    resumos_i8124 = [(_i8124_resumo_consumo(c, estoque_i8124), c) for c in consumos_i8124 if isinstance(c, dict) and not c.get("estornado")]
+    pedidos_atendidos_i8124 = sum(1 for r, _ in resumos_i8124 if r.get("chave") == "atendido")
+    pedidos_parciais_i8124 = sum(1 for r, _ in resumos_i8124 if r.get("chave") == "parcial")
+    pedidos_pendentes_i8124 = sum(1 for r, _ in resumos_i8124 if r.get("chave") == "pendente")
+    materiais_pendentes_ids_i8124 = {
+        str(n.get("material_id")) for r, _ in resumos_i8124 for n in (r.get("necessidades") or []) if valor_float(n.get("pendente")) > 0.000001
+    }
+    cp1, cp2, cp3, cp4 = st.columns(4)
+    cp1.metric("Pedidos com consumo", len(resumos_i8124))
+    cp2.metric("Atendidos", pedidos_atendidos_i8124)
+    cp3.metric("Parciais / pendentes", pedidos_parciais_i8124 + pedidos_pendentes_i8124)
+    cp4.metric("Materiais em falta", len(materiais_pendentes_ids_i8124))
+    if st.button("🔄 Reconciliar pendências com o saldo atual", key="i8124_reconciliar", use_container_width=True, help="Executa novamente a mesma regra automática. Útil após restauração/importação ou para conferência; nunca deixa saldo negativo."):
+        resultado_recon_i8124 = _i8124_regularizar_pendencias_automaticamente(usuario=usuario_compras)
+        if resultado_recon_i8124.get("movimentos"):
+            st.session_state["_mensagem_sucesso_pendente"] = resultado_recon_i8124.get("mensagem")
+            st.rerun()
+        else:
+            st.info(resultado_recon_i8124.get("mensagem") or "Nenhuma pendência foi alterada.")
+
+    historico_pedidos_i8124 = carregar_historico(force_refresh=True)
+    numeros_consumo_ativos_i8124 = {str(c.get("numero_proposta") or "") for c in consumos_i8124 if isinstance(c, dict) and not c.get("estornado")}
+    elegiveis_i8124 = [
+        p for p in historico_pedidos_i8124
+        if (valor_bool(p.get("aprovado")) and not proposta_encerrada(p))
+        or str(p.get("numero_proposta") or "") in numeros_consumo_ativos_i8124
+    ]
+    elegiveis_i8124.sort(key=lambda p: (data_entrega_segura(p.get("data_entrega")) or date.max, str(p.get("numero_proposta") or "")))
+    if not elegiveis_i8124:
+        st.caption("Nenhum pedido aprovado disponível para confirmação de consumo.")
+    else:
+        mapa_pedidos_i8124 = {str(p.get("numero_proposta")): p for p in elegiveis_i8124 if str(p.get("numero_proposta") or "")}
+        numero_pedido_i8124 = st.selectbox(
+            "Pedido aprovado",
+            list(mapa_pedidos_i8124),
+            format_func=lambda n: f"{n} · {mapa_pedidos_i8124[n].get('cliente_nome', 'Cliente')} · entrega {mapa_pedidos_i8124[n].get('data_entrega', '—')}",
+            key="i8124_pedido_consumo",
+        )
+        proposta_i8124 = mapa_pedidos_i8124.get(str(numero_pedido_i8124), {})
+        consumo_ativo_i8124 = _i8124_consumo_ativo_pedido(numero_pedido_i8124, consumos_i8124)
+        previa_i8124 = _i8124_montar_previa_pedido(proposta_i8124, estoque=estoque_i8124)
+
+        with st.container(border=True):
+            st.markdown(f"#### 📋 {numero_pedido_i8124} — {proposta_i8124.get('cliente_nome', 'Cliente')}")
+            st.caption(f"Entrega: {proposta_i8124.get('data_entrega', '—')} · Itens: {len(proposta_i8124.get('itens') or [])}")
+            if consumo_ativo_i8124:
+                resumo_sel_i8124 = _i8124_resumo_consumo(consumo_ativo_i8124, estoque_i8124)
+                st.markdown(f"**Situação atual:** {resumo_sel_i8124.get('status')}")
+                if proposta_encerrada(proposta_i8124) or not valor_bool(proposta_i8124.get("aprovado")):
+                    st.error("⚠️ Este pedido não está mais aprovado/ativo, mas ainda possui consumo de estoque confirmado. Revise e estorne o consumo se o pedido foi cancelado ou desfeito.")
+                linhas_status_i8124 = []
+                for nec_i8124 in resumo_sel_i8124.get("necessidades") or []:
+                    linhas_status_i8124.append({
+                        "Material": nec_i8124.get("material_nome", ""),
+                        "Necessário": f"{_i8121_quantidade(nec_i8124.get('necessario'))} {nec_i8124.get('unidade', '')}",
+                        "Baixado": f"{_i8121_quantidade(nec_i8124.get('baixado'))} {nec_i8124.get('unidade', '')}",
+                        "Pendente": f"{_i8121_quantidade(nec_i8124.get('pendente'))} {nec_i8124.get('unidade', '')}",
+                    })
+                if linhas_status_i8124:
+                    st.dataframe(pd.DataFrame(linhas_status_i8124), use_container_width=True, hide_index=True)
+                if previa_i8124.get("assinatura") and previa_i8124.get("assinatura") != consumo_ativo_i8124.get("assinatura_confirmada"):
+                    st.warning("⚠️ Os itens do pedido ou a Ficha Técnica mudaram após a confirmação. Estorne este consumo e confirme novamente para recalcular com segurança.")
+                with st.expander("↩️ Estornar / corrigir consumo do pedido", expanded=False):
+                    motivo_est_i8124 = st.text_input("Motivo do estorno", key=f"i8124_motivo_est_{numero_pedido_i8124}", placeholder="Ex.: quantidade corrigida, pedido cancelado, ficha técnica revisada...")
+                    conf_est_i8124 = st.checkbox("Confirmo o estorno auditado", key=f"i8124_conf_est_{numero_pedido_i8124}")
+                    if st.button("↩️ Estornar consumo confirmado", key=f"i8124_estornar_{numero_pedido_i8124}", use_container_width=True, disabled=not conf_est_i8124 or len(motivo_est_i8124.strip()) < 3):
+                        ok_est_i8124, msg_est_i8124 = _i8124_estornar_consumo(consumo_ativo_i8124.get("id"), motivo_est_i8124, usuario=usuario_compras)
+                        if ok_est_i8124:
+                            st.session_state["_mensagem_sucesso_pendente"] = msg_est_i8124
+                            st.rerun()
+                        else:
+                            st.error(msg_est_i8124)
+            else:
+                st.markdown("**Prévia antes de confirmar**")
+                linhas_prev_i8124 = []
+                for nec_i8124 in previa_i8124.get("necessidades") or []:
+                    saldo_i8124 = _i8122_saldo_material(estoque_i8124, nec_i8124.get("material_id"))
+                    necessario_i8124 = valor_float(nec_i8124.get("necessario"))
+                    baixar_agora_i8124 = min(max(0.0, saldo_i8124), necessario_i8124)
+                    pendente_i8124 = max(0.0, necessario_i8124 - baixar_agora_i8124)
+                    linhas_prev_i8124.append({
+                        "Material": nec_i8124.get("material_nome", ""),
+                        "Saldo disponível": f"{_i8121_quantidade(saldo_i8124)} {nec_i8124.get('unidade', '')}",
+                        "Necessário": f"{_i8121_quantidade(necessario_i8124)} {nec_i8124.get('unidade', '')}",
+                        "Baixa imediata": f"{_i8121_quantidade(baixar_agora_i8124)} {nec_i8124.get('unidade', '')}",
+                        "Ficará pendente": f"{_i8121_quantidade(pendente_i8124)} {nec_i8124.get('unidade', '')}",
+                    })
+                if linhas_prev_i8124:
+                    st.dataframe(pd.DataFrame(linhas_prev_i8124), use_container_width=True, hide_index=True)
+                if previa_i8124.get("sem_catalogo"):
+                    st.error("Produto(s) do pedido sem correspondência no Catálogo Oficial: " + " • ".join(previa_i8124.get("sem_catalogo")))
+                if previa_i8124.get("sem_ficha"):
+                    st.warning("Item(ns) sem Ficha Técnica: " + " • ".join(previa_i8124.get("sem_ficha")))
+                faltas_ficha_i8124 = bool(previa_i8124.get("sem_catalogo") or previa_i8124.get("sem_ficha"))
+                confirma_sem_ficha_i8124 = False
+                if faltas_ficha_i8124:
+                    confirma_sem_ficha_i8124 = st.checkbox(
+                        "Confirmo que os itens acima não devem gerar consumo de materiais controlados nesta confirmação",
+                        key=f"i8124_conf_sem_ficha_{numero_pedido_i8124}",
+                    )
+                confirma_consumo_i8124 = st.checkbox(
+                    "Confirmo esta necessidade de materiais para o pedido",
+                    key=f"i8124_conf_consumo_{numero_pedido_i8124}",
+                )
+                pode_confirmar_i8124 = bool(previa_i8124.get("necessidades")) and confirma_consumo_i8124 and (not faltas_ficha_i8124 or confirma_sem_ficha_i8124)
+                if st.button("✅ Confirmar consumo do pedido", key=f"i8124_confirmar_{numero_pedido_i8124}", type="primary", use_container_width=True, disabled=not pode_confirmar_i8124):
+                    ok_conf_i8124, msg_conf_i8124, _ = _i8124_confirmar_consumo_pedido(
+                        proposta_i8124, aceitar_sem_ficha=confirma_sem_ficha_i8124, usuario=usuario_compras
+                    )
+                    if ok_conf_i8124:
+                        st.session_state["_mensagem_sucesso_pendente"] = msg_conf_i8124
+                        st.rerun()
+                    else:
+                        st.error(msg_conf_i8124)
+
+    if resumos_i8124:
+        with st.expander("📚 Pedidos com consumo confirmado", expanded=False):
+            linhas_consumos_i8124 = []
+            for resumo_i8124, consumo_i8124 in sorted(resumos_i8124, key=lambda x: str(x[1].get("confirmado_em") or ""), reverse=True):
+                pendencias_i8124 = [n for n in (resumo_i8124.get("necessidades") or []) if valor_float(n.get("pendente")) > 0.000001]
+                linhas_consumos_i8124.append({
+                    "Pedido": consumo_i8124.get("numero_proposta", ""),
+                    "Cliente": consumo_i8124.get("cliente_nome", ""),
+                    "Status": resumo_i8124.get("status", ""),
+                    "Materiais pendentes": len(pendencias_i8124),
+                    "Confirmado por": consumo_i8124.get("confirmado_por", ""),
+                    "Confirmado em": str(consumo_i8124.get("confirmado_em") or "")[:16].replace("T", " "),
+                })
+            st.dataframe(pd.DataFrame(linhas_consumos_i8124), use_container_width=True, hide_index=True)
+
+    st.divider()
 
     with st.expander("➕ Cadastrar material de estoque", expanded=False):
         cm1, cm2, cm3 = st.columns([1.6, 0.8, 1])
@@ -23125,13 +23675,19 @@ if pagina_atual == "compras_custos":
                 "Tipo": mov_i8122.get("tipo", ""),
                 "Movimento": ("+" if valor_float(mov_i8122.get("delta", 0)) > 0 else "") + _i8121_quantidade(mov_i8122.get("delta", 0)),
                 "Unidade": mov_i8122.get("unidade", ""),
-                "Origem": (f"{mov_i8122.get('origem_tipo')} · {mov_i8122.get('origem_id')}" if mov_i8122.get("origem_id") else mov_i8122.get("origem_tipo", "Manual")),
+                "Origem": (
+                    f"Pedido · {mov_i8122.get('numero_proposta') or mov_i8122.get('origem_id')}"
+                    if str(mov_i8122.get("origem_tipo") or "") == "Pedido"
+                    else (f"{mov_i8122.get('origem_tipo')} · {mov_i8122.get('origem_id')}" if mov_i8122.get("origem_id") else mov_i8122.get("origem_tipo", "Manual"))
+                ),
             })
         st.dataframe(pd.DataFrame(linhas_mov_i8122), use_container_width=True, hide_index=True)
 
         reversiveis_i8122 = [
             m for m in mov_ord_i8122
-            if not str(m.get("estorno_de") or "") and not _i8122_movimento_estornado(estoque_i8122, m.get("id"))
+            if not str(m.get("estorno_de") or "")
+            and not _i8122_movimento_estornado(estoque_i8122, m.get("id"))
+            and str(m.get("origem_tipo") or "") != "Pedido"  # baixas de pedido são estornadas pelo controle I8.12.4
         ]
         if reversiveis_i8122:
             with st.expander("↩️ Estornar movimentação incorreta", expanded=False):
@@ -23205,7 +23761,7 @@ if pagina_atual == "compras_custos":
             lancar_estoque_i8122 = st.checkbox(
                 "📦 Lançar esta compra como entrada de estoque",
                 value=True, key="i8122_compra_gera_estoque",
-                help="Desmarque para serviços, frete ou itens que você não deseja controlar em estoque. Não existe baixa automática por venda nesta versão.",
+                help="Desmarque para serviços, frete ou itens que você não deseja controlar em estoque. Se houver consumo confirmado pendente, esta entrada poderá regularizá-lo automaticamente.",
             )
 
             catalogo_i8121 = carregar_catalogo()

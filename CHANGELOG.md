@@ -620,3 +620,13 @@ hangelog
 - Novo campo `Evento` no cabeçalho da proposta, separado de Tema/Ocasião.
 - Evento propagado para WhatsApp, HTML/PDF e Histórico.
 - Edição e duplicação preservam Evento; propostas antigas continuam compatíveis.
+
+## 20.4.9-I8.12.4 — Baixa de Estoque por Pedido + Pendências Automáticas
+- Pedido aprovado não baixa estoque sozinho; Jorge revisa e confirma o consumo.
+- Consumo usa Ficha Técnica, baixa somente o saldo disponível e nunca deixa estoque negativo.
+- Falta de material vira pendência rastreável por pedido/material.
+- Novas entradas regularizam automaticamente as pendências mais antigas (FIFO).
+- Estoque, Central, Histórico, Fluxo e visão operacional da Anna passam a refletir o mesmo estado de materiais do pedido.
+- Estorno do consumo é auditado e devolve ao estoque apenas as baixas ativas, preservando histórico.
+- Pedido com consumo ativo não pode ser excluído antes do estorno.
+- Mudança posterior no pedido/Ficha Técnica gera alerta de revisão antes da produção.
