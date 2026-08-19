@@ -52,6 +52,7 @@ from thu_executivo import calcular_briefing, renderizar_briefing_thu
 from alpha_core import calcular_alpha_core, listar_atrasados_operacionais
 from consumo_estoque_engine import resumo_consumo as _i8124_engine_resumo, pendencia_material as _i8124_engine_pendencia_material, planejar_regularizacao as _i8124_engine_planejar
 from necessidades_compras_engine import agregar_necessidades_compra as _i8125_engine_agregar
+from planejamento_compras_engine import aplicar_planejamento_necessidades as _i8126_engine_aplicar, quantidade_aberta as _i8126_engine_aberta, status_plano as _i8126_engine_status, agregar_aberto_por_material as _i8126_engine_agregar_aberto
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_encerrada as _status_proposta_encerrada,
@@ -367,6 +368,7 @@ ARQUIVO_COMPRAS = "compras_db.json"
 ARQUIVO_ESTOQUE = "estoque_db.json"
 ARQUIVO_FICHAS_TECNICAS = "fichas_tecnicas_db.json"
 ARQUIVO_CONSUMO_PEDIDOS = "consumo_pedidos_db.json"
+ARQUIVO_PLANEJAMENTO_COMPRAS = "planejamento_compras_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -3599,6 +3601,145 @@ def salvar_compras(lista):
     return bool(save_document("compras_db", lista, ARQUIVO_COMPRAS))
 
 
+# --- 20.4.9-I8.12.6: Planejamento de compras por necessidade ---
+def carregar_planejamentos_compras(force_refresh=False):
+    dados = load_document("planejamento_compras_db", ARQUIVO_PLANEJAMENTO_COMPRAS, [], force_refresh=force_refresh)
+    return dados if isinstance(dados, list) else []
+
+
+def salvar_planejamentos_compras(lista):
+    if not isinstance(lista, list):
+        raise ValueError("O planejamento de compras precisa ser uma lista.")
+    return bool(save_document("planejamento_compras_db", lista, ARQUIVO_PLANEJAMENTO_COMPRAS))
+
+
+def _i8126_plano_por_id(planos, plano_id):
+    return next((p for p in (planos or []) if isinstance(p, dict) and str(p.get("id") or "") == str(plano_id or "")), None)
+
+
+def _i8126_criar_plano(material, quantidade, unidade, fornecedor, custo_previsto=0.0, previsao=None, referencia="", observacao="", produtos=None, usuario="Jorge"):
+    quantidade = max(0.0, valor_float(quantidade))
+    if quantidade <= 0.0000001:
+        return False, "Informe uma quantidade maior que zero.", None
+    material_id = str((material or {}).get("id") or "").strip()
+    if not material_id:
+        return False, "Material de estoque inválido.", None
+    fornecedor_id = str((fornecedor or {}).get("id") or "").strip()
+    if not fornecedor_id:
+        return False, "Selecione um fornecedor válido.", None
+    agora = agora_local()
+    registro = {
+        "id": agora.strftime("PLC%Y%m%d%H%M%S%f"),
+        "material_id": material_id,
+        "material_nome_snapshot": str((material or {}).get("nome") or "Material"),
+        "unidade": str(unidade or (material or {}).get("unidade") or ""),
+        "quantidade_solicitada": round(float(quantidade), 6),
+        "quantidade_recebida": 0.0,
+        "fornecedor_id": fornecedor_id,
+        "fornecedor_nome_snapshot": str((fornecedor or {}).get("nome") or "Fornecedor"),
+        "custo_unitario_previsto": round(max(0.0, valor_float(custo_previsto)), 4),
+        "previsao_recebimento": previsao.isoformat() if isinstance(previsao, date) else str(previsao or ""),
+        "referencia": str(referencia or "").strip(),
+        "observacao": str(observacao or "").strip(),
+        "produtos_relacionados": list(dict.fromkeys([str(x).strip() for x in (produtos or []) if str(x).strip()])),
+        "cancelado": False,
+        "recebimentos": [],
+        "eventos": [{"em": agora.isoformat(), "usuario": str(usuario or "Jorge"), "tipo": "solicitado", "quantidade": round(float(quantidade), 6)}],
+        "criado_em": agora.isoformat(),
+        "criado_por": str(usuario or "Jorge"),
+        "atualizado_em": agora.isoformat(),
+    }
+    planos = carregar_planejamentos_compras(force_refresh=True)
+    planos.append(registro)
+    if not salvar_planejamentos_compras(planos):
+        return False, "Não foi possível salvar a solicitação ao fornecedor.", None
+    registrar_auditoria("Solicitar compra ao fornecedor", "Planejamento de compras", registro["id"], {
+        "material": registro["material_nome_snapshot"], "quantidade": registro["quantidade_solicitada"],
+        "unidade": registro["unidade"], "fornecedor": registro["fornecedor_nome_snapshot"],
+    })
+    registrar_atividade(str(usuario or "Jorge"), "Compra solicitada ao fornecedor", "Compras", detalhe=f"{registro['material_nome_snapshot']} · {_i8121_quantidade(registro['quantidade_solicitada'])} {registro['unidade']} · {registro['fornecedor_nome_snapshot']}", evento=True)
+    return True, "Solicitação registrada. Nenhuma movimentação de estoque foi feita.", registro
+
+
+def _i8126_cancelar_plano(plano_id, motivo, usuario="Jorge"):
+    motivo = str(motivo or "").strip()
+    if len(motivo) < 3:
+        return False, "Informe o motivo do cancelamento."
+    planos = carregar_planejamentos_compras(force_refresh=True)
+    plano = _i8126_plano_por_id(planos, plano_id)
+    if not plano:
+        return False, "Solicitação não encontrada."
+    if plano.get("cancelado"):
+        return False, "Esta solicitação já está cancelada."
+    if _i8126_engine_aberta(plano) <= 0.0000001:
+        return False, "Esta solicitação não possui quantidade em aberto para cancelar."
+    agora = agora_local().isoformat()
+    plano["cancelado"] = True
+    plano["cancelado_em"] = agora
+    plano["cancelado_por"] = str(usuario or "Jorge")
+    plano["motivo_cancelamento"] = motivo
+    plano["atualizado_em"] = agora
+    plano.setdefault("eventos", []).append({"em": agora, "usuario": str(usuario or "Jorge"), "tipo": "cancelado", "motivo": motivo})
+    if not salvar_planejamentos_compras(planos):
+        return False, "Não foi possível cancelar a solicitação."
+    registrar_auditoria("Cancelar solicitação de compra", "Planejamento de compras", plano_id, {"motivo": motivo})
+    registrar_atividade(str(usuario or "Jorge"), "Solicitação de compra cancelada", "Compras", detalhe=f"{plano.get('material_nome_snapshot')} · {motivo}", evento=True)
+    return True, "Solicitação cancelada sem alterar estoque ou histórico de compras."
+
+
+def _i8126_registrar_recebimento_plano(plano_id, quantidade, compra_id, usuario="Jorge", permitir_cancelado=False):
+    quantidade = max(0.0, valor_float(quantidade))
+    if quantidade <= 0.0000001 or not str(plano_id or "").strip():
+        return False, "Recebimento sem planejamento válido."
+    planos = carregar_planejamentos_compras(force_refresh=True)
+    plano = _i8126_plano_por_id(planos, plano_id)
+    if not plano or (plano.get("cancelado") and not permitir_cancelado):
+        return False, "Solicitação de compra não encontrada ou cancelada."
+    if any(str(r.get("compra_id") or "") == str(compra_id or "") and not r.get("revertido") for r in (plano.get("recebimentos") or [])):
+        return True, "Recebimento já vinculado a esta compra."
+    agora = agora_local().isoformat()
+    plano["quantidade_recebida"] = round(max(0.0, valor_float(plano.get("quantidade_recebida"))) + quantidade, 6)
+    plano.setdefault("recebimentos", []).append({"compra_id": str(compra_id or ""), "quantidade": round(quantidade, 6), "em": agora, "usuario": str(usuario or "Jorge"), "revertido": False})
+    plano.setdefault("eventos", []).append({"em": agora, "usuario": str(usuario or "Jorge"), "tipo": "recebimento", "quantidade": round(quantidade, 6), "compra_id": str(compra_id or "")})
+    plano["atualizado_em"] = agora
+    if not salvar_planejamentos_compras(planos):
+        return False, "A compra foi registrada, mas o planejamento não pôde ser atualizado."
+    registrar_auditoria("Receber compra planejada", "Planejamento de compras", plano_id, {"compra_id": compra_id, "quantidade": quantidade})
+    return True, "Planejamento atualizado com o recebimento."
+
+
+def _i8126_reverter_recebimento_compra(compra, usuario="Jorge"):
+    plano_id = str((compra or {}).get("planejamento_compra_id") or "").strip()
+    compra_id = str((compra or {}).get("id") or "").strip()
+    if not plano_id or not compra_id:
+        return True, "Compra sem planejamento vinculado."
+    planos = carregar_planejamentos_compras(force_refresh=True)
+    plano = _i8126_plano_por_id(planos, plano_id)
+    if not plano:
+        return True, "Planejamento antigo não localizado; compra pode ser corrigida sem bloquear."
+    recebimento = next((r for r in reversed(plano.get("recebimentos") or []) if str(r.get("compra_id") or "") == compra_id and not r.get("revertido")), None)
+    if not recebimento:
+        return True, "Nenhum recebimento ativo encontrado para esta compra."
+    qtd = max(0.0, valor_float(recebimento.get("quantidade")))
+    agora = agora_local().isoformat()
+    recebimento["revertido"] = True
+    recebimento["revertido_em"] = agora
+    recebimento["revertido_por"] = str(usuario or "Jorge")
+    plano["quantidade_recebida"] = round(max(0.0, valor_float(plano.get("quantidade_recebida")) - qtd), 6)
+    plano.setdefault("eventos", []).append({"em": agora, "usuario": str(usuario or "Jorge"), "tipo": "estorno_recebimento", "quantidade": qtd, "compra_id": compra_id})
+    plano["atualizado_em"] = agora
+    if not salvar_planejamentos_compras(planos):
+        return False, "Não foi possível reabrir a solicitação vinculada a esta compra."
+    return True, "Quantidade reaberta no planejamento de compras."
+
+
+def _i8126_restaurar_recebimento_compra(compra, usuario="Jorge"):
+    plano_id = str((compra or {}).get("planejamento_compra_id") or "").strip()
+    if not plano_id:
+        return True, "Compra sem planejamento vinculado."
+    return _i8126_registrar_recebimento_plano(plano_id, compra.get("quantidade", 0), compra.get("id"), usuario=usuario, permitir_cancelado=True)
+
+
 def _i8121_data_compra(valor):
     if isinstance(valor, date):
         return valor
@@ -4026,6 +4167,9 @@ def _i8122_consolidar_material_duplicado(origem_id, destino_id, motivo, usuario=
     pendente_origem = _i8124_pendencia_material(origem_id, consumos=carregar_consumos_pedidos(force_refresh=True), estoque=dados)
     if pendente_origem > 0.000001:
         return False, f"{origem.get('nome')} possui {_i8121_quantidade(pendente_origem)} {origem.get('unidade')} pendente(s) em pedidos. Regularize/revise esses pedidos antes da consolidação."
+    planos_origem_i8126 = [p for p in carregar_planejamentos_compras(force_refresh=True) if str((p or {}).get("material_id") or "") == origem_id and _i8126_engine_aberta(p) > 0.0000001]
+    if planos_origem_i8126:
+        return False, f"{origem.get('nome')} possui solicitação(ões) de compra ainda em aberto. Receba ou cancele o saldo solicitado antes de consolidar o material."
 
     saldo_origem = _i8122_saldo_material(dados, origem_id)
     if saldo_origem < -0.000001:
@@ -4114,6 +4258,9 @@ def _i8122_inativar_material_historico(material_id, motivo, usuario="Jorge"):
     if produtos_usando:
         nomes = " • ".join(dict.fromkeys(produtos_usando))
         return False, f"Este material ainda é usado por Ficha Técnica: {nomes}. Atualize a ficha antes de arquivar."
+    planos_material_i8126 = [p for p in carregar_planejamentos_compras(force_refresh=True) if str((p or {}).get("material_id") or "") == material_id and _i8126_engine_aberta(p) > 0.0000001]
+    if planos_material_i8126:
+        return False, "Este material possui solicitação de compra ainda em aberto. Receba ou cancele o saldo solicitado antes de arquivar."
 
     agora = agora_local().isoformat()
     material["ativo"] = False
@@ -4466,6 +4613,13 @@ def _i8125_central_necessidades(consumos=None, estoque=None, compras=None, histo
     return resultado
 
 
+def _i8126_central_necessidades(consumos=None, estoque=None, compras=None, historico=None, fornecedores=None, planejamentos=None):
+    """Acrescenta o que já está solicitado ao fornecedor sem alterar a falta real."""
+    base = _i8125_central_necessidades(consumos=consumos, estoque=estoque, compras=compras, historico=historico, fornecedores=fornecedores)
+    planejamentos = carregar_planejamentos_compras() if planejamentos is None else planejamentos
+    return _i8126_engine_aplicar(base, planejamentos)
+
+
 def _i8124_resumo_pedido(numero_proposta, consumos=None, estoque=None):
     consumos = carregar_consumos_pedidos() if consumos is None else consumos
     estoque = carregar_estoque() if estoque is None else estoque
@@ -4666,6 +4820,19 @@ def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
                     f"• {nec.get('material_nome') or 'Material'}: necessário {_i8121_quantidade(nec.get('necessario'))} {unidade} · "
                     f"baixado {_i8121_quantidade(nec.get('baixado'))} {unidade} · pendente {_i8121_quantidade(nec.get('pendente'))} {unidade}"
                 )
+        # I8.12.6 — a mesma informação de compra em andamento aparece em Jorge,
+        # Anna, Histórico e Fluxo por meio deste componente compartilhado.
+        pendentes_status_i8126 = [n for n in (resumo.get("necessidades") or []) if valor_float(n.get("pendente")) > 0.0000001]
+        if pendentes_status_i8126:
+            abertos_status_i8126 = _i8126_engine_agregar_aberto(carregar_planejamentos_compras())
+            materiais_com_compra_i8126 = 0
+            for nec_status_i8126 in pendentes_status_i8126:
+                plano_mat_status_i8126 = abertos_status_i8126.get(str(nec_status_i8126.get("material_id") or ""), {})
+                qtd_plano_status_i8126 = valor_float(plano_mat_status_i8126.get("quantidade_em_compra", 0))
+                if qtd_plano_status_i8126 > 0.0000001:
+                    materiais_com_compra_i8126 += 1
+            if materiais_com_compra_i8126:
+                st.caption(f"🛒 Compra em andamento: {materiais_com_compra_i8126} material(is) pendente(s) já possuem solicitação ao fornecedor.")
         try:
             previa_atual = _i8124_montar_previa_pedido(proposta)
             if previa_atual.get("assinatura") and previa_atual.get("assinatura") != consumo.get("assinatura_confirmada"):
@@ -12681,6 +12848,10 @@ def restaurar_item_lixeira(registro):
             ok_estoque, msg_estoque = _i8122_registrar_entrada_compra(item, force_refresh=True, motivo="Compra restaurada da Lixeira")
             if not ok_estoque:
                 raise ValueError(msg_estoque)
+        if item.get("planejamento_compra_id"):
+            ok_plano, msg_plano = _i8126_restaurar_recebimento_compra(item, usuario=_usuario_auditoria())
+            if not ok_plano:
+                raise ValueError(msg_plano)
     else:
         raise ValueError(f"Tipo de item ainda não restaurável: {tipo}")
     remover_da_lixeira(registro.get("id_lixeira"))
@@ -12866,6 +13037,7 @@ DOCUMENTOS_BACKUP = [
     ("estoque_db", ARQUIVO_ESTOQUE, {"materiais": [], "movimentacoes": []}),
     ("fichas_tecnicas_db", ARQUIVO_FICHAS_TECNICAS, []),
     ("consumo_pedidos_db", ARQUIVO_CONSUMO_PEDIDOS, []),
+    ("planejamento_compras_db", ARQUIVO_PLANEJAMENTO_COMPRAS, []),
 ]
 
 def carregar_config_backup():
@@ -20240,33 +20412,36 @@ if pagina_atual == "central":
                         )
                 st.write(f"• **{consumo_central_i8124.get('numero_proposta')} — {consumo_central_i8124.get('cliente_nome', 'Cliente')}** · " + " · ".join(faltas_txt_i8124))
 
-    # I8.12.5 — mesma fonte de pendências, agora agregada como necessidade de compra no Centro do Jorge.
-    necessidades_compra_central_i8125 = _i8125_central_necessidades(
+    # I8.12.6 — mesma fonte de pendências + o que já foi solicitado ao fornecedor.
+    necessidades_compra_central_i8126 = _i8126_central_necessidades(
         consumos=consumos_central_i8124, estoque=estoque_central_i8124,
         compras=carregar_compras(), historico=historico_central, fornecedores=_i8121_fornecedores(),
+        planejamentos=carregar_planejamentos_compras(),
     )
-    if necessidades_compra_central_i8125:
-        pedidos_compra_central_i8125 = {
+    planos_abertos_central_i8126 = [p for p in carregar_planejamentos_compras() if isinstance(p, dict) and _i8126_engine_aberta(p) > 0.0000001]
+    if necessidades_compra_central_i8126:
+        pedidos_compra_central_i8126 = {
             str(p.get("numero_proposta") or "")
-            for n in necessidades_compra_central_i8125 for p in (n.get("pedidos") or [])
+            for n in necessidades_compra_central_i8126 for p in (n.get("pedidos") or [])
             if str(p.get("numero_proposta") or "")
         }
-        valor_compra_central_i8125 = sum(
-            valor_float(n.get("valor_estimado")) for n in necessidades_compra_central_i8125 if n.get("valor_estimado") is not None
-        )
-        texto_estimativa_central_i8125 = f" · estimativa conhecida {_i8121_moeda_md(valor_compra_central_i8125)}" if valor_compra_central_i8125 > 0 else ""
+        materiais_em_compra_central_i8126 = sum(1 for n in necessidades_compra_central_i8126 if valor_float(n.get("quantidade_em_compra")) > 0.0000001)
+        materiais_a_solicitar_central_i8126 = sum(1 for n in necessidades_compra_central_i8126 if valor_float(n.get("quantidade_a_solicitar")) > 0.0000001)
         st.warning(
-            f"🛒 **Central de Compras: {len(necessidades_compra_central_i8125)} material(is) faltante(s) em {len(pedidos_compra_central_i8125)} pedido(s)**"
-            f"{texto_estimativa_central_i8125}."
+            f"🛒 **Central de Compras: {len(necessidades_compra_central_i8126)} material(is) faltante(s) em {len(pedidos_compra_central_i8126)} pedido(s)** · "
+            f"{materiais_em_compra_central_i8126} material(is) já solicitado(s) · {materiais_a_solicitar_central_i8126} ainda a solicitar."
         )
         with st.expander("🛒 Ver materiais para comprar", expanded=False):
-            for nec_central_i8125 in necessidades_compra_central_i8125[:8]:
-                forn_central_i8125 = nec_central_i8125.get("fornecedor_nome") or "fornecedor ainda não conhecido"
+            for nec_central_i8126 in necessidades_compra_central_i8126[:8]:
+                forn_central_i8126 = nec_central_i8126.get("fornecedor_nome") or "fornecedor ainda não conhecido"
                 st.write(
-                    f"• **{nec_central_i8125.get('material_nome')}** · {_i8121_quantidade(nec_central_i8125.get('quantidade_pendente'))} {nec_central_i8125.get('unidade', '')} "
-                    f"· {nec_central_i8125.get('quantidade_pedidos', 0)} pedido(s) · {nec_central_i8125.get('prioridade')} · {forn_central_i8125}"
+                    f"• **{nec_central_i8126.get('material_nome')}** · falta {_i8121_quantidade(nec_central_i8126.get('quantidade_pendente'))} {nec_central_i8126.get('unidade', '')} "
+                    f"· já solicitado {_i8121_quantidade(nec_central_i8126.get('quantidade_em_compra'))} · ainda solicitar {_i8121_quantidade(nec_central_i8126.get('quantidade_a_solicitar'))} "
+                    f"· {nec_central_i8126.get('prioridade')} · {forn_central_i8126}"
                 )
-            st.caption("Detalhes, custos e preparação da compra: Gestão → Compras, Custos & Estoque.")
+            st.caption("Detalhes, solicitação ao fornecedor e recebimentos: Gestão → Compras, Custos & Estoque.")
+    elif planos_abertos_central_i8126:
+        st.info(f"🛒 Não há falta real pendente, mas existem {len(planos_abertos_central_i8126)} solicitação(ões) ao fornecedor ainda em aberto. Revise recebimento/cancelamento em Gestão → Compras, Custos & Estoque.")
 
     numeros_consumo_ativos_central_i8124 = {
         str(c.get("numero_proposta") or "").strip()
@@ -23748,10 +23923,10 @@ if pagina_atual == "faturamento_mensal":
 
 
 if pagina_atual == "compras_custos":
-    st.header("📦 I8.12.5 · Compras, Custos, Estoque, Ficha Técnica & Pedidos")
+    st.header("📦 I8.12.6 · Compras, Custos, Estoque, Ficha Técnica & Pedidos")
     st.caption(
         "Registre custos reais, transforme compras em entradas de estoque, controle materiais e defina o consumo técnico por produto. "
-        "A I8.12.4 confirma o consumo por pedido e a I8.12.5 transforma as faltas confirmadas em uma Central de Necessidades de Compras. Entradas de estoque regularizam as pendências automaticamente; o módulo nunca altera sozinho o preço do Catálogo Oficial."
+        "A I8.12.4 confirma o consumo por pedido; a I8.12.5 consolida as faltas reais; e a I8.12.6 controla o que já foi solicitado ao fornecedor e o que ainda precisa ser comprado. Solicitação não movimenta estoque: somente o recebimento real registrado como compra/entrada regulariza pendências. O módulo nunca altera sozinho o preço do Catálogo Oficial."
     )
 
     usuario_compras = obter_usuario_atual()
@@ -23957,118 +24132,260 @@ if pagina_atual == "compras_custos":
                 else:
                     st.error(msg_arq_i8122)
 
-    # I8.12.5 — Central de Necessidades de Compras: visão derivada das pendências confirmadas.
-    necessidades_i8125 = _i8125_central_necessidades(
+    # I8.12.6 — Central de Necessidades + Planejamento de compras.
+    planejamentos_i8126 = carregar_planejamentos_compras()
+    necessidades_i8126 = _i8126_central_necessidades(
         consumos=consumos_i8124, estoque=estoque_i8122, compras=compras_i8121,
-        historico=carregar_historico(), fornecedores=fornecedores_i8121,
+        historico=carregar_historico(), fornecedores=fornecedores_i8121, planejamentos=planejamentos_i8126,
     )
-    st.markdown("### 🛒 Central de Necessidades de Compras · I8.12.5")
+    planos_abertos_i8126 = [p for p in planejamentos_i8126 if isinstance(p, dict) and _i8126_engine_aberta(p) > 0.0000001]
+
+    st.markdown("### 🛒 Central de Necessidades e Planejamento de Compras · I8.12.6")
     st.caption(
-        "Fonte única: esta Central não cria uma lista paralela. Ela soma somente as faltas reais dos consumos de pedidos já confirmados. "
-        "Quando uma entrada de estoque regulariza a pendência, a necessidade diminui ou desaparece automaticamente desta tela."
+        "Fonte única: a falta real continua vindo dos consumos confirmados. A I8.12.6 apenas registra o que já foi solicitado ao fornecedor, "
+        "para não comprar duas vezes. Solicitar NÃO movimenta estoque; somente uma compra/entrada realmente recebida reduz a pendência do pedido."
     )
-    if not necessidades_i8125:
+
+    if not necessidades_i8126:
         st.success("✅ Nenhum material está pendente para pedidos confirmados neste momento.")
     else:
-        pedidos_unicos_i8125 = {
+        pedidos_unicos_i8126 = {
             str(p.get("numero_proposta") or "")
-            for n in necessidades_i8125 for p in (n.get("pedidos") or [])
+            for n in necessidades_i8126 for p in (n.get("pedidos") or [])
             if str(p.get("numero_proposta") or "")
         }
-        estimativa_conhecida_i8125 = sum(valor_float(n.get("valor_estimado")) for n in necessidades_i8125 if n.get("valor_estimado") is not None)
-        sem_custo_i8125 = sum(1 for n in necessidades_i8125 if n.get("ultimo_custo") is None)
-        urgentes_i8125 = sum(1 for n in necessidades_i8125 if int(n.get("dias_ate_entrega", 999999)) <= 2)
-        nc1, nc2, nc3, nc4 = st.columns(4)
-        nc1.metric("Materiais para comprar", len(necessidades_i8125))
-        nc2.metric("Pedidos envolvidos", len(pedidos_unicos_i8125))
-        nc3.metric("Urgentes / até 2 dias", urgentes_i8125)
-        nc4.metric("Valor estimado", _i8121_moeda(estimativa_conhecida_i8125) if estimativa_conhecida_i8125 > 0 else "Sem base")
-        if sem_custo_i8125:
-            st.caption(f"ℹ️ A estimativa é parcial: {sem_custo_i8125} material(is) ainda não têm custo de compra conhecido. Nenhum preço de venda é alterado por esta Central.")
+        materiais_em_compra_i8126 = sum(1 for n in necessidades_i8126 if valor_float(n.get("quantidade_em_compra")) > 0.0000001)
+        materiais_a_solicitar_i8126 = sum(1 for n in necessidades_i8126 if valor_float(n.get("quantidade_a_solicitar")) > 0.0000001)
+        estimativa_conhecida_i8126 = sum(valor_float(n.get("valor_estimado")) for n in necessidades_i8126 if n.get("valor_estimado") is not None)
+        urgentes_i8126 = sum(1 for n in necessidades_i8126 if int(n.get("dias_ate_entrega", 999999)) <= 2)
+        nc1, nc2, nc3, nc4, nc5 = st.columns(5)
+        nc1.metric("Materiais em falta", len(necessidades_i8126))
+        nc2.metric("Pedidos envolvidos", len(pedidos_unicos_i8126))
+        nc3.metric("Urgentes / até 2 dias", urgentes_i8126)
+        nc4.metric("Materiais já solicitados", materiais_em_compra_i8126)
+        nc5.metric("Materiais ainda a solicitar", materiais_a_solicitar_i8126)
+        if estimativa_conhecida_i8126 > 0:
+            st.caption(f"💰 Estimativa conhecida da falta atual: {_i8121_moeda(estimativa_conhecida_i8126)}. É referência de gestão; não altera preço de venda.")
 
-        linhas_central_i8125 = []
-        for nec_i8125 in necessidades_i8125:
-            proxima_i8125 = nec_i8125.get("proxima_entrega")
-            linhas_central_i8125.append({
-                "Prioridade": nec_i8125.get("prioridade", ""),
-                "Material": nec_i8125.get("material_nome", ""),
-                "Comprar": f"{_i8121_quantidade(nec_i8125.get('quantidade_pendente'))} {nec_i8125.get('unidade', '')}",
-                "Pedidos": nec_i8125.get("quantidade_pedidos", 0),
-                "Próxima entrega": proxima_i8125.strftime("%d/%m/%Y") if isinstance(proxima_i8125, date) else "—",
-                "Último fornecedor": nec_i8125.get("fornecedor_nome") or "Sem histórico",
-                "Último custo": _i8121_moeda(nec_i8125.get("ultimo_custo")) if nec_i8125.get("ultimo_custo") is not None else "Sem custo",
-                "Estimativa": _i8121_moeda(nec_i8125.get("valor_estimado")) if nec_i8125.get("valor_estimado") is not None else "—",
+        linhas_central_i8126 = []
+        for nec_i8126 in necessidades_i8126:
+            proxima_i8126 = nec_i8126.get("proxima_entrega")
+            linhas_central_i8126.append({
+                "Prioridade": nec_i8126.get("prioridade", ""),
+                "Material": nec_i8126.get("material_nome", ""),
+                "Falta real": f"{_i8121_quantidade(nec_i8126.get('quantidade_pendente'))} {nec_i8126.get('unidade', '')}",
+                "Já solicitado": f"{_i8121_quantidade(nec_i8126.get('quantidade_em_compra'))} {nec_i8126.get('unidade', '')}",
+                "Ainda solicitar": f"{_i8121_quantidade(nec_i8126.get('quantidade_a_solicitar'))} {nec_i8126.get('unidade', '')}",
+                "Pedidos": nec_i8126.get("quantidade_pedidos", 0),
+                "Próxima entrega": proxima_i8126.strftime("%d/%m/%Y") if isinstance(proxima_i8126, date) else "—",
+                "Último fornecedor": nec_i8126.get("fornecedor_nome") or "Sem histórico",
+                "Último custo": _i8121_moeda(nec_i8126.get("ultimo_custo")) if nec_i8126.get("ultimo_custo") is not None else "Sem custo",
             })
-        st.dataframe(pd.DataFrame(linhas_central_i8125), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(linhas_central_i8126), use_container_width=True, hide_index=True)
 
-        st.markdown("#### 🔎 Materiais e pedidos envolvidos")
-        for nec_i8125 in necessidades_i8125:
-            qtd_txt_i8125 = f"{_i8121_quantidade(nec_i8125.get('quantidade_pendente'))} {nec_i8125.get('unidade', '')}"
-            with st.expander(f"{nec_i8125.get('prioridade', '')} · {nec_i8125.get('material_nome')} · comprar {qtd_txt_i8125}", expanded=False):
-                nd1, nd2, nd3 = st.columns(3)
-                nd1.metric("Quantidade pendente", qtd_txt_i8125)
-                nd2.metric("Pedidos", nec_i8125.get("quantidade_pedidos", 0))
-                nd3.metric("Estimativa", _i8121_moeda(nec_i8125.get("valor_estimado")) if nec_i8125.get("valor_estimado") is not None else "Sem custo conhecido")
-                if nec_i8125.get("fornecedor_nome"):
-                    info_forn_i8125 = f"🏭 Último fornecedor: **{nec_i8125.get('fornecedor_nome')}**"
-                    if nec_i8125.get("fornecedor_prazo"):
-                        info_forn_i8125 += f" · prazo médio cadastrado: {nec_i8125.get('fornecedor_prazo')}"
-                    if nec_i8125.get("ultima_compra_data"):
-                        info_forn_i8125 += f" · última compra: {nec_i8125.get('ultima_compra_data').strftime('%d/%m/%Y')}"
-                    st.info(info_forn_i8125)
-                else:
-                    st.warning("Ainda não existe fornecedor de compra conhecido para este material. A necessidade é real, mas o fornecedor deve ser definido antes da compra.")
+        st.markdown("#### 🔎 Materiais, pedidos e solicitação ao fornecedor")
+        mapa_fornecedores_i8126 = {str(f.get("id") or ""): f for f in fornecedores_i8121 if isinstance(f, dict)}
+        for nec_i8126 in necessidades_i8126:
+            qtd_falta_i8126 = valor_float(nec_i8126.get("quantidade_pendente"))
+            qtd_em_compra_i8126 = valor_float(nec_i8126.get("quantidade_em_compra"))
+            qtd_solicitar_i8126 = valor_float(nec_i8126.get("quantidade_a_solicitar"))
+            unidade_i8126 = str(nec_i8126.get("unidade") or "")
+            qtd_txt_i8126 = f"{_i8121_quantidade(qtd_falta_i8126)} {unidade_i8126}"
+            with st.expander(f"{nec_i8126.get('prioridade', '')} · {nec_i8126.get('material_nome')} · falta {qtd_txt_i8126}", expanded=False):
+                nd1, nd2, nd3, nd4 = st.columns(4)
+                nd1.metric("Falta real", qtd_txt_i8126)
+                nd2.metric("Já solicitado", f"{_i8121_quantidade(qtd_em_compra_i8126)} {unidade_i8126}")
+                nd3.metric("Ainda a solicitar", f"{_i8121_quantidade(qtd_solicitar_i8126)} {unidade_i8126}")
+                nd4.metric("Pedidos", nec_i8126.get("quantidade_pedidos", 0))
+                if valor_float(nec_i8126.get("excesso_planejado")) > 0.0000001:
+                    st.warning(
+                        f"⚠️ Há {_i8121_quantidade(nec_i8126.get('excesso_planejado'))} {unidade_i8126} solicitada(s) acima da falta real atual. "
+                        "A solicitação ao fornecedor não é cancelada automaticamente; revise se a necessidade mudou."
+                    )
 
-                linhas_ped_i8125 = []
-                for ped_i8125 in nec_i8125.get("pedidos") or []:
-                    entrega_dt_i8125 = _i8125_parse_data_entrega(ped_i8125.get("data_entrega"))
-                    linhas_ped_i8125.append({
-                        "Pedido": ped_i8125.get("numero_proposta", ""),
-                        "Cliente": ped_i8125.get("cliente_nome", ""),
-                        "Entrega": entrega_dt_i8125.strftime("%d/%m/%Y") if isinstance(entrega_dt_i8125, date) else (ped_i8125.get("data_entrega") or "—"),
-                        "Falta deste material": f"{_i8121_quantidade(ped_i8125.get('quantidade_pendente'))} {nec_i8125.get('unidade', '')}",
-                        "Produto(s)": ", ".join(ped_i8125.get("produtos") or []) or "—",
+                linhas_ped_i8126 = []
+                for ped_i8126 in nec_i8126.get("pedidos") or []:
+                    entrega_dt_i8126 = _i8125_parse_data_entrega(ped_i8126.get("data_entrega"))
+                    linhas_ped_i8126.append({
+                        "Pedido": ped_i8126.get("numero_proposta", ""),
+                        "Cliente": ped_i8126.get("cliente_nome", ""),
+                        "Entrega": entrega_dt_i8126.strftime("%d/%m/%Y") if isinstance(entrega_dt_i8126, date) else (ped_i8126.get("data_entrega") or "—"),
+                        "Falta deste material": f"{_i8121_quantidade(ped_i8126.get('quantidade_pendente'))} {unidade_i8126}",
+                        "Produto(s)": ", ".join(ped_i8126.get("produtos") or []) or "—",
                     })
-                if linhas_ped_i8125:
-                    st.dataframe(pd.DataFrame(linhas_ped_i8125), use_container_width=True, hide_index=True)
+                if linhas_ped_i8126:
+                    st.dataframe(pd.DataFrame(linhas_ped_i8126), use_container_width=True, hide_index=True)
 
-                fornecedor_pode_prefill_i8125 = bool(nec_i8125.get("fornecedor_id")) and any(
-                    str(f.get("id") or "") == str(nec_i8125.get("fornecedor_id") or "") for f in fornecedores_i8121
-                )
-                if fornecedor_pode_prefill_i8125:
-                    if st.button(
-                        "🧾 Preparar compra deste material",
-                        key=f"i8125_preparar_{nec_i8125.get('material_id')}",
-                        use_container_width=True,
-                        help="Preenche a compra com o material, quantidade pendente, último fornecedor/custo e destino correto de estoque. Você ainda revisa e confirma o registro.",
-                    ):
-                        unidade_pref_i8125 = str(nec_i8125.get("unidade") or "un")
-                        catalogo_pref_i8125 = carregar_catalogo()
-                        nomes_catalogo_pref_i8125 = {str(p.get("Nome") or "").strip() for p in catalogo_pref_i8125 if str(p.get("Nome") or "").strip()}
-                        produtos_pref_i8125 = [
-                            str(x) for x in (nec_i8125.get("produtos") or [])
-                            if str(x).strip() and str(x).strip() in nomes_catalogo_pref_i8125
-                        ]
-                        st.session_state["i8121_nova_fornecedor"] = str(nec_i8125.get("fornecedor_id"))
-                        st.session_state["i8121_novo_item"] = str(nec_i8125.get("material_nome") or "")
-                        st.session_state["i8121_nova_qtd"] = float(valor_float(nec_i8125.get("quantidade_pendente")))
-                        if unidade_pref_i8125 in I8121_UNIDADES:
-                            st.session_state["i8121_nova_unidade"] = unidade_pref_i8125
-                        st.session_state["i8121_novo_custo"] = float(valor_float(nec_i8125.get("ultimo_custo", 0)))
-                        st.session_state["i8122_compra_gera_estoque"] = True
-                        st.session_state["i8121_novos_relacionados"] = produtos_pref_i8125
-                        assinatura_pref_i8125 = hashlib.sha1(
-                            ("|".join(sorted(produtos_pref_i8125)) + "|" + unidade_pref_i8125).encode("utf-8")
-                        ).hexdigest()[:10]
-                        st.session_state[f"i8124hf3_destino_compra_{assinatura_pref_i8125}"] = str(nec_i8125.get("material_id") or "")
-                        st.session_state["_i8125_expandir_compra"] = True
-                        st.session_state["_i8125_msg_preparo"] = (
-                            f"Compra preparada para {nec_i8125.get('material_nome')}: {_i8121_quantidade(nec_i8125.get('quantidade_pendente'))} {unidade_pref_i8125}. "
-                            "Revise fornecedor, custo e documento antes de registrar."
+                if nec_i8126.get("planos_abertos"):
+                    st.markdown("**Solicitações já abertas para este material**")
+                    for plano_mat_i8126 in nec_i8126.get("planos_abertos") or []:
+                        st.write(
+                            f"• {plano_mat_i8126.get('fornecedor_nome_snapshot', 'Fornecedor')} · "
+                            f"{_i8121_quantidade(_i8126_engine_aberta(plano_mat_i8126))} {plano_mat_i8126.get('unidade', '')} ainda em aberto · "
+                            f"status {_i8126_engine_status(plano_mat_i8126)}"
                         )
+
+                if qtd_solicitar_i8126 > 0.0000001:
+                    with st.expander("📤 Solicitar ao fornecedor", expanded=False):
+                        if not fornecedores_i8121:
+                            st.warning("Cadastre um relacionamento com papel Fornecedor antes de registrar uma solicitação.")
+                        else:
+                            opcoes_forn_plan_i8126 = [str(f.get("id") or "") for f in fornecedores_i8121]
+                            fornecedor_padrao_i8126 = str(nec_i8126.get("fornecedor_id") or "")
+                            idx_forn_plan_i8126 = opcoes_forn_plan_i8126.index(fornecedor_padrao_i8126) if fornecedor_padrao_i8126 in opcoes_forn_plan_i8126 else 0
+                            pf1_i8126, pf2_i8126 = st.columns([1.4, 1])
+                            fornecedor_plan_id_i8126 = pf1_i8126.selectbox(
+                                "Fornecedor",
+                                opcoes_forn_plan_i8126,
+                                index=idx_forn_plan_i8126,
+                                format_func=lambda fid: str(mapa_fornecedores_i8126.get(fid, {}).get("nome") or fid),
+                                key=f"i8126_forn_{nec_i8126.get('material_id')}",
+                            )
+                            qtd_plan_i8126 = pf2_i8126.number_input(
+                                f"Quantidade a solicitar ({unidade_i8126})", min_value=0.001,
+                                value=float(qtd_solicitar_i8126), step=1.0, format="%.3f",
+                                key=f"i8126_qtd_{nec_i8126.get('material_id')}",
+                            )
+                            pc1_i8126, pc2_i8126 = st.columns(2)
+                            custo_plan_i8126 = pc1_i8126.number_input(
+                                "Custo unitário previsto (R$)", min_value=0.0,
+                                value=float(valor_float(nec_i8126.get("ultimo_custo", 0))), step=0.10, format="%.2f",
+                                key=f"i8126_custo_{nec_i8126.get('material_id')}",
+                            )
+                            previsao_plan_i8126 = pc2_i8126.date_input(
+                                "Previsão de recebimento", value=hoje_local() + timedelta(days=1),
+                                key=f"i8126_prev_{nec_i8126.get('material_id')}",
+                            )
+                            ref_plan_i8126 = st.text_input("Pedido / referência no fornecedor (opcional)", key=f"i8126_ref_{nec_i8126.get('material_id')}")
+                            obs_plan_i8126 = st.text_input("Observação (opcional)", key=f"i8126_obs_{nec_i8126.get('material_id')}")
+                            if valor_float(qtd_plan_i8126) > qtd_solicitar_i8126 + 0.0000001:
+                                st.warning(f"Você está solicitando {_i8121_quantidade(valor_float(qtd_plan_i8126) - qtd_solicitar_i8126)} {unidade_i8126} acima da falta ainda não coberta. Isso é permitido, mas ficará visível como excesso planejado para revisão.")
+                            st.info("Registrar esta solicitação NÃO lança entrada e NÃO reduz a falta real. Ela apenas informa que o material já foi pedido ao fornecedor.")
+                            if st.button("📤 Registrar solicitação ao fornecedor", key=f"i8126_salvar_{nec_i8126.get('material_id')}", type="primary", use_container_width=True):
+                                estoque_fresco_plan_i8126 = carregar_estoque(force_refresh=True)
+                                material_plan_i8126 = _i8122_material_destino_ativo(estoque_fresco_plan_i8126, nec_i8126.get("material_id")) or _i8122_material_por_id(estoque_fresco_plan_i8126, nec_i8126.get("material_id"))
+                                fornecedor_plan_i8126 = mapa_fornecedores_i8126.get(str(fornecedor_plan_id_i8126), {})
+                                ok_plan_i8126, msg_plan_i8126, _ = _i8126_criar_plano(
+                                    material_plan_i8126, qtd_plan_i8126, unidade_i8126, fornecedor_plan_i8126,
+                                    custo_previsto=custo_plan_i8126, previsao=previsao_plan_i8126,
+                                    referencia=ref_plan_i8126, observacao=obs_plan_i8126,
+                                    produtos=nec_i8126.get("produtos") or [], usuario=str(usuario_compras.get("nome") or "Jorge"),
+                                )
+                                if ok_plan_i8126:
+                                    st.session_state["_mensagem_sucesso_pendente"] = msg_plan_i8126
+                                    st.rerun()
+                                else:
+                                    st.error(msg_plan_i8126)
+
+                fornecedor_pode_prefill_i8126 = bool(nec_i8126.get("fornecedor_id")) and str(nec_i8126.get("fornecedor_id")) in mapa_fornecedores_i8126
+                if fornecedor_pode_prefill_i8126 and qtd_falta_i8126 > 0.0000001:
+                    if st.button(
+                        "🧾 Registrar compra/recebimento agora",
+                        key=f"i8126_comprar_agora_{nec_i8126.get('material_id')}", use_container_width=True,
+                        help="Atalho para uma compra que já está sendo recebida agora. Diferente de 'Solicitar ao fornecedor', esta ação prepara o registro real de compra/entrada.",
+                    ):
+                        unidade_pref_i8126 = unidade_i8126 or "un"
+                        produtos_pref_i8126 = [str(x) for x in (nec_i8126.get("produtos") or []) if str(x).strip()]
+                        st.session_state["i8121_nova_fornecedor"] = str(nec_i8126.get("fornecedor_id"))
+                        st.session_state["i8121_novo_item"] = str(nec_i8126.get("material_nome") or "")
+                        st.session_state["i8121_novo_doc"] = ""
+                        st.session_state["i8121_nova_obs"] = ""
+                        st.session_state["i8121_nova_qtd"] = float(qtd_falta_i8126)
+                        if unidade_pref_i8126 in I8121_UNIDADES:
+                            st.session_state["i8121_nova_unidade"] = unidade_pref_i8126
+                        st.session_state["i8121_novo_custo"] = float(valor_float(nec_i8126.get("ultimo_custo", 0)))
+                        st.session_state["i8122_compra_gera_estoque"] = True
+                        st.session_state["i8121_novos_relacionados"] = produtos_pref_i8126
+                        assinatura_pref_i8126 = hashlib.sha1(("|".join(sorted(produtos_pref_i8126)) + "|" + unidade_pref_i8126).encode("utf-8")).hexdigest()[:10]
+                        st.session_state[f"i8124hf3_destino_compra_{assinatura_pref_i8126}"] = str(nec_i8126.get("material_id") or "")
+                        st.session_state.pop("_i8126_plano_recebimento_id", None)
+                        st.session_state["_i8125_expandir_compra"] = True
+                        st.session_state["_i8125_msg_preparo"] = f"Compra preparada para {nec_i8126.get('material_nome')}. Revise os dados e registre somente quando o material estiver realmente sendo recebido."
                         st.rerun()
-                else:
-                    st.caption("Para preparar a compra automaticamente, primeiro registre uma compra/fornecedor conhecido para este material ou escolha o fornecedor manualmente no formulário abaixo.")
+
+    st.markdown("#### 📦 Solicitações ao fornecedor em aberto")
+    if not planos_abertos_i8126:
+        st.caption("Nenhuma solicitação de compra está aguardando recebimento.")
+    else:
+        mapa_necessidades_i8126 = {str(n.get("material_id") or ""): n for n in necessidades_i8126}
+        linhas_planos_i8126 = []
+        for plano_i8126 in planos_abertos_i8126:
+            falta_atual_i8126 = valor_float((mapa_necessidades_i8126.get(str(plano_i8126.get("material_id") or "")) or {}).get("quantidade_pendente", 0))
+            linhas_planos_i8126.append({
+                "Material": plano_i8126.get("material_nome_snapshot", ""),
+                "Fornecedor": plano_i8126.get("fornecedor_nome_snapshot", ""),
+                "Solicitado": f"{_i8121_quantidade(plano_i8126.get('quantidade_solicitada'))} {plano_i8126.get('unidade', '')}",
+                "Recebido": f"{_i8121_quantidade(plano_i8126.get('quantidade_recebida'))} {plano_i8126.get('unidade', '')}",
+                "Em aberto": f"{_i8121_quantidade(_i8126_engine_aberta(plano_i8126))} {plano_i8126.get('unidade', '')}",
+                "Falta real agora": f"{_i8121_quantidade(falta_atual_i8126)} {plano_i8126.get('unidade', '')}",
+                "Previsão": str(plano_i8126.get("previsao_recebimento") or "—")[:10],
+                "Status": _i8126_engine_status(plano_i8126),
+            })
+        st.dataframe(pd.DataFrame(linhas_planos_i8126), use_container_width=True, hide_index=True)
+
+        for plano_i8126 in sorted(planos_abertos_i8126, key=lambda x: (str(x.get("previsao_recebimento") or "9999-12-31"), str(x.get("criado_em") or ""))):
+            aberto_i8126 = _i8126_engine_aberta(plano_i8126)
+            necessidade_atual_i8126 = mapa_necessidades_i8126.get(str(plano_i8126.get("material_id") or ""), {})
+            with st.expander(
+                f"📦 {plano_i8126.get('material_nome_snapshot')} · {plano_i8126.get('fornecedor_nome_snapshot')} · {_i8121_quantidade(aberto_i8126)} {plano_i8126.get('unidade', '')} em aberto",
+                expanded=False,
+            ):
+                if not necessidade_atual_i8126:
+                    st.warning("⚠️ A falta real deste material já zerou, mas ainda existe quantidade solicitada ao fornecedor. Revise antes do recebimento; o sistema não cancela pedidos ao fornecedor sozinho.")
+                st.write(f"**Solicitado:** {_i8121_quantidade(plano_i8126.get('quantidade_solicitada'))} {plano_i8126.get('unidade', '')} · **Recebido:** {_i8121_quantidade(plano_i8126.get('quantidade_recebida'))} {plano_i8126.get('unidade', '')}")
+                if plano_i8126.get("referencia"):
+                    st.write(f"**Referência:** {plano_i8126.get('referencia')}")
+                if plano_i8126.get("observacao"):
+                    st.write(f"**Observação:** {plano_i8126.get('observacao')}")
+                br1_i8126, br2_i8126 = st.columns(2)
+                if br1_i8126.button("📥 Receber / registrar compra", key=f"i8126_receber_{plano_i8126.get('id')}", use_container_width=True):
+                    fornecedor_id_plan_i8126 = str(plano_i8126.get("fornecedor_id") or "")
+                    if fornecedor_id_plan_i8126 not in {str(f.get("id") or "") for f in fornecedores_i8121}:
+                        st.error("O fornecedor desta solicitação não está mais disponível no cadastro de Relacionamentos.")
+                    else:
+                        unidade_plan_i8126 = str(plano_i8126.get("unidade") or "un")
+                        produtos_plan_i8126 = list(plano_i8126.get("produtos_relacionados") or [])
+                        st.session_state["i8121_nova_fornecedor"] = fornecedor_id_plan_i8126
+                        st.session_state["i8121_novo_item"] = str(plano_i8126.get("material_nome_snapshot") or "")
+                        st.session_state["i8121_novo_doc"] = str(plano_i8126.get("referencia") or "")
+                        st.session_state["i8121_nova_obs"] = str(plano_i8126.get("observacao") or "")
+                        st.session_state["i8121_nova_qtd"] = float(aberto_i8126)
+                        if unidade_plan_i8126 in I8121_UNIDADES:
+                            st.session_state["i8121_nova_unidade"] = unidade_plan_i8126
+                        st.session_state["i8121_novo_custo"] = float(valor_float(plano_i8126.get("custo_unitario_previsto", 0)))
+                        st.session_state["i8122_compra_gera_estoque"] = True
+                        st.session_state["i8121_novos_relacionados"] = produtos_plan_i8126
+                        assinatura_plan_i8126 = hashlib.sha1(("|".join(sorted(str(x) for x in produtos_plan_i8126)) + "|" + unidade_plan_i8126).encode("utf-8")).hexdigest()[:10]
+                        st.session_state[f"i8124hf3_destino_compra_{assinatura_plan_i8126}"] = str(plano_i8126.get("material_id") or "")
+                        st.session_state["_i8126_plano_recebimento_id"] = str(plano_i8126.get("id") or "")
+                        st.session_state["_i8125_expandir_compra"] = True
+                        st.session_state["_i8125_msg_preparo"] = f"Recebimento preparado para a solicitação {plano_i8126.get('id')}. Registre a quantidade que realmente chegou; somente então o estoque será movimentado."
+                        st.rerun()
+                with br2_i8126.expander("✖️ Cancelar saldo em aberto", expanded=False):
+                    motivo_cancel_i8126 = st.text_input("Motivo", key=f"i8126_mot_cancel_{plano_i8126.get('id')}", placeholder="Ex.: fornecedor sem estoque, pedido substituído...")
+                    confirma_cancel_i8126 = st.checkbox("Confirmo o cancelamento do saldo ainda não recebido", key=f"i8126_conf_cancel_{plano_i8126.get('id')}")
+                    if st.button("✖️ Cancelar solicitação", key=f"i8126_cancel_{plano_i8126.get('id')}", use_container_width=True, disabled=not confirma_cancel_i8126):
+                        ok_cancel_i8126, msg_cancel_i8126 = _i8126_cancelar_plano(plano_i8126.get("id"), motivo_cancel_i8126, usuario=str(usuario_compras.get("nome") or "Jorge"))
+                        if ok_cancel_i8126:
+                            st.session_state["_mensagem_sucesso_pendente"] = msg_cancel_i8126
+                            st.rerun()
+                        else:
+                            st.error(msg_cancel_i8126)
+
+    historico_planos_i8126 = [p for p in planejamentos_i8126 if isinstance(p, dict) and _i8126_engine_aberta(p) <= 0.0000001]
+    if historico_planos_i8126:
+        with st.expander(f"🕘 Histórico de solicitações ao fornecedor ({len(historico_planos_i8126)})", expanded=False):
+            linhas_hist_plan_i8126 = []
+            for plano_hist_i8126 in sorted(historico_planos_i8126, key=lambda x: str(x.get("atualizado_em") or x.get("criado_em") or ""), reverse=True)[:100]:
+                linhas_hist_plan_i8126.append({
+                    "Material": plano_hist_i8126.get("material_nome_snapshot", ""),
+                    "Fornecedor": plano_hist_i8126.get("fornecedor_nome_snapshot", ""),
+                    "Solicitado": f"{_i8121_quantidade(plano_hist_i8126.get('quantidade_solicitada'))} {plano_hist_i8126.get('unidade', '')}",
+                    "Recebido": f"{_i8121_quantidade(plano_hist_i8126.get('quantidade_recebida'))} {plano_hist_i8126.get('unidade', '')}",
+                    "Status": _i8126_engine_status(plano_hist_i8126),
+                    "Criado em": str(plano_hist_i8126.get("criado_em") or "")[:16].replace("T", " "),
+                })
+            st.dataframe(pd.DataFrame(linhas_hist_plan_i8126), use_container_width=True, hide_index=True)
 
     st.divider()
     # I8.12.3 — ficha técnica por produto, somente configuração e simulação.
@@ -24604,7 +24921,22 @@ if pagina_atual == "compras_custos":
     if msg_preparo_i8125:
         st.success(msg_preparo_i8125)
     expandir_compra_i8125 = bool(st.session_state.pop("_i8125_expandir_compra", False))
-    with st.expander("➕ Registrar nova compra", expanded=expandir_compra_i8125 or not bool(compras_i8121)):
+    plano_recebimento_id_i8126 = str(st.session_state.get("_i8126_plano_recebimento_id") or "").strip()
+    plano_recebimento_i8126 = _i8126_plano_por_id(carregar_planejamentos_compras(), plano_recebimento_id_i8126) if plano_recebimento_id_i8126 else None
+    if plano_recebimento_id_i8126 and (not plano_recebimento_i8126 or plano_recebimento_i8126.get("cancelado") or _i8126_engine_aberta(plano_recebimento_i8126) <= 0.0000001):
+        st.session_state.pop("_i8126_plano_recebimento_id", None)
+        plano_recebimento_id_i8126 = ""
+        plano_recebimento_i8126 = None
+    with st.expander("➕ Registrar nova compra", expanded=expandir_compra_i8125 or bool(plano_recebimento_i8126) or not bool(compras_i8121)):
+        if plano_recebimento_i8126:
+            st.info(
+                f"📥 Recebendo solicitação **{plano_recebimento_i8126.get('id')}** · {plano_recebimento_i8126.get('material_nome_snapshot')} · "
+                f"{_i8121_quantidade(_i8126_engine_aberta(plano_recebimento_i8126))} {plano_recebimento_i8126.get('unidade', '')} ainda em aberto. "
+                "Registre somente a quantidade que realmente chegou."
+            )
+            if st.button("↩️ Desvincular deste planejamento", key="i8126_desvincular_recebimento", use_container_width=True):
+                st.session_state.pop("_i8126_plano_recebimento_id", None)
+                st.rerun()
         if not fornecedores_i8121:
             st.warning("Nenhum relacionamento com papel **Fornecedor** foi encontrado. Cadastre o fornecedor primeiro em Relacionamentos para manter uma única fonte de cadastro.")
             if st.button("🏭 Abrir Relacionamentos para cadastrar fornecedor", key="i8121_ir_fornecedores", use_container_width=True):
@@ -24769,6 +25101,10 @@ if pagina_atual == "compras_custos":
                     st.warning("Informe um custo unitário maior que zero.")
                 elif lancar_estoque_i8122 and (bloqueio_destino_i8122 or not material_destino_id_i8122):
                     st.warning("Defina um material de estoque válido para receber esta entrada.")
+                elif plano_recebimento_i8126 and not lancar_estoque_i8122:
+                    st.warning("Este registro está vinculado a uma solicitação de material. Para concluir o recebimento, a compra precisa ser lançada como entrada de estoque.")
+                elif plano_recebimento_i8126 and str(material_destino_id_i8122 or "") != str(plano_recebimento_i8126.get("material_id") or ""):
+                    st.warning("O material de estoque selecionado é diferente do material solicitado ao fornecedor. Corrija o destino ou desvincule este recebimento do planejamento.")
                 else:
                     compras_frescas_i8121 = carregar_compras(force_refresh=True)
                     registro_i8121 = {
@@ -24789,6 +25125,7 @@ if pagina_atual == "compras_custos":
                         "material_estoque_nome": material_destino_nome_i8122 if lancar_estoque_i8122 else "",
                         "material_estoque_origem": material_destino_origem_i8122 if lancar_estoque_i8122 else "",
                         "material_estoque_criar_novo": bool(material_destino_criar_i8122) if lancar_estoque_i8122 else False,
+                        "planejamento_compra_id": str(plano_recebimento_i8126.get("id") or "") if plano_recebimento_i8126 else "",
                         "criado_em": agora_local().isoformat(),
                         "criado_por": str(usuario_compras.get("nome") or usuario_compras.get("email") or "Jorge"),
                     }
@@ -24817,8 +25154,19 @@ if pagina_atual == "compras_custos":
                     if registro_i8121.get("estoque_lancado") and not estoque_ok_i8122:
                         st.error(f"Compra registrada, mas a entrada de estoque precisa de atenção: {estoque_msg_i8122}")
                     else:
-                        st.success("Compra registrada" + (" e entrada de estoque lançada." if registro_i8121.get("estoque_lancado") else ".") + " O Catálogo Oficial não foi alterado.")
-                        st.rerun()
+                        plano_ok_i8126, plano_msg_i8126 = (True, "")
+                        if registro_i8121.get("planejamento_compra_id"):
+                            plano_ok_i8126, plano_msg_i8126 = _i8126_registrar_recebimento_plano(
+                                registro_i8121.get("planejamento_compra_id"), registro_i8121.get("quantidade"),
+                                registro_i8121.get("id"), usuario=str(usuario_compras.get("nome") or "Jorge")
+                            )
+                            if plano_ok_i8126:
+                                st.session_state.pop("_i8126_plano_recebimento_id", None)
+                        if not plano_ok_i8126:
+                            st.error("Compra e entrada registradas, mas o planejamento precisa de atenção: " + str(plano_msg_i8126))
+                        else:
+                            st.success("Compra registrada" + (" e entrada de estoque lançada." if registro_i8121.get("estoque_lancado") else ".") + (" Planejamento atualizado." if registro_i8121.get("planejamento_compra_id") else "") + " O Catálogo Oficial não foi alterado.")
+                            st.rerun()
 
     st.markdown("### 📚 Histórico de compras")
     if not compras_i8121:
@@ -24886,6 +25234,8 @@ if pagina_atual == "compras_custos":
                     destino_hist_i8121 = compra_i8121.get("material_estoque_nome") or compra_i8121.get("item") or "Material"
                     origem_hist_i8121 = str(compra_i8121.get("material_estoque_origem") or "legado").replace("_", " ")
                     st.write(f"**Entrada de estoque:** {destino_hist_i8121} · origem do vínculo: {origem_hist_i8121}")
+                if compra_i8121.get("planejamento_compra_id"):
+                    st.write(f"**Planejamento de compra:** {compra_i8121.get('planejamento_compra_id')} · recebimento vinculado à solicitação ao fornecedor")
                 if compra_i8121.get("observacao"):
                     st.write(f"**Observação:** {compra_i8121.get('observacao')}")
                 if anterior_i8121:
@@ -24922,11 +25272,15 @@ if pagina_atual == "compras_custos":
                             if not estoque_pode_excluir_i8122:
                                 st.error(msg_excluir_estoque_i8122)
                             else:
-                                enviar_para_lixeira("Compra", alvo_i8121, alvo_i8121.get("id", ""))
-                                salvar_compras([x for x in compras_frescas_i8121 if str(x.get("id")) != str(compra_i8121.get("id"))])
-                                registrar_auditoria("Excluir compra", "Compras", alvo_i8121.get("id", ""), {"fornecedor": alvo_i8121.get("fornecedor_nome"), "item": alvo_i8121.get("item"), "valor_total": alvo_i8121.get("valor_total")})
-                                st.success("Compra enviada para a Lixeira" + (" e entrada de estoque estornada." if alvo_i8121.get("estoque_lancado") else "."))
-                                st.rerun()
+                                plano_pode_excluir_i8126, msg_plano_excluir_i8126 = _i8126_reverter_recebimento_compra(alvo_i8121, usuario=str(usuario_compras.get("nome") or "Jorge"))
+                                if not plano_pode_excluir_i8126:
+                                    st.error(msg_plano_excluir_i8126)
+                                else:
+                                    enviar_para_lixeira("Compra", alvo_i8121, alvo_i8121.get("id", ""))
+                                    salvar_compras([x for x in compras_frescas_i8121 if str(x.get("id")) != str(compra_i8121.get("id"))])
+                                    registrar_auditoria("Excluir compra", "Compras", alvo_i8121.get("id", ""), {"fornecedor": alvo_i8121.get("fornecedor_nome"), "item": alvo_i8121.get("item"), "valor_total": alvo_i8121.get("valor_total"), "planejamento_compra_id": alvo_i8121.get("planejamento_compra_id")})
+                                    st.success("Compra enviada para a Lixeira" + (" e entrada de estoque estornada." if alvo_i8121.get("estoque_lancado") else ".") + (" A quantidade voltou a ficar aberta no planejamento." if alvo_i8121.get("planejamento_compra_id") else ""))
+                                    st.rerun()
 
 if pagina_atual == "relatorios":
     _produto_auditar_relatorios = st.session_state.get("_thu_auditar_produto_nome")

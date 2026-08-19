@@ -1,3 +1,11 @@
+## 20.4.9-I8.12.6 — Planejamento de Compras por Necessidade
+- Central separa falta real, quantidade já solicitada ao fornecedor e saldo ainda a solicitar.
+- Solicitação ao fornecedor não movimenta estoque; somente recebimento registrado como compra/entrada regulariza pendências.
+- Recebimentos parciais atualizam o planejamento e mantêm somente o saldo restante em aberto.
+- Compras vinculadas a planejamento preservam rastreabilidade; exclusão reabre a quantidade e restauração recompõe o recebimento.
+- Central do Jorge e status operacional dos pedidos comunicam compras em andamento usando a mesma fonte.
+- Materiais com solicitação aberta não podem ser arquivados/consolidados até o recebimento ou cancelamento do saldo.
+
 ## 20.4.9-I8.12.4-HF4 — Materiais Inativos / Históricos
 - Materiais consolidados passam a ser identificados explicitamente como Inativo/Histórico.
 - Inativos deixam as listas operacionais sem perder histórico.
