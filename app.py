@@ -362,6 +362,7 @@ ARQUIVO_USUARIOS = "usuarios_config.json"
 ARQUIVO_ORIENTACOES_THU = "orientacoes_thu.json"
 ARQUIVO_FATURAMENTO_MENSAL = "faturamento_mensal_db.json"
 ARQUIVO_COMPRAS = "compras_db.json"
+ARQUIVO_ESTOQUE = "estoque_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -492,7 +493,7 @@ ABAS_SISTEMA = [
     ("catalogo", "📦 Catálogo"),
     ("relacionamentos", "🌐 Relacionamentos"),
     ("faturamento_mensal", "💳 Faturamento Mensal"),
-    ("compras_custos", "🧾 Compras & Custos"),
+    ("compras_custos", "🧾 Compras, Custos & Estoque"),
     ("memoria", "🧠 Memória"),
     ("conhecimento", "🧩 Conhecimento"),
     ("calendario", "📅 Calendário Comercial"),
@@ -3678,6 +3679,189 @@ def _i8121_resumo_variacao(delta):
     if delta > 0:
         return f"↑ +{_i8121_moeda(delta)}"
     return f"↓ -{_i8121_moeda(abs(delta))}"
+
+
+# --- 20.4.9-I8.12.2: Estoque e movimentação de materiais ---
+I8122_ESTOQUE_PADRAO = {"materiais": [], "movimentacoes": []}
+I8122_TIPOS_MANUAIS = ["Entrada manual", "Saída manual", "Perda", "Ajuste de inventário"]
+
+
+def carregar_estoque(force_refresh=False):
+    dados = load_document("estoque_db", ARQUIVO_ESTOQUE, I8122_ESTOQUE_PADRAO, force_refresh=force_refresh)
+    if not isinstance(dados, dict):
+        dados = {}
+    materiais = dados.get("materiais") if isinstance(dados.get("materiais"), list) else []
+    movimentos = dados.get("movimentacoes") if isinstance(dados.get("movimentacoes"), list) else []
+    return {"materiais": materiais, "movimentacoes": movimentos}
+
+
+def salvar_estoque(dados):
+    if not isinstance(dados, dict):
+        raise ValueError("O estoque precisa ser um objeto com materiais e movimentações.")
+    normalizado = {
+        "materiais": list(dados.get("materiais") or []),
+        "movimentacoes": list(dados.get("movimentacoes") or []),
+    }
+    return bool(save_document("estoque_db", normalizado, ARQUIVO_ESTOQUE))
+
+
+def _i8122_material_id(nome, unidade):
+    chave = f"{_i8121_chave_item(nome)}|{str(unidade or '').strip().casefold()}"
+    return "MAT" + hashlib.sha1(chave.encode("utf-8")).hexdigest()[:16].upper()
+
+
+def _i8122_material_por_id(dados, material_id):
+    return next((m for m in (dados.get("materiais") or []) if str(m.get("id")) == str(material_id)), None)
+
+
+def _i8122_garantir_material(dados, nome, unidade, usuario="Jorge", estoque_minimo=None):
+    nome = str(nome or "").strip()
+    unidade = str(unidade or "un").strip() or "un"
+    material_id = _i8122_material_id(nome, unidade)
+    material = _i8122_material_por_id(dados, material_id)
+    criado = False
+    if material is None:
+        material = {
+            "id": material_id,
+            "nome": nome,
+            "unidade": unidade,
+            "estoque_minimo": max(0.0, valor_float(estoque_minimo or 0)),
+            "ativo": True,
+            "criado_em": agora_local().isoformat(),
+            "criado_por": str(usuario or "Jorge"),
+        }
+        dados.setdefault("materiais", []).append(material)
+        criado = True
+    elif estoque_minimo is not None:
+        material["estoque_minimo"] = max(0.0, valor_float(estoque_minimo))
+    return material, criado
+
+
+def _i8122_saldo_material(dados, material_id):
+    return round(sum(
+        valor_float(m.get("delta", 0))
+        for m in (dados.get("movimentacoes") or [])
+        if str(m.get("material_id")) == str(material_id)
+    ), 6)
+
+
+def _i8122_movimento_estornado(dados, movimento_id):
+    return any(
+        str(m.get("estorno_de") or "") == str(movimento_id)
+        for m in (dados.get("movimentacoes") or [])
+    )
+
+
+def _i8122_adicionar_movimento(dados, material, delta, tipo, data_movimento=None, observacao="", origem_tipo="Manual", origem_id="", estorno_de="", usuario="Jorge"):
+    delta = round(valor_float(delta), 6)
+    if abs(delta) < 0.000001:
+        raise ValueError("A movimentação precisa alterar o saldo do material.")
+    registro = {
+        "id": agora_local().strftime("MOV%Y%m%d%H%M%S%f"),
+        "material_id": str(material.get("id") or ""),
+        "material_nome": str(material.get("nome") or ""),
+        "unidade": str(material.get("unidade") or ""),
+        "tipo": str(tipo or "Movimentação"),
+        "quantidade": abs(delta),
+        "delta": delta,
+        "data_movimento": (data_movimento or hoje_local()).isoformat() if isinstance((data_movimento or hoje_local()), date) else str(data_movimento),
+        "observacao": str(observacao or "").strip(),
+        "origem_tipo": str(origem_tipo or "Manual"),
+        "origem_id": str(origem_id or ""),
+        "estorno_de": str(estorno_de or ""),
+        "criado_em": agora_local().isoformat(),
+        "criado_por": str(usuario or "Jorge"),
+    }
+    dados.setdefault("movimentacoes", []).append(registro)
+    return registro
+
+
+def _i8122_registrar_entrada_compra(compra, force_refresh=True, motivo="Entrada automática da compra"):
+    if not isinstance(compra, dict) or not str(compra.get("id") or "").strip():
+        return False, "Compra inválida para entrada de estoque."
+    dados = carregar_estoque(force_refresh=force_refresh)
+    compra_id = str(compra.get("id"))
+    existentes = [
+        m for m in (dados.get("movimentacoes") or [])
+        if str(m.get("origem_tipo")) == "Compra" and str(m.get("origem_id")) == compra_id and not str(m.get("estorno_de") or "")
+    ]
+    ativos = [m for m in existentes if not _i8122_movimento_estornado(dados, m.get("id"))]
+    if ativos:
+        return True, "Entrada de estoque desta compra já registrada."
+    material, _ = _i8122_garantir_material(
+        dados, compra.get("item"), compra.get("unidade"), usuario=compra.get("criado_por") or "Jorge"
+    )
+    qtd = valor_float(compra.get("quantidade", 0))
+    if qtd <= 0:
+        return False, "A compra não possui quantidade válida para estoque."
+    mov = _i8122_adicionar_movimento(
+        dados, material, qtd, "Entrada por compra", _i8121_data_compra(compra.get("data_compra")),
+        observacao=motivo, origem_tipo="Compra", origem_id=compra_id, usuario=compra.get("criado_por") or "Jorge"
+    )
+    if not salvar_estoque(dados):
+        return False, "Não foi possível salvar a entrada de estoque."
+    registrar_auditoria("Entrada de estoque por compra", "Estoque", mov.get("id"), {
+        "compra_id": compra_id, "material": material.get("nome"), "quantidade": qtd, "unidade": material.get("unidade")
+    })
+    return True, "Entrada de estoque registrada."
+
+
+def _i8122_estornar_entrada_compra(compra_id, motivo="Compra removida", usuario="Jorge"):
+    dados = carregar_estoque(force_refresh=True)
+    originais = [
+        m for m in (dados.get("movimentacoes") or [])
+        if str(m.get("origem_tipo")) == "Compra" and str(m.get("origem_id")) == str(compra_id) and not str(m.get("estorno_de") or "")
+        and not _i8122_movimento_estornado(dados, m.get("id"))
+    ]
+    if not originais:
+        return True, "Nenhuma entrada ativa desta compra no estoque."
+    por_material = {}
+    for mov in originais:
+        por_material.setdefault(str(mov.get("material_id")), 0.0)
+        por_material[str(mov.get("material_id"))] += valor_float(mov.get("delta", 0))
+    for material_id, qtd_retirar in por_material.items():
+        saldo = _i8122_saldo_material(dados, material_id)
+        if saldo - qtd_retirar < -0.000001:
+            material = _i8122_material_por_id(dados, material_id) or {}
+            return False, f"Não é possível excluir a compra: o saldo de {material.get('nome', 'material')} ficaria negativo. Faça primeiro um ajuste de estoque."
+    for original in originais:
+        material = _i8122_material_por_id(dados, original.get("material_id")) or {
+            "id": original.get("material_id"), "nome": original.get("material_nome"), "unidade": original.get("unidade")
+        }
+        estorno = _i8122_adicionar_movimento(
+            dados, material, -valor_float(original.get("delta", 0)), "Estorno de entrada por compra", hoje_local(),
+            observacao=motivo, origem_tipo="Estorno", origem_id=str(compra_id), estorno_de=original.get("id"), usuario=usuario
+        )
+        registrar_auditoria("Estornar entrada de estoque", "Estoque", estorno.get("id"), {
+            "compra_id": str(compra_id), "movimento_original": original.get("id"), "material": material.get("nome")
+        })
+    return bool(salvar_estoque(dados)), "Entrada de estoque estornada."
+
+
+def _i8122_ultimo_custo(material, compras):
+    candidatos = []
+    chave = _i8121_chave_item(material.get("nome"))
+    unidade = str(material.get("unidade") or "").strip().casefold()
+    for compra in compras or []:
+        if _i8121_chave_item(compra.get("item")) != chave:
+            continue
+        if str(compra.get("unidade") or "").strip().casefold() != unidade:
+            continue
+        candidatos.append((_i8121_data_compra(compra.get("data_compra")), str(compra.get("criado_em") or ""), compra))
+    if not candidatos:
+        return None
+    candidatos.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return candidatos[0][2]
+
+
+def _i8122_status_material(saldo, minimo):
+    saldo = valor_float(saldo)
+    minimo = max(0.0, valor_float(minimo))
+    if saldo <= 0.000001:
+        return "🔴 Zerado"
+    if minimo > 0 and saldo <= minimo + 0.000001:
+        return "🟡 No/abaixo do mínimo"
+    return "🟢 OK"
 
 
 # --- 20.4.9-I8.11.1: Central de Faturamento Mensal ---
@@ -11476,6 +11660,10 @@ def restaurar_item_lixeira(registro):
         if cid and not any(str(x.get("id") or "") == cid for x in dados):
             dados.append(item)
         salvar_compras(dados)
+        if item.get("estoque_lancado"):
+            ok_estoque, msg_estoque = _i8122_registrar_entrada_compra(item, force_refresh=True, motivo="Compra restaurada da Lixeira")
+            if not ok_estoque:
+                raise ValueError(msg_estoque)
     else:
         raise ValueError(f"Tipo de item ainda não restaurável: {tipo}")
     remover_da_lixeira(registro.get("id_lixeira"))
@@ -11658,6 +11846,7 @@ DOCUMENTOS_BACKUP = [
     ("catalogo_modelos_db", ARQUIVO_MODELOS_CATALOGO, []),
     ("faturamento_mensal_db", ARQUIVO_FATURAMENTO_MENSAL, []),
     ("compras_db", ARQUIVO_COMPRAS, []),
+    ("estoque_db", ARQUIVO_ESTOQUE, {"materiais": [], "movimentacoes": []}),
 ]
 
 def carregar_config_backup():
@@ -22455,10 +22644,10 @@ if pagina_atual == "faturamento_mensal":
 
 
 if pagina_atual == "compras_custos":
-    st.header("🧾 I8.12.1-HF1 · Histórico de Compras por Fornecedor")
+    st.header("📦 I8.12.2 · Compras, Custos & Estoque")
     st.caption(
-        "Registre custos reais de compra e acompanhe variações por fornecedor. "
-        "Este módulo nunca altera automaticamente o preço de venda do Catálogo Oficial."
+        "Registre custos reais, transforme compras em entradas de estoque e controle movimentações de materiais. "
+        "Nesta etapa não existe baixa automática por venda e o módulo nunca altera sozinho o preço do Catálogo Oficial."
     )
 
     usuario_compras = obter_usuario_atual()
@@ -22492,6 +22681,208 @@ if pagina_atual == "compras_custos":
         "Mesmo quando houver aumento, o Manager apenas recomenda revisão; o preço oficial de venda continua sob decisão humana."
     )
 
+    # I8.12.2 — estoque manual e entradas originadas pelas compras.
+    estoque_i8122 = carregar_estoque()
+    materiais_i8122 = [m for m in (estoque_i8122.get("materiais") or []) if m.get("ativo", True)]
+    movimentos_i8122 = estoque_i8122.get("movimentacoes") or []
+    saldos_i8122 = {str(m.get("id")): _i8122_saldo_material(estoque_i8122, m.get("id")) for m in materiais_i8122}
+    baixos_i8122 = [m for m in materiais_i8122 if valor_float(m.get("estoque_minimo", 0)) > 0 and saldos_i8122.get(str(m.get("id")), 0) <= valor_float(m.get("estoque_minimo", 0)) + 0.000001]
+    zerados_i8122 = [m for m in materiais_i8122 if saldos_i8122.get(str(m.get("id")), 0) <= 0.000001]
+    mov_mes_i8122 = [
+        mov for mov in movimentos_i8122
+        if _i8121_data_compra(mov.get("data_movimento")).year == hoje_i8121.year
+        and _i8121_data_compra(mov.get("data_movimento")).month == hoje_i8121.month
+    ]
+
+    st.markdown("### 📦 Estoque de materiais · I8.12.2")
+    es1, es2, es3, es4 = st.columns(4)
+    es1.metric("Materiais controlados", len(materiais_i8122))
+    es2.metric("No/abaixo do mínimo", len(baixos_i8122))
+    es3.metric("Zerados", len(zerados_i8122))
+    es4.metric("Movimentações no mês", len(mov_mes_i8122))
+    st.caption(
+        "🔒 Homologação segura: compras podem gerar entrada de estoque, mas pedidos/vendas ainda não fazem baixa automática. "
+        "Saídas, perdas e ajustes são manuais até existir ficha técnica de consumo por produto."
+    )
+
+    if materiais_i8122:
+        linhas_estoque_i8122 = []
+        for mat_i8122 in sorted(materiais_i8122, key=lambda m: str(m.get("nome") or "").casefold()):
+            saldo_i8122 = saldos_i8122.get(str(mat_i8122.get("id")), 0)
+            minimo_i8122 = valor_float(mat_i8122.get("estoque_minimo", 0))
+            ultima_compra_i8122 = _i8122_ultimo_custo(mat_i8122, compras_i8121)
+            linhas_estoque_i8122.append({
+                "Material": mat_i8122.get("nome", ""),
+                "Unidade": mat_i8122.get("unidade", ""),
+                "Saldo": _i8121_quantidade(saldo_i8122),
+                "Estoque mínimo": _i8121_quantidade(minimo_i8122),
+                "Status": _i8122_status_material(saldo_i8122, minimo_i8122),
+                "Último custo": _i8121_moeda(ultima_compra_i8122.get("custo_unitario", 0)) if ultima_compra_i8122 else "Sem compra vinculada",
+            })
+        st.dataframe(pd.DataFrame(linhas_estoque_i8122), use_container_width=True, hide_index=True)
+    else:
+        st.info("Nenhum material em estoque ainda. Registre uma compra com entrada de estoque ou cadastre o primeiro material abaixo.")
+
+    with st.expander("➕ Cadastrar material de estoque", expanded=False):
+        cm1, cm2, cm3 = st.columns([1.6, 0.8, 1])
+        nome_mat_i8122 = cm1.text_input("Material", key="i8122_cad_nome", placeholder="Ex.: Fita cetim azul 22 mm")
+        unidade_mat_i8122 = cm2.selectbox("Unidade", I8121_UNIDADES, key="i8122_cad_unidade")
+        minimo_mat_i8122 = cm3.number_input("Estoque mínimo", min_value=0.0, value=0.0, step=1.0, format="%.3f", key="i8122_cad_minimo")
+        if st.button("💾 Cadastrar material", key="i8122_cad_salvar", use_container_width=True):
+            if not nome_mat_i8122.strip():
+                st.warning("Informe o nome do material.")
+            else:
+                dados_frescos_i8122 = carregar_estoque(force_refresh=True)
+                material_i8122, criado_i8122 = _i8122_garantir_material(
+                    dados_frescos_i8122, nome_mat_i8122, unidade_mat_i8122,
+                    usuario=str(usuario_compras.get("nome") or "Jorge"), estoque_minimo=minimo_mat_i8122
+                )
+                salvar_estoque(dados_frescos_i8122)
+                registrar_auditoria("Cadastrar/atualizar material", "Estoque", material_i8122.get("id"), {
+                    "material": material_i8122.get("nome"), "unidade": material_i8122.get("unidade"), "estoque_minimo": material_i8122.get("estoque_minimo")
+                })
+                st.success("Material cadastrado." if criado_i8122 else "Material já existia; estoque mínimo atualizado.")
+                st.rerun()
+
+    if materiais_i8122:
+        mapa_mat_i8122 = {str(m.get("id")): m for m in materiais_i8122}
+        opcoes_mat_i8122 = sorted(mapa_mat_i8122, key=lambda mid: str(mapa_mat_i8122[mid].get("nome") or "").casefold())
+        with st.expander("🔄 Registrar movimentação manual", expanded=False):
+            mm1, mm2, mm3 = st.columns([1.5, 1, 1])
+            mat_id_mov_i8122 = mm1.selectbox(
+                "Material", opcoes_mat_i8122,
+                format_func=lambda mid: f"{mapa_mat_i8122[mid].get('nome')} · {mapa_mat_i8122[mid].get('unidade')}",
+                key="i8122_mov_material",
+            )
+            tipo_mov_i8122 = mm2.selectbox("Tipo", I8122_TIPOS_MANUAIS, key="i8122_mov_tipo")
+            data_mov_i8122 = mm3.date_input("Data", value=hoje_i8121, key="i8122_mov_data")
+            mat_mov_i8122 = mapa_mat_i8122.get(str(mat_id_mov_i8122), {})
+            saldo_atual_i8122 = _i8122_saldo_material(estoque_i8122, mat_id_mov_i8122)
+            if tipo_mov_i8122 == "Ajuste de inventário":
+                saldo_fisico_i8122 = st.number_input(
+                    f"Saldo físico contado ({mat_mov_i8122.get('unidade', '')})", min_value=0.0, value=max(0.0, float(saldo_atual_i8122)),
+                    step=1.0, format="%.3f", key="i8122_mov_saldo_fisico"
+                )
+                delta_mov_i8122 = float(saldo_fisico_i8122) - float(saldo_atual_i8122)
+                qtd_mov_i8122 = abs(delta_mov_i8122)
+            else:
+                qtd_mov_i8122 = st.number_input(
+                    f"Quantidade ({mat_mov_i8122.get('unidade', '')})", min_value=0.001, value=1.0, step=1.0, format="%.3f", key="i8122_mov_qtd"
+                )
+                delta_mov_i8122 = float(qtd_mov_i8122) if tipo_mov_i8122 == "Entrada manual" else -float(qtd_mov_i8122)
+            obs_mov_i8122 = st.text_input("Motivo / observação", key="i8122_mov_obs", placeholder="Ex.: contagem física, uso interno, avaria, amostra...")
+            saldo_prev_i8122 = float(saldo_atual_i8122) + float(delta_mov_i8122)
+            pv1, pv2, pv3 = st.columns(3)
+            pv1.metric("Saldo atual", f"{_i8121_quantidade(saldo_atual_i8122)} {mat_mov_i8122.get('unidade', '')}")
+            pv2.metric("Movimentação", ("+" if delta_mov_i8122 > 0 else "") + f"{_i8121_quantidade(delta_mov_i8122)} {mat_mov_i8122.get('unidade', '')}")
+            pv3.metric("Saldo previsto", f"{_i8121_quantidade(saldo_prev_i8122)} {mat_mov_i8122.get('unidade', '')}")
+            bloqueio_mov_i8122 = saldo_prev_i8122 < -0.000001 or abs(delta_mov_i8122) < 0.000001
+            if saldo_prev_i8122 < -0.000001:
+                st.error("A movimentação deixaria o estoque negativo. Registre a entrada faltante ou faça uma contagem física antes da saída.")
+            if st.button("💾 Registrar movimentação", key="i8122_mov_salvar", type="primary", use_container_width=True, disabled=bloqueio_mov_i8122):
+                dados_frescos_i8122 = carregar_estoque(force_refresh=True)
+                mat_fresco_i8122 = _i8122_material_por_id(dados_frescos_i8122, mat_id_mov_i8122)
+                saldo_fresco_i8122 = _i8122_saldo_material(dados_frescos_i8122, mat_id_mov_i8122)
+                delta_final_i8122 = float(delta_mov_i8122)
+                if tipo_mov_i8122 == "Ajuste de inventário":
+                    delta_final_i8122 = float(saldo_fisico_i8122) - float(saldo_fresco_i8122)
+                if saldo_fresco_i8122 + delta_final_i8122 < -0.000001:
+                    st.error("O saldo mudou desde a abertura da tela e esta movimentação deixaria o estoque negativo. Atualize e tente novamente.")
+                elif abs(delta_final_i8122) < 0.000001:
+                    st.info("O saldo informado já é igual ao saldo atual; nenhuma movimentação foi necessária.")
+                else:
+                    mov_i8122 = _i8122_adicionar_movimento(
+                        dados_frescos_i8122, mat_fresco_i8122, delta_final_i8122, tipo_mov_i8122, data_mov_i8122,
+                        observacao=obs_mov_i8122, usuario=str(usuario_compras.get("nome") or "Jorge")
+                    )
+                    salvar_estoque(dados_frescos_i8122)
+                    registrar_auditoria("Registrar movimentação", "Estoque", mov_i8122.get("id"), {
+                        "material": mat_fresco_i8122.get("nome"), "tipo": tipo_mov_i8122, "delta": delta_final_i8122
+                    })
+                    st.success("Movimentação registrada.")
+                    st.rerun()
+
+        with st.expander("⚙️ Definir estoque mínimo", expanded=False):
+            em1, em2 = st.columns([1.6, 1])
+            mat_id_min_i8122 = em1.selectbox(
+                "Material", opcoes_mat_i8122,
+                format_func=lambda mid: f"{mapa_mat_i8122[mid].get('nome')} · {mapa_mat_i8122[mid].get('unidade')}",
+                key="i8122_min_material",
+            )
+            mat_min_i8122 = mapa_mat_i8122.get(str(mat_id_min_i8122), {})
+            novo_min_i8122 = em2.number_input(
+                "Estoque mínimo", min_value=0.0, value=float(valor_float(mat_min_i8122.get("estoque_minimo", 0))),
+                step=1.0, format="%.3f", key=f"i8122_min_valor_{mat_id_min_i8122}"
+            )
+            if st.button("💾 Salvar estoque mínimo", key="i8122_min_salvar", use_container_width=True):
+                dados_frescos_i8122 = carregar_estoque(force_refresh=True)
+                alvo_min_i8122 = _i8122_material_por_id(dados_frescos_i8122, mat_id_min_i8122)
+                if alvo_min_i8122:
+                    alvo_min_i8122["estoque_minimo"] = float(novo_min_i8122)
+                    alvo_min_i8122["atualizado_em"] = agora_local().isoformat()
+                    alvo_min_i8122["atualizado_por"] = str(usuario_compras.get("nome") or "Jorge")
+                    salvar_estoque(dados_frescos_i8122)
+                    registrar_auditoria("Atualizar estoque mínimo", "Estoque", mat_id_min_i8122, {"estoque_minimo": novo_min_i8122})
+                    st.success("Estoque mínimo atualizado.")
+                    st.rerun()
+
+    st.markdown("#### 🔁 Histórico de movimentações")
+    if movimentos_i8122:
+        mov_ord_i8122 = sorted(
+            movimentos_i8122, key=lambda m: (_i8121_data_compra(m.get("data_movimento")), str(m.get("criado_em") or "")), reverse=True
+        )
+        linhas_mov_i8122 = []
+        for mov_i8122 in mov_ord_i8122[:100]:
+            linhas_mov_i8122.append({
+                "Data": _i8121_data_compra(mov_i8122.get("data_movimento")).strftime("%d/%m/%Y"),
+                "Material": mov_i8122.get("material_nome", ""),
+                "Tipo": mov_i8122.get("tipo", ""),
+                "Movimento": ("+" if valor_float(mov_i8122.get("delta", 0)) > 0 else "") + _i8121_quantidade(mov_i8122.get("delta", 0)),
+                "Unidade": mov_i8122.get("unidade", ""),
+                "Origem": (f"{mov_i8122.get('origem_tipo')} · {mov_i8122.get('origem_id')}" if mov_i8122.get("origem_id") else mov_i8122.get("origem_tipo", "Manual")),
+            })
+        st.dataframe(pd.DataFrame(linhas_mov_i8122), use_container_width=True, hide_index=True)
+
+        reversiveis_i8122 = [
+            m for m in mov_ord_i8122
+            if not str(m.get("estorno_de") or "") and not _i8122_movimento_estornado(estoque_i8122, m.get("id"))
+        ]
+        if reversiveis_i8122:
+            with st.expander("↩️ Estornar movimentação incorreta", expanded=False):
+                mapa_rev_i8122 = {str(m.get("id")): m for m in reversiveis_i8122}
+                mov_id_rev_i8122 = st.selectbox(
+                    "Movimentação", list(mapa_rev_i8122),
+                    format_func=lambda mid: f"{_i8121_data_compra(mapa_rev_i8122[mid].get('data_movimento')).strftime('%d/%m/%Y')} · {mapa_rev_i8122[mid].get('material_nome')} · {mapa_rev_i8122[mid].get('tipo')} · {(('+' if valor_float(mapa_rev_i8122[mid].get('delta', 0)) > 0 else '') + _i8121_quantidade(mapa_rev_i8122[mid].get('delta', 0)))} {mapa_rev_i8122[mid].get('unidade')}",
+                    key="i8122_rev_mov",
+                )
+                motivo_rev_i8122 = st.text_input("Motivo do estorno", key="i8122_rev_motivo", placeholder="Ex.: lançamento duplicado / quantidade incorreta")
+                confirma_rev_i8122 = st.checkbox("Confirmo o estorno desta movimentação", key="i8122_rev_conf")
+                if st.button("↩️ Registrar estorno", key="i8122_rev_salvar", use_container_width=True, disabled=not confirma_rev_i8122):
+                    dados_frescos_i8122 = carregar_estoque(force_refresh=True)
+                    original_rev_i8122 = next((m for m in dados_frescos_i8122.get("movimentacoes", []) if str(m.get("id")) == str(mov_id_rev_i8122)), None)
+                    if not original_rev_i8122 or _i8122_movimento_estornado(dados_frescos_i8122, mov_id_rev_i8122):
+                        st.warning("Esta movimentação já foi estornada ou não está mais disponível.")
+                    else:
+                        material_rev_i8122 = _i8122_material_por_id(dados_frescos_i8122, original_rev_i8122.get("material_id")) or {}
+                        delta_rev_i8122 = -valor_float(original_rev_i8122.get("delta", 0))
+                        saldo_rev_i8122 = _i8122_saldo_material(dados_frescos_i8122, original_rev_i8122.get("material_id"))
+                        if saldo_rev_i8122 + delta_rev_i8122 < -0.000001:
+                            st.error("O estorno deixaria o estoque negativo. Faça primeiro um ajuste de inventário.")
+                        else:
+                            estorno_i8122 = _i8122_adicionar_movimento(
+                                dados_frescos_i8122, material_rev_i8122, delta_rev_i8122, "Estorno", hoje_local(),
+                                observacao=motivo_rev_i8122 or "Correção de movimentação", origem_tipo="Estorno", origem_id=mov_id_rev_i8122,
+                                estorno_de=mov_id_rev_i8122, usuario=str(usuario_compras.get("nome") or "Jorge")
+                            )
+                            salvar_estoque(dados_frescos_i8122)
+                            registrar_auditoria("Estornar movimentação", "Estoque", estorno_i8122.get("id"), {"movimento_original": mov_id_rev_i8122})
+                            st.success("Estorno registrado sem apagar o histórico.")
+                            st.rerun()
+    else:
+        st.caption("Nenhuma movimentação de estoque registrada ainda.")
+
+    st.divider()
+    st.markdown("### 🧾 Compras por fornecedor")
     with st.expander("➕ Registrar nova compra", expanded=not bool(compras_i8121)):
         if not fornecedores_i8121:
             st.warning("Nenhum relacionamento com papel **Fornecedor** foi encontrado. Cadastre o fornecedor primeiro em Relacionamentos para manter uma única fonte de cadastro.")
@@ -22525,6 +22916,11 @@ if pagina_atual == "compras_custos":
             unidade_i8121 = q2.selectbox("Unidade", I8121_UNIDADES, key="i8121_nova_unidade")
             custo_unit_i8121 = q3.number_input("Custo unitário (R$)", min_value=0.0, value=0.0, step=0.10, format="%.2f", key="i8121_novo_custo")
             total_i8121 = float(qtd_i8121) * float(custo_unit_i8121)
+            lancar_estoque_i8122 = st.checkbox(
+                "📦 Lançar esta compra como entrada de estoque",
+                value=True, key="i8122_compra_gera_estoque",
+                help="Desmarque para serviços, frete ou itens que você não deseja controlar em estoque. Não existe baixa automática por venda nesta versão.",
+            )
 
             catalogo_i8121 = carregar_catalogo()
             nomes_produtos_i8121 = sorted({str(p.get("Nome") or "").strip() for p in catalogo_i8121 if str(p.get("Nome") or "").strip()}, key=str.casefold)
@@ -22579,11 +22975,15 @@ if pagina_atual == "compras_custos":
                         "documento": documento_i8121.strip(),
                         "produtos_relacionados": relacionados_i8121,
                         "observacao": obs_i8121.strip(),
+                        "estoque_lancado": bool(lancar_estoque_i8122),
                         "criado_em": agora_local().isoformat(),
                         "criado_por": str(usuario_compras.get("nome") or usuario_compras.get("email") or "Jorge"),
                     }
                     compras_frescas_i8121.append(registro_i8121)
                     salvar_compras(compras_frescas_i8121)
+                    estoque_ok_i8122, estoque_msg_i8122 = (True, "Entrada de estoque não solicitada.")
+                    if registro_i8121.get("estoque_lancado"):
+                        estoque_ok_i8122, estoque_msg_i8122 = _i8122_registrar_entrada_compra(registro_i8121, force_refresh=True)
                     registrar_auditoria(
                         "Registrar compra",
                         "Compras",
@@ -22598,8 +22998,11 @@ if pagina_atual == "compras_custos":
                             "produtos_relacionados": len(registro_i8121["produtos_relacionados"]),
                         },
                     )
-                    st.success("Compra registrada. O Catálogo Oficial não foi alterado.")
-                    st.rerun()
+                    if registro_i8121.get("estoque_lancado") and not estoque_ok_i8122:
+                        st.error(f"Compra registrada, mas a entrada de estoque precisa de atenção: {estoque_msg_i8122}")
+                    else:
+                        st.success("Compra registrada" + (" e entrada de estoque lançada." if registro_i8121.get("estoque_lancado") else ".") + " O Catálogo Oficial não foi alterado.")
+                        st.rerun()
 
     st.markdown("### 📚 Histórico de compras")
     if not compras_i8121:
@@ -22690,11 +23093,19 @@ if pagina_atual == "compras_custos":
                         compras_frescas_i8121 = carregar_compras(force_refresh=True)
                         alvo_i8121 = next((x for x in compras_frescas_i8121 if str(x.get("id")) == str(compra_i8121.get("id"))), None)
                         if alvo_i8121:
-                            enviar_para_lixeira("Compra", alvo_i8121, alvo_i8121.get("id", ""))
-                            salvar_compras([x for x in compras_frescas_i8121 if str(x.get("id")) != str(compra_i8121.get("id"))])
-                            registrar_auditoria("Excluir compra", "Compras", alvo_i8121.get("id", ""), {"fornecedor": alvo_i8121.get("fornecedor_nome"), "item": alvo_i8121.get("item"), "valor_total": alvo_i8121.get("valor_total")})
-                            st.success("Compra enviada para a Lixeira.")
-                            st.rerun()
+                            estoque_pode_excluir_i8122, msg_excluir_estoque_i8122 = (True, "")
+                            if alvo_i8121.get("estoque_lancado"):
+                                estoque_pode_excluir_i8122, msg_excluir_estoque_i8122 = _i8122_estornar_entrada_compra(
+                                    alvo_i8121.get("id"), motivo="Compra enviada para a Lixeira", usuario=str(usuario_compras.get("nome") or "Jorge")
+                                )
+                            if not estoque_pode_excluir_i8122:
+                                st.error(msg_excluir_estoque_i8122)
+                            else:
+                                enviar_para_lixeira("Compra", alvo_i8121, alvo_i8121.get("id", ""))
+                                salvar_compras([x for x in compras_frescas_i8121 if str(x.get("id")) != str(compra_i8121.get("id"))])
+                                registrar_auditoria("Excluir compra", "Compras", alvo_i8121.get("id", ""), {"fornecedor": alvo_i8121.get("fornecedor_nome"), "item": alvo_i8121.get("item"), "valor_total": alvo_i8121.get("valor_total")})
+                                st.success("Compra enviada para a Lixeira" + (" e entrada de estoque estornada." if alvo_i8121.get("estoque_lancado") else "."))
+                                st.rerun()
 
 if pagina_atual == "relatorios":
     _produto_auditar_relatorios = st.session_state.get("_thu_auditar_produto_nome")
