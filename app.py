@@ -361,6 +361,7 @@ ARQUIVO_INTELIGENCIA = "alpha_intelligence_db.json"
 ARQUIVO_USUARIOS = "usuarios_config.json"
 ARQUIVO_ORIENTACOES_THU = "orientacoes_thu.json"
 ARQUIVO_FATURAMENTO_MENSAL = "faturamento_mensal_db.json"
+ARQUIVO_COMPRAS = "compras_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -491,6 +492,7 @@ ABAS_SISTEMA = [
     ("catalogo", "📦 Catálogo"),
     ("relacionamentos", "🌐 Relacionamentos"),
     ("faturamento_mensal", "💳 Faturamento Mensal"),
+    ("compras_custos", "🧾 Compras & Custos"),
     ("memoria", "🧠 Memória"),
     ("conhecimento", "🧩 Conhecimento"),
     ("calendario", "📅 Calendário Comercial"),
@@ -613,11 +615,13 @@ def obter_perfil_configurado(usuario=None):
             )
             cfg["acoes"] = acoes
         elif nome_cfg == "jorge":
-            # I8.11.1 nasce primeiro no perfil Jorge. A sobreposição garante
-            # acesso mesmo quando usuarios_config.json veio de uma base antiga.
-            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"faturamento_mensal"})
+            # I8.11.1 / I8.12.1 nascem primeiro no perfil Jorge. A sobreposição
+            # garante acesso mesmo quando usuarios_config.json veio de uma base
+            # antiga, sem liberar os módulos de gestão no perfil operacional.
+            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"faturamento_mensal", "compras_custos"})
             acoes = dict(cfg.get("acoes") or {})
             acoes["faturamento_mensal"] = list(ACOES_PADRAO)
+            acoes["compras_custos"] = list(ACOES_PADRAO)
             cfg["acoes"] = acoes
         return cfg
     nome = str(usuario.get("nome", "")).casefold()
@@ -3566,6 +3570,105 @@ def propostas_do_cliente(cliente):
         if pchave == chave:
             propostas.append(prop)
     return propostas
+
+
+# --- 20.4.9-I8.12.1: Histórico de Compras por Fornecedor ---
+I8121_UNIDADES = ["un", "pct", "cx", "kg", "g", "m", "cm", "L", "ml", "serviço", "outro"]
+
+
+def carregar_compras(force_refresh=False):
+    dados = load_document("compras_db", ARQUIVO_COMPRAS, [], force_refresh=force_refresh)
+    return dados if isinstance(dados, list) else []
+
+
+def salvar_compras(lista):
+    if not isinstance(lista, list):
+        raise ValueError("O histórico de compras precisa ser uma lista.")
+    return bool(save_document("compras_db", lista, ARQUIVO_COMPRAS))
+
+
+def _i8121_data_compra(valor):
+    if isinstance(valor, date):
+        return valor
+    texto = str(valor or "").strip()
+    for formato in ("%Y-%m-%d", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(texto, formato).date()
+        except Exception:
+            pass
+    return hoje_local()
+
+
+def _i8121_chave_item(valor):
+    return normalizar_identidade_produto(valor)
+
+
+def _i8121_fornecedores():
+    fornecedores = []
+    for cli in carregar_clientes():
+        if "Fornecedor" in papeis_relacionamento(cli):
+            fornecedores.append(cli)
+    return sorted(fornecedores, key=lambda c: normalizar_texto_cliente(c.get("nome", "")).casefold())
+
+
+def _i8121_compra_anterior(compras, fornecedor_id, item, unidade="", antes_de=None, ignorar_id=""):
+    chave_item = _i8121_chave_item(item)
+    candidatos = []
+    for compra in compras or []:
+        if str(compra.get("id", "")) == str(ignorar_id or ""):
+            continue
+        if str(compra.get("fornecedor_id", "")) != str(fornecedor_id or ""):
+            continue
+        if _i8121_chave_item(compra.get("item", "")) != chave_item:
+            continue
+        if unidade and str(compra.get("unidade") or "").strip().casefold() != str(unidade).strip().casefold():
+            continue
+        data_c = _i8121_data_compra(compra.get("data_compra"))
+        criado = str(compra.get("criado_em") or "")
+        if antes_de:
+            data_ref, criado_ref = antes_de
+            if data_c > data_ref or (data_c == data_ref and criado >= criado_ref):
+                continue
+        candidatos.append((data_c, criado, compra))
+    if not candidatos:
+        return None
+    candidatos.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return candidatos[0][2]
+
+
+def _i8121_variacao_unitaria(compras, compra):
+    anterior = _i8121_compra_anterior(
+        compras,
+        compra.get("fornecedor_id"),
+        compra.get("item"),
+        compra.get("unidade", ""),
+        antes_de=(_i8121_data_compra(compra.get("data_compra")), str(compra.get("criado_em") or "")),
+        ignorar_id=compra.get("id", ""),
+    )
+    if not anterior:
+        return None, None
+    atual = valor_float(compra.get("custo_unitario", 0))
+    anterior_valor = valor_float(anterior.get("custo_unitario", 0))
+    return atual - anterior_valor, anterior
+
+
+def _i8121_moeda(valor):
+    return f"R$ {valor_float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _i8121_quantidade(valor):
+    numero = valor_float(valor)
+    if abs(numero - round(numero)) < 0.000001:
+        return str(int(round(numero)))
+    return f"{numero:.3f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+def _i8121_resumo_variacao(delta):
+    if delta is None or abs(delta) < 0.005:
+        return "Sem variação" if delta is not None else "Primeira compra"
+    if delta > 0:
+        return f"↑ +{_i8121_moeda(delta)}"
+    return f"↓ -{_i8121_moeda(abs(delta))}"
 
 
 # --- 20.4.9-I8.11.1: Central de Faturamento Mensal ---
@@ -11358,6 +11461,12 @@ def restaurar_item_lixeira(registro):
         if not any(x.get("id") == item.get("id") for x in dados):
             dados.append(item)
         salvar_modelos_catalogo(dados)
+    elif tipo == "Compra":
+        dados = carregar_compras(force_refresh=True)
+        cid = str(item.get("id") or "")
+        if cid and not any(str(x.get("id") or "") == cid for x in dados):
+            dados.append(item)
+        salvar_compras(dados)
     else:
         raise ValueError(f"Tipo de item ainda não restaurável: {tipo}")
     remover_da_lixeira(registro.get("id_lixeira"))
@@ -11539,6 +11648,7 @@ DOCUMENTOS_BACKUP = [
     ("catalogos_gerados_db", ARQUIVO_CATALOGOS_GERADOS, []),
     ("catalogo_modelos_db", ARQUIVO_MODELOS_CATALOGO, []),
     ("faturamento_mensal_db", ARQUIVO_FATURAMENTO_MENSAL, []),
+    ("compras_db", ARQUIVO_COMPRAS, []),
 ]
 
 def carregar_config_backup():
@@ -18369,7 +18479,7 @@ GRUPOS_NAVEGACAO = {
     "📋 Operação": ["novo_orcamento", "historico", "fluxo", "catalogo", "projeto", "jornada"],
     "👥 Clientes": ["atendimento", "crm", "clientes_360", "relacionamentos"],
     "🧠 Inteligência": ["alpha", "intelligence", "memoria", "conhecimento"],
-    "📈 Gestão": ["executivo", "relatorios", "faturamento_mensal"],
+    "📈 Gestão": ["executivo", "relatorios", "faturamento_mensal", "compras_custos"],
     "📢 Marketing": ["crescimento", "calendario"],
     "⚙️ Administração": ["configuracoes"],
 }
@@ -22334,6 +22444,248 @@ if pagina_atual == "faturamento_mensal":
                 "- Se uma nova proposta elegível entrar depois de um fechamento, ela reaparece em um novo ciclo aberto da mesma competência e pode formar um complemento, sem alterar o fechamento anterior."
             )
 
+
+if pagina_atual == "compras_custos":
+    st.header("🧾 I8.12.1 · Histórico de Compras por Fornecedor")
+    st.caption(
+        "Registre custos reais de compra e acompanhe variações por fornecedor. "
+        "Este módulo nunca altera automaticamente o preço de venda do Catálogo Oficial."
+    )
+
+    usuario_compras = obter_usuario_atual()
+    if str(usuario_compras.get("nome", "")).strip().casefold() != "jorge":
+        st.warning("Este módulo está em homologação no perfil Jorge.")
+        st.stop()
+
+    compras_i8121 = carregar_compras()
+    fornecedores_i8121 = _i8121_fornecedores()
+    hoje_i8121 = hoje_local()
+    compras_mes_i8121 = [
+        c for c in compras_i8121
+        if _i8121_data_compra(c.get("data_compra")).year == hoje_i8121.year
+        and _i8121_data_compra(c.get("data_compra")).month == hoje_i8121.month
+    ]
+    fornecedores_mes_i8121 = {str(c.get("fornecedor_id") or c.get("fornecedor_nome") or "") for c in compras_mes_i8121}
+    aumentos_mes_i8121 = 0
+    for compra_i8121 in compras_mes_i8121:
+        delta_i8121, _ = _i8121_variacao_unitaria(compras_i8121, compra_i8121)
+        if delta_i8121 is not None and delta_i8121 > 0.005:
+            aumentos_mes_i8121 += 1
+
+    rm1, rm2, rm3, rm4 = st.columns(4)
+    rm1.metric("Compras registradas no mês", len(compras_mes_i8121))
+    rm2.metric("Total comprado no mês", _i8121_moeda(sum(valor_float(c.get("valor_total", 0)) for c in compras_mes_i8121)))
+    rm3.metric("Fornecedores usados no mês", len([x for x in fornecedores_mes_i8121 if x]))
+    rm4.metric("Compras com custo maior", aumentos_mes_i8121)
+
+    st.info(
+        "🛡️ Regra comercial: custo de fornecedor é informação de gestão. "
+        "Mesmo quando houver aumento, o Manager apenas recomenda revisão; o preço oficial de venda continua sob decisão humana."
+    )
+
+    with st.expander("➕ Registrar nova compra", expanded=not bool(compras_i8121)):
+        if not fornecedores_i8121:
+            st.warning("Nenhum relacionamento com papel **Fornecedor** foi encontrado. Cadastre o fornecedor primeiro em Relacionamentos para manter uma única fonte de cadastro.")
+            if st.button("🏭 Abrir Relacionamentos para cadastrar fornecedor", key="i8121_ir_fornecedores", use_container_width=True):
+                rerun_na_aba("relacionamentos")
+        else:
+            mapa_fornecedores_i8121 = {str(f.get("id")): f for f in fornecedores_i8121}
+            opcoes_fornecedores_i8121 = [str(f.get("id")) for f in fornecedores_i8121]
+            f1, f2 = st.columns([1.4, 1])
+            fornecedor_id_i8121 = f1.selectbox(
+                "Fornecedor",
+                opcoes_fornecedores_i8121,
+                format_func=lambda fid: str(mapa_fornecedores_i8121.get(fid, {}).get("nome") or fid),
+                key="i8121_nova_fornecedor",
+            )
+            data_i8121 = f2.date_input("Data da compra", value=hoje_i8121, key="i8121_nova_data")
+            fornecedor_i8121 = mapa_fornecedores_i8121.get(str(fornecedor_id_i8121), {})
+            meta_forn_i8121 = fornecedor_i8121.get("fornecedor", {}) or {}
+            if meta_forn_i8121.get("prioridade") or meta_forn_i8121.get("prazo_medio"):
+                st.caption(
+                    f"🏭 {meta_forn_i8121.get('prioridade') or 'Prioridade não definida'}"
+                    + (f" · prazo médio {meta_forn_i8121.get('prazo_medio')}" if meta_forn_i8121.get("prazo_medio") else "")
+                )
+
+            i1, i2 = st.columns([1.7, 1])
+            item_i8121 = i1.text_input("Produto / material comprado", key="i8121_novo_item", placeholder="Ex.: Papel fotográfico A4 180g")
+            documento_i8121 = i2.text_input("Pedido / NF / referência (opcional)", key="i8121_novo_doc")
+
+            q1, q2, q3 = st.columns([1, 1, 1.25])
+            qtd_i8121 = q1.number_input("Quantidade", min_value=0.001, value=1.0, step=1.0, format="%.3f", key="i8121_nova_qtd")
+            unidade_i8121 = q2.selectbox("Unidade", I8121_UNIDADES, key="i8121_nova_unidade")
+            custo_unit_i8121 = q3.number_input("Custo unitário (R$)", min_value=0.0, value=0.0, step=0.10, format="%.2f", key="i8121_novo_custo")
+            total_i8121 = float(qtd_i8121) * float(custo_unit_i8121)
+
+            catalogo_i8121 = carregar_catalogo()
+            nomes_produtos_i8121 = sorted({str(p.get("Nome") or "").strip() for p in catalogo_i8121 if str(p.get("Nome") or "").strip()}, key=str.casefold)
+            relacionados_i8121 = st.multiselect(
+                "Produto(s) de venda relacionado(s) (opcional)",
+                nomes_produtos_i8121,
+                key="i8121_novos_relacionados",
+                help="Cria somente a referência para futura análise de margem. Não altera o Catálogo Oficial.",
+            )
+            obs_i8121 = st.text_area("Observação da compra (opcional)", key="i8121_nova_obs", placeholder="Condição, lote, prazo, mudança de qualidade, frete já incluso etc.")
+
+            pr1, pr2, pr3 = st.columns(3)
+            pr1.metric("Quantidade", f"{_i8121_quantidade(qtd_i8121)} {unidade_i8121}")
+            pr2.metric("Custo unitário", _i8121_moeda(custo_unit_i8121))
+            pr3.metric("Total desta compra", _i8121_moeda(total_i8121))
+
+            anterior_preview_i8121 = _i8121_compra_anterior(compras_i8121, fornecedor_id_i8121, item_i8121, unidade_i8121) if item_i8121.strip() else None
+            if anterior_preview_i8121:
+                anterior_custo_i8121 = valor_float(anterior_preview_i8121.get("custo_unitario", 0))
+                delta_preview_i8121 = float(custo_unit_i8121) - anterior_custo_i8121
+                data_ant_i8121 = _i8121_data_compra(anterior_preview_i8121.get("data_compra")).strftime("%d/%m/%Y")
+                if delta_preview_i8121 > 0.005:
+                    st.warning(
+                        f"⚠️ Este custo está **{_i8121_moeda(delta_preview_i8121)} por unidade acima** da última compra deste item neste fornecedor "
+                        f"({_i8121_moeda(anterior_custo_i8121)} em {data_ant_i8121}). Vale revisar o preço de venda dos produtos relacionados antes da próxima proposta."
+                    )
+                elif delta_preview_i8121 < -0.005:
+                    st.success(
+                        f"⬇️ Este custo está **{_i8121_moeda(abs(delta_preview_i8121))} por unidade abaixo** da última compra deste item neste fornecedor "
+                        f"({_i8121_moeda(anterior_custo_i8121)} em {data_ant_i8121})."
+                    )
+                else:
+                    st.info(f"Custo unitário igual à última compra deste item neste fornecedor: {_i8121_moeda(anterior_custo_i8121)} em {data_ant_i8121}.")
+
+            if st.button("💾 Registrar compra", type="primary", use_container_width=True, key="i8121_salvar_compra"):
+                if not item_i8121.strip():
+                    st.warning("Informe o produto ou material comprado.")
+                elif custo_unit_i8121 <= 0:
+                    st.warning("Informe um custo unitário maior que zero.")
+                else:
+                    compras_frescas_i8121 = carregar_compras(force_refresh=True)
+                    registro_i8121 = {
+                        "id": agora_local().strftime("COM%Y%m%d%H%M%S%f"),
+                        "data_compra": data_i8121.isoformat(),
+                        "fornecedor_id": str(fornecedor_i8121.get("id") or fornecedor_id_i8121),
+                        "fornecedor_nome": str(fornecedor_i8121.get("nome") or "Fornecedor"),
+                        "item": item_i8121.strip(),
+                        "quantidade": float(qtd_i8121),
+                        "unidade": unidade_i8121,
+                        "custo_unitario": round(float(custo_unit_i8121), 4),
+                        "valor_total": round(total_i8121, 2),
+                        "documento": documento_i8121.strip(),
+                        "produtos_relacionados": relacionados_i8121,
+                        "observacao": obs_i8121.strip(),
+                        "criado_em": agora_local().isoformat(),
+                        "criado_por": str(usuario_compras.get("nome") or usuario_compras.get("email") or "Jorge"),
+                    }
+                    compras_frescas_i8121.append(registro_i8121)
+                    salvar_compras(compras_frescas_i8121)
+                    registrar_auditoria(
+                        "Registrar compra",
+                        "Compras",
+                        registro_i8121["id"],
+                        {
+                            "fornecedor": registro_i8121["fornecedor_nome"],
+                            "item": registro_i8121["item"],
+                            "quantidade": registro_i8121["quantidade"],
+                            "unidade": registro_i8121["unidade"],
+                            "custo_unitario": registro_i8121["custo_unitario"],
+                            "valor_total": registro_i8121["valor_total"],
+                            "produtos_relacionados": len(registro_i8121["produtos_relacionados"]),
+                        },
+                    )
+                    st.success("Compra registrada. O Catálogo Oficial não foi alterado.")
+                    st.rerun()
+
+    st.markdown("### 📚 Histórico de compras")
+    if not compras_i8121:
+        st.info("Nenhuma compra registrada ainda.")
+    else:
+        fc1, fc2, fc3 = st.columns([1.4, 1, 1])
+        busca_i8121 = fc1.text_input("Pesquisar", placeholder="Item, fornecedor ou documento", key="i8121_busca").strip().casefold()
+        opcoes_filtro_forn_i8121 = ["Todos"] + sorted({str(c.get("fornecedor_nome") or "") for c in compras_i8121 if str(c.get("fornecedor_nome") or "").strip()}, key=str.casefold)
+        filtro_forn_i8121 = fc2.selectbox("Fornecedor", opcoes_filtro_forn_i8121, key="i8121_filtro_fornecedor")
+        filtro_periodo_i8121 = fc3.selectbox("Período", ["Todos", "Este mês", "Últimos 90 dias", "Este ano"], key="i8121_filtro_periodo")
+
+        filtradas_i8121 = []
+        limite_90_i8121 = hoje_i8121 - timedelta(days=90)
+        for compra_i8121 in compras_i8121:
+            texto_busca_i8121 = " ".join([
+                str(compra_i8121.get("item", "")), str(compra_i8121.get("fornecedor_nome", "")),
+                str(compra_i8121.get("documento", "")), " ".join(compra_i8121.get("produtos_relacionados", []) or []),
+            ]).casefold()
+            if busca_i8121 and busca_i8121 not in texto_busca_i8121:
+                continue
+            if filtro_forn_i8121 != "Todos" and str(compra_i8121.get("fornecedor_nome")) != filtro_forn_i8121:
+                continue
+            data_filtro_i8121 = _i8121_data_compra(compra_i8121.get("data_compra"))
+            if filtro_periodo_i8121 == "Este mês" and (data_filtro_i8121.year, data_filtro_i8121.month) != (hoje_i8121.year, hoje_i8121.month):
+                continue
+            if filtro_periodo_i8121 == "Últimos 90 dias" and data_filtro_i8121 < limite_90_i8121:
+                continue
+            if filtro_periodo_i8121 == "Este ano" and data_filtro_i8121.year != hoje_i8121.year:
+                continue
+            filtradas_i8121.append(compra_i8121)
+
+        filtradas_i8121.sort(key=lambda c: (_i8121_data_compra(c.get("data_compra")), str(c.get("criado_em") or "")), reverse=True)
+        st.caption(f"{len(filtradas_i8121)} compra(s) nesta visualização.")
+
+        linhas_i8121 = []
+        for compra_i8121 in filtradas_i8121:
+            delta_i8121, _ = _i8121_variacao_unitaria(compras_i8121, compra_i8121)
+            linhas_i8121.append({
+                "Data": _i8121_data_compra(compra_i8121.get("data_compra")).strftime("%d/%m/%Y"),
+                "Fornecedor": compra_i8121.get("fornecedor_nome", ""),
+                "Item / material": compra_i8121.get("item", ""),
+                "Qtd.": f"{_i8121_quantidade(compra_i8121.get('quantidade', 0))} {compra_i8121.get('unidade', '')}",
+                "Custo unit.": _i8121_moeda(compra_i8121.get("custo_unitario", 0)),
+                "Total": _i8121_moeda(compra_i8121.get("valor_total", 0)),
+                "Variação vs compra anterior": _i8121_resumo_variacao(delta_i8121),
+            })
+        if linhas_i8121:
+            st.dataframe(pd.DataFrame(linhas_i8121), use_container_width=True, hide_index=True)
+
+        st.markdown("#### 🔎 Detalhes e alertas")
+        for compra_i8121 in filtradas_i8121[:30]:
+            data_rot_i8121 = _i8121_data_compra(compra_i8121.get("data_compra")).strftime("%d/%m/%Y")
+            delta_i8121, anterior_i8121 = _i8121_variacao_unitaria(compras_i8121, compra_i8121)
+            with st.expander(f"{data_rot_i8121} · {compra_i8121.get('fornecedor_nome', 'Fornecedor')} · {compra_i8121.get('item', 'Item')} · {_i8121_moeda(compra_i8121.get('valor_total', 0))}"):
+                d1, d2, d3 = st.columns(3)
+                d1.metric("Quantidade", f"{_i8121_quantidade(compra_i8121.get('quantidade', 0))} {compra_i8121.get('unidade', '')}")
+                d2.metric("Custo unitário", _i8121_moeda(compra_i8121.get("custo_unitario", 0)))
+                d3.metric("Total", _i8121_moeda(compra_i8121.get("valor_total", 0)))
+                if compra_i8121.get("documento"):
+                    st.write(f"**Pedido/NF/referência:** {compra_i8121.get('documento')}")
+                if compra_i8121.get("produtos_relacionados"):
+                    st.write("**Produtos de venda relacionados:** " + ", ".join(compra_i8121.get("produtos_relacionados") or []))
+                if compra_i8121.get("observacao"):
+                    st.write(f"**Observação:** {compra_i8121.get('observacao')}")
+                if anterior_i8121:
+                    data_ant_i8121 = _i8121_data_compra(anterior_i8121.get("data_compra")).strftime("%d/%m/%Y")
+                    if delta_i8121 > 0.005:
+                        st.warning(f"⚠️ Custo aumentou {_i8121_moeda(delta_i8121)} por unidade desde a compra de {data_ant_i8121} ({_i8121_moeda(anterior_i8121.get('custo_unitario', 0))}).")
+                    elif delta_i8121 < -0.005:
+                        st.success(f"⬇️ Custo caiu {_i8121_moeda(abs(delta_i8121))} por unidade desde a compra de {data_ant_i8121} ({_i8121_moeda(anterior_i8121.get('custo_unitario', 0))}).")
+                    else:
+                        st.info(f"Custo unitário sem alteração em relação à compra de {data_ant_i8121}.")
+                else:
+                    st.info("Primeira compra registrada deste item neste fornecedor; ainda não há base anterior para comparação.")
+                st.caption(f"Registrado por {compra_i8121.get('criado_por', 'Jorge')} em {str(compra_i8121.get('criado_em', ''))[:19].replace('T', ' ')}")
+                with st.expander("🗑️ Corrigir registro de teste / lançamento incorreto", expanded=False):
+                    st.caption("A exclusão envia a compra para a Lixeira do sistema; o registro pode ser restaurado pela Administração.")
+                    confirma_excluir_i8121 = st.checkbox(
+                        "Confirmo que este lançamento deve sair do histórico de compras",
+                        key=f"i8121_conf_excluir_{compra_i8121.get('id')}",
+                    )
+                    if st.button(
+                        "🗑️ Enviar compra para a Lixeira",
+                        key=f"i8121_excluir_{compra_i8121.get('id')}",
+                        use_container_width=True,
+                        disabled=not confirma_excluir_i8121,
+                    ):
+                        compras_frescas_i8121 = carregar_compras(force_refresh=True)
+                        alvo_i8121 = next((x for x in compras_frescas_i8121 if str(x.get("id")) == str(compra_i8121.get("id"))), None)
+                        if alvo_i8121:
+                            enviar_para_lixeira("Compra", alvo_i8121, alvo_i8121.get("id", ""))
+                            salvar_compras([x for x in compras_frescas_i8121 if str(x.get("id")) != str(compra_i8121.get("id"))])
+                            registrar_auditoria("Excluir compra", "Compras", alvo_i8121.get("id", ""), {"fornecedor": alvo_i8121.get("fornecedor_nome"), "item": alvo_i8121.get("item"), "valor_total": alvo_i8121.get("valor_total")})
+                            st.success("Compra enviada para a Lixeira.")
+                            st.rerun()
 
 if pagina_atual == "relatorios":
     _produto_auditar_relatorios = st.session_state.get("_thu_auditar_produto_nome")
