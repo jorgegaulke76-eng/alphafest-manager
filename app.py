@@ -54,7 +54,7 @@ from consumo_estoque_engine import resumo_consumo as _i8124_engine_resumo, pende
 from necessidades_compras_engine import agregar_necessidades_compra as _i8125_engine_agregar
 from planejamento_compras_engine import aplicar_planejamento_necessidades as _i8126_engine_aplicar, quantidade_aberta as _i8126_engine_aberta, status_plano as _i8126_engine_status, agregar_aberto_por_material as _i8126_engine_agregar_aberto
 from risco_producao_engine import montar_previsao_producao as _i8127_engine_previsao
-from central_producao_engine import montar_central_producao as _i8128_engine_central, resumo_central as _i8128_engine_resumo
+from central_producao_engine import montar_central_producao as _i8128_engine_central, resumo_central as _i8128_engine_resumo, reconciliar_etapa_entrega as _i8128_reconciliar_etapa
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_encerrada as _status_proposta_encerrada,
@@ -1480,7 +1480,8 @@ def alternar_status(num_proposta, campo, novo_valor):
     evento_status_hf4 = {"texto": ""}
 
     def _mutar(p):
-        valor_anterior = valor_bool(p.get(campo, False))
+        estado_anterior = _status_resumo(p)
+        valor_anterior = bool(estado_anterior.get(campo)) if campo in {"aprovado", "pago", "entregue"} else valor_bool(p.get(campo, False))
         p[campo] = bool(novo_valor)
         if valor_anterior != bool(novo_valor):
             rotulos = {"pago": "Pagamento confirmado", "entregue": "Entrega concluída", "aprovado": "Orçamento aprovado"}
@@ -1496,8 +1497,12 @@ def alternar_status(num_proposta, campo, novo_valor):
     if proposta_alterada and evento_status_hf4["texto"]:
         cliente_evt = str(proposta_alterada.get("cliente_nome") or proposta_alterada.get("cliente") or "Cliente").strip()
         registrar_atividade(obter_usuario_atual(), "Status da proposta atualizado", "Propostas", detalhe=f"{num_proposta} · {cliente_evt} · {evento_status_hf4['texto']}", evento=True)
+    historico_pos_status = carregar_historico(force_refresh=True) if proposta_alterada and evento_status_hf4["texto"] else None
+    if historico_pos_status is not None:
+        # HF1: qualquer alteração oficial de Aprovado/Pago/Entregue reconcilia
+        # imediatamente o espelho do Fluxo; não esperamos outra tela abrir.
+        sincronizar_producao_com_propostas(historico_pos_status)
     if proposta_alterada and alterou_aprovacao["valor"]:
-        sincronizar_producao_com_propostas()
         tarefas = carregar_producao()
         mudou = False
         for tarefa in tarefas:
@@ -2707,9 +2712,10 @@ def diagnosticar_sincronizacao_status(historico):
             continue
         numero = str(prop.get("numero_proposta") or "SEM-NÚMERO")
         cliente = str(prop.get("cliente_nome") or prop.get("cliente") or "Cliente")
-        aprovado = valor_bool(prop.get("aprovado"))
-        pago = valor_bool(prop.get("pago"))
-        entregue = valor_bool(prop.get("entregue"))
+        estado_oficial = _status_resumo(prop)
+        aprovado = bool(estado_oficial.get("aprovado"))
+        pago = bool(estado_oficial.get("pago"))
+        entregue = bool(estado_oficial.get("entregue"))
         legado_concluido = aprovado and pago and entregue
         oficial_concluido = proposta_concluida(prop)
         if legado_concluido != oficial_concluido:
@@ -4918,7 +4924,9 @@ def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
             # I8.12.8 — a etapa manual do Fluxo é exibida junto da mesma previsão,
             # sem criar um novo status persistido na proposta.
             try:
-                producao_i8128 = _i8128_engine_central([previsao_i8127], carregar_producao(), hoje=hoje_local())
+                # HF1: nunca exibir uma etapa bruta sem reconciliar o espelho
+                # de entrega com a proposta oficial.
+                producao_i8128 = _i8128_engine_central([previsao_i8127], sincronizar_producao_com_propostas(), hoje=hoje_local())
                 if producao_i8128 and producao_i8128[0].get("tarefas"):
                     st.caption(f"🏭 Etapa da produção: {producao_i8128[0].get('etapa_manual')}")
                     if detalhado:
@@ -7861,13 +7869,20 @@ def adicionar_evento_timeline(tarefa, descricao):
     tarefa["timeline"] = timeline[-50:]
 
 
-def sincronizar_producao_com_propostas():
-    """Cria um fluxo por item de proposta e preserva as alterações manuais."""
+def sincronizar_producao_com_propostas(historico=None):
+    """Sincroniza dados básicos do Fluxo com uma fotografia oficial das propostas.
+
+    HF1: quando a Central já fez uma leitura fresca do banco, ela passa a mesma
+    lista para esta função. Assim o ``producao_db`` nunca reconstrói cliente,
+    entrega ou condição de entrega a partir de uma leitura possivelmente antiga.
+    O ``producao_db`` continua guardando somente a etapa manual de trabalho.
+    """
     tarefas = carregar_producao()
     existentes = {t.get("id"): t for t in tarefas}
     ids_ativos = set()
     alterado = False
-    for prop in carregar_historico():
+    propostas_fonte = historico if isinstance(historico, list) else carregar_historico()
+    for prop in propostas_fonte:
         numero = str(prop.get("numero_proposta", "SEM-NUMERO"))
         for indice, item in enumerate(prop.get("itens", []) or []):
             tarefa_id = f"{numero}::{indice}"
@@ -7875,7 +7890,8 @@ def sincronizar_producao_com_propostas():
             produto = item.get("produto", "Produto não informado")
             especificacoes = item.get("especificacoes", "")
             processos = inferir_processos(produto, especificacoes)
-            status_base = "Entregue" if prop.get("entregue", False) else status_inicial_fluxo(produto, especificacoes)
+            estado_oficial_prop = _status_resumo(prop)
+            status_base = "Entregue" if estado_oficial_prop.get("entregue") else status_inicial_fluxo(produto, especificacoes)
             base = {
                 "id": tarefa_id,
                 "numero_proposta": numero,
@@ -7887,6 +7903,7 @@ def sincronizar_producao_com_propostas():
                 "especificacoes": especificacoes,
                 "quantidade": item.get("quantidade", 0),
                 "status": status_base,
+                "status_antes_entrega": status_inicial_fluxo(produto, especificacoes) if estado_oficial_prop.get("entregue") else "",
                 "prioridade": "Normal",
                 "processos": processos,
                 "necessita_arte": "Criação/ajuste de arte" in processos,
@@ -7910,7 +7927,14 @@ def sincronizar_producao_com_propostas():
                 if "necessita_arte" not in atual:
                     atual["necessita_arte"] = "Criação/ajuste de arte" in atual.get("processos", [])
                     alterado = True
-                novo_status = normalizar_status_fluxo(atual.get("status"), prop.get("entregue", False))
+                novo_status, status_antes_entrega = _i8128_reconciliar_etapa(
+                    atual.get("status"),
+                    estado_oficial_prop.get("entregue", False),
+                    atual.get("status_antes_entrega"),
+                )
+                if status_antes_entrega and atual.get("status_antes_entrega") != status_antes_entrega:
+                    atual["status_antes_entrega"] = status_antes_entrega
+                    alterado = True
                 if atual.get("status") != novo_status:
                     atual["status"] = novo_status
                     alterado = True
@@ -7976,7 +8000,7 @@ def _i8128_central_producao(historico=None, tarefas=None, consumos=None, estoque
     previsao = _i8127_previsao_producao(
         historico=historico, consumos=consumos, estoque=estoque, planejamentos=planejamentos
     )
-    tarefas = sincronizar_producao_com_propostas() if tarefas is None else tarefas
+    tarefas = sincronizar_producao_com_propostas(historico) if tarefas is None else tarefas
     return _i8128_engine_central(previsao or [], tarefas or [], hoje=hoje_local())
 
 
@@ -7998,7 +8022,7 @@ def _i8128_atualizar_etapa_pedido(numero_proposta, acao, usuario=None):
         return False, "Pedido inválido."
 
     historico = carregar_historico(force_refresh=True)
-    tarefas = sincronizar_producao_com_propostas()
+    tarefas = sincronizar_producao_com_propostas(historico)
     linha = _i8128_resumo_pedido(numero, historico=historico, tarefas=tarefas)
     if not linha:
         return False, "Pedido não está na fila operacional de produção."
@@ -14115,10 +14139,11 @@ def salvar_andamento_proposta(numero, aprovado, pago, entregue):
     controle = {"anteriores": None, "nova_conclusao": False, "aprovou_agora": False, "mudancas": []}
 
     def _mutar(proposta):
+        estado_antes = _status_resumo(proposta)
         anteriores = {
-            "aprovado": valor_bool(proposta.get("aprovado", False)),
-            "pago": valor_bool(proposta.get("pago", False)),
-            "entregue": valor_bool(proposta.get("entregue", False)),
+            "aprovado": bool(estado_antes.get("aprovado")),
+            "pago": bool(estado_antes.get("pago")),
+            "entregue": bool(estado_antes.get("entregue")),
         }
         controle["anteriores"] = anteriores
         antes_concluida = proposta_concluida(proposta)
@@ -14157,10 +14182,12 @@ def salvar_andamento_proposta(numero, aprovado, pago, entregue):
 
     # Confirma com leitura realmente fresca para que a tela do outro usuário veja
     # o mesmo estado que acabou de ser persistido.
-    confirmado = next((p for p in carregar_historico(force_refresh=True) if p.get("numero_proposta") == numero), None)
+    historico_confirmado = carregar_historico(force_refresh=True)
+    confirmado = next((p for p in historico_confirmado if p.get("numero_proposta") == numero), None)
     if confirmado is None:
         return False, "A proposta não foi localizada após a gravação."
-    if any(valor_bool(confirmado.get(campo, False)) != valor for campo, valor in novos.items()):
+    estado_confirmado = _status_resumo(confirmado)
+    if any(bool(estado_confirmado.get(campo)) != valor for campo, valor in novos.items()):
         return False, "O banco recebeu outra atualização simultânea. Reabra a proposta e confirme os status atuais."
 
     if controle["mudancas"]:
@@ -14172,8 +14199,11 @@ def salvar_andamento_proposta(numero, aprovado, pago, entregue):
             detalhe=f"{numero} · {cliente_evt} · " + " / ".join(controle["mudancas"]),
             evento=True,
         )
-    if controle["aprovou_agora"]:
-        sincronizar_producao_com_propostas()
+    if controle["mudancas"]:
+        # A mesma fotografia fresca confirmada acima alimenta o Fluxo. Isso faz
+        # a atualização da Anna aparecer na Central do Jorge no próximo rerun
+        # sem uma segunda interpretação de status.
+        sincronizar_producao_com_propostas(historico_confirmado)
     if proposta_concluida(confirmado):
         if proposta_faturamento_mensal(confirmado):
             return True, f"{numero} com operação concluída; pagamento segue para o Faturamento Mensal."
@@ -14209,9 +14239,10 @@ def dialog_fluxo_anna():
         ]).lower()
         if busca and busca not in texto:
             return False
-        aprovado = valor_bool(prop.get("aprovado", False))
-        pago = valor_bool(prop.get("pago", False))
-        entregue = valor_bool(prop.get("entregue", False))
+        estado_dialog = _status_resumo(prop)
+        aprovado = bool(estado_dialog.get("aprovado"))
+        pago = bool(estado_dialog.get("pago"))
+        entregue = bool(estado_dialog.get("entregue"))
         ativa = proposta_ativa_operacional(prop)
         return {
             "Todas": ativa,
@@ -14241,16 +14272,17 @@ def dialog_fluxo_anna():
                 f"{_anna_fmt_moeda(prop.get('valor_total', prop.get('total', 0)))}"
             )
             with st.form(f"dlg_fluxo_form_{chave_segura}"):
+                estado_form_fluxo = _status_resumo(prop)
                 c1, c2, c3 = st.columns(3)
-                aprovado = c1.checkbox("Aprovado", value=valor_bool(prop.get("aprovado", False)))
+                aprovado = c1.checkbox("Aprovado", value=bool(estado_form_fluxo.get("aprovado")))
                 mensal_fluxo = proposta_faturamento_mensal(prop)
                 pago = c2.checkbox(
                     "💳 Pago no fechamento mensal" if mensal_fluxo else "Pago",
-                    value=valor_bool(prop.get("pago", False)),
+                    value=bool(estado_form_fluxo.get("pago")),
                     disabled=mensal_fluxo,
                     help="Mensalistas recebem baixa somente pela Central de Faturamento Mensal." if mensal_fluxo else None,
                 )
-                entregue = c3.checkbox("Entregue", value=valor_bool(prop.get("entregue", False)))
+                entregue = c3.checkbox("Entregue", value=bool(estado_form_fluxo.get("entregue")))
                 nf1, nf2 = st.columns(2)
                 nao_pagto = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"nf_pag_{prop.get('numero_proposta')}")
                 nao_retorno = nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(prop.get("nao_fechado_sem_retorno")), key=f"nf_ret_{prop.get('numero_proposta')}")
@@ -20253,13 +20285,23 @@ if pagina_atual == "central":
         solicitar_navegacao_aba(indice_aba("fluxo"))
 
     historico_central = carregar_historico(force_refresh=True)
-    tarefas_central = sincronizar_producao_com_propostas()
+    tarefas_central = sincronizar_producao_com_propostas(historico_central)
     tarefas_ativas_central = [t for t in tarefas_central if t.get("ativa", True)]
 
-    propostas_operacionais_central = [p for p in historico_central if not proposta_encerrada(p)]
+    # I8.12.8-HF1 — a Central lê aprovação/pagamento/entrega somente pela
+    # fonte oficial de status. A etapa do producao_db nunca decide se um pedido
+    # está aprovado, entregue ou encerrado.
+    estados_oficiais_central = {
+        str(p.get("numero_proposta") or "").strip(): _status_resumo(p)
+        for p in historico_central if isinstance(p, dict) and str(p.get("numero_proposta") or "").strip()
+    }
+    propostas_operacionais_central = [
+        p for p in historico_central
+        if not _status_resumo(p).get("encerrada")
+    ]
     propostas_aprovadas_abertas_central = [
         p for p in propostas_operacionais_central
-        if valor_bool(p.get("aprovado")) and not valor_bool(p.get("entregue"))
+        if _status_resumo(p).get("aprovado") and not _status_resumo(p).get("entregue")
     ]
     entregas_hoje_central = [
         p for p in propostas_aprovadas_abertas_central
@@ -20269,10 +20311,16 @@ if pagina_atual == "central":
     pedidos_atrasados_central = listar_atrasados_operacionais(historico_central, hoje_central)
     aguardando_aprovacao_central = [
         p for p in propostas_operacionais_central
-        if not valor_bool(p.get("aprovado")) and not valor_bool(p.get("entregue"))
+        if not _status_resumo(p).get("aprovado") and not _status_resumo(p).get("entregue")
     ]
-    em_producao_central = [t for t in tarefas_ativas_central if normalizar_status_fluxo(t.get("status")) in ["Pedido recebido", "Arte pendente", "Aguardando aprovação", "Pronto para produzir", "Em produção"]]
-    prontos_central = [t for t in tarefas_ativas_central if normalizar_status_fluxo(t.get("status")) == "Pronto"]
+    numeros_aprovados_abertos_central = {
+        str(p.get("numero_proposta") or "").strip() for p in propostas_aprovadas_abertas_central
+        if str(p.get("numero_proposta") or "").strip()
+    }
+    tarefas_operacionais_central = [
+        t for t in tarefas_ativas_central
+        if str(t.get("numero_proposta") or "").strip() in numeros_aprovados_abertos_central
+    ]
     pendentes_pagamento_central = [p for p in historico_central if _status_pagamento_pendente(p)]
     valor_previsto_hoje = sum(calcular_valores_proposta(p)[2] for p in entregas_hoje_central)
 
@@ -20377,7 +20425,7 @@ if pagina_atual == "central":
         pb1.metric("🚚 Entregas hoje", len(entregas_hoje_central))
         pb2.metric("💰 Pagamentos pendentes", len(pendentes_pagamento_central))
         pb3.metric("⚠️ Aguardando +30 min", len(aguardando_resposta_central))
-        pb4.metric("📦 Em produção", len(em_producao_central))
+        pb4.metric("📦 Produção ativa", indicadores_unificados_central.get("em_producao_operacional", 0), help="Mesma contagem oficial usada pela Central/indicadores; inclui preparação, pronto para produzir e em produção de pedidos aprovados ainda não entregues.")
 
         st.markdown("#### 📲 De onde estão vindo os atendimentos")
         pc1, pc2, pc3, pc4 = st.columns(4)
@@ -20634,11 +20682,12 @@ if pagina_atual == "central":
             f"🏭 **Produção operacional:** {resumo_prod_central_i8128.get('prontos_iniciar', 0)} pronto(s) para iniciar · "
             f"{resumo_prod_central_i8128.get('em_producao', 0)} em produção · "
             f"{resumo_prod_central_i8128.get('prontos_entrega', 0)} pronto(s) para entrega · "
+            f"{resumo_prod_central_i8128.get('preparacao', 0)} em preparação/arte · "
             f"{resumo_prod_central_i8128.get('bloqueados_material', 0)} bloqueado(s) por liberação/material."
         )
         prioridades_central_i8128 = [
             l for l in central_prod_central_i8128
-            if l.get("risco_atraso") or l.get("situacao_operacional_chave") in {"pronto_iniciar", "em_producao", "pronto_entrega"}
+            if l.get("risco_atraso") or l.get("situacao_operacional_chave") in {"preparacao", "pronto_iniciar", "em_producao", "pronto_entrega"}
         ]
         if prioridades_central_i8128:
             with st.expander("🏭 Ver fila prioritária de produção", expanded=False):
@@ -20652,6 +20701,27 @@ if pagina_atual == "central":
                         f"{linha_central_i8128.get('proxima_acao_producao')}"
                     )
                 st.caption("Ações rápidas e atualização da etapa: Fluxo de Pedidos → Central de Produção.")
+
+        if str(usuario_atual.get("nome", "")).strip().casefold() == "jorge":
+            with st.expander("🔎 Auditoria operacional da Central · I8.12.8-HF1", expanded=False):
+                st.caption(
+                    "Esta tabela não grava nada. Ela mostra, na mesma linha, o status oficial atualizado por Anna/Jorge, "
+                    "a leitura de materiais da I8.12.7 e a etapa manual do Fluxo."
+                )
+                linhas_auditoria_central_hf1 = []
+                for linha_hf1 in central_prod_central_i8128:
+                    numero_hf1 = str(linha_hf1.get("numero_proposta") or "").strip()
+                    estado_hf1 = estados_oficiais_central.get(numero_hf1) or {}
+                    linhas_auditoria_central_hf1.append({
+                        "Pedido": numero_hf1,
+                        "Cliente": linha_hf1.get("cliente_nome"),
+                        "Aprovado": "SIM" if estado_hf1.get("aprovado") else "NÃO",
+                        "Pago": "SIM" if estado_hf1.get("pago") else "NÃO",
+                        "Entregue": "SIM" if estado_hf1.get("entregue") else "NÃO",
+                        "Materiais": linha_hf1.get("status_base"),
+                        "Produção": linha_hf1.get("etapa_manual"),
+                    })
+                st.dataframe(pd.DataFrame(linhas_auditoria_central_hf1), use_container_width=True, hide_index=True)
 
     numeros_consumo_ativos_central_i8124 = {
         str(c.get("numero_proposta") or "").strip()
@@ -21436,7 +21506,7 @@ if pagina_atual == "crm":
     itens_crm = dados_crm.get("itens", [])
     historico_crm = carregar_historico()
     clientes_crm = carregar_clientes()
-    tarefas_crm = sincronizar_producao_com_propostas()
+    tarefas_crm = sincronizar_producao_com_propostas(historico_crm)
     indicadores_unificados_crm = calcular_indicadores_unificados(
         historico_crm, itens_crm, tarefas_crm, agora_local().date()
     )
@@ -23711,7 +23781,8 @@ if pagina_atual == "fluxo":
     st.markdown("<h2 style='text-align:center;'>🎯 Fluxo de Pedidos</h2>", unsafe_allow_html=True)
     st.markdown("<p style='text-align:center;color:#6b7280;'>Mostra o que precisa ser feito agora, da arte até a entrega.</p>", unsafe_allow_html=True)
 
-    tarefas = sincronizar_producao_com_propostas()
+    historico_fluxo_i8128hf1 = carregar_historico(force_refresh=True)
+    tarefas = sincronizar_producao_com_propostas(historico_fluxo_i8128hf1)
     tarefas_ativas = [t for t in tarefas if t.get("ativa", True)]
 
     atrasados = sum(1 for t in tarefas_ativas if classe_prazo_producao(t.get("data_entrega"), t.get("status")) == "Atrasado")
@@ -23728,7 +23799,7 @@ if pagina_atual == "fluxo":
     m5.metric("✅ Prontos", prontos)
 
     # I8.12.7 — camada material/prazo, derivada da mesma fonte usada em Compras e Central.
-    previsao_fluxo_i8127 = _i8127_previsao_producao()
+    previsao_fluxo_i8127 = _i8127_previsao_producao(historico=historico_fluxo_i8128hf1)
     if previsao_fluxo_i8127:
         fr1_i8127, fr2_i8127, fr3_i8127, fr4_i8127 = st.columns(4)
         fr1_i8127.metric("🔴 Risco material/prazo", sum(1 for p in previsao_fluxo_i8127 if p.get("chave") == "risco_atraso"))
@@ -23740,18 +23811,19 @@ if pagina_atual == "fluxo":
     # I8.12.8 — Central de Produção: mesma previsão + andamento manual já existente.
     central_prod_i8128 = _i8128_engine_central(previsao_fluxo_i8127, tarefas_ativas, hoje=hoje_local())
     resumo_prod_i8128 = _i8128_engine_resumo(central_prod_i8128)
-    st.markdown("### 🏭 Central de Produção · I8.12.8")
+    st.markdown("### 🏭 Central de Produção · I8.12.8-HF1")
     st.caption(
-        "Fila única dos pedidos aprovados e ainda não entregues. Materiais e risco vêm da I8.12.7; "
-        "a etapa de produção continua sendo o Fluxo de Pedidos já existente. Nenhum status paralelo é criado."
+        "Fonte única operacional: Aprovado/Pago/Entregue vêm da proposta oficial; materiais e risco vêm da I8.12.7; "
+        "o producao_db guarda somente a etapa manual do trabalho. A mesma leitura fresca é usada por Jorge e Anna."
     )
-    cp81, cp82, cp83, cp84, cp85, cp86 = st.columns(6)
+    cp81, cp82, cp83, cp84, cp85, cp86, cp87 = st.columns(7)
     cp81.metric("Na fila", resumo_prod_i8128.get("total", 0))
-    cp82.metric("🟢 Prontos p/ iniciar", resumo_prod_i8128.get("prontos_iniciar", 0))
-    cp83.metric("🔵 Em produção", resumo_prod_i8128.get("em_producao", 0))
-    cp84.metric("📦 Bloqueados material", resumo_prod_i8128.get("bloqueados_material", 0))
-    cp85.metric("✅ Prontos entrega", resumo_prod_i8128.get("prontos_entrega", 0))
-    cp86.metric("🔴 Em risco", resumo_prod_i8128.get("risco", 0))
+    cp82.metric("🎨 Preparação", resumo_prod_i8128.get("preparacao", 0))
+    cp83.metric("🟢 Prontos p/ iniciar", resumo_prod_i8128.get("prontos_iniciar", 0))
+    cp84.metric("🔵 Em produção", resumo_prod_i8128.get("em_producao", 0))
+    cp85.metric("📦 Bloqueados material", resumo_prod_i8128.get("bloqueados_material", 0))
+    cp86.metric("✅ Prontos entrega", resumo_prod_i8128.get("prontos_entrega", 0))
+    cp87.metric("🔴 Em risco", resumo_prod_i8128.get("risco", 0))
 
     if central_prod_i8128:
         linhas_tabela_i8128 = []
@@ -23774,6 +23846,31 @@ if pagina_atual == "fluxo":
                 "Próxima ação": linha_i8128.get("proxima_acao_producao"),
             })
         st.dataframe(pd.DataFrame(linhas_tabela_i8128), use_container_width=True, hide_index=True, height=min(420, 44 + 35 * len(linhas_tabela_i8128)))
+
+        if str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold() == "jorge":
+            with st.expander("🔎 Fonte única operacional · HF1", expanded=False):
+                st.caption(
+                    "Diagnóstico somente leitura. Aprovado/Pago/Entregue vêm da proposta oficial; "
+                    "Materiais vêm da I8.12.7; Produção é apenas a etapa manual do Fluxo."
+                )
+                mapa_prop_hf1 = {
+                    str(p.get("numero_proposta") or "").strip(): p
+                    for p in historico_fluxo_i8128hf1 if isinstance(p, dict)
+                }
+                auditoria_hf1 = []
+                for linha_hf1 in central_prod_i8128:
+                    numero_hf1 = str(linha_hf1.get("numero_proposta") or "").strip()
+                    estado_hf1 = _status_resumo(mapa_prop_hf1.get(numero_hf1) or {})
+                    auditoria_hf1.append({
+                        "Pedido": numero_hf1,
+                        "Cliente": linha_hf1.get("cliente_nome"),
+                        "Aprovado": "SIM" if estado_hf1.get("aprovado") else "NÃO",
+                        "Pago": "SIM" if estado_hf1.get("pago") else "NÃO",
+                        "Entregue": "SIM" if estado_hf1.get("entregue") else "NÃO",
+                        "Materiais": linha_hf1.get("status_base"),
+                        "Etapa manual": linha_hf1.get("etapa_manual"),
+                    })
+                st.dataframe(pd.DataFrame(auditoria_hf1), use_container_width=True, hide_index=True)
 
         opcoes_prod_i8128 = [str(l.get("numero_proposta") or "") for l in central_prod_i8128]
         rotulos_prod_i8128 = {
@@ -24226,7 +24323,7 @@ if pagina_atual == "faturamento_mensal":
 
 
 if pagina_atual == "compras_custos":
-    st.header("📦 I8.12.8 · Compras, Custos, Estoque, Ficha Técnica, Pedidos & Produção")
+    st.header("📦 I8.12.8-HF1 · Compras, Custos, Estoque, Ficha Técnica, Pedidos & Produção")
     st.caption(
         "Registre custos reais, transforme compras em entradas de estoque, controle materiais e defina o consumo técnico por produto. "
         "A I8.12.4 confirma o consumo por pedido; a I8.12.5 consolida as faltas reais; a I8.12.6 controla o que já foi solicitado ao fornecedor; e a I8.12.7 transforma essas mesmas fontes em previsão operacional de produção e risco de entrega. Solicitação não movimenta estoque: somente o recebimento real registrado como compra/entrada regulariza pendências. O módulo nunca altera sozinho o preço do Catálogo Oficial."
@@ -26287,7 +26384,7 @@ if pagina_atual == "executivo":
     historico_exec = carregar_historico()
     clientes_exec = carregar_clientes()
     atendimentos_exec = carregar_atendimentos()
-    tarefas_exec = [t for t in sincronizar_producao_com_propostas() if t.get("ativa", True)]
+    tarefas_exec = [t for t in sincronizar_producao_com_propostas(historico_exec) if t.get("ativa", True)]
 
     # 20.4.9-G — fonte oficial compartilhada com Relatórios.
     resultados_exec = calcular_resultados_oficiais(historico_exec, hoje_exec)

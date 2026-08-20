@@ -7,6 +7,7 @@ from proposal_status import (
     proposta_concluida as _status_concluida,
     proposta_encerrada as _status_encerrada,
     proposta_faturamento_mensal as _status_mensal,
+    status_bool as _status_bool,
 )
 from alpha_core import listar_atrasados_operacionais
 
@@ -96,22 +97,22 @@ def calcular_indicadores_unificados(
         if _is_today(p, ("data_geracao", "data", "criado_em", "created_at"), hoje)
     ]
     propostas_validas = [p for p in propostas if not _encerrada(p)]
-    aprovadas_total = [p for p in propostas_validas if _bool(p.get("aprovado"))]
+    aprovadas_total = [p for p in propostas_validas if _status_bool(p, "aprovado")]
     aprovadas_hoje = [
         p for p in aprovadas_total
         if _is_today(p, ("aprovado_em", "data_aprovacao"), hoje)
     ]
-    entregues_total = [p for p in propostas_validas if _bool(p.get("entregue"))]
+    entregues_total = [p for p in propostas_validas if _status_bool(p, "entregue")]
     entregues_hoje = [
         p for p in entregues_total
         if _is_today(p, ("entregue_em", "data_entrega_real"), hoje)
     ]
-    pagas_total = [p for p in propostas_validas if _bool(p.get("pago"))]
+    pagas_total = [p for p in propostas_validas if _status_bool(p, "pago")]
 
     propostas_abertas = [p for p in propostas_validas if not _concluida(p)]
-    aguardando_aprovacao = [p for p in propostas_abertas if not _bool(p.get("aprovado"))]
-    aprovadas_em_andamento = [p for p in propostas_abertas if _bool(p.get("aprovado")) and not _bool(p.get("entregue"))]
-    pagamentos_pendentes = [p for p in propostas_abertas if _bool(p.get("aprovado")) and not _status_mensal(p) and not _bool(p.get("pago"))]
+    aguardando_aprovacao = [p for p in propostas_abertas if not _status_bool(p, "aprovado")]
+    aprovadas_em_andamento = [p for p in propostas_abertas if _status_bool(p, "aprovado") and not _status_bool(p, "entregue")]
+    pagamentos_pendentes = [p for p in propostas_abertas if _status_bool(p, "aprovado") and not _status_mensal(p) and not _status_bool(p, "pago")]
 
     entregas_hoje_abertas = [
         p for p in aprovadas_em_andamento

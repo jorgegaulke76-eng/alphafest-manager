@@ -11,6 +11,7 @@ from typing import Any, Callable
 import streamlit as st
 
 from alpha_core import listar_atrasados_operacionais
+from proposal_status import status_bool as _status_bool
 
 
 def _bool(value: Any) -> bool:
@@ -64,11 +65,11 @@ def calcular_briefing(
     propostas = list(historico or [])
     pagos_hoje = [
         p for p in propostas
-        if _bool(p.get("pago")) and _data(p.get("pago_em") or p.get("data_pagamento") or p.get("atualizado_em")) == hoje
+        if _status_bool(p, "pago") and _data(p.get("pago_em") or p.get("data_pagamento") or p.get("atualizado_em")) == hoje
     ]
     recebido_hoje = sum(_valor_total(p, calcular_valores) for p in pagos_hoje)
 
-    aprovados_abertos = [p for p in propostas if _bool(p.get("aprovado")) and not _bool(p.get("entregue"))]
+    aprovados_abertos = [p for p in propostas if _status_bool(p, "aprovado") and not _status_bool(p, "entregue")]
     previsto_aberto = sum(_valor_total(p, calcular_valores) for p in aprovados_abertos)
 
     entregas_hoje = [p for p in aprovados_abertos if _data(p.get("data_entrega")) == hoje]

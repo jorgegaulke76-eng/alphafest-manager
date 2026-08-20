@@ -1,4 +1,4 @@
-"""Motor puro da I8.12.8 — Central de Produção.
+"""Motor puro da I8.12.8-HF1 — Central de Produção.
 
 A Central não cria uma nova fonte de pedido, estoque ou produção. Ela combina:
 - a previsão material/prazo da I8.12.7;
@@ -41,6 +41,29 @@ def _normalizar_status(status: Any) -> str:
     return mapa.get(texto, texto or "Pedido recebido")
 
 
+def reconciliar_etapa_entrega(status_manual: Any, entregue_oficial: Any, status_antes_entrega: Any = None) -> tuple[str, str]:
+    """Espelha somente a entrega oficial sem transformar producao_db em status do pedido.
+
+    Quando a proposta é marcada como Entregue, a etapa anterior é preservada.
+    Se a entrega for desmarcada depois, a etapa volta para o ponto anterior (ou
+    ``Pronto`` como fallback seguro para registros antigos sem memória).
+    """
+    atual = _normalizar_status(status_manual)
+    anterior = _normalizar_status(status_antes_entrega) if str(status_antes_entrega or "").strip() else ""
+    entregue = _bool(entregue_oficial)
+    if entregue:
+        if atual != "Entregue":
+            anterior = atual
+        return "Entregue", anterior
+    if atual == "Entregue":
+        restaurar = anterior or "Pronto"
+        restaurar = _normalizar_status(restaurar)
+        if restaurar == "Entregue":
+            restaurar = "Pronto"
+        return restaurar, anterior
+    return atual, anterior
+
+
 def _data(valor: Any) -> date | None:
     if isinstance(valor, datetime):
         return valor.date()
@@ -71,7 +94,7 @@ def _prioridade_manual(tarefas: list[dict]) -> tuple[str, int]:
 def _etapa_manual(tarefas: list[dict]) -> tuple[str, str]:
     """Retorna (chave, rótulo) da etapa manual agregada do pedido."""
     if not tarefas:
-        return "sem_itens", "⚪ Sem itens no Fluxo"
+        return "sem_registro", "⚪ Aguardando etapa no Fluxo"
     statuses = [_normalizar_status(t.get("status")) for t in tarefas]
     if all(s in _STATUS_PRONTO for s in statuses):
         return "pronto", "✅ Pronto para entrega"
@@ -142,6 +165,10 @@ def montar_central_producao(
             situacao = "🛒 Compra em andamento"
             situacao_chave = "compra_em_andamento"
             proxima_acao = "Acompanhar recebimento do fornecedor"
+        elif etapa_chave == "sem_registro":
+            situacao = etapa
+            situacao_chave = "sem_registro"
+            proxima_acao = "Abrir Fluxo de Pedidos e conferir etapa"
         elif etapa_chave == "preparacao":
             situacao = etapa
             situacao_chave = "preparacao"
@@ -181,6 +208,10 @@ def montar_central_producao(
             "pode_marcar_pronto": pode_marcar_pronto,
             "prioridade_manual": prioridade,
             "prioridade_manual_rank": prioridade_rank,
+            "tem_etapa_manual": bool(itens),
+            "fonte_status_pedido": "proposta_oficial",
+            "fonte_material_prazo": "I8.12.7",
+            "fonte_etapa_producao": "producao_db",
             "risco_atraso": risco,
             "dias_ate_entrega": dias if dias != 999999 else previsao.get("dias_ate_entrega"),
         })
@@ -208,4 +239,5 @@ def resumo_central(linhas: Iterable[dict]) -> dict[str, int]:
         "prontos_entrega": sum(1 for l in linhas if l.get("situacao_operacional_chave") == "pronto_entrega"),
         "bloqueados_material": sum(1 for l in linhas if l.get("situacao_operacional_chave") in {"aguardando_liberacao", "aguardando_material", "compra_em_andamento"}),
         "preparacao": sum(1 for l in linhas if l.get("situacao_operacional_chave") == "preparacao"),
+        "sem_registro": sum(1 for l in linhas if l.get("situacao_operacional_chave") == "sem_registro"),
     }

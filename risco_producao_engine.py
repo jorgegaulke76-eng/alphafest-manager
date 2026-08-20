@@ -16,6 +16,7 @@ from typing import Any, Iterable
 
 from consumo_estoque_engine import resumo_consumo
 from planejamento_compras_engine import quantidade_aberta
+from proposal_status import resumo_status as resumo_status_proposta
 
 
 def _num(valor: Any) -> float:
@@ -132,7 +133,8 @@ def montar_previsao_producao(
     base: list[dict] = []
     for proposta in propostas_validas:
         numero = str(proposta.get("numero_proposta") or "").strip()
-        if not numero or not _bool(_status(proposta, "aprovado")) or _bool(_status(proposta, "entregue")):
+        estado_oficial = resumo_status_proposta(proposta)
+        if not numero or not estado_oficial.get("aprovado") or estado_oficial.get("entregue"):
             continue
         entrega = _data(proposta.get("data_entrega"))
         dias = (entrega - hoje).days if entrega else None

@@ -13,6 +13,7 @@ from proposal_status import (
     proposta_concluida as _status_concluida,
     proposta_encerrada as _status_encerrada,
     proposta_faturamento_mensal as _status_mensal,
+    status_bool as _status_bool,
 )
 
 
@@ -74,8 +75,8 @@ def listar_atrasados_operacionais(
     ativas = [p for p in validas if not _concluida(p)]
     return [
         p for p in ativas
-        if _bool(p.get("aprovado"))
-        and not _bool(p.get("entregue"))
+        if _status_bool(p, "aprovado")
+        and not _status_bool(p, "entregue")
         and (_date(p.get("data_entrega")) or date.max) < hoje
     ]
 
@@ -133,21 +134,21 @@ def calcular_alpha_core(
     contatos = [a for a in list(atendimentos or []) if isinstance(a, dict)]
     validas = [p for p in propostas if not _encerrada(p)]
     ativas = [p for p in validas if not _concluida(p)]
-    aguardando = [p for p in ativas if not _bool(p.get("aprovado"))]
-    aprovadas_abertas = [p for p in ativas if _bool(p.get("aprovado"))]
-    pagamentos_pendentes = [p for p in aprovadas_abertas if not _status_mensal(p) and not _bool(p.get("pago"))]
+    aguardando = [p for p in ativas if not _status_bool(p, "aprovado")]
+    aprovadas_abertas = [p for p in ativas if _status_bool(p, "aprovado")]
+    pagamentos_pendentes = [p for p in aprovadas_abertas if not _status_mensal(p) and not _status_bool(p, "pago")]
 
     previstas_hoje_lista = [p for p in ativas if _date(p.get("data_entrega")) == hoje]
-    pendentes_hoje_lista = [p for p in aprovadas_abertas if not _bool(p.get("entregue")) and _date(p.get("data_entrega")) == hoje]
+    pendentes_hoje_lista = [p for p in aprovadas_abertas if not _status_bool(p, "entregue") and _date(p.get("data_entrega")) == hoje]
     entregues_hoje_lista = [
         p for p in validas
-        if _bool(p.get("entregue"))
+        if _status_bool(p, "entregue")
         and _date(p.get("entregue_em") or p.get("data_entrega_real")) == hoje
     ]
     atrasadas_lista = listar_atrasados_operacionais(propostas, hoje)
     pagos_hoje = [
         p for p in validas
-        if _bool(p.get("pago"))
+        if _status_bool(p, "pago")
         and _date(p.get("pago_em") or p.get("data_pagamento")) == hoje
     ]
 

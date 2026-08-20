@@ -682,3 +682,11 @@ hangelog
 - Correlações automáticas ficam visíveis na comunicação operacional; aliases não são gravados automaticamente.
 - Ambiguidades continuam bloqueadas para evitar baixa no produto errado.
 
+
+## 20.4.9-I8.12.8-HF1 — Fonte Única Operacional da Central
+- Aprovado, Pago e Entregue passam a ser lidos pela mesma fonte oficial em Central, I8.12.7, Alpha Core, THU e indicadores.
+- Central e Fluxo sincronizam a produção com a mesma fotografia fresca do Histórico.
+- `producao_db` permanece somente como etapa manual; não define mais condição comercial/operacional do pedido.
+- Entrega marcada pela proposta espelha `Entregue` no Fluxo preservando a etapa anterior para eventual reabertura.
+- Pedidos em Preparação/arte ficam visíveis na fila prioritária e no resumo da Central.
+- Auditoria somente leitura permite comparar status oficial, materiais e etapa de produção por pedido.
