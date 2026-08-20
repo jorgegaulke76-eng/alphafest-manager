@@ -55,6 +55,7 @@ from necessidades_compras_engine import agregar_necessidades_compra as _i8125_en
 from planejamento_compras_engine import aplicar_planejamento_necessidades as _i8126_engine_aplicar, quantidade_aberta as _i8126_engine_aberta, status_plano as _i8126_engine_status, agregar_aberto_por_material as _i8126_engine_agregar_aberto
 from risco_producao_engine import montar_previsao_producao as _i8127_engine_previsao
 from central_producao_engine import montar_central_producao as _i8128_engine_central, resumo_central as _i8128_engine_resumo, reconciliar_etapa_status_oficial as _i8128_reconciliar_etapa_status
+from central_entregas_engine import montar_fila as _i813_engine_fila, resumo_fila as _i813_engine_resumo
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -498,6 +499,7 @@ ABAS_SISTEMA = [
     ("novo_orcamento", "➕ Novo Orçamento"),
     ("historico", "📋 Histórico"),
     ("fluxo", "🎯 Fluxo de Pedidos"),
+    ("entregas_retiradas", "📦 Entregas & Retiradas"),
     ("relatorios", "📊 Relatórios"),
     ("executivo", "📈 Executivo"),
     ("catalogo", "📦 Catálogo"),
@@ -629,10 +631,11 @@ def obter_perfil_configurado(usuario=None):
             # I8.11.1 / I8.12.1 nascem primeiro no perfil Jorge. A sobreposição
             # garante acesso mesmo quando usuarios_config.json veio de uma base
             # antiga, sem liberar os módulos de gestão no perfil operacional.
-            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"faturamento_mensal", "compras_custos"})
+            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"faturamento_mensal", "compras_custos", "entregas_retiradas"})
             acoes = dict(cfg.get("acoes") or {})
             acoes["faturamento_mensal"] = list(ACOES_PADRAO)
             acoes["compras_custos"] = list(ACOES_PADRAO)
+            acoes["entregas_retiradas"] = list(ACOES_PADRAO)
             cfg["acoes"] = acoes
         return cfg
     nome = str(usuario.get("nome", "")).casefold()
@@ -1552,6 +1555,74 @@ def alternar_status(num_proposta, campo, novo_valor):
         if mudou:
             salvar_producao(tarefas)
     return True
+
+
+# --- 20.4.9-I8.13: Central de Entregas & Retiradas ---
+def atualizar_logistica_pedido(num_proposta, *, tipo_entrega=None, observacao=None, marcar_avisado=False):
+    """Atualiza somente metadados logísticos na proposta oficial.
+
+    Não cria banco paralelo: Pronto/Entregue continuam sendo os marcos oficiais
+    e estes campos apenas descrevem como a saída será concluída.
+    """
+    usuario = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
+    agora_txt = agora_local().strftime("%d/%m/%Y %H:%M")
+    tipos_validos = {"Retirada na AlphaFest", "Entrega AlphaFest", "Motoboy", "Outro"}
+
+    def _mutar(proposta):
+        mudou = False
+        if tipo_entrega is not None:
+            tipo = str(tipo_entrega or "").strip()
+            if tipo and tipo not in tipos_validos:
+                raise ValueError("Forma de saída inválida.")
+            if str(proposta.get("logistica_tipo") or "") != tipo:
+                proposta["logistica_tipo"] = tipo
+                mudou = True
+        if observacao is not None:
+            obs = str(observacao or "").strip()[:500]
+            if str(proposta.get("logistica_observacao") or "") != obs:
+                proposta["logistica_observacao"] = obs
+                mudou = True
+        if marcar_avisado:
+            proposta["cliente_avisado_em"] = agora_txt
+            proposta["cliente_avisado_por"] = usuario
+            mudou = True
+            registrar_evento_proposta(proposta, "Cliente avisado: pedido pronto para retirada/entrega", usuario=usuario)
+        elif mudou:
+            registrar_evento_proposta(proposta, "Dados de entrega/retirada atualizados", usuario=usuario)
+
+    ok, proposta, _ = atualizar_proposta_com_leitura_fresca(num_proposta, _mutar)
+    if ok and proposta:
+        registrar_atividade(
+            obter_usuario_atual(), "Logística do pedido atualizada", "Entregas & Retiradas",
+            detalhe=f"{num_proposta} · {proposta.get('cliente_nome') or 'Cliente'}", evento=True,
+        )
+    return bool(ok)
+
+
+def _i813_dias_aguardando_pronto(proposta, hoje=None):
+    hoje = hoje or hoje_local()
+    texto = str(proposta.get("pronto_em") or "").strip()
+    if not texto:
+        return None
+    for formato in ("%d/%m/%Y %H:%M", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+        try:
+            data_pronto = datetime.strptime(texto[:19] if "%S" in formato else texto[:10], formato).date()
+            return max(0, (hoje - data_pronto).days)
+        except Exception:
+            continue
+    return None
+
+
+def _i813_mensagem_pronto(proposta):
+    cliente = str(proposta.get("cliente_nome") or "").strip().title() or "cliente"
+    numero = str(proposta.get("numero_proposta") or "pedido")
+    tipo = str(proposta.get("logistica_tipo") or "").strip()
+    complemento = {
+        "Retirada na AlphaFest": "Seu pedido já está disponível para retirada na AlphaFest.",
+        "Entrega AlphaFest": "Seu pedido está pronto e vamos organizar a entrega com você.",
+        "Motoboy": "Seu pedido está pronto e podemos organizar o envio por motoboy.",
+    }.get(tipo, "Seu pedido está pronto para retirada/entrega.")
+    return f"Olá, {cliente}! 😊 {complemento} Pedido {numero}. Qualquer dúvida, estamos à disposição. — AlphaFest"
 
 
 def alternar_motivo_nao_fechado(num_proposta, motivo, novo_valor):
@@ -20132,7 +20203,7 @@ aplicar_visibilidade_abas(obter_usuario_atual())
 # Isso elimina o custo do st.tabs, que executava todos os 20 módulos a cada clique.
 GRUPOS_NAVEGACAO = {
     "🏠 Central": ["central"],
-    "📋 Operação": ["novo_orcamento", "historico", "fluxo", "catalogo", "projeto", "jornada"],
+    "📋 Operação": ["novo_orcamento", "historico", "fluxo", "entregas_retiradas", "catalogo", "projeto", "jornada"],
     "👥 Clientes": ["atendimento", "crm", "clientes_360", "relacionamentos"],
     "🧠 Inteligência": ["alpha", "intelligence", "memoria", "conhecimento"],
     "📈 Gestão": ["executivo", "relatorios", "faturamento_mensal", "compras_custos"],
@@ -20362,7 +20433,7 @@ if pagina_atual == "central":
         st.divider()
 
     st.markdown("#### ⚡ Ações rápidas")
-    ac1, ac2, ac3, ac4, ac5 = st.columns(5)
+    ac1, ac2, ac3, ac4, ac5, ac6 = st.columns(6)
     if ac1.button("📥 Novo atendimento", key="acao_rapida_atendimento", use_container_width=True):
         st.session_state["foco_novo_atendimento"] = True
         solicitar_navegacao_aba(indice_aba("atendimento"))
@@ -20377,6 +20448,8 @@ if pagina_atual == "central":
         solicitar_navegacao_aba(indice_aba("relacionamentos"))
     if ac5.button("📦 Fluxo de pedidos", key="acao_rapida_fluxo", use_container_width=True):
         solicitar_navegacao_aba(indice_aba("fluxo"))
+    if ac6.button("🚚 Entregas", key="acao_rapida_entregas", use_container_width=True):
+        solicitar_navegacao_aba(indice_aba("entregas_retiradas"))
 
     historico_central = carregar_historico(force_refresh=True)
     tarefas_central = sincronizar_producao_com_propostas(historico_central)
@@ -20397,6 +20470,17 @@ if pagina_atual == "central":
         p for p in propostas_operacionais_central
         if _status_resumo(p).get("aprovado") and not _status_resumo(p).get("entregue")
     ]
+    fila_saida_central_i813 = _i813_engine_fila(historico_central, hoje_central, resumo_produtos=resumo_produtos_pedido)
+    resumo_saida_central_i813 = _i813_engine_resumo(fila_saida_central_i813)
+    if resumo_saida_central_i813.get("prontos"):
+        st.info(
+            f"📦 **{resumo_saida_central_i813.get('prontos')} pronto(s) aguardando saída** · "
+            f"{resumo_saida_central_i813.get('hoje')} previsto(s) para hoje · "
+            f"{resumo_saida_central_i813.get('nao_avisados')} cliente(s) ainda não registrado(s) como avisados · "
+            f"{resumo_saida_central_i813.get('aguardando_3_dias')} aguardando há 3+ dias."
+        )
+        if st.button("🚚 Abrir Central de Entregas & Retiradas", key="central_abrir_i813", use_container_width=True):
+            rerun_na_aba("entregas_retiradas")
     entregas_hoje_central = [
         p for p in propostas_aprovadas_abertas_central
         if data_entrega_segura(p.get("data_entrega")) == hoje_central
@@ -24143,6 +24227,146 @@ if pagina_atual == "fluxo":
     with entregas:
         lista_entregas = [t for t in tarefas_ativas if normalizar_status_fluxo(t.get("status")) in ["Pronto", "Entregue"]]
         renderizar_cartoes_fluxo(lista_entregas, "entregas")
+
+
+if pagina_atual == "entregas_retiradas":
+    st.header("📦 I8.13 · Central de Entregas & Retiradas")
+    st.caption("Fila única dos pedidos oficialmente Prontos e ainda não Entregues. A proposta continua sendo a fonte oficial; esta Central apenas organiza a saída e registra a logística.")
+
+    usuario_i813 = obter_usuario_atual()
+    if str(usuario_i813.get("nome") or "").strip().casefold() != "jorge":
+        st.info("Esta primeira versão está em homologação no perfil Jorge. Após validação, liberamos para a Anna sem duplicar regras ou dados.")
+    else:
+        historico_i813 = carregar_historico(force_refresh=True)
+        fila_i813 = _i813_engine_fila(historico_i813, hoje_local(), resumo_produtos=resumo_produtos_pedido)
+        resumo_i813 = _i813_engine_resumo(fila_i813)
+
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("📦 Prontos", resumo_i813.get("prontos", 0))
+        m2.metric("📅 Para hoje", resumo_i813.get("hoje", 0))
+        m3.metric("📱 Não avisados", resumo_i813.get("nao_avisados", 0))
+        m4.metric("⏳ 3+ dias", resumo_i813.get("aguardando_3_dias", 0))
+        m5.metric("💳 Não pagos", resumo_i813.get("nao_pagos", 0))
+
+        if not fila_i813:
+            st.success("✅ Nenhum pedido Pronto aguardando retirada ou entrega neste momento.")
+        else:
+            f1, f2 = st.columns([2.2, 1.3])
+            busca_i813 = f1.text_input("🔎 Pesquisar", placeholder="Cliente, proposta ou produto", key="i813_busca")
+            filtro_i813 = f2.selectbox(
+                "Filtro",
+                ["Todos os prontos", "Não avisados", "Para hoje", "Aguardando 3+ dias", "Retirada", "Entrega / Motoboy", "Não pagos"],
+                key="i813_filtro",
+            )
+            termo_i813 = str(busca_i813 or "").strip().casefold()
+            exibidos_i813 = []
+            for linha_i813 in fila_i813:
+                texto_i813 = f"{linha_i813.get('numero_proposta')} {linha_i813.get('cliente_nome')} {linha_i813.get('resumo_produtos')}".casefold()
+                if termo_i813 and termo_i813 not in texto_i813:
+                    continue
+                tipo_i813 = str(linha_i813.get("tipo_entrega") or "")
+                if filtro_i813 == "Não avisados" and linha_i813.get("cliente_avisado"):
+                    continue
+                if filtro_i813 == "Para hoje" and not linha_i813.get("entrega_hoje"):
+                    continue
+                if filtro_i813 == "Aguardando 3+ dias" and (linha_i813.get("dias_aguardando") or 0) < 3:
+                    continue
+                if filtro_i813 == "Retirada" and tipo_i813 != "Retirada na AlphaFest":
+                    continue
+                if filtro_i813 == "Entrega / Motoboy" and tipo_i813 not in {"Entrega AlphaFest", "Motoboy"}:
+                    continue
+                if filtro_i813 == "Não pagos" and linha_i813.get("pago"):
+                    continue
+                exibidos_i813.append(linha_i813)
+
+            st.caption(f"Exibindo {len(exibidos_i813)} de {len(fila_i813)} pedido(s) pronto(s).")
+            if not exibidos_i813:
+                st.info("Nenhum pedido corresponde aos filtros atuais.")
+
+            for idx_i813, linha_i813 in enumerate(exibidos_i813):
+                proposta_i813 = linha_i813.get("proposta") or {}
+                numero_i813 = str(linha_i813.get("numero_proposta") or "SEM-NÚMERO")
+                cliente_i813 = str(linha_i813.get("cliente_nome") or "Cliente")
+                entrega_i813 = linha_i813.get("data_entrega")
+                entrega_txt_i813 = entrega_i813.strftime("%d/%m/%Y") if isinstance(entrega_i813, date) else "Sem data"
+                dias_i813 = linha_i813.get("dias_aguardando")
+                espera_txt_i813 = "tempo de espera não registrado" if dias_i813 is None else ("pronto hoje" if dias_i813 == 0 else f"pronto há {dias_i813} dia(s)")
+                aviso_txt_i813 = (
+                    f"📱 Avisado em {linha_i813.get('cliente_avisado_em')}"
+                    if linha_i813.get("cliente_avisado") else "📱 Cliente ainda não registrado como avisado"
+                )
+                pagamento_txt_i813 = "💳 Pago" if linha_i813.get("pago") else "⚠️ Pagamento pendente"
+
+                with st.container(border=True):
+                    h1, h2 = st.columns([5, 2])
+                    h1.markdown(f"### 📦 {numero_i813} — {cliente_i813}")
+                    h1.caption(f"🧾 {linha_i813.get('resumo_produtos') or 'Sem itens informados'}")
+                    h2.markdown(f"**{pagamento_txt_i813}**")
+                    h2.caption(f"Entrega prevista: {entrega_txt_i813}")
+                    st.caption(f"{aviso_txt_i813} · ⏳ {espera_txt_i813}")
+
+                    tipos_i813 = ["", "Retirada na AlphaFest", "Entrega AlphaFest", "Motoboy", "Outro"]
+                    tipo_atual_i813 = str(linha_i813.get("tipo_entrega") or "")
+                    if tipo_atual_i813 not in tipos_i813:
+                        tipos_i813.append(tipo_atual_i813)
+                    c1, c2 = st.columns([1.35, 2.65])
+                    tipo_novo_i813 = c1.selectbox(
+                        "Forma de saída", tipos_i813, index=tipos_i813.index(tipo_atual_i813),
+                        format_func=lambda x: "Definir..." if not x else x, key=f"i813_tipo_{numero_i813}_{idx_i813}",
+                    )
+                    obs_nova_i813 = c2.text_input(
+                        "Observação logística", value=str(linha_i813.get("observacao") or ""),
+                        placeholder="Ex.: retirar após 15h, entregar na portaria...", key=f"i813_obs_{numero_i813}_{idx_i813}",
+                    )
+
+                    a1, a2, a3, a4 = st.columns(4)
+                    if a1.button("💾 Salvar logística", key=f"i813_salvar_{numero_i813}_{idx_i813}", use_container_width=True):
+                        try:
+                            if atualizar_logistica_pedido(numero_i813, tipo_entrega=tipo_novo_i813, observacao=obs_nova_i813):
+                                st.session_state["_mensagem_sucesso_pendente"] = f"Logística do pedido {numero_i813} atualizada."
+                                st.rerun()
+                            st.error("Não foi possível salvar a logística. Atualize os dados e tente novamente.")
+                        except Exception as exc_i813:
+                            st.error(f"Não foi possível salvar: {exc_i813}")
+
+                    numero_wa_i813 = re.sub(r"\D", "", str(linha_i813.get("whatsapp") or ""))
+                    if numero_wa_i813 and not numero_wa_i813.startswith("55"):
+                        numero_wa_i813 = "55" + numero_wa_i813
+                    mensagem_i813 = _i813_mensagem_pronto({**proposta_i813, "logistica_tipo": tipo_novo_i813})
+                    link_i813 = f"https://wa.me/{numero_wa_i813}?text={quote(mensagem_i813)}" if numero_wa_i813 else f"https://wa.me/?text={quote(mensagem_i813)}"
+                    a2.link_button("📱 Abrir WhatsApp", link_i813, use_container_width=True)
+
+                    if a3.button("✅ Registrar aviso", key=f"i813_avisado_{numero_i813}_{idx_i813}", use_container_width=True):
+                        if atualizar_logistica_pedido(numero_i813, tipo_entrega=tipo_novo_i813, observacao=obs_nova_i813, marcar_avisado=True):
+                            st.session_state["_mensagem_sucesso_pendente"] = f"Cliente de {numero_i813} registrado como avisado."
+                            st.rerun()
+                        st.error("Não foi possível registrar o aviso ao cliente.")
+
+                    confirmar_entrega_i813 = a4.checkbox("Confirmar saída", key=f"i813_conf_entrega_{numero_i813}_{idx_i813}")
+                    if st.button(
+                        "🚚 Marcar Entregue", type="primary", use_container_width=True,
+                        disabled=not confirmar_entrega_i813, key=f"i813_entregue_{numero_i813}_{idx_i813}",
+                        help="Entregue fecha a operação e mantém Pronto automaticamente.",
+                    ):
+                        # Persiste a logística digitada antes do fechamento.
+                        atualizar_logistica_pedido(numero_i813, tipo_entrega=tipo_novo_i813, observacao=obs_nova_i813)
+                        if alternar_status(numero_i813, "entregue", True):
+                            st.session_state["_mensagem_sucesso_pendente"] = f"Pedido {numero_i813} marcado como Entregue e removido da fila aberta."
+                            st.rerun()
+                        st.error("Não foi possível concluir a entrega. Atualize os dados e tente novamente.")
+
+        entregues_i813 = [p for p in historico_i813 if _status_resumo(p).get("entregue")]
+        entregues_i813 = sorted(
+            entregues_i813,
+            key=lambda p: str(p.get("entregue_em") or p.get("data_entrega_real") or p.get("data_entrega") or ""),
+            reverse=True,
+        )
+        with st.expander(f"📚 Histórico recente de entregues ({len(entregues_i813)})", expanded=False):
+            for p_i813 in entregues_i813[:20]:
+                st.write(
+                    f"• **{p_i813.get('numero_proposta', '—')} — {p_i813.get('cliente_nome', 'Cliente')}** · "
+                    f"🧾 {resumo_produtos_pedido(p_i813)} · entregue em {p_i813.get('entregue_em') or p_i813.get('data_entrega_real') or 'data não registrada'}"
+                )
 
 
 if pagina_atual == "faturamento_mensal":
