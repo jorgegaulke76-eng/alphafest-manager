@@ -56,6 +56,7 @@ from planejamento_compras_engine import aplicar_planejamento_necessidades as _i8
 from risco_producao_engine import montar_previsao_producao as _i8127_engine_previsao
 from central_producao_engine import montar_central_producao as _i8128_engine_central, resumo_central as _i8128_engine_resumo, reconciliar_etapa_status_oficial as _i8128_reconciliar_etapa_status
 from central_entregas_engine import montar_fila as _i813_engine_fila, resumo_fila as _i813_engine_resumo, dias_aguardando as _i813_engine_dias_aguardando, ordenar_historico_entregues as _i813_engine_ordenar_entregues
+from prioridade_operacional_engine import montar_prioridades_operacionais as _i8131_engine_prioridades, resumo_prioridades as _i8131_engine_resumo, indexar_prioridades as _i8131_engine_indexar
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -20872,6 +20873,71 @@ if pagina_atual == "central":
     # I8.12.8 — Central do Jorge recebe a mesma fila operacional do Fluxo.
     central_prod_central_i8128 = _i8128_engine_central(previsao_central_i8127, tarefas_ativas_central, hoje=hoje_local())
     resumo_prod_central_i8128 = _i8128_engine_resumo(central_prod_central_i8128)
+
+    # I8.13.1 — prioridade é derivada, nunca um novo status gravado.
+    fila_saida_central_i8131 = _i813_engine_fila(
+        historico_central, hoje_local(), resumo_produtos=resumo_produtos_pedido
+    )
+    prioridades_central_i8131 = _i8131_engine_prioridades(
+        historico_central,
+        hoje_local(),
+        central_producao=central_prod_central_i8128,
+        fila_entregas=fila_saida_central_i8131,
+        resumo_produtos=resumo_produtos_pedido,
+    )
+    resumo_prioridades_central_i8131 = _i8131_engine_resumo(prioridades_central_i8131)
+    mapa_prioridades_central_i8131 = _i8131_engine_indexar(prioridades_central_i8131)
+
+    if str(usuario_atual.get("nome", "")).strip().casefold() == "jorge" and prioridades_central_i8131:
+        st.markdown("#### 🧠 Prioridades operacionais · I8.13.1")
+        ip1, ip2, ip3, ip4, ip5 = st.columns(5)
+        ip1.metric(
+            "🚨 Críticos",
+            resumo_prioridades_central_i8131.get("criticos", 0),
+            help="Atrasos de produção e saídas vencidas. Pedido Pronto nunca é contado como atraso de produção.",
+        )
+        ip2.metric("🔴 Para hoje", resumo_prioridades_central_i8131.get("vence_hoje", 0), help="Produções ou saídas previstas para hoje.")
+        ip3.metric("🟠 Próx. 2 dias", resumo_prioridades_central_i8131.get("proximos_2_dias", 0), help="Pedidos ainda não Prontos com entrega em 1 ou 2 dias.")
+        ip4.metric("📦 Prontos saída", resumo_prioridades_central_i8131.get("prontos_saida", 0), help="Produção concluída aguardando retirada/entrega.")
+        ip5.metric("⚪ Sem data", resumo_prioridades_central_i8131.get("sem_data", 0), help="Pedidos aprovados ainda abertos sem data de entrega registrada.")
+        st.caption(
+            "A prioridade é recalculada automaticamente por prazo + status oficial + produção/material + saída. "
+            "Ela não cria novo status e não substitui Aprovado/Pago/Pronto/Entregue."
+        )
+
+        top_prioridades_central_i8131 = [
+            x for x in prioridades_central_i8131
+            if int(x.get("prioridade_rank", 9)) <= 3
+        ][:10]
+        if top_prioridades_central_i8131:
+            with st.expander(
+                f"🎯 Ver o que precisa de atenção primeiro ({len(top_prioridades_central_i8131)})",
+                expanded=bool(resumo_prioridades_central_i8131.get("criticos")),
+            ):
+                for idx_prio_i8131, linha_prio_i8131 in enumerate(top_prioridades_central_i8131):
+                    entrega_prio_i8131 = linha_prio_i8131.get("data_entrega")
+                    entrega_txt_prio_i8131 = entrega_prio_i8131.strftime("%d/%m/%Y") if isinstance(entrega_prio_i8131, date) else "Sem data"
+                    pcol1, pcol2 = st.columns([7, 2])
+                    pcol1.markdown(
+                        f"**{linha_prio_i8131.get('prioridade_rotulo')} · "
+                        f"{html.escape(str(linha_prio_i8131.get('numero_proposta')))} — "
+                        f"{html.escape(str(linha_prio_i8131.get('cliente_nome') or 'Cliente'))}**"
+                    )
+                    pcol1.caption(
+                        f"🧾 {linha_prio_i8131.get('resumo_produtos') or 'Sem itens informados'} · "
+                        f"Entrega {entrega_txt_prio_i8131} · Área: {linha_prio_i8131.get('area')}"
+                    )
+                    pcol1.write(f"**Por quê:** {linha_prio_i8131.get('motivo_prioridade')}")
+                    pcol1.write(f"**Próxima ação:** {linha_prio_i8131.get('proxima_acao')}")
+                    pcol2.button(
+                        "📋 Abrir pedido",
+                        key=f"i8131_abrir_{idx_prio_i8131}_{linha_prio_i8131.get('numero_proposta')}",
+                        use_container_width=True,
+                        on_click=lambda n=linha_prio_i8131.get("numero_proposta"): st.session_state.__setitem__("alerta_proposta_numero", n),
+                    )
+        else:
+            st.success("🟢 Nenhum pedido nas faixas críticas, de hoje ou dos próximos 5 dias.")
+
     if central_prod_central_i8128:
         st.info(
             f"🏭 **Produção operacional:** {resumo_prod_central_i8128.get('prontos_iniciar', 0)} pronto(s) para iniciar · "
@@ -20880,35 +20946,19 @@ if pagina_atual == "central":
             f"{resumo_prod_central_i8128.get('preparacao', 0)} em preparação/arte · "
             f"{resumo_prod_central_i8128.get('bloqueados_material', 0)} bloqueado(s) por liberação/material."
         )
-        prioridades_central_i8128 = [
-            l for l in central_prod_central_i8128
-            if l.get("risco_atraso") or l.get("situacao_operacional_chave") in {"preparacao", "pronto_iniciar", "em_producao", "pronto_entrega"}
-        ]
-        if prioridades_central_i8128:
-            with st.expander("🏭 Ver top prioridades de produção", expanded=False):
-                for linha_central_i8128 in prioridades_central_i8128[:8]:
-                    entrega_central_i8128 = linha_central_i8128.get("data_entrega")
-                    entrega_txt_central_i8128 = entrega_central_i8128.strftime("%d/%m/%Y") if isinstance(entrega_central_i8128, date) else "Sem data"
-                    risco_txt_central_i8128 = " · 🔴 risco de atraso" if linha_central_i8128.get("risco_atraso") else ""
-                    st.write(
-                        f"• **{linha_central_i8128.get('numero_proposta')} — {linha_central_i8128.get('cliente_nome', 'Cliente')}** · "
-                        f"🧾 {linha_central_i8128.get('resumo_produtos', 'Sem itens informados')} · "
-                        f"{linha_central_i8128.get('etapa_manual')} · entrega {entrega_txt_central_i8128}{risco_txt_central_i8128} · "
-                        f"{linha_central_i8128.get('proxima_acao_producao')}"
-                    )
-                st.caption("Este bloco é apenas um recorte das prioridades mais urgentes. A fila completa está logo abaixo.")
-
         with st.expander(f"📋 Ver fila completa de produção ({len(central_prod_central_i8128)})", expanded=False):
             for linha_central_i8128 in central_prod_central_i8128:
                 entrega_central_i8128 = linha_central_i8128.get("data_entrega")
                 entrega_txt_central_i8128 = entrega_central_i8128.strftime("%d/%m/%Y") if isinstance(entrega_central_i8128, date) else "Sem data"
+                prioridade_linha_i8131 = mapa_prioridades_central_i8131.get(str(linha_central_i8128.get("numero_proposta") or ""), {})
+                prioridade_txt_i8131 = prioridade_linha_i8131.get("prioridade_rotulo") or "📌 PRIORIDADE NÃO CALCULADA"
                 st.write(
-                    f"• **{linha_central_i8128.get('numero_proposta')} — {linha_central_i8128.get('cliente_nome', 'Cliente')}** · "
+                    f"• **{prioridade_txt_i8131} · {linha_central_i8128.get('numero_proposta')} — {linha_central_i8128.get('cliente_nome', 'Cliente')}** · "
                     f"🧾 {linha_central_i8128.get('resumo_produtos', 'Sem itens informados')} · "
                     f"{linha_central_i8128.get('situacao_operacional')} · entrega {entrega_txt_central_i8128} · "
                     f"{linha_central_i8128.get('proxima_acao_producao')}"
                 )
-            st.caption("Todos os pedidos aprovados e não entregues aparecem aqui; o bloco acima mostra somente as maiores prioridades.")
+            st.caption("Todos os pedidos aprovados e não entregues aparecem aqui, identificados pela prioridade calculada.")
 
         if str(usuario_atual.get("nome", "")).strip().casefold() == "jorge":
             with st.expander("🔎 Auditoria operacional da Central · I8.12.8-HF2", expanded=False):
@@ -24252,6 +24302,14 @@ if pagina_atual == "entregas_retiradas":
         historico_i813 = carregar_historico(force_refresh=True)
         fila_i813 = _i813_engine_fila(historico_i813, hoje_local(), resumo_produtos=resumo_produtos_pedido)
         resumo_i813 = _i813_engine_resumo(fila_i813)
+        prioridades_saida_i8131 = _i8131_engine_prioridades(
+            historico_i813,
+            hoje_local(),
+            fila_entregas=fila_i813,
+            resumo_produtos=resumo_produtos_pedido,
+        )
+        mapa_prioridades_saida_i8131 = _i8131_engine_indexar(prioridades_saida_i8131)
+        resumo_prioridades_saida_i8131 = _i8131_engine_resumo(prioridades_saida_i8131)
 
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("📦 Prontos", resumo_i813.get("prontos", 0))
@@ -24259,6 +24317,11 @@ if pagina_atual == "entregas_retiradas":
         m3.metric("📱 Não avisados", resumo_i813.get("nao_avisados", 0))
         m4.metric("⏳ 3+ dias", resumo_i813.get("aguardando_3_dias", 0))
         m5.metric("💳 Não pagos", resumo_i813.get("nao_pagos", 0))
+        if resumo_prioridades_saida_i8131.get("saidas_atrasadas"):
+            st.error(
+                f"🚚 **{resumo_prioridades_saida_i8131.get('saidas_atrasadas')} pedido(s) Pronto(s) com saída prevista vencida.** "
+                "Isto é atraso de retirada/entrega, não atraso de produção."
+            )
 
         if not fila_i813:
             st.success("✅ Nenhum pedido Pronto aguardando retirada ou entrega neste momento.")
@@ -24313,6 +24376,8 @@ if pagina_atual == "entregas_retiradas":
                     if linha_i813.get("cliente_avisado") else "📱 Cliente ainda não registrado como avisado"
                 )
                 pagamento_txt_i813 = "💳 Pago" if linha_i813.get("pago") else "⚠️ Pagamento pendente"
+                prioridade_saida_linha_i8131 = mapa_prioridades_saida_i8131.get(numero_i813, {})
+                prioridade_saida_txt_i8131 = prioridade_saida_linha_i8131.get("prioridade_rotulo") or "📦 AGUARDANDO SAÍDA"
 
                 with st.container(border=True):
                     h1, h2 = st.columns([5, 2])
@@ -24320,7 +24385,7 @@ if pagina_atual == "entregas_retiradas":
                     h1.caption(f"🧾 {linha_i813.get('resumo_produtos') or 'Sem itens informados'}")
                     h2.markdown(f"**{pagamento_txt_i813}**")
                     h2.caption(f"Entrega prevista: {entrega_txt_i813}")
-                    st.caption(f"{aviso_txt_i813} · {espera_txt_i813}")
+                    st.caption(f"{prioridade_saida_txt_i8131} · {aviso_txt_i813} · {espera_txt_i813}")
 
                     tipos_i813 = ["", "Retirada na AlphaFest", "Entrega AlphaFest", "Motoboy", "Outro"]
                     tipo_atual_i813 = str(linha_i813.get("tipo_entrega") or "")

@@ -716,3 +716,10 @@ hangelog
 - Entrega marcada pela proposta espelha `Entregue` no Fluxo preservando a etapa anterior para eventual reabertura.
 - Pedidos em Preparação/arte ficam visíveis na fila prioritária e no resumo da Central.
 - Auditoria somente leitura permite comparar status oficial, materiais e etapa de produção por pedido.
+
+## 20.4.9-I8.13.1 — Inteligência de Prioridades e Atrasos
+- Prioridade operacional passa a ser calculada automaticamente por prazo, status oficial, produção/material e saída.
+- Pedido Pronto nunca é classificado como atraso de produção; prazo vencido após Pronto vira `Saída atrasada`.
+- Central Jorge ganha painel de prioridades com motivo e próxima ação.
+- Fila completa de produção e Central de Entregas passam a exibir a mesma classificação derivada.
+- Nenhum banco novo e nenhuma prioridade manual gravada na proposta.
