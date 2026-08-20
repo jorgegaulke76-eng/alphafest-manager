@@ -3,9 +3,12 @@
 A proposta oficial continua sendo a única fonte de Pronto/Entregue. Este motor
 somente organiza a fila de saída e calcula indicadores; não persiste dados.
 
-HF1 reforça duas regras de confiabilidade:
-- espera em Pronto só é calculada quando existe data real registrada em ``pronto_em``;
-- histórico de entregas usa apenas data real de entrega, nunca a data prevista.
+HF2 reforça a proveniência da data de Pronto:
+- a espera só é calculada quando ``pronto_em`` foi capturado por uma transição nova e
+  traz o marcador ``pronto_em_confiavel``;
+- carimbos legados ou criados por versões anteriores sem esse marcador não são
+  tratados como 'Pronto hoje';
+- histórico de entregas continua usando apenas data real de entrega, nunca a prevista.
 """
 from __future__ import annotations
 
@@ -67,16 +70,25 @@ def _date(value: Any) -> date | None:
     return parsed.date() if parsed is not None else None
 
 
-def dias_aguardando(record: dict, hoje: date) -> int | None:
-    """Dias desde a conclusão real da produção.
+def pronto_em_confiavel(record: dict) -> datetime | None:
+    """Retorna o carimbo de Pronto somente quando sua origem é comprovada.
 
-    Registros legados sem ``pronto_em`` retornam ``None``. A HF1 proíbe usar
-    data prevista, data de atualização ou a data atual como fallback.
+    A HF2 introduz ``pronto_em_confiavel``. Isso é propositalmente conservador:
+    registros legados podem até conter ``pronto_em`` preenchido por versões
+    anteriores, mas sem o marcador não há como provar que aquele horário é o
+    momento real em que a produção terminou. Nesse caso, devolvemos ``None``.
     """
-    pronto_em = _date(record.get("pronto_em"))
-    if pronto_em is None:
+    if not _bool(record.get("pronto_em_confiavel")):
         return None
-    return max(0, (hoje - pronto_em).days)
+    return _datetime(record.get("pronto_em"))
+
+
+def dias_aguardando(record: dict, hoje: date) -> int | None:
+    """Dias desde uma conclusão de produção com data comprovadamente capturada."""
+    pronto_dt = pronto_em_confiavel(record)
+    if pronto_dt is None:
+        return None
+    return max(0, (hoje - pronto_dt.date()).days)
 
 
 def data_real_entrega(record: dict) -> datetime | None:
@@ -128,6 +140,7 @@ def montar_fila(propostas: Iterable[dict], hoje: date, resumo_produtos=None) -> 
             "cliente_avisado_por": str(proposta.get("cliente_avisado_por") or "").strip(),
             "pronto_em": str(proposta.get("pronto_em") or "").strip(),
             "pronto_por": str(proposta.get("pronto_por") or "").strip(),
+            "pronto_em_confiavel": _bool(proposta.get("pronto_em_confiavel")),
             "dias_aguardando": dias,
             "entrega_hoje": entrega == hoje,
             "proposta": proposta,

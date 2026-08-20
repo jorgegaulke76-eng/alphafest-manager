@@ -1501,8 +1501,10 @@ def alternar_status(num_proposta, campo, novo_valor):
         if campo == "entregue" and valor_novo:
             if not bool(estado_anterior.get("pronto")):
                 p["pronto"] = True
-                p.setdefault("pronto_em", agora_local().strftime("%d/%m/%Y %H:%M"))
-                p.setdefault("pronto_por", usuario_status)
+                # HF2/I8.13-HF2: esta transição aconteceu agora, então o carimbo é confiável.
+                p["pronto_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                p["pronto_por"] = usuario_status
+                p["pronto_em_confiavel"] = True
                 registrar_evento_proposta(p, "Pedido pronto", usuario=usuario_status)
             p["entregue"] = True
         elif campo == "pronto" and not valor_novo and bool(estado_anterior.get("entregue")):
@@ -1514,14 +1516,19 @@ def alternar_status(num_proposta, campo, novo_valor):
 
         agora_status = agora_local().strftime("%d/%m/%Y %H:%M")
         campo_data = {"aprovado": "aprovado_em", "pago": "pago_em", "pronto": "pronto_em", "entregue": "entregue_em"}[campo]
-        if valor_novo and not valor_anterior and not p.get(campo_data):
-            p[campo_data] = agora_status
-        if campo == "pronto" and valor_novo and not valor_anterior:
-            p["pronto_por"] = usuario_status
+        if valor_novo and not valor_anterior:
+            if campo == "pronto":
+                # Não reaproveita carimbo legado: uma transição real nova recebe hora nova e proveniência explícita.
+                p["pronto_em"] = agora_status
+                p["pronto_por"] = usuario_status
+                p["pronto_em_confiavel"] = True
+            elif not p.get(campo_data):
+                p[campo_data] = agora_status
         elif not valor_novo and valor_anterior:
             p.pop(campo_data, None)
             if campo == "pronto":
                 p.pop("pronto_por", None)
+                p.pop("pronto_em_confiavel", None)
 
         if valor_anterior != valor_novo:
             rotulos = {
@@ -14309,10 +14316,19 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
             ("aprovado", "aprovado_em"), ("pago", "pago_em"),
             ("pronto", "pronto_em"), ("entregue", "entregue_em"),
         ):
-            if novos[campo] and not anteriores[campo] and not proposta.get(campo_data):
-                proposta[campo_data] = agora_status
+            if novos[campo] and not anteriores[campo]:
+                if campo == "pronto":
+                    # I8.13-HF2: só uma transição observada nesta versão cria uma data de Pronto confiável.
+                    proposta["pronto_em"] = agora_status
+                    proposta["pronto_por"] = usuario_status
+                    proposta["pronto_em_confiavel"] = True
+                elif not proposta.get(campo_data):
+                    proposta[campo_data] = agora_status
             elif not novos[campo] and anteriores[campo]:
                 proposta.pop(campo_data, None)
+                if campo == "pronto":
+                    proposta.pop("pronto_por", None)
+                    proposta.pop("pronto_em_confiavel", None)
 
         rotulos = {
             "aprovado": "Orçamento aprovado",

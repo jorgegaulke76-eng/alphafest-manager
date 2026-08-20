@@ -1,3 +1,11 @@
+## 20.4.9-I8.13-HF2 — Proveniência real do Pronto
+- Corrige definitivamente o falso **“Pronto hoje”** em pedidos legados.
+- `pronto_em` só é usado para calcular espera quando possui o marcador interno `pronto_em_confiavel`, criado exclusivamente numa transição real de Pronto observada pela versão atual.
+- Carimbos antigos sem proveniência passam a ser tratados como **data de conclusão não registrada**, mesmo que o campo `pronto_em` esteja preenchido.
+- Novos acionamentos de Pronto gravam `pronto_em`, `pronto_por` e a proveniência no mesmo salvamento oficial.
+- Histórico de entregas mantém a ordenação correta da HF1: datas reais mais recentes primeiro e registros sem data real no final.
+- Nenhuma migração destrutiva e nenhum JSON operacional alterado no pacote.
+
 ## 20.4.9-I8.13-HF1 — Datas reais + Histórico correto
 - Novos registros de Pronto passam a gravar `pronto_em` e `pronto_por` na proposta oficial.
 - Pedidos Pronto sem data histórica confiável não recebem fallback inventado; a Central informa data de conclusão não registrada.
