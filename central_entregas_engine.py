@@ -2,6 +2,10 @@
 
 A proposta oficial continua sendo a única fonte de Pronto/Entregue. Este motor
 somente organiza a fila de saída e calcula indicadores; não persiste dados.
+
+HF1 reforça duas regras de confiabilidade:
+- espera em Pronto só é calculada quando existe data real registrada em ``pronto_em``;
+- histórico de entregas usa apenas data real de entrega, nunca a data prevista.
 """
 from __future__ import annotations
 
@@ -25,27 +29,74 @@ def _status(record: dict) -> dict:
     return {"aprovado": aprovado, "pago": pago, "pronto": pronto, "entregue": entregue}
 
 
-def _date(value: Any) -> date | None:
+def _datetime(value: Any) -> datetime | None:
+    """Converte formatos antigos/atuais sem inventar data quando o campo está vazio."""
     if isinstance(value, datetime):
-        return value.date()
+        return value.replace(tzinfo=None) if value.tzinfo is not None else value
     if isinstance(value, date):
-        return value
+        return datetime.combine(value, datetime.min.time())
+
     text = str(value or "").strip()
     if not text:
         return None
-    for fmt, sample in (("%d/%m/%Y %H:%M", 16), ("%d/%m/%Y", 10), ("%Y-%m-%dT%H:%M:%S", 19), ("%Y-%m-%d", 10)):
+
+    # Primeiro tenta ISO, inclusive registros com timezone/Z.
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        return parsed.replace(tzinfo=None) if parsed.tzinfo is not None else parsed
+    except ValueError:
+        pass
+
+    for fmt in (
+        "%d/%m/%Y %H:%M:%S",
+        "%d/%m/%Y %H:%M",
+        "%d/%m/%Y",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d",
+    ):
         try:
-            return datetime.strptime(text[:sample], fmt).date()
+            return datetime.strptime(text, fmt)
         except ValueError:
-            pass
+            continue
     return None
 
 
+def _date(value: Any) -> date | None:
+    parsed = _datetime(value)
+    return parsed.date() if parsed is not None else None
+
+
 def dias_aguardando(record: dict, hoje: date) -> int | None:
+    """Dias desde a conclusão real da produção.
+
+    Registros legados sem ``pronto_em`` retornam ``None``. A HF1 proíbe usar
+    data prevista, data de atualização ou a data atual como fallback.
+    """
     pronto_em = _date(record.get("pronto_em"))
     if pronto_em is None:
         return None
     return max(0, (hoje - pronto_em).days)
+
+
+def data_real_entrega(record: dict) -> datetime | None:
+    """Data efetiva da entrega, sem recorrer a ``data_entrega`` (prevista)."""
+    return _datetime(record.get("entregue_em")) or _datetime(record.get("data_entrega_real"))
+
+
+def ordenar_historico_entregues(propostas: Iterable[dict]) -> list[dict]:
+    """Mais recentes primeiro; registros legados sem data real ficam no final."""
+    itens = [p for p in (propostas or []) if isinstance(p, dict)]
+
+    def chave(proposta: dict):
+        real = data_real_entrega(proposta)
+        return (
+            1 if real is not None else 0,
+            real or datetime.min,
+            str(proposta.get("numero_proposta") or ""),
+        )
+
+    return sorted(itens, key=chave, reverse=True)
 
 
 def montar_fila(propostas: Iterable[dict], hoje: date, resumo_produtos=None) -> list[dict]:
@@ -76,6 +127,7 @@ def montar_fila(propostas: Iterable[dict], hoje: date, resumo_produtos=None) -> 
             "cliente_avisado_em": avisado_em,
             "cliente_avisado_por": str(proposta.get("cliente_avisado_por") or "").strip(),
             "pronto_em": str(proposta.get("pronto_em") or "").strip(),
+            "pronto_por": str(proposta.get("pronto_por") or "").strip(),
             "dias_aguardando": dias,
             "entrega_hoje": entrega == hoje,
             "proposta": proposta,
@@ -96,6 +148,9 @@ def resumo_fila(linhas: Iterable[dict]) -> dict:
         "prontos": len(itens),
         "hoje": sum(1 for x in itens if x.get("entrega_hoje")),
         "nao_avisados": sum(1 for x in itens if not x.get("cliente_avisado")),
-        "aguardando_3_dias": sum(1 for x in itens if (x.get("dias_aguardando") or 0) >= 3),
+        "aguardando_3_dias": sum(
+            1 for x in itens
+            if isinstance(x.get("dias_aguardando"), int) and x.get("dias_aguardando") >= 3
+        ),
         "nao_pagos": sum(1 for x in itens if not x.get("pago")),
     }

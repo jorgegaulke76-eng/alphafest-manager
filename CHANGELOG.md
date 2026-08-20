@@ -1,3 +1,11 @@
+## 20.4.9-I8.13-HF1 — Datas reais + Histórico correto
+- Novos registros de Pronto passam a gravar `pronto_em` e `pronto_por` na proposta oficial.
+- Pedidos Pronto sem data histórica confiável não recebem fallback inventado; a Central informa data de conclusão não registrada.
+- Indicador 3+ dias considera apenas tempo de espera calculável a partir de `pronto_em`.
+- Histórico de Entregues passa a ordenar por data real (`entregue_em`/`data_entrega_real`), nunca pela data prevista.
+- Registros antigos sem data real permanecem preservados e aparecem ao final do histórico.
+- Nenhum banco novo e nenhum JSON operacional migrado.
+
 ## 20.4.9-I8.12.8-HF2 — Status Pronto + Resumo Operacional do Pedido
 - Adicionado o status oficial **Pronto** entre Pago e Entregue; Pronto significa produção concluída aguardando retirada/entrega.
 - Entregue passa a representar fechamento operacional e implica Pronto automaticamente, sem remover o registro do Histórico.

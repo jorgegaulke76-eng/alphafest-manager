@@ -55,7 +55,7 @@ from necessidades_compras_engine import agregar_necessidades_compra as _i8125_en
 from planejamento_compras_engine import aplicar_planejamento_necessidades as _i8126_engine_aplicar, quantidade_aberta as _i8126_engine_aberta, status_plano as _i8126_engine_status, agregar_aberto_por_material as _i8126_engine_agregar_aberto
 from risco_producao_engine import montar_previsao_producao as _i8127_engine_previsao
 from central_producao_engine import montar_central_producao as _i8128_engine_central, resumo_central as _i8128_engine_resumo, reconciliar_etapa_status_oficial as _i8128_reconciliar_etapa_status
-from central_entregas_engine import montar_fila as _i813_engine_fila, resumo_fila as _i813_engine_resumo
+from central_entregas_engine import montar_fila as _i813_engine_fila, resumo_fila as _i813_engine_resumo, dias_aguardando as _i813_engine_dias_aguardando, ordenar_historico_entregues as _i813_engine_ordenar_entregues
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -1502,6 +1502,7 @@ def alternar_status(num_proposta, campo, novo_valor):
             if not bool(estado_anterior.get("pronto")):
                 p["pronto"] = True
                 p.setdefault("pronto_em", agora_local().strftime("%d/%m/%Y %H:%M"))
+                p.setdefault("pronto_por", usuario_status)
                 registrar_evento_proposta(p, "Pedido pronto", usuario=usuario_status)
             p["entregue"] = True
         elif campo == "pronto" and not valor_novo and bool(estado_anterior.get("entregue")):
@@ -1515,8 +1516,12 @@ def alternar_status(num_proposta, campo, novo_valor):
         campo_data = {"aprovado": "aprovado_em", "pago": "pago_em", "pronto": "pronto_em", "entregue": "entregue_em"}[campo]
         if valor_novo and not valor_anterior and not p.get(campo_data):
             p[campo_data] = agora_status
+        if campo == "pronto" and valor_novo and not valor_anterior:
+            p["pronto_por"] = usuario_status
         elif not valor_novo and valor_anterior:
             p.pop(campo_data, None)
+            if campo == "pronto":
+                p.pop("pronto_por", None)
 
         if valor_anterior != valor_novo:
             rotulos = {
@@ -1600,17 +1605,8 @@ def atualizar_logistica_pedido(num_proposta, *, tipo_entrega=None, observacao=No
 
 
 def _i813_dias_aguardando_pronto(proposta, hoje=None):
-    hoje = hoje or hoje_local()
-    texto = str(proposta.get("pronto_em") or "").strip()
-    if not texto:
-        return None
-    for formato in ("%d/%m/%Y %H:%M", "%d/%m/%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
-        try:
-            data_pronto = datetime.strptime(texto[:19] if "%S" in formato else texto[:10], formato).date()
-            return max(0, (hoje - data_pronto).days)
-        except Exception:
-            continue
-    return None
+    # Mantém compatibilidade interna usando a mesma regra pura da Central.
+    return _i813_engine_dias_aguardando(proposta, hoje or hoje_local())
 
 
 def _i813_mensagem_pronto(proposta):
@@ -24290,7 +24286,12 @@ if pagina_atual == "entregas_retiradas":
                 entrega_i813 = linha_i813.get("data_entrega")
                 entrega_txt_i813 = entrega_i813.strftime("%d/%m/%Y") if isinstance(entrega_i813, date) else "Sem data"
                 dias_i813 = linha_i813.get("dias_aguardando")
-                espera_txt_i813 = "tempo de espera não registrado" if dias_i813 is None else ("pronto hoje" if dias_i813 == 0 else f"pronto há {dias_i813} dia(s)")
+                if dias_i813 is None:
+                    espera_txt_i813 = "📦 Pronto · data de conclusão não registrada"
+                elif dias_i813 == 0:
+                    espera_txt_i813 = "⏳ Pronto hoje"
+                else:
+                    espera_txt_i813 = f"⏳ Pronto há {dias_i813} dia(s)"
                 aviso_txt_i813 = (
                     f"📱 Avisado em {linha_i813.get('cliente_avisado_em')}"
                     if linha_i813.get("cliente_avisado") else "📱 Cliente ainda não registrado como avisado"
@@ -24303,7 +24304,7 @@ if pagina_atual == "entregas_retiradas":
                     h1.caption(f"🧾 {linha_i813.get('resumo_produtos') or 'Sem itens informados'}")
                     h2.markdown(f"**{pagamento_txt_i813}**")
                     h2.caption(f"Entrega prevista: {entrega_txt_i813}")
-                    st.caption(f"{aviso_txt_i813} · ⏳ {espera_txt_i813}")
+                    st.caption(f"{aviso_txt_i813} · {espera_txt_i813}")
 
                     tipos_i813 = ["", "Retirada na AlphaFest", "Entrega AlphaFest", "Motoboy", "Outro"]
                     tipo_atual_i813 = str(linha_i813.get("tipo_entrega") or "")
@@ -24356,11 +24357,9 @@ if pagina_atual == "entregas_retiradas":
                         st.error("Não foi possível concluir a entrega. Atualize os dados e tente novamente.")
 
         entregues_i813 = [p for p in historico_i813 if _status_resumo(p).get("entregue")]
-        entregues_i813 = sorted(
-            entregues_i813,
-            key=lambda p: str(p.get("entregue_em") or p.get("data_entrega_real") or p.get("data_entrega") or ""),
-            reverse=True,
-        )
+        # HF1: ordena somente por data REAL de entrega. Data prevista nunca
+        # posiciona registro legado no histórico; sem data real fica no final.
+        entregues_i813 = _i813_engine_ordenar_entregues(entregues_i813)
         with st.expander(f"📚 Histórico recente de entregues ({len(entregues_i813)})", expanded=False):
             for p_i813 in entregues_i813[:20]:
                 st.write(
