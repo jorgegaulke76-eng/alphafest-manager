@@ -1,4 +1,4 @@
-"""Motor puro da I8.12.8-HF1 — Central de Produção.
+"""Motor puro da I8.12.8-HF2 — Central de Produção.
 
 A Central não cria uma nova fonte de pedido, estoque ou produção. Ela combina:
 - a previsão material/prazo da I8.12.7;
@@ -26,7 +26,7 @@ def _bool(valor: Any) -> bool:
     if isinstance(valor, (int, float)):
         return bool(valor)
     return str(valor or "").strip().casefold() in {
-        "1", "true", "sim", "yes", "ok", "pago", "aprovado", "entregue"
+        "1", "true", "sim", "yes", "ok", "pago", "aprovado", "pronto", "entregue"
     }
 
 
@@ -41,27 +41,40 @@ def _normalizar_status(status: Any) -> str:
     return mapa.get(texto, texto or "Pedido recebido")
 
 
-def reconciliar_etapa_entrega(status_manual: Any, entregue_oficial: Any, status_antes_entrega: Any = None) -> tuple[str, str]:
-    """Espelha somente a entrega oficial sem transformar producao_db em status do pedido.
+def reconciliar_etapa_status_oficial(
+    status_manual: Any,
+    pronto_oficial: Any,
+    entregue_oficial: Any,
+    status_antes_finalizacao: Any = None,
+) -> tuple[str, str]:
+    """Espelha Pronto/Entregue oficiais sem dar ao producao_db o status do pedido.
 
-    Quando a proposta é marcada como Entregue, a etapa anterior é preservada.
-    Se a entrega for desmarcada depois, a etapa volta para o ponto anterior (ou
-    ``Pronto`` como fallback seguro para registros antigos sem memória).
+    A etapa anterior é preservada para permitir correções: desmarcar Entregue
+    mantém Pronto; desmarcar Pronto restaura a etapa anterior de produção.
     """
     atual = _normalizar_status(status_manual)
-    anterior = _normalizar_status(status_antes_entrega) if str(status_antes_entrega or "").strip() else ""
+    anterior = _normalizar_status(status_antes_finalizacao) if str(status_antes_finalizacao or "").strip() else ""
     entregue = _bool(entregue_oficial)
+    pronto = _bool(pronto_oficial) or entregue
     if entregue:
-        if atual != "Entregue":
+        if atual not in {"Pronto", "Entregue"}:
             anterior = atual
         return "Entregue", anterior
-    if atual == "Entregue":
-        restaurar = anterior or "Pronto"
-        restaurar = _normalizar_status(restaurar)
-        if restaurar == "Entregue":
-            restaurar = "Pronto"
+    if pronto:
+        if atual not in {"Pronto", "Entregue"}:
+            anterior = atual
+        return "Pronto", anterior
+    if atual in {"Pronto", "Entregue"}:
+        restaurar = _normalizar_status(anterior or "Pronto para produzir")
+        if restaurar in {"Pronto", "Entregue"}:
+            restaurar = "Pronto para produzir"
         return restaurar, anterior
     return atual, anterior
+
+
+def reconciliar_etapa_entrega(status_manual: Any, entregue_oficial: Any, status_antes_entrega: Any = None) -> tuple[str, str]:
+    """Compatibilidade com a assinatura da HF1."""
+    return reconciliar_etapa_status_oficial(status_manual, False, entregue_oficial, status_antes_entrega)
 
 
 def _data(valor: Any) -> date | None:
@@ -153,7 +166,13 @@ def montar_central_producao(
             and all(s in (_STATUS_EM_PRODUCAO | _STATUS_PRONTO) for s in statuses)
         )
 
-        if chave_material == "aguardando_liberacao":
+        if chave_material == "pronto_aguardando_entrega" or _bool(previsao.get("pronto_oficial")):
+            situacao = "📦 Pronto — aguardando retirada/entrega"
+            situacao_chave = "pronto_entrega"
+            proxima_acao = "Retirar/entregar ao cliente"
+            pode_iniciar = False
+            pode_marcar_pronto = False
+        elif chave_material == "aguardando_liberacao":
             situacao = "⚪ Aguardando liberação de materiais"
             situacao_chave = "aguardando_liberacao"
             proxima_acao = "Confirmar liberação de consumo"

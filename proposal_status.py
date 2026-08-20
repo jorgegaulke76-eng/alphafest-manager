@@ -15,7 +15,7 @@ def valor_bool(value: Any) -> bool:
     if isinstance(value, (int, float)):
         return bool(value)
     return str(value or "").strip().casefold() in {
-        "1", "true", "sim", "yes", "ok", "pago", "aprovado", "entregue"
+        "1", "true", "sim", "yes", "ok", "pago", "aprovado", "pronto", "entregue"
     }
 
 
@@ -23,13 +23,14 @@ def valor_campo(record: dict[str, Any] | None, campo: str, default: Any = None) 
     """Lê um campo oficial aceitando apenas aliases legados conhecidos.
 
     A fonte continua sendo a própria proposta; esta função evita que telas novas
-    criem regras próprias para ``Aprovado/aprovado``, ``Pago/pago`` e
-    ``Entregue/entregue``. O primeiro valor realmente presente vence.
+    criem regras próprias para ``Aprovado/aprovado``, ``Pago/pago``,
+    ``Pronto/pronto`` e ``Entregue/entregue``. O primeiro valor realmente presente vence.
     """
     record = record or {}
     aliases = {
         "aprovado": ("aprovado", "Aprovado"),
         "pago": ("pago", "Pago"),
+        "pronto": ("pronto", "Pronto"),
         "entregue": ("entregue", "Entregue"),
         "encerrado": ("encerrado", "Encerrado"),
         "faturamento_mensal": ("faturamento_mensal", "FaturamentoMensal"),
@@ -70,19 +71,22 @@ def proposta_encerrada(record: dict[str, Any] | None) -> bool:
     }
 
 
-def proposta_concluida(record: dict[str, Any] | None) -> bool:
-    """Regra oficial de conclusão operacional.
+def proposta_pronta(record: dict[str, Any] | None) -> bool:
+    """Status oficial Pronto. Entregue sempre implica Pronto."""
+    record = record or {}
+    return status_bool(record, "pronto") or status_bool(record, "entregue")
 
-    - cobrança por proposta: Aprovado + Pago + Entregue;
-    - faturamento mensal: Aprovado + Entregue. O pagamento pertence à Central
-      de Faturamento Mensal e não mantém o pedido operacionalmente pendente.
+
+def proposta_concluida(record: dict[str, Any] | None) -> bool:
+    """Regra oficial de conclusão operacional da HF2.
+
+    O status ``Entregue`` fecha a operação. Pagamento continua sendo informação
+    financeira e pode permanecer pendente sem manter o pedido nas filas de
+    produção/entrega. ``Pronto`` ainda é operacionalmente aberto: o pedido
+    aguarda retirada do cliente ou entrega pela AlphaFest.
     """
     record = record or {}
-    aprovado = status_bool(record, "aprovado")
-    entregue = status_bool(record, "entregue")
-    if proposta_faturamento_mensal(record):
-        return aprovado and entregue
-    return aprovado and status_bool(record, "pago") and entregue
+    return status_bool(record, "aprovado") and status_bool(record, "entregue")
 
 
 def proposta_ativa_operacional(record: dict[str, Any] | None) -> bool:
@@ -98,6 +102,7 @@ def pagamento_individual_pendente(record: dict[str, Any] | None) -> bool:
     record = record or {}
     return (
         not proposta_encerrada(record)
+        and not proposta_concluida(record)
         and status_bool(record, "aprovado")
         and not proposta_faturamento_mensal(record)
         and not status_bool(record, "pago")
@@ -109,6 +114,8 @@ def resumo_status(record: dict[str, Any] | None) -> dict[str, Any]:
     mensal = proposta_faturamento_mensal(record)
     concluida = proposta_concluida(record)
     encerrada = proposta_encerrada(record)
+    entregue = status_bool(record, "entregue")
+    pronto = proposta_pronta(record)
     return {
         "mensalista": mensal,
         "encerrada": encerrada,
@@ -117,5 +124,6 @@ def resumo_status(record: dict[str, Any] | None) -> dict[str, Any]:
         "pagamento_individual_pendente": pagamento_individual_pendente(record),
         "aprovado": status_bool(record, "aprovado"),
         "pago": status_bool(record, "pago"),
-        "entregue": status_bool(record, "entregue"),
+        "pronto": pronto,
+        "entregue": entregue,
     }

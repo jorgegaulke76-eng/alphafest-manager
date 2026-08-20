@@ -13,6 +13,7 @@ from proposal_status import (
     proposta_concluida as _status_concluida,
     proposta_encerrada as _status_encerrada,
     proposta_faturamento_mensal as _status_mensal,
+    proposta_pronta as _status_pronta,
     status_bool as _status_bool,
 )
 
@@ -23,7 +24,7 @@ def _bool(value: Any) -> bool:
     if isinstance(value, (int, float)):
         return bool(value)
     return str(value or "").strip().casefold() in {
-        "1", "true", "sim", "yes", "ok", "pago", "aprovado", "entregue"
+        "1", "true", "sim", "yes", "ok", "pago", "aprovado", "pronto", "entregue"
     }
 
 
@@ -76,6 +77,7 @@ def listar_atrasados_operacionais(
     return [
         p for p in ativas
         if _status_bool(p, "aprovado")
+        and not _status_pronta(p)
         and not _status_bool(p, "entregue")
         and (_date(p.get("data_entrega")) or date.max) < hoje
     ]
@@ -108,6 +110,7 @@ class AlphaCoreSnapshot:
     pedidos_ativos: int
     aguardando_aprovacao: int
     aprovados_em_andamento: int
+    prontos_aguardando_entrega: int
     pagamentos_pendentes: int
     previstas_hoje: int
     pendentes_entrega_hoje: int
@@ -136,6 +139,7 @@ def calcular_alpha_core(
     ativas = [p for p in validas if not _concluida(p)]
     aguardando = [p for p in ativas if not _status_bool(p, "aprovado")]
     aprovadas_abertas = [p for p in ativas if _status_bool(p, "aprovado")]
+    prontos_aguardando_entrega = [p for p in aprovadas_abertas if _status_pronta(p) and not _status_bool(p, "entregue")]
     pagamentos_pendentes = [p for p in aprovadas_abertas if not _status_mensal(p) and not _status_bool(p, "pago")]
 
     previstas_hoje_lista = [p for p in ativas if _date(p.get("data_entrega")) == hoje]
@@ -177,6 +181,7 @@ def calcular_alpha_core(
         pedidos_ativos=len(ativas),
         aguardando_aprovacao=len(aguardando),
         aprovados_em_andamento=len(aprovadas_abertas),
+        prontos_aguardando_entrega=len(prontos_aguardando_entrega),
         pagamentos_pendentes=len(pagamentos_pendentes),
         previstas_hoje=len(previstas_hoje_lista),
         pendentes_entrega_hoje=len(pendentes_hoje_lista),

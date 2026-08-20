@@ -1,3 +1,13 @@
+## 20.4.9-I8.12.8-HF2 — Status Pronto + Resumo Operacional do Pedido
+- Adicionado o status oficial **Pronto** entre Pago e Entregue; Pronto significa produção concluída aguardando retirada/entrega.
+- Entregue passa a representar fechamento operacional e implica Pronto automaticamente, sem remover o registro do Histórico.
+- Central/Fluxo e proposta oficial sincronizam Pronto de forma controlada; `producao_db` continua sendo somente etapa manual.
+- Pedidos Prontos deixam de ser classificados como produção atrasada e saem da fila de liberação de consumo.
+- Alpha Core, THU, Resumo Mensal, Central, Previsão e Produção passam a tratar Pronto pela mesma fonte oficial.
+- Criado resumo compacto dos produtos do pedido, derivado dos itens da proposta, e propagado para cards/listas operacionais.
+- Central diferencia **Top prioridades** da **Fila completa de produção**, evitando que pedidos aprovados pareçam ausentes do painel.
+- Nenhum banco novo e nenhum JSON operacional migrado.
+
 ## 20.4.9-I8.12.7-HF1 — Comunicação coerente antes da liberação
 - “Aguardando liberação” agora exibe **Material ainda não apurado**.
 - Remove afirmações “Sem falta física” / “Materiais atendidos” quando ainda não houve consumo confirmado.

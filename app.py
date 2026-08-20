@@ -54,9 +54,10 @@ from consumo_estoque_engine import resumo_consumo as _i8124_engine_resumo, pende
 from necessidades_compras_engine import agregar_necessidades_compra as _i8125_engine_agregar
 from planejamento_compras_engine import aplicar_planejamento_necessidades as _i8126_engine_aplicar, quantidade_aberta as _i8126_engine_aberta, status_plano as _i8126_engine_status, agregar_aberto_por_material as _i8126_engine_agregar_aberto
 from risco_producao_engine import montar_previsao_producao as _i8127_engine_previsao
-from central_producao_engine import montar_central_producao as _i8128_engine_central, resumo_central as _i8128_engine_resumo, reconciliar_etapa_entrega as _i8128_reconciliar_etapa
+from central_producao_engine import montar_central_producao as _i8128_engine_central, resumo_central as _i8128_engine_resumo, reconciliar_etapa_status_oficial as _i8128_reconciliar_etapa_status
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
+    proposta_pronta as _status_proposta_pronta,
     proposta_encerrada as _status_proposta_encerrada,
     proposta_concluida as _status_proposta_concluida,
     proposta_ativa_operacional as _status_proposta_ativa,
@@ -64,6 +65,7 @@ from proposal_status import (
     resumo_status as _status_resumo,
 )
 from executive_center import renderizar_centro_executivo
+from pedido_resumo import resumo_produtos_pedido
 try:
     from thu_embedded import THU_AVATAR_B64
 except Exception:
@@ -1475,20 +1477,55 @@ def registrar_evento_proposta(proposta, descricao, usuario="Sistema"):
 
 
 def alternar_status(num_proposta, campo, novo_valor):
+    """Atualiza um marco oficial e reconcilia todas as telas dependentes.
+
+    HF2: Aprovado → Pago → Pronto → Entregue. Entregue sempre implica Pronto;
+    desmarcar Entregue preserva Pronto para que o pedido volte como aguardando
+    retirada/entrega, e não como produção incompleta.
+    """
     usuario_status = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
+    campo = str(campo or "").strip().casefold()
+    if campo not in {"aprovado", "pago", "pronto", "entregue"}:
+        return False
     alterou_aprovacao = {"valor": False}
     evento_status_hf4 = {"texto": ""}
 
     def _mutar(p):
         estado_anterior = _status_resumo(p)
-        valor_anterior = bool(estado_anterior.get(campo)) if campo in {"aprovado", "pago", "entregue"} else valor_bool(p.get(campo, False))
-        p[campo] = bool(novo_valor)
-        if valor_anterior != bool(novo_valor):
-            rotulos = {"pago": "Pagamento confirmado", "entregue": "Entrega concluída", "aprovado": "Orçamento aprovado"}
-            acao = rotulos.get(campo, campo.replace("_", " ").title())
-            evento_status_hf4["texto"] = acao if novo_valor else f"{acao} desmarcado"
+        valor_anterior = bool(estado_anterior.get(campo))
+        valor_novo = bool(novo_valor)
+        # Entregue é fechamento operacional e, por definição, já está Pronto.
+        if campo == "entregue" and valor_novo:
+            if not bool(estado_anterior.get("pronto")):
+                p["pronto"] = True
+                p.setdefault("pronto_em", agora_local().strftime("%d/%m/%Y %H:%M"))
+                registrar_evento_proposta(p, "Pedido pronto", usuario=usuario_status)
+            p["entregue"] = True
+        elif campo == "pronto" and not valor_novo and bool(estado_anterior.get("entregue")):
+            # Não existe Entregue sem Pronto. A UI também bloqueia este caso.
+            p["pronto"] = True
+            return
+        else:
+            p[campo] = valor_novo
+
+        agora_status = agora_local().strftime("%d/%m/%Y %H:%M")
+        campo_data = {"aprovado": "aprovado_em", "pago": "pago_em", "pronto": "pronto_em", "entregue": "entregue_em"}[campo]
+        if valor_novo and not valor_anterior and not p.get(campo_data):
+            p[campo_data] = agora_status
+        elif not valor_novo and valor_anterior:
+            p.pop(campo_data, None)
+
+        if valor_anterior != valor_novo:
+            rotulos = {
+                "pago": "Pagamento confirmado",
+                "pronto": "Pedido pronto",
+                "entregue": "Entrega concluída",
+                "aprovado": "Orçamento aprovado",
+            }
+            acao = rotulos[campo]
+            evento_status_hf4["texto"] = acao if valor_novo else f"{acao} desmarcado"
             registrar_evento_proposta(p, evento_status_hf4["texto"], usuario=usuario_status)
-            if campo == "aprovado" and bool(novo_valor):
+            if campo == "aprovado" and valor_novo:
                 alterou_aprovacao["valor"] = True
 
     ok, proposta_alterada, _ = atualizar_proposta_com_leitura_fresca(num_proposta, _mutar)
@@ -1497,10 +1534,9 @@ def alternar_status(num_proposta, campo, novo_valor):
     if proposta_alterada and evento_status_hf4["texto"]:
         cliente_evt = str(proposta_alterada.get("cliente_nome") or proposta_alterada.get("cliente") or "Cliente").strip()
         registrar_atividade(obter_usuario_atual(), "Status da proposta atualizado", "Propostas", detalhe=f"{num_proposta} · {cliente_evt} · {evento_status_hf4['texto']}", evento=True)
-    historico_pos_status = carregar_historico(force_refresh=True) if proposta_alterada and evento_status_hf4["texto"] else None
+    historico_pos_status = carregar_historico(force_refresh=True) if proposta_alterada else None
     if historico_pos_status is not None:
-        # HF1: qualquer alteração oficial de Aprovado/Pago/Entregue reconcilia
-        # imediatamente o espelho do Fluxo; não esperamos outra tela abrir.
+        # Fonte única: Aprovado/Pago/Pronto/Entregue reconciliam imediatamente o Fluxo.
         sincronizar_producao_com_propostas(historico_pos_status)
     if proposta_alterada and alterou_aprovacao["valor"]:
         tarefas = carregar_producao()
@@ -2465,7 +2501,7 @@ def valor_bool(valor):
         return valor
     if isinstance(valor, (int, float)):
         return bool(valor)
-    return str(valor or "").strip().casefold() in {"1", "true", "sim", "yes", "ok", "pago", "aprovado", "entregue"}
+    return str(valor or "").strip().casefold() in {"1", "true", "sim", "yes", "ok", "pago", "aprovado", "pronto", "entregue"}
 
 
 
@@ -2715,6 +2751,7 @@ def diagnosticar_sincronizacao_status(historico):
         estado_oficial = _status_resumo(prop)
         aprovado = bool(estado_oficial.get("aprovado"))
         pago = bool(estado_oficial.get("pago"))
+        pronto = bool(estado_oficial.get("pronto"))
         entregue = bool(estado_oficial.get("entregue"))
         legado_concluido = aprovado and pago and entregue
         oficial_concluido = proposta_concluida(prop)
@@ -2725,9 +2762,12 @@ def diagnosticar_sincronizacao_status(historico):
                 "Cobrança": "Mensal" if proposta_faturamento_mensal(prop) else "Por proposta",
                 "Aprovado": "Sim" if aprovado else "Não",
                 "Pago": "Sim" if pago else "Não",
+                "Pronto": "Sim" if pronto else "Não",
                 "Entregue": "Sim" if entregue else "Não",
                 "Regra oficial": "Concluída" if oficial_concluido else "Ativa",
             })
+        if entregue and not pronto:
+            contradicoes.append({"Proposta": numero, "Cliente": cliente, "Problema": "Entregue sem Pronto (registro legado; leitura oficial corrige em memória)"})
         if entregue and not aprovado:
             contradicoes.append({"Proposta": numero, "Cliente": cliente, "Problema": "Entregue sem aprovação"})
         if pago and not aprovado:
@@ -2922,9 +2962,11 @@ def auditar_integridade_resultados(historico):
                 "problema": "Proposta sem número identificador",
             })
 
-        aprovado = valor_bool(p.get("aprovado"))
-        pago = valor_bool(p.get("pago"))
-        entregue = valor_bool(p.get("entregue"))
+        estado_integridade = _status_resumo(p)
+        aprovado = bool(estado_integridade.get("aprovado"))
+        pago = bool(estado_integridade.get("pago"))
+        pronto = bool(estado_integridade.get("pronto"))
+        entregue = bool(estado_integridade.get("entregue"))
 
         if pago and not aprovado:
             achados.append({
@@ -2932,11 +2974,23 @@ def auditar_integridade_resultados(historico):
                 "proposta": numero or f"registro {indice + 1}",
                 "problema": "Marcada como paga, mas não aprovada",
             })
+        if pronto and not aprovado:
+            achados.append({
+                "nivel": "Crítico",
+                "proposta": numero or f"registro {indice + 1}",
+                "problema": "Marcada como pronta, mas não aprovada",
+            })
         if entregue and not aprovado:
             achados.append({
                 "nivel": "Crítico",
                 "proposta": numero or f"registro {indice + 1}",
                 "problema": "Marcada como entregue, mas não aprovada",
+            })
+        if entregue and not pronto:
+            achados.append({
+                "nivel": "Legado",
+                "proposta": numero or f"registro {indice + 1}",
+                "problema": "Entregue sem campo Pronto gravado; a leitura oficial corrige em memória",
             })
         if entregue and not pago and not proposta_faturamento_mensal(p):
             achados.append({
@@ -2956,6 +3010,12 @@ def auditar_integridade_resultados(historico):
                 "nivel": "Legado",
                 "proposta": numero or f"registro {indice + 1}",
                 "problema": "Pagamento sem data própria; indicador diário usa fallback",
+            })
+        if pronto and not entregue and not _data_resultado(p.get("pronto_em")):
+            achados.append({
+                "nivel": "Legado",
+                "proposta": numero or f"registro {indice + 1}",
+                "problema": "Pedido Pronto sem data própria de conclusão da produção",
             })
         if entregue and not (_data_resultado(p.get("entregue_em")) or _data_resultado(p.get("data_entrega_real"))):
             achados.append({
@@ -3050,7 +3110,7 @@ def renderizar_auditoria_resultados(historico, resultados=None):
             f"pagamento: {fallback.get('pagamento', 0)}, entrega: {fallback.get('entrega', 0)}."
         )
     else:
-        st.success("Datas de aprovação, pagamento e entrega estão consistentes para os registros auditados.")
+        st.success("Datas de aprovação, pagamento, pronto e entrega estão consistentes para os registros auditados.")
 
     if not achados:
         st.success("Nenhuma inconsistência estrutural encontrada nos resultados.")
@@ -4424,17 +4484,20 @@ def _i8124_proposta_na_fila_liberacao(proposta, numeros_consumo_ativos=None):
     Regra homologada pelo negócio:
     - entra somente se Aprovado = SIM;
     - sai ao confirmar o consumo;
+    - sai quando Pronto = SIM (produção já concluída);
     - sai também quando Entregue = SIM.
 
-    Nenhum outro status, data ou idade da proposta participa desta decisão.
+    Data/idade da proposta não participa desta decisão.
     """
     proposta = proposta or {}
     numero = str(proposta.get("numero_proposta") or "").strip()
     if not numero:
         return False
     aprovado = valor_bool(_i8124_valor_status_proposta(proposta, "aprovado"))
-    entregue = valor_bool(_i8124_valor_status_proposta(proposta, "entregue"))
-    if not aprovado or entregue:
+    estado = _status_resumo(proposta)
+    pronto = bool(estado.get("pronto"))
+    entregue = bool(estado.get("entregue"))
+    if not aprovado or pronto or entregue:
         return False
     if numeros_consumo_ativos is None:
         consumo_confirmado = _i8124_consumo_ativo_pedido(numero) is not None
@@ -5328,7 +5391,7 @@ def renderizar_resumo_mensal_executivo_i8112(historico, snapshot_alpha_core=None
     )
 
     core = snapshot_alpha_core.to_dict() if hasattr(snapshot_alpha_core, "to_dict") else dict(snapshot_alpha_core or {})
-    rc1, rc2, rc3, rc4, rc5 = st.columns(5)
+    rc1, rc2, rc3, rc4, rc5, rc6 = st.columns(6)
     rc1.metric(
         "📈 Conversão",
         f"{atual['conversao']:.1f}%".replace(".", ","),
@@ -5336,9 +5399,10 @@ def renderizar_resumo_mensal_executivo_i8112(historico, snapshot_alpha_core=None
         help="Conversão comercial = propostas emitidas no mês que estão aprovadas ÷ todas as propostas emitidas no mês. Não fechadas/encerradas permanecem no denominador.",
     )
     rc2.metric("📦 Pedidos ativos · agora", int(core.get("pedidos_ativos") or 0))
-    rc3.metric("📊 Carteira aberta · agora", _i8112_moeda(core.get("carteira_aberta") or 0))
-    rc4.metric("🟡 Aprovação pendente · agora", int(core.get("aguardando_aprovacao") or 0))
-    rc5.metric("🔴 Atrasados · agora", int(core.get("atrasados") or 0))
+    rc3.metric("✅ Prontos · agora", int(core.get("prontos_aguardando_entrega") or 0), help="Produção concluída; aguardando retirada do cliente ou entrega pela AlphaFest.")
+    rc4.metric("📊 Carteira aberta · agora", _i8112_moeda(core.get("carteira_aberta") or 0))
+    rc5.metric("🟡 Aprovação pendente · agora", int(core.get("aguardando_aprovacao") or 0))
+    rc6.metric("🔴 Atrasados · agora", int(core.get("atrasados") or 0), help="Não inclui pedidos já marcados como Pronto.")
 
     with st.expander("🔎 Como ler o resumo mensal", expanded=False):
         st.caption(
@@ -7891,7 +7955,11 @@ def sincronizar_producao_com_propostas(historico=None):
             especificacoes = item.get("especificacoes", "")
             processos = inferir_processos(produto, especificacoes)
             estado_oficial_prop = _status_resumo(prop)
-            status_base = "Entregue" if estado_oficial_prop.get("entregue") else status_inicial_fluxo(produto, especificacoes)
+            status_base = (
+                "Entregue" if estado_oficial_prop.get("entregue")
+                else "Pronto" if estado_oficial_prop.get("pronto")
+                else status_inicial_fluxo(produto, especificacoes)
+            )
             base = {
                 "id": tarefa_id,
                 "numero_proposta": numero,
@@ -7903,7 +7971,7 @@ def sincronizar_producao_com_propostas(historico=None):
                 "especificacoes": especificacoes,
                 "quantidade": item.get("quantidade", 0),
                 "status": status_base,
-                "status_antes_entrega": status_inicial_fluxo(produto, especificacoes) if estado_oficial_prop.get("entregue") else "",
+                "status_antes_finalizacao": status_inicial_fluxo(produto, especificacoes) if estado_oficial_prop.get("pronto") else "",
                 "prioridade": "Normal",
                 "processos": processos,
                 "necessita_arte": "Criação/ajuste de arte" in processos,
@@ -7927,13 +7995,14 @@ def sincronizar_producao_com_propostas(historico=None):
                 if "necessita_arte" not in atual:
                     atual["necessita_arte"] = "Criação/ajuste de arte" in atual.get("processos", [])
                     alterado = True
-                novo_status, status_antes_entrega = _i8128_reconciliar_etapa(
+                novo_status, status_antes_finalizacao = _i8128_reconciliar_etapa_status(
                     atual.get("status"),
+                    estado_oficial_prop.get("pronto", False),
                     estado_oficial_prop.get("entregue", False),
-                    atual.get("status_antes_entrega"),
+                    atual.get("status_antes_finalizacao") or atual.get("status_antes_entrega"),
                 )
-                if status_antes_entrega and atual.get("status_antes_entrega") != status_antes_entrega:
-                    atual["status_antes_entrega"] = status_antes_entrega
+                if status_antes_finalizacao and atual.get("status_antes_finalizacao") != status_antes_finalizacao:
+                    atual["status_antes_finalizacao"] = status_antes_finalizacao
                     alterado = True
                 if atual.get("status") != novo_status:
                     atual["status"] = novo_status
@@ -7968,13 +8037,26 @@ def salvar_tarefa_producao(tarefa_id, novos_dados):
     salvar_producao(tarefas)
     if numero:
         relacionadas = [t for t in tarefas if t.get("numero_proposta") == numero and t.get("ativa", True)]
-        if relacionadas and all(normalizar_status_fluxo(t.get("status")) == "Entregue" for t in relacionadas):
+        estados = [normalizar_status_fluxo(t.get("status")) for t in relacionadas]
+        if relacionadas and all(s == "Entregue" for s in estados):
             alternar_status(numero, "entregue", True)
+        elif relacionadas and all(s in {"Pronto", "Entregue"} for s in estados):
+            alternar_status(numero, "pronto", True)
+        else:
+            # Se alguém reabre a produção pelo Fluxo, o Pronto oficial também
+            # volta a NÃO (exceto se o pedido já foi entregue).
+            hist = carregar_historico(force_refresh=True)
+            prop = next((p for p in hist if str(p.get("numero_proposta") or "") == str(numero)), None)
+            if prop and _status_resumo(prop).get("pronto") and not _status_resumo(prop).get("entregue"):
+                alternar_status(numero, "pronto", False)
 
 
 def classe_prazo_producao(data_txt, status):
-    if normalizar_status_fluxo(status) == "Entregue":
+    status_norm = normalizar_status_fluxo(status)
+    if status_norm == "Entregue":
         return "Concluído"
+    if status_norm == "Pronto":
+        return "Pronto / aguardando entrega"
     data_item = data_entrega_segura(data_txt)
     if not data_item:
         return "Sem data"
@@ -8058,13 +8140,17 @@ def _i8128_atualizar_etapa_pedido(numero_proposta, acao, usuario=None):
     salvar_producao(tarefas)
 
     descricao = "Produção iniciada" if acao == "iniciar" else "Pedido marcado como pronto na produção"
-    try:
-        atualizar_proposta_com_leitura_fresca(
-            numero,
-            lambda p: registrar_evento_proposta(p, descricao, usuario=nome_usuario),
-        )
-    except Exception:
-        pass
+    if acao == "pronto":
+        # HF2: marcar produção concluída atualiza o status oficial Pronto.
+        alternar_status(numero, "pronto", True)
+    else:
+        try:
+            atualizar_proposta_com_leitura_fresca(
+                numero,
+                lambda p: registrar_evento_proposta(p, descricao, usuario=nome_usuario),
+            )
+        except Exception:
+            pass
     try:
         registrar_atividade(nome_usuario, descricao, "Produção", detalhe=numero, evento=True)
     except Exception:
@@ -13462,7 +13548,7 @@ with st.sidebar:
                 if telefone:
                     b.link_button("WhatsApp", f"https://wa.me/{numero}", use_container_width=True)
             for proposta in resultados_globais["propostas"]:
-                st.write(f"📄 **{proposta.get('numero_proposta', '—')}** · {proposta.get('cliente_nome', 'Cliente')}")
+                st.write(f"📄 **{proposta.get('numero_proposta', '—')}** · {proposta.get('cliente_nome', 'Cliente')} · 🧾 {resumo_produtos_pedido(proposta)}")
                 if st.button("Selecionar proposta", key=f"gprop_{proposta.get('numero_proposta')}", use_container_width=True):
                     st.session_state.alerta_proposta_numero = proposta.get("numero_proposta")
                     st.success("Proposta selecionada. Abra Histórico.")
@@ -14057,7 +14143,9 @@ def dialog_orcamento_anna(proposta=None):
                 "valor_total": total, "prazo_dias": prazo, "frete_tipo": frete,
                 "taxa_entrega": valor_float(taxa_entrega) if frete == "Entrega" else 0.0,
                 "validade_dias": validade,
-                "pago": proposta.get("pago", False), "entregue": proposta.get("entregue", False),
+                "pago": proposta.get("pago", False),
+                "pronto": bool(_status_resumo(proposta).get("pronto")),
+                "entregue": proposta.get("entregue", False),
                 "aprovado": proposta.get("aprovado", False),
                 "timeline": proposta.get("timeline", []) if isinstance(proposta.get("timeline", []), list) else [],
                 "atendimento_id": proposta.get("atendimento_id") or st.session_state.get("_atendimento_origem_id", ""),
@@ -14132,24 +14220,28 @@ def dialog_cliente_anna():
         st.rerun()
 
 
-def salvar_andamento_proposta(numero, aprovado, pago, entregue):
-    """HF3: atualiza status sobre leitura fresca, com autoria real e confirmação."""
-    novos = {"aprovado": valor_bool(aprovado), "pago": valor_bool(pago), "entregue": valor_bool(entregue)}
+def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
+    """HF2: atualiza Aprovado/Pago/Pronto/Entregue sobre leitura fresca."""
+    novos = {
+        "aprovado": valor_bool(aprovado),
+        "pago": valor_bool(pago),
+        "pronto": valor_bool(pronto) or valor_bool(entregue),
+        "entregue": valor_bool(entregue),
+    }
     usuario_status = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
     controle = {"anteriores": None, "nova_conclusao": False, "aprovou_agora": False, "mudancas": []}
 
     def _mutar(proposta):
         estado_antes = _status_resumo(proposta)
-        anteriores = {
-            "aprovado": bool(estado_antes.get("aprovado")),
-            "pago": bool(estado_antes.get("pago")),
-            "entregue": bool(estado_antes.get("entregue")),
-        }
+        anteriores = {campo: bool(estado_antes.get(campo)) for campo in ("aprovado", "pago", "pronto", "entregue")}
         controle["anteriores"] = anteriores
         antes_concluida = proposta_concluida(proposta)
         proposta.update(novos)
         agora_status = agora_local().strftime("%d/%m/%Y %H:%M")
-        for campo, campo_data in (("aprovado", "aprovado_em"), ("pago", "pago_em"), ("entregue", "entregue_em")):
+        for campo, campo_data in (
+            ("aprovado", "aprovado_em"), ("pago", "pago_em"),
+            ("pronto", "pronto_em"), ("entregue", "entregue_em"),
+        ):
             if novos[campo] and not anteriores[campo] and not proposta.get(campo_data):
                 proposta[campo_data] = agora_status
             elif not novos[campo] and anteriores[campo]:
@@ -14158,6 +14250,7 @@ def salvar_andamento_proposta(numero, aprovado, pago, entregue):
         rotulos = {
             "aprovado": "Orçamento aprovado",
             "pago": "Pagamento confirmado",
+            "pronto": "Pedido pronto",
             "entregue": "Entrega concluída",
         }
         for campo, valor in novos.items():
@@ -14170,18 +14263,15 @@ def salvar_andamento_proposta(numero, aprovado, pago, entregue):
         depois_concluida = proposta_concluida(proposta)
         controle["nova_conclusao"] = depois_concluida and not antes_concluida
         if controle["nova_conclusao"]:
+            descricao = "Entregue — operação finalizada e disponível no Histórico"
             if proposta_faturamento_mensal(proposta):
-                descricao = "Aprovado e entregue — operação concluída; pagamento segue para Faturamento Mensal"
-            else:
-                descricao = "Aprovado, pago e entregue — proposta movida para o Histórico"
+                descricao += "; pagamento segue para Faturamento Mensal"
             registrar_evento_proposta(proposta, descricao, usuario=usuario_status)
 
     ok, atualizado, motivo = atualizar_proposta_com_leitura_fresca(numero, _mutar)
     if not ok:
         return False, f"Não foi possível atualizar a proposta com segurança ({motivo or 'falha de gravação'}). Tente novamente."
 
-    # Confirma com leitura realmente fresca para que a tela do outro usuário veja
-    # o mesmo estado que acabou de ser persistido.
     historico_confirmado = carregar_historico(force_refresh=True)
     confirmado = next((p for p in historico_confirmado if p.get("numero_proposta") == numero), None)
     if confirmado is None:
@@ -14193,21 +14283,17 @@ def salvar_andamento_proposta(numero, aprovado, pago, entregue):
     if controle["mudancas"]:
         cliente_evt = str(confirmado.get("cliente_nome") or confirmado.get("cliente") or "Cliente").strip()
         registrar_atividade(
-            obter_usuario_atual(),
-            "Status da proposta atualizado",
-            "Propostas",
-            detalhe=f"{numero} · {cliente_evt} · " + " / ".join(controle["mudancas"]),
-            evento=True,
+            obter_usuario_atual(), "Status da proposta atualizado", "Propostas",
+            detalhe=f"{numero} · {cliente_evt} · " + " / ".join(controle["mudancas"]), evento=True,
         )
-    if controle["mudancas"]:
-        # A mesma fotografia fresca confirmada acima alimenta o Fluxo. Isso faz
-        # a atualização da Anna aparecer na Central do Jorge no próximo rerun
-        # sem uma segunda interpretação de status.
+        # A mesma fotografia fresca alimenta Fluxo/Centrais.
         sincronizar_producao_com_propostas(historico_confirmado)
     if proposta_concluida(confirmado):
         if proposta_faturamento_mensal(confirmado):
-            return True, f"{numero} com operação concluída; pagamento segue para o Faturamento Mensal."
-        return True, f"{numero} concluída e movida para o Histórico."
+            return True, f"{numero} entregue e finalizada; pagamento segue para o Faturamento Mensal."
+        return True, f"{numero} entregue, finalizada e disponível no Histórico."
+    if _status_proposta_pronta(confirmado):
+        return True, f"{numero} pronta e aguardando retirada/entrega."
     return True, f"Andamento de {numero} atualizado por {usuario_status}."
 
 
@@ -14227,7 +14313,7 @@ def dialog_fluxo_anna():
     ).strip().lower()
     status = c_status.selectbox(
         "Mostrar",
-        ["Todas", "Ativas", "Aguardando aprovação", "Aprovadas", "Pagas", "Entregues"],
+        ["Todas", "Ativas", "Aguardando aprovação", "Aprovadas", "Pagas", "Prontas", "Entregues"],
         key="dlg_fluxo_status",
     )
 
@@ -14242,6 +14328,7 @@ def dialog_fluxo_anna():
         estado_dialog = _status_resumo(prop)
         aprovado = bool(estado_dialog.get("aprovado"))
         pago = bool(estado_dialog.get("pago"))
+        pronto = bool(estado_dialog.get("pronto"))
         entregue = bool(estado_dialog.get("entregue"))
         ativa = proposta_ativa_operacional(prop)
         return {
@@ -14250,7 +14337,8 @@ def dialog_fluxo_anna():
             "Aguardando aprovação": ativa and not aprovado,
             "Aprovadas": ativa and aprovado,
             "Pagas": ativa and pago,
-            "Entregues": ativa and entregue,
+            "Prontas": ativa and pronto and not entregue,
+            "Entregues": entregue,
         }[status]
 
     propostas = [p for p in historico if atende_filtro(p)]
@@ -14269,11 +14357,12 @@ def dialog_fluxo_anna():
             st.write(f"**{numero} — {prop.get('cliente_nome', prop.get('cliente', 'Cliente'))}**")
             st.caption(
                 f"Entrega: {prop.get('data_entrega', '—')} · "
-                f"{_anna_fmt_moeda(prop.get('valor_total', prop.get('total', 0)))}"
+                f"{_anna_fmt_moeda(prop.get('valor_total', prop.get('total', 0)))} · "
+                f"{resumo_produtos_pedido(prop)}"
             )
             with st.form(f"dlg_fluxo_form_{chave_segura}"):
                 estado_form_fluxo = _status_resumo(prop)
-                c1, c2, c3 = st.columns(3)
+                c1, c2, c3, c4 = st.columns(4)
                 aprovado = c1.checkbox("Aprovado", value=bool(estado_form_fluxo.get("aprovado")))
                 mensal_fluxo = proposta_faturamento_mensal(prop)
                 pago = c2.checkbox(
@@ -14282,7 +14371,8 @@ def dialog_fluxo_anna():
                     disabled=mensal_fluxo,
                     help="Mensalistas recebem baixa somente pela Central de Faturamento Mensal." if mensal_fluxo else None,
                 )
-                entregue = c3.checkbox("Entregue", value=bool(estado_form_fluxo.get("entregue")))
+                pronto = c3.checkbox("📦 Pronto", value=bool(estado_form_fluxo.get("pronto")), disabled=bool(estado_form_fluxo.get("entregue")), help="Produção concluída; aguardando retirada/entrega.")
+                entregue = c4.checkbox("🚚 Entregue", value=bool(estado_form_fluxo.get("entregue")), help="Finaliza a operação e implica Pronto.")
                 nf1, nf2 = st.columns(2)
                 nao_pagto = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"nf_pag_{prop.get('numero_proposta')}")
                 nao_retorno = nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(prop.get("nao_fechado_sem_retorno")), key=f"nf_ret_{prop.get('numero_proposta')}")
@@ -14292,7 +14382,7 @@ def dialog_fluxo_anna():
                     alternar_motivo_nao_fechado(prop.get("numero_proposta"), "sem_retorno", nao_retorno); st.rerun()
                 salvar = st.form_submit_button("💾 Salvar andamento", use_container_width=True)
             if salvar:
-                ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, entregue)
+                ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue)
                 if ok:
                     st.session_state["_mensagem_sucesso_pendente"] = mensagem
                     st.rerun()
@@ -19838,6 +19928,7 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
     _, _, total = calcular_valores_proposta(prop)
     c1, c2, c3, c4 = st.columns([4, 1.4, 1.4, 1.2])
     c1.write(f"**{numero} — {prop.get('cliente_nome','Cliente')}** · {_anna_fmt_moeda(total)}")
+    st.caption(f"🧾 {resumo_produtos_pedido(prop)}")
     if c2.button("✏️ Atualizar", key=f"{prefixo}_edit_{numero}", use_container_width=True):
         dialog_orcamento_anna(prop)
     numero_wa = _anna_numero_whatsapp(prop.get("whatsapp") or prop.get("cliente_wa"))
@@ -19852,18 +19943,20 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
         prefixo=f"{prefixo}_thu_catalogo",
     )
 
-    with st.expander("✅ Atualizar aprovação, pagamento e entrega", expanded=False):
+    with st.expander("✅ Atualizar aprovação, pagamento, pronto e entrega", expanded=False):
         with st.form(f"{prefixo}_status_form_{numero}"):
-            s1, s2, s3 = st.columns(3)
-            aprovado = s1.checkbox("✅ Aprovado", value=valor_bool(prop.get("aprovado")))
+            s1, s2, s3, s4 = st.columns(4)
+            estado_linha = _status_resumo(prop)
+            aprovado = s1.checkbox("✅ Aprovado", value=bool(estado_linha.get("aprovado")))
             mensal_linha = proposta_faturamento_mensal(prop)
             pago = s2.checkbox(
                 "💳 Pago no fechamento mensal" if mensal_linha else "💰 Pago",
-                value=valor_bool(prop.get("pago")),
+                value=bool(estado_linha.get("pago")),
                 disabled=mensal_linha,
                 help="Mensalistas recebem baixa somente pela Central de Faturamento Mensal." if mensal_linha else None,
             )
-            entregue = s3.checkbox("📦 Entregue", value=valor_bool(prop.get("entregue")))
+            pronto = s3.checkbox("📦 Pronto", value=bool(estado_linha.get("pronto")), disabled=bool(estado_linha.get("entregue")), help="Produção concluída; aguardando retirada/entrega.")
+            entregue = s4.checkbox("🚚 Entregue", value=bool(estado_linha.get("entregue")), help="Finaliza a operação e implica Pronto.")
             nf1, nf2 = st.columns(2)
             nao_pagto = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"{prefixo}_nf_pag_{numero}")
             nao_retorno = nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(prop.get("nao_fechado_sem_retorno")), key=f"{prefixo}_nf_ret_{numero}")
@@ -19873,7 +19966,7 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
                 alternar_motivo_nao_fechado(prop.get("numero_proposta"), "sem_retorno", nao_retorno); st.rerun()
             salvar_status = st.form_submit_button("💾 Salvar andamento", type="primary", use_container_width=True)
         if salvar_status:
-            ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, entregue)
+            ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue)
             if ok:
                 st.session_state["_mensagem_sucesso_pendente"] = mensagem
                 try:
@@ -19910,11 +20003,12 @@ def dialog_entregas_hoje_anna(propostas):
         _, _, total = calcular_valores_proposta(prop)
         with st.container(border=True):
             st.markdown(f"### {prop.get('cliente_nome', 'Cliente')}")
-            st.caption(f"{numero} · {principal}")
+            st.caption(f"{numero} · {resumo_produtos_pedido(prop)}")
             d1, d2, d3 = st.columns(3)
             d1.metric("Valor", _anna_fmt_moeda(total))
             d2.metric("Pagamento", "Mensal" if proposta_faturamento_mensal(prop) else ("Pago" if valor_bool(prop.get("pago")) else "Pendente"))
-            d3.metric("Situação", "Entregue" if valor_bool(prop.get("entregue")) else "Entrega hoje")
+            estado_entrega_dialog = _status_resumo(prop)
+            d3.metric("Situação", "Entregue" if estado_entrega_dialog.get("entregue") else ("Pronto" if estado_entrega_dialog.get("pronto") else "Entrega hoje"))
             _renderizar_linha_proposta_anna(prop, f"entrega_hoje_{idx}")
 
 
@@ -20230,7 +20324,7 @@ if pagina_atual == "central":
                 for p_ws in lista_ws:
                     _, _, total_ws = calcular_valores_proposta(p_ws)
                     cws1, cws2 = st.columns([7, 2])
-                    cws1.write(f"**{p_ws.get('numero_proposta', '—')} — {p_ws.get('cliente_nome', 'Cliente')}** · Entrega: {p_ws.get('data_entrega', 'A combinar')} · R$ {total_ws:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                    cws1.write(f"**{p_ws.get('numero_proposta', '—')} — {p_ws.get('cliente_nome', 'Cliente')}** · 🧾 {resumo_produtos_pedido(p_ws)} · Entrega: {p_ws.get('data_entrega', 'A combinar')} · R$ {total_ws:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                     if cws2.button("Abrir", key=f"ws_abrir_prop_{p_ws.get('numero_proposta')}", use_container_width=True):
                         st.session_state.alerta_proposta_numero = p_ws.get("numero_proposta")
                         st.rerun()
@@ -20288,7 +20382,7 @@ if pagina_atual == "central":
     tarefas_central = sincronizar_producao_com_propostas(historico_central)
     tarefas_ativas_central = [t for t in tarefas_central if t.get("ativa", True)]
 
-    # I8.12.8-HF1 — a Central lê aprovação/pagamento/entrega somente pela
+    # I8.12.8-HF2 — a Central lê aprovação/pagamento/pronto/entrega somente pela
     # fonte oficial de status. A etapa do producao_db nunca decide se um pedido
     # está aprovado, entregue ou encerrado.
     estados_oficiais_central = {
@@ -20568,6 +20662,7 @@ if pagina_atual == "central":
         with st.container(border=True):
             st.markdown(f"### {html.escape(str(prioridade.get('cliente_nome', 'Cliente')))}")
             st.write(f"**Pedido:** {prioridade.get('numero_proposta', '—')}  •  **Entrega:** {prioridade.get('data_entrega', 'A combinar')}")
+            st.write(f"**Produtos:** {resumo_produtos_pedido(prioridade)}")
             st.write(f"**Motivo:** {motivo}")
             st.write(f"**Valor:** R$ {total_prioridade:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             st.button(
@@ -20609,7 +20704,8 @@ if pagina_atual == "central":
                         faltas_txt_i8124.append(
                             f"{nec_central_i8124.get('material_nome')}: {_i8121_quantidade(nec_central_i8124.get('pendente'))} {nec_central_i8124.get('unidade', '')}"
                         )
-                st.write(f"• **{consumo_central_i8124.get('numero_proposta')} — {consumo_central_i8124.get('cliente_nome', 'Cliente')}** · " + " · ".join(faltas_txt_i8124))
+                prop_nec = mapa_hist_central_i8124.get(str(consumo_central_i8124.get("numero_proposta") or ""))
+                st.write(f"• **{consumo_central_i8124.get('numero_proposta')} — {consumo_central_i8124.get('cliente_nome', 'Cliente')}** · 🧾 {resumo_produtos_pedido(prop_nec)} · " + " · ".join(faltas_txt_i8124))
 
     # I8.12.6 — mesma fonte de pendências + o que já foi solicitado ao fornecedor.
     necessidades_compra_central_i8126 = _i8126_central_necessidades(
@@ -20651,15 +20747,17 @@ if pagina_atual == "central":
     aguardando_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "aguardando_material"]
     compra_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "compra_em_andamento"]
     liberados_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "liberado"]
+    prontos_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave_base") == "pronto_aguardando_entrega"]
     if risco_central_i8127:
         st.error(
             f"🚦 **Produção: {len(risco_central_i8127)} pedido(s) com risco de atraso** · "
             f"{len(aguardando_central_i8127)} aguardando material · {len(compra_central_i8127)} com compra em andamento · "
-            f"{len(liberados_central_i8127)} liberado(s) para produção."
+            f"{len(liberados_central_i8127)} liberado(s) para produção · {len(prontos_central_i8127)} pronto(s) aguardando retirada/entrega."
         )
     elif previsao_central_i8127:
         st.info(
             f"🚦 **Previsão de produção:** {len(liberados_central_i8127)} liberado(s) · "
+            f"{len(prontos_central_i8127)} pronto(s) aguardando retirada/entrega · "
             f"{len(compra_central_i8127)} com compra em andamento · {len(aguardando_central_i8127)} aguardando material."
         )
     if risco_central_i8127 or aguardando_central_i8127 or compra_central_i8127:
@@ -20670,6 +20768,7 @@ if pagina_atual == "central":
                 motivo_central_i8127 = " · ".join(ped_central_i8127.get("motivos") or [])
                 st.write(
                     f"• **{ped_central_i8127.get('numero_proposta')} — {ped_central_i8127.get('cliente_nome', 'Cliente')}** · "
+                    f"🧾 {ped_central_i8127.get('resumo_produtos', 'Sem itens informados')} · "
                     f"{ped_central_i8127.get('status')} · entrega {entrega_txt_central_i8127}" + (f" · {motivo_central_i8127}" if motivo_central_i8127 else "")
                 )
             st.caption("Detalhes de materiais e compras: Gestão → Compras, Custos & Estoque.")
@@ -20690,20 +20789,33 @@ if pagina_atual == "central":
             if l.get("risco_atraso") or l.get("situacao_operacional_chave") in {"preparacao", "pronto_iniciar", "em_producao", "pronto_entrega"}
         ]
         if prioridades_central_i8128:
-            with st.expander("🏭 Ver fila prioritária de produção", expanded=False):
+            with st.expander("🏭 Ver top prioridades de produção", expanded=False):
                 for linha_central_i8128 in prioridades_central_i8128[:8]:
                     entrega_central_i8128 = linha_central_i8128.get("data_entrega")
                     entrega_txt_central_i8128 = entrega_central_i8128.strftime("%d/%m/%Y") if isinstance(entrega_central_i8128, date) else "Sem data"
                     risco_txt_central_i8128 = " · 🔴 risco de atraso" if linha_central_i8128.get("risco_atraso") else ""
                     st.write(
                         f"• **{linha_central_i8128.get('numero_proposta')} — {linha_central_i8128.get('cliente_nome', 'Cliente')}** · "
+                        f"🧾 {linha_central_i8128.get('resumo_produtos', 'Sem itens informados')} · "
                         f"{linha_central_i8128.get('etapa_manual')} · entrega {entrega_txt_central_i8128}{risco_txt_central_i8128} · "
                         f"{linha_central_i8128.get('proxima_acao_producao')}"
                     )
-                st.caption("Ações rápidas e atualização da etapa: Fluxo de Pedidos → Central de Produção.")
+                st.caption("Este bloco é apenas um recorte das prioridades mais urgentes. A fila completa está logo abaixo.")
+
+        with st.expander(f"📋 Ver fila completa de produção ({len(central_prod_central_i8128)})", expanded=False):
+            for linha_central_i8128 in central_prod_central_i8128:
+                entrega_central_i8128 = linha_central_i8128.get("data_entrega")
+                entrega_txt_central_i8128 = entrega_central_i8128.strftime("%d/%m/%Y") if isinstance(entrega_central_i8128, date) else "Sem data"
+                st.write(
+                    f"• **{linha_central_i8128.get('numero_proposta')} — {linha_central_i8128.get('cliente_nome', 'Cliente')}** · "
+                    f"🧾 {linha_central_i8128.get('resumo_produtos', 'Sem itens informados')} · "
+                    f"{linha_central_i8128.get('situacao_operacional')} · entrega {entrega_txt_central_i8128} · "
+                    f"{linha_central_i8128.get('proxima_acao_producao')}"
+                )
+            st.caption("Todos os pedidos aprovados e não entregues aparecem aqui; o bloco acima mostra somente as maiores prioridades.")
 
         if str(usuario_atual.get("nome", "")).strip().casefold() == "jorge":
-            with st.expander("🔎 Auditoria operacional da Central · I8.12.8-HF1", expanded=False):
+            with st.expander("🔎 Auditoria operacional da Central · I8.12.8-HF2", expanded=False):
                 st.caption(
                     "Esta tabela não grava nada. Ela mostra, na mesma linha, o status oficial atualizado por Anna/Jorge, "
                     "a leitura de materiais da I8.12.7 e a etapa manual do Fluxo."
@@ -20715,8 +20827,10 @@ if pagina_atual == "central":
                     linhas_auditoria_central_hf1.append({
                         "Pedido": numero_hf1,
                         "Cliente": linha_hf1.get("cliente_nome"),
+                        "Produtos": linha_hf1.get("resumo_produtos"),
                         "Aprovado": "SIM" if estado_hf1.get("aprovado") else "NÃO",
                         "Pago": "SIM" if estado_hf1.get("pago") else "NÃO",
+                        "Pronto": "SIM" if estado_hf1.get("pronto") else "NÃO",
                         "Entregue": "SIM" if estado_hf1.get("entregue") else "NÃO",
                         "Materiais": linha_hf1.get("status_base"),
                         "Produção": linha_hf1.get("etapa_manual"),
@@ -20735,7 +20849,7 @@ if pagina_atual == "central":
     if fila_liberacao_central_i8124:
         st.info(
             f"📋 **{len(fila_liberacao_central_i8124)} proposta(s) aprovada(s) aguardam liberação de consumo.** "
-            "Ao confirmar o consumo ou marcar a proposta como Entregue, ela sai automaticamente dessa fila."
+            "Ao confirmar o consumo, marcar Pronto ou marcar Entregue, a proposta sai automaticamente dessa fila."
         )
         with st.expander("📋 Ver propostas aguardando liberação", expanded=False):
             for prop_fila_central_i8124 in _ordenar_propostas_recentes(fila_liberacao_central_i8124)[:10]:
@@ -20750,7 +20864,7 @@ if pagina_atual == "central":
                     situacao_fila_central_i8124 = "🟡 sem necessidade de material calculada"
                 st.write(
                     f"• **{prop_fila_central_i8124.get('numero_proposta')} — {prop_fila_central_i8124.get('cliente_nome', 'Cliente')}** · "
-                    f"{situacao_fila_central_i8124}"
+                    f"🧾 {resumo_produtos_pedido(prop_fila_central_i8124)} · {situacao_fila_central_i8124}"
                 )
 
     st.divider()
@@ -20774,7 +20888,9 @@ if pagina_atual == "central":
             # quando o editor operacional é aberto logo abaixo da lista.
             with st.container(border=True):
                 al1, al2 = st.columns([7, 2])
-                al1.markdown(f"{icone} **{html.escape(str(numero))} — {html.escape(str(cliente or 'Cliente'))}** · {html.escape(str(texto))}")
+                prop_alerta = next((p for p in historico_central if str(p.get("numero_proposta") or "") == str(numero)), None)
+                resumo_alerta = resumo_produtos_pedido(prop_alerta) if prop_alerta else "Sem itens informados"
+                al1.markdown(f"{icone} **{html.escape(str(numero))} — {html.escape(str(cliente or 'Cliente'))}** · 🧾 {html.escape(resumo_alerta)} · {html.escape(str(texto))}")
                 al2.button(
                     "Abrir e atualizar",
                     key=f"central_alerta_abrir_{idx_alerta}_{numero}",
@@ -20796,6 +20912,7 @@ if pagina_atual == "central":
             _, _, total_central_sel = calcular_valores_proposta(proposta_central_selecionada)
             with st.container(border=True):
                 st.markdown(f"### 📋 {html.escape(str(proposta_central_selecionada.get('numero_proposta', 'Proposta')))} — {html.escape(str(proposta_central_selecionada.get('cliente_nome', 'Cliente')))}")
+                st.caption(f"🧾 {resumo_produtos_pedido(proposta_central_selecionada)}")
                 det1, det2, det3 = st.columns(3)
                 det1.metric("Entrega", proposta_central_selecionada.get("data_entrega", "A combinar"))
                 det2.metric("Valor", f"R$ {total_central_sel:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
@@ -20807,17 +20924,19 @@ if pagina_atual == "central":
                 _i8124_render_status_pedido(proposta_central_selecionada, prefixo=f"central_estoque_{numero_central_selecionado}", detalhado=True)
 
                 st.markdown("**Atualização rápida**")
-                up1, up2, up3 = st.columns(3)
-                aprovado_central = up1.checkbox("✅ Aprovado", value=valor_bool(proposta_central_selecionada.get("aprovado")), key=f"central_aprov_{numero_central_selecionado}")
+                up1, up2, up3, up4 = st.columns(4)
+                estado_central_sel = _status_resumo(proposta_central_selecionada)
+                aprovado_central = up1.checkbox("✅ Aprovado", value=bool(estado_central_sel.get("aprovado")), key=f"central_aprov_{numero_central_selecionado}")
                 mensal_central_sel = proposta_faturamento_mensal(proposta_central_selecionada)
                 pago_central = up2.checkbox(
                     "💳 Pago no fechamento mensal" if mensal_central_sel else "💰 Pago",
-                    value=valor_bool(proposta_central_selecionada.get("pago")),
+                    value=bool(estado_central_sel.get("pago")),
                     key=f"central_pago_{numero_central_selecionado}",
                     disabled=mensal_central_sel,
                     help="Mensalistas recebem baixa somente pela Central de Faturamento Mensal." if mensal_central_sel else None,
                 )
-                entregue_central = up3.checkbox("📦 Entregue", value=valor_bool(proposta_central_selecionada.get("entregue")), key=f"central_entregue_{numero_central_selecionado}")
+                pronto_central = up3.checkbox("📦 Pronto", value=bool(estado_central_sel.get("pronto")), key=f"central_pronto_{numero_central_selecionado}", disabled=bool(estado_central_sel.get("entregue")), help="Produção concluída; aguardando retirada/entrega.")
+                entregue_central = up4.checkbox("🚚 Entregue", value=bool(estado_central_sel.get("entregue")), key=f"central_entregue_{numero_central_selecionado}", help="Finaliza a operação e implica Pronto.")
                 nf1, nf2 = st.columns(2)
                 nao_pagto_central = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(proposta_central_selecionada.get("nao_fechado_pagamento")), key=f"central_nf_pag_{numero_central_selecionado}")
                 nao_retorno_central = nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(proposta_central_selecionada.get("nao_fechado_sem_retorno")), key=f"central_nf_ret_{numero_central_selecionado}")
@@ -20835,7 +20954,7 @@ if pagina_atual == "central":
                 op1, op2, op3 = st.columns(3)
                 if op1.button("💾 Salvar andamento", key=f"central_salvar_{numero_central_selecionado}", type="primary", use_container_width=True):
                     ok_andamento, msg_andamento = salvar_andamento_proposta(
-                        numero_central_selecionado, aprovado_central, pago_central, entregue_central
+                        numero_central_selecionado, aprovado_central, pago_central, pronto_central, entregue_central
                     )
                     if not ok_andamento:
                         st.error(msg_andamento)
@@ -20854,6 +20973,7 @@ if pagina_atual == "central":
                     for chave_editor in (
                         f"central_aprov_{numero_central_selecionado}",
                         f"central_pago_{numero_central_selecionado}",
+                        f"central_pronto_{numero_central_selecionado}",
                         f"central_entregue_{numero_central_selecionado}",
                         f"central_obs_{numero_central_selecionado}",
                     ):
@@ -21096,7 +21216,7 @@ if pagina_atual == "central":
                 st.markdown("#### 📋 Propostas")
                 for prop in resultados["propostas"]:
                     _, _, total_resultado = calcular_valores_proposta(prop)
-                    st.write(f"• **{prop.get('numero_proposta', '—')} — {prop.get('cliente_nome', 'Cliente')}** · R$ {total_resultado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                    st.write(f"• **{prop.get('numero_proposta', '—')} — {prop.get('cliente_nome', 'Cliente')}** · 🧾 {resumo_produtos_pedido(prop)} · R$ {total_resultado:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
             if resultados["atendimentos"]:
                 st.markdown("#### 📥 Atendimentos")
                 for at in resultados["atendimentos"]:
@@ -23674,9 +23794,11 @@ if pagina_atual == "historico":
         num_p = prop.get("numero_proposta", "SEM-NÚMERO")
         cliente_p = prop_atual.get("cliente_nome", "Cliente não informado")
         subtotal_p, desconto_p, total_p = calcular_valores_proposta(prop)
-        pago_p = valor_bool(prop.get("pago", False))
-        entregue_p = valor_bool(prop.get("entregue", False))
-        aprovado_p = valor_bool(prop.get("aprovado", False))
+        estado_hist_p = _status_resumo(prop)
+        pago_p = bool(estado_hist_p.get("pago"))
+        pronto_p = bool(estado_hist_p.get("pronto"))
+        entregue_p = bool(estado_hist_p.get("entregue"))
+        aprovado_p = bool(estado_hist_p.get("aprovado"))
         mensal_p = proposta_faturamento_mensal(prop)
         proposta_fechada = proposta_concluida(prop)
 
@@ -23692,16 +23814,19 @@ if pagina_atual == "historico":
                 status.append("Pago")
             if entregue_p:
                 status.append("Entregue")
+            elif pronto_p:
+                status.append("📦 Pronto")
             status_txt = " • ".join(status) if status else "Pendente"
 
         with st.expander(f"{num_p} - {cliente_p} | R$ {total_p:,.2f} | {status_txt}"):
             if proposta_fechada and mensal_p:
                 st.success("✅ Operação concluída. 💳 Pagamento segue para o controle de faturamento mensal.")
             elif proposta_fechada:
-                st.success("✅ Pedido fechado: pagamento recebido e entrega concluída.")
+                st.success("✅ Pedido entregue e finalizado operacionalmente.")
             if mensal_p:
                 st.info("💳 **Cliente mensalista:** esta proposta não exige marcação individual de Pago. O recebimento será controlado no fechamento mensal.")
             st.write(f"📅 **Entrega:** {prop.get('data_entrega', 'Não informada')}")
+            st.write(f"🧾 **Produtos:** {resumo_produtos_pedido(prop)}")
             evento_hist = str(prop.get("evento", "") or "").strip()
             if evento_hist:
                 st.write(f"🎉 **Evento:** {evento_hist}")
@@ -23740,13 +23865,14 @@ if pagina_atual == "historico":
             if c5 is not None and c5.button("🗑️ Excluir", key=f"del_{num_p}", use_container_width=True):
                 excluir_proposta(num_p)
 
-            s1, s2, s3 = st.columns(3)
-            s1.checkbox("Aprovado", value=valor_bool(prop.get("aprovado", False)), key=f"a_{num_p}", on_change=alternar_status, args=(num_p, "aprovado", not valor_bool(prop.get("aprovado", False))))
+            s1, s2, s3, s4 = st.columns(4)
+            s1.checkbox("Aprovado", value=aprovado_p, key=f"a_{num_p}", on_change=alternar_status, args=(num_p, "aprovado", not aprovado_p))
             if mensal_p:
-                s2.checkbox("💳 Pago no fechamento mensal", value=valor_bool(prop.get("pago", False)), key=f"p_mensal_{num_p}", disabled=True, help="Este indicador é atualizado automaticamente pela Central de Faturamento Mensal.")
+                s2.checkbox("💳 Pago no fechamento mensal", value=pago_p, key=f"p_mensal_{num_p}", disabled=True, help="Este indicador é atualizado automaticamente pela Central de Faturamento Mensal.")
             else:
-                s2.checkbox("Pago", value=valor_bool(prop.get("pago", False)), key=f"p_{num_p}", on_change=alternar_status, args=(num_p, "pago", not valor_bool(prop.get("pago", False))))
-            s3.checkbox("Entregue", value=valor_bool(prop.get("entregue", False)), key=f"e_{num_p}", on_change=alternar_status, args=(num_p, "entregue", not valor_bool(prop.get("entregue", False))))
+                s2.checkbox("Pago", value=pago_p, key=f"p_{num_p}", on_change=alternar_status, args=(num_p, "pago", not pago_p))
+            s3.checkbox("📦 Pronto", value=pronto_p, key=f"r_{num_p}", on_change=alternar_status, args=(num_p, "pronto", not pronto_p), disabled=entregue_p, help="Produção concluída; aguardando retirada/entrega.")
+            s4.checkbox("🚚 Entregue", value=entregue_p, key=f"e_{num_p}", on_change=alternar_status, args=(num_p, "entregue", not entregue_p), help="Finaliza a operação e implica Pronto.")
             nf1, nf2 = st.columns(2)
             if mensal_p:
                 nf1.checkbox("❌ Não fechado — falta de pagamento", value=False, key=f"legacy_nf_pag_mensal_{num_p}", disabled=True, help="Não se aplica a clientes de faturamento mensal.")
@@ -23758,6 +23884,8 @@ if pagina_atual == "historico":
                 proxima_acao = "Aguardar fechamento mensal e registrar pós-venda"
             elif entregue_p:
                 proxima_acao = "Registrar pós-venda"
+            elif pronto_p:
+                proxima_acao = "Aguardar retirada do cliente ou realizar entrega pela AlphaFest"
             elif not aprovado_p:
                 proxima_acao = "Aguardar ou registrar aprovação do cliente"
             elif mensal_p:
@@ -23765,7 +23893,7 @@ if pagina_atual == "historico":
             elif not pago_p:
                 proxima_acao = "Confirmar pagamento e acompanhar produção"
             else:
-                proxima_acao = "Concluir produção e entregar"
+                proxima_acao = "Concluir produção e marcar como Pronto"
             st.info(f"🎯 **Próxima ação:** {proxima_acao}")
             timeline_prop = prop.get("timeline", []) if isinstance(prop.get("timeline"), list) else []
             if timeline_prop:
@@ -23789,7 +23917,10 @@ if pagina_atual == "fluxo":
     hoje_fluxo = sum(1 for t in tarefas_ativas if classe_prazo_producao(t.get("data_entrega"), t.get("status")) == "Hoje")
     aprovacao = sum(1 for t in tarefas_ativas if normalizar_status_fluxo(t.get("status")) == "Aguardando aprovação")
     produzir = sum(1 for t in tarefas_ativas if normalizar_status_fluxo(t.get("status")) in ["Arte aprovada", "Pronto para produzir"])
-    prontos = sum(1 for t in tarefas_ativas if normalizar_status_fluxo(t.get("status")) == "Pronto")
+    prontos = sum(
+        1 for p in historico_fluxo_i8128hf1
+        if isinstance(p, dict) and _status_resumo(p).get("aprovado") and _status_resumo(p).get("pronto") and not _status_resumo(p).get("entregue") and not proposta_encerrada(p)
+    )
 
     m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("🚨 Atrasados", atrasados)
@@ -23811,9 +23942,9 @@ if pagina_atual == "fluxo":
     # I8.12.8 — Central de Produção: mesma previsão + andamento manual já existente.
     central_prod_i8128 = _i8128_engine_central(previsao_fluxo_i8127, tarefas_ativas, hoje=hoje_local())
     resumo_prod_i8128 = _i8128_engine_resumo(central_prod_i8128)
-    st.markdown("### 🏭 Central de Produção · I8.12.8-HF1")
+    st.markdown("### 🏭 Central de Produção · I8.12.8-HF2")
     st.caption(
-        "Fonte única operacional: Aprovado/Pago/Entregue vêm da proposta oficial; materiais e risco vêm da I8.12.7; "
+        "Fonte única operacional: Aprovado/Pago/Pronto/Entregue vêm da proposta oficial; materiais e risco vêm da I8.12.7; "
         "o producao_db guarda somente a etapa manual do trabalho. A mesma leitura fresca é usada por Jorge e Anna."
     )
     cp81, cp82, cp83, cp84, cp85, cp86, cp87 = st.columns(7)
@@ -23835,11 +23966,13 @@ if pagina_atual == "fluxo":
                 "aguardando_liberacao": "⚪ Não apurado",
                 "aguardando_material": "🟠 Falta material",
                 "compra_em_andamento": "🛒 Em compra",
+                "pronto_aguardando_entrega": "📦 Produção concluída",
             }.get(str(linha_i8128.get("chave_base") or ""), str(linha_i8128.get("status_base") or "—"))
             linhas_tabela_i8128.append({
                 "Prazo": "🔴 Risco" if linha_i8128.get("risco_atraso") else "—",
                 "Pedido": linha_i8128.get("numero_proposta"),
                 "Cliente": linha_i8128.get("cliente_nome"),
+                "Produtos": linha_i8128.get("resumo_produtos", "Sem itens informados"),
                 "Entrega": entrega_txt_i8128,
                 "Materiais": material_txt_i8128,
                 "Produção": linha_i8128.get("etapa_manual"),
@@ -23848,9 +23981,9 @@ if pagina_atual == "fluxo":
         st.dataframe(pd.DataFrame(linhas_tabela_i8128), use_container_width=True, hide_index=True, height=min(420, 44 + 35 * len(linhas_tabela_i8128)))
 
         if str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold() == "jorge":
-            with st.expander("🔎 Fonte única operacional · HF1", expanded=False):
+            with st.expander("🔎 Fonte única operacional · HF2", expanded=False):
                 st.caption(
-                    "Diagnóstico somente leitura. Aprovado/Pago/Entregue vêm da proposta oficial; "
+                    "Diagnóstico somente leitura. Aprovado/Pago/Pronto/Entregue vêm da proposta oficial; "
                     "Materiais vêm da I8.12.7; Produção é apenas a etapa manual do Fluxo."
                 )
                 mapa_prop_hf1 = {
@@ -23864,8 +23997,10 @@ if pagina_atual == "fluxo":
                     auditoria_hf1.append({
                         "Pedido": numero_hf1,
                         "Cliente": linha_hf1.get("cliente_nome"),
+                        "Produtos": linha_hf1.get("resumo_produtos", "Sem itens informados"),
                         "Aprovado": "SIM" if estado_hf1.get("aprovado") else "NÃO",
                         "Pago": "SIM" if estado_hf1.get("pago") else "NÃO",
+                        "Pronto": "SIM" if estado_hf1.get("pronto") else "NÃO",
                         "Entregue": "SIM" if estado_hf1.get("entregue") else "NÃO",
                         "Materiais": linha_hf1.get("status_base"),
                         "Etapa manual": linha_hf1.get("etapa_manual"),
@@ -23874,7 +24009,7 @@ if pagina_atual == "fluxo":
 
         opcoes_prod_i8128 = [str(l.get("numero_proposta") or "") for l in central_prod_i8128]
         rotulos_prod_i8128 = {
-            str(l.get("numero_proposta") or ""): f"{l.get('numero_proposta')} · {l.get('cliente_nome')} · {l.get('situacao_operacional')}"
+            str(l.get("numero_proposta") or ""): f"{l.get('numero_proposta')} · {l.get('cliente_nome')} · {l.get('resumo_produtos', 'Sem itens')} · {l.get('situacao_operacional')}"
             for l in central_prod_i8128
         }
         selecionado_prod_i8128 = st.selectbox(
@@ -23885,6 +24020,7 @@ if pagina_atual == "fluxo":
         if linha_sel_i8128:
             with st.container(border=True):
                 st.markdown(f"**{linha_sel_i8128.get('numero_proposta')} — {linha_sel_i8128.get('cliente_nome')}**")
+                st.caption(f"🧾 {linha_sel_i8128.get('resumo_produtos', 'Sem itens informados')}")
                 st.write(f"**Materiais:** {linha_sel_i8128.get('status_base')}  •  **Produção:** {linha_sel_i8128.get('etapa_manual')}")
                 st.caption(f"Próxima ação: {linha_sel_i8128.get('proxima_acao_producao')}")
                 if linha_sel_i8128.get("motivos"):
@@ -23933,7 +24069,7 @@ if pagina_atual == "fluxo":
             tid = tarefa.get("id")
             status_atual = normalizar_status_fluxo(tarefa.get("status"))
             prazo = classe_prazo_producao(tarefa.get("data_entrega"), status_atual)
-            icone = {"Atrasado": "🚨", "Hoje": "⚠️", "Amanhã": "📅", "Concluído": "✅"}.get(prazo, "📌")
+            icone = {"Atrasado": "🚨", "Hoje": "⚠️", "Amanhã": "📅", "Pronto / aguardando entrega": "📦", "Concluído": "✅"}.get(prazo, "📌")
             titulo = f"{icone} {tarefa.get('data_entrega') or 'Sem data'} | {tarefa.get('cliente_nome')} | {tarefa.get('produto')}"
             with st.expander(titulo, expanded=(prazo in ["Atrasado", "Hoje"])):
                 st.write(f"**Pedido:** {tarefa.get('numero_proposta')}  •  **Qtd.:** {tarefa.get('quantidade')}  •  **Status:** {status_atual}")
@@ -23979,7 +24115,7 @@ if pagina_atual == "fluxo":
 
     with visao:
         f1, f2, f3 = st.columns(3)
-        prazo_filtro = f1.selectbox("Prazo", ["Todos", "Atrasado", "Hoje", "Amanhã", "Próximos 3 dias", "Futuro", "Sem data", "Concluído"], key="fluxo_prazo")
+        prazo_filtro = f1.selectbox("Prazo", ["Todos", "Atrasado", "Hoje", "Amanhã", "Próximos 3 dias", "Futuro", "Pronto / aguardando entrega", "Sem data", "Concluído"], key="fluxo_prazo")
         status_filtro = f2.selectbox("Etapa", ["Todas"] + STATUS_FLUXO, key="fluxo_etapa")
         prioridade_filtro = f3.selectbox("Prioridade", ["Todas"] + PRIORIDADES_FLUXO, key="fluxo_prioridade")
         busca = st.text_input("🔎 Buscar por cliente, pedido, produto, tema, nome ou detalhes", key="fluxo_busca").strip().lower()
@@ -24323,7 +24459,7 @@ if pagina_atual == "faturamento_mensal":
 
 
 if pagina_atual == "compras_custos":
-    st.header("📦 I8.12.8-HF1 · Compras, Custos, Estoque, Ficha Técnica, Pedidos & Produção")
+    st.header("📦 I8.12.8-HF2 · Compras, Custos, Estoque, Ficha Técnica, Pedidos & Produção")
     st.caption(
         "Registre custos reais, transforme compras em entradas de estoque, controle materiais e defina o consumo técnico por produto. "
         "A I8.12.4 confirma o consumo por pedido; a I8.12.5 consolida as faltas reais; a I8.12.6 controla o que já foi solicitado ao fornecedor; e a I8.12.7 transforma essas mesmas fontes em previsão operacional de produção e risco de entrega. Solicitação não movimenta estoque: somente o recebimento real registrado como compra/entrada regulariza pendências. O módulo nunca altera sozinho o preço do Catálogo Oficial."
@@ -24550,13 +24686,15 @@ if pagina_atual == "compras_custos":
         aguardando_i8127 = [p for p in previsao_i8127 if p.get("chave") == "aguardando_material"]
         comprando_i8127 = [p for p in previsao_i8127 if p.get("chave") == "compra_em_andamento"]
         liberados_i8127 = [p for p in previsao_i8127 if p.get("chave") == "liberado"]
+        prontos_i8127 = [p for p in previsao_i8127 if p.get("chave_base") == "pronto_aguardando_entrega"]
         liberar_i8127 = [p for p in previsao_i8127 if p.get("chave") == "aguardando_liberacao"]
-        pr1_i8127, pr2_i8127, pr3_i8127, pr4_i8127, pr5_i8127 = st.columns(5)
+        pr1_i8127, pr2_i8127, pr3_i8127, pr4_i8127, pr5_i8127, pr6_i8127 = st.columns(6)
         pr1_i8127.metric("🔴 Risco de atraso", len(risco_i8127))
         pr2_i8127.metric("🟠 Aguardando material", len(aguardando_i8127))
         pr3_i8127.metric("🛒 Compra em andamento", len(comprando_i8127))
         pr4_i8127.metric("🟢 Liberados", len(liberados_i8127))
-        pr5_i8127.metric("⚪ Aguardando liberação", len(liberar_i8127))
+        pr5_i8127.metric("📦 Prontos", len(prontos_i8127))
+        pr6_i8127.metric("⚪ Aguardando liberação", len(liberar_i8127))
 
         linhas_previsao_i8127 = []
         for ped_i8127 in previsao_i8127:
@@ -24567,7 +24705,11 @@ if pagina_atual == "compras_custos":
                     f"{nec_i8127.get('material_nome')}: {_i8121_quantidade(nec_i8127.get('pendente'))} {nec_i8127.get('unidade', '')}"
                 )
             aguardando_liberacao_i8127 = ped_i8127.get("chave_base") == "aguardando_liberacao"
-            if aguardando_liberacao_i8127:
+            pronto_i8127 = ped_i8127.get("chave_base") == "pronto_aguardando_entrega"
+            if pronto_i8127:
+                materiais_txt_i8127 = "Produção concluída"
+                atencao_txt_i8127 = "Aguardando retirada do cliente ou entrega pela AlphaFest"
+            elif aguardando_liberacao_i8127:
                 materiais_txt_i8127 = "Material ainda não apurado"
                 atencao_txt_i8127 = " · ".join(ped_i8127.get("motivos") or []) or "Confirmar liberação de consumo para verificar disponibilidade dos materiais"
             else:
@@ -24577,6 +24719,7 @@ if pagina_atual == "compras_custos":
                 "Situação": ped_i8127.get("status", ""),
                 "Pedido": ped_i8127.get("numero_proposta", ""),
                 "Cliente": ped_i8127.get("cliente_nome", ""),
+                "Produtos": ped_i8127.get("resumo_produtos", "Sem itens informados"),
                 "Entrega": entrega_i8127.strftime("%d/%m/%Y") if isinstance(entrega_i8127, date) else "Sem data",
                 "Materiais": materiais_txt_i8127,
                 "Motivo / próxima atenção": atencao_txt_i8127,
@@ -25089,7 +25232,7 @@ if pagina_atual == "compras_custos":
     # Ordenação é somente visual: propostas mais recentes primeiro. Não altera a elegibilidade.
     elegiveis_i8124 = _ordenar_propostas_recentes(elegiveis_i8124)
     st.caption(
-        f"Fila de liberação: {len(elegiveis_i8124)} proposta(s) com Aprovado = SIM, Entregue = NÃO e consumo ainda não confirmado."
+        f"Fila de liberação: {len(elegiveis_i8124)} proposta(s) com Aprovado = SIM, Pronto = NÃO, Entregue = NÃO e consumo ainda não confirmado."
     )
     if not elegiveis_i8124:
         st.caption("Nenhuma proposta aguarda liberação de consumo neste momento.")
@@ -25102,7 +25245,7 @@ if pagina_atual == "compras_custos":
         numero_pedido_i8124 = st.selectbox(
             "Proposta aprovada aguardando liberação",
             list(mapa_pedidos_i8124),
-            format_func=lambda n: f"{n} · {mapa_pedidos_i8124[n].get('cliente_nome', 'Cliente')} · entrega {mapa_pedidos_i8124[n].get('data_entrega', '—')}",
+            format_func=lambda n: f"{n} · {mapa_pedidos_i8124[n].get('cliente_nome', 'Cliente')} · {resumo_produtos_pedido(mapa_pedidos_i8124[n])} · entrega {mapa_pedidos_i8124[n].get('data_entrega', '—')}",
             key="i8124_pedido_consumo",
         )
         proposta_i8124 = mapa_pedidos_i8124.get(str(numero_pedido_i8124), {})
@@ -25111,7 +25254,7 @@ if pagina_atual == "compras_custos":
 
         with st.container(border=True):
             st.markdown(f"#### 📋 {numero_pedido_i8124} — {proposta_i8124.get('cliente_nome', 'Cliente')}")
-            st.caption(f"Entrega: {proposta_i8124.get('data_entrega', '—')} · Itens: {len(proposta_i8124.get('itens') or [])}")
+            st.caption(f"Entrega: {proposta_i8124.get('data_entrega', '—')} · 🧾 {resumo_produtos_pedido(proposta_i8124)}")
             if consumo_ativo_i8124:
                 resumo_sel_i8124 = _i8124_resumo_consumo(consumo_ativo_i8124, estoque_i8124)
                 st.markdown(f"**Situação atual:** {resumo_sel_i8124.get('status')}")
@@ -29376,10 +29519,12 @@ if pagina_atual == "relacionamentos":
                             "Proposta": pcli.get("numero_proposta", ""),
                             "Emissão": pcli.get("data_geracao", ""),
                             "Entrega": pcli.get("data_entrega", ""),
+                            "Produtos": resumo_produtos_pedido(pcli),
                             "Total": total_cli,
                             "Cobrança": I811_MODALIDADE_MENSAL if proposta_faturamento_mensal(pcli) else I811_MODALIDADE_NORMAL,
-                            "Pago": "Mensal" if proposta_faturamento_mensal(pcli) else ("Sim" if pcli.get("pago") else "Não"),
-                            "Entregue": "Sim" if pcli.get("entregue") else "Não",
+                            "Pago": "Mensal" if proposta_faturamento_mensal(pcli) else ("Sim" if _status_resumo(pcli).get("pago") else "Não"),
+                            "Pronto": "Sim" if _status_resumo(pcli).get("pronto") else "Não",
+                            "Entregue": "Sim" if _status_resumo(pcli).get("entregue") else "Não",
                         })
                     st.dataframe(
                         pd.DataFrame(linhas_cli),

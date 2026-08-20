@@ -7,6 +7,7 @@ from proposal_status import (
     proposta_concluida as _status_concluida,
     proposta_encerrada as _status_encerrada,
     proposta_faturamento_mensal as _status_mensal,
+    proposta_pronta as _status_pronta,
     status_bool as _status_bool,
 )
 from alpha_core import listar_atrasados_operacionais
@@ -17,7 +18,7 @@ def _bool(value: Any) -> bool:
         return value
     if isinstance(value, (int, float)):
         return bool(value)
-    return str(value or "").strip().casefold() in {"1", "true", "sim", "yes", "ok", "pago", "aprovado", "entregue"}
+    return str(value or "").strip().casefold() in {"1", "true", "sim", "yes", "ok", "pago", "aprovado", "pronto", "entregue"}
 
 
 def _parse_date(value: Any) -> date | None:
@@ -112,6 +113,7 @@ def calcular_indicadores_unificados(
     propostas_abertas = [p for p in propostas_validas if not _concluida(p)]
     aguardando_aprovacao = [p for p in propostas_abertas if not _status_bool(p, "aprovado")]
     aprovadas_em_andamento = [p for p in propostas_abertas if _status_bool(p, "aprovado") and not _status_bool(p, "entregue")]
+    prontos_aguardando_entrega = [p for p in aprovadas_em_andamento if _status_pronta(p)]
     pagamentos_pendentes = [p for p in propostas_abertas if _status_bool(p, "aprovado") and not _status_mensal(p) and not _status_bool(p, "pago")]
 
     entregas_hoje_abertas = [
@@ -124,21 +126,10 @@ def calcular_indicadores_unificados(
 
     tarefas_ativas = [t for t in tarefas_lista if _bool(t.get("ativa", True))]
     aprovadas_abertas_ids = {_numero(p) for p in aprovadas_em_andamento if _numero(p)}
-    status_por_proposta: dict[str, set[str]] = {}
-    for tarefa in tarefas_ativas:
-        numero = _numero(tarefa)
-        if numero not in aprovadas_abertas_ids:
-            continue
-        status = str(tarefa.get("status") or "Pedido recebido").strip()
-        status_por_proposta.setdefault(numero, set()).add(status)
-
-    prontos_ids = {n for n, statuses in status_por_proposta.items() if statuses and statuses <= {"Pronto", "Entregue"} and "Pronto" in statuses}
-    em_producao_ids = {
-        n for n, statuses in status_por_proposta.items()
-        if n not in prontos_ids and any(s in {"Pedido recebido", "Arte pendente", "Aguardando aprovação", "Pronto para produzir", "Em produção"} for s in statuses)
-    }
-    # Propostas aprovadas ainda sem tarefa sincronizada também precisam aparecer como operação pendente.
-    em_producao_ids.update(aprovadas_abertas_ids - set(status_por_proposta))
+    prontos_ids = {_numero(p) for p in prontos_aguardando_entrega if _numero(p)}
+    # HF2: Pronto é status oficial da proposta. O producao_db informa a etapa,
+    # mas não pode manter um pedido pronto dentro de "em produção".
+    em_producao_ids = aprovadas_abertas_ids - prontos_ids
 
     # Funil unificado: atendimentos representam captação; propostas representam o
     # avanço comercial. Dessa forma, CRM e Central deixam de contar bases isoladas.
@@ -164,6 +155,7 @@ def calcular_indicadores_unificados(
         "aprovadas_total": len(aprovadas_total),
         "aprovadas_hoje": len(aprovadas_hoje),
         "aprovadas_em_andamento": len(aprovadas_em_andamento),
+        "prontos_aguardando_entrega": len(prontos_aguardando_entrega),
         "pedidos_ativos": len(propostas_abertas),
         "pagas_total": len(pagas_total),
         "pagamentos_pendentes": len(pagamentos_pendentes),

@@ -20,11 +20,12 @@ def renderizar_centro_executivo(snapshot: Any, indicadores_legados: dict[str, An
         unsafe_allow_html=True,
     )
 
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("📦 Pedidos ativos", dados.get("pedidos_ativos", 0))
     c2.metric("🟡 Aprovação", dados.get("aguardando_aprovacao", 0))
-    c3.metric("🚚 Pendentes hoje", dados.get("pendentes_entrega_hoje", 0))
-    c4.metric("🔴 Atrasados", dados.get("atrasados", 0))
+    c3.metric("✅ Prontos", dados.get("prontos_aguardando_entrega", 0), help="Produção concluída; aguardando retirada/entrega.")
+    c4.metric("🚚 Pendentes hoje", dados.get("pendentes_entrega_hoje", 0))
+    c5.metric("🔴 Atrasados", dados.get("atrasados", 0), help="Não inclui pedidos já marcados como Pronto.")
 
     f1, f2, f3, f4 = st.columns(4)
     f1.metric("💵 Recebido hoje", _money(dados.get("recebido_hoje", 0)))
@@ -39,6 +40,7 @@ def renderizar_centro_executivo(snapshot: Any, indicadores_legados: dict[str, An
             comparacoes = {
                 "Pedidos ativos": (dados.get("pedidos_ativos", 0), indicadores_legados.get("pedidos_ativos", 0)),
                 "Aguardando aprovação": (dados.get("aguardando_aprovacao", 0), indicadores_legados.get("aguardando_aprovacao", 0)),
+                "Prontos": (dados.get("prontos_aguardando_entrega", 0), indicadores_legados.get("prontos_operacionais", 0)),
                 "Entregues hoje": (dados.get("entregues_hoje", 0), indicadores_legados.get("entregues_hoje", 0)),
                 "Atrasados": (dados.get("atrasados", 0), indicadores_legados.get("atrasados_operacionais", 0)),
             }
@@ -49,4 +51,4 @@ def renderizar_centro_executivo(snapshot: Any, indicadores_legados: dict[str, An
                     st.caption(f"{nome}: Alpha Core = {core} | cálculo legado = {legado}")
             else:
                 st.success("Os principais indicadores estão sincronizados com o cálculo legado atual.")
-        st.caption("🧪 Ambiente de homologação do Jorge. A Central da Anna não foi modificada.")
+        st.caption("Fonte única operacional compartilhada entre Jorge e Anna.")

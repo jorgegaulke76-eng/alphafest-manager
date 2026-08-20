@@ -11,7 +11,7 @@ from typing import Any, Callable
 import streamlit as st
 
 from alpha_core import listar_atrasados_operacionais
-from proposal_status import status_bool as _status_bool
+from proposal_status import status_bool as _status_bool, proposta_pronta as _status_pronta
 
 
 def _bool(value: Any) -> bool:
@@ -19,7 +19,7 @@ def _bool(value: Any) -> bool:
         return value
     if isinstance(value, (int, float)):
         return bool(value)
-    return str(value or "").strip().casefold() in {"1", "true", "sim", "yes", "ok", "pago", "aprovado", "entregue"}
+    return str(value or "").strip().casefold() in {"1", "true", "sim", "yes", "ok", "pago", "aprovado", "pronto", "entregue"}
 
 
 def _data(value: Any) -> date | None:
@@ -73,6 +73,7 @@ def calcular_briefing(
     previsto_aberto = sum(_valor_total(p, calcular_valores) for p in aprovados_abertos)
 
     entregas_hoje = [p for p in aprovados_abertos if _data(p.get("data_entrega")) == hoje]
+    prontos_aguardando = [p for p in aprovados_abertos if _status_pronta(p)]
     # HF2: não recalcular atraso com regra própria. O THU consome a lista
     # oficial do Alpha Core para garantir os mesmos pedidos e a mesma contagem.
     atrasados = listar_atrasados_operacionais(propostas, hoje)
@@ -91,6 +92,7 @@ def calcular_briefing(
         "recebido_hoje": recebido_hoje,
         "previsto_aberto": previsto_aberto,
         "entregas_hoje": len(entregas_hoje),
+        "prontos_aguardando_entrega": len(prontos_aguardando),
         "atrasados": len(atrasados),
         "pedidos_ativos": int(indicadores.get("pedidos_ativos", indicadores.get("propostas_abertas", 0))),
         "aguardando_aprovacao": int(indicadores.get("aguardando_aprovacao", 0)),
@@ -107,6 +109,8 @@ def renderizar_briefing_thu(nome: str, briefing: dict[str, Any]) -> None:
     tarefas: list[tuple[str, str]] = []
     if briefing.get("atrasados", 0):
         tarefas.append(("🔴", f"Resolver {briefing['atrasados']} pedido(s) atrasado(s) primeiro"))
+    if briefing.get("prontos_aguardando_entrega", 0):
+        tarefas.append(("📦", f"Acompanhar {briefing['prontos_aguardando_entrega']} pedido(s) pronto(s) aguardando retirada/entrega"))
     if briefing.get("entregas_hoje", 0):
         tarefas.append(("🚚", f"Conferir {briefing['entregas_hoje']} entrega(s) prevista(s) para hoje"))
     if briefing.get("aguardando_aprovacao", 0):
@@ -131,12 +135,13 @@ def renderizar_briefing_thu(nome: str, briefing: dict[str, Any]) -> None:
     valores = [
         ("📄", "Orçamentos hoje", briefing.get("propostas_hoje", 0)),
         ("📦", "Pedidos ativos", briefing.get("pedidos_ativos", 0)),
+        ("✅", "Prontos", briefing.get("prontos_aguardando_entrega", 0)),
         ("🚚", "Entregas hoje", briefing.get("entregas_hoje", 0)),
         ("💵", "Recebido hoje", recebido),
         ("🟡", "Aprovação", briefing.get("aguardando_aprovacao", 0)),
         ("🔴", "Atrasados", briefing.get("atrasados", 0)),
     ]
-    cols = st.columns(6)
+    cols = st.columns(7)
     for col, (icone, rotulo, valor) in zip(cols, valores):
         col.markdown(
             f'<div style="border:1px solid #263244;border-radius:12px;padding:9px 8px;text-align:center;min-height:78px;">'

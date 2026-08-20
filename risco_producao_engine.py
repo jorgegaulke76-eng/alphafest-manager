@@ -17,6 +17,7 @@ from typing import Any, Iterable
 from consumo_estoque_engine import resumo_consumo
 from planejamento_compras_engine import quantidade_aberta
 from proposal_status import resumo_status as resumo_status_proposta
+from pedido_resumo import resumo_produtos_pedido
 
 
 def _num(valor: Any) -> float:
@@ -32,7 +33,7 @@ def _bool(valor: Any) -> bool:
     if isinstance(valor, (int, float)):
         return bool(valor)
     return str(valor or "").strip().casefold() in {
-        "1", "true", "sim", "yes", "ok", "pago", "aprovado", "entregue"
+        "1", "true", "sim", "yes", "ok", "pago", "aprovado", "pronto", "entregue"
     }
 
 
@@ -145,6 +146,8 @@ def montar_previsao_producao(
         base.append({
             "numero_proposta": numero,
             "cliente_nome": str(proposta.get("cliente_nome") or "Cliente"),
+            "resumo_produtos": resumo_produtos_pedido(proposta),
+            "pronto_oficial": bool(estado_oficial.get("pronto")),
             "data_entrega": entrega,
             "data_entrega_original": proposta.get("data_entrega"),
             "dias_ate_entrega": dias,
@@ -208,7 +211,13 @@ def montar_previsao_producao(
         motivos: list[str] = []
         risco = False
 
-        if not consumo:
+        if pedido.get("pronto_oficial"):
+            # HF2: Pronto significa produção concluída. Não exigir liberação de
+            # consumo retroativa nem classificar como atraso de produção.
+            chave_base = "pronto_aguardando_entrega"
+            status_base = "📦 Pronto — aguardando retirada/entrega"
+            motivos.append("produção concluída; aguardando retirada do cliente ou entrega pela AlphaFest")
+        elif not consumo:
             chave_base = "aguardando_liberacao"
             status_base = "⚪ Aguardando liberação de materiais"
             # HF1: antes da liberação não existe apuração física oficial. Nunca
@@ -265,7 +274,8 @@ def montar_previsao_producao(
                 "aguardando_material": 1,
                 "compra_em_andamento": 2,
                 "aguardando_liberacao": 3,
-                "liberado": 4,
+                "pronto_aguardando_entrega": 4,
+                "liberado": 5,
             }.get(chave_base, 5)
 
         pedido["status_base"] = status_base
