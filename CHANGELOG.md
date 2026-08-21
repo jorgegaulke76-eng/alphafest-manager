@@ -739,3 +739,9 @@ hangelog
 - Nome oficial tem prioridade; alias só é aceito quando a correspondência é única.
 - Reserva continua bloqueada em ambiguidade ou ausência de Ficha Técnica.
 - Nenhuma alteração automática no Catálogo Oficial ou nos dados operacionais.
+
+## 20.4.9-I8.13.2-HF2
+- Ficha Técnica passou a ser opcional por pedido.
+- Adicionados modos: Ficha padrão, materiais específicos do pedido e sem consumo de estoque controlado.
+- Pedidos sem Ficha Técnica não ficam mais bloqueados apenas por essa ausência.
+- Mantido vínculo seguro do Catálogo e fluxo Reserva → Consumo Real.
