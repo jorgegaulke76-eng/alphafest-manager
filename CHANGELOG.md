@@ -732,3 +732,10 @@ hangelog
 - Simulador e capacidade de Ficha Técnica deixam de contar material já comprometido com outros pedidos.
 - Saída manual não pode consumir estoque reservado; consolidação de material com reserva ativa é bloqueada.
 - Nenhum banco novo; `consumo_pedidos_db` guarda reservas e `estoque_db` continua guardando somente movimentos físicos.
+
+## 20.4.9-I8.13.2-HF1 — Reconhecimento seguro de aliases na Reserva
+- Corrige falso “sem correspondência no Catálogo Oficial” quando o item da proposta já existe como alias confirmado.
+- Compatibilidade com aliases legados agrupados em uma única entrada separada por vírgulas/outros delimitadores.
+- Nome oficial tem prioridade; alias só é aceito quando a correspondência é única.
+- Reserva continua bloqueada em ambiguidade ou ausência de Ficha Técnica.
+- Nenhuma alteração automática no Catálogo Oficial ou nos dados operacionais.

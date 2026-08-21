@@ -4659,13 +4659,14 @@ def _i8124_montar_previa_pedido(proposta, catalogo=None, fichas=None, estoque=No
         if produto is None:
             sem_catalogo.append(nome_item)
             continue
-        if (resolucao_prod or {}).get("modo") == "saneamento_seguro":
+        if (resolucao_prod or {}).get("modo") in {"alias_confirmado", "saneamento_seguro"}:
             correlacoes_saneadas.append({
                 "item": nome_item,
                 "produto_oficial": str((produto or {}).get("Nome") or nome_item),
                 "campo": str((resolucao_prod or {}).get("campo") or ""),
                 "referencia": str((resolucao_prod or {}).get("referencia") or ""),
                 "confianca": valor_float((resolucao_prod or {}).get("confianca", 0)),
+                "modo": str((resolucao_prod or {}).get("modo") or ""),
             })
         ficha = _i8123_ficha_para_produto(fichas, produto, idx_prod)
         componentes = _i8123_componentes_ativos(ficha) if ficha else []
@@ -10039,6 +10040,49 @@ def normalizar_identidade_produto(valor):
     return " ".join(texto.split())
 
 
+def _aliases_catalogo_atomicos(produto):
+    """Interpreta aliases atuais e formatos legados sem alterar o Catálogo.
+
+    Alguns cadastros históricos guardaram vários aliases dentro de um único item
+    (ex.: ``["ALIAS A, ALIAS B, ALIAS C"]``). O Catálogo continua sendo a fonte
+    oficial; esta função apenas expande a leitura para comparação segura. O valor
+    original também é preservado como candidato, então nomes que contenham vírgula
+    não deixam de funcionar.
+    """
+    produto = produto or {}
+    bruto = produto.get("Aliases", [])
+    if isinstance(bruto, (str, int, float)):
+        valores = [bruto]
+    elif isinstance(bruto, dict):
+        valores = [bruto.get("Nome") or bruto.get("nome") or bruto.get("Alias") or bruto.get("alias") or ""]
+    else:
+        try:
+            valores = list(bruto or [])
+        except TypeError:
+            valores = [bruto]
+
+    resultado = []
+    vistos = set()
+    for valor in valores:
+        if isinstance(valor, dict):
+            valor = valor.get("Nome") or valor.get("nome") or valor.get("Alias") or valor.get("alias") or ""
+        texto = str(valor or "").strip()
+        if not texto:
+            continue
+        candidatos = [texto]
+        # Compatibilidade com importações/edições antigas que concentraram aliases
+        # em uma única linha separados por vírgula, ponto e vírgula, barra vertical,
+        # bullet ou quebra de linha.
+        if re.search(r"[\n\r;,|•]", texto):
+            candidatos.extend(x.strip() for x in re.split(r"(?:[\r\n]+|[;,|•]+)", texto) if x.strip())
+        for candidato in candidatos:
+            chave = normalizar_identidade_produto(candidato)
+            if chave and chave not in vistos:
+                vistos.add(chave)
+                resultado.append(candidato)
+    return resultado
+
+
 def mapa_identidade_produtos(catalogo):
     """Retorna nome/alias normalizado -> nome oficial. Nome oficial sempre tem prioridade."""
     catalogo = catalogo or []
@@ -10046,17 +10090,17 @@ def mapa_identidade_produtos(catalogo):
 
     # Primeiro os nomes oficiais: um alias nunca pode sobrescrever um produto real.
     for produto in catalogo:
-        nome = str(produto.get("Nome") or "").strip()
+        nome = str((produto or {}).get("Nome") or "").strip()
         chave = normalizar_identidade_produto(nome)
         if chave and nome:
             mapa[chave] = nome
 
-    # Depois aliases livres.
+    # Depois aliases confirmados, inclusive formatos legados agrupados.
     for produto in catalogo:
-        oficial = str(produto.get("Nome") or "").strip()
+        oficial = str((produto or {}).get("Nome") or "").strip()
         if not oficial:
             continue
-        for alias in (produto.get("Aliases", []) or []):
+        for alias in _aliases_catalogo_atomicos(produto):
             chave = normalizar_identidade_produto(alias)
             if chave and chave not in mapa:
                 mapa[chave] = oficial
@@ -10129,21 +10173,48 @@ def _resolver_produto_catalogo_saneado(nome, catalogo):
         return None, None, {"modo": "ausente", "confianca": 0.0, "original": original}
 
     chave = normalizar_identidade_produto(original)
-    mapa = mapa_identidade_produtos(catalogo)
-    oficial_exato = mapa.get(chave)
-    if oficial_exato:
-        idx = next((
-            i for i, p in enumerate(catalogo)
-            if normalizar_identidade_produto((p or {}).get("Nome"))
-            == normalizar_identidade_produto(oficial_exato)
-        ), None)
-        if idx is not None:
-            modo = "nome_oficial" if normalizar_identidade_produto((catalogo[idx] or {}).get("Nome")) == chave else "alias_confirmado"
-            return idx, catalogo[idx], {
-                "modo": modo, "confianca": 1.0, "original": original,
-                "oficial": str((catalogo[idx] or {}).get("Nome") or oficial_exato),
-                "campo": "Nome" if modo == "nome_oficial" else "Aliases",
-            }
+
+    # I8.13.2-HF1: resolução direta precisa ser inequívoca. Nome oficial exato
+    # vence qualquer alias. Se não houver nome oficial, aceita alias exato/normalizado
+    # somente quando ele pertence a UM único produto. Isso também entende o formato
+    # legado em que vários aliases ficaram dentro de uma única string separada por vírgulas.
+    oficiais_exatos = [
+        (i, p) for i, p in enumerate(catalogo)
+        if normalizar_identidade_produto((p or {}).get("Nome")) == chave
+    ]
+    if len(oficiais_exatos) == 1:
+        idx, produto = oficiais_exatos[0]
+        return idx, produto, {
+            "modo": "nome_oficial", "confianca": 1.0, "original": original,
+            "oficial": str((produto or {}).get("Nome") or original), "campo": "Nome",
+            "referencia": str((produto or {}).get("Nome") or original),
+        }
+    if len(oficiais_exatos) > 1:
+        return None, None, {
+            "modo": "ambiguo", "confianca": 1.0, "original": original,
+            "motivo": "mais de um produto possui o mesmo nome oficial normalizado",
+        }
+
+    aliases_exatos = []
+    for idx, produto in enumerate(catalogo):
+        for alias in _aliases_catalogo_atomicos(produto):
+            if normalizar_identidade_produto(alias) == chave:
+                aliases_exatos.append((idx, produto, alias))
+                break
+    indices_alias = {idx for idx, _, _ in aliases_exatos}
+    if len(indices_alias) == 1:
+        idx, produto, alias_ref = aliases_exatos[0]
+        return idx, produto, {
+            "modo": "alias_confirmado", "confianca": 1.0, "original": original,
+            "oficial": str((produto or {}).get("Nome") or original), "campo": "Aliases",
+            "referencia": str(alias_ref or original),
+        }
+    if len(indices_alias) > 1:
+        return None, None, {
+            "modo": "ambiguo", "confianca": 1.0, "original": original,
+            "motivo": "o mesmo alias pertence a mais de um produto oficial",
+            "candidatos": [str((p or {}).get("Nome") or "") for _, p, _ in aliases_exatos],
+        }
 
     tokens_alvo = _tokens_saneamento_produto(original)
     if not tokens_alvo:
@@ -10154,7 +10225,7 @@ def _resolver_produto_catalogo_saneado(nome, catalogo):
     for idx, produto in enumerate(catalogo):
         produto = produto or {}
         campos = [("Nome", produto.get("Nome"))]
-        campos.extend(("Aliases", x) for x in (produto.get("Aliases", []) or []) if str(x).strip())
+        campos.extend(("Aliases", x) for x in _aliases_catalogo_atomicos(produto) if str(x).strip())
         for campo in ("Categoria", "Subcategoria", "PalavrasChave"):
             valor = produto.get(campo)
             if isinstance(valor, (list, tuple, set)):
@@ -25903,10 +25974,17 @@ if pagina_atual == "compras_custos":
                     for corr_i8124 in previa_i8124.get("correlacoes_saneadas") or []:
                         ref_corr_i8124 = str(corr_i8124.get("referencia") or "").strip()
                         detalhe_corr_i8124 = f" via {corr_i8124.get('campo')}" + (f" ‘{ref_corr_i8124}’" if ref_corr_i8124 else "")
-                        st.success(
-                            f"🧹 Saneamento aplicado: {corr_i8124.get('item')} → {corr_i8124.get('produto_oficial')}"
-                            f"{detalhe_corr_i8124}. A proposta original não foi alterada."
-                        )
+                        modo_corr_i8124 = str(corr_i8124.get("modo") or "")
+                        if modo_corr_i8124 == "alias_confirmado":
+                            st.success(
+                                f"✅ Vinculado pelo alias: {corr_i8124.get('item')} → {corr_i8124.get('produto_oficial')}"
+                                f"{detalhe_corr_i8124}. A proposta original não foi alterada."
+                            )
+                        else:
+                            st.success(
+                                f"🧹 Saneamento aplicado: {corr_i8124.get('item')} → {corr_i8124.get('produto_oficial')}"
+                                f"{detalhe_corr_i8124}. A proposta original não foi alterada."
+                            )
                 if previa_i8124.get("sem_catalogo"):
                     st.error("Produto(s) do pedido sem correspondência segura no Catálogo Oficial: " + " • ".join(previa_i8124.get("sem_catalogo")))
                 if previa_i8124.get("sem_ficha"):
