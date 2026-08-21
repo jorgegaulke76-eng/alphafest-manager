@@ -50,7 +50,13 @@ from painel_indicadores import calcular_indicadores_unificados
 from alpha_live import registrar_atividade, obter_operacao_online, obter_eventos_recentes
 from thu_executivo import calcular_briefing, renderizar_briefing_thu
 from alpha_core import calcular_alpha_core, listar_atrasados_operacionais
-from consumo_estoque_engine import resumo_consumo as _i8124_engine_resumo, pendencia_material as _i8124_engine_pendencia_material, planejar_regularizacao as _i8124_engine_planejar
+from consumo_estoque_engine import (
+    resumo_consumo as _i8124_engine_resumo,
+    pendencia_material as _i8124_engine_pendencia_material,
+    planejar_regularizacao as _i8124_engine_planejar,
+    planejar_reducao_reservas as _i8132_engine_reduzir_reservas,
+    reservado_ativo_material as _i8132_engine_reservado_material,
+)
 from necessidades_compras_engine import agregar_necessidades_compra as _i8125_engine_agregar
 from planejamento_compras_engine import aplicar_planejamento_necessidades as _i8126_engine_aplicar, quantidade_aberta as _i8126_engine_aberta, status_plano as _i8126_engine_status, agregar_aberto_por_material as _i8126_engine_agregar_aberto
 from risco_producao_engine import montar_previsao_producao as _i8127_engine_previsao
@@ -1491,6 +1497,31 @@ def alternar_status(num_proposta, campo, novo_valor):
     campo = str(campo or "").strip().casefold()
     if campo not in {"aprovado", "pago", "pronto", "entregue"}:
         return False
+
+    # I8.13.2 — Pronto/Entregue novos não podem encerrar produção deixando
+    # reservas sem consumo. Pedidos LEGADOS que já estavam Prontos antes desta
+    # ação não recebem exigência retroativa ao serem apenas entregues.
+    if bool(novo_valor) and campo in {"pronto", "entregue"}:
+        exigir_consumo_i8132 = True
+        try:
+            atual_i8132 = next((p for p in carregar_historico(force_refresh=True) if str((p or {}).get("numero_proposta") or "") == str(num_proposta)), None)
+            estado_atual_i8132 = _status_resumo(atual_i8132 or {})
+            if campo == "entregue" and estado_atual_i8132.get("pronto"):
+                exigir_consumo_i8132 = False
+            if campo == "pronto" and estado_atual_i8132.get("pronto"):
+                exigir_consumo_i8132 = False
+        except Exception:
+            pass
+        consumidor_i8132 = globals().get("_i8132_consumir_reserva_pedido")
+        if exigir_consumo_i8132 and callable(consumidor_i8132):
+            ok_mat_i8132, _msg_mat_i8132 = consumidor_i8132(num_proposta, usuario=obter_usuario_atual())
+            if not ok_mat_i8132:
+                try:
+                    st.session_state["_i8132_erro_status"] = _msg_mat_i8132
+                except Exception:
+                    pass
+                return False
+
     alterou_aprovacao = {"valor": False}
     evento_status_hf4 = {"texto": ""}
 
@@ -1672,7 +1703,7 @@ def excluir_proposta(num_proposta):
     if callable(consumo_ativo_i8124):
         consumo_i8124 = consumo_ativo_i8124(num_proposta)
         if consumo_i8124:
-            st.error("📦 Este pedido possui consumo de estoque confirmado. Estorne o consumo em Gestão → Compras, Custos & Estoque antes de excluir a proposta, para preservar a rastreabilidade.")
+            st.error("📦 Este pedido possui reserva/consumo de materiais ativo. Estorne a liberação em Gestão → Compras, Custos & Estoque antes de excluir a proposta, para preservar a rastreabilidade.")
             return False
 
     historico_atual = carregar_historico()
@@ -3998,19 +4029,19 @@ def salvar_estoque(dados, regularizar_pendencias=True):
         "movimentacoes": list(dados.get("movimentacoes") or []),
     }
     ok = bool(save_document("estoque_db", normalizado, ARQUIVO_ESTOQUE))
-    # I8.12.4 — qualquer entrada/ajuste positivo pode atender necessidades já
-    # confirmadas. A regularização usa somente saldo físico disponível e nunca
-    # deixa o estoque negativo. O flag evita recursão durante a própria baixa.
+    # I8.13.2 — qualquer alteração física reconcilia RESERVAS, sem baixa automática.
+    # Entradas podem completar reservas FIFO; perdas/ajustes que reduzam o físico
+    # liberam primeiro as reservas mais novas. A baixa real acontece ao iniciar produção.
     if ok and regularizar_pendencias:
         regularizador = globals().get("_i8124_regularizar_pendencias_automaticamente")
         if callable(regularizador):
             try:
                 resultado = regularizador(usuario=obter_usuario_atual())
-                if isinstance(resultado, dict) and resultado.get("movimentos"):
-                    st.session_state["_i8124_msg_regularizacao"] = resultado.get("mensagem") or "Pendências de pedidos atualizadas pelo estoque."
+                if isinstance(resultado, dict) and (resultado.get("reservas_criadas") or resultado.get("reservas_liberadas")):
+                    st.session_state["_i8124_msg_regularizacao"] = resultado.get("mensagem") or "Reservas dos pedidos reconciliadas com o estoque físico."
             except Exception as exc:
-                # Falha na regularização nunca invalida a entrada física já salva.
-                registrar_auditoria("Falha ao regularizar pendências", "Estoque", "", {"erro": str(exc)[:500]})
+                # Falha na reconciliação nunca invalida a movimentação física já salva.
+                registrar_auditoria("Falha ao reconciliar reservas", "Estoque", "", {"erro": str(exc)[:500]})
     return ok
 
 
@@ -4307,7 +4338,11 @@ def _i8122_consolidar_material_duplicado(origem_id, destino_id, motivo, usuario=
     fichas = carregar_fichas_tecnicas(force_refresh=True)
     if any(str(c.get("material_id") or "") == origem_id for f in fichas for c in _i8123_componentes_ativos(f)):
         return False, f"{origem.get('nome')} ainda é usado por uma Ficha Técnica. Atualize a ficha antes de consolidar este material."
-    pendente_origem = _i8124_pendencia_material(origem_id, consumos=carregar_consumos_pedidos(force_refresh=True), estoque=dados)
+    consumos_origem_i8132 = carregar_consumos_pedidos(force_refresh=True)
+    reservado_origem_i8132 = _i8132_reservado_material(origem_id, consumos=consumos_origem_i8132, estoque=dados)
+    if reservado_origem_i8132 > 0.000001:
+        return False, f"{origem.get('nome')} possui {_i8121_quantidade(reservado_origem_i8132)} {origem.get('unidade')} reservado(s) para pedidos. Estorne/realoque essas reservas antes da consolidação."
+    pendente_origem = _i8124_pendencia_material(origem_id, consumos=consumos_origem_i8132, estoque=dados)
     if pendente_origem > 0.000001:
         return False, f"{origem.get('nome')} possui {_i8121_quantidade(pendente_origem)} {origem.get('unidade')} pendente(s) em pedidos. Regularize/revise esses pedidos antes da consolidação."
     planos_origem_i8126 = [p for p in carregar_planejamentos_compras(force_refresh=True) if str((p or {}).get("material_id") or "") == origem_id and _i8126_engine_aberta(p) > 0.0000001]
@@ -4497,10 +4532,12 @@ def _i8123_status_ficha(ficha, estoque):
     return "Atenção: material ausente" if ausentes else "Pronta para simulação"
 
 
-def _i8123_capacidade_estimada(ficha, estoque):
+def _i8123_capacidade_estimada(ficha, estoque, consumos=None):
     componentes = _i8123_componentes_ativos(ficha)
     if not componentes:
         return None, None
+    # I8.13.2: simulador considera saldo LIVRE, não material já reservado a pedidos.
+    consumos = carregar_consumos_pedidos() if consumos is None else consumos
     capacidades = []
     for comp in componentes:
         consumo = valor_float(comp.get("consumo_por_unidade", 0))
@@ -4508,7 +4545,7 @@ def _i8123_capacidade_estimada(ficha, estoque):
         material = _i8122_material_por_id(estoque or {}, material_id)
         if not material or consumo <= 0:
             return 0, comp
-        saldo = max(0.0, _i8122_saldo_material(estoque or {}, material_id))
+        saldo = max(0.0, _i8132_saldo_livre_material(material_id, consumos=consumos, estoque=estoque or {}))
         capacidades.append((saldo / consumo, comp))
     if not capacidades:
         return None, None
@@ -4554,11 +4591,11 @@ def _i8124_valor_status_proposta(proposta, campo):
 
 
 def _i8124_proposta_na_fila_liberacao(proposta, numeros_consumo_ativos=None):
-    """Fonte única da fila de liberação de consumo.
+    """Fonte única da fila de liberação/reserva de materiais.
 
     Regra homologada pelo negócio:
     - entra somente se Aprovado = SIM;
-    - sai ao confirmar o consumo;
+    - sai ao confirmar a necessidade e criar a reserva;
     - sai quando Pronto = SIM (produção já concluída);
     - sai também quando Entregue = SIM.
 
@@ -4682,6 +4719,20 @@ def _i8124_resumo_consumo(consumo, estoque=None):
     return _i8124_engine_resumo(consumo or {}, (estoque or {}).get("movimentacoes") or [])
 
 
+def _i8132_reservado_material(material_id, consumos=None, estoque=None):
+    consumos = carregar_consumos_pedidos() if consumos is None else consumos
+    estoque = carregar_estoque() if estoque is None else estoque
+    return _i8132_engine_reservado_material(consumos or [], (estoque or {}).get("movimentacoes") or [], str(material_id or ""))
+
+
+def _i8132_saldo_livre_material(material_id, consumos=None, estoque=None):
+    estoque = carregar_estoque() if estoque is None else estoque
+    consumos = carregar_consumos_pedidos() if consumos is None else consumos
+    fisico = max(0.0, _i8122_saldo_material(estoque or {}, material_id))
+    reservado = max(0.0, _i8132_reservado_material(material_id, consumos=consumos, estoque=estoque))
+    return round(max(0.0, fisico - reservado), 6)
+
+
 def _i8124_pendencia_material(material_id, consumos=None, estoque=None):
     consumos = carregar_consumos_pedidos() if consumos is None else consumos
     estoque = carregar_estoque() if estoque is None else estoque
@@ -4800,85 +4851,153 @@ def _i8124_resumo_pedido(numero_proposta, consumos=None, estoque=None):
     estoque = carregar_estoque() if estoque is None else estoque
     consumo = _i8124_consumo_ativo_pedido(numero_proposta, consumos)
     if not consumo:
-        return {"status": "⚪ Consumo não confirmado", "chave": "nao_confirmado", "consumo": None, "necessidades": []}
+        return {"status": "⚪ Reserva não confirmada", "chave": "nao_confirmado", "consumo": None, "necessidades": []}
     resumo = _i8124_resumo_consumo(consumo, estoque)
     resumo["consumo"] = consumo
     return resumo
 
 
 def _i8124_regularizar_pendencias_automaticamente(usuario=None):
-    """Usa saldo físico disponível para quitar pendências FIFO, sem permitir negativo."""
+    """I8.13.2 — reconcilia reservas com o saldo físico, sem baixar estoque.
+
+    1) se perda/ajuste deixou o físico menor que o reservado, libera primeiro as
+       reservas mais novas para preservar FIFO;
+    2) usa o saldo físico LIVRE para completar faltas antigas em FIFO;
+    3) nenhuma movimentação física é criada aqui. A baixa ocorre ao iniciar produção.
+    """
     consumos = carregar_consumos_pedidos(force_refresh=True)
     ativos = [c for c in consumos if isinstance(c, dict) and not c.get("estornado")]
     if not ativos:
-        return {"movimentos": 0, "quantidade": 0.0, "mensagem": "Nenhuma pendência ativa."}
+        return {"movimentos": 0, "reservas_criadas": 0, "reservas_liberadas": 0, "quantidade": 0.0, "mensagem": "Nenhuma reserva ativa."}
+
     estoque = carregar_estoque(force_refresh=True)
+    movimentos = (estoque or {}).get("movimentacoes") or []
     saldos = {
         str(m.get("id")): max(0.0, _i8122_saldo_material(estoque, m.get("id")))
         for m in (estoque.get("materiais") or [])
     }
-    plano = _i8124_engine_planejar(ativos, estoque.get("movimentacoes") or [], saldos)
-    if not plano:
-        return {"movimentos": 0, "quantidade": 0.0, "mensagem": "Nenhuma pendência pôde ser regularizada com o saldo atual."}
-
     nome_usuario = str((usuario or obter_usuario_atual() or {}).get("nome") if isinstance((usuario or obter_usuario_atual()), dict) else (usuario or "Sistema")) or "Sistema"
-    por_consumo = {str(c.get("id")): c for c in consumos if isinstance(c, dict)}
+    por_consumo = {str(c.get("id") or ""): c for c in consumos if isinstance(c, dict)}
     afetados = {}
-    movimentos_criados = []
-    for aloc in plano:
+    reservas_liberadas = []
+    reservas_criadas = []
+
+    # Se o físico caiu abaixo do reservado, a reserva mais nova cede primeiro.
+    plano_reducao = _i8132_engine_reduzir_reservas(ativos, movimentos, saldos)
+    for liberacao in plano_reducao:
+        consumo = por_consumo.get(str(liberacao.get("consumo_id") or ""))
+        if consumo is None:
+            continue
+        reserva = next((r for r in (consumo.get("reservas") or []) if str((r or {}).get("id") or "") == str(liberacao.get("reserva_id") or "")), None)
+        qtd = max(0.0, valor_float(liberacao.get("quantidade")))
+        if not isinstance(reserva, dict) or qtd <= 0.0000001:
+            continue
+        original = max(0.0, valor_float(reserva.get("quantidade")))
+        ja_liberada = max(0.0, valor_float(reserva.get("quantidade_liberada")))
+        qtd = min(qtd, max(0.0, original - ja_liberada))
+        if qtd <= 0.0000001:
+            continue
+        reserva["quantidade_liberada"] = round(ja_liberada + qtd, 6)
+        reserva["ultima_liberacao_em"] = agora_local().isoformat()
+        reserva["ultima_liberacao_por"] = nome_usuario
+        reserva["motivo_ultima_liberacao"] = "Saldo físico ficou abaixo do total reservado"
+        consumo.setdefault("eventos", []).append({
+            "em": agora_local().isoformat(), "usuario": nome_usuario, "tipo": "reserva_reduzida",
+            "material_id": str(liberacao.get("material_id") or ""),
+            "material": str(liberacao.get("material_nome") or "Material"),
+            "quantidade": qtd, "reserva_id": str(liberacao.get("reserva_id") or ""),
+            "detalhe": "Reserva reduzida para respeitar o saldo físico real",
+        })
+        consumo["atualizado_em"] = agora_local().isoformat()
+        reservas_liberadas.append(liberacao | {"quantidade": qtd})
+        numero = str(consumo.get("numero_proposta") or "")
+        afetados.setdefault(numero, {"reservado": 0.0, "liberado": 0.0})["liberado"] += qtd
+
+    # Com as liberações aplicadas em memória, o plano de novas reservas já usa
+    # físico - reservas ativas, impedindo dupla alocação do mesmo material.
+    plano_reserva = _i8124_engine_planejar(ativos, movimentos, saldos)
+    for aloc in plano_reserva:
+        consumo = por_consumo.get(str(aloc.get("consumo_id") or ""))
         material = _i8122_material_por_id(estoque, aloc.get("material_id"))
         qtd = max(0.0, valor_float(aloc.get("quantidade")))
-        saldo_atual = _i8122_saldo_material(estoque, aloc.get("material_id"))
-        qtd = min(qtd, max(0.0, saldo_atual))
-        if not material or qtd <= 0.0000001:
+        if consumo is None or material is None or qtd <= 0.0000001:
             continue
-        mov = _i8122_adicionar_movimento(
-            estoque, material, -qtd, "Baixa automática de pedido", hoje_local(),
-            observacao=f"Regularização automática da necessidade do pedido {aloc.get('numero_proposta')}",
-            origem_tipo="Pedido", origem_id=str(aloc.get("consumo_id") or ""), usuario=nome_usuario,
-        )
-        mov["numero_proposta"] = str(aloc.get("numero_proposta") or "")
-        mov["consumo_id"] = str(aloc.get("consumo_id") or "")
-        movimentos_criados.append(mov)
-        consumo = por_consumo.get(str(aloc.get("consumo_id") or ""))
-        if consumo is not None:
-            consumo.setdefault("eventos", []).append({
-                "em": agora_local().isoformat(),
-                "usuario": nome_usuario,
-                "tipo": "baixa_automatica",
-                "material_id": str(material.get("id") or ""),
-                "material": str(material.get("nome") or ""),
-                "quantidade": qtd,
-                "movimento_id": mov.get("id"),
-            })
-            consumo["atualizado_em"] = agora_local().isoformat()
-            afetados.setdefault(str(consumo.get("numero_proposta") or ""), []).append((str(material.get("nome") or "Material"), qtd, str(material.get("unidade") or "")))
+        agora = agora_local().isoformat()
+        reserva = {
+            "id": agora_local().strftime("RES%Y%m%d%H%M%S%f"),
+            "material_id": str(material.get("id") or ""),
+            "material_nome": str(material.get("nome") or aloc.get("material_nome") or "Material"),
+            "unidade": str(material.get("unidade") or aloc.get("unidade") or ""),
+            "quantidade": round(qtd, 6),
+            "quantidade_liberada": 0.0,
+            "reservado_em": agora,
+            "reservado_por": nome_usuario,
+            "origem": "I8.13.2 · reserva automática FIFO",
+        }
+        consumo.setdefault("reservas", []).append(reserva)
+        consumo.setdefault("eventos", []).append({
+            "em": agora, "usuario": nome_usuario, "tipo": "reserva_material",
+            "material_id": str(material.get("id") or ""), "material": str(material.get("nome") or ""),
+            "quantidade": qtd, "reserva_id": reserva.get("id"),
+        })
+        consumo["atualizado_em"] = agora
+        reservas_criadas.append(reserva | {"numero_proposta": str(consumo.get("numero_proposta") or "")})
+        numero = str(consumo.get("numero_proposta") or "")
+        afetados.setdefault(numero, {"reservado": 0.0, "liberado": 0.0})["reservado"] += qtd
 
-    if not movimentos_criados:
-        return {"movimentos": 0, "quantidade": 0.0, "mensagem": "Nenhuma pendência pôde ser regularizada com o saldo atual."}
-    if not salvar_estoque(estoque, regularizar_pendencias=False):
-        return {"movimentos": 0, "quantidade": 0.0, "mensagem": "Falha ao registrar as baixas automáticas."}
-    salvar_consumos_pedidos(consumos)
+    if not reservas_criadas and not reservas_liberadas:
+        return {
+            "movimentos": 0, "reservas_criadas": 0, "reservas_liberadas": 0, "quantidade": 0.0,
+            "mensagem": "Reservas já estão coerentes com o saldo físico atual.",
+        }
+    if not salvar_consumos_pedidos(consumos):
+        return {
+            "movimentos": 0, "reservas_criadas": 0, "reservas_liberadas": 0, "quantidade": 0.0,
+            "mensagem": "Não foi possível salvar a reconciliação das reservas.",
+        }
 
-    for numero, linhas in afetados.items():
-        qtd_total = sum(x[1] for x in linhas)
+    for numero, totais in afetados.items():
+        if not numero:
+            continue
         resumo_atual = _i8124_resumo_pedido(numero, consumos=consumos, estoque=estoque)
-        detalhe_status = resumo_atual.get("status") or "Materiais atualizados"
-        def _mutar_prop_i8124(p, _q=qtd_total, _status=detalhe_status):
-            registrar_evento_proposta(p, f"Estoque: {_i8121_quantidade(_q)} unidade(s) de material regularizada(s) automaticamente · {_status}", usuario=nome_usuario)
-        atualizar_proposta_com_leitura_fresca(numero, _mutar_prop_i8124)
-        registrar_atividade(nome_usuario, "Materiais do pedido atualizados", "Estoque", detalhe=f"{numero} · {detalhe_status}", evento=True)
-    registrar_auditoria("Regularizar pendências de pedidos", "Estoque", "", {
-        "movimentos": len(movimentos_criados),
+        detalhe_status = resumo_atual.get("status") or "Reservas atualizadas"
+        reservado = round(max(0.0, valor_float(totais.get("reservado"))), 6)
+        liberado = round(max(0.0, valor_float(totais.get("liberado"))), 6)
+        partes = []
+        if reservado > 0.0000001:
+            partes.append(f"reservado {_i8121_quantidade(reservado)}")
+        if liberado > 0.0000001:
+            partes.append(f"reserva reduzida {_i8121_quantidade(liberado)}")
+        detalhe = " · ".join(partes)
+        try:
+            atualizar_proposta_com_leitura_fresca(
+                numero,
+                lambda p, _det=detalhe, _status=detalhe_status: registrar_evento_proposta(
+                    p, f"Reserva de materiais atualizada: {_det} · {_status}", usuario=nome_usuario
+                ),
+            )
+            registrar_atividade(nome_usuario, "Reserva de materiais atualizada", "Estoque", detalhe=f"{numero} · {detalhe_status}", evento=True)
+        except Exception:
+            pass
+
+    registrar_auditoria("Reconciliar reservas de pedidos", "Estoque", "", {
+        "reservas_criadas": len(reservas_criadas),
+        "reservas_liberadas": len(reservas_liberadas),
         "pedidos": list(afetados),
-        "quantidade_total": round(sum(abs(valor_float(m.get("delta"))) for m in movimentos_criados), 6),
+        "quantidade_reservada": round(sum(valor_float(x.get("quantidade")) for x in reservas_criadas), 6),
+        "quantidade_liberada": round(sum(valor_float(x.get("quantidade")) for x in reservas_liberadas), 6),
     })
-    qtd_total = round(sum(abs(valor_float(m.get("delta"))) for m in movimentos_criados), 6)
+    qtd_reservada = round(sum(valor_float(x.get("quantidade")) for x in reservas_criadas), 6)
+    qtd_liberada = round(sum(valor_float(x.get("quantidade")) for x in reservas_liberadas), 6)
     return {
-        "movimentos": len(movimentos_criados),
-        "quantidade": qtd_total,
+        "movimentos": 0,
+        "reservas_criadas": len(reservas_criadas),
+        "reservas_liberadas": len(reservas_liberadas),
+        "quantidade": qtd_reservada,
+        "quantidade_reservada": qtd_reservada,
+        "quantidade_liberada": qtd_liberada,
         "pedidos": list(afetados),
-        "mensagem": f"📦 Estoque atualizado: {len(afetados)} pedido(s) teve/tiveram pendências regularizadas automaticamente.",
+        "mensagem": f"🔒 Reservas reconciliadas: {len(reservas_criadas)} nova(s), {len(reservas_liberadas)} reduzida(s). Nenhuma baixa física foi feita.",
     }
 
 
@@ -4886,16 +5005,16 @@ def _i8124_confirmar_consumo_pedido(proposta, aceitar_sem_ficha=False, usuario=N
     if not isinstance(proposta, dict) or not str(proposta.get("numero_proposta") or "").strip():
         return False, "Proposta inválida.", None
     if not valor_bool(proposta.get("aprovado")):
-        return False, "O consumo só pode ser confirmado depois que o pedido estiver aprovado.", None
+        return False, "A necessidade de materiais só pode ser confirmada depois que o pedido estiver aprovado.", None
     consumos = carregar_consumos_pedidos(force_refresh=True)
     if _i8124_consumo_ativo_pedido(proposta.get("numero_proposta"), consumos):
-        return False, "Este pedido já possui consumo ativo. Estorne a confirmação atual antes de confirmar novamente.", None
+        return False, "Este pedido já possui reserva/consumo ativo. Estorne a liberação atual antes de confirmar novamente.", None
     previa = _i8124_montar_previa_pedido(proposta)
     if not previa.get("necessidades"):
         return False, "Nenhum item deste pedido possui Ficha Técnica com material controlado.", None
     faltas = (previa.get("sem_ficha") or []) + (previa.get("sem_catalogo") or [])
     if faltas and not aceitar_sem_ficha:
-        return False, "Há item(ns) sem Ficha Técnica/Catálogo. Confirme explicitamente que eles não entram neste consumo.", None
+        return False, "Há item(ns) sem Ficha Técnica/Catálogo. Revise antes de liberar a reserva deste pedido.", None
     nome_usuario = str((usuario or obter_usuario_atual() or {}).get("nome") if isinstance((usuario or obter_usuario_atual()), dict) else (usuario or "Jorge")) or "Jorge"
     agora = agora_local().isoformat()
     numero = str(proposta.get("numero_proposta") or "")
@@ -4912,18 +5031,20 @@ def _i8124_confirmar_consumo_pedido(proposta, aceitar_sem_ficha=False, usuario=N
         "confirmado_por": nome_usuario,
         "atualizado_em": agora,
         "estornado": False,
-        "eventos": [{"em": agora, "usuario": nome_usuario, "tipo": "confirmacao", "detalhe": "Consumo do pedido confirmado"}],
+        "modelo_materiais": "reserva_consumo_real_v1",
+        "reservas": [],
+        "eventos": [{"em": agora, "usuario": nome_usuario, "tipo": "confirmacao", "detalhe": "Necessidade de materiais confirmada para reserva"}],
     }
     consumos.append(consumo)
     if not salvar_consumos_pedidos(consumos):
-        return False, "Não foi possível salvar a confirmação do consumo.", None
-    registrar_auditoria("Confirmar consumo do pedido", "Estoque", consumo.get("id"), {"numero_proposta": numero, "materiais": len(consumo.get("necessidades") or [])})
+        return False, "Não foi possível salvar a liberação dos materiais.", None
+    registrar_auditoria("Confirmar necessidade e reserva do pedido", "Estoque", consumo.get("id"), {"numero_proposta": numero, "materiais": len(consumo.get("necessidades") or [])})
     def _mutar_prop(p):
-        registrar_evento_proposta(p, "Consumo de materiais confirmado para o estoque", usuario=nome_usuario)
+        registrar_evento_proposta(p, "Necessidade de materiais confirmada; reserva iniciada sem baixa física", usuario=nome_usuario)
     atualizar_proposta_com_leitura_fresca(numero, _mutar_prop)
     resultado = _i8124_regularizar_pendencias_automaticamente(usuario=usuario or obter_usuario_atual())
-    registrar_atividade(nome_usuario, "Consumo do pedido confirmado", "Estoque", detalhe=f"{numero} · {resultado.get('mensagem', '')}", evento=True)
-    return True, "Consumo confirmado. O saldo disponível foi baixado e eventual falta ficou como pendência.", consumo
+    registrar_atividade(nome_usuario, "Reserva de materiais do pedido confirmada", "Estoque", detalhe=f"{numero} · {resultado.get('mensagem', '')}", evento=True)
+    return True, "Necessidade confirmada. O saldo disponível foi reservado sem baixa física; eventual falta ficou pendente para compra/entrada.", consumo
 
 
 def _i8124_estornar_consumo(consumo_id, motivo, usuario=None):
@@ -4968,11 +5089,11 @@ def _i8124_estornar_consumo(consumo_id, motivo, usuario=None):
     def _mutar_prop(p):
         registrar_evento_proposta(p, f"Consumo de estoque estornado: {motivo}", usuario=nome_usuario)
     atualizar_proposta_com_leitura_fresca(numero, _mutar_prop)
-    registrar_auditoria("Estornar consumo do pedido", "Estoque", consumo_id, {"numero_proposta": numero, "motivo": motivo, "movimentos_estornados": len(movimentos_originais)})
-    registrar_atividade(nome_usuario, "Consumo do pedido estornado", "Estoque", detalhe=f"{numero} · {motivo}", evento=True)
+    registrar_auditoria("Estornar reserva/consumo do pedido", "Estoque", consumo_id, {"numero_proposta": numero, "motivo": motivo, "movimentos_estornados": len(movimentos_originais)})
+    registrar_atividade(nome_usuario, "Reserva/consumo do pedido estornado", "Estoque", detalhe=f"{numero} · {motivo}", evento=True)
     # O material devolvido pode quitar outros pedidos pendentes, nunca o consumo já estornado.
     _i8124_regularizar_pendencias_automaticamente(usuario=usuario or obter_usuario_atual())
-    return True, "Consumo estornado com histórico preservado."
+    return True, "Liberação de materiais estornada com histórico preservado; reservas foram liberadas e baixas reais ativas foram devolvidas."
 
 
 def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
@@ -4993,7 +5114,9 @@ def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
                 unidade = str(nec.get("unidade") or "")
                 st.write(
                     f"• {nec.get('material_nome') or 'Material'}: necessário {_i8121_quantidade(nec.get('necessario'))} {unidade} · "
-                    f"baixado {_i8121_quantidade(nec.get('baixado'))} {unidade} · pendente {_i8121_quantidade(nec.get('pendente'))} {unidade}"
+                    f"🔒 reservado {_i8121_quantidade(nec.get('reservado'))} {unidade} · "
+                    f"🏭 consumido {_i8121_quantidade(nec.get('consumido'))} {unidade} · "
+                    f"falta {_i8121_quantidade(nec.get('pendente'))} {unidade}"
                 )
         # I8.12.6 — a mesma informação de compra em andamento aparece em Jorge,
         # Anna, Histórico e Fluxo por meio deste componente compartilhado.
@@ -5024,7 +5147,7 @@ def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
                 if entregue_i8124:
                     st.caption("📦 Materiais do pedido: ⚪ fora da fila de liberação (proposta entregue)")
                 else:
-                    st.caption("📦 Materiais do pedido: ⚪ aguardando liberação de consumo")
+                    st.caption("📦 Materiais do pedido: ⚪ aguardando liberação e reserva")
             if detalhado and previa.get("correlacoes_saneadas"):
                 for corr in previa.get("correlacoes_saneadas") or []:
                     st.caption(f"🧹 Vínculo saneado: {corr.get('item')} → {corr.get('produto_oficial')}")
@@ -5043,7 +5166,7 @@ def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
         if previsao_i8127:
             st.caption(f"🚦 Produção / entrega: {previsao_i8127.get('status')}")
             if previsao_i8127.get("chave_base") == "aguardando_liberacao":
-                st.caption("📦 Situação de materiais: Material ainda não apurado — aguardando liberação de consumo")
+                st.caption("📦 Situação de materiais: Material ainda não apurado — aguardando liberação e reserva")
             elif previsao_i8127.get("status_base") != previsao_i8127.get("status"):
                 st.caption(f"Situação de materiais: {previsao_i8127.get('status_base')}")
             if detalhado and previsao_i8127.get("motivos"):
@@ -8098,11 +8221,23 @@ def sincronizar_producao_com_propostas(historico=None):
 def salvar_tarefa_producao(tarefa_id, novos_dados):
     tarefas = carregar_producao()
     numero = novos_dados.get("numero_proposta")
+    alvo = next((t for t in tarefas if t.get("id") == tarefa_id), None)
+    if alvo is None:
+        return False, "Item de produção não encontrado."
+    status_anterior = normalizar_status_fluxo(alvo.get("status"))
+    status_novo = normalizar_status_fluxo(novos_dados.get("status", status_anterior))
+
+    # I8.13.2 — qualquer caminho manual que efetivamente entre em produção (ou
+    # pule direto para Pronto/Entregue) converte a reserva em consumo real.
+    if numero and status_novo in {"Em produção", "Montagem/acabamento", "Pronto", "Entregue"}:
+        ok_mat_i8132, msg_mat_i8132 = _i8132_consumir_reserva_pedido(numero)
+        if not ok_mat_i8132:
+            return False, msg_mat_i8132
+
     for tarefa in tarefas:
         if tarefa.get("id") == tarefa_id:
-            status_anterior = normalizar_status_fluxo(tarefa.get("status"))
             tarefa.update(novos_dados)
-            tarefa["status"] = normalizar_status_fluxo(tarefa.get("status"))
+            tarefa["status"] = status_novo
             tarefa["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
             if status_anterior != tarefa["status"]:
                 adicionar_evento_timeline(tarefa, f"Status alterado de {status_anterior} para {tarefa['status']}")
@@ -8124,6 +8259,7 @@ def salvar_tarefa_producao(tarefa_id, novos_dados):
             prop = next((p for p in hist if str(p.get("numero_proposta") or "") == str(numero)), None)
             if prop and _status_resumo(prop).get("pronto") and not _status_resumo(prop).get("entregue"):
                 alternar_status(numero, "pronto", False)
+    return True, "Andamento atualizado."
 
 
 def classe_prazo_producao(data_txt, status):
@@ -8171,6 +8307,95 @@ def _i8128_resumo_pedido(numero_proposta, historico=None, tarefas=None):
     return None
 
 
+def _i8132_consumir_reserva_pedido(numero_proposta, usuario=None):
+    """Converte a reserva do pedido em baixa física no início real da produção.
+
+    Compatibilidade: se uma versão antiga já baixou os materiais deste consumo,
+    o resumo os reconhece como consumidos e nenhuma segunda baixa é criada.
+    """
+    numero = str(numero_proposta or "").strip()
+    if not numero:
+        return False, "Pedido inválido para consumo de materiais."
+    consumos = carregar_consumos_pedidos(force_refresh=True)
+    consumo = _i8124_consumo_ativo_pedido(numero, consumos)
+    if not consumo:
+        # Serviços/itens sem Ficha Técnica controlada não precisam inventar reserva.
+        try:
+            proposta = next((p for p in carregar_historico(force_refresh=True) if str((p or {}).get("numero_proposta") or "") == numero), None)
+            previa = _i8124_montar_previa_pedido(proposta or {}) if proposta else {}
+            if proposta and not previa.get("necessidades") and not previa.get("sem_ficha") and not previa.get("sem_catalogo"):
+                return True, "Pedido sem materiais controlados; nenhuma baixa física necessária."
+        except Exception:
+            pass
+        return False, "O pedido ainda não possui liberação/reserva de materiais."
+    estoque = carregar_estoque(force_refresh=True)
+    resumo = _i8124_resumo_consumo(consumo, estoque)
+    pendentes = [n for n in (resumo.get("necessidades") or []) if valor_float(n.get("pendente")) > 0.0000001]
+    if pendentes:
+        nomes = ", ".join(str(n.get("material_nome") or "Material") for n in pendentes[:3])
+        return False, f"Ainda há material sem reserva ({nomes}). Receba/compre o faltante antes de iniciar a produção."
+
+    # Itens legados já baixados pela I8.12.4 não podem ser baixados novamente.
+    a_consumir = [n for n in (resumo.get("necessidades") or []) if valor_float(n.get("reservado")) > 0.0000001]
+    if not a_consumir:
+        return True, "Materiais já estavam consumidos fisicamente; nenhuma nova baixa foi necessária."
+
+    nome_usuario = str((usuario or obter_usuario_atual() or {}).get("nome") if isinstance((usuario or obter_usuario_atual()), dict) else (usuario or "Sistema")) or "Sistema"
+    movimentos_criados = []
+    for nec in a_consumir:
+        material_id = str(nec.get("material_id") or "")
+        material = _i8122_material_por_id(estoque, material_id)
+        qtd = max(0.0, valor_float(nec.get("reservado")))
+        saldo_fisico = max(0.0, _i8122_saldo_material(estoque, material_id))
+        if not material or qtd <= 0.0000001:
+            continue
+        if saldo_fisico + 0.0000001 < qtd:
+            # A reconciliação normalmente impede isso; a trava evita estoque negativo
+            # caso o banco tenha sido alterado externamente entre duas leituras.
+            return False, f"O saldo físico de {material.get('nome', 'material')} mudou e não cobre mais a reserva. Reabra a tela para reconciliar."
+        mov = _i8122_adicionar_movimento(
+            estoque, material, -qtd, "Consumo real de produção", hoje_local(),
+            observacao=f"Reserva convertida em consumo real ao iniciar produção do pedido {numero}",
+            origem_tipo="Pedido", origem_id=str(consumo.get("id") or ""), usuario=nome_usuario,
+        )
+        mov["numero_proposta"] = numero
+        mov["consumo_id"] = str(consumo.get("id") or "")
+        mov["fase_material"] = "consumo_real_inicio_producao"
+        movimentos_criados.append(mov)
+
+    if not movimentos_criados:
+        return True, "Nenhuma baixa física adicional foi necessária."
+    if not salvar_estoque(estoque, regularizar_pendencias=False):
+        return False, "Não foi possível registrar o consumo físico; a produção não foi iniciada."
+
+    # Evento é auxiliar: a movimentação de estoque é a fonte física oficial.
+    try:
+        consumo.setdefault("eventos", []).append({
+            "em": agora_local().isoformat(), "usuario": nome_usuario, "tipo": "consumo_real_inicio_producao",
+            "quantidade_movimentos": len(movimentos_criados),
+            "movimentos": [str(m.get("id") or "") for m in movimentos_criados],
+            "detalhe": "Reservas convertidas em consumo físico no início da produção",
+        })
+        consumo["consumo_real_iniciado_em"] = agora_local().isoformat()
+        consumo["consumo_real_iniciado_por"] = nome_usuario
+        consumo["atualizado_em"] = agora_local().isoformat()
+        salvar_consumos_pedidos(consumos)
+    except Exception:
+        pass
+    registrar_auditoria("Consumir reserva no início da produção", "Estoque", str(consumo.get("id") or ""), {
+        "numero_proposta": numero,
+        "movimentos": len(movimentos_criados),
+        "quantidade_total": round(sum(abs(valor_float(m.get("delta"))) for m in movimentos_criados), 6),
+    })
+    try:
+        atualizar_proposta_com_leitura_fresca(
+            numero, lambda p: registrar_evento_proposta(p, "Produção iniciada: materiais reservados convertidos em consumo físico", usuario=nome_usuario)
+        )
+    except Exception:
+        pass
+    return True, "Materiais reservados convertidos em consumo físico com sucesso."
+
+
 def _i8128_atualizar_etapa_pedido(numero_proposta, acao, usuario=None):
     """Executa somente atalhos seguros da Central, preservando o Fluxo manual."""
     numero = str(numero_proposta or "").strip()
@@ -8190,6 +8415,13 @@ def _i8128_atualizar_etapa_pedido(numero_proposta, acao, usuario=None):
         return False, "Para marcar o pedido como pronto, todos os itens precisam estar em produção ou já prontos."
     if acao not in {"iniciar", "pronto"}:
         return False, "Ação de produção inválida."
+
+    # I8.13.2 — somente o início REAL da produção transforma reserva em baixa física.
+    # A função é idempotente para dados legados já baixados pela I8.12.4.
+    if acao == "iniciar":
+        ok_consumo_i8132, msg_consumo_i8132 = _i8132_consumir_reserva_pedido(numero, usuario=usuario)
+        if not ok_consumo_i8132:
+            return False, msg_consumo_i8132
 
     nome_usuario = str((usuario or obter_usuario_atual() or {}).get("nome") if isinstance((usuario or obter_usuario_atual()), dict) else (usuario or "Sistema")) or "Sistema"
     alteradas = 0
@@ -8639,6 +8871,10 @@ def sincronizar_atendimento_com_operacao(item, status_anterior=""):
         if alterou:
             salvar_producao(tarefas)
     elif status == "Em produção":
+        ok_mat_i8132, msg_mat_i8132 = _i8132_consumir_reserva_pedido(numero)
+        if not ok_mat_i8132:
+            registrar_auditoria("Bloqueio de produção por materiais", "Produção", numero, {"origem": "Atendimento", "motivo": msg_mat_i8132})
+            return
         tarefas = carregar_producao()
         alterou = False
         for tarefa in tarefas:
@@ -8649,6 +8885,10 @@ def sincronizar_atendimento_com_operacao(item, status_anterior=""):
         if alterou:
             salvar_producao(tarefas)
     elif status == "Pronto":
+        ok_mat_i8132, msg_mat_i8132 = _i8132_consumir_reserva_pedido(numero)
+        if not ok_mat_i8132:
+            registrar_auditoria("Bloqueio de Pronto por materiais", "Produção", numero, {"origem": "Atendimento", "motivo": msg_mat_i8132})
+            return
         tarefas = carregar_producao()
         alterou = False
         for tarefa in tarefas:
@@ -8659,6 +8899,10 @@ def sincronizar_atendimento_com_operacao(item, status_anterior=""):
         if alterou:
             salvar_producao(tarefas)
     elif status == "Entregue":
+        ok_mat_i8132, msg_mat_i8132 = _i8132_consumir_reserva_pedido(numero)
+        if not ok_mat_i8132:
+            registrar_auditoria("Bloqueio de Entregue por materiais", "Produção", numero, {"origem": "Atendimento", "motivo": msg_mat_i8132})
+            return
         alternar_status(numero, "entregue", True)
 
 
@@ -14296,7 +14540,7 @@ def dialog_cliente_anna():
 
 
 def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
-    """HF2: atualiza Aprovado/Pago/Pronto/Entregue sobre leitura fresca."""
+    """HF2/I8.13.2: atualiza os marcos oficiais com proteção de materiais."""
     novos = {
         "aprovado": valor_bool(aprovado),
         "pago": valor_bool(pago),
@@ -14304,6 +14548,26 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
         "entregue": valor_bool(entregue),
     }
     usuario_status = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
+
+    # I8.13.2 — este editor atualiza os quatro marcos de uma vez e, por isso,
+    # não passa por alternar_status(). Antes de uma NOVA transição para Pronto
+    # ou Entregue, converte a reserva em consumo real. Pedido legado que já
+    # estava Pronto pode apenas ser entregue sem exigência retroativa.
+    try:
+        atual_status_i8132 = next(
+            (p for p in carregar_historico(force_refresh=True) if str((p or {}).get("numero_proposta") or "") == str(numero)),
+            None,
+        )
+        estado_antes_i8132 = _status_resumo(atual_status_i8132 or {})
+    except Exception:
+        estado_antes_i8132 = {}
+    nova_conclusao_producao_i8132 = bool(novos["pronto"] or novos["entregue"]) and not bool(estado_antes_i8132.get("pronto"))
+    if nova_conclusao_producao_i8132:
+        consumidor_i8132 = globals().get("_i8132_consumir_reserva_pedido")
+        if callable(consumidor_i8132):
+            ok_mat_i8132, msg_mat_i8132 = consumidor_i8132(numero, usuario=obter_usuario_atual())
+            if not ok_mat_i8132:
+                return False, msg_mat_i8132
     controle = {"anteriores": None, "nova_conclusao": False, "aprovou_agora": False, "mudancas": []}
 
     def _mutar(proposta):
@@ -20790,9 +21054,9 @@ if pagina_atual == "central":
         elif _i8124_montar_previa_pedido(prop_consumo_central_i8124).get("assinatura") != consumo_central_i8124.get("assinatura_confirmada"):
             revisar_central_i8124.append((consumo_central_i8124, "pedido ou Ficha Técnica mudou após a confirmação"))
     if revisar_central_i8124:
-        st.error(f"📦 **{len(revisar_central_i8124)} consumo(s) de pedido precisam de revisão.** Abra Gestão → Compras, Custos & Estoque antes de produzir ou excluir o pedido.")
+        st.error(f"📦 **{len(revisar_central_i8124)} reserva(s)/consumo(s) de pedido precisam de revisão.** Abra Gestão → Compras, Custos & Estoque antes de produzir ou excluir o pedido.")
     if pendentes_central_i8124:
-        st.warning(f"📦 **{len(pendentes_central_i8124)} pedido(s) aguardam material.** Novas entradas de estoque regularizam essas pendências automaticamente.")
+        st.warning(f"📦 **{len(pendentes_central_i8124)} pedido(s) aguardam material.** Novas entradas de estoque completam as reservas pendentes automaticamente, sem baixa física.")
         with st.expander("📦 Ver necessidades de material", expanded=False):
             for consumo_central_i8124, resumo_central_i8124 in pendentes_central_i8124[:10]:
                 faltas_txt_i8124 = []
@@ -20994,8 +21258,8 @@ if pagina_atual == "central":
     ]
     if fila_liberacao_central_i8124:
         st.info(
-            f"📋 **{len(fila_liberacao_central_i8124)} proposta(s) aprovada(s) aguardam liberação de consumo.** "
-            "Ao confirmar o consumo, marcar Pronto ou marcar Entregue, a proposta sai automaticamente dessa fila."
+            f"📋 **{len(fila_liberacao_central_i8124)} proposta(s) aprovada(s) aguardam liberação/reserva de materiais.** "
+            "Ao confirmar a reserva, marcar Pronto ou marcar Entregue, a proposta sai automaticamente dessa fila."
         )
         with st.expander("📋 Ver propostas aguardando liberação", expanded=False):
             for prop_fila_central_i8124 in _ordenar_propostas_recentes(fila_liberacao_central_i8124)[:10]:
@@ -24239,7 +24503,7 @@ if pagina_atual == "fluxo":
 
                 b1, b2 = st.columns(2)
                 if b1.button("💾 Salvar andamento", key=f"salvar_fluxo_{prefixo}_{tid}", type="primary", use_container_width=True):
-                    salvar_tarefa_producao(tid, {
+                    ok_fluxo_i8132, msg_fluxo_i8132 = salvar_tarefa_producao(tid, {
                         "numero_proposta": tarefa.get("numero_proposta"),
                         "status": novo_status,
                         "prioridade": prioridade,
@@ -24247,8 +24511,11 @@ if pagina_atual == "fluxo":
                         "necessita_arte": necessita_arte,
                         "observacao_interna": observacao.strip(),
                     })
-                    st.success("Andamento atualizado.")
-                    st.rerun()
+                    if ok_fluxo_i8132:
+                        st.session_state["_mensagem_sucesso_pendente"] = msg_fluxo_i8132
+                        st.rerun()
+                    else:
+                        st.error(msg_fluxo_i8132)
                 if b2.button("📋 Selecionar pedido no histórico", key=f"hist_fluxo_{prefixo}_{tid}", use_container_width=True):
                     st.session_state.alerta_proposta_numero = tarefa.get("numero_proposta")
                     st.info("A proposta foi selecionada. Abra a aba Histórico para consultá-la.")
@@ -24766,7 +25033,7 @@ if pagina_atual == "compras_custos":
     st.header("📦 I8.12.8-HF2 · Compras, Custos, Estoque, Ficha Técnica, Pedidos & Produção")
     st.caption(
         "Registre custos reais, transforme compras em entradas de estoque, controle materiais e defina o consumo técnico por produto. "
-        "A I8.12.4 confirma o consumo por pedido; a I8.12.5 consolida as faltas reais; a I8.12.6 controla o que já foi solicitado ao fornecedor; e a I8.12.7 transforma essas mesmas fontes em previsão operacional de produção e risco de entrega. Solicitação não movimenta estoque: somente o recebimento real registrado como compra/entrada regulariza pendências. O módulo nunca altera sozinho o preço do Catálogo Oficial."
+        "A I8.13.2 separa reserva de consumo real; a I8.12.5 consolida somente a falta não reservada; a I8.12.6 controla o que já foi solicitado ao fornecedor; e a I8.12.7 transforma essas mesmas fontes em previsão operacional. Solicitar compra não movimenta estoque; receber material aumenta o físico e pode completar reservas. O preço do Catálogo Oficial nunca é alterado automaticamente."
     )
 
     usuario_compras = obter_usuario_atual()
@@ -24810,40 +25077,46 @@ if pagina_atual == "compras_custos":
     movimentos_i8122 = estoque_i8122.get("movimentacoes") or []
     saldos_i8122 = {str(m.get("id")): _i8122_saldo_material(estoque_i8122, m.get("id")) for m in materiais_i8122}
     consumos_i8124 = carregar_consumos_pedidos()
+    reservados_i8132 = {str(m.get("id")): _i8132_reservado_material(m.get("id"), consumos=consumos_i8124, estoque=estoque_i8122) for m in materiais_i8122}
+    livres_i8132 = {str(m.get("id")): max(0.0, saldos_i8122.get(str(m.get("id")), 0) - reservados_i8132.get(str(m.get("id")), 0)) for m in materiais_i8122}
     pendencias_mat_i8124 = {str(m.get("id")): _i8124_pendencia_material(m.get("id"), consumos=consumos_i8124, estoque=estoque_i8122) for m in materiais_i8122}
-    baixos_i8122 = [m for m in materiais_i8122 if valor_float(m.get("estoque_minimo", 0)) > 0 and saldos_i8122.get(str(m.get("id")), 0) <= valor_float(m.get("estoque_minimo", 0)) + 0.000001]
-    zerados_i8122 = [m for m in materiais_i8122 if saldos_i8122.get(str(m.get("id")), 0) <= 0.000001]
+    baixos_i8122 = [m for m in materiais_i8122 if valor_float(m.get("estoque_minimo", 0)) > 0 and livres_i8132.get(str(m.get("id")), 0) <= valor_float(m.get("estoque_minimo", 0)) + 0.000001]
+    zerados_i8122 = [m for m in materiais_i8122 if livres_i8132.get(str(m.get("id")), 0) <= 0.000001]
     mov_mes_i8122 = [
         mov for mov in movimentos_i8122
         if _i8121_data_compra(mov.get("data_movimento")).year == hoje_i8121.year
         and _i8121_data_compra(mov.get("data_movimento")).month == hoje_i8121.month
     ]
 
-    st.markdown("### 📦 Estoque de materiais · I8.12.4-HF4")
+    st.markdown("### 📦 Estoque de materiais · I8.13.2")
     es1, es2, es3, es4 = st.columns(4)
     es1.metric("Materiais controlados", len(materiais_i8122))
     es2.metric("No/abaixo do mínimo", len(baixos_i8122))
-    es3.metric("Zerados", len(zerados_i8122))
+    es3.metric("Disponível zerado", len(zerados_i8122))
     es4.metric("Movimentações no mês", len(mov_mes_i8122))
     st.caption(
-        "🔒 O estoque físico nunca fica negativo. Consumos confirmados usam o saldo disponível; o que faltar vira pendência separada. "
-        "Quando entra material, as pendências mais antigas são atendidas automaticamente em ordem de confirmação."
+        "🔒 I8.13.2: Saldo físico é o que existe na AlphaFest. Reservado é o que já pertence a pedidos liberados. "
+        "Disponível livre = físico − reservado. Confirmar o pedido NÃO baixa estoque; a baixa real ocorre somente ao iniciar a produção."
     )
 
     if materiais_i8122:
         linhas_estoque_i8122 = []
         for mat_i8122 in sorted(materiais_i8122, key=lambda m: str(m.get("nome") or "").casefold()):
             saldo_i8122 = saldos_i8122.get(str(mat_i8122.get("id")), 0)
+            reservado_i8132 = reservados_i8132.get(str(mat_i8122.get("id")), 0)
+            livre_i8132 = livres_i8132.get(str(mat_i8122.get("id")), 0)
             minimo_i8122 = valor_float(mat_i8122.get("estoque_minimo", 0))
             ultima_compra_i8122 = _i8122_ultimo_custo(mat_i8122, compras_i8121, estoque=estoque_i8122)
             pendente_i8124 = pendencias_mat_i8124.get(str(mat_i8122.get("id")), 0)
             linhas_estoque_i8122.append({
                 "Material": mat_i8122.get("nome", ""),
                 "Unidade": mat_i8122.get("unidade", ""),
-                "Saldo disponível": _i8121_quantidade(saldo_i8122),
-                "Pendente em pedidos": _i8121_quantidade(pendente_i8124),
+                "Saldo físico": _i8121_quantidade(saldo_i8122),
+                "🔒 Reservado": _i8121_quantidade(reservado_i8132),
+                "Disponível livre": _i8121_quantidade(livre_i8132),
+                "Falta em pedidos": _i8121_quantidade(pendente_i8124),
                 "Estoque mínimo": _i8121_quantidade(minimo_i8122),
-                "Status": ("🟠 Pedido(s) aguardando material" if pendente_i8124 > 0.000001 else _i8122_status_material(saldo_i8122, minimo_i8122)),
+                "Status": ("🟠 Pedido(s) aguardando material" if pendente_i8124 > 0.000001 else _i8122_status_material(livre_i8132, minimo_i8122)),
                 "Último custo": _i8121_moeda(ultima_compra_i8122.get("custo_unitario", 0)) if ultima_compra_i8122 else "Sem compra vinculada",
             })
         st.dataframe(pd.DataFrame(linhas_estoque_i8122), use_container_width=True, hide_index=True)
@@ -24979,7 +25252,7 @@ if pagina_atual == "compras_custos":
     )
     st.markdown("### 🚦 Previsão de Produção e Risco de Entrega · I8.12.7-HF1")
     st.caption(
-        "Leitura derivada dos pedidos aprovados ainda não entregues. Não cria status paralelo: usa a liberação de consumo, "
+        "Leitura derivada dos pedidos aprovados ainda não entregues. Não cria status paralelo: usa a liberação/reserva de materiais, "
         "as pendências reais do estoque, as solicitações ao fornecedor e a data de entrega. Nesta etapa o Manager não inventa "
         "tempo de fabricação; o risco considera somente prazo e disponibilidade/recebimento de materiais."
     )
@@ -25015,10 +25288,19 @@ if pagina_atual == "compras_custos":
                 atencao_txt_i8127 = "Aguardando retirada do cliente ou entrega pela AlphaFest"
             elif aguardando_liberacao_i8127:
                 materiais_txt_i8127 = "Material ainda não apurado"
-                atencao_txt_i8127 = " · ".join(ped_i8127.get("motivos") or []) or "Confirmar liberação de consumo para verificar disponibilidade dos materiais"
+                atencao_txt_i8127 = " · ".join(ped_i8127.get("motivos") or []) or "Confirmar e reservar materiais para verificar disponibilidade"
             else:
-                materiais_txt_i8127 = " · ".join(materiais_pend_i8127) if materiais_pend_i8127 else "Sem falta física"
-                atencao_txt_i8127 = " · ".join(ped_i8127.get("motivos") or []) or "Materiais atendidos"
+                if materiais_pend_i8127:
+                    materiais_txt_i8127 = " · ".join(materiais_pend_i8127)
+                else:
+                    fase_mat_i8132 = str(((ped_i8127.get("resumo_consumo") or {}).get("fase_material") or ""))
+                    if fase_mat_i8132 == "reservado":
+                        materiais_txt_i8127 = "🔒 Materiais reservados · baixa física somente ao iniciar produção"
+                    elif fase_mat_i8132 == "consumido":
+                        materiais_txt_i8127 = "🏭 Materiais consumidos · baixa física registrada"
+                    else:
+                        materiais_txt_i8127 = "Materiais atendidos"
+                atencao_txt_i8127 = " · ".join(ped_i8127.get("motivos") or []) or "Materiais liberados para produção"
             linhas_previsao_i8127.append({
                 "Situação": ped_i8127.get("status", ""),
                 "Pedido": ped_i8127.get("numero_proposta", ""),
@@ -25045,7 +25327,7 @@ if pagina_atual == "compras_custos":
 
     st.markdown("### 🛒 Central de Necessidades e Planejamento de Compras · I8.12.6")
     st.caption(
-        "Fonte única: a falta real continua vindo dos consumos confirmados. A I8.12.6 apenas registra o que já foi solicitado ao fornecedor, "
+        "Fonte única: a falta real é somente o que não está consumido nem reservado. A I8.12.6 apenas registra o que já foi solicitado ao fornecedor, "
         "para não comprar duas vezes. Solicitar NÃO movimenta estoque; somente uma compra/entrada realmente recebida reduz a pendência do pedido."
     )
 
@@ -25337,19 +25619,23 @@ if pagina_atual == "compras_custos":
         pf2.metric("Status", status_ficha_i8123)
         pf3.metric("Capacidade estimada", f"{capacidade_i8123} un" if capacidade_i8123 is not None else "—")
         if gargalo_i8123 and capacidade_i8123 is not None:
-            st.caption(f"Gargalo atual: {gargalo_i8123.get('material_nome_snapshot') or 'material'} · capacidade calculada pelo saldo atual e pelo consumo por unidade.")
+            st.caption(f"Gargalo atual: {gargalo_i8123.get('material_nome_snapshot') or 'material'} · capacidade calculada pelo saldo livre (físico menos reservas) e pelo consumo por unidade.")
 
         if componentes_i8123:
             linhas_ft_i8123 = []
             for comp_i8123 in componentes_i8123:
                 mat_ft_i8123 = _i8122_material_por_id(estoque_i8122, comp_i8123.get("material_id")) or {}
-                saldo_ft_i8123 = _i8122_saldo_material(estoque_i8122, comp_i8123.get("material_id")) if mat_ft_i8123 else 0
+                saldo_fisico_ft_i8132 = _i8122_saldo_material(estoque_i8122, comp_i8123.get("material_id")) if mat_ft_i8123 else 0
+                reservado_ft_i8132 = _i8132_reservado_material(comp_i8123.get("material_id"), consumos=consumos_i8124, estoque=estoque_i8122) if mat_ft_i8123 else 0
+                saldo_ft_i8123 = max(0.0, saldo_fisico_ft_i8132 - reservado_ft_i8132)
                 consumo_ft_i8123 = valor_float(comp_i8123.get("consumo_por_unidade", 0))
                 cap_ft_i8123 = int(max(0, saldo_ft_i8123 / consumo_ft_i8123) + 0.0000001) if consumo_ft_i8123 > 0 and mat_ft_i8123 else 0
                 linhas_ft_i8123.append({
                     "Material": mat_ft_i8123.get("nome") or comp_i8123.get("material_nome_snapshot", "Material não encontrado"),
                     "Consumo / 1 un produto": f"{_i8121_quantidade(consumo_ft_i8123)} {mat_ft_i8123.get('unidade') or comp_i8123.get('unidade_snapshot', '')}",
-                    "Saldo atual": f"{_i8121_quantidade(saldo_ft_i8123)} {mat_ft_i8123.get('unidade') or comp_i8123.get('unidade_snapshot', '')}",
+                    "Saldo físico": f"{_i8121_quantidade(saldo_fisico_ft_i8132)} {mat_ft_i8123.get('unidade') or comp_i8123.get('unidade_snapshot', '')}",
+                    "Reservado": f"{_i8121_quantidade(reservado_ft_i8132)} {mat_ft_i8123.get('unidade') or comp_i8123.get('unidade_snapshot', '')}",
+                    "Disponível livre": f"{_i8121_quantidade(saldo_ft_i8123)} {mat_ft_i8123.get('unidade') or comp_i8123.get('unidade_snapshot', '')}",
                     "Capacidade pelo material": f"{cap_ft_i8123} un",
                     "Observação": comp_i8123.get("observacao", ""),
                 })
@@ -25473,7 +25759,9 @@ if pagina_atual == "compras_custos":
             faltantes_sim_i8123 = []
             for comp_sim_i8123 in componentes_i8123:
                 mat_sim_i8123 = _i8122_material_por_id(estoque_i8122, comp_sim_i8123.get("material_id")) or {}
-                saldo_sim_i8123 = _i8122_saldo_material(estoque_i8122, comp_sim_i8123.get("material_id")) if mat_sim_i8123 else 0
+                saldo_fisico_sim_i8132 = _i8122_saldo_material(estoque_i8122, comp_sim_i8123.get("material_id")) if mat_sim_i8123 else 0
+                reservado_sim_i8132 = _i8132_reservado_material(comp_sim_i8123.get("material_id"), consumos=consumos_i8124, estoque=estoque_i8122) if mat_sim_i8123 else 0
+                saldo_sim_i8123 = max(0.0, saldo_fisico_sim_i8132 - reservado_sim_i8132)
                 consumo_sim_i8123 = valor_float(comp_sim_i8123.get("consumo_por_unidade", 0))
                 necessario_sim_i8123 = consumo_sim_i8123 * float(qtd_sim_i8123)
                 previsto_sim_i8123 = saldo_sim_i8123 - necessario_sim_i8123
@@ -25483,9 +25771,11 @@ if pagina_atual == "compras_custos":
                 unidade_sim_i8123 = mat_sim_i8123.get("unidade") or comp_sim_i8123.get("unidade_snapshot", "")
                 linhas_sim_i8123.append({
                     "Material": mat_sim_i8123.get("nome") or comp_sim_i8123.get("material_nome_snapshot", "Material não encontrado"),
-                    "Saldo atual": f"{_i8121_quantidade(saldo_sim_i8123)} {unidade_sim_i8123}",
+                    "Saldo físico": f"{_i8121_quantidade(saldo_fisico_sim_i8132)} {unidade_sim_i8123}",
+                    "Já reservado": f"{_i8121_quantidade(reservado_sim_i8132)} {unidade_sim_i8123}",
+                    "Disponível para simular": f"{_i8121_quantidade(saldo_sim_i8123)} {unidade_sim_i8123}",
                     "Necessário": f"{_i8121_quantidade(necessario_sim_i8123)} {unidade_sim_i8123}",
-                    "Saldo se produzir": f"{_i8121_quantidade(previsto_sim_i8123)} {unidade_sim_i8123}",
+                    "Livre se produzir": f"{_i8121_quantidade(previsto_sim_i8123)} {unidade_sim_i8123}",
                     "Situação": "✅ Suficiente" if suficiente_sim_i8123 else "🔴 Insuficiente",
                 })
             st.dataframe(pd.DataFrame(linhas_sim_i8123), use_container_width=True, hide_index=True)
@@ -25495,10 +25785,10 @@ if pagina_atual == "compras_custos":
                 st.success(f"Estoque suficiente para simular {_i8121_quantidade(qtd_sim_i8123)} unidade(s) deste produto. Nenhuma baixa foi realizada.")
 
     st.divider()
-    st.markdown("### 🧾 Consumo de estoque por pedido · I8.12.4-HF4")
+    st.markdown("### 🔒 Reserva de Estoque x Consumo Real · I8.13.2")
     st.info(
-        "📌 A aprovação do cliente não baixa estoque sozinha. Você revisa a prévia e confirma o consumo do pedido. "
-        "Se faltar material, o saldo físico vai até zero e a diferença fica pendente. Novas entradas quitam essa pendência automaticamente, sem estoque negativo."
+        "📌 Confirmar a necessidade RESERVA o material disponível, mas não altera o saldo físico. "
+        "Ao iniciar a produção, a reserva vira consumo real e só então o estoque é baixado. Se faltar material, a diferença fica pendente para compra/entrada."
     )
 
     consumos_i8124 = carregar_consumos_pedidos(force_refresh=True)
@@ -25511,17 +25801,17 @@ if pagina_atual == "compras_custos":
         str(n.get("material_id")) for r, _ in resumos_i8124 for n in (r.get("necessidades") or []) if valor_float(n.get("pendente")) > 0.000001
     }
     cp1, cp2, cp3, cp4 = st.columns(4)
-    cp1.metric("Pedidos com consumo", len(resumos_i8124))
-    cp2.metric("Atendidos", pedidos_atendidos_i8124)
-    cp3.metric("Parciais / pendentes", pedidos_parciais_i8124 + pedidos_pendentes_i8124)
+    cp1.metric("Pedidos liberados", len(resumos_i8124))
+    cp2.metric("Reserva completa", pedidos_atendidos_i8124)
+    cp3.metric("Reserva parcial / falta", pedidos_parciais_i8124 + pedidos_pendentes_i8124)
     cp4.metric("Materiais em falta", len(materiais_pendentes_ids_i8124))
-    if st.button("🔄 Reconciliar pendências com o saldo atual", key="i8124_reconciliar", use_container_width=True, help="Executa novamente a mesma regra automática. Útil após restauração/importação ou para conferência; nunca deixa saldo negativo."):
+    if st.button("🔄 Reconciliar reservas com o saldo físico", key="i8124_reconciliar", use_container_width=True, help="Confere reservas x saldo físico. Entradas completam reservas FIFO; perdas/ajustes podem reduzir reservas mais novas. Nenhuma baixa física é feita aqui."):
         resultado_recon_i8124 = _i8124_regularizar_pendencias_automaticamente(usuario=usuario_compras)
-        if resultado_recon_i8124.get("movimentos"):
+        if resultado_recon_i8124.get("reservas_criadas") or resultado_recon_i8124.get("reservas_liberadas"):
             st.session_state["_mensagem_sucesso_pendente"] = resultado_recon_i8124.get("mensagem")
             st.rerun()
         else:
-            st.info(resultado_recon_i8124.get("mensagem") or "Nenhuma pendência foi alterada.")
+            st.info(resultado_recon_i8124.get("mensagem") or "Nenhuma reserva foi alterada.")
 
     historico_pedidos_i8124 = carregar_historico(force_refresh=True)
     numeros_consumo_ativos_i8124 = {
@@ -25536,10 +25826,10 @@ if pagina_atual == "compras_custos":
     # Ordenação é somente visual: propostas mais recentes primeiro. Não altera a elegibilidade.
     elegiveis_i8124 = _ordenar_propostas_recentes(elegiveis_i8124)
     st.caption(
-        f"Fila de liberação: {len(elegiveis_i8124)} proposta(s) com Aprovado = SIM, Pronto = NÃO, Entregue = NÃO e consumo ainda não confirmado."
+        f"Fila de liberação: {len(elegiveis_i8124)} proposta(s) com Aprovado = SIM, Pronto = NÃO, Entregue = NÃO e reserva de materiais ainda não confirmada."
     )
     if not elegiveis_i8124:
-        st.caption("Nenhuma proposta aguarda liberação de consumo neste momento.")
+        st.caption("Nenhuma proposta aguarda liberação/reserva de materiais neste momento.")
     else:
         mapa_pedidos_i8124 = {str(p.get("numero_proposta")): p for p in elegiveis_i8124 if str(p.get("numero_proposta") or "")}
         # Evita manter no widget uma seleção que acabou de sair da fila após confirmação/entrega.
@@ -25547,7 +25837,7 @@ if pagina_atual == "compras_custos":
         if selecao_anterior_i8124 not in mapa_pedidos_i8124:
             st.session_state.pop("i8124_pedido_consumo", None)
         numero_pedido_i8124 = st.selectbox(
-            "Proposta aprovada aguardando liberação",
+            "Proposta aprovada aguardando reserva",
             list(mapa_pedidos_i8124),
             format_func=lambda n: f"{n} · {mapa_pedidos_i8124[n].get('cliente_nome', 'Cliente')} · {resumo_produtos_pedido(mapa_pedidos_i8124[n])} · entrega {mapa_pedidos_i8124[n].get('data_entrega', '—')}",
             key="i8124_pedido_consumo",
@@ -25563,23 +25853,24 @@ if pagina_atual == "compras_custos":
                 resumo_sel_i8124 = _i8124_resumo_consumo(consumo_ativo_i8124, estoque_i8124)
                 st.markdown(f"**Situação atual:** {resumo_sel_i8124.get('status')}")
                 if proposta_encerrada(proposta_i8124) or not valor_bool(proposta_i8124.get("aprovado")):
-                    st.error("⚠️ Este pedido não está mais aprovado/ativo, mas ainda possui consumo de estoque confirmado. Revise e estorne o consumo se o pedido foi cancelado ou desfeito.")
+                    st.error("⚠️ Este pedido não está mais aprovado/ativo, mas ainda possui reserva/consumo de materiais. Estorne a liberação para devolver o material reservado e preservar a rastreabilidade.")
                 linhas_status_i8124 = []
                 for nec_i8124 in resumo_sel_i8124.get("necessidades") or []:
                     linhas_status_i8124.append({
                         "Material": nec_i8124.get("material_nome", ""),
                         "Necessário": f"{_i8121_quantidade(nec_i8124.get('necessario'))} {nec_i8124.get('unidade', '')}",
-                        "Baixado": f"{_i8121_quantidade(nec_i8124.get('baixado'))} {nec_i8124.get('unidade', '')}",
-                        "Pendente": f"{_i8121_quantidade(nec_i8124.get('pendente'))} {nec_i8124.get('unidade', '')}",
+                        "🔒 Reservado": f"{_i8121_quantidade(nec_i8124.get('reservado'))} {nec_i8124.get('unidade', '')}",
+                        "🏭 Consumido": f"{_i8121_quantidade(nec_i8124.get('consumido'))} {nec_i8124.get('unidade', '')}",
+                        "Falta": f"{_i8121_quantidade(nec_i8124.get('pendente'))} {nec_i8124.get('unidade', '')}",
                     })
                 if linhas_status_i8124:
                     st.dataframe(pd.DataFrame(linhas_status_i8124), use_container_width=True, hide_index=True)
                 if previa_i8124.get("assinatura") and previa_i8124.get("assinatura") != consumo_ativo_i8124.get("assinatura_confirmada"):
                     st.warning("⚠️ Os itens do pedido ou a Ficha Técnica mudaram após a confirmação. Estorne este consumo e confirme novamente para recalcular com segurança.")
-                with st.expander("↩️ Estornar / corrigir consumo do pedido", expanded=False):
+                with st.expander("↩️ Estornar / corrigir reserva e consumo do pedido", expanded=False):
                     motivo_est_i8124 = st.text_input("Motivo do estorno", key=f"i8124_motivo_est_{numero_pedido_i8124}", placeholder="Ex.: quantidade corrigida, pedido cancelado, ficha técnica revisada...")
                     conf_est_i8124 = st.checkbox("Confirmo o estorno auditado", key=f"i8124_conf_est_{numero_pedido_i8124}")
-                    if st.button("↩️ Estornar consumo confirmado", key=f"i8124_estornar_{numero_pedido_i8124}", use_container_width=True, disabled=not conf_est_i8124 or len(motivo_est_i8124.strip()) < 3):
+                    if st.button("↩️ Estornar liberação de materiais", key=f"i8124_estornar_{numero_pedido_i8124}", use_container_width=True, disabled=not conf_est_i8124 or len(motivo_est_i8124.strip()) < 3):
                         ok_est_i8124, msg_est_i8124 = _i8124_estornar_consumo(consumo_ativo_i8124.get("id"), motivo_est_i8124, usuario=usuario_compras)
                         if ok_est_i8124:
                             st.session_state["_mensagem_sucesso_pendente"] = msg_est_i8124
@@ -25587,19 +25878,24 @@ if pagina_atual == "compras_custos":
                         else:
                             st.error(msg_est_i8124)
             else:
-                st.markdown("**Prévia antes de confirmar**")
+                st.markdown("**Prévia antes de reservar**")
                 linhas_prev_i8124 = []
                 for nec_i8124 in previa_i8124.get("necessidades") or []:
-                    saldo_i8124 = _i8122_saldo_material(estoque_i8124, nec_i8124.get("material_id"))
+                    material_id_prev_i8132 = nec_i8124.get("material_id")
+                    saldo_fisico_i8132 = _i8122_saldo_material(estoque_i8124, material_id_prev_i8132)
+                    reservado_outros_i8132 = _i8132_reservado_material(material_id_prev_i8132, consumos=consumos_i8124, estoque=estoque_i8124)
+                    livre_i8132 = max(0.0, saldo_fisico_i8132 - reservado_outros_i8132)
                     necessario_i8124 = valor_float(nec_i8124.get("necessario"))
-                    baixar_agora_i8124 = min(max(0.0, saldo_i8124), necessario_i8124)
-                    pendente_i8124 = max(0.0, necessario_i8124 - baixar_agora_i8124)
+                    reservar_agora_i8132 = min(livre_i8132, necessario_i8124)
+                    pendente_i8124 = max(0.0, necessario_i8124 - reservar_agora_i8132)
                     linhas_prev_i8124.append({
                         "Material": nec_i8124.get("material_nome", ""),
-                        "Saldo disponível": f"{_i8121_quantidade(saldo_i8124)} {nec_i8124.get('unidade', '')}",
+                        "Saldo físico": f"{_i8121_quantidade(saldo_fisico_i8132)} {nec_i8124.get('unidade', '')}",
+                        "Já reservado": f"{_i8121_quantidade(reservado_outros_i8132)} {nec_i8124.get('unidade', '')}",
+                        "Disponível livre": f"{_i8121_quantidade(livre_i8132)} {nec_i8124.get('unidade', '')}",
                         "Necessário": f"{_i8121_quantidade(necessario_i8124)} {nec_i8124.get('unidade', '')}",
-                        "Baixa imediata": f"{_i8121_quantidade(baixar_agora_i8124)} {nec_i8124.get('unidade', '')}",
-                        "Ficará pendente": f"{_i8121_quantidade(pendente_i8124)} {nec_i8124.get('unidade', '')}",
+                        "Pode reservar agora": f"{_i8121_quantidade(reservar_agora_i8132)} {nec_i8124.get('unidade', '')}",
+                        "Falta": f"{_i8121_quantidade(pendente_i8124)} {nec_i8124.get('unidade', '')}",
                     })
                 if linhas_prev_i8124:
                     st.dataframe(pd.DataFrame(linhas_prev_i8124), use_container_width=True, hide_index=True)
@@ -25619,15 +25915,15 @@ if pagina_atual == "compras_custos":
                 if faltas_ficha_i8124:
                     st.error(
                         "Liberação bloqueada: corrija primeiro o vínculo pelo Saneamento/Catálogo e a Ficha Técnica. "
-                        "A proposta permanece nesta fila até ficar apta, ser entregue ou ter o consumo confirmado."
+                        "A proposta permanece nesta fila até ficar apta, ser entregue ou ter a reserva confirmada."
                     )
                 confirma_consumo_i8124 = st.checkbox(
-                    "Confirmo esta necessidade de materiais para o pedido",
+                    "Confirmo esta necessidade e quero reservar o material disponível para o pedido",
                     key=f"i8124_conf_consumo_{numero_pedido_i8124}",
                     disabled=faltas_ficha_i8124 or not bool(previa_i8124.get("necessidades")),
                 )
                 pode_confirmar_i8124 = bool(previa_i8124.get("necessidades")) and confirma_consumo_i8124 and not faltas_ficha_i8124
-                if st.button("✅ Confirmar consumo do pedido", key=f"i8124_confirmar_{numero_pedido_i8124}", type="primary", use_container_width=True, disabled=not pode_confirmar_i8124):
+                if st.button("🔒 Confirmar e reservar materiais", key=f"i8124_confirmar_{numero_pedido_i8124}", type="primary", use_container_width=True, disabled=not pode_confirmar_i8124):
                     ok_conf_i8124, msg_conf_i8124, _ = _i8124_confirmar_consumo_pedido(
                         proposta_i8124, aceitar_sem_ficha=False, usuario=usuario_compras
                     )
@@ -25638,7 +25934,7 @@ if pagina_atual == "compras_custos":
                         st.error(msg_conf_i8124)
 
     if resumos_i8124:
-        with st.expander("📚 Pedidos com consumo confirmado", expanded=False):
+        with st.expander("📚 Pedidos com reserva / consumo", expanded=False):
             linhas_consumos_i8124 = []
             for resumo_i8124, consumo_i8124 in sorted(resumos_i8124, key=lambda x: str(x[1].get("confirmado_em") or ""), reverse=True):
                 pendencias_i8124 = [n for n in (resumo_i8124.get("necessidades") or []) if valor_float(n.get("pendente")) > 0.000001]
@@ -25646,9 +25942,9 @@ if pagina_atual == "compras_custos":
                     "Pedido": consumo_i8124.get("numero_proposta", ""),
                     "Cliente": consumo_i8124.get("cliente_nome", ""),
                     "Status": resumo_i8124.get("status", ""),
-                    "Materiais pendentes": len(pendencias_i8124),
-                    "Confirmado por": consumo_i8124.get("confirmado_por", ""),
-                    "Confirmado em": str(consumo_i8124.get("confirmado_em") or "")[:16].replace("T", " "),
+                    "Materiais em falta": len(pendencias_i8124),
+                    "Liberado por": consumo_i8124.get("confirmado_por", ""),
+                    "Liberado em": str(consumo_i8124.get("confirmado_em") or "")[:16].replace("T", " "),
                 })
             st.dataframe(pd.DataFrame(linhas_consumos_i8124), use_container_width=True, hide_index=True)
 
@@ -25689,6 +25985,8 @@ if pagina_atual == "compras_custos":
             data_mov_i8122 = mm3.date_input("Data", value=hoje_i8121, key="i8122_mov_data")
             mat_mov_i8122 = mapa_mat_i8122.get(str(mat_id_mov_i8122), {})
             saldo_atual_i8122 = _i8122_saldo_material(estoque_i8122, mat_id_mov_i8122)
+            reservado_atual_i8132 = _i8132_reservado_material(mat_id_mov_i8122, consumos=consumos_i8124, estoque=estoque_i8122)
+            livre_atual_i8132 = max(0.0, saldo_atual_i8122 - reservado_atual_i8132)
             if tipo_mov_i8122 == "Ajuste de inventário":
                 saldo_fisico_i8122 = st.number_input(
                     f"Saldo físico contado ({mat_mov_i8122.get('unidade', '')})", min_value=0.0, value=max(0.0, float(saldo_atual_i8122)),
@@ -25703,13 +26001,20 @@ if pagina_atual == "compras_custos":
                 delta_mov_i8122 = float(qtd_mov_i8122) if tipo_mov_i8122 == "Entrada manual" else -float(qtd_mov_i8122)
             obs_mov_i8122 = st.text_input("Motivo / observação", key="i8122_mov_obs", placeholder="Ex.: contagem física, uso interno, avaria, amostra...")
             saldo_prev_i8122 = float(saldo_atual_i8122) + float(delta_mov_i8122)
-            pv1, pv2, pv3 = st.columns(3)
-            pv1.metric("Saldo atual", f"{_i8121_quantidade(saldo_atual_i8122)} {mat_mov_i8122.get('unidade', '')}")
-            pv2.metric("Movimentação", ("+" if delta_mov_i8122 > 0 else "") + f"{_i8121_quantidade(delta_mov_i8122)} {mat_mov_i8122.get('unidade', '')}")
-            pv3.metric("Saldo previsto", f"{_i8121_quantidade(saldo_prev_i8122)} {mat_mov_i8122.get('unidade', '')}")
-            bloqueio_mov_i8122 = saldo_prev_i8122 < -0.000001 or abs(delta_mov_i8122) < 0.000001
+            livre_prev_i8132 = max(0.0, saldo_prev_i8122 - reservado_atual_i8132)
+            pv1, pv2, pv3, pv4 = st.columns(4)
+            pv1.metric("Saldo físico", f"{_i8121_quantidade(saldo_atual_i8122)} {mat_mov_i8122.get('unidade', '')}")
+            pv2.metric("🔒 Reservado", f"{_i8121_quantidade(reservado_atual_i8132)} {mat_mov_i8122.get('unidade', '')}")
+            pv3.metric("Disponível livre", f"{_i8121_quantidade(livre_atual_i8132)} {mat_mov_i8122.get('unidade', '')}")
+            pv4.metric("Físico previsto", f"{_i8121_quantidade(saldo_prev_i8122)} {mat_mov_i8122.get('unidade', '')}")
+            saida_invade_reserva_i8132 = tipo_mov_i8122 == "Saída manual" and abs(min(0.0, delta_mov_i8122)) > livre_atual_i8132 + 0.000001
+            bloqueio_mov_i8122 = saldo_prev_i8122 < -0.000001 or abs(delta_mov_i8122) < 0.000001 or saida_invade_reserva_i8132
             if saldo_prev_i8122 < -0.000001:
-                st.error("A movimentação deixaria o estoque negativo. Registre a entrada faltante ou faça uma contagem física antes da saída.")
+                st.error("A movimentação deixaria o estoque físico negativo. Registre a entrada faltante ou faça uma contagem física antes da saída.")
+            if saida_invade_reserva_i8132:
+                st.error("Esta saída manual usaria material já reservado para pedidos. Use somente o saldo disponível livre ou revise/estorne a reserva do pedido correspondente.")
+            elif saldo_prev_i8122 + 0.000001 < reservado_atual_i8132 and tipo_mov_i8122 in {"Perda", "Ajuste de inventário"}:
+                st.warning("O saldo físico ficará menor que o reservado. Ao salvar, o Manager reduzirá automaticamente as reservas mais novas e os pedidos afetados voltarão a indicar falta de material.")
             if st.button("💾 Registrar movimentação", key="i8122_mov_salvar", type="primary", use_container_width=True, disabled=bloqueio_mov_i8122):
                 dados_frescos_i8122 = carregar_estoque(force_refresh=True)
                 mat_fresco_i8122 = _i8122_material_por_id(dados_frescos_i8122, mat_id_mov_i8122)
@@ -25717,8 +26022,12 @@ if pagina_atual == "compras_custos":
                 delta_final_i8122 = float(delta_mov_i8122)
                 if tipo_mov_i8122 == "Ajuste de inventário":
                     delta_final_i8122 = float(saldo_fisico_i8122) - float(saldo_fresco_i8122)
+                reservado_fresco_i8132 = _i8132_reservado_material(mat_id_mov_i8122, consumos=carregar_consumos_pedidos(force_refresh=True), estoque=dados_frescos_i8122)
+                livre_fresco_i8132 = max(0.0, saldo_fresco_i8122 - reservado_fresco_i8132)
                 if saldo_fresco_i8122 + delta_final_i8122 < -0.000001:
-                    st.error("O saldo mudou desde a abertura da tela e esta movimentação deixaria o estoque negativo. Atualize e tente novamente.")
+                    st.error("O saldo mudou desde a abertura da tela e esta movimentação deixaria o estoque físico negativo. Atualize e tente novamente.")
+                elif tipo_mov_i8122 == "Saída manual" and abs(min(0.0, delta_final_i8122)) > livre_fresco_i8132 + 0.000001:
+                    st.error("O saldo livre mudou e esta saída usaria material reservado para pedidos. Atualize e tente novamente.")
                 elif abs(delta_final_i8122) < 0.000001:
                     st.info("O saldo informado já é igual ao saldo atual; nenhuma movimentação foi necessária.")
                 else:
@@ -25782,7 +26091,7 @@ if pagina_atual == "compras_custos":
             m for m in mov_ord_i8122
             if not str(m.get("estorno_de") or "")
             and not _i8122_movimento_estornado(estoque_i8122, m.get("id"))
-            and str(m.get("origem_tipo") or "") != "Pedido"  # baixas de pedido são estornadas pelo controle I8.12.4
+            and str(m.get("origem_tipo") or "") != "Pedido"  # consumo físico de pedido é estornado pelo controle I8.13.2
         ]
         if reversiveis_i8122:
             with st.expander("↩️ Estornar movimentação incorreta", expanded=False):
@@ -25875,7 +26184,7 @@ if pagina_atual == "compras_custos":
             lancar_estoque_i8122 = st.checkbox(
                 "📦 Lançar esta compra como entrada de estoque",
                 value=True, key="i8122_compra_gera_estoque",
-                help="Desmarque para serviços, frete ou itens que você não deseja controlar em estoque. Se houver consumo confirmado pendente, esta entrada poderá regularizá-lo automaticamente.",
+                help="Desmarque para serviços, frete ou itens que você não deseja controlar em estoque. Se houver falta de material em pedidos liberados, esta entrada poderá completar reservas automaticamente.",
             )
 
             catalogo_i8121 = carregar_catalogo()

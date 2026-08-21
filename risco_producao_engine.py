@@ -2,7 +2,7 @@
 
 A previsão não cria uma nova fonte operacional. Ela deriva o estado de pedidos
 aprovados ainda não entregues a partir de três fontes já oficiais:
-- consumo confirmado / pendências de materiais (I8.12.4);
+- necessidade confirmada / reserva / falta de materiais (I8.13.2);
 - movimentações de estoque;
 - planejamento de compras em aberto (I8.12.6).
 
@@ -112,7 +112,7 @@ def montar_previsao_producao(
     """Classifica pedidos aprovados e ainda não entregues usando fontes oficiais.
 
     Regras principais:
-    - sem consumo confirmado: aguardando liberação de materiais;
+    - sem liberação/reserva confirmada: aguardando liberação de materiais;
     - sem pendência: liberado para produção;
     - falta totalmente coberta por solicitação aberta: compra em andamento;
     - falta não coberta: aguardando material;
@@ -227,7 +227,7 @@ def montar_previsao_producao(
                 motivos.append(f"entrega vencida há {abs(dias)} dia(s) e consumo ainda não foi liberado")
             elif isinstance(dias, int) and dias <= 1:
                 motivos.append("entrega muito próxima e consumo ainda não foi liberado")
-            motivos.append("confirmar liberação de consumo para verificar disponibilidade dos materiais")
+            motivos.append("confirmar e reservar materiais para verificar disponibilidade")
         elif not pendencias:
             chave_base = "liberado"
             status_base = "🟢 Liberado para produção"

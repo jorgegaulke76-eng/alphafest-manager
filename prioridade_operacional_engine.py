@@ -58,7 +58,7 @@ def _acao_producao(linha_producao: dict | None) -> str:
     linha = linha_producao or {}
     chave = _texto(linha.get("situacao_operacional_chave"))
     if chave == "aguardando_liberacao":
-        return "Confirmar liberação de consumo"
+        return "Confirmar e reservar materiais"
     if chave == "aguardando_material":
         return "Resolver falta de material"
     if chave == "compra_em_andamento":

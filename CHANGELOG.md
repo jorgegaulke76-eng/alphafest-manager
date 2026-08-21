@@ -723,3 +723,12 @@ hangelog
 - Central Jorge ganha painel de prioridades com motivo e próxima ação.
 - Fila completa de produção e Central de Entregas passam a exibir a mesma classificação derivada.
 - Nenhum banco novo e nenhuma prioridade manual gravada na proposta.
+
+## 20.4.9-I8.13.2 — Reserva de Estoque x Consumo Real
+- Necessidade confirmada passa a reservar saldo livre sem movimentar o estoque físico.
+- Baixa de estoque acontece somente quando a produção realmente começa; dados legados já baixados não são duplicados.
+- Estoque exibe físico, reservado, disponível livre e falta real em pedidos.
+- Entradas completam reservas FIFO; perdas/ajustes reconciliam excesso de reserva preservando pedidos mais antigos.
+- Simulador e capacidade de Ficha Técnica deixam de contar material já comprometido com outros pedidos.
+- Saída manual não pode consumir estoque reservado; consolidação de material com reserva ativa é bloqueada.
+- Nenhum banco novo; `consumo_pedidos_db` guarda reservas e `estoque_db` continua guardando somente movimentos físicos.

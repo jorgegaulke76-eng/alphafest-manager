@@ -175,7 +175,7 @@ def montar_central_producao(
         elif chave_material == "aguardando_liberacao":
             situacao = "⚪ Aguardando liberação de materiais"
             situacao_chave = "aguardando_liberacao"
-            proxima_acao = "Confirmar liberação de consumo"
+            proxima_acao = "Confirmar e reservar materiais"
         elif chave_material == "aguardando_material":
             situacao = "🟠 Aguardando material"
             situacao_chave = "aguardando_material"

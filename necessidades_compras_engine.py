@@ -1,6 +1,6 @@
 """Motor puro da I8.12.5 — Central de Necessidades de Compras.
 
-A central é derivada das necessidades já confirmadas pela I8.12.4. Não cria
+A central é derivada das faltas não cobertas por reserva/consumo da I8.13.2. Não cria
 uma segunda fonte de pedidos, estoque, fornecedores ou custos. Este módulo
 apenas agrega pendências por material para que todas as telas possam consumir
 o mesmo resultado.
