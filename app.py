@@ -20634,12 +20634,16 @@ def renderizar_workspace_anna_isolado():
         rerun_na_aba("historico")
 
     st.markdown("### 📚 Catálogo")
-    k1, k2, k3, k4, k5 = st.columns(5)
+    st.caption("⚡ CAT1 ativa • Kits Festa e catálogos antigos disponíveis no Acervo Histórico.")
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
     if k1.button("➕ Cadastrar produto", use_container_width=True): dialog_catalogo_cadastro_anna()
     if k2.button("📋 Visualizar produtos", use_container_width=True): dialog_catalogo_visualizar_anna()
     if k3.button("📤 Gerar rápido", use_container_width=True): dialog_catalogo_gerar_anna()
     if k4.button("📅 Revisar campanhas", use_container_width=True): dialog_thu_revisar_elegibilidade()
-    if k5.button("✨ Gerador / Modelos / Central", use_container_width=True):
+    if k5.button("📚 Acervo histórico", use_container_width=True):
+        st.session_state["_cat1_abrir_acervo_direto"] = True
+        rerun_na_aba("catalogo")
+    if k6.button("✨ Gerador / Modelos / Central", use_container_width=True):
         rerun_na_aba("catalogo")
 
     entregas_hoje = [p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]
@@ -28341,19 +28345,36 @@ if pagina_atual == "catalogo":
         formulario_catalogo(None)
     else:
         if usuario_em_operacao_protegida(obter_usuario_atual()):
-            # I8.8.4: ao entrar pelo atalho da Central da Anna, as ferramentas
-            # liberadas aparecem primeiro e o Gerador já abre como aba padrão.
-            aba_gerador, aba_modelos, aba_central, aba_inteligencia, aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_cliente = st.tabs([
-                "✨ Gerador I8.7.1",
-                "🧩 Modelos I8.8.3",
-                "📤 Central I8.9.2.1",
-                "📊 Inteligência I8.10.1",
-                "➕ Cadastrar",
-                "📋 Produtos",
-                "🧹 Saneamento",
-                "📚 Acervo histórico",
-                "📤 Catálogo para cliente",
-            ])
+            # CAT1-HF1: quando a Anna entra pelo novo atalho do Acervo, ele vira
+            # temporariamente a primeira aba (o Streamlit abre sempre a primeira).
+            # Nas demais entradas, preservamos a ordem homologada da I8.8.4.
+            _cat1_acervo_direto = bool(st.session_state.pop("_cat1_abrir_acervo_direto", False))
+            if _cat1_acervo_direto:
+                aba_acervo, aba_gerador, aba_modelos, aba_central, aba_inteligencia, aba_cad, aba_lista, aba_saneamento, aba_cliente = st.tabs([
+                    "📚 Acervo histórico",
+                    "✨ Gerador I8.7.1",
+                    "🧩 Modelos I8.8.3",
+                    "📤 Central I8.9.2.1",
+                    "📊 Inteligência I8.10.1",
+                    "➕ Cadastrar",
+                    "📋 Produtos",
+                    "🧹 Saneamento",
+                    "📤 Catálogo para cliente",
+                ])
+            else:
+                # I8.8.4: ao entrar pelo atalho da Central da Anna, as ferramentas
+                # liberadas aparecem primeiro e o Gerador já abre como aba padrão.
+                aba_gerador, aba_modelos, aba_central, aba_inteligencia, aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_cliente = st.tabs([
+                    "✨ Gerador I8.7.1",
+                    "🧩 Modelos I8.8.3",
+                    "📤 Central I8.9.2.1",
+                    "📊 Inteligência I8.10.1",
+                    "➕ Cadastrar",
+                    "📋 Produtos",
+                    "🧹 Saneamento",
+                    "📚 Acervo histórico",
+                    "📤 Catálogo para cliente",
+                ])
         else:
             aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_gerador, aba_modelos, aba_central, aba_inteligencia, aba_cliente = st.tabs([
                 "➕ Cadastrar",
