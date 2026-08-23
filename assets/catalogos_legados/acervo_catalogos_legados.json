@@ -8,6 +8,723 @@
   },
   "catalogos": [
     {
+      "filename": "Catálogo Kit Festa Personalizados 2026 - 2semestre.pdf",
+      "id": "kit_festa_2026_2s",
+      "titulo": "Kit Festa Personalizados • 2026 2º semestre",
+      "categoria_hint": "Kit Festa",
+      "subcategoria_hint": "Kits Personalizados",
+      "campanhas_hint": [
+        "Permanente / Todas as épocas"
+      ],
+      "tipo": "Linha de alto giro • Kits compostos",
+      "paginas_total": 11,
+      "validade_preco_historico": null,
+      "preco_sujeito_alteracao_mensal": false,
+      "sha256_origem": "07eb2b03ef6eae154e23e9634108ba3debb383c034595e80b71f27d2528e70dd",
+      "alta_rotatividade": true,
+      "regra_preco": "Preço do PDF preservado somente como histórico; revisão obrigatória antes de virar preço oficial",
+      "paginas": [
+        {
+          "pagina": 1,
+          "preview": "assets/catalogos_legados/previews/kit_festa_2026_2s/p001.jpg",
+          "raw_text": "KIT\nFESTA\n\n\n\n             11 97294-9533\n            @ alphafest10\n * Fazemos todos os temas !!! *",
+          "clean_text": "KIT\nFESTA\n11 97294-9533\n@ alphafest10\n* Fazemos todos os temas !!! *",
+          "precos_historicos": [],
+          "minimos_historicos": [],
+          "materiais_detectados": [],
+          "medidas_variacoes_detectadas": [],
+          "candidatos_produto": [],
+          "nome_sugerido": "",
+          "descricao_sugerida": "",
+          "multiproduto": false,
+          "curadoria_visual": true,
+          "pagina_institucional_sugerida": true
+        },
+        {
+          "pagina": 2,
+          "preview": "assets/catalogos_legados/previews/kit_festa_2026_2s/p002.jpg",
+          "raw_text": "KIT\n           FESTA PRÁTICA\n       02 unds POSTERS\n       01 und TOPO de BOLO\n       02 unds DISPLAYS DE MESA\n       10 unds TOPPERs PARA DOCES\n\n\n\n\n                                 R$ 25,00\n\n\n\n\n* Fazemos todos os temas !!! *",
+          "clean_text": "KIT\nFESTA PRÁTICA\n02 unds POSTERS\n01 und TOPO de BOLO\n02 unds DISPLAYS DE MESA\n10 unds TOPPERs PARA DOCES\nR$ 25,00\n* Fazemos todos os temas !!! *",
+          "precos_historicos": [
+            "25,00"
+          ],
+          "minimos_historicos": [],
+          "materiais_detectados": [],
+          "medidas_variacoes_detectadas": [],
+          "candidatos_produto": [
+            "Kit Festa Prática"
+          ],
+          "nome_sugerido": "Kit Festa Prática",
+          "descricao_sugerida": "Kit Festa Prática personalizado para o tema escolhido. Composição histórica do kit: 2x Poster; 1x Topo de Bolo; 2x Display de Mesa; 10x Topper para Doces. Composição e valores atuais devem ser confirmados antes da venda.",
+          "multiproduto": false,
+          "curadoria_visual": true,
+          "produto_alto_giro": true,
+          "tipo_produto_sugerido": "Kit composto",
+          "composicao_kit": [
+            {
+              "quantidade": 2,
+              "produto_historico": "Poster",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Topo de Bolo",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 2,
+              "produto_historico": "Display de Mesa",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 10,
+              "produto_historico": "Topper para Doces",
+              "unidade": "un",
+              "observacao": ""
+            }
+          ],
+          "revisao_preco_obrigatoria": true,
+          "observacao_comercial_historica": "Fazemos todos os temas"
+        },
+        {
+          "pagina": 3,
+          "preview": "assets/catalogos_legados/previews/kit_festa_2026_2s/p003.jpg",
+          "raw_text": "KIT\n             FESTA RÁPIDA\n       1 KIT BANDEIROLAS - 1º NOME\n       10 BALÕES NORMAIS\n       03 MINI POSTERS -20X28\n       01 TOPO de BOLO\n       03 DISPLAYS DE MESA -19CM\n       1 VELA - NORMAL NÚMERO\n\n\n\n\n                                 R$ 35,00\n\n\n\n\n* Fazemos todos os temas !!! *",
+          "clean_text": "KIT\nFESTA RÁPIDA\n1 KIT BANDEIROLAS - 1º NOME\n10 BALÕES NORMAIS\n03 MINI POSTERS -20X28\n01 TOPO de BOLO\n03 DISPLAYS DE MESA -19CM\n1 VELA - NORMAL NÚMERO\nR$ 35,00\n* Fazemos todos os temas !!! *",
+          "precos_historicos": [
+            "35,00"
+          ],
+          "minimos_historicos": [],
+          "materiais_detectados": [],
+          "medidas_variacoes_detectadas": [],
+          "candidatos_produto": [
+            "Kit Festa Rápida"
+          ],
+          "nome_sugerido": "Kit Festa Rápida",
+          "descricao_sugerida": "Kit Festa Rápida personalizado para o tema escolhido. Composição histórica do kit: 1x Kit Bandeirolas (1º nome); 10x Balões Normais; 3x Mini Poster 20x28; 1x Topo de Bolo; 3x Display de Mesa 19cm; 1x Vela Normal Número. Composição e valores atuais devem ser confirmados antes da venda.",
+          "multiproduto": false,
+          "curadoria_visual": true,
+          "produto_alto_giro": true,
+          "tipo_produto_sugerido": "Kit composto",
+          "composicao_kit": [
+            {
+              "quantidade": 1,
+              "produto_historico": "Kit Bandeirolas",
+              "unidade": "kit",
+              "observacao": "1º nome"
+            },
+            {
+              "quantidade": 10,
+              "produto_historico": "Balões Normais",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 3,
+              "produto_historico": "Mini Poster 20x28",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Topo de Bolo",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 3,
+              "produto_historico": "Display de Mesa 19cm",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Vela Normal Número",
+              "unidade": "un",
+              "observacao": ""
+            }
+          ],
+          "revisao_preco_obrigatoria": true,
+          "observacao_comercial_historica": "Fazemos todos os temas"
+        },
+        {
+          "pagina": 4,
+          "preview": "assets/catalogos_legados/previews/kit_festa_2026_2s/p004.jpg",
+          "raw_text": "KIT\n                   FESTA MINI\n        1 KIT BANDEIROLAS - 1º NOME\n        20 BALÕES NORMAIS\n        02 MINI POSTERS -20X28\n        01 TOPO de BOLO\n        02 DISPLAYS DE MESA -19CM\n        1 VELA - NORMAL NÚMERO\n        20 TOPPER PARA DOCES\n        20 FORMINHAS DOCES COM TEMA\n\n\n\n                                   R$ 45,00\n\n\n\n\n* Fazemos todos os temas !!! *",
+          "clean_text": "KIT\nFESTA MINI\n1 KIT BANDEIROLAS - 1º NOME\n20 BALÕES NORMAIS\n02 MINI POSTERS -20X28\n01 TOPO de BOLO\n02 DISPLAYS DE MESA -19CM\n1 VELA - NORMAL NÚMERO\n20 TOPPER PARA DOCES\n20 FORMINHAS DOCES COM TEMA\nR$ 45,00\n* Fazemos todos os temas !!! *",
+          "precos_historicos": [
+            "45,00"
+          ],
+          "minimos_historicos": [],
+          "materiais_detectados": [],
+          "medidas_variacoes_detectadas": [],
+          "candidatos_produto": [
+            "Kit Festa Mini"
+          ],
+          "nome_sugerido": "Kit Festa Mini",
+          "descricao_sugerida": "Kit Festa Mini personalizado para o tema escolhido. Composição histórica do kit: 1x Kit Bandeirolas (1º nome); 20x Balões Normais; 2x Mini Poster 20x28; 1x Topo de Bolo; 2x Display de Mesa 19cm; 1x Vela Normal Número; 20x Topper para Doces; 20x Forminha para Doces com Tema. Composição e valores atuais devem ser confirmados antes da venda.",
+          "multiproduto": false,
+          "curadoria_visual": true,
+          "produto_alto_giro": true,
+          "tipo_produto_sugerido": "Kit composto",
+          "composicao_kit": [
+            {
+              "quantidade": 1,
+              "produto_historico": "Kit Bandeirolas",
+              "unidade": "kit",
+              "observacao": "1º nome"
+            },
+            {
+              "quantidade": 20,
+              "produto_historico": "Balões Normais",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 2,
+              "produto_historico": "Mini Poster 20x28",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Topo de Bolo",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 2,
+              "produto_historico": "Display de Mesa 19cm",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Vela Normal Número",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 20,
+              "produto_historico": "Topper para Doces",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 20,
+              "produto_historico": "Forminha para Doces com Tema",
+              "unidade": "un",
+              "observacao": ""
+            }
+          ],
+          "revisao_preco_obrigatoria": true,
+          "observacao_comercial_historica": "Fazemos todos os temas"
+        },
+        {
+          "pagina": 5,
+          "preview": "assets/catalogos_legados/previews/kit_festa_2026_2s/p005.jpg",
+          "raw_text": "KIT\n                   FESTINHA\n      1 KIT BANDEIROLAS - 1º NOME\n      20 BALÕES NORMAIS\n      04 MINI POSTERS -20X28\n      01 TOPO de BOLO\n      04 DISPLAYS DE MESA -19CM\n      1 VELA - NORMAL NÚMERO\n      20 TOPPER PARA DOCES\n\n\n\n\n                                 R$ 42,00\n\n\n\n* Fazemos todos os temas !!! *",
+          "clean_text": "KIT\nFESTINHA\n1 KIT BANDEIROLAS - 1º NOME\n20 BALÕES NORMAIS\n04 MINI POSTERS -20X28\n01 TOPO de BOLO\n04 DISPLAYS DE MESA -19CM\n1 VELA - NORMAL NÚMERO\n20 TOPPER PARA DOCES\nR$ 42,00\n* Fazemos todos os temas !!! *",
+          "precos_historicos": [
+            "42,00"
+          ],
+          "minimos_historicos": [],
+          "materiais_detectados": [],
+          "medidas_variacoes_detectadas": [],
+          "candidatos_produto": [
+            "Kit Festinha"
+          ],
+          "nome_sugerido": "Kit Festinha",
+          "descricao_sugerida": "Kit Festinha personalizado para o tema escolhido. Composição histórica do kit: 1x Kit Bandeirolas (1º nome); 20x Balões Normais; 4x Mini Poster 20x28; 1x Topo de Bolo; 4x Display de Mesa 19cm; 1x Vela Normal Número; 20x Topper para Doces. Composição e valores atuais devem ser confirmados antes da venda.",
+          "multiproduto": false,
+          "curadoria_visual": true,
+          "produto_alto_giro": true,
+          "tipo_produto_sugerido": "Kit composto",
+          "composicao_kit": [
+            {
+              "quantidade": 1,
+              "produto_historico": "Kit Bandeirolas",
+              "unidade": "kit",
+              "observacao": "1º nome"
+            },
+            {
+              "quantidade": 20,
+              "produto_historico": "Balões Normais",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 4,
+              "produto_historico": "Mini Poster 20x28",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Topo de Bolo",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 4,
+              "produto_historico": "Display de Mesa 19cm",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Vela Normal Número",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 20,
+              "produto_historico": "Topper para Doces",
+              "unidade": "un",
+              "observacao": ""
+            }
+          ],
+          "revisao_preco_obrigatoria": true,
+          "observacao_comercial_historica": "Fazemos todos os temas"
+        },
+        {
+          "pagina": 6,
+          "preview": "assets/catalogos_legados/previews/kit_festa_2026_2s/p006.jpg",
+          "raw_text": "KIT\n                MESVERSÁRIO\n       01 und     TOPO de BOLO\n       01 kit    BANDEIROLAS\n       01 und     PORTA RETRATO DECORATIVO\n       20 unds TOPPERs PARA DOCES\n       20 unds FORMINHA PARA DOCE\n       06 unds CAIXA MILK\n\n\n\n                                   R$ 48,00\n\n\n\n\n                                   Foto do seu bebê!\n* Fazemos todos os temas !!! *",
+          "clean_text": "KIT\nMESVERSÁRIO\n01 und     TOPO de BOLO\n01 kit    BANDEIROLAS\n01 und     PORTA RETRATO DECORATIVO\n20 unds TOPPERs PARA DOCES\n20 unds FORMINHA PARA DOCE\n06 unds CAIXA MILK\nR$ 48,00\nFoto do seu bebê!\n* Fazemos todos os temas !!! *",
+          "precos_historicos": [
+            "48,00"
+          ],
+          "minimos_historicos": [],
+          "materiais_detectados": [],
+          "medidas_variacoes_detectadas": [],
+          "candidatos_produto": [
+            "Kit Mesversário"
+          ],
+          "nome_sugerido": "Kit Mesversário",
+          "descricao_sugerida": "Kit Mesversário personalizado para o tema escolhido. Composição histórica do kit: 1x Topo de Bolo; 1x Kit Bandeirolas; 1x Porta Retrato Decorativo; 20x Topper para Doces; 20x Forminha para Doce; 6x Caixa Milk. Composição e valores atuais devem ser confirmados antes da venda.",
+          "multiproduto": false,
+          "curadoria_visual": true,
+          "produto_alto_giro": true,
+          "tipo_produto_sugerido": "Kit composto",
+          "composicao_kit": [
+            {
+              "quantidade": 1,
+              "produto_historico": "Topo de Bolo",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Kit Bandeirolas",
+              "unidade": "kit",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Porta Retrato Decorativo",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 20,
+              "produto_historico": "Topper para Doces",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 20,
+              "produto_historico": "Forminha para Doce",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 6,
+              "produto_historico": "Caixa Milk",
+              "unidade": "un",
+              "observacao": ""
+            }
+          ],
+          "revisao_preco_obrigatoria": true,
+          "observacao_comercial_historica": "Fazemos todos os temas"
+        },
+        {
+          "pagina": 7,
+          "preview": "assets/catalogos_legados/previews/kit_festa_2026_2s/p007.jpg",
+          "raw_text": "KIT\n               FESTA SUPER\n         1 KIT BANDEIROLAS - 1º NOME\n         40 BALÕES NORMAIS\n         04 MINI POSTERS -20X28\n         01 TOPO de BOLO\n         04 DISPLAYS DE MESA -19CM\n         1 VELA - NORMAL NÚMERO\n         40 TOPPER PARA DOCES\n         40 FORMINHAS DOCES COM TEMA\n\n\n\n\n                                 R$ 65,00\n\n\n\n\n* Fazemos todos os temas !!! *",
+          "clean_text": "KIT\nFESTA SUPER\n1 KIT BANDEIROLAS - 1º NOME\n40 BALÕES NORMAIS\n04 MINI POSTERS -20X28\n01 TOPO de BOLO\n04 DISPLAYS DE MESA -19CM\n1 VELA - NORMAL NÚMERO\n40 TOPPER PARA DOCES\n40 FORMINHAS DOCES COM TEMA\nR$ 65,00\n* Fazemos todos os temas !!! *",
+          "precos_historicos": [
+            "65,00"
+          ],
+          "minimos_historicos": [],
+          "materiais_detectados": [],
+          "medidas_variacoes_detectadas": [],
+          "candidatos_produto": [
+            "Kit Festa Super"
+          ],
+          "nome_sugerido": "Kit Festa Super",
+          "descricao_sugerida": "Kit Festa Super personalizado para o tema escolhido. Composição histórica do kit: 1x Kit Bandeirolas (1º nome); 40x Balões Normais; 4x Mini Poster 20x28; 1x Topo de Bolo; 4x Display de Mesa 19cm; 1x Vela Normal Número; 40x Topper para Doces; 40x Forminha para Doces com Tema. Composição e valores atuais devem ser confirmados antes da venda.",
+          "multiproduto": false,
+          "curadoria_visual": true,
+          "produto_alto_giro": true,
+          "tipo_produto_sugerido": "Kit composto",
+          "composicao_kit": [
+            {
+              "quantidade": 1,
+              "produto_historico": "Kit Bandeirolas",
+              "unidade": "kit",
+              "observacao": "1º nome"
+            },
+            {
+              "quantidade": 40,
+              "produto_historico": "Balões Normais",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 4,
+              "produto_historico": "Mini Poster 20x28",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Topo de Bolo",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 4,
+              "produto_historico": "Display de Mesa 19cm",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Vela Normal Número",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 40,
+              "produto_historico": "Topper para Doces",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 40,
+              "produto_historico": "Forminha para Doces com Tema",
+              "unidade": "un",
+              "observacao": ""
+            }
+          ],
+          "revisao_preco_obrigatoria": true,
+          "observacao_comercial_historica": "Fazemos todos os temas"
+        },
+        {
+          "pagina": 8,
+          "preview": "assets/catalogos_legados/previews/kit_festa_2026_2s/p008.jpg",
+          "raw_text": "KIT\n        FESTA MINI PLUS\n         1 KIT BANDEIROLAS - 1º NOME\n         20 BALÕES NORMAIS\n         01 PAINEL 1 METRO REDONDO\n         01 TOPO de BOLO\n         02 DISPLAYS DE MESA -19CM\n         1 VELA - NORMAL NÚMERO\n         20 TOPPER PARA DOCES\n         20 FORMINHAS DOCES COM TEMA\n\n\n\n                                  R$ 110,00\n\n\n\n\n* Fazemos todos os temas !!! *",
+          "clean_text": "KIT\nFESTA MINI PLUS\n1 KIT BANDEIROLAS - 1º NOME\n20 BALÕES NORMAIS\n01 PAINEL 1 METRO REDONDO\n01 TOPO de BOLO\n02 DISPLAYS DE MESA -19CM\n1 VELA - NORMAL NÚMERO\n20 TOPPER PARA DOCES\n20 FORMINHAS DOCES COM TEMA\nR$ 110,00\n* Fazemos todos os temas !!! *",
+          "precos_historicos": [
+            "110,00"
+          ],
+          "minimos_historicos": [],
+          "materiais_detectados": [],
+          "medidas_variacoes_detectadas": [],
+          "candidatos_produto": [
+            "Kit Festa Mini Plus"
+          ],
+          "nome_sugerido": "Kit Festa Mini Plus",
+          "descricao_sugerida": "Kit Festa Mini Plus personalizado para o tema escolhido. Composição histórica do kit: 1x Kit Bandeirolas (1º nome); 20x Balões Normais; 1x Painel Redondo 1 Metro; 1x Topo de Bolo; 2x Display de Mesa 19cm; 1x Vela Normal Número; 20x Topper para Doces; 20x Forminha para Doces com Tema. Composição e valores atuais devem ser confirmados antes da venda.",
+          "multiproduto": false,
+          "curadoria_visual": true,
+          "produto_alto_giro": true,
+          "tipo_produto_sugerido": "Kit composto",
+          "composicao_kit": [
+            {
+              "quantidade": 1,
+              "produto_historico": "Kit Bandeirolas",
+              "unidade": "kit",
+              "observacao": "1º nome"
+            },
+            {
+              "quantidade": 20,
+              "produto_historico": "Balões Normais",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Painel Redondo 1 Metro",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Topo de Bolo",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 2,
+              "produto_historico": "Display de Mesa 19cm",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Vela Normal Número",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 20,
+              "produto_historico": "Topper para Doces",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 20,
+              "produto_historico": "Forminha para Doces com Tema",
+              "unidade": "un",
+              "observacao": ""
+            }
+          ],
+          "revisao_preco_obrigatoria": true,
+          "observacao_comercial_historica": "Fazemos todos os temas"
+        },
+        {
+          "pagina": 9,
+          "preview": "assets/catalogos_legados/previews/kit_festa_2026_2s/p009.jpg",
+          "raw_text": "KIT\n                 FESTA TOP\n           1 KIT BANDEIROLAS - 1º NOME\n           03 MINI POSTERS 20X28\n           01 TOPO de BOLO\n           02 DISPLAYS DE MESA -19CM\n           1 VELA - NORMAL NÚMERO\n           25 TOPPER PARA DOCES\n           10 CAIXAS MILK\n           10 CAIXAS CONE\n           10 PORTA BIS\n\n                                 R$ 120,00\n\n\n\n\n* Fazemos todos os temas !!! *",
+          "clean_text": "KIT\nFESTA TOP\n1 KIT BANDEIROLAS - 1º NOME\n03 MINI POSTERS 20X28\n01 TOPO de BOLO\n02 DISPLAYS DE MESA -19CM\n1 VELA - NORMAL NÚMERO\n25 TOPPER PARA DOCES\n10 CAIXAS MILK\n10 CAIXAS CONE\n10 PORTA BIS\nR$ 120,00\n* Fazemos todos os temas !!! *",
+          "precos_historicos": [
+            "120,00"
+          ],
+          "minimos_historicos": [],
+          "materiais_detectados": [],
+          "medidas_variacoes_detectadas": [],
+          "candidatos_produto": [
+            "Kit Festa Top"
+          ],
+          "nome_sugerido": "Kit Festa Top",
+          "descricao_sugerida": "Kit Festa Top personalizado para o tema escolhido. Composição histórica do kit: 1x Kit Bandeirolas (1º nome); 3x Mini Poster 20x28; 1x Topo de Bolo; 2x Display de Mesa 19cm; 1x Vela Normal Número; 25x Topper para Doces; 10x Caixa Milk; 10x Caixa Cone; 10x Porta Bis. Composição e valores atuais devem ser confirmados antes da venda.",
+          "multiproduto": false,
+          "curadoria_visual": true,
+          "produto_alto_giro": true,
+          "tipo_produto_sugerido": "Kit composto",
+          "composicao_kit": [
+            {
+              "quantidade": 1,
+              "produto_historico": "Kit Bandeirolas",
+              "unidade": "kit",
+              "observacao": "1º nome"
+            },
+            {
+              "quantidade": 3,
+              "produto_historico": "Mini Poster 20x28",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Topo de Bolo",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 2,
+              "produto_historico": "Display de Mesa 19cm",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Vela Normal Número",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 25,
+              "produto_historico": "Topper para Doces",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 10,
+              "produto_historico": "Caixa Milk",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 10,
+              "produto_historico": "Caixa Cone",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 10,
+              "produto_historico": "Porta Bis",
+              "unidade": "un",
+              "observacao": ""
+            }
+          ],
+          "revisao_preco_obrigatoria": true,
+          "observacao_comercial_historica": "Fazemos todos os temas"
+        },
+        {
+          "pagina": 10,
+          "preview": "assets/catalogos_legados/previews/kit_festa_2026_2s/p010.jpg",
+          "raw_text": "KIT\n           FESTA BOLINHO\n       1 KIT BANDEIROLAS - 1º NOME\n       03 MINI POSTERS 20X28\n       01 TOPO de BOLO\n       03 DISPLAYS DE MESA -19CM\n       1 VELA - NORMAL NÚMERO\n       50 TOPPER PARA DOCES\n       1 BALÃO BUBBLE PERSONALIZADO\n       TEMA - NOME- IDADE\n\n\n\n                                 R$ 105,00\n\n\n\n\n* Fazemos todos os temas !!! *",
+          "clean_text": "KIT\nFESTA BOLINHO\n1 KIT BANDEIROLAS - 1º NOME\n03 MINI POSTERS 20X28\n01 TOPO de BOLO\n03 DISPLAYS DE MESA -19CM\n1 VELA - NORMAL NÚMERO\n50 TOPPER PARA DOCES\n1 BALÃO BUBBLE PERSONALIZADO\nTEMA - NOME- IDADE\nR$ 105,00\n* Fazemos todos os temas !!! *",
+          "precos_historicos": [
+            "105,00"
+          ],
+          "minimos_historicos": [],
+          "materiais_detectados": [],
+          "medidas_variacoes_detectadas": [],
+          "candidatos_produto": [
+            "Kit Festa Bolinho"
+          ],
+          "nome_sugerido": "Kit Festa Bolinho",
+          "descricao_sugerida": "Kit Festa Bolinho personalizado para o tema escolhido. Composição histórica do kit: 1x Kit Bandeirolas (1º nome); 3x Mini Poster 20x28; 1x Topo de Bolo; 3x Display de Mesa 19cm; 1x Vela Normal Número; 50x Topper para Doces; 1x Balão Bubble Personalizado (Tema, nome e idade). Composição e valores atuais devem ser confirmados antes da venda.",
+          "multiproduto": false,
+          "curadoria_visual": true,
+          "produto_alto_giro": true,
+          "tipo_produto_sugerido": "Kit composto",
+          "composicao_kit": [
+            {
+              "quantidade": 1,
+              "produto_historico": "Kit Bandeirolas",
+              "unidade": "kit",
+              "observacao": "1º nome"
+            },
+            {
+              "quantidade": 3,
+              "produto_historico": "Mini Poster 20x28",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Topo de Bolo",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 3,
+              "produto_historico": "Display de Mesa 19cm",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Vela Normal Número",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 50,
+              "produto_historico": "Topper para Doces",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Balão Bubble Personalizado",
+              "unidade": "un",
+              "observacao": "Tema, nome e idade"
+            }
+          ],
+          "revisao_preco_obrigatoria": true,
+          "observacao_comercial_historica": "Fazemos todos os temas"
+        },
+        {
+          "pagina": 11,
+          "preview": "assets/catalogos_legados/previews/kit_festa_2026_2s/p011.jpg",
+          "raw_text": "KIT\n     FESTA SUPER TOP\n        1 KIT BANDEIROLAS - 1º NOME\n        01 PAINEL 1 METRO - REDONDO\n        01 TOPO de BOLO\n        04 DISPLAYS DE MESA -19CM\n        1 VELA - NORMAL NÚMERO\n        50 TOPPER PARA DOCES\n        10 CAIXAS MILK\n        10 CAIXAS CONE\n        10 PORTA BIS\n\n                                 R$ 180,00\n\n\n\n\n* Fazemos todos os temas !!! *",
+          "clean_text": "KIT\nFESTA SUPER TOP\n1 KIT BANDEIROLAS - 1º NOME\n01 PAINEL 1 METRO - REDONDO\n01 TOPO de BOLO\n04 DISPLAYS DE MESA -19CM\n1 VELA - NORMAL NÚMERO\n50 TOPPER PARA DOCES\n10 CAIXAS MILK\n10 CAIXAS CONE\n10 PORTA BIS\nR$ 180,00\n* Fazemos todos os temas !!! *",
+          "precos_historicos": [
+            "180,00"
+          ],
+          "minimos_historicos": [],
+          "materiais_detectados": [],
+          "medidas_variacoes_detectadas": [],
+          "candidatos_produto": [
+            "Kit Festa Super Top"
+          ],
+          "nome_sugerido": "Kit Festa Super Top",
+          "descricao_sugerida": "Kit Festa Super Top personalizado para o tema escolhido. Composição histórica do kit: 1x Kit Bandeirolas (1º nome); 1x Painel Redondo 1 Metro; 1x Topo de Bolo; 4x Display de Mesa 19cm; 1x Vela Normal Número; 50x Topper para Doces; 10x Caixa Milk; 10x Caixa Cone; 10x Porta Bis. Composição e valores atuais devem ser confirmados antes da venda.",
+          "multiproduto": false,
+          "curadoria_visual": true,
+          "produto_alto_giro": true,
+          "tipo_produto_sugerido": "Kit composto",
+          "composicao_kit": [
+            {
+              "quantidade": 1,
+              "produto_historico": "Kit Bandeirolas",
+              "unidade": "kit",
+              "observacao": "1º nome"
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Painel Redondo 1 Metro",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Topo de Bolo",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 4,
+              "produto_historico": "Display de Mesa 19cm",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 1,
+              "produto_historico": "Vela Normal Número",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 50,
+              "produto_historico": "Topper para Doces",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 10,
+              "produto_historico": "Caixa Milk",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 10,
+              "produto_historico": "Caixa Cone",
+              "unidade": "un",
+              "observacao": ""
+            },
+            {
+              "quantidade": 10,
+              "produto_historico": "Porta Bis",
+              "unidade": "un",
+              "observacao": ""
+            }
+          ],
+          "revisao_preco_obrigatoria": true,
+          "observacao_comercial_historica": "Fazemos todos os temas"
+        }
+      ]
+    },
+    {
       "filename": "Catálogo Alphafest COPOS.pdf",
       "id": "copos",
       "titulo": "Copos",
@@ -6360,8 +7077,9 @@
     }
   ],
   "estatisticas": {
-    "paginas": 236,
+    "paginas": 247,
     "paginas_preco": 158,
-    "paginas_minimo": 92
+    "paginas_minimo": 92,
+    "catalogos": 14
   }
 }

@@ -18761,6 +18761,12 @@ def thu_i8_fonte_historica(catalogo_fonte, pagina_fonte, nome_candidato=""):
         "variacoes_detectadas": list(pagina_fonte.get("medidas_variacoes_detectadas", []) or []),
         "campanhas_sugeridas": list(catalogo_fonte.get("campanhas_hint", []) or []),
         "pagina_multiproduto": bool(pagina_fonte.get("multiproduto")),
+        # CAT1 — kits antigos de alto giro preservam a composição como referência
+        # estrutural. Isto não cria baixa de estoque e não altera preço oficial.
+        "produto_alto_giro": bool(pagina_fonte.get("produto_alto_giro")),
+        "tipo_produto_sugerido": str(pagina_fonte.get("tipo_produto_sugerido") or ""),
+        "composicao_kit": [dict(x) for x in (pagina_fonte.get("composicao_kit") or []) if isinstance(x, dict)],
+        "revisao_preco_obrigatoria": bool(pagina_fonte.get("revisao_preco_obrigatoria")),
         "registrado_em": agora_local().isoformat(timespec="seconds"),
         "usuario": obter_usuario_atual(),
         "regra_quantidade_minima": "Não utilizada pela AlphaFest atual",
@@ -18861,6 +18867,12 @@ def thu_i8_preparar_cadastro_novo(catalogo_id, pagina, nome_candidato=""):
         "precos_historicos": list(pg.get("precos_historicos", []) or []),
         "preview_historico": str(pg.get("preview") or ""),
         "pagina_multiproduto": bool(_multiproduto),
+        # CAT1 — metadados de kit composto ficam no prefill para revisão humana.
+        "produto_alto_giro": bool(pg.get("produto_alto_giro")),
+        "tipo_produto_sugerido": str(pg.get("tipo_produto_sugerido") or ""),
+        "composicao_kit": [dict(x) for x in (pg.get("composicao_kit") or []) if isinstance(x, dict)],
+        "revisao_preco_obrigatoria": bool(pg.get("revisao_preco_obrigatoria")),
+        "preco_historico_principal": str(((pg.get("precos_historicos") or [""])[0]) or ""),
         "recorte_historico_url": str((recorte_pendente or {}).get("url") or ""),
         "recorte_historico_meta": dict(recorte_pendente or {}),
         "fonte": fonte,
@@ -19268,6 +19280,13 @@ def renderizar_acervo_catalogos_legados():
     if not cat_fonte:
         return
 
+    if cat_fonte.get("alta_rotatividade"):
+        st.success(
+            "⚡ **Linha de alto giro — Kit Festa.** Este catálogo foi priorizado porque reúne "
+            "produtos de venda recorrente. A composição dos kits foi estruturada para reaproveitamento; "
+            "os preços do PDF continuam apenas como referência histórica."
+        )
+
     cmeta1, cmeta2, cmeta3 = st.columns(3)
     cmeta1.write(f"**Tipo:** {cat_fonte.get('tipo') or 'Acervo'}")
     cmeta2.write(f"**Grupo sugerido:** {cat_fonte.get('categoria_hint') or '—'}")
@@ -19398,6 +19417,19 @@ def renderizar_acervo_catalogos_legados():
         vars_pg = list(pg.get("medidas_variacoes_detectadas", []) or [])
         if vars_pg:
             st.caption("🔀 Medidas/opções detectadas: " + " • ".join(vars_pg[:15]))
+        _cat1_comps_pg = [x for x in (pg.get("composicao_kit") or []) if isinstance(x, dict)]
+        if _cat1_comps_pg:
+            st.markdown("##### 🎁 Composição estruturada do kit")
+            for _cat1_comp in _cat1_comps_pg:
+                _cat1_obs = str(_cat1_comp.get("observacao") or "").strip()
+                st.write(
+                    f"• **{_cat1_comp.get('quantidade', 0):g}× {_cat1_comp.get('produto_historico', 'Item')}**"
+                    + (f" • {_cat1_obs}" if _cat1_obs else "")
+                )
+            st.caption(
+                "Ao preparar um cadastro novo, esta composição acompanha o kit. "
+                "Nenhum componente é criado automaticamente no Catálogo Oficial."
+            )
         if camp_hint:
             st.caption(
                 "📅 Evidência histórica de campanha/ocasião: "
@@ -19502,7 +19534,7 @@ def renderizar_acervo_catalogos_legados():
 
                 _match_exato = sug.get("status") == "oficial"
                 if n3.button(
-                    "✅ Já existe" if _match_exato else "🆕 Preparar cadastro",
+                    "✅ Já existe" if _match_exato else ("⚡ Preparar kit" if pg.get("composicao_kit") else "🆕 Preparar cadastro"),
                     key=f"thu_i8_novo_{catalogo_id}_{pg.get('pagina')}_{pos}_{abs(hash(nome))}",
                     use_container_width=True,
                     disabled=_match_exato,
@@ -27641,6 +27673,32 @@ if pagina_atual == "catalogo":
                     + " • ".join(_i8_campaigns)
                     + ". Marque abaixo somente as que continuam válidas hoje."
                 )
+            # CAT1 — linha Kit Festa de alto giro. A composição histórica é
+            # preservada e revisável; preço antigo nunca preenche o preço oficial.
+            if prefill_i8.get("produto_alto_giro"):
+                st.success("⚡ Linha de alto giro AlphaFest • Kit Festa")
+            _cat1_composicao_prefill = [
+                dict(x) for x in (prefill_i8.get("composicao_kit") or []) if isinstance(x, dict)
+            ]
+            if _cat1_composicao_prefill:
+                with st.expander(
+                    f"🎁 Composição histórica do kit ({len(_cat1_composicao_prefill)} item(ns))",
+                    expanded=True,
+                ):
+                    for _cat1_comp in _cat1_composicao_prefill:
+                        _q = _cat1_comp.get("quantidade", 0)
+                        _n = str(_cat1_comp.get("produto_historico") or "Item")
+                        _o = str(_cat1_comp.get("observacao") or "").strip()
+                        st.write(f"• **{_q:g}× {_n}**" + (f" • {_o}" if _o else ""))
+                    st.caption(
+                        "A composição será salva como estrutura do kit. O vínculo de cada componente "
+                        "com produtos oficiais poderá ser saneado sem criar duplicidades."
+                    )
+                if prefill_i8.get("revisao_preco_obrigatoria"):
+                    st.warning(
+                        "💰 Produto de alto giro: confirme o preço atual antes de vender. "
+                        "O valor antigo permanece somente no histórico."
+                    )
 
         _i8_usar_foto_historica = False
         _i8_preview_historico = None
@@ -28152,6 +28210,24 @@ if pagina_atual == "catalogo":
                     "AtualizadoEm": agora_local().isoformat(timespec="seconds"),
                 })
 
+                # CAT1 — ao cadastrar um Kit Festa vindo do acervo, preserva a
+                # composição como dado estrutural, mas não transforma o preço antigo
+                # em preço oficial e não cria consumo de estoque automaticamente.
+                if prefill_i8 and prefill_i8.get("composicao_kit"):
+                    _cat1_comps_salvar = [
+                        dict(x) for x in (prefill_i8.get("composicao_kit") or []) if isinstance(x, dict)
+                    ]
+                    registro["TipoProduto"] = str(prefill_i8.get("tipo_produto_sugerido") or "Kit composto")
+                    registro["KitComposto"] = True
+                    registro["ComposicaoKit"] = _cat1_comps_salvar
+                    registro["LinhaAltoGiro"] = bool(prefill_i8.get("produto_alto_giro"))
+                    registro["PrioridadeComercial"] = "Alta" if prefill_i8.get("produto_alto_giro") else registro.get("PrioridadeComercial", "")
+                    registro["PrecoHistoricoReferencia"] = str(prefill_i8.get("preco_historico_principal") or "")
+                    registro["RevisaoPrecoHistoricoPendente"] = bool(
+                        prefill_i8.get("revisao_preco_obrigatoria") and not str(preco_cat or "").strip()
+                    )
+                    registro["ComposicaoKitOrigem"] = "Catálogo histórico AlphaFest • revisão humana"
+
                 _fonte_i8_novo = (
                     dict(st.session_state.get("_thu_i8_fonte_pendente_novo") or {})
                     if not item_edicao
@@ -28345,6 +28421,22 @@ if pagina_atual == "catalogo":
                     aliases_lista = [str(x).strip() for x in (produto_cat.get("Aliases", []) or []) if str(x).strip()]
                     if aliases_lista:
                         cinfo.caption("🔗 Aliases: " + " • ".join(aliases_lista))
+                    if produto_cat.get("KitComposto"):
+                        _cat1_comp_lista = [
+                            x for x in (produto_cat.get("ComposicaoKit") or []) if isinstance(x, dict)
+                        ]
+                        cinfo.caption(
+                            "🎁 Kit composto: "
+                            + " • ".join(
+                                f"{x.get('quantidade', 0):g}× {x.get('produto_historico', 'Item')}"
+                                for x in _cat1_comp_lista[:7]
+                            )
+                            + (" • + itens" if len(_cat1_comp_lista) > 7 else "")
+                        )
+                    if produto_cat.get("LinhaAltoGiro"):
+                        cinfo.success("⚡ Linha de alto giro")
+                    if produto_cat.get("RevisaoPrecoHistoricoPendente"):
+                        cinfo.warning("💰 Preço atual pendente de revisão")
 
                     # Estatísticas históricas consolidadas pelo nome oficial + aliases.
                     orcado_qtd = 0.0
