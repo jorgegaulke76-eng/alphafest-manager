@@ -18819,6 +18819,28 @@ def thu_i8_adicionar_fonte_ao_produto(produto, fonte):
     return registro
 
 
+def _cat1_token_rascunho(catalogo_id, pagina, nome_candidato):
+    """CAT1-HF2: identidade estável de um cadastro preparado pelo Acervo.
+
+    Cada produto histórico recebe um token próprio. Isso impede que widgets do
+    Streamlit de um Kit Festa reaproveitem o estado do kit salvo anteriormente.
+    """
+    base = "|".join([
+        str(catalogo_id or "").strip(),
+        str(int(pagina or 0)),
+        normalizar_identidade_produto(nome_candidato),
+    ])
+    return hashlib.sha1(base.encode("utf-8")).hexdigest()[:12]
+
+
+def _cat1_limpar_widgets_novo_catalogo():
+    """Remove apenas estados temporários de cadastro NOVO do Catálogo."""
+    for chave in list(st.session_state.keys()):
+        txt = str(chave)
+        if txt.startswith("cat_") and (txt.endswith("_novo") or "_novo_" in txt):
+            st.session_state.pop(chave, None)
+
+
 def thu_i8_preparar_cadastro_novo(catalogo_id, pagina, nome_candidato=""):
     acervo = thu_i8_carregar_acervo_estatico()
     cat_fonte, pg = thu_i8_pagina(catalogo_id, pagina, acervo=acervo)
@@ -18846,12 +18868,13 @@ def thu_i8_preparar_cadastro_novo(catalogo_id, pagina, nome_candidato=""):
     fonte = thu_i8_fonte_historica(cat_fonte, pg, nome)
     recorte_pendente = thu_i85_recorte_pendente(catalogo_id, pagina, nome)
 
-    # Limpa somente widgets do novo cadastro para o prefill entrar de forma previsível.
-    for chave in list(st.session_state.keys()):
-        if str(chave).startswith("cat_") and str(chave).endswith("_novo"):
-            st.session_state.pop(chave, None)
+    # CAT1-HF2: cada item do Acervo abre um rascunho isolado. Antes de preparar
+    # o próximo, removemos qualquer estado temporário de cadastro novo anterior.
+    _cat1_limpar_widgets_novo_catalogo()
+    _draft_token = _cat1_token_rascunho(catalogo_id, pagina, nome)
 
     st.session_state["_thu_i8_prefill_catalogo"] = {
+        "draft_token": _draft_token,
         "nome": nome,
         "categoria": str(cat_fonte.get("categoria_hint") or ""),
         "subcategoria": str(cat_fonte.get("subcategoria_hint") or ""),
@@ -27628,7 +27651,14 @@ if pagina_atual == "catalogo":
             if indice_edicao is None
             else {}
         )
-        sufixo = str(indice_edicao) if indice_edicao is not None else "novo"
+        # CAT1-HF2: um novo produto vindo do Acervo não compartilha mais a
+        # identidade de widget genérica "novo". Cada kit usa seu próprio token.
+        if indice_edicao is not None:
+            sufixo = str(indice_edicao)
+        elif prefill_i8.get("draft_token"):
+            sufixo = f"novo_{str(prefill_i8.get('draft_token')).strip()}"
+        else:
+            sufixo = "novo"
         pendente = st.session_state.pop(f"cat_geracao_pendente_{sufixo}", None)
         if isinstance(pendente, dict):
             mapa_campos = {
@@ -28129,6 +28159,25 @@ if pagina_atual == "catalogo":
             if not nome_cat.strip() or not categoria_cat.strip():
                 st.warning("Informe pelo menos o nome e a categoria.")
             else:
+                # CAT1-HF2: cadastro NOVO nunca pode reutilizar silenciosamente
+                # a identidade de um produto já salvo. Se o nome/alias já existe,
+                # bloqueia e orienta editar o cadastro existente.
+                _identidade_novo_cat = normalizar_identidade_produto(nome_cat)
+                _mapa_existente_cat = mapa_identidade_produtos(catalogo)
+                _conflito_novo_cat = (
+                    not item_edicao
+                    and bool(_identidade_novo_cat)
+                    and _identidade_novo_cat in _mapa_existente_cat
+                )
+                if _conflito_novo_cat:
+                    _existente_cat = _mapa_existente_cat.get(_identidade_novo_cat)
+                    _nome_existente_cat = str(_existente_cat or nome_cat).strip()
+                    st.error(
+                        f"Este cadastro não foi salvo porque **{_nome_existente_cat}** já existe no Catálogo Oficial. "
+                        "Volte ao Acervo e use Revisar existente; nenhum produto foi sobrescrito."
+                    )
+                    return
+
                 if substituir_fotos_cat:
                     imagens = []
                 else:
@@ -28288,6 +28337,14 @@ if pagina_atual == "catalogo":
                 if item_edicao:
                     catalogo[indice_edicao] = registro
                 else:
+                    # CAT1-HF2: novos produtos recebem identidade persistente
+                    # própria, independente da posição na lista.
+                    registro.setdefault(
+                        "CatalogoId",
+                        f"CAT-{agora_local().strftime('%Y%m%d%H%M%S%f')}-{secrets.token_hex(3).upper()}",
+                    )
+                    if prefill_i8.get("draft_token"):
+                        registro["ImportacaoAcervoToken"] = str(prefill_i8.get("draft_token"))
                     registro["CriadoEm"] = agora_local().isoformat(timespec="seconds")
                     catalogo.append(registro)
                 salvar_catalogo(catalogo)
@@ -28300,6 +28357,11 @@ if pagina_atual == "catalogo":
                     )
                     st.session_state.pop("_thu_i8_prefill_catalogo", None)
                     st.session_state.pop("_thu_i8_fonte_pendente_novo", None)
+                    # CAT1-HF2: elimina o estado visual deste rascunho antes de
+                    # abrir outro Kit Festa. O próximo cadastro nasce limpo.
+                    for _chave_cat1 in list(st.session_state.keys()):
+                        if str(_chave_cat1).startswith("cat_") and str(_chave_cat1).endswith(f"_{sufixo}"):
+                            st.session_state.pop(_chave_cat1, None)
                     st.session_state["_thu_i8_feedback"] = (
                         f"✅ {nome_cat.strip()} foi SALVO no Catálogo Oficial. "
                         "A fonte histórica ficou vinculada e o preço antigo permaneceu somente como histórico."
