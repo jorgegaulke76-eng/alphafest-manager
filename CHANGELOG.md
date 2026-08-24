@@ -752,3 +752,8 @@ hangelog
 - Catálogo continua obrigatório apenas para itens comerciais sem vínculo seguro.
 - Materiais listados no pedido não geram consumo duplicado; reserva segue Ficha Técnica ou decisão manual.
 - Ambiguidade de nomes no Estoque continua bloqueada para não escolher material incorreto.
+
+## 20.4.9-I8.13.2-CAT1-HF4
+- Novo Orçamento: seleção pesquisável do Catálogo Oficial + digitação livre.
+- Busca inclui aliases e salva o nome oficial quando há correspondência segura.
+- Produto novo continua permitido sem cadastro prévio.

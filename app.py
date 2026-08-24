@@ -10261,6 +10261,131 @@ def mapa_identidade_produtos(catalogo):
     return mapa
 
 
+ORCAMENTO_PRODUTO_LIVRE = "✍️ Digitar produto que não está no catálogo"
+
+
+def _orcamento_opcoes_produto_catalogo(catalogo=None):
+    """CAT1-HF4: opções pesquisáveis de produto para orçamento.
+
+    O selectbox do Streamlit já permite digitar para filtrar. Incluímos também
+    aliases como rótulos pesquisáveis, mas sempre devolvendo o nome oficial.
+    Isso reduz nomes diferentes para o mesmo produto sem impedir texto livre.
+    """
+    catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
+    opcoes = [ORCAMENTO_PRODUTO_LIVRE]
+    mapa_rotulo = {}
+    vistos = set()
+
+    for produto in catalogo:
+        if not isinstance(produto, dict) or produto.get("Ativo") is False:
+            continue
+        oficial = str(produto.get("Nome") or "").strip()
+        if not oficial:
+            continue
+        chave_oficial = normalizar_identidade_produto(oficial)
+        if chave_oficial and chave_oficial not in vistos:
+            vistos.add(chave_oficial)
+            opcoes.append(oficial)
+            mapa_rotulo[oficial] = oficial
+
+    # Aliases aparecem como opções auxiliares para que a busca encontre nomes
+    # usados no balcão, mas a proposta salva sempre o nome oficial.
+    for produto in catalogo:
+        if not isinstance(produto, dict) or produto.get("Ativo") is False:
+            continue
+        oficial = str(produto.get("Nome") or "").strip()
+        if not oficial:
+            continue
+        for alias in _aliases_catalogo_atomicos(produto):
+            alias = str(alias or "").strip()
+            if not alias or normalizar_identidade_produto(alias) == normalizar_identidade_produto(oficial):
+                continue
+            rotulo = f"{alias}  →  {oficial}"
+            chave_rotulo = normalizar_identidade_produto(rotulo)
+            if chave_rotulo in vistos:
+                continue
+            vistos.add(chave_rotulo)
+            opcoes.append(rotulo)
+            mapa_rotulo[rotulo] = oficial
+
+    return opcoes, mapa_rotulo
+
+
+def _orcamento_resolver_produto(escolha_catalogo, texto_livre, catalogo=None):
+    """Resolve a entrada híbrida sem bloquear produto novo.
+
+    Ordem: escolha explícita do catálogo -> nome/alias exato digitado -> texto livre.
+    Retorna (nome_para_proposta, metadados).
+    """
+    catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
+    opcoes, mapa_rotulo = _orcamento_opcoes_produto_catalogo(catalogo)
+    escolha = str(escolha_catalogo or "").strip()
+    digitado = str(texto_livre or "").strip()
+
+    oficial = ""
+    origem = "livre"
+    digitado_original = digitado
+
+    if escolha and escolha != ORCAMENTO_PRODUTO_LIVRE:
+        oficial = str(mapa_rotulo.get(escolha) or escolha).strip()
+        origem = "catalogo"
+    elif digitado:
+        mapa = mapa_identidade_produtos(catalogo)
+        resolvido = str(mapa.get(normalizar_identidade_produto(digitado)) or "").strip()
+        if resolvido:
+            oficial = resolvido
+            origem = "catalogo_alias" if normalizar_identidade_produto(resolvido) != normalizar_identidade_produto(digitado) else "catalogo"
+        else:
+            oficial = digitado
+            origem = "livre"
+
+    produto_obj = None
+    if oficial and origem != "livre":
+        chave = normalizar_identidade_produto(oficial)
+        produto_obj = next((x for x in catalogo if isinstance(x, dict) and normalizar_identidade_produto(x.get("Nome")) == chave), None)
+
+    meta = {
+        "origem": origem,
+        "digitado": digitado_original,
+        "catalogo_id": str((produto_obj or {}).get("CatalogoId") or (produto_obj or {}).get("id") or ""),
+        "produto_oficial": oficial if origem != "livre" else "",
+    }
+    return oficial, meta
+
+
+def _orcamento_campos_produto(prefixo, *, em_form=False):
+    """Renderiza seleção pesquisável + texto livre para Jorge e Anna."""
+    catalogo = carregar_catalogo()
+    opcoes, _ = _orcamento_opcoes_produto_catalogo(catalogo)
+    escolha = st.selectbox(
+        "🔎 Produto do Catálogo Oficial (opcional)",
+        opcoes,
+        index=0,
+        key=f"{prefixo}_catalogo",
+        help=(
+            "Clique e comece a digitar para pesquisar nome oficial ou alias. "
+            "Se o produto ainda não existir no Catálogo, deixe na primeira opção e digite livremente abaixo."
+        ),
+    )
+    digitado = st.text_input(
+        "✍️ Produto livre / novo",
+        key=f"{prefixo}_livre",
+        placeholder="Digite somente se não encontrou no Catálogo Oficial",
+        help="Se você escolher um produto acima, esta digitação é ignorada. Nomes/aliases exatos já conhecidos são normalizados automaticamente.",
+    )
+    produto, meta = _orcamento_resolver_produto(escolha, digitado, catalogo)
+    if produto:
+        if meta.get("origem") == "catalogo_alias":
+            st.caption(f"✅ Nome reconhecido no Catálogo e padronizado como: **{produto}**")
+        elif meta.get("origem") == "catalogo":
+            st.caption(f"✅ Produto oficial selecionado: **{produto}**")
+        else:
+            st.caption(f"✍️ Produto livre: **{produto}** — poderá ser saneado/cadastrado depois, sem bloquear o orçamento.")
+    else:
+        st.caption("💡 Pesquise no Catálogo acima ou digite um produto livre abaixo.")
+    return produto, meta
+
+
 def _tokens_saneamento_produto(valor):
     """Tokens conservadores para correlacionar nomes parecidos sem alterar o Catálogo.
 
@@ -14527,7 +14652,7 @@ def dialog_orcamento_anna(proposta=None):
     # já executa isoladamente; por isso quantidade e valor podem recalcular a prévia
     # sem atualizar os indicadores e sem sair da janela.
     chave_item_i8113 = st.session_state.get("anna_modal_item_key", 0)
-    prod = st.text_input("Produto", key=f"anna_modal_prod_{chave_item_i8113}")
+    prod, prod_meta_i8113 = _orcamento_campos_produto(f"anna_modal_prod_{chave_item_i8113}")
     with st.expander("🎨 Personalização & Especificações", expanded=True):
         e1, e2 = st.columns(2)
         tema = e1.text_input("Tema / Ocasião", key=f"anna_modal_tema_{chave_item_i8113}")
@@ -14570,7 +14695,12 @@ def dialog_orcamento_anna(proposta=None):
             st.warning("Informe o produto antes de adicionar.")
         else:
             detalhes = f"Tema: {tema} | Nome: {nome_item} | Idade: {idade} | Cor: {cor} | Obs: {obs}"
-            item_novo = {"produto": prod.strip(), "especificacoes": detalhes, "quantidade": q, "valor_unitario": v}
+            item_novo = {
+                "produto": prod.strip(), "especificacoes": detalhes, "quantidade": q, "valor_unitario": v,
+                "produto_origem": prod_meta_i8113.get("origem", "livre"),
+                "produto_digitado": prod_meta_i8113.get("digitado", ""),
+                "produto_catalogo_id": prod_meta_i8113.get("catalogo_id", ""),
+            }
             cliente_item_i811 = localizar_cliente_comercial(nome, doc, wa)
             preco_item_i811 = calcular_preco_cliente_item(cliente_item_i811, prod.strip(), v) if cliente_item_i811 else None
             if preco_item_i811 and preco_item_i811.get("bloqueado"):
@@ -24279,7 +24409,7 @@ if pagina_atual == "novo_orcamento":
     # O formulário de ITEM continua isolado para não recalcular a tela enquanto
     # Jorge digita tema, nome, cor e demais especificações.
     with st.form(key=f"form_item_orcamento_{st.session_state.form_key}", clear_on_submit=False):
-        prod = st.text_input("Produto", key=f"produto_novo_{st.session_state.form_key}")
+        prod, prod_meta_i8113 = _orcamento_campos_produto(f"produto_novo_{st.session_state.form_key}", em_form=True)
         with st.expander("🎨 Personalização & Especificações", expanded=True):
             c1, c2 = st.columns(2)
             et = c1.text_input("Tema / Ocasião", key=f"tema_{st.session_state.form_key}")
@@ -24299,7 +24429,12 @@ if pagina_atual == "novo_orcamento":
             detalhes = f"Tema: {et} | Nome: {en} | Idade: {ei} | Cor: {ec} | Obs: {eg}"
             cliente_i811 = localizar_cliente_comercial(nome, doc, wa)
             preco_i811 = calcular_preco_cliente_item(cliente_i811, prod, v) if cliente_i811 else None
-            item_novo = {"produto": prod, "especificacoes": detalhes, "quantidade": q, "valor_unitario": v}
+            item_novo = {
+                "produto": prod, "especificacoes": detalhes, "quantidade": q, "valor_unitario": v,
+                "produto_origem": prod_meta_i8113.get("origem", "livre"),
+                "produto_digitado": prod_meta_i8113.get("digitado", ""),
+                "produto_catalogo_id": prod_meta_i8113.get("catalogo_id", ""),
+            }
             if preco_i811 and preco_i811.get("bloqueado"):
                 st.error(
                     f"🛑 Regra comercial inválida para {preco_i811.get('produto_oficial')}: "
