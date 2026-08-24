@@ -4054,6 +4054,31 @@ def _i8122_material_por_id(dados, material_id):
     return next((m for m in (dados.get("materiais") or []) if str(m.get("id")) == str(material_id)), None)
 
 
+def _i8132_material_estoque_por_nome_unico(dados, nome):
+    """Resolve um item diretamente no cadastro de Materiais/Estoque.
+
+    I8.13.2-HF3: material operacional não é produto comercial. Portanto, quando
+    um item de proposta não existe no Catálogo Oficial, mas coincide de forma
+    inequívoca com UM material ativo do estoque, ele pode ser tratado como
+    material/insumo sem exigir cadastro no Catálogo de vendas.
+
+    Retorna (material_unico_ou_None, candidatos). Em caso de nomes duplicados
+    no estoque, não escolhe no chute.
+    """
+    chave = _i8121_chave_item(nome)
+    if not chave:
+        return None, []
+    candidatos = [
+        m for m in ((dados or {}).get("materiais") or [])
+        if isinstance(m, dict)
+        and m.get("ativo", True)
+        and _i8121_chave_item(m.get("nome")) == chave
+    ]
+    if len(candidatos) == 1:
+        return candidatos[0], candidatos
+    return None, candidatos
+
+
 def _i8122_garantir_material(dados, nome, unidade, usuario="Jorge", estoque_minimo=None):
     nome = str(nome or "").strip()
     unidade = str(unidade or "un").strip() or "un"
@@ -4649,6 +4674,8 @@ def _i8124_montar_previa_pedido(proposta, catalogo=None, fichas=None, estoque=No
     produtos = []
     sem_ficha = []
     sem_catalogo = []
+    materiais_estoque_pedido = []
+    materiais_estoque_ambiguos = []
     correlacoes_saneadas = []
     for indice_item, item in enumerate(proposta.get("itens") or []):
         nome_item = str((item or {}).get("produto") or "").strip()
@@ -4657,6 +4684,26 @@ def _i8124_montar_previa_pedido(proposta, catalogo=None, fichas=None, estoque=No
             continue
         idx_prod, produto, resolucao_prod = _resolver_produto_catalogo_saneado(nome_item, catalogo)
         if produto is None:
+            # HF3 — antes de declarar "sem Catálogo", verifica se este item é
+            # um material/insumo ativo do Estoque. Material operacional não precisa
+            # virar produto de venda apenas para liberar reserva/produção.
+            material_estoque, candidatos_material = _i8132_material_estoque_por_nome_unico(estoque, nome_item)
+            if material_estoque is not None:
+                materiais_estoque_pedido.append({
+                    "item_indice": indice_item,
+                    "item": nome_item,
+                    "quantidade_item": qtd_produto,
+                    "material_id": str(material_estoque.get("id") or ""),
+                    "material_nome": str(material_estoque.get("nome") or nome_item),
+                    "unidade": str(material_estoque.get("unidade") or ""),
+                })
+                # O item de estoque reconhecido NÃO cria consumo extra sozinho.
+                # A quantidade a reservar continua vindo da Ficha Técnica escolhida
+                # ou da decisão manual deste pedido, evitando baixa duplicada quando
+                # o material já compõe o produto comercial principal.
+                continue
+            if len(candidatos_material) > 1:
+                materiais_estoque_ambiguos.append(nome_item)
             sem_catalogo.append(nome_item)
             continue
         if (resolucao_prod or {}).get("modo") in {"alias_confirmado", "saneamento_seguro"}:
@@ -4710,6 +4757,8 @@ def _i8124_montar_previa_pedido(proposta, catalogo=None, fichas=None, estoque=No
         "necessidades": necessidades,
         "sem_ficha": list(dict.fromkeys(sem_ficha)),
         "sem_catalogo": list(dict.fromkeys(sem_catalogo)),
+        "materiais_estoque_pedido": materiais_estoque_pedido,
+        "materiais_estoque_ambiguos": list(dict.fromkeys(materiais_estoque_ambiguos)),
         "correlacoes_saneadas": correlacoes_saneadas,
         "assinatura": assinatura,
     }
@@ -5011,8 +5060,9 @@ def _i8124_confirmar_consumo_pedido(proposta, aceitar_sem_ficha=False, usuario=N
     - manual_pedido: usa materiais/quantidades definidos apenas para este pedido;
     - sem_consumo: libera o pedido sem reserva/baixa de estoque controlado.
 
-    O vínculo seguro com o Catálogo continua obrigatório para preservar a
-    identidade comercial do item. A decisão de consumo fica registrada no
+    O vínculo seguro com o Catálogo continua obrigatório somente para item
+    comercial. Item reconhecido de forma inequívoca como Material/Estoque não
+    precisa virar produto de venda. A decisão de consumo fica registrada no
     consumo_pedidos_db, nunca altera Catálogo/Ficha Técnica/proposta original.
     """
     if not isinstance(proposta, dict) or not str(proposta.get("numero_proposta") or "").strip():
@@ -5101,6 +5151,7 @@ def _i8124_confirmar_consumo_pedido(proposta, aceitar_sem_ficha=False, usuario=N
         "necessidades": necessidades,
         "itens_sem_ficha_confirmados": previa.get("sem_ficha") or [],
         "itens_sem_catalogo_confirmados": previa.get("sem_catalogo") or [],
+        "itens_materiais_estoque_reconhecidos": previa.get("materiais_estoque_pedido") or [],
         "assinatura_confirmada": assinatura,
         "modo_consumo": modo,
         "modo_consumo_descricao": detalhe_modo,
@@ -10469,9 +10520,15 @@ def filtrar_aliases_validos_produto(produto_oficial, aliases, catalogo, indice_i
 
 
 
-def produtos_proposta_sem_catalogo(proposta, catalogo=None):
-    """20.4.9-I8.12.4-HF1 — ausentes após aplicar a mesma resolução do Saneamento."""
+def produtos_proposta_sem_catalogo(proposta, catalogo=None, estoque=None):
+    """Ausentes comerciais após Saneamento, sem confundir materiais com produtos.
+
+    I8.13.2-HF3: um item que não existe no Catálogo, mas corresponde de forma
+    inequívoca a um material ativo do Estoque, não é considerado produto comercial
+    ausente e não deve sugerir cadastro no Catálogo Oficial.
+    """
     catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
+    estoque = carregar_estoque() if estoque is None else (estoque or {})
     ausentes = []
     vistos = set()
 
@@ -10485,6 +10542,9 @@ def produtos_proposta_sem_catalogo(proposta, catalogo=None):
         _, produto, _ = _resolver_produto_catalogo_saneado(nome, catalogo)
         if produto is not None:
             continue
+        material_estoque, _ = _i8132_material_estoque_por_nome_unico(estoque, nome)
+        if material_estoque is not None:
+            continue
         if chave in vistos:
             continue
         vistos.add(chave)
@@ -10496,7 +10556,26 @@ def produtos_proposta_sem_catalogo(proposta, catalogo=None):
 def renderizar_alerta_thu_produto_sem_catalogo(proposta, prefixo="thu_sem_catalogo"):
     """Comunica ausência real ou correlação segura do Saneamento sem duplicar produto."""
     catalogo = carregar_catalogo()
-    ausentes = produtos_proposta_sem_catalogo(proposta, catalogo=catalogo)
+    estoque_thu = carregar_estoque()
+    ausentes = produtos_proposta_sem_catalogo(proposta, catalogo=catalogo, estoque=estoque_thu)
+    materiais_thu = []
+    vistos_materiais_thu = set()
+    for item_thu in (proposta or {}).get("itens", []) or []:
+        nome_thu = str((item_thu or {}).get("produto") or "").strip()
+        if not nome_thu:
+            continue
+        _, prod_thu, _ = _resolver_produto_catalogo_saneado(nome_thu, catalogo)
+        if prod_thu is not None:
+            continue
+        mat_thu, _ = _i8132_material_estoque_por_nome_unico(estoque_thu, nome_thu)
+        if mat_thu is None:
+            continue
+        chave_thu = _i8121_chave_item(mat_thu.get("nome"))
+        if chave_thu and chave_thu not in vistos_materiais_thu:
+            vistos_materiais_thu.add(chave_thu)
+            materiais_thu.append(str(mat_thu.get("nome") or nome_thu))
+    if materiais_thu:
+        st.caption("📦 THU Estoque: " + " • ".join(materiais_thu) + " — material/insumo operacional; não exige cadastro no Catálogo Oficial.")
     correlacoes = []
     vistos_corr = set()
     for item in (proposta or {}).get("itens", []) or []:
@@ -26135,10 +26214,29 @@ if pagina_atual == "compras_custos":
                                 f"{detalhe_corr_i8124}. A proposta original não foi alterada."
                             )
 
+                materiais_estoque_i8132 = previa_i8124.get("materiais_estoque_pedido") or []
+                if materiais_estoque_i8132:
+                    nomes_materiais_i8132 = []
+                    vistos_mat_i8132 = set()
+                    for mat_item_i8132 in materiais_estoque_i8132:
+                        nome_mat_i8132 = str(mat_item_i8132.get("material_nome") or mat_item_i8132.get("item") or "Material")
+                        chave_mat_i8132 = _i8121_chave_item(nome_mat_i8132)
+                        if chave_mat_i8132 and chave_mat_i8132 not in vistos_mat_i8132:
+                            vistos_mat_i8132.add(chave_mat_i8132)
+                            nomes_materiais_i8132.append(nome_mat_i8132)
+                    if nomes_materiais_i8132:
+                        st.success(
+                            "📦 Material(is) reconhecido(s) diretamente no Estoque — não exigem cadastro no Catálogo Oficial: "
+                            + " • ".join(nomes_materiais_i8132)
+                        )
+                        st.caption(
+                            "O Catálogo Oficial continua sendo exigido para produtos vendidos. Materiais/insumos operacionais são tratados pelo Estoque e não geram consumo duplicado por aparecerem como item do pedido."
+                        )
+
                 sem_catalogo_i8132 = bool(previa_i8124.get("sem_catalogo"))
                 if sem_catalogo_i8132:
-                    st.error("Produto(s) do pedido sem correspondência segura no Catálogo Oficial: " + " • ".join(previa_i8124.get("sem_catalogo")))
-                    st.error("Liberação bloqueada apenas pelo vínculo do Catálogo. A Ficha Técnica, por si só, não é mais obrigatória.")
+                    st.error("Produto(s) comerciais do pedido sem correspondência segura no Catálogo Oficial: " + " • ".join(previa_i8124.get("sem_catalogo")))
+                    st.error("Liberação bloqueada somente para item comercial sem vínculo. Materiais reconhecidos no Estoque não precisam estar no Catálogo Oficial.")
 
                 tem_ficha_completa_i8132 = bool(previa_i8124.get("necessidades")) and not bool(previa_i8124.get("sem_ficha"))
                 if previa_i8124.get("sem_ficha"):

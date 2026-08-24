@@ -745,3 +745,10 @@ hangelog
 - Adicionados modos: Ficha padrão, materiais específicos do pedido e sem consumo de estoque controlado.
 - Pedidos sem Ficha Técnica não ficam mais bloqueados apenas por essa ausência.
 - Mantido vínculo seguro do Catálogo e fluxo Reserva → Consumo Real.
+
+
+## 20.4.9-I8.13.2-CAT1-HF3 — Produto Comercial x Material de Estoque
+- Materiais/insumos reconhecidos no Estoque deixam de exigir cadastro no Catálogo Oficial.
+- Catálogo continua obrigatório apenas para itens comerciais sem vínculo seguro.
+- Materiais listados no pedido não geram consumo duplicado; reserva segue Ficha Técnica ou decisão manual.
+- Ambiguidade de nomes no Estoque continua bloqueada para não escolher material incorreto.
