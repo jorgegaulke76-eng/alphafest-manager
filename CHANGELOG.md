@@ -762,3 +762,9 @@ hangelog
 - Orçamento: produto do Catálogo Oficial passa a preencher preço, material e descrição automaticamente, mantendo edição livre no pedido.
 - Catálogo: galeria de até 5 mídias por produto, com foto principal e opção de 1 vídeo.
 - HTML/PDF: geração comercial passa a aproveitar múltiplas fotos; vídeo público pode ser acessado pelo catálogo/QR no PDF.
+
+## 20.4.9-I8.13.2-CAT1-HF6
+- Novo Orçamento (Jorge e Anna): cliente pesquisável por nome, WhatsApp, CPF/CNPJ e cidade.
+- Seleção de cliente cadastrado preenche automaticamente identificação e preserva Perfil Comercial existente.
+- Cliente novo continua livre e não exige cadastro prévio.
+- Autopreenchimento só ocorre ao trocar a seleção, sem sobrescrever ajustes manuais da proposta.

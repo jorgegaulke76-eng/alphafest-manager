@@ -2727,6 +2727,141 @@ def resumo_cliente_reconhecido_i8111(cliente):
     return " · ".join(partes)
 
 
+# CAT1-HF6 — seleção híbrida de cliente no orçamento.
+ORCAMENTO_CLIENTE_LIVRE = "✍️ Cliente novo / digitar manualmente"
+
+
+def _orcamento_cliente_ref(cliente):
+    """Identidade estável do cliente para o seletor, sem criar cadastro novo."""
+    cliente = cliente or {}
+    identificador = str(cliente.get("id") or "").strip()
+    if identificador:
+        return f"id:{identificador}"
+    return chave_cliente(
+        cliente.get("nome", ""),
+        cliente.get("documento", ""),
+        cliente.get("whatsapp", ""),
+    )
+
+
+def _orcamento_opcoes_cliente(clientes=None):
+    """Monta opções pesquisáveis por nome, WhatsApp, documento e cidade."""
+    clientes = carregar_clientes() if clientes is None else (clientes or [])
+    opcoes = [ORCAMENTO_CLIENTE_LIVRE]
+    mapa = {}
+    repeticoes = {}
+
+    validos = [c for c in clientes if isinstance(c, dict) and (str(c.get("nome") or "").strip() or str(c.get("whatsapp") or "").strip())]
+    validos.sort(key=lambda c: normalizar_texto_cliente(c.get("nome") or c.get("whatsapp") or "").casefold())
+
+    for cliente in validos:
+        nome = normalizar_texto_cliente(cliente.get("nome") or "Cliente sem nome")
+        whatsapp = str(cliente.get("whatsapp") or "").strip()
+        documento = str(cliente.get("documento") or "").strip()
+        cidade = str(cliente.get("cidade") or "").strip()
+        partes = [nome]
+        if whatsapp:
+            partes.append(whatsapp)
+        if documento:
+            partes.append(documento)
+        if cidade:
+            partes.append(cidade)
+        base = " · ".join(partes)
+        repeticoes[base] = repeticoes.get(base, 0) + 1
+        rotulo = base if repeticoes[base] == 1 else f"{base} · #{repeticoes[base]}"
+        opcoes.append(rotulo)
+        mapa[rotulo] = cliente
+    return opcoes, mapa
+
+
+def _orcamento_resumo_cliente_selecionado(cliente):
+    cliente = cliente or {}
+    partes = []
+    email = str(cliente.get("email") or "").strip()
+    cidade = str(cliente.get("cidade") or "").strip()
+    if email:
+        partes.append(email)
+    if cidade:
+        partes.append(cidade)
+    perfil = resumo_perfil_comercial(cliente)
+    if perfil.get("faturamento_mensal"):
+        partes.append(f"mensalista · fecha dia {perfil.get('dia_fechamento')} · vence dia {perfil.get('dia_vencimento')}")
+    if perfil.get("qtd_regras_ativas"):
+        partes.append(f"{perfil.get('qtd_regras_ativas')} preço(s) especial(is)")
+    return " · ".join(partes)
+
+
+def _orcamento_campos_cliente(prefixo, *, nome_key, documento_key, whatsapp_key):
+    """Seleciona cadastro existente e preenche identificação, mantendo cliente livre.
+
+    A seleção só injeta os dados quando muda. Assim, depois de escolher um cliente,
+    Jorge/Anna ainda podem ajustar algum campo somente naquela proposta sem o rerun
+    reescrever o valor. Trocar a seleção carrega o novo cadastro novamente.
+    """
+    clientes = carregar_clientes()
+    opcoes, mapa = _orcamento_opcoes_cliente(clientes)
+    seletor_key = f"{prefixo}_seletor"
+    marcador_key = f"{prefixo}_token"
+
+    # Remove valor obsoleto caso o cliente tenha sido excluído/mesclado.
+    if seletor_key in st.session_state and st.session_state.get(seletor_key) not in opcoes:
+        st.session_state.pop(seletor_key, None)
+        st.session_state.pop(marcador_key, None)
+
+    indice = 0
+    if seletor_key not in st.session_state:
+        atual = localizar_cliente_comercial(
+            st.session_state.get(nome_key, ""),
+            st.session_state.get(documento_key, ""),
+            st.session_state.get(whatsapp_key, ""),
+        )
+        if atual:
+            ref_atual = _orcamento_cliente_ref(atual)
+            for pos, rotulo in enumerate(opcoes[1:], start=1):
+                if _orcamento_cliente_ref(mapa.get(rotulo)) == ref_atual:
+                    indice = pos
+                    break
+
+    escolha = st.selectbox(
+        "🔎 Cliente cadastrado (opcional)",
+        opcoes,
+        index=indice,
+        key=seletor_key,
+        help=(
+            "Clique e comece a digitar para pesquisar por nome, WhatsApp, CPF/CNPJ ou cidade. "
+            "Se for cliente novo, mantenha a primeira opção e digite os dados normalmente abaixo."
+        ),
+    )
+
+    if escolha == ORCAMENTO_CLIENTE_LIVRE:
+        # Só limpa quando houve uma seleção anterior e o usuário voltou
+        # conscientemente para cliente novo/livre. Na abertura inicial preserva
+        # dados carregados de propostas antigas.
+        if st.session_state.get(marcador_key):
+            st.session_state[nome_key] = ""
+            st.session_state[documento_key] = ""
+            st.session_state[whatsapp_key] = ""
+            st.session_state.pop(marcador_key, None)
+        st.caption("✍️ Cliente novo: preencha os dados abaixo. O orçamento continua livre e não exige cadastro prévio.")
+        return None
+
+    cliente = mapa.get(escolha)
+    if not cliente:
+        return None
+    token = _orcamento_cliente_ref(cliente)
+    if st.session_state.get(marcador_key) != token:
+        st.session_state[nome_key] = str(cliente.get("nome") or "").strip()
+        st.session_state[documento_key] = str(cliente.get("documento") or "").strip()
+        st.session_state[whatsapp_key] = str(cliente.get("whatsapp") or "").strip()
+        st.session_state[marcador_key] = token
+
+    st.caption(f"✅ Cliente selecionado: **{cliente.get('nome') or 'Cliente'}** — dados carregados do cadastro mestre.")
+    resumo = _orcamento_resumo_cliente_selecionado(cliente)
+    if resumo:
+        st.caption(resumo)
+    return cliente
+
+
 def _i811_data_regra(valor):
     texto = str(valor or "").strip()
     if not texto:
@@ -3265,6 +3400,8 @@ def aplicar_proposta_pendente_no_formulario():
     st.session_state.form_cliente = prop.get("cliente_nome", prop.get("cliente", ""))
     st.session_state.form_documento = prop.get("documento", prop.get("cliente_cpf_cnpj", ""))
     st.session_state.form_whatsapp = prop.get("whatsapp", prop.get("cliente_wa", ""))
+    st.session_state.pop("jorge_orc_cliente_seletor", None)
+    st.session_state.pop("jorge_orc_cliente_token", None)
     st.session_state.form_evento = str(prop.get("evento", ""))
     st.session_state.form_desconto = valor_float(prop.get("desconto", prop.get("desconto_valor", 0)))
     st.session_state.form_prazo = str(prop.get("prazo_dias", "10"))
@@ -3297,6 +3434,8 @@ def aplicar_limpeza_formulario_pendente():
     st.session_state.form_cliente = ""
     st.session_state.form_documento = ""
     st.session_state.form_whatsapp = ""
+    st.session_state.pop("jorge_orc_cliente_seletor", None)
+    st.session_state.pop("jorge_orc_cliente_token", None)
     st.session_state.form_evento = ""
     st.session_state.form_desconto = 0.0
     st.session_state.form_entrega = hoje_local()
@@ -14782,6 +14921,7 @@ def dialog_orcamento_anna(proposta=None):
 
     # Inicializa o formulário somente uma vez por proposta/modal.
     chave_modal = f"anna_modal_iniciado_{numero_original or 'novo'}"
+    cliente_prefixo_hf6 = f"anna_orc_cliente_{numero_original or 'novo'}"
     mostrar_orientacao_thu(
         "atualizar_orcamento" if numero_original else "novo_orcamento",
         token=chave_modal,
@@ -14806,6 +14946,8 @@ def dialog_orcamento_anna(proposta=None):
         st.session_state["anna_modal_validade"] = str(proposta.get("validade_dias", "5"))
         st.session_state.pop("_i811hf2_anna_cliente_reconhecido_msg", None)
         st.session_state.pop("_i811hf2_anna_cliente_reconhecido_id", None)
+        st.session_state.pop(f"{cliente_prefixo_hf6}_seletor", None)
+        st.session_state.pop(f"{cliente_prefixo_hf6}_token", None)
 
     logo_b64, _ = encontrar_logo_base64()
     if logo_b64:
@@ -14843,6 +14985,12 @@ def dialog_orcamento_anna(proposta=None):
     # A identificação do cliente fica fora do form de item para permitir o callback
     # do WhatsApp sem recalcular tema, personalização e demais campos do produto.
     st.markdown("#### 👤 Cliente")
+    cliente_selecionado_hf6 = _orcamento_campos_cliente(
+        cliente_prefixo_hf6,
+        nome_key="anna_modal_cliente",
+        documento_key="anna_modal_documento",
+        whatsapp_key="anna_modal_whatsapp",
+    )
     nome = st.text_input("Nome / Razão Social", key="anna_modal_cliente")
     c1, c2 = st.columns(2)
     doc = c1.text_input("CPF / CNPJ", key="anna_modal_documento")
@@ -15086,6 +15234,8 @@ def dialog_orcamento_anna(proposta=None):
                 "evento": evento.strip(),
                 "cliente_cpf_cnpj": doc.strip(), "cliente_wa": wa.strip(),
                 "relacionamento_id": (cliente_comercial_i811 or {}).get("id", proposta.get("relacionamento_id", "")),
+                "cliente_email": str((cliente_comercial_i811 or {}).get("email") or proposta.get("cliente_email", "") or "").strip(),
+                "cliente_cidade": str((cliente_comercial_i811 or {}).get("cidade") or proposta.get("cliente_cidade", "") or "").strip(),
                 "modalidade_cobranca": modalidade_salvar_i811,
                 "faturamento_mensal": mensal_salvar_i811,
                 "financeiro_status": (proposta.get("financeiro_status") or "Aguardando fechamento mensal") if mensal_salvar_i811 else proposta.get("financeiro_status", ""),
@@ -24652,6 +24802,12 @@ if pagina_atual == "novo_orcamento":
     # Assim, ao informar/confirmar um WhatsApp já cadastrado, o Streamlit pode
     # reconhecer o relacionamento e preencher os demais dados antes do item.
     st.markdown("#### 👤 Cliente")
+    cliente_selecionado_hf6 = _orcamento_campos_cliente(
+        "jorge_orc_cliente",
+        nome_key="form_cliente",
+        documento_key="form_documento",
+        whatsapp_key="form_whatsapp",
+    )
     cli1, cli2, cli3 = st.columns([2.2, 1.5, 1.5])
     nome = cli1.text_input("Nome / Razão Social", key="form_cliente")
     doc = cli2.text_input("CPF / CNPJ", key="form_documento")
@@ -24869,6 +25025,8 @@ if pagina_atual == "novo_orcamento":
                 "cliente_cpf_cnpj": doc.strip(),
                 "cliente_wa": wa.strip(),
                 "relacionamento_id": (cliente_comercial_i811 or {}).get("id", antigo.get("relacionamento_id", "")),
+                "cliente_email": str((cliente_comercial_i811 or {}).get("email") or antigo.get("cliente_email", "") or "").strip(),
+                "cliente_cidade": str((cliente_comercial_i811 or {}).get("cidade") or antigo.get("cliente_cidade", "") or "").strip(),
                 "modalidade_cobranca": modalidade_i811,
                 "faturamento_mensal": mensal_i811,
                 "financeiro_status": (antigo.get("financeiro_status") or "Aguardando fechamento mensal") if mensal_i811 else antigo.get("financeiro_status", ""),
