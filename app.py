@@ -1602,7 +1602,7 @@ def alternar_status(num_proposta, campo, novo_valor):
 
 
 def _hf8_render_status_proposta_jorge_inline(num_proposta, prefixo="hf8_orcamento"):
-    """CAT1-HF8 — status oficiais disponíveis no próprio Novo Orçamento do Jorge.
+    """CAT1-HF9 — status oficiais disponíveis no próprio Novo Orçamento do Jorge.
 
     Usa exclusivamente ``alternar_status`` e a proposta persistida como fonte de
     verdade. Não cria campos/status paralelos. A interface serve tanto para uma
@@ -15411,12 +15411,37 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
         estado_antes_i8132 = _status_resumo(atual_status_i8132 or {})
     except Exception:
         estado_antes_i8132 = {}
+    # CAT1-HF9: quando o usuário marca Aprovado junto com Pronto/Entregue no
+    # mesmo salvamento, a aprovação precisa existir primeiro para que a Central
+    # de Reserva consiga enxergar o pedido. Gravamos os marcos preliminares e
+    # só depois validamos consumo/material para a conclusão da produção.
+    aprovou_previamente_hf9 = False
+    pagou_previamente_hf9 = False
+    if bool(novos["aprovado"]) and not bool(estado_antes_i8132.get("aprovado")) and bool(novos["pronto"] or novos["entregue"]):
+        aprovou_previamente_hf9 = bool(alternar_status(numero, "aprovado", True))
+        if bool(novos["pago"]) and not bool(estado_antes_i8132.get("pago")):
+            pagou_previamente_hf9 = bool(alternar_status(numero, "pago", True))
+        try:
+            atual_status_i8132 = next(
+                (p for p in carregar_historico(force_refresh=True) if str((p or {}).get("numero_proposta") or "") == str(numero)),
+                None,
+            )
+            estado_antes_i8132 = _status_resumo(atual_status_i8132 or {})
+        except Exception:
+            pass
+
     nova_conclusao_producao_i8132 = bool(novos["pronto"] or novos["entregue"]) and not bool(estado_antes_i8132.get("pronto"))
     if nova_conclusao_producao_i8132:
         consumidor_i8132 = globals().get("_i8132_consumir_reserva_pedido")
         if callable(consumidor_i8132):
             ok_mat_i8132, msg_mat_i8132 = consumidor_i8132(numero, usuario=obter_usuario_atual())
             if not ok_mat_i8132:
+                if aprovou_previamente_hf9:
+                    extras_hf9 = " e o pagamento" if pagou_previamente_hf9 else ""
+                    return False, (
+                        f"A aprovação{extras_hf9} foi salva. {msg_mat_i8132} "
+                        "Libere/reserve os materiais e depois continue o pedido em 'Pedidos em andamento'."
+                    )
                 return False, msg_mat_i8132
     controle = {"anteriores": None, "nova_conclusao": False, "aprovou_agora": False, "mudancas": []}
 
@@ -22209,6 +22234,46 @@ if pagina_atual == "central":
                     f"🧾 {resumo_produtos_pedido(prop_fila_central_i8124)} · {situacao_fila_central_i8124}"
                 )
 
+    # CAT1-HF9 — todo pedido aprovado e ainda aberto permanece acessível para
+    # continuar os status, mesmo depois de sair da fila de reserva ou de não
+    # estar em uma faixa de alerta/prioridade.
+    pedidos_em_andamento_hf9 = [
+        p for p in propostas_aprovadas_abertas_central
+        if not _status_resumo(p).get("entregue")
+    ]
+    if pedidos_em_andamento_hf9:
+        with st.expander(f"🔄 Pedidos em andamento — continuar atualização ({len(pedidos_em_andamento_hf9)})", expanded=False):
+            consumos_idx_hf9 = {
+                str((c or {}).get("numero_proposta") or "").strip(): c
+                for c in carregar_consumos_pedidos()
+                if isinstance(c, dict) and not c.get("estornado") and str(c.get("numero_proposta") or "").strip()
+            }
+            estoque_andamento_hf9 = carregar_estoque()
+            for idx_hf9, prop_hf9 in enumerate(_ordenar_propostas_recentes(pedidos_em_andamento_hf9)[:20]):
+                num_hf9 = str(prop_hf9.get("numero_proposta") or "").strip()
+                est_hf9 = _status_resumo(prop_hf9)
+                cons_hf9 = consumos_idx_hf9.get(num_hf9)
+                if est_hf9.get("pronto"):
+                    fase_hf9 = "📦 Pronto — aguardando saída"
+                elif cons_hf9:
+                    res_hf9 = _i8124_resumo_consumo(cons_hf9, estoque_andamento_hf9)
+                    fase_hf9 = "⚠️ Material pendente" if res_hf9.get("pendente") else "✅ Materiais liberados — continuar produção/status"
+                else:
+                    fase_hf9 = "🧾 Aguardando decisão/liberação de materiais"
+                col_hf9a, col_hf9b = st.columns([7, 2])
+                col_hf9a.markdown(
+                    f"**{html.escape(num_hf9)} — {html.escape(str(prop_hf9.get('cliente_nome') or 'Cliente'))}** · "
+                    f"🧾 {html.escape(resumo_produtos_pedido(prop_hf9))} · {fase_hf9}"
+                )
+                col_hf9b.button(
+                    "Abrir e atualizar",
+                    key=f"hf9_andamento_{idx_hf9}_{num_hf9}",
+                    use_container_width=True,
+                    on_click=lambda n=num_hf9: st.session_state.__setitem__("alerta_proposta_numero", n),
+                )
+            if len(pedidos_em_andamento_hf9) > 20:
+                st.caption("Mostrando os 20 pedidos mais recentes. A fila completa continua disponível no Fluxo de Pedidos.")
+
     st.divider()
     st.subheader("🚨 Atenção")
 
@@ -22264,6 +22329,24 @@ if pagina_atual == "central":
                 for item_central_sel in proposta_central_selecionada.get("itens", []) or []:
                     st.write(f"• {item_central_sel.get('produto', 'Produto')} · Qtd.: {item_central_sel.get('quantidade', 0)}")
                 _i8124_render_status_pedido(proposta_central_selecionada, prefixo=f"central_estoque_{numero_central_selecionado}", detalhado=True)
+
+                # CAT1-HF9 — mostra a mesma leitura da Central de Reserva dentro
+                # do editor e oferece ida/volta direta para o tratamento do pedido.
+                consumo_editor_hf9 = _i8124_consumo_ativo_pedido(numero_central_selecionado, carregar_consumos_pedidos())
+                estado_editor_hf9 = _status_resumo(proposta_central_selecionada)
+                if estado_editor_hf9.get("aprovado") and not estado_editor_hf9.get("pronto"):
+                    if consumo_editor_hf9:
+                        resumo_editor_hf9 = _i8124_resumo_consumo(consumo_editor_hf9, carregar_estoque())
+                        if resumo_editor_hf9.get("pendente"):
+                            st.warning("📦 Materiais: reserva parcial / ainda há falta. Complete a entrada antes de concluir a produção.")
+                        else:
+                            st.success("📦 Materiais: liberados/reservados. O pedido pode continuar para produção e atualização dos status.")
+                    else:
+                        mc1_hf9, mc2_hf9 = st.columns([5, 2])
+                        mc1_hf9.warning("📦 Materiais: aguardando tratamento/liberação.")
+                        if mc2_hf9.button("🔒 Abrir Reserva", key=f"hf9_abrir_reserva_{numero_central_selecionado}", use_container_width=True):
+                            st.session_state["_hf9_retorno_reserva_numero"] = numero_central_selecionado
+                            rerun_na_aba("compras_custos", "Pedido enviado para liberação/reserva de materiais.")
 
                 st.markdown("**Atualização rápida**")
                 up1, up2, up3, up4 = st.columns(4)
@@ -27019,8 +27102,18 @@ if pagina_atual == "compras_custos":
                         necessidades_manuais=necessidades_confirmar_i8132 if modo_i8132 == "manual_pedido" else None,
                     )
                     if ok_conf_i8124:
-                        st.session_state["_mensagem_sucesso_pendente"] = msg_conf_i8124
-                        st.rerun()
+                        # CAT1-HF9: se a Reserva foi aberta a partir do editor da
+                        # proposta, retorna ao mesmo pedido já aberto para continuar
+                        # Pago/Pronto/Entregue. Em uso normal da Central de Estoque,
+                        # permanece nesta tela para permitir trabalho em lote.
+                        retorno_hf9 = str(st.session_state.get("_hf9_retorno_reserva_numero") or "").strip()
+                        if retorno_hf9 == str(numero_pedido_i8124):
+                            st.session_state.pop("_hf9_retorno_reserva_numero", None)
+                            st.session_state["alerta_proposta_numero"] = numero_pedido_i8124
+                            rerun_na_aba("central", msg_conf_i8124 + " Continue os status do pedido abaixo.")
+                        else:
+                            st.session_state["_mensagem_sucesso_pendente"] = msg_conf_i8124
+                            st.rerun()
                     else:
                         st.error(msg_conf_i8124)
 
