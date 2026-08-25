@@ -1601,6 +1601,89 @@ def alternar_status(num_proposta, campo, novo_valor):
     return True
 
 
+def _hf8_render_status_proposta_jorge_inline(num_proposta, prefixo="hf8_orcamento"):
+    """CAT1-HF8 — status oficiais disponíveis no próprio Novo Orçamento do Jorge.
+
+    Usa exclusivamente ``alternar_status`` e a proposta persistida como fonte de
+    verdade. Não cria campos/status paralelos. A interface serve tanto para uma
+    proposta em edição quanto para a proposta recém-salva.
+    """
+    usuario_nome = str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold()
+    if usuario_nome != "jorge":
+        return
+
+    numero = str(num_proposta or "").strip()
+    if not numero:
+        return
+
+    try:
+        proposta = next(
+            (p for p in carregar_historico(force_refresh=True)
+             if str((p or {}).get("numero_proposta") or "").strip() == numero),
+            None,
+        )
+    except Exception:
+        proposta = None
+    if not isinstance(proposta, dict):
+        st.info("Os status oficiais ficam disponíveis após a proposta ser salva.")
+        return
+
+    erro_status = st.session_state.pop("_i8132_erro_status", None)
+    if erro_status:
+        st.error(str(erro_status))
+
+    estado = _status_resumo(proposta)
+    aprovado = bool(estado.get("aprovado"))
+    pago = bool(estado.get("pago"))
+    pronto = bool(estado.get("pronto"))
+    entregue = bool(estado.get("entregue"))
+    mensal = proposta_faturamento_mensal(proposta)
+
+    st.markdown("#### 🚦 Status oficiais do pedido")
+    st.caption(
+        "Fonte única: as alterações feitas aqui são as mesmas usadas no Histórico, "
+        "Produção, Entregas, THU, Alpha Core e demais indicadores."
+    )
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.checkbox(
+        "✅ Aprovado", value=aprovado, key=f"{prefixo}_aprovado_{numero}",
+        on_change=alternar_status, args=(numero, "aprovado", not aprovado),
+        help="Confirma a aprovação comercial do orçamento e libera o pedido para a operação.",
+    )
+    if mensal:
+        c2.checkbox(
+            "💳 Pago (mensal)", value=pago, key=f"{prefixo}_pago_mensal_{numero}",
+            disabled=True,
+            help="Cliente mensalista: o pagamento é atualizado automaticamente pelo fechamento mensal.",
+        )
+    else:
+        c2.checkbox(
+            "💳 Pago", value=pago, key=f"{prefixo}_pago_{numero}",
+            on_change=alternar_status, args=(numero, "pago", not pago),
+            help="Confirma o recebimento individual desta proposta.",
+        )
+    c3.checkbox(
+        "📦 Pronto", value=pronto, key=f"{prefixo}_pronto_{numero}",
+        on_change=alternar_status, args=(numero, "pronto", not pronto),
+        disabled=entregue,
+        help="Produção concluída; aguardando retirada ou entrega. As travas de consumo de materiais continuam valendo.",
+    )
+    c4.checkbox(
+        "🚚 Entregue", value=entregue, key=f"{prefixo}_entregue_{numero}",
+        on_change=alternar_status, args=(numero, "entregue", not entregue),
+        help="Finaliza a operação. Entregue implica Pronto automaticamente.",
+    )
+
+    carimbos = []
+    for campo, rotulo in (("aprovado_em", "Aprovado"), ("pago_em", "Pago"), ("pronto_em", "Pronto"), ("entregue_em", "Entregue")):
+        valor = str(proposta.get(campo) or "").strip()
+        if valor:
+            carimbos.append(f"{rotulo}: {valor}")
+    if carimbos:
+        st.caption(" · ".join(carimbos))
+
+
 # --- 20.4.9-I8.13: Central de Entregas & Retiradas ---
 def atualizar_logistica_pedido(num_proposta, *, tipo_entrega=None, observacao=None, marcar_avisado=False):
     """Atualiza somente metadados logísticos na proposta oficial.
@@ -24716,6 +24799,10 @@ if pagina_atual == "novo_orcamento":
         if st.button("Cancelar edição"):
             agendar_limpeza_formulario()
             st.rerun()
+        _hf8_render_status_proposta_jorge_inline(
+            st.session_state.editar_numero,
+            prefixo="hf8_edicao_orcamento",
+        )
 
     ultima_salva = st.session_state.get("_ultima_proposta_salva")
     if ultima_salva:
@@ -24745,6 +24832,11 @@ if pagina_atual == "novo_orcamento":
             if ac3.button("✖ Fechar", key="fechar_acoes_ultima_proposta", use_container_width=True):
                 st.session_state.pop("_ultima_proposta_salva", None)
                 st.rerun()
+
+            _hf8_render_status_proposta_jorge_inline(
+                ultima_salva.get("numero_proposta", ""),
+                prefixo="hf8_pos_salvar_orcamento",
+            )
 
             # HF1 — restaura as ações administrativas que o Jorge usa logo após
             # salvar uma proposta de teste/correção. A Anna não passa por este
