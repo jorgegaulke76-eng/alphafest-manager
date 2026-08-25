@@ -14831,7 +14831,7 @@ def renderizar_painel_alertas(prefixo):
         if a1.button("✏️ Editar proposta", key=f"editar_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}", use_container_width=True):
             carregar_proposta_no_formulario(proposta_alerta, duplicar=False)
             st.session_state.alerta_proposta_numero = None
-            st.rerun()
+            rerun_na_aba("novo_orcamento", "Proposta carregada para edição e atualização dos status.")
         numero_alerta = re.sub(r"\D", "", str(proposta_alerta.get("whatsapp") or proposta_alerta.get("cliente_wa") or ""))
         if numero_alerta and not numero_alerta.startswith("55"):
             numero_alerta = "55" + numero_alerta
@@ -14870,6 +14870,14 @@ def renderizar_painel_alertas(prefixo):
                 numero_excluir_alerta_hf2 = str(proposta_alerta.get("numero_proposta") or "")
                 st.session_state.alerta_proposta_numero = None
                 excluir_proposta(numero_excluir_alerta_hf2)
+
+            # CAT1-HF10 — o cartão selecionado no Histórico também precisa ser
+            # um ponto operacional completo. Assim uma proposta aprovada/liberada
+            # nunca fica sem caminho para seguir em Pago -> Pronto -> Entregue.
+            _hf8_render_status_proposta_jorge_inline(
+                proposta_alerta.get("numero_proposta", ""),
+                prefixo=f"hf10_historico_selecionado_{prefixo}",
+            )
 
 mensagem_sucesso = st.session_state.pop("_mensagem_sucesso_pendente", None)
 if mensagem_sucesso:
