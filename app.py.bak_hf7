@@ -2745,12 +2745,7 @@ def _orcamento_cliente_ref(cliente):
 
 
 def _orcamento_opcoes_cliente(clientes=None):
-    """CAT1-HF7: mostra somente o nome do cliente no seletor.
-
-    WhatsApp/documento continuam sendo carregados do cadastro ao selecionar, mas
-    não poluem a lista visual. Em nomes repetidos usamos apenas um sufixo numérico
-    para manter as opções tecnicamente distintas sem expor telefone/documento.
-    """
+    """Monta opções pesquisáveis por nome, WhatsApp, documento e cidade."""
     clientes = carregar_clientes() if clientes is None else (clientes or [])
     opcoes = [ORCAMENTO_CLIENTE_LIVRE]
     mapa = {}
@@ -2761,8 +2756,19 @@ def _orcamento_opcoes_cliente(clientes=None):
 
     for cliente in validos:
         nome = normalizar_texto_cliente(cliente.get("nome") or "Cliente sem nome")
-        repeticoes[nome] = repeticoes.get(nome, 0) + 1
-        rotulo = nome if repeticoes[nome] == 1 else f"{nome} · #{repeticoes[nome]}"
+        whatsapp = str(cliente.get("whatsapp") or "").strip()
+        documento = str(cliente.get("documento") or "").strip()
+        cidade = str(cliente.get("cidade") or "").strip()
+        partes = [nome]
+        if whatsapp:
+            partes.append(whatsapp)
+        if documento:
+            partes.append(documento)
+        if cidade:
+            partes.append(cidade)
+        base = " · ".join(partes)
+        repeticoes[base] = repeticoes.get(base, 0) + 1
+        rotulo = base if repeticoes[base] == 1 else f"{base} · #{repeticoes[base]}"
         opcoes.append(rotulo)
         mapa[rotulo] = cliente
     return opcoes, mapa
@@ -2822,8 +2828,7 @@ def _orcamento_campos_cliente(prefixo, *, nome_key, documento_key, whatsapp_key)
         index=indice,
         key=seletor_key,
         help=(
-            "Clique e comece a digitar o nome do cliente. A lista mostra somente nomes; "
-            "ao selecionar, WhatsApp e CPF/CNPJ são carregados automaticamente. "
+            "Clique e comece a digitar para pesquisar por nome, WhatsApp, CPF/CNPJ ou cidade. "
             "Se for cliente novo, mantenha a primeira opção e digite os dados normalmente abaixo."
         ),
     )
@@ -10511,14 +10516,11 @@ def _orcamento_produto_catalogo_obj(meta, catalogo=None):
     return None
 
 
-def _orcamento_aplicar_autopreenchimento_catalogo(meta, *, marcador_key, valor_key, material_key=None, detalhes_key=None):
-    """CAT1-HF7: carrega apenas dados comerciais seguros do Catálogo.
+def _orcamento_aplicar_autopreenchimento_catalogo(meta, *, marcador_key, valor_key, material_key, detalhes_key):
+    """Preenche dados do Catálogo somente quando a seleção oficial muda.
 
-    O preço oficial pode ser preenchido automaticamente. Já os campos de
-    personalização — Tema, Nome, Cor/Material e Outros Detalhes — são sempre
-    preenchidos manualmente porque variam de pedido para pedido. A descrição,
-    material e categoria oficiais continuam disponíveis como metadados do item,
-    sem serem injetados nos campos visuais da proposta.
+    Não fica sobrescrevendo ajustes feitos manualmente no orçamento durante reruns.
+    Produto livre continua totalmente aberto.
     """
     produto = _orcamento_produto_catalogo_obj(meta)
     if not produto:
@@ -10531,6 +10533,19 @@ def _orcamento_aplicar_autopreenchimento_catalogo(meta, *, marcador_key, valor_k
 
     st.session_state[marcador_key] = token
     st.session_state[valor_key] = float(_i811_preco_catalogo_float(produto))
+
+    material = str(produto.get("Material") or "").strip()
+    descricao = str(produto.get("DescricaoCurta") or produto.get("Descricao") or "").strip()
+    if material:
+        st.session_state[material_key] = material
+    else:
+        st.session_state[material_key] = ""
+    if descricao:
+        # Campo visual é curto; preservamos a descrição oficial completa no cadastro
+        # e trazemos uma versão prática para a especificação deste orçamento.
+        st.session_state[detalhes_key] = descricao[:500]
+    else:
+        st.session_state[detalhes_key] = ""
     return produto
 
 
@@ -15025,7 +15040,7 @@ def dialog_orcamento_anna(proposta=None):
     )
     if produto_cat_auto_i8113:
         resumo_auto_i8113 = _orcamento_resumo_dados_catalogo(produto_cat_auto_i8113)
-        st.success("⚡ Produto do Catálogo reconhecido: preço oficial carregado. Tema, nome, cor/material e detalhes permanecem manuais.")
+        st.success("⚡ Dados do Catálogo Oficial carregados automaticamente: preço, material e descrição.")
         if resumo_auto_i8113:
             st.caption(resumo_auto_i8113)
     with st.expander("🎨 Personalização & Especificações", expanded=True):
@@ -24832,7 +24847,7 @@ if pagina_atual == "novo_orcamento":
     )
     if produto_cat_auto_i8113:
         resumo_auto_i8113 = _orcamento_resumo_dados_catalogo(produto_cat_auto_i8113)
-        st.success("⚡ Produto do Catálogo reconhecido: preço oficial carregado. Tema, nome, cor/material e detalhes permanecem manuais.")
+        st.success("⚡ Dados do Catálogo Oficial carregados automaticamente: preço, material e descrição.")
         if resumo_auto_i8113:
             st.caption(resumo_auto_i8113)
 
