@@ -10353,79 +10353,6 @@ def _orcamento_resolver_produto(escolha_catalogo, texto_livre, catalogo=None):
     return oficial, meta
 
 
-def _orcamento_produto_catalogo_obj(meta, catalogo=None):
-    """CAT1-HF5: retorna o cadastro oficial escolhido no orçamento, sem adivinhação."""
-    meta = meta or {}
-    if str(meta.get("origem") or "") == "livre":
-        return None
-    catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
-    catalogo_id = str(meta.get("catalogo_id") or "").strip()
-    oficial = str(meta.get("produto_oficial") or "").strip()
-    if catalogo_id:
-        achou = next((
-            x for x in catalogo
-            if isinstance(x, dict) and str(x.get("CatalogoId") or x.get("id") or "").strip() == catalogo_id
-        ), None)
-        if achou is not None:
-            return achou
-    chave = normalizar_identidade_produto(oficial)
-    if chave:
-        return next((
-            x for x in catalogo
-            if isinstance(x, dict) and normalizar_identidade_produto(x.get("Nome")) == chave
-        ), None)
-    return None
-
-
-def _orcamento_aplicar_autopreenchimento_catalogo(meta, *, marcador_key, valor_key, material_key, detalhes_key):
-    """Preenche dados do Catálogo somente quando a seleção oficial muda.
-
-    Não fica sobrescrevendo ajustes feitos manualmente no orçamento durante reruns.
-    Produto livre continua totalmente aberto.
-    """
-    produto = _orcamento_produto_catalogo_obj(meta)
-    if not produto:
-        return None
-    token = str(produto.get("CatalogoId") or produto.get("id") or normalizar_identidade_produto(produto.get("Nome")) or "")
-    if not token:
-        return produto
-    if str(st.session_state.get(marcador_key) or "") == token:
-        return produto
-
-    st.session_state[marcador_key] = token
-    st.session_state[valor_key] = float(_i811_preco_catalogo_float(produto))
-
-    material = str(produto.get("Material") or "").strip()
-    descricao = str(produto.get("DescricaoCurta") or produto.get("Descricao") or "").strip()
-    if material:
-        st.session_state[material_key] = material
-    else:
-        st.session_state[material_key] = ""
-    if descricao:
-        # Campo visual é curto; preservamos a descrição oficial completa no cadastro
-        # e trazemos uma versão prática para a especificação deste orçamento.
-        st.session_state[detalhes_key] = descricao[:500]
-    else:
-        st.session_state[detalhes_key] = ""
-    return produto
-
-
-def _orcamento_resumo_dados_catalogo(produto):
-    produto = produto or {}
-    partes = []
-    categoria = str(produto.get("Categoria") or "").strip()
-    sub = str(produto.get("Subcategoria") or "").strip()
-    material = str(produto.get("Material") or "").strip()
-    variacoes = [str(x).strip() for x in (produto.get("Variacoes", []) or []) if str(x).strip()]
-    if categoria:
-        partes.append(categoria + (f" / {sub}" if sub else ""))
-    if material:
-        partes.append(f"Material: {material}")
-    if variacoes:
-        partes.append("Opções: " + " • ".join(variacoes[:5]))
-    return " · ".join(partes)
-
-
 def _orcamento_campos_produto(prefixo, *, em_form=False):
     """Renderiza seleção pesquisável + texto livre para Jorge e Anna."""
     catalogo = carregar_catalogo()
@@ -12304,48 +12231,6 @@ def _i884_atualizar_ultima_geracao(catalogo_id, metadados):
     return alterou
 
 
-def _catalogo_html_src_imagem(origem):
-    origem = str(origem or "").strip()
-    if not origem:
-        return ""
-    if origem.startswith(("http://", "https://", "data:image/")):
-        return origem
-    return imagem_data_uri(origem)
-
-
-def _catalogo_galeria_html(produto, nome_alt="Produto"):
-    """CAT1-HF5: galeria compacta estilo marketplace para o catálogo online."""
-    midias = _catalogo_midias_resumo(produto)
-    imagens = midias["imagens"][:CATALOGO_MAX_MIDIAS]
-    video = midias["video"]
-    if video and len(imagens) >= CATALOGO_MAX_MIDIAS:
-        imagens = imagens[: CATALOGO_MAX_MIDIAS - 1]
-
-    fontes = [x for x in (_catalogo_html_src_imagem(img) for img in imagens) if x]
-    nome_esc = html.escape(str(nome_alt or "Produto"), quote=True)
-    if not fontes:
-        principal_html = '<div class="sem-imagem">Sem imagem</div>'
-        thumbs = []
-    else:
-        principal = html.escape(fontes[0], quote=True)
-        principal_html = f'<img class="media-principal" src="{principal}" alt="{nome_esc}" onclick="abrirImagem(this.src)">'
-        thumbs = []
-        for pos, src in enumerate(fontes):
-            src_esc = html.escape(src, quote=True)
-            principal_cls = " ativa" if pos == 0 else ""
-            thumbs.append(
-                f'<button type="button" class="thumb{principal_cls}" title="Foto {pos + 1}" data-src="{src_esc}" '
-                f'onclick="trocarFoto(this)"><img src="{src_esc}" alt="Foto {pos + 1} de {nome_esc}"></button>'
-            )
-    if video:
-        video_esc = html.escape(str(video), quote=True)
-        thumbs.append(
-            f'<a class="thumb video-thumb" href="{video_esc}" target="_blank" rel="noopener" title="Assistir vídeo">▶<span>Vídeo</span></a>'
-        )
-    faixa = f'<div class="thumbs">{"".join(thumbs)}</div>' if thumbs else ""
-    return f'<div class="media-gallery">{principal_html}{faixa}</div>'
-
-
 def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True, metadados_geracao=None):
     produtos = sorted(
         list(produtos or []),
@@ -12385,7 +12270,10 @@ def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True, metadados_ge
                 '<div class="variacoes"><strong>Opções:</strong> ' + html.escape(" • ".join(variacoes)) + '</div>'
                 if variacoes else ''
             )
-            imagem_html = _catalogo_galeria_html(produto, produto.get("Nome", "Produto"))
+            imagens = produto.get("Imagens", []) or []
+            primeira = imagens[0] if imagens else ""
+            src = primeira if str(primeira).startswith(("http://", "https://")) else imagem_data_uri(primeira)
+            imagem_html = f'<img src="{src}" alt="{nome}" onclick="abrirImagem(this.src)">' if src else '<div class="sem-imagem">Sem imagem</div>'
             preco_html = f'<div class="preco">{html.escape(formatar_preco_catalogo(produto.get("Preco")))}</div>' if mostrar_precos else ''
             msg = quote(f"Olá! Gostaria de informações sobre: {produto.get('Nome', 'produto')}")
             numero_wpp = re.sub(r"\D", "", str(empresa.get("whatsapp_catalogo", "")))
@@ -12398,8 +12286,8 @@ def gerar_html_catalogo(produtos, titulo=None, mostrar_precos=True, metadados_ge
     logo_tag = f'<img class="logo" src="{logo_src}">' if logo_src else ''
     corpo = ''.join(cards_por_categoria) if cards_por_categoria else '<div class="intro">Nenhum produto selecionado.</div>'
     return f'''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(titulo)}</title><style>
-    *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f5f6f8;color:#20252b}} .layout{{display:flex;min-height:100vh}} aside{{width:260px;background:#18222d;color:#fff;padding:24px 18px;position:sticky;top:0;height:100vh;overflow:auto}} .logo{{max-width:180px;max-height:95px;display:block;margin:0 auto 18px;object-fit:contain}} aside h1{{font-size:20px;text-align:center;margin:8px 0 22px}} nav a{{display:block;color:#eef2f7;text-decoration:none;padding:11px 10px;border-bottom:1px solid rgba(255,255,255,.12)}} main{{flex:1;padding:32px;max-width:1400px}} .intro{{background:#fff;padding:22px;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.06);margin-bottom:28px}} section{{scroll-margin-top:20px;margin-bottom:42px}} section h2{{border-bottom:3px solid #202b36;padding-bottom:9px}} .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:22px}} .card{{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 5px 18px rgba(0,0,0,.08);display:flex;flex-direction:column}} .media-gallery{{background:#f7f8fa;border-bottom:1px solid #edf0f3}} .media-principal,.sem-imagem{{width:100%;height:220px;object-fit:cover;background:#e9edf2;display:flex;align-items:center;justify-content:center;cursor:pointer}} .thumbs{{display:flex;gap:7px;padding:8px;overflow-x:auto;background:#fff}} .thumb{{flex:0 0 48px;width:48px;height:48px;border:1px solid #d8dee6;border-radius:7px;background:#fff;padding:2px;display:flex;align-items:center;justify-content:center;cursor:pointer;text-decoration:none;color:#263746;font-weight:800;font-size:15px}} .thumb img{{width:100%;height:100%;object-fit:cover;border-radius:5px}} .thumb.ativa{{border:2px solid #147a42}} .video-thumb{{flex-direction:column;font-size:18px;line-height:1}} .video-thumb span{{font-size:8px;margin-top:3px}} .card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .card h3{{margin:0 0 10px}} .card p{{line-height:1.45;flex:1}} .variacoes{{font-size:13px;line-height:1.45;color:#4b5563;margin:2px 0 10px}} .preco{{font-size:22px;font-weight:800;margin:12px 0;color:#147a42}} .btn{{display:block;text-align:center;background:#25d366;color:#fff;text-decoration:none;padding:12px;border-radius:9px;font-weight:800}} footer{{text-align:center;color:#6b7280;padding:30px}} .validade-comercial{{margin:18px auto 0;max-width:760px;padding:16px;border:1px solid #d1d5db;border-radius:12px;background:#fff;color:#374151}} .validade-comercial p{{margin:5px 0}} .validade-comercial .aviso-validade{{font-weight:700;color:#7c2d12}} #modal{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:999;align-items:center;justify-content:center}} #modal img{{max-width:92vw;max-height:90vh}} @media(max-width:760px){{.layout{{display:block}}aside{{width:100%;height:auto;position:relative}}main{{padding:18px}}nav{{display:flex;gap:5px;overflow:auto}}nav a{{white-space:nowrap;border:1px solid rgba(255,255,255,.18);border-radius:8px}}}}
-    </style></head><body><div class="layout"><aside>{logo_tag}<h1>{html.escape(titulo)}</h1><nav>{links}</nav></aside><main><div class="intro"><h1>{html.escape(titulo)}</h1><p>Seleção preparada por {html.escape(str(empresa.get("nome", "Empresa")))}. Consulte disponibilidade, personalização e prazo pelo WhatsApp.</p></div>{corpo}<footer>{html.escape(str(empresa.get("nome", "Empresa")))} - {html.escape(str(empresa.get("slogan", "")))}{rodape_comercial}</footer></main></div><div id="modal" onclick="this.style.display='none'"><img id="modal-img"></div><script>function abrirImagem(src){{document.getElementById('modal-img').src=src;document.getElementById('modal').style.display='flex';}} function trocarFoto(btn){{var g=btn.closest('.media-gallery');if(!g)return;var p=g.querySelector('.media-principal');if(p)p.src=btn.dataset.src;g.querySelectorAll('.thumb').forEach(function(x){{x.classList.remove('ativa')}});btn.classList.add('ativa');}}</script></body></html>'''
+    *{{box-sizing:border-box}} body{{margin:0;font-family:Arial,Helvetica,sans-serif;background:#f5f6f8;color:#20252b}} .layout{{display:flex;min-height:100vh}} aside{{width:260px;background:#18222d;color:#fff;padding:24px 18px;position:sticky;top:0;height:100vh;overflow:auto}} .logo{{max-width:180px;max-height:95px;display:block;margin:0 auto 18px;object-fit:contain}} aside h1{{font-size:20px;text-align:center;margin:8px 0 22px}} nav a{{display:block;color:#eef2f7;text-decoration:none;padding:11px 10px;border-bottom:1px solid rgba(255,255,255,.12)}} main{{flex:1;padding:32px;max-width:1400px}} .intro{{background:#fff;padding:22px;border-radius:14px;box-shadow:0 4px 18px rgba(0,0,0,.06);margin-bottom:28px}} section{{scroll-margin-top:20px;margin-bottom:42px}} section h2{{border-bottom:3px solid #202b36;padding-bottom:9px}} .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(245px,1fr));gap:22px}} .card{{background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 5px 18px rgba(0,0,0,.08);display:flex;flex-direction:column}} .card img,.sem-imagem{{width:100%;height:220px;object-fit:cover;background:#e9edf2;display:flex;align-items:center;justify-content:center;cursor:pointer}} .card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .card h3{{margin:0 0 10px}} .card p{{line-height:1.45;flex:1}} .variacoes{{font-size:13px;line-height:1.45;color:#4b5563;margin:2px 0 10px}} .preco{{font-size:22px;font-weight:800;margin:12px 0;color:#147a42}} .btn{{display:block;text-align:center;background:#25d366;color:#fff;text-decoration:none;padding:12px;border-radius:9px;font-weight:800}} footer{{text-align:center;color:#6b7280;padding:30px}} .validade-comercial{{margin:18px auto 0;max-width:760px;padding:16px;border:1px solid #d1d5db;border-radius:12px;background:#fff;color:#374151}} .validade-comercial p{{margin:5px 0}} .validade-comercial .aviso-validade{{font-weight:700;color:#7c2d12}} #modal{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:999;align-items:center;justify-content:center}} #modal img{{max-width:92vw;max-height:90vh}} @media(max-width:760px){{.layout{{display:block}}aside{{width:100%;height:auto;position:relative}}main{{padding:18px}}nav{{display:flex;gap:5px;overflow:auto}}nav a{{white-space:nowrap;border:1px solid rgba(255,255,255,.18);border-radius:8px}}}}
+    </style></head><body><div class="layout"><aside>{logo_tag}<h1>{html.escape(titulo)}</h1><nav>{links}</nav></aside><main><div class="intro"><h1>{html.escape(titulo)}</h1><p>Seleção preparada por {html.escape(str(empresa.get("nome", "Empresa")))}. Consulte disponibilidade, personalização e prazo pelo WhatsApp.</p></div>{corpo}<footer>{html.escape(str(empresa.get("nome", "Empresa")))} - {html.escape(str(empresa.get("slogan", "")))}{rodape_comercial}</footer></main></div><div id="modal" onclick="this.style.display='none'"><img id="modal-img"></div><script>function abrirImagem(src){{document.getElementById('modal-img').src=src;document.getElementById('modal').style.display='flex';}}</script></body></html>'''
 
 
 
@@ -13578,71 +13466,6 @@ def _i89_rl_imagem(origem, max_w, max_h):
         return Spacer(max_w, max_h * 0.28)
 
 
-def _i89_rl_galeria_produto(produto, largura=44 * mm):
-    """CAT1-HF5: usa várias fotos do produto no PDF e QR para vídeo quando houver."""
-    midias = _catalogo_midias_resumo(produto)
-    imagens = list(midias.get("imagens") or [])
-    video = str(midias.get("video") or "").strip()
-    max_fotos = CATALOGO_MAX_MIDIAS - (1 if video else 0)
-    imagens = imagens[:max_fotos]
-
-    if not imagens:
-        principal = _i89_rl_imagem("", largura, 30 * mm)
-        return principal
-
-    principal = _i89_rl_imagem(imagens[0], largura, 30 * mm)
-    linhas = [[principal]]
-    extras = imagens[1:]
-    if extras:
-        celulas = [_i89_rl_imagem(x, 20.5 * mm, 15 * mm) for x in extras]
-        rows = []
-        for i in range(0, len(celulas), 2):
-            row = celulas[i:i+2]
-            if len(row) == 1:
-                row.append(Spacer(20.5 * mm, 15 * mm))
-            rows.append(row)
-        thumbs = Table(rows, colWidths=[21.5 * mm, 21.5 * mm], hAlign="LEFT")
-        thumbs.setStyle(TableStyle([
-            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-            ("LEFTPADDING", (0,0), (-1,-1), 1),
-            ("RIGHTPADDING", (0,0), (-1,-1), 1),
-            ("TOPPADDING", (0,0), (-1,-1), 1),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 1),
-        ]))
-        linhas.append([thumbs])
-
-    if video and str(video).startswith(("http://", "https://")):
-        qr = _i89_qr_png_bytes(video)
-        if qr:
-            qr_flow = RLImage(io.BytesIO(qr), width=12 * mm, height=12 * mm)
-            estilo_video = ParagraphStyle(
-                "i89_video_produto", fontName="Helvetica-Bold", fontSize=6.7, leading=8,
-                textColor=rl_colors.HexColor("#31556f")
-            )
-            linha_video = Table(
-                [[qr_flow, Paragraph("Ver vídeo<br/>do produto", estilo_video)]],
-                colWidths=[14 * mm, 29 * mm], hAlign="LEFT"
-            )
-            linha_video.setStyle(TableStyle([
-                ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
-                ("LEFTPADDING", (0,0), (-1,-1), 1),
-                ("RIGHTPADDING", (0,0), (-1,-1), 1),
-                ("TOPPADDING", (0,0), (-1,-1), 2),
-                ("BOTTOMPADDING", (0,0), (-1,-1), 1),
-            ]))
-            linhas.append([linha_video])
-
-    galeria = Table(linhas, colWidths=[largura], hAlign="LEFT")
-    galeria.setStyle(TableStyle([
-        ("VALIGN", (0,0), (-1,-1), "TOP"),
-        ("LEFTPADDING", (0,0), (-1,-1), 0),
-        ("RIGHTPADDING", (0,0), (-1,-1), 0),
-        ("TOPPADDING", (0,0), (-1,-1), 0),
-        ("BOTTOMPADDING", (0,0), (-1,-1), 2),
-    ]))
-    return galeria
-
-
 def gerar_pdf_catalogo_i89(
     produtos,
     titulo="Catálogo AlphaFest",
@@ -13734,8 +13557,9 @@ def gerar_pdf_catalogo_i89(
                 blocos.append(Paragraph("<b>Opções:</b> " + html.escape(" • ".join(variacoes)), estilo_corpo))
             if mostrar_precos:
                 blocos.append(Paragraph(html.escape(formatar_preco_catalogo(prod.get("Preco"))), estilo_preco))
-            galeria_pdf = _i89_rl_galeria_produto(prod, 44 * mm)
-            card = Table([[galeria_pdf, blocos]], colWidths=[49 * mm, 116 * mm], hAlign="LEFT")
+            imagens = _i871_lista_textos(prod.get("Imagens"))
+            img = _i89_rl_imagem(imagens[0] if imagens else "", 44 * mm, 38 * mm)
+            card = Table([[img, blocos]], colWidths=[49 * mm, 116 * mm], hAlign="LEFT")
             card.setStyle(TableStyle([
                 ("VALIGN", (0,0), (-1,-1), "TOP"),
                 ("BOX", (0,0), (-1,-1), 0.55, rl_colors.HexColor("#dce8f1")),
@@ -13785,63 +13609,9 @@ def _i89_pdf_catalogo_salvo(registro, catalogo_oficial, metadados_geracao=None, 
         url_publica=url_publica,
     )
 
-CATALOGO_MAX_MIDIAS = 5
-
-
-def _catalogo_video_ref(produto):
-    produto = produto or {}
-    return str(
-        produto.get("VideoCatalogo")
-        or produto.get("Video")
-        or produto.get("VideoUrl")
-        or ""
-    ).strip()
-
-
-def _catalogo_midias_resumo(produto):
-    produto = produto or {}
-    imagens = list(dict.fromkeys(
-        str(x).strip() for x in (produto.get("Imagens", []) or []) if str(x).strip()
-    ))
-    video = _catalogo_video_ref(produto)
-    return {
-        "imagens": imagens,
-        "video": video,
-        "total": len(imagens) + (1 if video else 0),
-        "tem_video": bool(video),
-    }
-
-
-def _catalogo_validar_midias(imagens, video=""):
-    imagens = list(dict.fromkeys(str(x).strip() for x in (imagens or []) if str(x).strip()))
-    video = str(video or "").strip()
-    total = len(imagens) + (1 if video else 0)
-    if video and not imagens:
-        return False, "Adicione pelo menos uma foto principal; o vídeo é complementar.", total
-    if total > CATALOGO_MAX_MIDIAS:
-        return False, f"Limite de {CATALOGO_MAX_MIDIAS} mídias por produto.", total
-    return True, "", total
-
-
 def salvar_upload_catalogo(upload):
-    """Salva a imagem no Supabase Storage, com fallback persistente em data URL."""
+    """Salva a imagem no Supabase Storage, com fallback para a pasta uploads."""
     return upload_catalog_image(upload, PASTA_UPLOADS)
-
-
-def salvar_video_catalogo(upload, produto_nome="produto"):
-    """CAT1-HF5: salva um único vídeo demonstrativo do produto.
-
-    O vídeo conta como uma das cinco mídias da galeria. No ambiente online ele
-    usa o mesmo Storage público do Manager; em contingência local mantém arquivo
-    de trabalho sem transformar vídeo em imagem/base64.
-    """
-    if upload is None:
-        return ""
-    return upload_library_file(
-        upload,
-        produto_nome=f"catalogo_video/{str(produto_nome or 'produto').strip() or 'produto'}",
-        local_upload_dir="uploads_catalogo_video",
-    )
 
 
 class _DriveImageUpload:
@@ -14883,18 +14653,6 @@ def dialog_orcamento_anna(proposta=None):
     # sem atualizar os indicadores e sem sair da janela.
     chave_item_i8113 = st.session_state.get("anna_modal_item_key", 0)
     prod, prod_meta_i8113 = _orcamento_campos_produto(f"anna_modal_prod_{chave_item_i8113}")
-    produto_cat_auto_i8113 = _orcamento_aplicar_autopreenchimento_catalogo(
-        prod_meta_i8113,
-        marcador_key=f"anna_modal_catalogo_auto_{chave_item_i8113}",
-        valor_key=f"anna_modal_valor_{chave_item_i8113}",
-        material_key=f"anna_modal_cor_{chave_item_i8113}",
-        detalhes_key=f"anna_modal_obs_{chave_item_i8113}",
-    )
-    if produto_cat_auto_i8113:
-        resumo_auto_i8113 = _orcamento_resumo_dados_catalogo(produto_cat_auto_i8113)
-        st.success("⚡ Dados do Catálogo Oficial carregados automaticamente: preço, material e descrição.")
-        if resumo_auto_i8113:
-            st.caption(resumo_auto_i8113)
     with st.expander("🎨 Personalização & Especificações", expanded=True):
         e1, e2 = st.columns(2)
         tema = e1.text_input("Tema / Ocasião", key=f"anna_modal_tema_{chave_item_i8113}")
@@ -14903,11 +14661,7 @@ def dialog_orcamento_anna(proposta=None):
         idade = e2.text_input("Idade / Data do Evento", key=f"anna_modal_idade_{chave_item_i8113}")
         obs = e2.text_input("Outros Detalhes", key=f"anna_modal_obs_{chave_item_i8113}")
     q = st.number_input("Qtd", min_value=1, value=1, key=f"anna_modal_qtd_{chave_item_i8113}")
-    _anna_valor_key_i8113 = f"anna_modal_valor_{chave_item_i8113}"
-    if _anna_valor_key_i8113 in st.session_state:
-        v = st.number_input("Valor Unitário (R$)", min_value=0.0, step=0.5, key=_anna_valor_key_i8113)
-    else:
-        v = st.number_input("Valor Unitário (R$)", min_value=0.0, value=0.0, step=0.5, key=_anna_valor_key_i8113)
+    v = st.number_input("Valor Unitário (R$)", min_value=0.0, value=0.0, step=0.5, key=f"anna_modal_valor_{chave_item_i8113}")
 
     itens_previa_i8113 = st.session_state.get("anna_modal_itens", []) or []
     subtotal_atual_i8113 = sum(valor_float(i.get("quantidade")) * valor_float(i.get("valor_unitario")) for i in itens_previa_i8113)
@@ -14946,9 +14700,6 @@ def dialog_orcamento_anna(proposta=None):
                 "produto_origem": prod_meta_i8113.get("origem", "livre"),
                 "produto_digitado": prod_meta_i8113.get("digitado", ""),
                 "produto_catalogo_id": prod_meta_i8113.get("catalogo_id", ""),
-                "produto_catalogo_descricao": str((produto_cat_auto_i8113 or {}).get("DescricaoCurta") or (produto_cat_auto_i8113 or {}).get("Descricao") or ""),
-                "produto_catalogo_material": str((produto_cat_auto_i8113 or {}).get("Material") or ""),
-                "produto_catalogo_categoria": str((produto_cat_auto_i8113 or {}).get("Categoria") or ""),
             }
             cliente_item_i811 = localizar_cliente_comercial(nome, doc, wa)
             preco_item_i811 = calcular_preco_cliente_item(cliente_item_i811, prod.strip(), v) if cliente_item_i811 else None
@@ -20258,25 +20009,14 @@ def dialog_catalogo_cadastro_anna(
             default=[x for x in campanhas_atuais if x in CAMPANHAS_PRODUTO_OPCOES],
             help="Marque Permanente para produtos genéricos. Produtos temáticos devem receber somente as campanhas realmente permitidas.",
         )
-        st.caption("🛒 Galeria: até 5 mídias por produto; a primeira foto é a principal e 1 das posições pode ser vídeo.")
-        imagens_urls = st.text_area("URLs das fotos (uma por linha)", value="\n".join([x for x in (produto.get("Imagens", []) or []) if str(x).startswith("http")]), height=90)
-        fotos = st.file_uploader("Adicionar fotos do computador", type=["png","jpg","jpeg","webp"], accept_multiple_files=True, help="Fotos + vídeo não podem ultrapassar 5 mídias.")
+        imagens_urls = st.text_area("URLs das imagens (uma por linha)", value="\n".join([x for x in (produto.get("Imagens", []) or []) if str(x).startswith("http")]), height=90)
+        fotos = st.file_uploader("Adicionar fotos do computador", type=["png","jpg","jpeg","webp"], accept_multiple_files=True, help="A foto será incorporada ao catálogo e permanecerá disponível mesmo após reinícios do Streamlit.")
         drive_urls = st.text_area(
             "Importar fotos do Google Drive (um link por linha)",
             placeholder="Cole aqui o link compartilhado da foto no Google Drive",
             help="No Google Drive, deixe o arquivo como ‘Qualquer pessoa com o link’. A foto será copiada para o catálogo; não dependerá do link depois.",
             height=80,
         )
-        _video_atual_dialog = _catalogo_video_ref(produto)
-        video_url_dialog = st.text_input(
-            "Link do vídeo (opcional)",
-            value=_video_atual_dialog if _video_atual_dialog.startswith(("http://", "https://")) else "",
-            placeholder="Link público do vídeo",
-        )
-        video_upload_dialog = st.file_uploader(
-            "Ou enviar 1 vídeo", type=["mp4", "mov", "webm"], accept_multiple_files=False
-        )
-        remover_video_dialog = st.checkbox("Remover vídeo atual", value=False) if _video_atual_dialog else False
         c5, c6 = st.columns(2)
         ativo = c5.checkbox("Produto ativo", value=bool(produto.get("Ativo", True)))
         destaque = c6.checkbox("Produto em destaque", value=bool(produto.get("Destaque", False)))
@@ -20290,23 +20030,12 @@ def dialog_catalogo_cadastro_anna(
         for foto in fotos or []:
             caminho = salvar_upload_catalogo(foto)
             if caminho:
-                imagens.append(caminho)
+                imagens.insert(0, caminho)
         drive_imagens, drive_erros = importar_imagens_google_drive(drive_urls)
-        imagens.extend(drive_imagens)
+        for caminho in reversed(drive_imagens):
+            imagens.insert(0, caminho)
         if drive_erros:
             st.warning("Google Drive: " + " ".join(dict.fromkeys(drive_erros)))
-        imagens = list(dict.fromkeys(str(x).strip() for x in imagens if str(x).strip()))
-        video_dialog = "" if remover_video_dialog else str(_video_atual_dialog or "").strip()
-        if str(video_url_dialog or "").strip():
-            video_dialog = str(video_url_dialog).strip()
-        if video_upload_dialog is not None:
-            _video_salvo_dialog = salvar_video_catalogo(video_upload_dialog, nome.strip())
-            if _video_salvo_dialog:
-                video_dialog = _video_salvo_dialog
-        _midias_ok_dialog, _midias_erro_dialog, _total_midias_dialog = _catalogo_validar_midias(imagens, video_dialog)
-        if not _midias_ok_dialog:
-            st.error(f"{_midias_erro_dialog} Total atual: {_total_midias_dialog} mídia(s).")
-            return
         variacoes_digitadas = list(dict.fromkeys(x.strip() for x in variacoes_txt.splitlines() if x.strip()))
         aliases_digitados = [x.strip() for x in aliases_txt.splitlines() if x.strip()]
         nome_anterior_alias = str(produto.get("Nome") or "").strip()
@@ -20325,8 +20054,7 @@ def dialog_catalogo_cadastro_anna(
             "Aliases": aliases_validos,
             "CampanhasPermitidas": list(dict.fromkeys(campanhas_permitidas)),
             "Descricao": descricao.strip(), "DescricaoCurta": descricao.strip(),
-            "Imagens": list(dict.fromkeys(imagens)), "VideoCatalogo": video_dialog, "MidiasCatalogoVersao": 1,
-            "Ativo": bool(ativo), "Destaque": bool(destaque),
+            "Imagens": list(dict.fromkeys(imagens)), "Ativo": bool(ativo), "Destaque": bool(destaque),
             "AtualizadoEm": agora_local().isoformat(timespec="seconds"),
         })
         if produto_indice is None:
@@ -24678,26 +24406,10 @@ if pagina_atual == "novo_orcamento":
     elif msg_identificacao_i8111 == "nao_encontrado":
         st.info("ℹ️ WhatsApp ainda não localizado nos Relacionamentos. A proposta pode ser criada normalmente e o cliente pode ser cadastrado depois.")
 
-    # CAT1-HF5 — produto fica fora do form para que a seleção no Catálogo Oficial
-    # possa preencher os dados do item imediatamente. Os demais campos continuam
-    # isolados no formulário e não perdem o que o Jorge já digitou.
-    prod, prod_meta_i8113 = _orcamento_campos_produto(f"produto_novo_{st.session_state.form_key}")
-    produto_cat_auto_i8113 = _orcamento_aplicar_autopreenchimento_catalogo(
-        prod_meta_i8113,
-        marcador_key=f"produto_catalogo_auto_{st.session_state.form_key}",
-        valor_key=f"valor_{st.session_state.form_key}",
-        material_key=f"cor_{st.session_state.form_key}",
-        detalhes_key=f"obs_item_{st.session_state.form_key}",
-    )
-    if produto_cat_auto_i8113:
-        resumo_auto_i8113 = _orcamento_resumo_dados_catalogo(produto_cat_auto_i8113)
-        st.success("⚡ Dados do Catálogo Oficial carregados automaticamente: preço, material e descrição.")
-        if resumo_auto_i8113:
-            st.caption(resumo_auto_i8113)
-
-    # O restante do ITEM continua isolado para evitar recálculos enquanto Jorge
-    # digita tema, nome e personalizações.
+    # O formulário de ITEM continua isolado para não recalcular a tela enquanto
+    # Jorge digita tema, nome, cor e demais especificações.
     with st.form(key=f"form_item_orcamento_{st.session_state.form_key}", clear_on_submit=False):
+        prod, prod_meta_i8113 = _orcamento_campos_produto(f"produto_novo_{st.session_state.form_key}", em_form=True)
         with st.expander("🎨 Personalização & Especificações", expanded=True):
             c1, c2 = st.columns(2)
             et = c1.text_input("Tema / Ocasião", key=f"tema_{st.session_state.form_key}")
@@ -24707,11 +24419,7 @@ if pagina_atual == "novo_orcamento":
             eg = c2.text_input("Outros Detalhes", key=f"obs_item_{st.session_state.form_key}")
 
         q = st.number_input("Qtd", min_value=1, value=1, key=f"qtd_{st.session_state.form_key}")
-        _jorge_valor_key_i8113 = f"valor_{st.session_state.form_key}"
-        if _jorge_valor_key_i8113 in st.session_state:
-            v = st.number_input("Valor Unitário (R$)", step=0.5, key=_jorge_valor_key_i8113)
-        else:
-            v = st.number_input("Valor Unitário (R$)", value=0.0, step=0.5, key=_jorge_valor_key_i8113)
+        v = st.number_input("Valor Unitário (R$)", value=0.0, step=0.5, key=f"valor_{st.session_state.form_key}")
         adicionar_item = st.form_submit_button("➕ Adicionar Item", use_container_width=True)
 
     if adicionar_item:
@@ -24726,9 +24434,6 @@ if pagina_atual == "novo_orcamento":
                 "produto_origem": prod_meta_i8113.get("origem", "livre"),
                 "produto_digitado": prod_meta_i8113.get("digitado", ""),
                 "produto_catalogo_id": prod_meta_i8113.get("catalogo_id", ""),
-                "produto_catalogo_descricao": str((produto_cat_auto_i8113 or {}).get("DescricaoCurta") or (produto_cat_auto_i8113 or {}).get("Descricao") or ""),
-                "produto_catalogo_material": str((produto_cat_auto_i8113 or {}).get("Material") or ""),
-                "produto_catalogo_categoria": str((produto_cat_auto_i8113 or {}).get("Categoria") or ""),
             }
             if preco_i811 and preco_i811.get("bloqueado"):
                 st.error(
@@ -28614,20 +28319,12 @@ if pagina_atual == "catalogo":
                         ),
                     )
 
-            imagens_cadastradas = list(dict.fromkeys(
-                str(x).strip() for x in (item_edicao.get("Imagens", []) or []) if str(x).strip()
-            ))
-            video_catalogo_atual = _catalogo_video_ref(item_edicao)
-
-            st.markdown("##### 🛒 Vitrine de mídias • estilo marketplace")
-            st.caption(
-                "Até 5 mídias por produto. A primeira foto é a capa/principal; as demais mostram ângulos, "
-                "modelos e exemplos. Uma das 5 posições pode ser usada por vídeo."
-            )
+            imagens_cadastradas = list(item_edicao.get("Imagens", []) or [])
 
             remover_indices = []
             if item_edicao and imagens_cadastradas:
                 st.markdown("##### Fotos atuais")
+                st.caption("Você pode manter, remover ou substituir as fotos do produto durante a edição.")
                 for _idx_img, _img_atual in enumerate(imagens_cadastradas):
                     _ci1, _ci2 = st.columns([1, 4])
                     try:
@@ -28635,35 +28332,19 @@ if pagina_atual == "catalogo":
                     except Exception:
                         _ci1.write("🖼️")
                     _origem = "Armazenamento online" if str(_img_atual).startswith("http") else "Imagem incorporada ao catálogo"
-                    _papel = "⭐ FOTO PRINCIPAL" if _idx_img == 0 else f"Foto adicional {_idx_img}"
-                    _ci2.caption(f"{_papel} • {_origem}")
+                    _ci2.caption(f"Foto {_idx_img + 1} • {_origem}")
                     if _ci2.checkbox("Remover esta foto ao salvar", key=f"cat_remover_foto_{sufixo}_{_idx_img}"):
                         remover_indices.append(_idx_img)
 
-                if len(imagens_cadastradas) > 1:
-                    principal_indice_cat = st.selectbox(
-                        "⭐ Definir foto principal",
-                        list(range(len(imagens_cadastradas))),
-                        index=0,
-                        format_func=lambda i: f"Foto {i + 1}",
-                        key=f"cat_principal_foto_{sufixo}",
-                        help="A foto principal aparece primeiro no catálogo e nos cards do produto.",
-                    )
-                else:
-                    principal_indice_cat = 0
-            else:
-                principal_indice_cat = 0
-
             urls_existentes = [x for x in imagens_cadastradas if str(x).startswith("http")]
             urls_cat = st.text_area(
-                "URLs de fotos (uma por linha)", value="\n".join(urls_existentes),
-                key=f"cat_urls_{sufixo}",
-                help="As fotos entram na galeria; respeite o limite total de 5 mídias."
+                "URLs de imagens (uma por linha)", value="\n".join(urls_existentes),
+                key=f"cat_urls_{sufixo}"
             )
             fotos_cat = st.file_uploader(
-                "Adicionar fotos do computador", type=["png", "jpg", "jpeg", "webp"],
+                "Adicionar / atualizar fotos do computador", type=["png", "jpg", "jpeg", "webp"],
                 accept_multiple_files=True, key=f"cat_fotos_{sufixo}",
-                help="Você pode adicionar várias fotos, desde que fotos + vídeo não ultrapassem 5 mídias."
+                help="As novas fotos serão gravadas de forma persistente no catálogo."
             )
             drive_fotos_cat = st.text_area(
                 "Adicionar fotos do Google Drive (um link por linha)",
@@ -28671,42 +28352,11 @@ if pagina_atual == "catalogo":
                 key=f"cat_drive_fotos_{sufixo}",
                 help="No Drive, deixe cada arquivo como ‘Qualquer pessoa com o link’."
             )
-
-            st.markdown("##### 🎬 Vídeo do produto (opcional)")
-            remover_video_cat = False
-            if video_catalogo_atual:
-                _vc1, _vc2 = st.columns([2, 3])
-                try:
-                    _vc1.video(video_catalogo_atual)
-                except Exception:
-                    _vc1.caption("Vídeo cadastrado")
-                _vc2.caption("O vídeo ocupa 1 das 5 posições da galeria.")
-                remover_video_cat = _vc2.checkbox(
-                    "Remover vídeo atual ao salvar",
-                    key=f"cat_remover_video_{sufixo}",
-                )
-            video_url_cat = st.text_input(
-                "Link do vídeo (opcional)",
-                value=video_catalogo_atual if str(video_catalogo_atual).startswith(("http://", "https://")) else "",
-                key=f"cat_video_url_{sufixo}",
-                placeholder="Ex.: link público MP4/WebM ou vídeo publicado",
-            )
-            video_upload_cat = st.file_uploader(
-                "Ou enviar 1 vídeo",
-                type=["mp4", "mov", "webm"],
-                accept_multiple_files=False,
-                key=f"cat_video_upload_{sufixo}",
-                help="Somente um vídeo por produto. Se enviar arquivo, ele tem prioridade sobre o link acima.",
-            )
-
             substituir_fotos_cat = st.checkbox(
                 "🔄 Substituir TODAS as fotos atuais pelas novas", value=False,
                 key=f"cat_substituir_fotos_{sufixo}",
-                help="Use esta opção quando quiser trocar completamente a galeria de fotos. O vídeo é tratado separadamente."
+                help="Use esta opção quando quiser trocar completamente a galeria do produto."
             )
-            _midias_atuais = len(imagens_cadastradas) + (1 if video_catalogo_atual else 0)
-            st.info(f"📊 Galeria atual: {_midias_atuais}/{CATALOGO_MAX_MIDIAS} mídia(s).")
-
             publicar_site = st.checkbox(
                 "Publicar no site/catálogo online", value=bool(item_edicao.get("PublicarSite", False)),
                 key=f"cat_publicar_{sufixo}"
@@ -28715,6 +28365,8 @@ if pagina_atual == "catalogo":
                 "Produto em destaque", value=bool(item_edicao.get("Destaque", False)),
                 key=f"cat_destaque_{sufixo}"
             )
+            if item_edicao.get("Imagens"):
+                st.caption(f"{len(item_edicao.get('Imagens', []))} imagem(ns) já cadastrada(s).")
 
         b1, b2 = st.columns(2)
         if item_edicao:
@@ -28759,32 +28411,23 @@ if pagina_atual == "catalogo":
                     )
                     return
 
-                # CAT1-HF5 — galeria marketplace: no máximo 5 mídias, com uma
-                # foto principal e até um vídeo. Fotos novas entram depois da
-                # principal para não trocar a capa do produto sem intenção.
-                _principal_original_cat = (
-                    imagens_cadastradas[principal_indice_cat]
-                    if imagens_cadastradas and 0 <= int(principal_indice_cat) < len(imagens_cadastradas)
-                    else ""
-                )
                 if substituir_fotos_cat:
                     imagens = []
                 else:
-                    imagens = [
-                        x for _i, x in enumerate(imagens_cadastradas)
-                        if _i not in set(remover_indices) and not str(x).startswith("http")
-                    ]
+                    imagens = [x for _i, x in enumerate(item_edicao.get("Imagens", []) or []) if _i not in set(remover_indices)]
 
                 urls_digitadas = [u.strip() for u in urls_cat.splitlines() if u.strip()]
+                imagens = [x for x in imagens if not str(x).startswith("http")]
                 imagens.extend(urls_digitadas)
 
                 for foto in fotos_cat or []:
                     caminho_novo = salvar_upload_catalogo(foto)
                     if caminho_novo:
-                        imagens.append(caminho_novo)
+                        imagens.insert(0, caminho_novo)
 
                 drive_imagens, drive_erros = importar_imagens_google_drive(drive_fotos_cat)
-                imagens.extend(drive_imagens)
+                for caminho_novo in reversed(drive_imagens):
+                    imagens.insert(0, caminho_novo)
                 if drive_erros:
                     st.warning("Google Drive: " + " ".join(dict.fromkeys(drive_erros)))
 
@@ -28804,43 +28447,19 @@ if pagina_atual == "catalogo":
                             nome_cat.strip(),
                         )
                         if _foto_hist_salva:
-                            if imagens:
-                                imagens.append(_foto_hist_salva)
-                            else:
-                                imagens.insert(0, _foto_hist_salva)
+                            imagens.insert(0, _foto_hist_salva)
                         else:
                             st.warning(
                                 "A foto histórica não pôde ser copiada para o banco de imagens. "
                                 "O produto poderá ser salvo normalmente e a fonte histórica continuará vinculada."
                             )
-                    except Exception:
+                    except Exception as _exc_i8_foto:
                         st.warning(
                             "Não foi possível incorporar a foto histórica neste momento. "
                             "O cadastro será preservado sem alterar as demais informações."
                         )
 
-                imagens = list(dict.fromkeys(str(x).strip() for x in imagens if str(x).strip()))
-                if _principal_original_cat and _principal_original_cat in imagens:
-                    imagens.remove(_principal_original_cat)
-                    imagens.insert(0, _principal_original_cat)
-
-                video_catalogo = "" if remover_video_cat else str(video_catalogo_atual or "").strip()
-                if str(video_url_cat or "").strip():
-                    video_catalogo = str(video_url_cat).strip()
-                if video_upload_cat is not None:
-                    _video_novo_cat = salvar_video_catalogo(video_upload_cat, nome_cat.strip())
-                    if _video_novo_cat:
-                        video_catalogo = _video_novo_cat
-                    else:
-                        st.warning("Não foi possível salvar o vídeo enviado; as fotos poderão ser salvas normalmente.")
-
-                _midias_ok_cat, _midias_erro_cat, _total_midias_cat = _catalogo_validar_midias(imagens, video_catalogo)
-                if not _midias_ok_cat:
-                    st.error(
-                        f"{_midias_erro_cat} A galeria ficou com {_total_midias_cat} mídia(s). "
-                        "Remova algumas mídias e salve novamente."
-                    )
-                    return
+                imagens = list(dict.fromkeys(imagens))
                 variacoes_digitadas_cat = list(dict.fromkeys(
                     x.strip() for x in variacoes_cat.splitlines() if x.strip()
                 ))
@@ -28860,8 +28479,6 @@ if pagina_atual == "catalogo":
                     "Nome": nome_cat.strip(), "Categoria": categoria_cat.strip(),
                     "Subcategoria": subcategoria_cat.strip(), "CodigoInterno": codigo_cat.strip(),
                     "Imagens": list(dict.fromkeys(imagens)),
-                    "VideoCatalogo": video_catalogo,
-                    "MidiasCatalogoVersao": 1,
                     "Descricao": descricao_curta_cat.strip() or descricao_cat.strip(),
                     "DescricaoCurta": descricao_curta_cat.strip(), "DescricaoCompleta": descricao_cat.strip(),
                     "IdeiasGeracao": ideias_geracao.strip(),
@@ -28878,8 +28495,6 @@ if pagina_atual == "catalogo":
                     "ArquivosBiblioteca": list(item_edicao.get("ArquivosBiblioteca", []) or []),
                     "AtualizadoEm": agora_local().isoformat(timespec="seconds"),
                 })
-                registro.pop("Video", None)
-                registro.pop("VideoUrl", None)
 
                 # CAT1 — ao cadastrar um Kit Festa vindo do acervo, preserva a
                 # composição como dado estrutural, mas não transforma o preço antigo

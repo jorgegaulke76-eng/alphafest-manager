@@ -757,3 +757,8 @@ hangelog
 - Novo Orçamento: seleção pesquisável do Catálogo Oficial + digitação livre.
 - Busca inclui aliases e salva o nome oficial quando há correspondência segura.
 - Produto novo continua permitido sem cadastro prévio.
+
+## 20.4.9-I8.13.2-CAT1-HF5
+- Orçamento: produto do Catálogo Oficial passa a preencher preço, material e descrição automaticamente, mantendo edição livre no pedido.
+- Catálogo: galeria de até 5 mídias por produto, com foto principal e opção de 1 vídeo.
+- HTML/PDF: geração comercial passa a aproveitar múltiplas fotos; vídeo público pode ser acessado pelo catálogo/QR no PDF.
