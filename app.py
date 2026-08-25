@@ -1602,11 +1602,12 @@ def alternar_status(num_proposta, campo, novo_valor):
 
 
 def _hf8_render_status_proposta_jorge_inline(num_proposta, prefixo="hf8_orcamento"):
-    """CAT1-HF9 — status oficiais disponíveis no próprio Novo Orçamento do Jorge.
+    """CAT1-HF11 — editor transacional dos status oficiais no perfil Jorge.
 
-    Usa exclusivamente ``alternar_status`` e a proposta persistida como fonte de
-    verdade. Não cria campos/status paralelos. A interface serve tanto para uma
-    proposta em edição quanto para a proposta recém-salva.
+    HF10 usava ``on_change`` em checkboxes. O widget podia mudar visualmente antes
+    de a gravação ser confirmada pelo banco; se a persistência falhasse, a tela
+    parecia resolvida até a próxima leitura fresca. HF11 troca isso por um único
+    salvamento explícito e só confirma a mudança após reler o registro persistido.
     """
     usuario_nome = str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold()
     if usuario_nome != "jorge":
@@ -1641,39 +1642,94 @@ def _hf8_render_status_proposta_jorge_inline(num_proposta, prefixo="hf8_orcament
 
     st.markdown("#### 🚦 Status oficiais do pedido")
     st.caption(
-        "Fonte única: as alterações feitas aqui são as mesmas usadas no Histórico, "
-        "Produção, Entregas, THU, Alpha Core e demais indicadores."
+        "Fonte única confirmada no banco. Marque os status desejados e clique em "
+        "Salvar status; a tela só considera a baixa concluída depois da releitura do registro."
     )
 
-    c1, c2, c3, c4 = st.columns(4)
-    c1.checkbox(
-        "✅ Aprovado", value=aprovado, key=f"{prefixo}_aprovado_{numero}",
-        on_change=alternar_status, args=(numero, "aprovado", not aprovado),
-        help="Confirma a aprovação comercial do orçamento e libera o pedido para a operação.",
-    )
-    if mensal:
-        c2.checkbox(
-            "💳 Pago (mensal)", value=pago, key=f"{prefixo}_pago_mensal_{numero}",
-            disabled=True,
-            help="Cliente mensalista: o pagamento é atualizado automaticamente pelo fechamento mensal.",
+    form_key = f"{prefixo}_form_status_{numero}"
+    with st.form(form_key):
+        c1, c2, c3, c4 = st.columns(4)
+        novo_aprovado = c1.checkbox(
+            "✅ Aprovado", value=aprovado, key=f"{prefixo}_aprovado_{numero}",
+            help="Confirma a aprovação comercial do orçamento e libera o pedido para a operação.",
         )
-    else:
-        c2.checkbox(
-            "💳 Pago", value=pago, key=f"{prefixo}_pago_{numero}",
-            on_change=alternar_status, args=(numero, "pago", not pago),
-            help="Confirma o recebimento individual desta proposta.",
+        if mensal:
+            novo_pago = pago
+            c2.checkbox(
+                "💳 Pago (mensal)", value=pago, key=f"{prefixo}_pago_mensal_{numero}",
+                disabled=True,
+                help="Cliente mensalista: o pagamento é atualizado automaticamente pelo fechamento mensal.",
+            )
+        else:
+            novo_pago = c2.checkbox(
+                "💳 Pago", value=pago, key=f"{prefixo}_pago_{numero}",
+                help="Confirma o recebimento individual desta proposta.",
+            )
+        novo_pronto = c3.checkbox(
+            "📦 Pronto", value=pronto, key=f"{prefixo}_pronto_{numero}",
+            disabled=entregue,
+            help="Produção concluída; aguardando retirada ou entrega. As travas de consumo de materiais continuam valendo.",
         )
-    c3.checkbox(
-        "📦 Pronto", value=pronto, key=f"{prefixo}_pronto_{numero}",
-        on_change=alternar_status, args=(numero, "pronto", not pronto),
-        disabled=entregue,
-        help="Produção concluída; aguardando retirada ou entrega. As travas de consumo de materiais continuam valendo.",
-    )
-    c4.checkbox(
-        "🚚 Entregue", value=entregue, key=f"{prefixo}_entregue_{numero}",
-        on_change=alternar_status, args=(numero, "entregue", not entregue),
-        help="Finaliza a operação. Entregue implica Pronto automaticamente.",
-    )
+        novo_entregue = c4.checkbox(
+            "🚚 Entregue", value=entregue, key=f"{prefixo}_entregue_{numero}",
+            help="Finaliza a operação. Entregue implica Pronto automaticamente.",
+        )
+        salvar_status_hf11 = st.form_submit_button(
+            "💾 Salvar status", type="primary", use_container_width=True
+        )
+
+    if salvar_status_hf11:
+        ok_status_hf11, msg_status_hf11 = salvar_andamento_proposta(
+            numero, novo_aprovado, novo_pago, novo_pronto, novo_entregue
+        )
+        # Sempre relê do banco antes de informar sucesso. Nunca deixa o estado
+        # visual do widget ser tratado como fonte de verdade.
+        try:
+            proposta_confirmada_hf11 = next(
+                (p for p in carregar_historico(force_refresh=True)
+                 if str((p or {}).get("numero_proposta") or "").strip() == numero),
+                None,
+            )
+        except Exception:
+            proposta_confirmada_hf11 = None
+        estado_confirmado_hf11 = _status_resumo(proposta_confirmada_hf11 or {})
+        esperado_hf11 = {
+            "aprovado": bool(novo_aprovado),
+            "pago": bool(pago if mensal else novo_pago),
+            "pronto": bool(novo_pronto or novo_entregue),
+            "entregue": bool(novo_entregue),
+        }
+        persistiu_hf11 = isinstance(proposta_confirmada_hf11, dict) and all(
+            bool(estado_confirmado_hf11.get(campo)) == valor
+            for campo, valor in esperado_hf11.items()
+        )
+
+        # Limpa somente os widgets deste pedido para que o próximo rerun seja
+        # reconstruído a partir do banco, e não de session_state antigo.
+        for chave_hf11 in (
+            f"{prefixo}_aprovado_{numero}", f"{prefixo}_pago_{numero}",
+            f"{prefixo}_pago_mensal_{numero}", f"{prefixo}_pronto_{numero}",
+            f"{prefixo}_entregue_{numero}",
+        ):
+            st.session_state.pop(chave_hf11, None)
+
+        try:
+            invalidate_document_cache("historico_orcamentos")
+            st.cache_data.clear()
+        except Exception:
+            pass
+
+        if ok_status_hf11 and persistiu_hf11:
+            st.session_state["_mensagem_sucesso_pendente"] = (
+                f"✅ {msg_status_hf11} Persistência confirmada no banco."
+            )
+            st.rerun()
+        else:
+            detalhe_hf11 = msg_status_hf11 or "A gravação não foi confirmada pelo banco."
+            st.error(
+                f"A baixa não foi confirmada. {detalhe_hf11} "
+                "Os controles foram restaurados para o último valor realmente salvo."
+            )
 
     carimbos = []
     for campo, rotulo in (("aprovado_em", "Aprovado"), ("pago_em", "Pago"), ("pronto_em", "Pronto"), ("entregue_em", "Entregue")):
@@ -14756,7 +14812,7 @@ hoje = hoje_local()
 alertas_hoje, alertas_atrasados, alertas_proximos = [], [], []
 for p in carregar_historico():
     entrega = data_entrega_segura(p.get("data_entrega"))
-    if not entrega or p.get("entregue", False):
+    if not entrega or bool(_status_resumo(p).get("entregue")):
         continue
     dias = (entrega - hoje).days
     if dias < 0:
