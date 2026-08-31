@@ -34,6 +34,7 @@ DEFAULT_CATALOG_VIEWER_URL = "https://jorgegaulke76-eng.github.io/alphafest-cata
 
 __all__ = [
     "online_configured",
+    "credential_mode",
     "connection_test",
     "load_document",
     "save_document",
@@ -47,17 +48,35 @@ __all__ = [
 ]
 
 
-def _config() -> tuple[str, str]:
-    url = ""
-    key = ""
+def _secret_or_env(name: str) -> str:
+    value = ""
     try:
-        url = str(st.secrets.get("SUPABASE_URL", "")).strip()
-        key = str(st.secrets.get("SUPABASE_KEY", "")).strip()
+        value = str(st.secrets.get(name, "") or "").strip()
     except Exception:
         pass
-    url = url or os.getenv("SUPABASE_URL", "").strip()
-    key = key or os.getenv("SUPABASE_KEY", "").strip()
-    return url.rstrip("/"), key
+    return value or os.getenv(name, "").strip()
+
+
+def _config() -> tuple[str, str]:
+    """Retorna URL e credencial de servidor.
+
+    I8.13.3: quando disponível, ``SUPABASE_SERVICE_KEY`` tem prioridade sobre
+    a chave anônima. O Manager roda no servidor do Streamlit, portanto a chave
+    de serviço permanece em Secrets e nunca é enviada ao navegador. Isso permite
+    fechar escrita anônima no Supabase sem custo adicional.
+    """
+    url = _secret_or_env("SUPABASE_URL")
+    service_key = _secret_or_env("SUPABASE_SERVICE_KEY")
+    anon_key = _secret_or_env("SUPABASE_KEY")
+    return url.rstrip("/"), service_key or anon_key
+
+
+def credential_mode() -> str:
+    if _secret_or_env("SUPABASE_SERVICE_KEY"):
+        return "service"
+    if _secret_or_env("SUPABASE_KEY"):
+        return "anon"
+    return "none"
 
 
 def online_configured() -> bool:
@@ -117,13 +136,23 @@ def load_document(document_key: str, local_path: str, default: Any) -> Any:
 
 
 def save_document(document_key: str, value: Any, local_path: str) -> bool:
-    """Salva online e mantém uma cópia JSON local como contingência."""
-    try:
-        _write_local(local_path, value)
-    except OSError:
-        pass
+    """Persiste com confirmação online antes de atualizar a contingência local.
 
+    I8.13.3 — regra de integridade: quando o Supabase está configurado, uma
+    falha online NÃO grava primeiro uma versão local mais nova. Isso evita o
+    efeito "salvou na tela, mas voltou depois" causado por duas verdades
+    diferentes (cache/local x banco). A cópia local só acompanha um write que
+    o banco confirmou.
+
+    Sem configuração online, a cópia local ainda é escrita para diagnóstico e
+    uso local, porém o retorno permanece ``False`` porque não houve confirmação
+    no banco oficial.
+    """
     if not online_configured():
+        try:
+            _write_local(local_path, value)
+        except OSError:
+            pass
         return False
 
     url, _ = _config()
@@ -141,9 +170,14 @@ def save_document(document_key: str, value: Any, local_path: str) -> bool:
             timeout=TIMEOUT,
         )
         response.raise_for_status()
-        return True
     except requests.RequestException:
         return False
+
+    try:
+        _write_local(local_path, value)
+    except OSError:
+        pass
+    return True
 
 
 

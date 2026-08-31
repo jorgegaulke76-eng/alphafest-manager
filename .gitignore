@@ -1,0 +1,34 @@
+# I8.13.3 — arquivos que nunca devem ir para o Git
+__pycache__/
+*.py[cod]
+*.pyo
+*.log
+*.tmp
+*.bak
+*.bak_*
+*.zip
+.env
+.env.*
+.streamlit/secrets.toml
+uploads/
+biblioteca_uploads/
+backups/
+
+# Bancos operacionais locais / contingência
+historico_orcamentos.json
+clientes_db.json
+estoque_db.json
+consumo_pedidos_db.json
+faturamento_mensal_db.json
+producao_db.json
+compras_db.json
+planejamento_compras_db.json
+fichas_tecnicas_db.json
+atendimentos_db.json
+integracoes_db.json
+alpha_intelligence_db.json
+usuarios_config.json
+
+# Mídias e artefatos gerados em runtime
+catalogos_publicados/
+catalogos_exportados/

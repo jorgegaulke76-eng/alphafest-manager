@@ -1,3 +1,9 @@
+## 20.4.9-I8.13.3 — Núcleo de Integridade e Segurança (custo zero)
+- Persistência confirmada antes do cache.
+- Preparação para SERVICE KEY e RLS fechado.
+- Health Monitor com estado da última gravação.
+- Higiene de deploy e proteção de Secrets.
+
 ## 20.4.9-I8.13.2-CAT1-HF12 — Proposta pública sem duplicidade/CPF
 - Evita `ITATIBA ITATIBA` no cabeçalho quando a cidade já estiver incorporada ao nome público da empresa.
 - Remove CPF/CNPJ anexado ao campo `Empresa` somente na saída pública da proposta/WhatsApp, preservando a configuração interna.

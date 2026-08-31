@@ -195,13 +195,33 @@ def load_document(document_key, local_path, default, force_refresh=False):
     return copy.deepcopy(value)
 
 def save_document(document_key, value, local_path):
+    """Grava um documento e só promove o novo valor ao cache após confirmação.
+
+    I8.13.3 generaliza a proteção homologada na HF11: falha de persistência não
+    pode deixar a sessão enxergando um valor que o banco oficial não confirmou.
+    """
     func = getattr(_cloud_db, "save_document", None) if _cloud_db else None
     result = func(document_key, value, local_path) if callable(func) else _write_json_fallback(local_path, value)
-    _document_cache()[str(document_key)] = {
-        "time": time.monotonic(),
-        "value": copy.deepcopy(value),
+    confirmado = bool(result)
+    st.session_state["_last_write_status"] = {
+        "ok": confirmado,
+        "documento": str(document_key),
+        "momento": agora_local().strftime("%d/%m/%Y %H:%M:%S") if "agora_local" in globals() else datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
     }
-    return result
+    if confirmado:
+        _document_cache()[str(document_key)] = {
+            "time": time.monotonic(),
+            "value": copy.deepcopy(value),
+        }
+    else:
+        # Uma tentativa não confirmada jamais pode virar a nova verdade da sessão.
+        invalidate_document_cache(document_key)
+    return confirmado
+
+
+def database_credential_mode():
+    func = getattr(_cloud_db, "credential_mode", None) if _cloud_db else None
+    return str(func() if callable(func) else "none")
 
 def connection_test(force_refresh=False):
     cache_key = "_connection_test_cache"
@@ -14734,6 +14754,20 @@ with st.sidebar:
         cmon1, cmon2 = st.columns(2)
         cmon1.caption(f"Sistema\n\n{status_geral_monitor}")
         cmon2.caption(f"Banco\n\n{banco_monitor}")
+        modo_credencial = database_credential_mode()
+        if modo_credencial == "service":
+            st.caption("🔒 Banco: escrita protegida por credencial de servidor")
+        elif modo_credencial == "anon":
+            st.caption("🟡 Segurança: chave anônima ativa — migração gratuita para SERVICE KEY recomendada")
+        else:
+            st.caption("🟡 Segurança: sem credencial online configurada")
+        ultima_gravacao = st.session_state.get("_last_write_status") or {}
+        if ultima_gravacao:
+            icone_gravacao = "✅" if ultima_gravacao.get("ok") else "🔴"
+            st.caption(
+                f"{icone_gravacao} Última gravação: {ultima_gravacao.get('documento', '—')} · "
+                f"{ultima_gravacao.get('momento', '—')}"
+            )
         st.caption(f"Boot: {total_monitor - falhas_monitor}/{total_monitor} etapas • {tempo_monitor:.2f}s")
         if contingencias_monitor:
             st.caption(f"🟡 {contingencias_monitor} módulo(s) em contingência controlada")
