@@ -1,3 +1,7 @@
+## 20.4.9-I8.13.2-CAT1-HF12 — Proposta pública sem duplicidade/CPF
+- Evita `ITATIBA ITATIBA` no cabeçalho quando a cidade já estiver incorporada ao nome público da empresa.
+- Remove CPF/CNPJ anexado ao campo `Empresa` somente na saída pública da proposta/WhatsApp, preservando a configuração interna.
+
 ## 20.4.9-I8.13-HF2 — Proveniência real do Pronto
 - Corrige definitivamente o falso **“Pronto hoje”** em pedidos legados.
 - `pronto_em` só é usado para calcular espera quando possui o marcador interno `pronto_em_confiavel`, criado exclusivamente numa transição real de Pronto observada pela versão atual.

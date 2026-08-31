@@ -1270,6 +1270,35 @@ def salvar_config_empresa(config):
     save_document("config_empresa", dados, ARQUIVO_EMPRESA)
 
 # --- FUNÇÕES AUXILIARES ---
+def _nome_publico_empresa_proposta(empresa):
+    """Nome público da empresa sem repetir a cidade no cabeçalho da proposta."""
+    empresa = empresa or {}
+    nome = str(empresa.get("nome_maiusculo", empresa.get("nome", "EMPRESA"))).strip().upper()
+    cidade = str(empresa.get("cidade", "")).strip().upper()
+    nome = re.sub(r"\s+", " ", nome)
+    cidade = re.sub(r"\s+", " ", cidade)
+    if cidade:
+        cidade_no_nome = re.search(rf"(?<!\S){re.escape(cidade)}(?!\S)", nome)
+        if not cidade_no_nome:
+            nome = f"{nome} {cidade}".strip()
+    return nome or "EMPRESA"
+
+def _pix_empresa_sem_documento(valor):
+    """Remove CPF/CNPJ eventualmente anexado ao nome do favorecido na proposta pública."""
+    texto = str(valor or "").strip()
+    if not texto:
+        return ""
+    padrao = re.compile(
+        r"\s*(?:[-–—|]\s*)?(?:(?:CPF(?:/CNPJ)?|CNPJ)\s*:?\s*)?([0-9][0-9.\-/ ]{9,}[0-9])\s*$",
+        re.IGNORECASE,
+    )
+    achado = padrao.search(texto)
+    if achado:
+        digitos = re.sub(r"\D", "", achado.group(1))
+        if len(digitos) in (11, 14):
+            texto = texto[:achado.start()].rstrip(" -–—|:")
+    return texto
+
 def formatar_msg_whatsapp(prop):
     """Monta a mensagem compacta aprovada para envio pelo WhatsApp."""
     prop = prop or {}
@@ -1334,7 +1363,7 @@ def formatar_msg_whatsapp(prop):
     sep = "────────────────────────"
 
     linhas = [
-        f"*PROPOSTA {str(empresa.get('nome_maiusculo', empresa.get('nome', 'EMPRESA'))).upper()} {str(empresa.get('cidade', '')).upper()}*".strip(),
+        f"*PROPOSTA {_nome_publico_empresa_proposta(empresa)}*",
         f"*Nº:* {numero_proposta}",
         f"*Emissão:* {data_emissao}",
         "",
@@ -1375,7 +1404,7 @@ def formatar_msg_whatsapp(prop):
             f"* Titular: {empresa.get('pix_titular', '')}",
             f"* Banco: {empresa.get('pix_banco', '')}",
             f"* Agência: {empresa.get('pix_agencia', '')} | Conta: {empresa.get('pix_conta', '')}",
-            f"* Empresa: {empresa.get('pix_empresa', '')}",
+            f"* Empresa: {_pix_empresa_sem_documento(empresa.get('pix_empresa', ''))}",
             "",
             "*Somente após realizado o pagamento e nos enviando o comprovante daremos seguimento ao seu pedido!*",
         ])
