@@ -85,12 +85,25 @@ def online_configured() -> bool:
 
 
 def _headers(extra: dict[str, str] | None = None) -> dict[str, str]:
+    """Monta cabeçalhos compatíveis com chaves novas e legadas do Supabase.
+
+    I8.13.3-HF1:
+    - ``sb_secret_...`` / ``sb_publishable_...`` são chaves opacas e devem ser
+      enviadas em ``apikey``; NÃO podem ser usadas como ``Bearer``.
+    - chaves legadas ``anon`` / ``service_role`` são JWTs e continuam usando
+      também ``Authorization: Bearer ...`` para compatibilidade.
+    """
     _, key = _config()
     headers = {
         "apikey": key,
-        "Authorization": f"Bearer {key}",
         "Content-Type": "application/json",
     }
+
+    # As novas chaves do Supabase (sb_*) não são JWTs. Enviá-las como Bearer
+    # provoca HTTP 401 / Invalid JWT. Para chaves legadas JWT, mantemos Bearer.
+    if key and not key.startswith(("sb_secret_", "sb_publishable_")):
+        headers["Authorization"] = f"Bearer {key}"
+
     if extra:
         headers.update(extra)
     return headers
