@@ -117,6 +117,7 @@ from catalogo_orcamento_service import (
     resolver_produto_orcamento as _catalogo_resolver_orcamento,
     produto_catalogo_da_meta as _catalogo_produto_da_meta,
     resumo_dados_catalogo as _catalogo_resumo_dados,
+    midias_preview_catalogo as _catalogo_midias_preview,
     snapshot_item_catalogo as _catalogo_snapshot_item,
 )
 from relacionamentos_service import (
@@ -10790,6 +10791,71 @@ def _orcamento_campos_produto(prefixo, *, em_form=False):
     return produto, meta
 
 
+
+def _orcamento_previa_visual_catalogo(produto, *, prefixo="orcamento_produto"):
+    """HF11: confirma visualmente o produto do Catálogo dentro do Orçamento.
+
+    A prévia é somente leitura: não altera produto, preço nem os campos manuais
+    de personalização. A galeria completa só é aberta sob demanda para manter o
+    formulário leve.
+    """
+    produto = produto or {}
+    midias = _catalogo_midias_preview(produto, limite=CATALOGO_MAX_MIDIAS)
+    imagens = list(midias.get("imagens") or [])
+    video = str(midias.get("video") or "").strip()
+    if not imagens and not video:
+        st.caption("🖼️ Este produto ainda não possui foto/vídeo cadastrado no Catálogo.")
+        return
+
+    nome_produto = str(produto.get("Nome") or "Produto").strip() or "Produto"
+    with st.container(border=True):
+        col_foto, col_info = st.columns([1.15, 2.85])
+        with col_foto:
+            if imagens:
+                try:
+                    st.image(
+                        imagem_streamlit_catalogo(imagens[0]),
+                        caption="Foto principal",
+                        use_container_width=True,
+                    )
+                except Exception:
+                    st.caption("🖼️ Foto principal cadastrada; a prévia não pôde ser carregada agora.")
+            else:
+                st.caption("🎬 Produto com vídeo cadastrado.")
+        with col_info:
+            st.markdown(f"**Confirmação visual · {nome_produto}**")
+            qtd_fotos = len(imagens)
+            partes = []
+            if qtd_fotos:
+                partes.append(f"{qtd_fotos} foto{'s' if qtd_fotos != 1 else ''}")
+            if video:
+                partes.append("1 vídeo")
+            st.caption("Galeria do Catálogo: " + " + ".join(partes))
+            descricao = str(produto.get("DescricaoCurta") or produto.get("Descricao") or "").strip()
+            if descricao:
+                st.caption(descricao)
+            if video.startswith(("http://", "https://")):
+                st.link_button(
+                    "▶️ Ver vídeo do produto",
+                    video,
+                    use_container_width=True,
+                )
+            elif video:
+                st.caption("▶️ Há um vídeo salvo no Catálogo deste produto.")
+
+        if len(imagens) > 1:
+            with st.expander(f"🖼️ Ver outras fotos ({len(imagens) - 1})", expanded=False):
+                extras = imagens[1:]
+                colunas = st.columns(min(4, max(1, len(extras))))
+                for pos, origem in enumerate(extras):
+                    try:
+                        colunas[pos % len(colunas)].image(
+                            imagem_streamlit_catalogo(origem),
+                            use_container_width=True,
+                        )
+                    except Exception:
+                        colunas[pos % len(colunas)].caption("Foto cadastrada")
+
 def _tokens_saneamento_produto(valor):
     """Tokens conservadores para correlacionar nomes parecidos sem alterar o Catálogo.
 
@@ -15470,6 +15536,10 @@ def dialog_orcamento_anna(proposta=None):
         st.success("⚡ Produto do Catálogo reconhecido: preço oficial carregado. Tema, nome, cor/material e detalhes permanecem manuais.")
         if resumo_auto_i8113:
             st.caption(resumo_auto_i8113)
+        _orcamento_previa_visual_catalogo(
+            produto_cat_auto_i8113,
+            prefixo=f"anna_orc_prev_{chave_item_i8113}",
+        )
     with st.expander("🎨 Personalização & Especificações", expanded=True):
         e1, e2 = st.columns(2)
         tema = e1.text_input("Tema / Ocasião", key=f"anna_modal_tema_{chave_item_i8113}")
@@ -25350,6 +25420,10 @@ if pagina_atual == "novo_orcamento":
         st.success("⚡ Produto do Catálogo reconhecido: preço oficial carregado. Tema, nome, cor/material e detalhes permanecem manuais.")
         if resumo_auto_i8113:
             st.caption(resumo_auto_i8113)
+        _orcamento_previa_visual_catalogo(
+            produto_cat_auto_i8113,
+            prefixo=f"orc_prev_{st.session_state.form_key}",
+        )
 
     # O restante do ITEM continua isolado para evitar recálculos enquanto Jorge
     # digita tema, nome e personalizações.

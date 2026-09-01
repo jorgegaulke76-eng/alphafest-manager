@@ -784,3 +784,10 @@ hangelog
 - Proposta recebe `relacionamento_id` do cliente criado, evitando herdar vínculo de cliente anterior em edições.
 - Identificadores novos não fazem fallback silencioso por nome, protegendo clientes homônimos.
 - Jorge e Anna usam a mesma regra; clientes existentes não são alterados automaticamente.
+
+## 20.4.9-I8.13.5-HF11 — Confirmação visual do produto no Orçamento
+- Novo Orçamento (Jorge e Anna) passa a mostrar a foto principal do produto selecionado no Catálogo antes de adicionar o item.
+- Fotos adicionais ficam disponíveis em galeria recolhida; vídeo público pode ser aberto diretamente quando cadastrado.
+- Produto sem mídia e produto livre continuam sem bloqueio.
+- Prévia é somente leitura: preço oficial continua automático, enquanto Tema, Nome, Cor/Material, Idade/Data e Outros Detalhes permanecem manuais.
+- `VERSAO` e `VERSAO.txt` alinhados em 20.4.9-I8.13.5-HF11.

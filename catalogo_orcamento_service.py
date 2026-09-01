@@ -1,10 +1,11 @@
 """Regras puras de Catálogo Oficial usadas pelo fluxo de orçamento.
 
-I8.13.5-HF8
+I8.13.5-HF11
 
 Este módulo não conhece Streamlit, Supabase nem session_state. Ele centraliza
-somente identidade de produto, aliases, resolução híbrida Catálogo/texto livre
-e o snapshot comercial seguro que acompanha um item da proposta.
+identidade de produto, aliases, resolução híbrida Catálogo/texto livre, o
+snapshot comercial seguro e o resumo de mídias usado na confirmação visual do
+produto dentro do orçamento.
 """
 
 from __future__ import annotations
@@ -226,6 +227,64 @@ def resumo_dados_catalogo(produto: Optional[Mapping[str, Any]]) -> str:
         partes.append("Opções: " + " • ".join(variacoes[:5]))
     return " · ".join(partes)
 
+
+
+def midias_preview_catalogo(
+    produto: Optional[Mapping[str, Any]],
+    *,
+    limite: int = 5,
+) -> Dict[str, Any]:
+    """HF11: retorna galeria segura para confirmação visual no Orçamento.
+
+    A primeira foto continua sendo a principal. O vídeo é complementar e conta
+    dentro do limite visual, preservando a regra já homologada de até cinco
+    mídias por produto. A função é somente leitura e não altera o Catálogo.
+    """
+    produto = produto or {}
+    try:
+        limite_int = max(1, int(limite))
+    except (TypeError, ValueError):
+        limite_int = 5
+
+    imagens: List[str] = []
+    vistos = set()
+    bruto_imagens = produto.get("Imagens", []) or []
+    if isinstance(bruto_imagens, (str, bytes, bytearray)):
+        bruto_imagens = [bruto_imagens]
+    try:
+        iter_imagens = list(bruto_imagens)
+    except TypeError:
+        iter_imagens = [bruto_imagens]
+
+    for origem in iter_imagens:
+        texto = str(origem or "").strip()
+        if not texto or texto in vistos:
+            continue
+        vistos.add(texto)
+        imagens.append(texto)
+
+    video = str(
+        produto.get("VideoCatalogo")
+        or produto.get("Video")
+        or produto.get("VideoUrl")
+        or ""
+    ).strip()
+
+    max_fotos = limite_int - (1 if video else 0)
+    if max_fotos < 0:
+        max_fotos = 0
+    imagens_visiveis = imagens[:max_fotos]
+    total_catalogado = len(imagens) + (1 if video else 0)
+
+    return {
+        "imagem_principal": imagens_visiveis[0] if imagens_visiveis else "",
+        "imagens": imagens_visiveis,
+        "video": video,
+        "tem_video": bool(video),
+        "total_visivel": len(imagens_visiveis) + (1 if video else 0),
+        "total_catalogado": total_catalogado,
+        "limite": limite_int,
+    }
 
 def snapshot_item_catalogo(
     meta: Optional[Mapping[str, Any]],

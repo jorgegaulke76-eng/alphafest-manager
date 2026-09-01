@@ -4,6 +4,7 @@ from catalogo_orcamento_service import (
     ORCAMENTO_PRODUTO_LIVRE,
     aliases_catalogo_atomicos,
     mapa_identidade_produtos,
+    midias_preview_catalogo,
     normalizar_identidade_produto,
     opcoes_produto_orcamento,
     produto_catalogo_da_meta,
@@ -106,6 +107,29 @@ class CatalogoOrcamentoServiceTests(unittest.TestCase):
         self.assertIn("Papelaria / Bolos", texto)
         self.assertIn("Material: Papel comestível", texto)
         self.assertIn("Opções: A4 • A3", texto)
+
+
+    def test_preview_midias_respeita_primeira_foto_e_limite_com_video(self):
+        produto = {
+            "Nome": "KIT FESTA",
+            "Imagens": ["foto1.png", "foto2.png", "foto2.png", "foto3.png", "foto4.png", "foto5.png"],
+            "VideoCatalogo": "https://exemplo.com/video.mp4",
+        }
+        preview = midias_preview_catalogo(produto, limite=5)
+        self.assertEqual(preview["imagem_principal"], "foto1.png")
+        self.assertEqual(preview["imagens"], ["foto1.png", "foto2.png", "foto3.png", "foto4.png"])
+        self.assertEqual(preview["video"], "https://exemplo.com/video.mp4")
+        self.assertEqual(preview["total_visivel"], 5)
+        self.assertEqual(preview["total_catalogado"], 6)
+
+    def test_preview_midias_e_somente_leitura_e_aceita_sem_midia(self):
+        produto = {"Nome": "SEM FOTO", "Imagens": []}
+        original = dict(produto)
+        preview = midias_preview_catalogo(produto)
+        self.assertEqual(preview["imagem_principal"], "")
+        self.assertEqual(preview["imagens"], [])
+        self.assertFalse(preview["tem_video"] )
+        self.assertEqual(produto, original)
 
 
 if __name__ == "__main__":
