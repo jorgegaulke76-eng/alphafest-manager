@@ -117,7 +117,6 @@ from catalogo_orcamento_service import (
     resolver_produto_orcamento as _catalogo_resolver_orcamento,
     produto_catalogo_da_meta as _catalogo_produto_da_meta,
     resumo_dados_catalogo as _catalogo_resumo_dados,
-    midias_preview_catalogo as _catalogo_midias_preview,
     snapshot_item_catalogo as _catalogo_snapshot_item,
 )
 from relacionamentos_service import (
@@ -10792,6 +10791,55 @@ def _orcamento_campos_produto(prefixo, *, em_form=False):
 
 
 
+def _catalogo_midias_preview_compativel(produto, *, limite=5):
+    """HF12: prévia de mídia sem exigir símbolo novo no service durante deploy.
+
+    Mantém compatibilidade com o ``catalogo_orcamento_service`` da HF10/HF9,
+    evitando que uma atualização parcial do repositório derrube a aplicação.
+    """
+    produto = produto or {}
+    try:
+        limite_int = max(1, int(limite))
+    except (TypeError, ValueError):
+        limite_int = 5
+
+    imagens = []
+    vistos = set()
+    bruto_imagens = produto.get("Imagens", []) or []
+    if isinstance(bruto_imagens, (str, bytes, bytearray)):
+        bruto_imagens = [bruto_imagens]
+    try:
+        iter_imagens = list(bruto_imagens)
+    except TypeError:
+        iter_imagens = [bruto_imagens]
+
+    for origem in iter_imagens:
+        texto = str(origem or "").strip()
+        if not texto or texto in vistos:
+            continue
+        vistos.add(texto)
+        imagens.append(texto)
+
+    video = str(
+        produto.get("VideoCatalogo")
+        or produto.get("Video")
+        or produto.get("VideoUrl")
+        or ""
+    ).strip()
+
+    max_fotos = limite_int - (1 if video else 0)
+    imagens_visiveis = imagens[:max(0, max_fotos)]
+    return {
+        "imagem_principal": imagens_visiveis[0] if imagens_visiveis else "",
+        "imagens": imagens_visiveis,
+        "video": video,
+        "tem_video": bool(video),
+        "total_visivel": len(imagens_visiveis) + (1 if video else 0),
+        "total_catalogado": len(imagens) + (1 if video else 0),
+        "limite": limite_int,
+    }
+
+
 def _orcamento_previa_visual_catalogo(produto, *, prefixo="orcamento_produto"):
     """HF11: confirma visualmente o produto do Catálogo dentro do Orçamento.
 
@@ -10800,7 +10848,7 @@ def _orcamento_previa_visual_catalogo(produto, *, prefixo="orcamento_produto"):
     formulário leve.
     """
     produto = produto or {}
-    midias = _catalogo_midias_preview(produto, limite=CATALOGO_MAX_MIDIAS)
+    midias = _catalogo_midias_preview_compativel(produto, limite=CATALOGO_MAX_MIDIAS)
     imagens = list(midias.get("imagens") or [])
     video = str(midias.get("video") or "").strip()
     if not imagens and not video:
