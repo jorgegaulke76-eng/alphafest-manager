@@ -108,6 +108,17 @@ from entregas_logistica_service import (
     mensagem_pedido_pronto as _entregas_mensagem_pronto,
     validar_conclusao_saida as _entregas_validar_conclusao_saida,
 )
+from catalogo_orcamento_service import (
+    ORCAMENTO_PRODUTO_LIVRE as _catalogo_orcamento_livre,
+    normalizar_identidade_produto as _catalogo_normalizar_identidade,
+    aliases_catalogo_atomicos as _catalogo_aliases_atomicos,
+    mapa_identidade_produtos as _catalogo_mapa_identidade,
+    opcoes_produto_orcamento as _catalogo_opcoes_orcamento,
+    resolver_produto_orcamento as _catalogo_resolver_orcamento,
+    produto_catalogo_da_meta as _catalogo_produto_da_meta,
+    resumo_dados_catalogo as _catalogo_resumo_dados,
+    snapshot_item_catalogo as _catalogo_snapshot_item,
+)
 from relacionamentos_service import (
     normalizar_texto_cliente as _rel_normalizar_texto_cliente,
     telefone_chave as _rel_telefone_chave,
@@ -10566,196 +10577,36 @@ def salvar_catalogo(lista):
 
 
 def normalizar_identidade_produto(valor):
-    """20.4.9-H — normalização estrita para nome oficial/alias."""
-    import unicodedata
-    texto = unicodedata.normalize("NFKD", str(valor or "").strip())
-    texto = "".join(c for c in texto if not unicodedata.combining(c)).casefold()
-    texto = re.sub(r"[^a-z0-9]+", " ", texto)
-    return " ".join(texto.split())
-
+    """I8.13.5-HF8 — identidade de produto centralizada no serviço de Catálogo/Orçamento."""
+    return _catalogo_normalizar_identidade(valor)
 
 def _aliases_catalogo_atomicos(produto):
-    """Interpreta aliases atuais e formatos legados sem alterar o Catálogo.
-
-    Alguns cadastros históricos guardaram vários aliases dentro de um único item
-    (ex.: ``["ALIAS A, ALIAS B, ALIAS C"]``). O Catálogo continua sendo a fonte
-    oficial; esta função apenas expande a leitura para comparação segura. O valor
-    original também é preservado como candidato, então nomes que contenham vírgula
-    não deixam de funcionar.
-    """
-    produto = produto or {}
-    bruto = produto.get("Aliases", [])
-    if isinstance(bruto, (str, int, float)):
-        valores = [bruto]
-    elif isinstance(bruto, dict):
-        valores = [bruto.get("Nome") or bruto.get("nome") or bruto.get("Alias") or bruto.get("alias") or ""]
-    else:
-        try:
-            valores = list(bruto or [])
-        except TypeError:
-            valores = [bruto]
-
-    resultado = []
-    vistos = set()
-    for valor in valores:
-        if isinstance(valor, dict):
-            valor = valor.get("Nome") or valor.get("nome") or valor.get("Alias") or valor.get("alias") or ""
-        texto = str(valor or "").strip()
-        if not texto:
-            continue
-        candidatos = [texto]
-        # Compatibilidade com importações/edições antigas que concentraram aliases
-        # em uma única linha separados por vírgula, ponto e vírgula, barra vertical,
-        # bullet ou quebra de linha.
-        if re.search(r"[\n\r;,|•]", texto):
-            candidatos.extend(x.strip() for x in re.split(r"(?:[\r\n]+|[;,|•]+)", texto) if x.strip())
-        for candidato in candidatos:
-            chave = normalizar_identidade_produto(candidato)
-            if chave and chave not in vistos:
-                vistos.add(chave)
-                resultado.append(candidato)
-    return resultado
-
+    """Leitura compatível de aliases atuais/legados delegada ao serviço puro."""
+    return _catalogo_aliases_atomicos(produto)
 
 def mapa_identidade_produtos(catalogo):
-    """Retorna nome/alias normalizado -> nome oficial. Nome oficial sempre tem prioridade."""
-    catalogo = catalogo or []
-    mapa = {}
+    """Nome/alias normalizado -> nome oficial, com prioridade do nome oficial."""
+    return _catalogo_mapa_identidade(catalogo)
 
-    # Primeiro os nomes oficiais: um alias nunca pode sobrescrever um produto real.
-    for produto in catalogo:
-        nome = str((produto or {}).get("Nome") or "").strip()
-        chave = normalizar_identidade_produto(nome)
-        if chave and nome:
-            mapa[chave] = nome
-
-    # Depois aliases confirmados, inclusive formatos legados agrupados.
-    for produto in catalogo:
-        oficial = str((produto or {}).get("Nome") or "").strip()
-        if not oficial:
-            continue
-        for alias in _aliases_catalogo_atomicos(produto):
-            chave = normalizar_identidade_produto(alias)
-            if chave and chave not in mapa:
-                mapa[chave] = oficial
-    return mapa
-
-
-ORCAMENTO_PRODUTO_LIVRE = "✍️ Digitar produto que não está no catálogo"
+ORCAMENTO_PRODUTO_LIVRE = _catalogo_orcamento_livre
 
 
 def _orcamento_opcoes_produto_catalogo(catalogo=None):
-    """CAT1-HF4: opções pesquisáveis de produto para orçamento.
-
-    O selectbox do Streamlit já permite digitar para filtrar. Incluímos também
-    aliases como rótulos pesquisáveis, mas sempre devolvendo o nome oficial.
-    Isso reduz nomes diferentes para o mesmo produto sem impedir texto livre.
-    """
+    """Opções híbridas de orçamento vindas do serviço modular de Catálogo."""
     catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
-    opcoes = [ORCAMENTO_PRODUTO_LIVRE]
-    mapa_rotulo = {}
-    vistos = set()
-
-    for produto in catalogo:
-        if not isinstance(produto, dict) or produto.get("Ativo") is False:
-            continue
-        oficial = str(produto.get("Nome") or "").strip()
-        if not oficial:
-            continue
-        chave_oficial = normalizar_identidade_produto(oficial)
-        if chave_oficial and chave_oficial not in vistos:
-            vistos.add(chave_oficial)
-            opcoes.append(oficial)
-            mapa_rotulo[oficial] = oficial
-
-    # Aliases aparecem como opções auxiliares para que a busca encontre nomes
-    # usados no balcão, mas a proposta salva sempre o nome oficial.
-    for produto in catalogo:
-        if not isinstance(produto, dict) or produto.get("Ativo") is False:
-            continue
-        oficial = str(produto.get("Nome") or "").strip()
-        if not oficial:
-            continue
-        for alias in _aliases_catalogo_atomicos(produto):
-            alias = str(alias or "").strip()
-            if not alias or normalizar_identidade_produto(alias) == normalizar_identidade_produto(oficial):
-                continue
-            rotulo = f"{alias}  →  {oficial}"
-            chave_rotulo = normalizar_identidade_produto(rotulo)
-            if chave_rotulo in vistos:
-                continue
-            vistos.add(chave_rotulo)
-            opcoes.append(rotulo)
-            mapa_rotulo[rotulo] = oficial
-
-    return opcoes, mapa_rotulo
-
+    return _catalogo_opcoes_orcamento(catalogo, rotulo_livre=ORCAMENTO_PRODUTO_LIVRE)
 
 def _orcamento_resolver_produto(escolha_catalogo, texto_livre, catalogo=None):
-    """Resolve a entrada híbrida sem bloquear produto novo.
-
-    Ordem: escolha explícita do catálogo -> nome/alias exato digitado -> texto livre.
-    Retorna (nome_para_proposta, metadados).
-    """
+    """Resolve Catálogo explícito -> alias/nome digitado -> texto livre."""
     catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
-    opcoes, mapa_rotulo = _orcamento_opcoes_produto_catalogo(catalogo)
-    escolha = str(escolha_catalogo or "").strip()
-    digitado = str(texto_livre or "").strip()
-
-    oficial = ""
-    origem = "livre"
-    digitado_original = digitado
-
-    if escolha and escolha != ORCAMENTO_PRODUTO_LIVRE:
-        oficial = str(mapa_rotulo.get(escolha) or escolha).strip()
-        origem = "catalogo"
-    elif digitado:
-        mapa = mapa_identidade_produtos(catalogo)
-        resolvido = str(mapa.get(normalizar_identidade_produto(digitado)) or "").strip()
-        if resolvido:
-            oficial = resolvido
-            origem = "catalogo_alias" if normalizar_identidade_produto(resolvido) != normalizar_identidade_produto(digitado) else "catalogo"
-        else:
-            oficial = digitado
-            origem = "livre"
-
-    produto_obj = None
-    if oficial and origem != "livre":
-        chave = normalizar_identidade_produto(oficial)
-        produto_obj = next((x for x in catalogo if isinstance(x, dict) and normalizar_identidade_produto(x.get("Nome")) == chave), None)
-
-    meta = {
-        "origem": origem,
-        "digitado": digitado_original,
-        "catalogo_id": str((produto_obj or {}).get("CatalogoId") or (produto_obj or {}).get("id") or ""),
-        "produto_oficial": oficial if origem != "livre" else "",
-    }
-    return oficial, meta
-
+    return _catalogo_resolver_orcamento(
+        escolha_catalogo, texto_livre, catalogo, rotulo_livre=ORCAMENTO_PRODUTO_LIVRE
+    )
 
 def _orcamento_produto_catalogo_obj(meta, catalogo=None):
-    """CAT1-HF5: retorna o cadastro oficial escolhido no orçamento, sem adivinhação."""
-    meta = meta or {}
-    if str(meta.get("origem") or "") == "livre":
-        return None
+    """Retorna o cadastro explicitamente vinculado, sem adivinhação aproximada."""
     catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
-    catalogo_id = str(meta.get("catalogo_id") or "").strip()
-    oficial = str(meta.get("produto_oficial") or "").strip()
-    if catalogo_id:
-        achou = next((
-            x for x in catalogo
-            if isinstance(x, dict) and str(x.get("CatalogoId") or x.get("id") or "").strip() == catalogo_id
-        ), None)
-        if achou is not None:
-            return achou
-    chave = normalizar_identidade_produto(oficial)
-    if chave:
-        return next((
-            x for x in catalogo
-            if isinstance(x, dict) and normalizar_identidade_produto(x.get("Nome")) == chave
-        ), None)
-    return None
-
+    return _catalogo_produto_da_meta(meta, catalogo)
 
 def _orcamento_aplicar_autopreenchimento_catalogo(meta, *, marcador_key, valor_key, material_key=None, detalhes_key=None):
     """CAT1-HF7: carrega apenas dados comerciais seguros do Catálogo.
@@ -10781,20 +10632,7 @@ def _orcamento_aplicar_autopreenchimento_catalogo(meta, *, marcador_key, valor_k
 
 
 def _orcamento_resumo_dados_catalogo(produto):
-    produto = produto or {}
-    partes = []
-    categoria = str(produto.get("Categoria") or "").strip()
-    sub = str(produto.get("Subcategoria") or "").strip()
-    material = str(produto.get("Material") or "").strip()
-    variacoes = [str(x).strip() for x in (produto.get("Variacoes", []) or []) if str(x).strip()]
-    if categoria:
-        partes.append(categoria + (f" / {sub}" if sub else ""))
-    if material:
-        partes.append(f"Material: {material}")
-    if variacoes:
-        partes.append("Opções: " + " • ".join(variacoes[:5]))
-    return " · ".join(partes)
-
+    return _catalogo_resumo_dados(produto)
 
 def _orcamento_campos_produto(prefixo, *, em_form=False):
     """Renderiza seleção pesquisável + texto livre para Jorge e Anna."""
@@ -15556,12 +15394,7 @@ def dialog_orcamento_anna(proposta=None):
             detalhes = f"Tema: {tema} | Nome: {nome_item} | Idade: {idade} | Cor: {cor} | Obs: {obs}"
             item_novo = {
                 "produto": prod.strip(), "especificacoes": detalhes, "quantidade": q, "valor_unitario": v,
-                "produto_origem": prod_meta_i8113.get("origem", "livre"),
-                "produto_digitado": prod_meta_i8113.get("digitado", ""),
-                "produto_catalogo_id": prod_meta_i8113.get("catalogo_id", ""),
-                "produto_catalogo_descricao": str((produto_cat_auto_i8113 or {}).get("DescricaoCurta") or (produto_cat_auto_i8113 or {}).get("Descricao") or ""),
-                "produto_catalogo_material": str((produto_cat_auto_i8113 or {}).get("Material") or ""),
-                "produto_catalogo_categoria": str((produto_cat_auto_i8113 or {}).get("Categoria") or ""),
+                **_catalogo_snapshot_item(prod_meta_i8113, produto_cat_auto_i8113),
             }
             cliente_item_i811 = localizar_cliente_comercial(nome, doc, wa)
             preco_item_i811 = calcular_preco_cliente_item(cliente_item_i811, prod.strip(), v) if cliente_item_i811 else None
@@ -25413,12 +25246,7 @@ if pagina_atual == "novo_orcamento":
             preco_i811 = calcular_preco_cliente_item(cliente_i811, prod, v) if cliente_i811 else None
             item_novo = {
                 "produto": prod, "especificacoes": detalhes, "quantidade": q, "valor_unitario": v,
-                "produto_origem": prod_meta_i8113.get("origem", "livre"),
-                "produto_digitado": prod_meta_i8113.get("digitado", ""),
-                "produto_catalogo_id": prod_meta_i8113.get("catalogo_id", ""),
-                "produto_catalogo_descricao": str((produto_cat_auto_i8113 or {}).get("DescricaoCurta") or (produto_cat_auto_i8113 or {}).get("Descricao") or ""),
-                "produto_catalogo_material": str((produto_cat_auto_i8113 or {}).get("Material") or ""),
-                "produto_catalogo_categoria": str((produto_cat_auto_i8113 or {}).get("Categoria") or ""),
+                **_catalogo_snapshot_item(prod_meta_i8113, produto_cat_auto_i8113),
             }
             if preco_i811 and preco_i811.get("bloqueado"):
                 st.error(
