@@ -108,6 +108,19 @@ from entregas_logistica_service import (
     mensagem_pedido_pronto as _entregas_mensagem_pronto,
     validar_conclusao_saida as _entregas_validar_conclusao_saida,
 )
+from relacionamentos_service import (
+    normalizar_texto_cliente as _rel_normalizar_texto_cliente,
+    telefone_chave as _rel_telefone_chave,
+    chave_cliente as _rel_chave_cliente,
+    pontuacao_cadastro_relacionamento as _rel_pontuacao_cadastro,
+    localizar_cliente_comercial as _rel_localizar_cliente_comercial,
+    localizar_relacionamento as _rel_localizar_relacionamento,
+    relacionamento_da_proposta as _rel_relacionamento_da_proposta,
+    proposta_com_dados_atuais as _rel_proposta_com_dados_atuais,
+    propostas_do_cliente as _rel_propostas_do_cliente,
+    proxima_acao_crm as _rel_proxima_acao_crm,
+    proxima_acao_proposta as _rel_proxima_acao_proposta,
+)
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -2920,21 +2933,10 @@ def _i811_digitos(valor):
 
 def localizar_cliente_comercial(nome="", documento="", whatsapp=""):
     """Localiza o cadastro mestre para aplicar a regra comercial correta na proposta."""
-    clientes = carregar_clientes()
-    doc = _i811_digitos(documento)
-    wa = _telefone_chave(whatsapp)
-    nome_norm = normalizar_texto_cliente(nome).casefold()
-    if doc:
-        achado = next((c for c in clientes if _i811_digitos(c.get("documento")) == doc), None)
-        if achado:
-            return achado
-    if wa:
-        achado = next((c for c in clientes if _telefone_chave(c.get("whatsapp")) == wa), None)
-        if achado:
-            return achado
-    if nome_norm:
-        return next((c for c in clientes if normalizar_texto_cliente(c.get("nome")).casefold() == nome_norm), None)
-    return None
+    return _rel_localizar_cliente_comercial(
+        carregar_clientes(), nome=nome, documento=documento, whatsapp=whatsapp
+    )
+
 
 
 def autopreencher_cliente_whatsapp_i8111():
@@ -3717,17 +3719,13 @@ def salvar_clientes(lista):
 
 
 def normalizar_texto_cliente(valor):
-    return re.sub(r"\s+", " ", str(valor or "").strip())
+    return _rel_normalizar_texto_cliente(valor)
+
 
 
 def chave_cliente(nome, documento="", whatsapp=""):
-    documento_limpo = re.sub(r"\D", "", str(documento or ""))
-    whatsapp_limpo = re.sub(r"\D", "", str(whatsapp or ""))
-    if documento_limpo:
-        return f"doc:{documento_limpo}"
-    if whatsapp_limpo:
-        return f"wa:{whatsapp_limpo}"
-    return f"nome:{normalizar_texto_cliente(nome).lower()}"
+    return _rel_chave_cliente(nome, documento, whatsapp)
+
 
 
 def _valor_preenchido(valor):
@@ -3738,16 +3736,8 @@ def _valor_preenchido(valor):
 
 def _pontuacao_cadastro_relacionamento(cliente):
     """Prioriza o cadastro manual/mais completo ao consolidar duplicidades seguras."""
-    campos = ["documento", "whatsapp", "email", "cidade", "aniversario", "observacoes", "segmentos", "interesses", "papeis"]
-    pontos = sum(1 for campo in campos if _valor_preenchido(cliente.get(campo)))
-    origem = str(cliente.get("origem", cliente.get("origem_cliente", ""))).casefold()
-    if "histórico" not in origem and "historico" not in origem:
-        pontos += 3
-    if cliente.get("politica_atendimento"):
-        pontos += 2
-    if cliente.get("classificacao_relacionamento") not in (None, "", "Não classificado"):
-        pontos += 1
-    return pontos
+    return _rel_pontuacao_cadastro(cliente)
+
 
 
 def consolidar_cadastros_duplicados_relacionamentos(clientes=None, historico=None, salvar=True):
@@ -4053,26 +4043,13 @@ def politica_atendimento(cliente):
     }
 
 def localizar_relacionamento(nome="", whatsapp=""):
-    chave_wa = _telefone_chave(whatsapp)
-    nome_norm = normalizar_texto_cliente(nome).casefold()
-    for cli in carregar_clientes():
-        if chave_wa and _telefone_chave(cli.get("whatsapp")) == chave_wa:
-            return cli
-        if nome_norm and normalizar_texto_cliente(cli.get("nome")).casefold() == nome_norm:
-            return cli
-    return None
+    return _rel_localizar_relacionamento(carregar_clientes(), nome=nome, whatsapp=whatsapp)
+
 
 def relacionamento_da_proposta(prop):
     """Retorna o cadastro atual vinculado à proposta, priorizando relacionamento_id."""
-    clientes = carregar_clientes()
-    rel_id = str(prop.get("relacionamento_id", "")).strip()
-    if rel_id:
-        encontrado = next((c for c in clientes if str(c.get("id", "")).strip() == rel_id), None)
-        if encontrado:
-            return encontrado
-    nome = prop.get("cliente_nome", prop.get("cliente", ""))
-    whatsapp = prop.get("whatsapp", prop.get("cliente_wa", ""))
-    return localizar_relacionamento(nome, whatsapp)
+    return _rel_relacionamento_da_proposta(prop, carregar_clientes())
+
 
 
 def proposta_com_dados_atuais(prop):
@@ -4080,25 +4057,8 @@ def proposta_com_dados_atuais(prop):
 
     Itens, valores, datas e status continuam vindo da proposta histórica.
     """
-    atual = relacionamento_da_proposta(prop)
-    if not atual:
-        return dict(prop), None
-    visao = dict(prop)
-    nome = atual.get("nome") or visao.get("cliente_nome", visao.get("cliente", ""))
-    documento = atual.get("documento") or visao.get("documento", visao.get("cliente_cpf_cnpj", ""))
-    whatsapp = atual.get("whatsapp") or visao.get("whatsapp", visao.get("cliente_wa", ""))
-    visao.update({
-        "cliente_nome": nome,
-        "cliente": nome,
-        "documento": documento,
-        "cliente_cpf_cnpj": documento,
-        "whatsapp": whatsapp,
-        "cliente_wa": whatsapp,
-        "email": atual.get("email", visao.get("email", "")),
-        "cidade": atual.get("cidade", visao.get("cidade", "")),
-        "relacionamento_id": atual.get("id", visao.get("relacionamento_id", "")),
-    })
-    return visao, atual
+    return _rel_proposta_com_dados_atuais(prop, carregar_clientes())
+
 
 
 def resumo_restricao_relacionamento(cliente):
@@ -4113,21 +4073,8 @@ def resumo_restricao_relacionamento(cliente):
     return {"nivel": nivel, "motivo": politica.get("motivo", ""), "papeis": papeis, **politica}
 
 def propostas_do_cliente(cliente):
-    rel_id = str(cliente.get("id", "")).strip()
-    chave = chave_cliente(cliente.get("nome"), cliente.get("documento"), cliente.get("whatsapp"))
-    propostas = []
-    for prop in carregar_historico():
-        if rel_id and str(prop.get("relacionamento_id", "")).strip() == rel_id:
-            propostas.append(prop)
-            continue
-        pchave = chave_cliente(
-            prop.get("cliente_nome", prop.get("cliente", "")),
-            prop.get("documento", prop.get("cliente_cpf_cnpj", "")),
-            prop.get("whatsapp", prop.get("cliente_wa", "")),
-        )
-        if pchave == chave:
-            propostas.append(prop)
-    return propostas
+    return _rel_propostas_do_cliente(cliente, carregar_historico())
+
 
 
 # --- 20.4.9-I8.12.1: Histórico de Compras por Fornecedor ---
@@ -9242,8 +9189,8 @@ def salvar_atendimentos(dados):
 
 def _telefone_chave(valor):
     """Normaliza telefone para cruzar atendimento, cliente e proposta."""
-    digitos = re.sub(r"\D", "", str(valor or ""))
-    return digitos[-11:] if len(digitos) >= 11 else digitos
+    return _rel_telefone_chave(valor)
+
 
 
 def estagio_funil_atendimento(item):
@@ -9268,24 +9215,8 @@ def estagio_funil_atendimento(item):
 
 
 def proxima_acao_crm(item):
-    status = str(item.get("status", "Novo contato"))
-    mapa = {
-        "Novo contato": "Responder e entender a necessidade",
-        "Catálogo solicitado": "Enviar o catálogo adequado",
-        "Catálogo enviado": "Perguntar o que mais interessou",
-        "Orçamento solicitado": "Preparar orçamento",
-        "Orçamento em elaboração": "Finalizar e enviar orçamento",
-        "Aguardando cliente": "Fazer acompanhamento",
-        "Pedido aprovado": "Confirmar dados e enviar à produção",
-        "Comprovante recebido": "Conferir pagamento",
-        "Arte aprovada": "Iniciar produção",
-        "Em produção": "Acompanhar prazo",
-        "Pronto": "Avisar cliente",
-        "Entregue": "Fazer pós-venda",
-        "Pós-venda": "Registrar retorno e oportunidade futura",
-        "Arquivado": "Sem ação",
-    }
-    return mapa.get(status, proxima_acao_atendimento(item))
+    return _rel_proxima_acao_crm(item, fallback=proxima_acao_atendimento(item))
+
 
 
 def calcular_indice_alpha(item, historico=None, clientes=None):
@@ -12618,20 +12549,8 @@ def montar_fila_operacional(historico, tarefas, atendimentos, limite=10):
 
 def proxima_acao_proposta(proposta):
     """Retorna a ação operacional mais útil usando a fonte oficial de status."""
-    estado = _status_resumo(proposta)
-    if estado.get("entregue"):
-        return "Registrar pós-venda"
-    if estado.get("encerrada"):
-        return "Pedido encerrado — consultar Histórico"
-    if estado.get("pronto"):
-        return "Confirmar retirada/entrega"
-    if estado.get("aprovado"):
-        if not estado.get("pago") and not estado.get("mensalista"):
-            return "Confirmar pagamento e acompanhar produção"
-        return "Acompanhar produção e entrega"
-    if proposta.get("enviado", False):
-        return "Aguardar ou registrar aprovação do cliente"
-    return "Revisar e enviar orçamento"
+    return _rel_proxima_acao_proposta(proposta)
+
 
 
 def resumo_cliente_operacional(cliente, propostas):
