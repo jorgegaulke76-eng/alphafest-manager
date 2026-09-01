@@ -75,6 +75,13 @@ from fluxo_operacional_service import (
     reconciliar_lista_fluxo as _fluxo_reconciliar_lista_fluxo,
 )
 from status_diagnostics_service import diagnosticar_sincronizacao_status
+from auditoria_operacional_service import (
+    executar_auditoria_sincronizacao as _auditoria_executar_sincronizacao,
+    contexto_auditoria_sincronizacao as _auditoria_contexto_sincronizacao,
+    aplicar_plano_saneamento as _auditoria_aplicar_plano_saneamento,
+    linhas_previa_saneamento as _auditoria_linhas_previa_saneamento,
+    linhas_relatorio_sincronizacao as _auditoria_linhas_relatorio_sincronizacao,
+)
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -8698,60 +8705,36 @@ def sincronizar_producao_com_propostas(historico=None):
 
 
 def executar_auditoria_sincronizacao_operacional(force_refresh=True, registrar=False):
-    """HF6 — audita e reconcilia as projeções operacionais contra o Histórico oficial.
-
-    Reparos automáticos são restritos ao espelho ``producao_db``. Status oficiais
-    nunca são inventados ou alterados pela auditoria. Risco, Entregas e painéis
-    são recalculados a partir de leituras frescas da mesma proposta oficial.
-    """
+    """I8.13.5-HF2 — adaptador da tela para o serviço modular de sincronização."""
     historico_sync = carregar_historico(force_refresh=bool(force_refresh))
     tarefas_antes = carregar_producao(force_refresh=bool(force_refresh))
     consumos_sync = carregar_consumos_pedidos(force_refresh=bool(force_refresh))
     estoque_sync = carregar_estoque(force_refresh=bool(force_refresh))
     planejamentos_sync = carregar_planejamentos_compras(force_refresh=bool(force_refresh))
 
-    # A previsão já é derivada. Nesta HF6 ela também exclui propostas encerradas
-    # pela mesma Fonte Única usada na Central.
-    previsao_sync = _i8127_previsao_producao(
-        historico=historico_sync, consumos=consumos_sync, estoque=estoque_sync,
+    rel_depois = _auditoria_executar_sincronizacao(
+        historico=historico_sync,
+        tarefas_antes=tarefas_antes,
+        consumos=consumos_sync,
+        estoque=estoque_sync,
         planejamentos=planejamentos_sync,
+        hoje=hoje_local(),
+        momento=agora_local().isoformat(),
+        montar_previsao=_i8127_previsao_producao,
+        montar_fila_entregas=_i813_engine_fila,
+        reconciliar_fluxo=sincronizar_producao_com_propostas,
+        resumo_produtos=resumo_produtos_pedido,
     )
-    fila_saida_sync = _i813_engine_fila(
-        historico_sync, hoje_local(), resumo_produtos=resumo_produtos_pedido
-    )
-    rel_antes = _i8134_engine_consistencia(
-        historico_sync, tarefas_antes, previsao_sync, fila_saida_sync
-    )
-
-    # Único reparo persistente seguro: reconstruir/inativar o espelho do Fluxo
-    # conforme as propostas oficiais, preservando etapa manual dos pedidos ativos.
-    tarefas_depois = sincronizar_producao_com_propostas(historico_sync)
-    rel_depois = _i8134_engine_consistencia(
-        historico_sync, tarefas_depois, previsao_sync, fila_saida_sync
-    )
-    reparos = max(0, int(rel_antes.get("problemas", 0)) - int(rel_depois.get("problemas", 0)))
-    rel_depois["problemas_antes"] = int(rel_antes.get("problemas", 0))
-    rel_depois["reparos_automaticos"] = reparos
-    rel_depois["momento"] = agora_local().isoformat()
 
     st.session_state["_i8134_relatorio_sincronizacao"] = copy.deepcopy(rel_depois)
     st.session_state["_i8134_relatorio_sincronizacao_ts"] = time.monotonic()
 
+    reparos = int(rel_depois.get("reparos_automaticos", 0) or 0)
     if registrar or reparos or not rel_depois.get("ok"):
         try:
             registrar_auditoria(
                 "Auditoria de sincronização operacional", "Sistema", "Central/Fluxo/Histórico",
-                {
-                    "origem": "Auditoria de Sincronização HF6",
-                    "problemas_antes": int(rel_antes.get("problemas", 0)),
-                    "problemas_depois": int(rel_depois.get("problemas", 0)),
-                    "reparos_automaticos": reparos,
-                    "fluxo_faltantes": rel_depois.get("fluxo_faltantes", [])[:20],
-                    "risco_indevido": rel_depois.get("risco_indevido", [])[:20],
-                    "previsao_indevida": rel_depois.get("previsao_indevida", [])[:20],
-                    "saida_indevida": rel_depois.get("saida_indevida", [])[:20],
-                    "contradicoes": rel_depois.get("contradicoes", [])[:20],
-                },
+                _auditoria_contexto_sincronizacao(rel_depois),
                 resultado="OK" if rel_depois.get("ok") else "ATENCAO",
             )
         except Exception:
@@ -8759,55 +8742,21 @@ def executar_auditoria_sincronizacao_operacional(force_refresh=True, registrar=F
     return rel_depois
 
 
-
 def executar_saneamento_status_historicos_seguro():
-    """HF7 — completa apenas pré-requisitos lógicos em registros históricos.
-
-    Cada proposta é atualizada sobre leitura fresca/CAS. As correções oficiais
-    só são auditadas depois da confirmação do banco. Não infere pagamento,
-    não desfaz status, não altera estoque e não cria datas retroativas.
-    """
+    """I8.13.5-HF2 — adaptador transacional para o saneamento modular."""
     historico_inicial = carregar_historico(force_refresh=True)
     plano_inicial = _i8134_planejar_saneamento_status(historico_inicial)
-    resultados = []
-    total_aplicado = 0
-    falhas = []
 
-    for plano in plano_inicial.get("planos", []):
-        numero = str(plano.get("pedido") or "").strip()
-        if not numero:
-            continue
-        aplicadas = []
-
-        def _mutar_saneamento(proposta):
-            aplicadas.clear()
-            aplicadas.extend(_i8134_aplicar_correcoes_status(proposta))
-
-        ok, _atualizada, motivo = atualizar_proposta_com_leitura_fresca(numero, _mutar_saneamento)
-        if not ok:
-            falhas.append({"pedido": numero, "motivo": str(motivo or "Falha de gravação")})
-            continue
-
-        for correcao in list(aplicadas):
-            campo = str(correcao.get("campo") or "")
-            registrar_mudanca_oficial(
-                "Proposta", numero, f"status.{campo}",
-                correcao.get("valor_anterior"), correcao.get("valor_novo"),
-                origem="Saneamento Histórico HF7",
-                contexto={
-                    "motivo": correcao.get("motivo"),
-                    "saneamento_seguro": True,
-                    "sem_inferencia_pagamento": True,
-                },
-            )
-            resultados.append({
-                "Pedido": numero,
-                "Campo": f"status.{campo}",
-                "Mudança": "NÃO → SIM",
-                "Motivo": correcao.get("motivo"),
-                "Resultado": "OK",
-            })
-            total_aplicado += 1
+    aplicado = _auditoria_aplicar_plano_saneamento(
+        plano_inicial=plano_inicial,
+        atualizar_proposta=atualizar_proposta_com_leitura_fresca,
+        aplicar_correcoes=_i8134_aplicar_correcoes_status,
+        registrar_mudanca=registrar_mudanca_oficial,
+        origem="Saneamento Histórico HF7",
+    )
+    total_aplicado = int(aplicado.get("alteracoes_confirmadas", 0) or 0)
+    resultados = list(aplicado.get("resultados") or [])
+    falhas = list(aplicado.get("falhas") or [])
 
     # Reconciliar todas as projeções somente depois das propostas confirmadas.
     historico_final = carregar_historico(force_refresh=True)
@@ -8851,17 +8800,7 @@ def renderizar_previa_saneamento_status_hf7(plano):
     c1, c2 = st.columns(2)
     c1.metric("Propostas a sanear", propostas)
     c2.metric("Correções seguras", alteracoes)
-    linhas = []
-    for item in plano.get("planos", []) or []:
-        for correcao in item.get("correcoes", []) or []:
-            linhas.append({
-                "Pedido": item.get("pedido"),
-                "Cliente": item.get("cliente"),
-                "Campo": f"status.{correcao.get('campo')}",
-                "Atual": "NÃO",
-                "Novo": "SIM",
-                "Motivo": correcao.get("motivo"),
-            })
+    linhas = _auditoria_linhas_previa_saneamento(plano)
     if linhas:
         st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
     else:
@@ -8869,7 +8808,7 @@ def renderizar_previa_saneamento_status_hf7(plano):
 
 
 def renderizar_auditoria_sincronizacao_operacional(relatorio, *, expandido=False):
-    """Bloco compacto reutilizável nas telas operacionais."""
+    """Bloco compacto de UI; o cálculo e a preparação das linhas vivem no serviço."""
     relatorio = relatorio or {}
     reparos = int(relatorio.get("reparos_automaticos", 0) or 0)
     problemas = int(relatorio.get("problemas", 0) or 0)
@@ -8890,26 +8829,7 @@ def renderizar_auditoria_sincronizacao_operacional(relatorio, *, expandido=False
         c2.metric("Fluxo representados", cont.get("fluxo_ativos", 0))
         c3.metric("Previsão/Risco", cont.get("previsao", 0))
         c4.metric("Prontos em Entregas", cont.get("fila_saida", 0))
-        grupos = [
-            ("Pedidos ativos sem Fluxo", relatorio.get("fluxo_faltantes") or []),
-            ("Fluxo ativo para pedido já encerrado", relatorio.get("fluxo_fechados_ativos") or []),
-            ("Fluxo órfão", relatorio.get("fluxo_orfaos") or []),
-            ("Previsão ausente", relatorio.get("previsao_faltantes") or []),
-            ("Previsão indevida", relatorio.get("previsao_indevida") or []),
-            ("Risco indevido", relatorio.get("risco_indevido") or []),
-            ("Pronto ausente em Entregas", relatorio.get("saida_faltantes") or []),
-            ("Entrega indevida", relatorio.get("saida_indevida") or []),
-        ]
-        linhas_sync = []
-        for tipo_sync, numeros_sync in grupos:
-            for numero_sync in numeros_sync[:50]:
-                linhas_sync.append({"Tipo": tipo_sync, "Pedido": numero_sync})
-        for contradicao_sync in relatorio.get("contradicoes") or []:
-            linhas_sync.append({
-                "Tipo": "Status contraditório",
-                "Pedido": contradicao_sync.get("pedido"),
-                "Detalhe": contradicao_sync.get("problema"),
-            })
+        linhas_sync = _auditoria_linhas_relatorio_sincronizacao(relatorio)
         if linhas_sync:
             st.dataframe(pd.DataFrame(linhas_sync), use_container_width=True, hide_index=True)
         else:
@@ -8918,6 +8838,7 @@ def renderizar_auditoria_sincronizacao_operacional(relatorio, *, expandido=False
             "Regra: Histórico/Proposta é a verdade oficial. Fluxo/Produção é espelho operacional; "
             "Risco e Entregas são recalculados, nunca gravados como status paralelo."
         )
+
 
 def salvar_tarefa_producao(tarefa_id, novos_dados):
     """I8.13.4-HF2 — salva uma etapa do Fluxo e reconcilia com a proposta oficial.

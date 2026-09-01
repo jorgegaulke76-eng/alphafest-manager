@@ -108,3 +108,93 @@ class ThuOperationalConsistencyTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuditoriaOperacionalServiceTests(unittest.TestCase):
+    def proposta(self, numero, **extras):
+        p = {"numero_proposta": numero}
+        p.update(extras)
+        return p
+
+    def test_sincronizacao_calcula_reparos_sem_streamlit(self):
+        from auditoria_operacional_service import executar_auditoria_sincronizacao
+
+        historico = [self.proposta("P1", aprovado=True)]
+        tarefas_antes = []
+
+        def montar_previsao(**kwargs):
+            return [{"numero_proposta": "P1", "chave": "dentro"}]
+
+        def montar_fila(historico, hoje, resumo_produtos=None):
+            return []
+
+        def reconciliar(_historico):
+            return [{"numero_proposta": "P1", "ativa": True}]
+
+        r = executar_auditoria_sincronizacao(
+            historico=historico,
+            tarefas_antes=tarefas_antes,
+            consumos=[], estoque={}, planejamentos=[], hoje=None,
+            momento="2026-09-01T12:00:00",
+            montar_previsao=montar_previsao,
+            montar_fila_entregas=montar_fila,
+            reconciliar_fluxo=reconciliar,
+            resumo_produtos=None,
+        )
+        self.assertEqual(r["problemas_antes"], 1)
+        self.assertEqual(r["reparos_automaticos"], 1)
+        self.assertTrue(r["ok"])
+
+    def test_saneamento_so_audita_depois_de_gravacao_confirmada(self):
+        from auditoria_operacional_service import aplicar_plano_saneamento
+        from consistencia_operacional_engine import aplicar_correcoes_seguras_status
+
+        plano = {
+            "planos": [
+                {"pedido": "OK", "correcoes": [{"campo": "aprovado"}]},
+                {"pedido": "FALHA", "correcoes": [{"campo": "pronto"}]},
+            ]
+        }
+        banco = {
+            "OK": {"numero_proposta": "OK", "pago": True, "aprovado": False},
+            "FALHA": {"numero_proposta": "FALHA", "entregue": True, "pronto": False},
+        }
+        auditoria = []
+
+        def atualizar(numero, mutar):
+            if numero == "FALHA":
+                return False, banco[numero], "simulado"
+            mutar(banco[numero])
+            return True, banco[numero], ""
+
+        def registrar(*args, **kwargs):
+            auditoria.append((args, kwargs))
+
+        r = aplicar_plano_saneamento(
+            plano_inicial=plano,
+            atualizar_proposta=atualizar,
+            aplicar_correcoes=aplicar_correcoes_seguras_status,
+            registrar_mudanca=registrar,
+        )
+        self.assertTrue(banco["OK"]["aprovado"])
+        self.assertFalse(banco["FALHA"]["pronto"])
+        self.assertEqual(r["alteracoes_confirmadas"], 1)
+        self.assertEqual(len(r["falhas"]), 1)
+        self.assertEqual(len(auditoria), 1)
+
+    def test_linhas_de_ui_sao_puras(self):
+        from auditoria_operacional_service import linhas_previa_saneamento, linhas_relatorio_sincronizacao
+
+        prev = linhas_previa_saneamento({
+            "planos": [{
+                "pedido": "P1", "cliente": "Cliente",
+                "correcoes": [{"campo": "pronto", "motivo": "Entregue exige Pronto"}],
+            }]
+        })
+        self.assertEqual(prev[0]["Campo"], "status.pronto")
+        rel = linhas_relatorio_sincronizacao({
+            "fluxo_faltantes": ["P2"],
+            "contradicoes": [{"pedido": "P3", "problema": "Pago sem Aprovado"}],
+        })
+        self.assertEqual(len(rel), 2)
+        self.assertEqual(rel[1]["Detalhe"], "Pago sem Aprovado")
