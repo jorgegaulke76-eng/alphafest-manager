@@ -72,6 +72,42 @@ def reconciliar_etapa_status_oficial(
     return atual, anterior
 
 
+def reconciliar_etapa_aprovacao_oficial(
+    status_manual: Any,
+    aprovado_oficial: Any,
+    status_antes_aprovacao: Any = None,
+    status_inicial: Any = "Pronto para produzir",
+) -> tuple[str, str]:
+    """I8.13.4-HF2 — reconcilia liberação comercial com a etapa manual.
+
+    Antes da aprovação oficial, o item permanece em ``Pedido recebido`` e não
+    entra artificialmente em arte/produção. Se uma aprovação já existente for
+    removida, a etapa manual anterior é preservada; ao aprovar novamente, ela
+    é restaurada. ``Aguardando aprovação`` continua reservado à aprovação de
+    ARTE dentro do Fluxo e não é confundido com aprovação comercial.
+    """
+    atual = _normalizar_status(status_manual)
+    anterior = _normalizar_status(status_antes_aprovacao) if str(status_antes_aprovacao or "").strip() else ""
+    aprovado = _bool(aprovado_oficial)
+
+    if not aprovado:
+        if atual not in {"Pedido recebido", "Pronto", "Entregue"}:
+            anterior = atual
+        if atual in {"Pronto", "Entregue"}:
+            return atual, anterior
+        return "Pedido recebido", anterior
+
+    if atual == "Pedido recebido":
+        restaurar = _normalizar_status(anterior or status_inicial or "Pronto para produzir")
+        if restaurar in {"Pedido recebido", "Pronto", "Entregue"}:
+            restaurar = _normalizar_status(status_inicial or "Pronto para produzir")
+        if restaurar == "Pedido recebido":
+            restaurar = "Pronto para produzir"
+        return restaurar, anterior
+
+    return atual, anterior
+
+
 def reconciliar_etapa_entrega(status_manual: Any, entregue_oficial: Any, status_antes_entrega: Any = None) -> tuple[str, str]:
     """Compatibilidade com a assinatura da HF1."""
     return reconciliar_etapa_status_oficial(status_manual, False, entregue_oficial, status_antes_entrega)
