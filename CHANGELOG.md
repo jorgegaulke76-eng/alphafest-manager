@@ -1,3 +1,10 @@
+# 20.4.9-I8.13.5-HF14 — THU • Retornos Comerciais
+- Primeiro passo do novo ciclo de automações/inteligência, homologado primeiro no perfil Jorge.
+- Envio/retorno de orçamento passa a ter registro explícito, sem presumir que abrir o WhatsApp significa enviar.
+- THU ordena propostas enviadas ainda não aprovadas por tempo sem retorno e proximidade do prazo.
+- WhatsApp de acompanhamento é apenas sugerido/aberto; nenhum envio ou mudança de status ocorre automaticamente.
+- Central da Anna permanece preservada nesta etapa.
+
 ## 20.4.9-I8.13.3 — Núcleo de Integridade e Segurança (custo zero)
 - Persistência confirmada antes do cache.
 - Preparação para SERVICE KEY e RLS fechado.

@@ -29,6 +29,9 @@ Compara projeções com a fonte oficial e identifica divergências.
 ### `status_diagnostics_service.py`
 Diagnóstico puro de compatibilidade/legado de status.
 
+### `thu_comercial_service.py` (HF14)
+Inteligência comercial assistida e testável: registro explícito de envio/retorno e priorização de follow-up. Não envia mensagens nem altera status automaticamente.
+
 ## Regra para próximas evoluções
 
 Regra de negócio nova deve preferencialmente entrar em serviço/engine testável. `app.py` deve apenas coletar entrada do usuário, chamar o serviço e apresentar o resultado.

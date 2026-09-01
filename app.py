@@ -108,6 +108,10 @@ from entregas_logistica_service import (
     mensagem_pedido_pronto as _entregas_mensagem_pronto,
     validar_conclusao_saida as _entregas_validar_conclusao_saida,
 )
+from thu_comercial_service import (
+    aplicar_registro_envio as _thu_comercial_aplicar_registro_envio,
+    montar_retornos_comerciais as _thu_comercial_montar_retornos,
+)
 from catalogo_orcamento_service import (
     ORCAMENTO_PRODUTO_LIVRE as _catalogo_orcamento_livre,
     normalizar_identidade_produto as _catalogo_normalizar_identidade,
@@ -12647,6 +12651,36 @@ def proxima_acao_proposta(proposta):
     return _rel_proxima_acao_proposta(proposta)
 
 
+def registrar_envio_comercial_proposta(numero):
+    """HF14: registra manualmente envio/retorno para o THU, somente pelo Jorge.
+
+    O registro não envia mensagem, não aprova a proposta e não altera nenhum
+    marco operacional. Ele apenas cria a referência temporal necessária para o
+    THU saber quando um orçamento realmente entrou em acompanhamento comercial.
+    """
+    usuario = obter_usuario_atual() or {}
+    nome_usuario = str(usuario.get("nome") or "").strip()
+    if nome_usuario.casefold() != "jorge":
+        return False, None, "Registro de envio disponível somente para Jorge nesta homologação."
+
+    instante = agora_local().strftime("%d/%m/%Y %H:%M")
+
+    def _mutar(proposta):
+        _thu_comercial_aplicar_registro_envio(
+            proposta,
+            now_text=instante,
+            usuario=nome_usuario or "Jorge",
+        )
+        qtd = int(proposta.get("envios_qtd") or 1)
+        descricao = (
+            "Orçamento enviado ao cliente — acompanhamento comercial iniciado"
+            if qtd <= 1
+            else "Novo contato/retorno comercial registrado"
+        )
+        registrar_evento_proposta(proposta, descricao, nome_usuario or "Jorge")
+
+    return atualizar_proposta_com_leitura_fresca(numero, _mutar)
+
 
 def resumo_cliente_operacional(cliente, propostas):
     """Calcula um cartão operacional sem alterar nenhum dado do cliente."""
@@ -22413,6 +22447,83 @@ if pagina_atual == "central":
         c6.metric("💰 Previsto hoje", f"R$ {valor_previsto_hoje:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), help="Soma dos pedidos aprovados, ainda não entregues, previstos para hoje.")
         st.caption("Atrasados, entregas e valor previsto consideram somente pedidos aprovados. Aprovação considera orçamentos ainda abertos.")
 
+    # HF14 — primeiro passo do ciclo de automações/inteligência do THU, somente Jorge.
+    # O bloco depende de um envio explicitamente registrado; abrir o WhatsApp não
+    # é tratado como prova de envio e nenhuma mensagem/status é alterado sozinho.
+    if usuario_eh_jorge_i8112hf1:
+        retornos_comerciais_hf14 = _thu_comercial_montar_retornos(
+            historico_central,
+            hoje_central,
+            limite=8,
+        )
+        st.divider()
+        st.markdown("#### 💬 THU • Retornos comerciais")
+        st.caption(
+            "Acompanha somente orçamentos cujo envio/contato foi registrado pelo Jorge. "
+            "O THU ordena prioridades e sugere o retorno, mas não envia mensagem nem muda status automaticamente."
+        )
+        if retornos_comerciais_hf14:
+            _ret_acao_hf14 = [r for r in retornos_comerciais_hf14 if r.get("nivel") != "aguardar"]
+            _ret_urg_hf14 = [r for r in retornos_comerciais_hf14 if r.get("nivel") in ("urgente", "alta")]
+            _rtm1_hf14, _rtm2_hf14, _rtm3_hf14 = st.columns(3)
+            _rtm1_hf14.metric("Aguardando aprovação", len(retornos_comerciais_hf14))
+            _rtm2_hf14.metric("Retorno sugerido agora", len(_ret_acao_hf14))
+            _rtm3_hf14.metric("Prioridade alta/urgente", len(_ret_urg_hf14))
+
+            for _ret_hf14 in retornos_comerciais_hf14[:5]:
+                _nivel_hf14 = str(_ret_hf14.get("nivel") or "normal")
+                _icone_hf14 = {
+                    "urgente": "🔴",
+                    "alta": "🟠",
+                    "normal": "🔵",
+                    "aguardar": "🟢",
+                }.get(_nivel_hf14, "🔵")
+                with st.container(border=True):
+                    _r1_hf14, _r2_hf14, _r3_hf14, _r4_hf14 = st.columns([5, 2, 2, 2])
+                    _r1_hf14.markdown(
+                        f"**{_icone_hf14} {_ret_hf14.get('numero_proposta', '—')} — "
+                        f"{html.escape(str(_ret_hf14.get('cliente_nome') or 'Cliente'))}**"
+                    )
+                    _r1_hf14.caption(
+                        f"{_ret_hf14.get('motivo')} · Próxima ação: {_ret_hf14.get('acao')}"
+                    )
+                    _numero_retorno_hf14 = re.sub(r"\D", "", str(_ret_hf14.get("whatsapp") or ""))
+                    if _numero_retorno_hf14 and not _numero_retorno_hf14.startswith("55"):
+                        _numero_retorno_hf14 = "55" + _numero_retorno_hf14
+                    if _numero_retorno_hf14:
+                        _r2_hf14.link_button(
+                            "📱 Retomar",
+                            f"https://wa.me/{_numero_retorno_hf14}?text={quote(str(_ret_hf14.get('mensagem_sugerida') or ''))}",
+                            use_container_width=True,
+                        )
+                    else:
+                        _r2_hf14.button("📱 Sem WhatsApp", disabled=True, key=f"thu_ret_sem_wa_{_ret_hf14.get('numero_proposta')}", use_container_width=True)
+                    if _r3_hf14.button(
+                        "✅ Registrei contato",
+                        key=f"thu_ret_reg_hf14_{_ret_hf14.get('numero_proposta')}",
+                        use_container_width=True,
+                        help="Clique somente depois de realmente falar/enviar ao cliente. Isso reinicia o tempo de acompanhamento do THU.",
+                    ):
+                        _ok_ret_hf14, _prop_ret_hf14, _motivo_ret_hf14 = registrar_envio_comercial_proposta(
+                            _ret_hf14.get("numero_proposta", "")
+                        )
+                        if _ok_ret_hf14:
+                            st.session_state["_mensagem_sucesso_pendente"] = f"Contato da proposta {_ret_hf14.get('numero_proposta')} registrado. O THU recalculou o acompanhamento."
+                            st.rerun()
+                        else:
+                            st.error(_motivo_ret_hf14 or "Não foi possível registrar o contato.")
+                    _r4_hf14.button(
+                        "📋 Abrir proposta",
+                        key=f"thu_ret_abrir_hf14_{_ret_hf14.get('numero_proposta')}",
+                        use_container_width=True,
+                        on_click=lambda n=_ret_hf14.get("numero_proposta"): st.session_state.__setitem__("alerta_proposta_numero", n),
+                    )
+            if len(retornos_comerciais_hf14) > 5:
+                st.caption(f"Mais {len(retornos_comerciais_hf14) - 5} orçamento(s) acompanhado(s) pelo THU.")
+        else:
+            st.success("Nenhum orçamento com envio registrado está aguardando aprovação.")
+            st.caption("Ao enviar um novo orçamento, use **Registrar envio**. A partir daí o THU passa a controlar o tempo de retorno.")
+
     st.divider()
     st.subheader("🎯 O que fazer agora")
     prioridade = None
@@ -25376,7 +25487,7 @@ if pagina_atual == "novo_orcamento":
                     + " • ".join(_ausentes_pos_salvar)
                     + "**. A Central da Anna continuará sinalizando esta pendência até o cadastro ser feito."
                 )
-            ac1, ac2, ac3 = st.columns([2, 2, 1])
+            ac1, ac2, ac3, ac4 = st.columns([2, 2, 2, 1])
             numero_destino = re.sub(r"\D", "", str(ultima_salva.get("whatsapp") or ultima_salva.get("cliente_wa") or ""))
             if numero_destino and not numero_destino.startswith("55"):
                 numero_destino = "55" + numero_destino
@@ -25390,9 +25501,31 @@ if pagina_atual == "novo_orcamento":
                 use_container_width=True,
                 key=f"html_pos_salvar_{ultima_salva.get('numero_proposta', 'orcamento')}",
             )
-            if ac3.button("✖ Fechar", key="fechar_acoes_ultima_proposta", use_container_width=True):
+            _rotulo_envio_hf14 = "🔁 Registrar novo contato" if ultima_salva.get("enviado") else "✅ Registrar envio"
+            if ac3.button(
+                _rotulo_envio_hf14,
+                key=f"registrar_envio_pos_salvar_{ultima_salva.get('numero_proposta', 'orcamento')}",
+                use_container_width=True,
+                help="Use depois de enviar/retomar no WhatsApp. O THU passa a contar o tempo de retorno a partir deste registro; nenhuma mensagem é enviada automaticamente.",
+            ):
+                _ok_envio_hf14, _atualizada_envio_hf14, _motivo_envio_hf14 = registrar_envio_comercial_proposta(
+                    ultima_salva.get("numero_proposta", "")
+                )
+                if _ok_envio_hf14:
+                    st.session_state["_ultima_proposta_salva"] = dict(_atualizada_envio_hf14 or ultima_salva)
+                    st.session_state["_mensagem_sucesso_pendente"] = "Contato comercial registrado. O THU já pode acompanhar o retorno deste orçamento."
+                    st.rerun()
+                else:
+                    st.error(_motivo_envio_hf14 or "Não foi possível registrar o envio.")
+            if ac4.button("✖ Fechar", key="fechar_acoes_ultima_proposta", use_container_width=True):
                 st.session_state.pop("_ultima_proposta_salva", None)
                 st.rerun()
+            if ultima_salva.get("enviado"):
+                st.caption(
+                    "💬 THU: último contato registrado em "
+                    f"{ultima_salva.get('ultimo_envio_em') or ultima_salva.get('enviado_em') or '—'} · "
+                    f"{ultima_salva.get('envios_qtd') or 1} registro(s)."
+                )
 
             _hf8_render_status_proposta_jorge_inline(
                 ultima_salva.get("numero_proposta", ""),
@@ -25836,6 +25969,32 @@ if pagina_atual == "historico":
                 rerun_na_aba("fluxo", f"Pedido {num_p} aberto a partir do Histórico.")
 
             usuario_historico_jorge_hf1 = str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold() == "jorge"
+            if usuario_historico_jorge_hf1 and not aprovado_p and not bool(estado_hist_p.get("encerrada")):
+                _ret1_hf14, _ret2_hf14 = st.columns([4, 2])
+                if prop.get("enviado"):
+                    _ret1_hf14.caption(
+                        "💬 THU acompanha este orçamento · último contato: "
+                        f"{prop.get('ultimo_envio_em') or prop.get('enviado_em') or '—'} · "
+                        f"{prop.get('envios_qtd') or 1} registro(s)."
+                    )
+                    _rotulo_hist_envio_hf14 = "🔁 Registrei novo contato"
+                else:
+                    _ret1_hf14.caption(
+                        "💬 Depois de realmente enviar ao cliente, registre o envio para o THU controlar o tempo de retorno."
+                    )
+                    _rotulo_hist_envio_hf14 = "✅ Registrar envio"
+                if _ret2_hf14.button(
+                    _rotulo_hist_envio_hf14,
+                    key=f"hist_registrar_envio_hf14_{num_p}",
+                    use_container_width=True,
+                ):
+                    _ok_hist_envio_hf14, _prop_hist_envio_hf14, _motivo_hist_envio_hf14 = registrar_envio_comercial_proposta(num_p)
+                    if _ok_hist_envio_hf14:
+                        st.session_state["_mensagem_sucesso_pendente"] = f"Contato comercial da proposta {num_p} registrado para acompanhamento do THU."
+                        st.rerun()
+                    else:
+                        st.error(_motivo_hist_envio_hf14 or "Não foi possível registrar o contato.")
+
             if usuario_historico_jorge_hf1:
                 c3, c4, c5 = st.columns(3)
             else:
