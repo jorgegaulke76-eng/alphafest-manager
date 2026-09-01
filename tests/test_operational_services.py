@@ -318,3 +318,116 @@ class ProposalPersistenceServiceTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIsNone(registro)
         self.assertIn("não encontrada", motivo.lower())
+
+
+class MateriaisPedidoServiceTests(unittest.TestCase):
+    def test_consumo_ativo_escolhe_mais_recente_e_ignora_estornado(self):
+        from materiais_pedido_service import consumo_ativo_pedido
+        consumos = [
+            {"id": "C1", "numero_proposta": "P1", "confirmado_em": "2026-09-01T10:00:00", "estornado": False},
+            {"id": "C2", "numero_proposta": "P1", "confirmado_em": "2026-09-01T11:00:00", "estornado": True},
+            {"id": "C3", "numero_proposta": "P1", "confirmado_em": "2026-09-01T10:30:00", "estornado": False},
+        ]
+        self.assertEqual(consumo_ativo_pedido("P1", consumos)["id"], "C3")
+
+    def test_fila_liberacao_so_aceita_aprovado_ativo_sem_consumo(self):
+        from materiais_pedido_service import proposta_na_fila_liberacao
+        p = {"numero_proposta": "P1"}
+        self.assertTrue(proposta_na_fila_liberacao(p, numeros_consumo_ativos=[], aprovado=True, pronto=False, entregue=False))
+        self.assertFalse(proposta_na_fila_liberacao(p, numeros_consumo_ativos=["P1"], aprovado=True, pronto=False, entregue=False))
+        self.assertFalse(proposta_na_fila_liberacao(p, numeros_consumo_ativos=[], aprovado=False, pronto=False, entregue=False))
+        self.assertFalse(proposta_na_fila_liberacao(p, numeros_consumo_ativos=[], aprovado=True, pronto=True, entregue=False))
+
+    def test_confirmacao_ficha_padrao_preserva_regra_homologada(self):
+        from materiais_pedido_service import preparar_confirmacao_consumo
+        proposta = {
+            "numero_proposta": "P1", "cliente_nome": "CLIENTE",
+            "itens": [{"produto": "PAPEL DE ARROZ", "quantidade": 2}],
+        }
+        previa = {
+            "produtos": [{"produto": "PAPEL DE ARROZ", "quantidade": 2, "ficha_id": "FT1"}],
+            "necessidades": [{"material_id": "M1", "material_nome": "FOLHA", "unidade": "un", "necessario": 2}],
+            "sem_ficha": [], "sem_catalogo": [], "materiais_estoque_pedido": [],
+        }
+        r = preparar_confirmacao_consumo(
+            proposta=proposta, previa=previa, estoque={"materiais": []},
+            modo_consumo="ficha_padrao", aprovado=True, ja_possui_consumo_ativo=False,
+            usuario_nome="Jorge", agora_iso="2026-09-01T12:00:00", consumo_id="C1",
+            normalizar_produto=lambda x: str(x or "").strip().casefold(),
+        )
+        self.assertTrue(r["ok"])
+        c = r["consumo"]
+        self.assertEqual(c["modo_consumo"], "ficha_padrao")
+        self.assertEqual(c["modelo_materiais"], "reserva_consumo_real_v1")
+        self.assertEqual(c["necessidades"][0]["necessario"], 2)
+        self.assertEqual(c["confirmado_por"], "Jorge")
+        self.assertEqual(c["reservas"], [])
+
+    def test_confirmacao_manual_agrega_material_sem_alterar_ficha(self):
+        from materiais_pedido_service import preparar_confirmacao_consumo
+        proposta = {"numero_proposta": "P2", "itens": [{"produto": "ADESIVO", "quantidade": 1}]}
+        estoque = {"materiais": [{"id": "M1", "nome": "PAPEL", "unidade": "folha", "ativo": True}]}
+        r = preparar_confirmacao_consumo(
+            proposta=proposta, previa={"sem_catalogo": [], "sem_ficha": ["ADESIVO"]}, estoque=estoque,
+            modo_consumo="manual_pedido",
+            necessidades_manuais=[{"material_id": "M1", "quantidade": 1}, {"material_id": "M1", "necessario": 2}],
+            aprovado=True, ja_possui_consumo_ativo=False, usuario_nome="Anna",
+            agora_iso="2026-09-01T12:01:00", consumo_id="C2",
+            normalizar_produto=lambda x: str(x or "").strip().casefold(),
+        )
+        self.assertTrue(r["ok"])
+        self.assertEqual(len(r["consumo"]["necessidades"]), 1)
+        self.assertEqual(r["consumo"]["necessidades"][0]["necessario"], 3)
+        self.assertEqual(r["consumo"]["modo_consumo"], "manual_pedido")
+
+    def test_sem_consumo_nao_inventa_material(self):
+        from materiais_pedido_service import preparar_confirmacao_consumo
+        r = preparar_confirmacao_consumo(
+            proposta={"numero_proposta": "P3", "itens": [{"produto": "SERVIÇO", "quantidade": 1}]},
+            previa={"sem_catalogo": [], "sem_ficha": ["SERVIÇO"]}, estoque={"materiais": []},
+            modo_consumo="sem_consumo", aprovado=True, ja_possui_consumo_ativo=False,
+            usuario_nome="Jorge", agora_iso="2026-09-01T12:02:00", consumo_id="C3",
+            normalizar_produto=lambda x: str(x or "").strip().casefold(),
+        )
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["consumo"]["necessidades"], [])
+        self.assertEqual(r["consumo"]["modelo_materiais"], "sem_consumo_controlado_v1")
+
+    def test_ficha_sem_material_exige_decisao_do_pedido(self):
+        from materiais_pedido_service import preparar_confirmacao_consumo
+        r = preparar_confirmacao_consumo(
+            proposta={"numero_proposta": "P4", "itens": []},
+            previa={"sem_catalogo": [], "sem_ficha": ["PRODUTO"], "necessidades": []},
+            estoque={"materiais": []}, modo_consumo="ficha_padrao", aprovado=True,
+            ja_possui_consumo_ativo=False, usuario_nome="Jorge",
+            agora_iso="2026-09-01T12:03:00", consumo_id="C4",
+            normalizar_produto=lambda x: str(x or "").strip().casefold(),
+        )
+        self.assertFalse(r["ok"])
+        self.assertIn("sem Ficha Técnica", r["mensagem"])
+
+    def test_inicio_producao_bloqueia_falta_e_consome_so_reservado(self):
+        from materiais_pedido_service import decidir_inicio_consumo
+        falta = decidir_inicio_consumo(
+            {"modo_consumo": "ficha_padrao"},
+            {"necessidades": [{"material_nome": "PAPEL", "pendente": 1, "reservado": 0}]},
+        )
+        self.assertFalse(falta["ok"])
+        pronto = decidir_inicio_consumo(
+            {"modo_consumo": "ficha_padrao"},
+            {"necessidades": [{"material_nome": "PAPEL", "pendente": 0, "reservado": 2, "material_id": "M1"}]},
+        )
+        self.assertTrue(pronto["ok"])
+        self.assertEqual(pronto["necessidades"][0]["reservado"], 2)
+
+    def test_inicio_sem_consumo_e_legado_sao_idempotentes(self):
+        from materiais_pedido_service import decidir_inicio_consumo
+        sem = decidir_inicio_consumo({"modo_consumo": "sem_consumo"}, {"necessidades": []})
+        self.assertTrue(sem["ok"])
+        self.assertEqual(sem["necessidades"], [])
+        legado = decidir_inicio_consumo(
+            {"modo_consumo": "ficha_padrao"},
+            {"necessidades": [{"material_nome": "PAPEL", "pendente": 0, "reservado": 0, "consumido": 2}]},
+        )
+        self.assertTrue(legado["ok"])
+        self.assertEqual(legado["necessidades"], [])

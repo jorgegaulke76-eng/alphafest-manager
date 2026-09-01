@@ -83,6 +83,13 @@ from auditoria_operacional_service import (
     linhas_relatorio_sincronizacao as _auditoria_linhas_relatorio_sincronizacao,
 )
 from proposal_persistence_service import atualizar_proposta_fresca as _proposta_persistir_fresca
+from materiais_pedido_service import (
+    consumo_ativo_pedido as _materiais_consumo_ativo_pedido,
+    proposta_na_fila_liberacao as _materiais_proposta_na_fila_liberacao,
+    assinatura_previa as _materiais_assinatura_previa,
+    preparar_confirmacao_consumo as _materiais_preparar_confirmacao_consumo,
+    decidir_inicio_consumo as _materiais_decidir_inicio_consumo,
+)
 from proposal_status_service import (
     normalizar_status_desejados as _status_normalizar_desejados,
     snapshot_status as _status_snapshot_oficial,
@@ -4969,16 +4976,9 @@ def salvar_consumos_pedidos(lista):
 
 
 def _i8124_consumo_ativo_pedido(numero_proposta, consumos=None):
-    numero = str(numero_proposta or "").strip()
+    """Adapter de persistência para a regra pura de materiais por pedido."""
     consumos = carregar_consumos_pedidos() if consumos is None else consumos
-    candidatos = [
-        c for c in (consumos or [])
-        if str((c or {}).get("numero_proposta") or "").strip() == numero and not (c or {}).get("estornado")
-    ]
-    if not candidatos:
-        return None
-    candidatos.sort(key=lambda c: (str(c.get("confirmado_em") or ""), str(c.get("id") or "")), reverse=True)
-    return candidatos[0]
+    return _materiais_consumo_ativo_pedido(numero_proposta, consumos or [])
 
 
 def _i8124_valor_status_proposta(proposta, campo):
@@ -4991,52 +4991,27 @@ def _i8124_valor_status_proposta(proposta, campo):
 
 
 def _i8124_proposta_na_fila_liberacao(proposta, numeros_consumo_ativos=None):
-    """Fonte única da fila de liberação/reserva de materiais.
-
-    Regra homologada pelo negócio:
-    - entra somente se Aprovado = SIM;
-    - sai ao confirmar a necessidade e criar a reserva;
-    - sai quando Pronto = SIM (produção já concluída);
-    - sai também quando Entregue = SIM.
-
-    Data/idade da proposta não participa desta decisão.
-    """
+    """Fonte única da fila de liberação/reserva, delegada ao serviço puro HF4."""
     proposta = proposta or {}
-    numero = str(proposta.get("numero_proposta") or "").strip()
-    if not numero:
-        return False
-    aprovado = valor_bool(_i8124_valor_status_proposta(proposta, "aprovado"))
-    estado = _status_resumo(proposta)
-    pronto = bool(estado.get("pronto"))
-    entregue = bool(estado.get("entregue"))
-    if not aprovado or pronto or entregue:
-        return False
     if numeros_consumo_ativos is None:
-        consumo_confirmado = _i8124_consumo_ativo_pedido(numero) is not None
-    else:
-        consumo_confirmado = numero in {str(x or "").strip() for x in numeros_consumo_ativos}
-    return not consumo_confirmado
+        consumos = carregar_consumos_pedidos()
+        numeros_consumo_ativos = [
+            str((c or {}).get("numero_proposta") or "").strip()
+            for c in (consumos or [])
+            if isinstance(c, dict) and not c.get("estornado")
+        ]
+    estado = _status_resumo(proposta)
+    return _materiais_proposta_na_fila_liberacao(
+        proposta,
+        numeros_consumo_ativos=numeros_consumo_ativos,
+        aprovado=valor_bool(_i8124_valor_status_proposta(proposta, "aprovado")),
+        pronto=bool(estado.get("pronto")),
+        entregue=bool(estado.get("entregue")),
+    )
 
 
 def _i8124_assinatura_previa(produtos, necessidades):
-    payload = {
-        "produtos": sorted([
-            {
-                "produto": normalizar_identidade_produto(x.get("produto")),
-                "quantidade": round(valor_float(x.get("quantidade")), 6),
-                "ficha_id": str(x.get("ficha_id") or ""),
-            }
-            for x in (produtos or [])
-        ], key=lambda x: (x["produto"], x["ficha_id"], x["quantidade"])),
-        "necessidades": sorted([
-            {
-                "material_id": str(x.get("material_id") or ""),
-                "necessario": round(valor_float(x.get("necessario")), 6),
-            }
-            for x in (necessidades or [])
-        ], key=lambda x: x["material_id"]),
-    }
-    return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+    return _materiais_assinatura_previa(produtos, necessidades, normalizar_identidade_produto)
 
 
 def _i8124_montar_previa_pedido(proposta, catalogo=None, fichas=None, estoque=None):
@@ -5427,120 +5402,49 @@ def _i8124_regularizar_pendencias_automaticamente(usuario=None):
 
 
 def _i8124_confirmar_consumo_pedido(proposta, aceitar_sem_ficha=False, usuario=None, modo_consumo="ficha_padrao", necessidades_manuais=None):
-    """Confirma como ESTE pedido tratará materiais controlados.
-
-    I8.13.2-HF2: Ficha Técnica é receita padrão, não obrigação universal.
-    Modos suportados:
-    - ficha_padrao: usa somente a Ficha Técnica oficial;
-    - manual_pedido: usa materiais/quantidades definidos apenas para este pedido;
-    - sem_consumo: libera o pedido sem reserva/baixa de estoque controlado.
-
-    O vínculo seguro com o Catálogo continua obrigatório somente para item
-    comercial. Item reconhecido de forma inequívoca como Material/Estoque não
-    precisa virar produto de venda. A decisão de consumo fica registrada no
-    consumo_pedidos_db, nunca altera Catálogo/Ficha Técnica/proposta original.
-    """
-    if not isinstance(proposta, dict) or not str(proposta.get("numero_proposta") or "").strip():
+    """Confirma materiais usando o serviço puro HF4; este adapter só persiste/audita."""
+    if not isinstance(proposta, dict) or not str((proposta or {}).get("numero_proposta") or "").strip():
         return False, "Proposta inválida.", None
     if not valor_bool(proposta.get("aprovado")):
         return False, "A necessidade de materiais só pode ser confirmada depois que o pedido estiver aprovado.", None
     consumos = carregar_consumos_pedidos(force_refresh=True)
-    if _i8124_consumo_ativo_pedido(proposta.get("numero_proposta"), consumos):
-        return False, "Este pedido já possui reserva/consumo ativo. Estorne a liberação atual antes de confirmar novamente.", None
-
-    previa = _i8124_montar_previa_pedido(proposta)
-    if previa.get("sem_catalogo"):
-        return False, "Há item(ns) sem vínculo seguro com o Catálogo Oficial. Resolva o vínculo antes de liberar este pedido.", None
-
-    modo = str(modo_consumo or "ficha_padrao").strip().casefold()
-    aliases_modo = {
-        "ficha": "ficha_padrao", "ficha_padrao": "ficha_padrao", "ficha padrão": "ficha_padrao",
-        "manual": "manual_pedido", "manual_pedido": "manual_pedido", "materiais_pedido": "manual_pedido",
-        "sem_consumo": "sem_consumo", "sem consumo": "sem_consumo", "nenhum": "sem_consumo",
-    }
-    modo = aliases_modo.get(modo, modo)
-    if modo not in {"ficha_padrao", "manual_pedido", "sem_consumo"}:
-        return False, "Escolha como tratar o consumo de estoque deste pedido.", None
-
-    necessidades = []
-    produtos_snapshot = []
-    for item in proposta.get("itens") or []:
-        nome = str((item or {}).get("produto") or "").strip()
-        qtd = max(0.0, valor_float((item or {}).get("quantidade", 0)))
-        if nome and qtd > 0:
-            produtos_snapshot.append({"produto": nome, "quantidade": qtd, "ficha_id": ""})
-
-    if modo == "ficha_padrao":
-        if previa.get("sem_ficha") and not aceitar_sem_ficha:
-            return False, "Há item(ns) sem Ficha Técnica. Escolha materiais específicos deste pedido ou confirme que ele não consome estoque controlado.", None
-        necessidades = [dict(x) for x in (previa.get("necessidades") or []) if isinstance(x, dict)]
-        if not necessidades:
-            return False, "Nenhuma Ficha Técnica com material controlado foi encontrada. Escolha materiais deste pedido ou 'Sem consumo de estoque controlado'.", None
-        produtos_snapshot = [dict(x) for x in (previa.get("produtos") or []) if isinstance(x, dict)] or produtos_snapshot
-
-    elif modo == "manual_pedido":
-        estoque = carregar_estoque(force_refresh=True)
-        agregadas = {}
-        for linha in necessidades_manuais or []:
-            if not isinstance(linha, dict):
-                continue
-            material_id = str(linha.get("material_id") or "").strip()
-            qtd = max(0.0, valor_float(linha.get("necessario", linha.get("quantidade", 0))))
-            material = _i8122_material_por_id(estoque, material_id)
-            if not material or not material.get("ativo", True) or qtd <= 0.0000001:
-                continue
-            destino = agregadas.setdefault(material_id, {
-                "material_id": material_id,
-                "material_nome": str(material.get("nome") or "Material"),
-                "unidade": str(material.get("unidade") or ""),
-                "necessario": 0.0,
-                "origens": [],
-            })
-            destino["necessario"] = round(valor_float(destino.get("necessario")) + qtd, 6)
-            destino["origens"].append({"produto": "Definição manual deste pedido", "necessario": qtd})
-        necessidades = sorted(agregadas.values(), key=lambda x: str(x.get("material_nome") or "").casefold())
-        if not necessidades:
-            return False, "Selecione pelo menos um material e informe uma quantidade maior que zero.", None
-
-    # sem_consumo deliberadamente grava necessidades vazias para retirar o pedido
-    # da fila sem inventar reserva, baixa ou Ficha Técnica.
-    assinatura = _i8124_assinatura_previa(produtos_snapshot, necessidades)
-    nome_usuario = str((usuario or obter_usuario_atual() or {}).get("nome") if isinstance((usuario or obter_usuario_atual()), dict) else (usuario or "Jorge")) or "Jorge"
-    agora = agora_local().isoformat()
     numero = str(proposta.get("numero_proposta") or "")
-    detalhe_modo = {
-        "ficha_padrao": "Ficha Técnica padrão confirmada para reserva",
-        "manual_pedido": "Materiais definidos especificamente para este pedido",
-        "sem_consumo": "Pedido confirmado sem consumo de estoque controlado",
-    }[modo]
-    modelo = {
-        "ficha_padrao": "reserva_consumo_real_v1",
-        "manual_pedido": "materiais_pedido_v1",
-        "sem_consumo": "sem_consumo_controlado_v1",
-    }[modo]
-    consumo = {
-        "id": agora_local().strftime("CON%Y%m%d%H%M%S%f"),
-        "numero_proposta": numero,
-        "cliente_nome": str(proposta.get("cliente_nome") or ""),
-        "produtos": produtos_snapshot,
-        "necessidades": necessidades,
-        "itens_sem_ficha_confirmados": previa.get("sem_ficha") or [],
-        "itens_sem_catalogo_confirmados": previa.get("sem_catalogo") or [],
-        "itens_materiais_estoque_reconhecidos": previa.get("materiais_estoque_pedido") or [],
-        "assinatura_confirmada": assinatura,
-        "modo_consumo": modo,
-        "modo_consumo_descricao": detalhe_modo,
-        "confirmado_em": agora,
-        "confirmado_por": nome_usuario,
-        "atualizado_em": agora,
-        "estornado": False,
-        "modelo_materiais": modelo,
-        "reservas": [],
-        "eventos": [{"em": agora, "usuario": nome_usuario, "tipo": "confirmacao", "detalhe": detalhe_modo}],
-    }
+    if _i8124_consumo_ativo_pedido(numero, consumos) is not None:
+        return False, "Este pedido já possui reserva/consumo ativo. Estorne a liberação atual antes de confirmar novamente.", None
+    estoque = carregar_estoque(force_refresh=True)
+    previa = _i8124_montar_previa_pedido(proposta, estoque=estoque)
+    usuario_ref = usuario or obter_usuario_atual()
+    nome_usuario = str(
+        usuario_ref.get("nome") if isinstance(usuario_ref, dict) else (usuario_ref or "Jorge")
+    ) or "Jorge"
+    agora_dt = agora_local()
+    agora = agora_dt.isoformat()
+
+    preparacao = _materiais_preparar_confirmacao_consumo(
+        proposta=proposta,
+        previa=previa,
+        estoque=estoque,
+        modo_consumo=modo_consumo,
+        necessidades_manuais=necessidades_manuais,
+        aceitar_sem_ficha=aceitar_sem_ficha,
+        aprovado=valor_bool(proposta.get("aprovado")),
+        ja_possui_consumo_ativo=False,
+        usuario_nome=nome_usuario,
+        agora_iso=agora,
+        consumo_id=agora_dt.strftime("CON%Y%m%d%H%M%S%f"),
+        normalizar_produto=normalizar_identidade_produto,
+    )
+    if not preparacao.get("ok"):
+        return False, str(preparacao.get("mensagem") or "Não foi possível confirmar os materiais do pedido."), None
+
+    consumo = preparacao.get("consumo") or {}
+    modo = str(preparacao.get("modo") or consumo.get("modo_consumo") or "ficha_padrao")
+    detalhe_modo = str(preparacao.get("detalhe_modo") or consumo.get("modo_consumo_descricao") or "")
+    necessidades = list(preparacao.get("necessidades") or [])
     consumos.append(consumo)
     if not salvar_consumos_pedidos(consumos):
         return False, "Não foi possível salvar a liberação dos materiais.", None
+
     registrar_auditoria("Confirmar tratamento de materiais do pedido", "Estoque", consumo.get("id"), {
         "numero_proposta": numero, "modo_consumo": modo, "materiais": len(necessidades)
     })
@@ -5569,7 +5473,7 @@ def _i8124_confirmar_consumo_pedido(proposta, aceitar_sem_ficha=False, usuario=N
         registrar_atividade(nome_usuario, "Pedido liberado sem consumo de estoque", "Estoque", detalhe=numero, evento=True)
         return True, "Pedido liberado sem consumo de estoque controlado. Nenhuma reserva ou baixa física foi criada.", consumo
 
-    resultado = _i8124_regularizar_pendencias_automaticamente(usuario=usuario or obter_usuario_atual())
+    resultado = _i8124_regularizar_pendencias_automaticamente(usuario=usuario_ref)
     try:
         resumo_pos_aud = _i8124_resumo_pedido(
             numero, consumos=carregar_consumos_pedidos(force_refresh=True), estoque=carregar_estoque(force_refresh=True)
@@ -9033,19 +8937,12 @@ def _i8132_consumir_reserva_pedido(numero_proposta, usuario=None):
         return False, "O pedido ainda não possui liberação/reserva de materiais."
     estoque = carregar_estoque(force_refresh=True)
     resumo = _i8124_resumo_consumo(consumo, estoque)
-    pendentes = [n for n in (resumo.get("necessidades") or []) if valor_float(n.get("pendente")) > 0.0000001]
-    if pendentes:
-        nomes = ", ".join(str(n.get("material_nome") or "Material") for n in pendentes[:3])
-        return False, f"Ainda há material sem reserva ({nomes}). Receba/compre o faltante antes de iniciar a produção."
-
-    # Pedido explicitamente liberado sem estoque controlado não inventa baixa.
-    if str(consumo.get("modo_consumo") or "") == "sem_consumo":
-        return True, "Pedido sem consumo de estoque controlado; nenhuma baixa física necessária."
-
-    # Itens legados já baixados pela I8.12.4 não podem ser baixados novamente.
-    a_consumir = [n for n in (resumo.get("necessidades") or []) if valor_float(n.get("reservado")) > 0.0000001]
+    decisao_consumo = _materiais_decidir_inicio_consumo(consumo, resumo)
+    if not decisao_consumo.get("ok"):
+        return False, str(decisao_consumo.get("mensagem") or "Materiais ainda não estão aptos para consumo.")
+    a_consumir = list(decisao_consumo.get("necessidades") or [])
     if not a_consumir:
-        return True, "Materiais já estavam consumidos fisicamente; nenhuma nova baixa foi necessária."
+        return True, str(decisao_consumo.get("mensagem") or "Nenhuma baixa física adicional foi necessária.")
 
     nome_usuario = str((usuario or obter_usuario_atual() or {}).get("nome") if isinstance((usuario or obter_usuario_atual()), dict) else (usuario or "Sistema")) or "Sistema"
     movimentos_criados = []
