@@ -431,3 +431,101 @@ class MateriaisPedidoServiceTests(unittest.TestCase):
         )
         self.assertTrue(legado["ok"])
         self.assertEqual(legado["necessidades"], [])
+
+
+class ProducaoOperacionalServiceTests(unittest.TestCase):
+    def test_nao_aprovado_nao_avanca_producao(self):
+        from producao_operacional_service import validar_transicao_fluxo
+        ok, msg = validar_transicao_fluxo(
+            proposta_encontrada=True, proposta_encerrada=False,
+            aprovado=False, entregue=False, status_novo="Em produção",
+        )
+        self.assertFalse(ok)
+        self.assertIn("não aprovado", msg)
+
+    def test_pedido_recebido_e_permitido_antes_da_aprovacao(self):
+        from producao_operacional_service import validar_transicao_fluxo
+        ok, _ = validar_transicao_fluxo(
+            proposta_encontrada=True, proposta_encerrada=False,
+            aprovado=False, entregue=False, status_novo="Pedido recebido",
+        )
+        self.assertTrue(ok)
+
+    def test_entregue_nao_pode_ser_reaberto_so_pelo_fluxo(self):
+        from producao_operacional_service import validar_transicao_fluxo
+        ok, msg = validar_transicao_fluxo(
+            proposta_encontrada=True, proposta_encerrada=False,
+            aprovado=True, entregue=True, status_novo="Em produção",
+        )
+        self.assertFalse(ok)
+        self.assertIn("Entregue", msg)
+
+    def test_etapas_reais_exigem_consumo(self):
+        from producao_operacional_service import etapa_exige_consumo
+        self.assertFalse(etapa_exige_consumo("Pronto para produzir"))
+        self.assertTrue(etapa_exige_consumo("Em produção"))
+        self.assertTrue(etapa_exige_consumo("Pronto"))
+        self.assertTrue(etapa_exige_consumo("Entregue"))
+
+    def test_todos_prontos_autorizam_pronto_oficial(self):
+        from producao_operacional_service import planejar_status_oficial_pos_fluxo
+        r = planejar_status_oficial_pos_fluxo(
+            ["Pronto", "Entregue"], pronto_oficial=False, entregue_oficial=False,
+        )
+        self.assertEqual(r["campo"], "pronto")
+        self.assertTrue(r["valor"])
+
+    def test_todos_entregues_autorizam_entregue_oficial(self):
+        from producao_operacional_service import planejar_status_oficial_pos_fluxo
+        r = planejar_status_oficial_pos_fluxo(
+            ["Entregue", "Entregue"], pronto_oficial=True, entregue_oficial=False,
+        )
+        self.assertEqual(r["campo"], "entregue")
+        self.assertTrue(r["valor"])
+
+    def test_reabrir_producao_remove_pronto_mas_nao_entregue(self):
+        from producao_operacional_service import planejar_status_oficial_pos_fluxo
+        r = planejar_status_oficial_pos_fluxo(
+            ["Em produção", "Pronto"], pronto_oficial=True, entregue_oficial=False,
+        )
+        self.assertEqual(r, {"campo": "pronto", "valor": False, "motivo": "Produção reaberta no Fluxo"})
+        self.assertIsNone(planejar_status_oficial_pos_fluxo(
+            ["Em produção"], pronto_oficial=True, entregue_oficial=True,
+        ))
+
+    def test_atalho_iniciar_altera_so_pronto_para_produzir(self):
+        from producao_operacional_service import planejar_atalho_central
+        tarefas = [
+            {"id": "P1::0", "numero_proposta": "P1", "produto": "A", "status": "Pronto para produzir", "ativa": True, "timeline": []},
+            {"id": "P1::1", "numero_proposta": "P1", "produto": "B", "status": "Em produção", "ativa": True, "timeline": []},
+            {"id": "P2::0", "numero_proposta": "P2", "produto": "C", "status": "Pronto para produzir", "ativa": True, "timeline": []},
+        ]
+        r = planejar_atalho_central(
+            tarefas, numero_proposta="P1", acao="iniciar",
+            pode_iniciar_producao=True, pode_marcar_pronto=False,
+            now_text="01/09/2026 14:00", usuario_nome="Jorge",
+        )
+        self.assertTrue(r["ok"])
+        self.assertTrue(r["exige_consumo"])
+        self.assertEqual(len(r["mudancas"]), 1)
+        self.assertEqual(r["tarefas"][0]["status"], "Em produção")
+        self.assertEqual(r["tarefas"][1]["status"], "Em produção")
+        self.assertEqual(r["tarefas"][2]["status"], "Pronto para produzir")
+        self.assertEqual(tarefas[0]["status"], "Pronto para produzir")  # função pura
+
+    def test_atalho_pronto_altera_itens_em_producao(self):
+        from producao_operacional_service import planejar_atalho_central
+        tarefas = [
+            {"id": "P1::0", "numero_proposta": "P1", "produto": "A", "status": "Em produção", "ativa": True, "timeline": []},
+            {"id": "P1::1", "numero_proposta": "P1", "produto": "B", "status": "Pronto", "ativa": True, "timeline": []},
+        ]
+        r = planejar_atalho_central(
+            tarefas, numero_proposta="P1", acao="pronto",
+            pode_iniciar_producao=False, pode_marcar_pronto=True,
+            now_text="01/09/2026 14:05", usuario_nome="Anna",
+        )
+        self.assertTrue(r["ok"])
+        self.assertFalse(r["exige_consumo"])
+        self.assertEqual([x["status"] for x in r["tarefas"]], ["Pronto", "Pronto"])
+        self.assertEqual(r["mudancas"][0]["antes"], "Em produção")
+        self.assertEqual(r["mudancas"][0]["depois"], "Pronto")

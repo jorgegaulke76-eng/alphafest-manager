@@ -97,6 +97,12 @@ from proposal_status_service import (
     exige_consumo_material as _status_exige_consumo_material,
     aplicar_status_na_proposta as _status_aplicar_na_proposta,
 )
+from producao_operacional_service import (
+    etapa_exige_consumo as _producao_etapa_exige_consumo,
+    validar_transicao_fluxo as _producao_validar_transicao_fluxo,
+    planejar_status_oficial_pos_fluxo as _producao_planejar_status_oficial_pos_fluxo,
+    planejar_atalho_central as _producao_planejar_atalho_central,
+)
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -8778,21 +8784,20 @@ def salvar_tarefa_producao(tarefa_id, novos_dados):
             proposta_fresca = None
             estado_oficial = {}
 
-    if numero and not proposta_fresca:
-        return False, "A proposta oficial não foi encontrada. Atualize os dados antes de alterar o Fluxo."
+    if numero:
+        ok_transicao_prod, msg_transicao_prod = _producao_validar_transicao_fluxo(
+            proposta_encontrada=bool(proposta_fresca),
+            proposta_encerrada=bool(proposta_fresca and proposta_encerrada(proposta_fresca)),
+            aprovado=bool(estado_oficial.get("aprovado")),
+            entregue=bool(estado_oficial.get("entregue")),
+            status_novo=status_novo,
+        )
+        if not ok_transicao_prod:
+            return False, msg_transicao_prod
 
-    if proposta_fresca and proposta_encerrada(proposta_fresca):
-        return False, "Esta proposta está encerrada no Histórico e não pode avançar no Fluxo."
-
-    if numero and not estado_oficial.get("aprovado") and status_novo != "Pedido recebido":
-        return False, "Pedido ainda não aprovado no Histórico. Aprove a proposta antes de liberar arte/produção."
-
-    if numero and estado_oficial.get("entregue") and status_novo != "Entregue":
-        return False, "Pedido já está Entregue no Histórico. Reabra o status oficial antes de alterar a produção."
-
-    # I8.13.2 — qualquer caminho manual que efetivamente entre em produção (ou
-    # pule direto para Pronto/Entregue) converte a reserva em consumo real.
-    if numero and status_novo in {"Em produção", "Montagem/acabamento", "Pronto", "Entregue"}:
+    # I8.13.5-HF5 — a decisão de quando uma etapa representa produção real fica
+    # no serviço puro; a conversão Reserva -> Consumo continua transacional no app.
+    if numero and _producao_etapa_exige_consumo(status_novo):
         ok_mat_i8132, msg_mat_i8132 = _i8132_consumir_reserva_pedido(numero)
         if not ok_mat_i8132:
             return False, msg_mat_i8132
@@ -8855,17 +8860,19 @@ def salvar_tarefa_producao(tarefa_id, novos_dados):
 
         relacionadas = [t for t in tarefas if t.get("numero_proposta") == numero and t.get("ativa", True)]
         estados = [normalizar_status_fluxo(t.get("status")) for t in relacionadas]
-        if relacionadas and all(s == "Entregue" for s in estados):
-            alternar_status(numero, "entregue", True)
-        elif relacionadas and all(s in {"Pronto", "Entregue"} for s in estados):
-            alternar_status(numero, "pronto", True)
-        else:
-            # Se alguém reabre a produção pelo Fluxo, o Pronto oficial também
-            # volta a NÃO (exceto se o pedido já foi entregue).
-            hist = carregar_historico(force_refresh=True)
-            prop = next((p for p in hist if str(p.get("numero_proposta") or "") == str(numero)), None)
-            if prop and _status_resumo(prop).get("pronto") and not _status_resumo(prop).get("entregue"):
-                alternar_status(numero, "pronto", False)
+        hist_status_prod = carregar_historico(force_refresh=True)
+        prop_status_prod = next(
+            (p for p in hist_status_prod if str((p or {}).get("numero_proposta") or "") == str(numero)),
+            None,
+        )
+        estado_status_prod = _status_resumo(prop_status_prod or {})
+        decisao_status_prod = _producao_planejar_status_oficial_pos_fluxo(
+            estados,
+            pronto_oficial=bool(estado_status_prod.get("pronto")),
+            entregue_oficial=bool(estado_status_prod.get("entregue")),
+        )
+        if decisao_status_prod:
+            alternar_status(numero, decisao_status_prod.get("campo"), bool(decisao_status_prod.get("valor")))
     return True, "Andamento atualizado e sincronizado com o Histórico."
 
 
@@ -9030,47 +9037,28 @@ def _i8128_atualizar_etapa_pedido(numero_proposta, acao, usuario=None):
     if not linha:
         return False, "Pedido não está na fila operacional de produção."
 
-    if acao == "iniciar" and not linha.get("pode_iniciar_producao"):
-        return False, "O pedido ainda não está apto para iniciar produção. Revise materiais e etapa do Fluxo."
-    if acao == "pronto" and not linha.get("pode_marcar_pronto"):
-        return False, "Para marcar o pedido como pronto, todos os itens precisam estar em produção ou já prontos."
-    if acao not in {"iniciar", "pronto"}:
-        return False, "Ação de produção inválida."
+    nome_usuario = str((usuario or obter_usuario_atual() or {}).get("nome") if isinstance((usuario or obter_usuario_atual()), dict) else (usuario or "Sistema")) or "Sistema"
+    plano_central_prod = _producao_planejar_atalho_central(
+        tarefas,
+        numero_proposta=numero,
+        acao=acao,
+        pode_iniciar_producao=bool(linha.get("pode_iniciar_producao")),
+        pode_marcar_pronto=bool(linha.get("pode_marcar_pronto")),
+        now_text=agora_local().strftime("%d/%m/%Y %H:%M"),
+        usuario_nome=nome_usuario,
+    )
+    if not plano_central_prod.get("ok"):
+        return False, str(plano_central_prod.get("mensagem") or "Não foi possível planejar a atualização de produção.")
 
     # I8.13.2 — somente o início REAL da produção transforma reserva em baixa física.
     # A função é idempotente para dados legados já baixados pela I8.12.4.
-    if acao == "iniciar":
+    if plano_central_prod.get("exige_consumo"):
         ok_consumo_i8132, msg_consumo_i8132 = _i8132_consumir_reserva_pedido(numero, usuario=usuario)
         if not ok_consumo_i8132:
             return False, msg_consumo_i8132
 
-    nome_usuario = str((usuario or obter_usuario_atual() or {}).get("nome") if isinstance((usuario or obter_usuario_atual()), dict) else (usuario or "Sistema")) or "Sistema"
-    alteradas = 0
-    mudancas_central_aud = []
-    for tarefa in tarefas:
-        if not isinstance(tarefa, dict) or not tarefa.get("ativa", True):
-            continue
-        if str(tarefa.get("numero_proposta") or "").strip() != numero:
-            continue
-        status_atual = normalizar_status_fluxo(tarefa.get("status"))
-        novo_status = None
-        if acao == "iniciar" and status_atual == "Pronto para produzir":
-            novo_status = "Em produção"
-        elif acao == "pronto" and status_atual == "Em produção":
-            novo_status = "Pronto"
-        if novo_status and novo_status != status_atual:
-            tarefa["status"] = novo_status
-            tarefa["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
-            adicionar_evento_timeline(tarefa, f"Central de Produção: {status_atual} → {novo_status} por {nome_usuario}")
-            mudancas_central_aud.append({
-                "tarefa_id": str(tarefa.get("id") or ""),
-                "produto": str(tarefa.get("produto") or "Item do pedido"),
-                "antes": status_atual, "depois": novo_status,
-            })
-            alteradas += 1
-
-    if not alteradas:
-        return False, "Nenhum item precisava desta atualização."
+    tarefas = plano_central_prod.get("tarefas") or tarefas
+    mudancas_central_aud = list(plano_central_prod.get("mudancas") or [])
     if not salvar_producao(tarefas):
         return False, "Não foi possível confirmar a etapa de produção no banco."
     for mudanca_aud in mudancas_central_aud:
