@@ -103,6 +103,11 @@ from producao_operacional_service import (
     planejar_status_oficial_pos_fluxo as _producao_planejar_status_oficial_pos_fluxo,
     planejar_atalho_central as _producao_planejar_atalho_central,
 )
+from entregas_logistica_service import (
+    aplicar_logistica_na_proposta as _entregas_aplicar_logistica,
+    mensagem_pedido_pronto as _entregas_mensagem_pronto,
+    validar_conclusao_saida as _entregas_validar_conclusao_saida,
+)
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -1876,42 +1881,26 @@ def atualizar_observacao_operacional_proposta(num_proposta, observacao):
 
 # --- 20.4.9-I8.13: Central de Entregas & Retiradas ---
 def atualizar_logistica_pedido(num_proposta, *, tipo_entrega=None, observacao=None, marcar_avisado=False):
-    """Atualiza somente metadados logísticos na proposta oficial.
+    """I8.13.5-HF6: persiste metadados usando o serviço puro de logística.
 
-    Não cria banco paralelo: Pronto/Entregue continuam sendo os marcos oficiais
-    e estes campos apenas descrevem como a saída será concluída.
+    Pronto/Entregue continuam na Fonte Única de Status; este adapter injeta
+    leitura fresca, timeline, atividade e auditoria sem duplicar regra na UI.
     """
     usuario = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
     agora_txt = agora_local().strftime("%d/%m/%Y %H:%M")
-    tipos_validos = {"Retirada na AlphaFest", "Entrega AlphaFest", "Motoboy", "Outro"}
     auditoria_logistica_i8134 = {"antes": {}}
 
     def _mutar(proposta):
-        auditoria_logistica_i8134["antes"] = {
-            "logistica_tipo": proposta.get("logistica_tipo"),
-            "logistica_observacao": proposta.get("logistica_observacao"),
-            "cliente_avisado_em": proposta.get("cliente_avisado_em"),
-        }
-        mudou = False
-        if tipo_entrega is not None:
-            tipo = str(tipo_entrega or "").strip()
-            if tipo and tipo not in tipos_validos:
-                raise ValueError("Forma de saída inválida.")
-            if str(proposta.get("logistica_tipo") or "") != tipo:
-                proposta["logistica_tipo"] = tipo
-                mudou = True
-        if observacao is not None:
-            obs = str(observacao or "").strip()[:500]
-            if str(proposta.get("logistica_observacao") or "") != obs:
-                proposta["logistica_observacao"] = obs
-                mudou = True
-        if marcar_avisado:
-            proposta["cliente_avisado_em"] = agora_txt
-            proposta["cliente_avisado_por"] = usuario
-            mudou = True
-            registrar_evento_proposta(proposta, "Cliente avisado: pedido pronto para retirada/entrega", usuario=usuario)
-        elif mudou:
-            registrar_evento_proposta(proposta, "Dados de entrega/retirada atualizados", usuario=usuario)
+        contexto = _entregas_aplicar_logistica(
+            proposta,
+            tipo_entrega=tipo_entrega,
+            observacao=observacao,
+            marcar_avisado=marcar_avisado,
+            agora_texto=agora_txt,
+            usuario=usuario,
+            registrar_evento=lambda p, descricao, usr: registrar_evento_proposta(p, descricao, usuario=usr),
+        )
+        auditoria_logistica_i8134["antes"] = contexto.get("antes", {})
 
     ok, proposta, _ = atualizar_proposta_com_leitura_fresca(num_proposta, _mutar)
     if ok and proposta:
@@ -1937,15 +1926,8 @@ def _i813_dias_aguardando_pronto(proposta, hoje=None):
 
 
 def _i813_mensagem_pronto(proposta):
-    cliente = str(proposta.get("cliente_nome") or "").strip().title() or "cliente"
-    numero = str(proposta.get("numero_proposta") or "pedido")
-    tipo = str(proposta.get("logistica_tipo") or "").strip()
-    complemento = {
-        "Retirada na AlphaFest": "Seu pedido já está disponível para retirada na AlphaFest.",
-        "Entrega AlphaFest": "Seu pedido está pronto e vamos organizar a entrega com você.",
-        "Motoboy": "Seu pedido está pronto e podemos organizar o envio por motoboy.",
-    }.get(tipo, "Seu pedido está pronto para retirada/entrega.")
-    return f"Olá, {cliente}! 😊 {complemento} Pedido {numero}. Qualquer dúvida, estamos à disposição. — AlphaFest"
+    # HF6: texto da Central usa a mesma regra pura da logística.
+    return _entregas_mensagem_pronto(proposta)
 
 
 def alternar_motivo_nao_fechado(num_proposta, motivo, novo_valor):
@@ -26339,12 +26321,23 @@ if pagina_atual == "entregas_retiradas":
                         disabled=not confirmar_entrega_i813, key=f"i813_entregue_{numero_i813}_{idx_i813}",
                         help="Entregue fecha a operação e mantém Pronto automaticamente.",
                     ):
-                        # Persiste a logística digitada antes do fechamento.
-                        atualizar_logistica_pedido(numero_i813, tipo_entrega=tipo_novo_i813, observacao=obs_nova_i813)
-                        if alternar_status(numero_i813, "entregue", True):
-                            st.session_state["_mensagem_sucesso_pendente"] = f"Pedido {numero_i813} marcado como Entregue e removido da fila aberta."
-                            st.rerun()
-                        st.error("Não foi possível concluir a entrega. Atualize os dados e tente novamente.")
+                        plano_saida_i813 = _entregas_validar_conclusao_saida(
+                            proposta_i813, confirmar_saida=confirmar_entrega_i813,
+                        )
+                        if not plano_saida_i813.get("ok"):
+                            st.error(plano_saida_i813.get("mensagem") or "Não foi possível concluir a saída.")
+                        else:
+                            # Persiste a logística digitada antes do fechamento; o status
+                            # oficial continua sendo gravado pela Fonte Única.
+                            atualizar_logistica_pedido(numero_i813, tipo_entrega=tipo_novo_i813, observacao=obs_nova_i813)
+                            if alternar_status(
+                                numero_i813,
+                                plano_saida_i813.get("campo_status", "entregue"),
+                                bool(plano_saida_i813.get("valor_status", True)),
+                            ):
+                                st.session_state["_mensagem_sucesso_pendente"] = f"Pedido {numero_i813} marcado como Entregue e removido da fila aberta."
+                                st.rerun()
+                            st.error("Não foi possível concluir a entrega. Atualize os dados e tente novamente.")
 
         entregues_i813 = [p for p in historico_i813 if _status_resumo(p).get("entregue")]
         # HF1: ordena somente por data REAL de entrega. Data prevista nunca

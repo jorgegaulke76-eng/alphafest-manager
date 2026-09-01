@@ -529,3 +529,87 @@ class ProducaoOperacionalServiceTests(unittest.TestCase):
         self.assertEqual([x["status"] for x in r["tarefas"]], ["Pronto", "Pronto"])
         self.assertEqual(r["mudancas"][0]["antes"], "Em produção")
         self.assertEqual(r["mudancas"][0]["depois"], "Pronto")
+
+
+class EntregasLogisticaServiceTests(unittest.TestCase):
+    def test_logistica_altera_somente_metadados_e_registra_evento(self):
+        from entregas_logistica_service import aplicar_logistica_na_proposta
+        proposta = {"numero_proposta": "P1", "logistica_tipo": "", "logistica_observacao": ""}
+        eventos = []
+        r = aplicar_logistica_na_proposta(
+            proposta,
+            tipo_entrega="Retirada na AlphaFest",
+            observacao="  após as 18h  ",
+            agora_texto="01/09/2026 14:30",
+            usuario="Jorge",
+            registrar_evento=lambda p, descricao, usuario: eventos.append((descricao, usuario)),
+        )
+        self.assertTrue(r["mudou"])
+        self.assertEqual(proposta["logistica_tipo"], "Retirada na AlphaFest")
+        self.assertEqual(proposta["logistica_observacao"], "após as 18h")
+        self.assertEqual(eventos, [("Dados de entrega/retirada atualizados", "Jorge")])
+        self.assertNotIn("pronto", proposta)
+        self.assertNotIn("entregue", proposta)
+
+    def test_registrar_aviso_grava_carimbo_e_usuario(self):
+        from entregas_logistica_service import aplicar_logistica_na_proposta
+        proposta = {"numero_proposta": "P2"}
+        eventos = []
+        r = aplicar_logistica_na_proposta(
+            proposta,
+            marcar_avisado=True,
+            agora_texto="01/09/2026 14:31",
+            usuario="Anna",
+            registrar_evento=lambda p, descricao, usuario: eventos.append(descricao),
+        )
+        self.assertTrue(r["mudou"])
+        self.assertEqual(proposta["cliente_avisado_em"], "01/09/2026 14:31")
+        self.assertEqual(proposta["cliente_avisado_por"], "Anna")
+        self.assertEqual(eventos, ["Cliente avisado: pedido pronto para retirada/entrega"])
+
+    def test_forma_saida_invalida_e_rejeitada(self):
+        from entregas_logistica_service import aplicar_logistica_na_proposta
+        with self.assertRaises(ValueError):
+            aplicar_logistica_na_proposta({}, tipo_entrega="Drone")
+
+    def test_mensagem_pronto_respeita_forma_saida(self):
+        from entregas_logistica_service import mensagem_pedido_pronto
+        msg = mensagem_pedido_pronto({
+            "cliente_nome": "RAYSSA BOLOS",
+            "numero_proposta": "P3",
+            "logistica_tipo": "Retirada na AlphaFest",
+        })
+        self.assertIn("Rayssa Bolos", msg)
+        self.assertIn("disponível para retirada", msg)
+        self.assertIn("P3", msg)
+
+    def test_so_pronto_ativo_pode_concluir_saida(self):
+        from entregas_logistica_service import validar_conclusao_saida
+        ok = validar_conclusao_saida(
+            {"numero_proposta": "P4", "aprovado": True, "pronto": True, "entregue": False},
+            confirmar_saida=True,
+        )
+        self.assertTrue(ok["ok"])
+        self.assertEqual(ok["campo_status"], "entregue")
+        self.assertTrue(ok["valor_status"])
+
+        nao_pronto = validar_conclusao_saida(
+            {"numero_proposta": "P5", "aprovado": True, "pronto": False, "entregue": False},
+            confirmar_saida=True,
+        )
+        self.assertFalse(nao_pronto["ok"])
+
+        ja_entregue = validar_conclusao_saida(
+            {"numero_proposta": "P6", "aprovado": True, "pronto": True, "entregue": True},
+            confirmar_saida=True,
+        )
+        self.assertFalse(ja_entregue["ok"])
+
+    def test_confirmacao_de_saida_continua_obrigatoria(self):
+        from entregas_logistica_service import validar_conclusao_saida
+        r = validar_conclusao_saida(
+            {"numero_proposta": "P7", "aprovado": True, "pronto": True},
+            confirmar_saida=False,
+        )
+        self.assertFalse(r["ok"])
+        self.assertIn("Confirme", r["mensagem"])
