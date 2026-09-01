@@ -5572,6 +5572,11 @@ def _i8124_confirmar_consumo_pedido(proposta, aceitar_sem_ficha=False, usuario=N
     registrar_auditoria("Confirmar tratamento de materiais do pedido", "Estoque", consumo.get("id"), {
         "numero_proposta": numero, "modo_consumo": modo, "materiais": len(necessidades)
     })
+    registrar_mudanca_oficial(
+        "Proposta", numero, "materiais.tratamento", "Não definido", detalhe_modo,
+        origem="Reserva de Materiais",
+        contexto={"modo_consumo": modo, "materiais": len(necessidades), "consumo_id": str(consumo.get("id") or "")},
+    )
 
     def _mutar_prop(p):
         if modo == "sem_consumo":
@@ -5584,10 +5589,26 @@ def _i8124_confirmar_consumo_pedido(proposta, aceitar_sem_ficha=False, usuario=N
     atualizar_proposta_com_leitura_fresca(numero, _mutar_prop)
 
     if modo == "sem_consumo":
+        registrar_mudanca_oficial(
+            "Proposta", numero, "materiais.situacao", "⚪ Reserva não confirmada",
+            "➖ Sem consumo de estoque controlado", origem="Reserva de Materiais",
+            contexto={"modo_consumo": modo, "consumo_id": str(consumo.get("id") or "")},
+        )
         registrar_atividade(nome_usuario, "Pedido liberado sem consumo de estoque", "Estoque", detalhe=numero, evento=True)
         return True, "Pedido liberado sem consumo de estoque controlado. Nenhuma reserva ou baixa física foi criada.", consumo
 
     resultado = _i8124_regularizar_pendencias_automaticamente(usuario=usuario or obter_usuario_atual())
+    try:
+        resumo_pos_aud = _i8124_resumo_pedido(
+            numero, consumos=carregar_consumos_pedidos(force_refresh=True), estoque=carregar_estoque(force_refresh=True)
+        )
+        registrar_mudanca_oficial(
+            "Proposta", numero, "materiais.situacao", "⚪ Reserva não confirmada",
+            str(resumo_pos_aud.get("status") or "Reserva confirmada"), origem="Reserva de Materiais",
+            contexto={"modo_consumo": modo, "consumo_id": str(consumo.get("id") or "")},
+        )
+    except Exception:
+        pass
     registrar_atividade(nome_usuario, "Reserva de materiais do pedido confirmada", "Estoque", detalhe=f"{numero} · {resultado.get('mensagem', '')}", evento=True)
     if modo == "manual_pedido":
         return True, "Materiais deste pedido confirmados. O saldo disponível foi reservado sem baixa física; eventual falta ficou pendente para compra/entrada.", consumo
@@ -5603,6 +5624,11 @@ def _i8124_estornar_consumo(consumo_id, motivo, usuario=None):
     if not consumo or consumo.get("estornado"):
         return False, "Consumo ativo não encontrado."
     estoque = carregar_estoque(force_refresh=True)
+    numero = str(consumo.get("numero_proposta") or "")
+    try:
+        situacao_antes_estorno_aud = str(_i8124_resumo_pedido(numero, consumos=consumos, estoque=estoque).get("status") or "Ativo")
+    except Exception:
+        situacao_antes_estorno_aud = "Ativo"
     movimentos_originais = [
         m for m in (estoque.get("movimentacoes") or [])
         if str(m.get("origem_tipo") or "") == "Pedido"
@@ -5632,11 +5658,18 @@ def _i8124_estornar_consumo(consumo_id, motivo, usuario=None):
     consumo.setdefault("eventos", []).append({"em": agora_local().isoformat(), "usuario": nome_usuario, "tipo": "estorno", "detalhe": motivo})
     if not salvar_consumos_pedidos(consumos):
         return False, "Não foi possível concluir o estorno do controle do pedido."
-    numero = str(consumo.get("numero_proposta") or "")
     def _mutar_prop(p):
         registrar_evento_proposta(p, f"Consumo de estoque estornado: {motivo}", usuario=nome_usuario)
     atualizar_proposta_com_leitura_fresca(numero, _mutar_prop)
     registrar_auditoria("Estornar reserva/consumo do pedido", "Estoque", consumo_id, {"numero_proposta": numero, "motivo": motivo, "movimentos_estornados": len(movimentos_originais)})
+    registrar_mudanca_oficial(
+        "Proposta", numero, "materiais.situacao", situacao_antes_estorno_aud, "♻️ Liberação estornada",
+        origem="Estoque", contexto={"motivo": motivo, "consumo_id": str(consumo_id)},
+    )
+    registrar_mudanca_oficial(
+        "Proposta", numero, "materiais.controle", "Ativo", "Estornado",
+        origem="Estoque", contexto={"motivo": motivo, "consumo_id": str(consumo_id)},
+    )
     registrar_atividade(nome_usuario, "Reserva/consumo do pedido estornado", "Estoque", detalhe=f"{numero} · {motivo}", evento=True)
     # O material devolvido pode quitar outros pedidos pendentes, nunca o consumo já estornado.
     _i8124_regularizar_pendencias_automaticamente(usuario=usuario or obter_usuario_atual())
@@ -9123,11 +9156,28 @@ def _i8132_consumir_reserva_pedido(numero_proposta, usuario=None):
         salvar_consumos_pedidos(consumos)
     except Exception:
         pass
+    quantidade_consumida_aud = round(sum(abs(valor_float(m.get("delta"))) for m in movimentos_criados), 6)
     registrar_auditoria("Consumir reserva no início da produção", "Estoque", str(consumo.get("id") or ""), {
         "numero_proposta": numero,
         "movimentos": len(movimentos_criados),
-        "quantidade_total": round(sum(abs(valor_float(m.get("delta"))) for m in movimentos_criados), 6),
+        "quantidade_total": quantidade_consumida_aud,
     })
+    try:
+        resumo_pos_consumo_aud = _i8124_resumo_pedido(
+            numero, consumos=carregar_consumos_pedidos(force_refresh=True), estoque=carregar_estoque(force_refresh=True)
+        )
+        registrar_mudanca_oficial(
+            "Proposta", numero, "materiais.situacao", str(resumo.get("status") or "Reservado"),
+            str(resumo_pos_consumo_aud.get("status") or "Consumido"), origem="Início da Produção",
+            contexto={"movimentos": len(movimentos_criados), "quantidade_total": quantidade_consumida_aud},
+        )
+        registrar_mudanca_oficial(
+            "Proposta", numero, "producao.consumo_estoque", "Reservado", "Consumido fisicamente",
+            origem="Início da Produção",
+            contexto={"movimentos": len(movimentos_criados), "quantidade_total": quantidade_consumida_aud},
+        )
+    except Exception:
+        pass
     try:
         atualizar_proposta_com_leitura_fresca(
             numero, lambda p: registrar_evento_proposta(p, "Produção iniciada: materiais reservados convertidos em consumo físico", usuario=nome_usuario)
@@ -9166,6 +9216,7 @@ def _i8128_atualizar_etapa_pedido(numero_proposta, acao, usuario=None):
 
     nome_usuario = str((usuario or obter_usuario_atual() or {}).get("nome") if isinstance((usuario or obter_usuario_atual()), dict) else (usuario or "Sistema")) or "Sistema"
     alteradas = 0
+    mudancas_central_aud = []
     for tarefa in tarefas:
         if not isinstance(tarefa, dict) or not tarefa.get("ativa", True):
             continue
@@ -9181,11 +9232,23 @@ def _i8128_atualizar_etapa_pedido(numero_proposta, acao, usuario=None):
             tarefa["status"] = novo_status
             tarefa["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
             adicionar_evento_timeline(tarefa, f"Central de Produção: {status_atual} → {novo_status} por {nome_usuario}")
+            mudancas_central_aud.append({
+                "tarefa_id": str(tarefa.get("id") or ""),
+                "produto": str(tarefa.get("produto") or "Item do pedido"),
+                "antes": status_atual, "depois": novo_status,
+            })
             alteradas += 1
 
     if not alteradas:
         return False, "Nenhum item precisava desta atualização."
-    salvar_producao(tarefas)
+    if not salvar_producao(tarefas):
+        return False, "Não foi possível confirmar a etapa de produção no banco."
+    for mudanca_aud in mudancas_central_aud:
+        registrar_mudanca_oficial(
+            "Proposta", numero, f"fluxo.etapa — {mudanca_aud.get('produto')}",
+            mudanca_aud.get("antes"), mudanca_aud.get("depois"), origem="Central de Produção",
+            contexto={"tarefa_id": mudanca_aud.get("tarefa_id"), "produto": mudanca_aud.get("produto")},
+        )
 
     descricao = "Produção iniciada" if acao == "iniciar" else "Pedido marcado como pronto na produção"
     if acao == "pronto":
@@ -14656,7 +14719,12 @@ def auditoria_por_identificador(identificador, entidade=None, limite=100):
             str(reg.get("identificador") or "").strip(),
             str(detalhes.get("numero_proposta") or "").strip(),
             str(detalhes.get("proposta") or "").strip(),
+            str(detalhes.get("pedido") or "").strip(),
+            str(detalhes.get("numero_pedido") or "").strip(),
         }
+        pedidos_relacionados = detalhes.get("pedidos")
+        if isinstance(pedidos_relacionados, (list, tuple, set)):
+            referencias.update(str(x or "").strip() for x in pedidos_relacionados)
         if identificador in referencias:
             saida.append(reg)
         if len(saida) >= max(1, int(limite or 1)):
@@ -14684,7 +14752,10 @@ def renderizar_linha_tempo_oficial_proposta(proposta, prefixo="timeline_oficial"
     numero = str(proposta.get("numero_proposta") or "").strip()
     if not numero:
         return
-    eventos_audit = auditoria_por_identificador(numero, entidade="Proposta", limite=40)
+    # HF5: a linha do tempo do pedido agrega qualquer evento oficial que
+    # referencie o numero da proposta, independentemente do modulo de origem.
+    # Assim Estoque/Reserva, Fluxo/Producao e Entregas aparecem no mesmo lugar.
+    eventos_audit = auditoria_por_identificador(numero, entidade=None, limite=80)
     eventos_legado = proposta.get("timeline") if isinstance(proposta.get("timeline"), list) else []
     if not eventos_audit and not eventos_legado:
         return
@@ -14709,9 +14780,24 @@ def renderizar_linha_tempo_oficial_proposta(proposta, prefixo="timeline_oficial"
                         f"{_fmt_valor_auditoria(detalhes.get('valor_anterior'))} → "
                         f"{_fmt_valor_auditoria(detalhes.get('valor_novo'))}"
                     )
+                contexto = []
+                if not detalhes.get("campo"):
+                    if detalhes.get("modo_consumo"):
+                        contexto.append(f"modo: {detalhes.get('modo_consumo')}")
+                    if detalhes.get("materiais") not in (None, ""):
+                        contexto.append(f"materiais: {detalhes.get('materiais')}")
+                    if detalhes.get("movimentos") not in (None, ""):
+                        contexto.append(f"movimentos: {detalhes.get('movimentos')}")
+                    if detalhes.get("quantidade_total") not in (None, ""):
+                        contexto.append(f"quantidade: {_fmt_valor_auditoria(detalhes.get('quantidade_total'))}")
+                    if detalhes.get("motivo"):
+                        contexto.append(f"motivo: {_fmt_valor_auditoria(detalhes.get('motivo'))}")
+                contexto_txt = f" · {' · '.join(contexto)}" if contexto else ""
+                origem_txt = str(detalhes.get("origem") or reg.get("entidade") or "Manager")
                 st.markdown(
                     f"**{data_fmt}** · {reg.get('usuario') or 'Sistema'} · "
-                    f"{reg.get('acao') or 'Atualização'}{mudanca}"
+                    f"{reg.get('acao') or 'Atualização'}{mudanca}{contexto_txt} "
+                    f"· _{origem_txt}_"
                 )
         elif eventos_legado:
             st.info("Ainda não há eventos na auditoria central para esta proposta; abaixo estão os eventos históricos preservados.")
@@ -33154,7 +33240,10 @@ if pagina_atual == "configuracoes":
                 filtro_acao = st.text_input("Filtrar auditoria", placeholder="Usuário, ação, entidade ou identificador", key="audit_filter").strip().casefold()
                 exibidos = []
                 for reg in auditoria:
-                    texto = " ".join(str(reg.get(k, "")) for k in ["usuario", "acao", "entidade", "identificador", "resultado"]).casefold()
+                    detalhes_busca = reg.get("detalhes") if isinstance(reg.get("detalhes"), dict) else {}
+                    texto = " ".join(str(reg.get(k, "")) for k in ["usuario", "acao", "entidade", "identificador", "resultado"])
+                    texto += " " + json.dumps(detalhes_busca, ensure_ascii=False, default=str)
+                    texto = texto.casefold()
                     if not filtro_acao or filtro_acao in texto:
                         exibidos.append(reg)
                 linhas = []
@@ -33171,7 +33260,12 @@ if pagina_atual == "configuracoes":
                             f"{_fmt_valor_auditoria(detalhes_reg.get('valor_anterior'))} → "
                             f"{_fmt_valor_auditoria(detalhes_reg.get('valor_novo'))}"
                         )
-                    linhas.append({"Data": data_fmt, "Usuário": reg.get("usuario"), "Ação": reg.get("acao"), "Mudança": mudanca_reg, "Entidade": reg.get("entidade"), "Identificador": reg.get("identificador"), "Resultado": reg.get("resultado")})
+                    linhas.append({
+                        "Data": data_fmt, "Usuário": reg.get("usuario"), "Ação": reg.get("acao"),
+                        "Mudança": mudanca_reg, "Origem": detalhes_reg.get("origem") or reg.get("entidade"),
+                        "Entidade": reg.get("entidade"), "Identificador": reg.get("identificador"),
+                        "Resultado": reg.get("resultado")
+                    })
                 st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
                 st.download_button("⬇️ Exportar auditoria JSON", json.dumps(auditoria, ensure_ascii=False, indent=2), file_name=f"auditoria_festmanager_{hoje_local().isoformat()}.json", mime="application/json", use_container_width=True)
 
