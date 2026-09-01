@@ -198,3 +198,123 @@ class AuditoriaOperacionalServiceTests(unittest.TestCase):
         })
         self.assertEqual(len(rel), 2)
         self.assertEqual(rel[1]["Detalhe"], "Pago sem Aprovado")
+
+
+class ProposalStatusServiceTests(unittest.TestCase):
+    def test_entregue_normaliza_pronto(self):
+        from proposal_status_service import normalizar_status_desejados
+        r = normalizar_status_desejados(True, True, False, True)
+        self.assertTrue(r["pronto"])
+        self.assertTrue(r["entregue"])
+
+    def test_aplicar_status_preserva_regra_e_carimbos(self):
+        from proposal_status_service import normalizar_status_desejados, aplicar_status_na_proposta
+
+        proposta = {"numero_proposta": "P1", "aprovado": False, "pago": False, "pronto": False, "entregue": False}
+        eventos = []
+        desejados = normalizar_status_desejados(True, True, True, False)
+        r = aplicar_status_na_proposta(
+            proposta, desejados,
+            now_text="01/09/2026 12:30", usuario="Jorge",
+            registrar_evento=lambda p, descricao, usuario: eventos.append((descricao, usuario)),
+        )
+        self.assertEqual(r["anteriores"], {"aprovado": False, "pago": False, "pronto": False, "entregue": False})
+        self.assertTrue(r["aprovou_agora"])
+        self.assertEqual(proposta["aprovado_em"], "01/09/2026 12:30")
+        self.assertEqual(proposta["pago_em"], "01/09/2026 12:30")
+        self.assertEqual(proposta["pronto_em"], "01/09/2026 12:30")
+        self.assertEqual(proposta["pronto_por"], "Jorge")
+        self.assertTrue(proposta["pronto_em_confiavel"])
+        self.assertEqual([x[0] for x in eventos], ["Orçamento aprovado", "Pagamento confirmado", "Pedido pronto"])
+
+    def test_entrega_gera_conclusao_e_pronto(self):
+        from proposal_status_service import normalizar_status_desejados, aplicar_status_na_proposta
+
+        proposta = {"numero_proposta": "P2", "aprovado": True, "pago": True, "pronto": False, "entregue": False}
+        eventos = []
+        desejados = normalizar_status_desejados(True, True, False, True)
+        r = aplicar_status_na_proposta(
+            proposta, desejados,
+            now_text="01/09/2026 12:31", usuario="Anna",
+            registrar_evento=lambda p, descricao, usuario: eventos.append(descricao),
+        )
+        self.assertTrue(proposta["pronto"])
+        self.assertTrue(proposta["entregue"])
+        self.assertTrue(r["nova_conclusao"])
+        self.assertIn("Pedido pronto", eventos)
+        self.assertIn("Entrega concluída", eventos)
+        self.assertIn("Entregue — operação finalizada e disponível no Histórico", eventos)
+
+    def test_verificacao_persistencia_rejeita_estado_diferente(self):
+        from proposal_status_service import normalizar_status_desejados, status_persistidos_correspondem
+        desejados = normalizar_status_desejados(True, True, False, False)
+        self.assertTrue(status_persistidos_correspondem({"aprovado": True, "pago": True}, desejados))
+        self.assertFalse(status_persistidos_correspondem({"aprovado": True, "pago": False}, desejados))
+
+
+class ProposalPersistenceServiceTests(unittest.TestCase):
+    def test_prefere_mutacao_condicional_quando_disponivel(self):
+        from proposal_persistence_service import atualizar_proposta_fresca
+
+        chamadas = []
+        cacheados = []
+        invalidados = []
+
+        def cloud(*args, **kwargs):
+            chamadas.append((args, kwargs))
+            registro = {"numero_proposta": "P1", "aprovado": True}
+            return True, registro, [registro], "ok"
+
+        ok, registro, motivo = atualizar_proposta_fresca(
+            "P1", lambda p: p.update({"aprovado": True}),
+            cloud_mutate=cloud,
+            on_cloud_document=lambda doc: cacheados.append(doc),
+            invalidate=lambda: invalidados.append(True),
+        )
+        self.assertTrue(ok)
+        self.assertTrue(registro["aprovado"])
+        self.assertEqual(motivo, "ok")
+        self.assertEqual(len(chamadas), 1)
+        self.assertEqual(len(cacheados), 1)
+        self.assertEqual(len(invalidados), 1)
+        self.assertEqual(chamadas[0][1]["retries"], 4)
+
+    def test_fallback_sempre_parte_de_leitura_fresca(self):
+        from proposal_persistence_service import atualizar_proposta_fresca
+
+        banco = [{"numero_proposta": "P2", "pago": False}]
+        leituras = []
+        gravacoes = []
+        invalidados = []
+
+        def load():
+            leituras.append(True)
+            return [dict(x) for x in banco]
+
+        def save(hist):
+            gravacoes.append(hist)
+            banco[:] = [dict(x) for x in hist]
+            return True
+
+        ok, registro, motivo = atualizar_proposta_fresca(
+            "P2", lambda p: p.update({"pago": True}),
+            load_fresh=load, save_full=save,
+            invalidate=lambda: invalidados.append(True),
+        )
+        self.assertTrue(ok)
+        self.assertTrue(registro["pago"])
+        self.assertEqual(motivo, "fallback")
+        self.assertEqual(len(leituras), 1)
+        self.assertEqual(len(gravacoes), 1)
+        self.assertEqual(len(invalidados), 1)
+        self.assertTrue(banco[0]["pago"])
+
+    def test_fallback_nao_inventa_proposta_ausente(self):
+        from proposal_persistence_service import atualizar_proposta_fresca
+        ok, registro, motivo = atualizar_proposta_fresca(
+            "INEXISTENTE", lambda p: p.update({"pago": True}),
+            load_fresh=lambda: [], save_full=lambda h: True,
+        )
+        self.assertFalse(ok)
+        self.assertIsNone(registro)
+        self.assertIn("não encontrada", motivo.lower())

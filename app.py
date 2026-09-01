@@ -82,6 +82,14 @@ from auditoria_operacional_service import (
     linhas_previa_saneamento as _auditoria_linhas_previa_saneamento,
     linhas_relatorio_sincronizacao as _auditoria_linhas_relatorio_sincronizacao,
 )
+from proposal_persistence_service import atualizar_proposta_fresca as _proposta_persistir_fresca
+from proposal_status_service import (
+    normalizar_status_desejados as _status_normalizar_desejados,
+    snapshot_status as _status_snapshot_oficial,
+    status_persistidos_correspondem as _status_persistencia_confere,
+    exige_consumo_material as _status_exige_consumo_material,
+    aplicar_status_na_proposta as _status_aplicar_na_proposta,
+)
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -1504,43 +1512,31 @@ def salvar_historico_completo(historico):
     return ok
 
 def atualizar_proposta_com_leitura_fresca(numero, updater):
-    """HF3: altera somente uma proposta sobre a versão mais recente do banco.
+    """I8.13.5-HF3: adapter da persistência segura de uma única proposta.
 
-    Quando o Supabase suporta PATCH condicional, usa compare-and-swap para que
-    Jorge e Anna não sobrescrevam silenciosamente alterações simultâneas.
+    O serviço modular decide CAS/fallback; ``app.py`` injeta Supabase, cache e
+    leitura/gravação. Assim a regra de persistência deixa de ficar acoplada à UI.
     """
-    numero = str(numero or "").strip()
-    if not numero:
-        return False, None, "Número da proposta não informado."
-
     func = getattr(_cloud_db, "mutate_list_record", None) if _cloud_db else None
-    if callable(func):
-        ok, atualizado, documento, motivo = func(
-            "historico_orcamentos",
-            ARQUIVO_HISTORICO,
-            [],
-            "numero_proposta",
-            numero,
-            updater,
-            retries=4,
-        )
-        invalidate_document_cache("historico_orcamentos")
-        if ok and isinstance(documento, list):
-            _document_cache()["historico_orcamentos"] = {
-                "time": time.monotonic(),
-                "value": copy.deepcopy(documento),
-            }
-        return bool(ok), atualizado, str(motivo or "")
 
-    # Fallback local/compatibilidade: sempre começa por leitura fresca.
-    historico = carregar_historico(force_refresh=True)
-    alvo = next((p for p in historico if str(p.get("numero_proposta")) == numero), None)
-    if alvo is None:
-        return False, None, "Proposta não encontrada no histórico."
-    updater(alvo)
-    ok = salvar_historico_completo(historico)
-    invalidate_document_cache("historico_orcamentos")
-    return bool(ok), alvo, "fallback"
+    def _cachear_documento(documento):
+        _document_cache()["historico_orcamentos"] = {
+            "time": time.monotonic(),
+            "value": copy.deepcopy(documento),
+        }
+
+    return _proposta_persistir_fresca(
+        numero,
+        updater,
+        cloud_mutate=func if callable(func) else None,
+        load_fresh=lambda: carregar_historico(force_refresh=True),
+        save_full=salvar_historico_completo,
+        on_cloud_document=_cachear_documento,
+        invalidate=lambda: invalidate_document_cache("historico_orcamentos"),
+        document_key="historico_orcamentos",
+        local_file=ARQUIVO_HISTORICO,
+        retries=4,
+    )
 
 
 def registrar_evento_proposta(proposta, descricao, usuario="Sistema"):
@@ -16006,12 +16002,7 @@ def dialog_cliente_anna():
 
 def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
     """HF2/I8.13.2: atualiza os marcos oficiais com proteção de materiais."""
-    novos = {
-        "aprovado": valor_bool(aprovado),
-        "pago": valor_bool(pago),
-        "pronto": valor_bool(pronto) or valor_bool(entregue),
-        "entregue": valor_bool(entregue),
-    }
+    novos = _status_normalizar_desejados(aprovado, pago, pronto, entregue)
     usuario_status = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
 
     # I8.13.2 — este editor atualiza os quatro marcos de uma vez e, por isso,
@@ -16023,7 +16014,7 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
             (p for p in carregar_historico(force_refresh=True) if str((p or {}).get("numero_proposta") or "") == str(numero)),
             None,
         )
-        estado_antes_i8132 = _status_resumo(atual_status_i8132 or {})
+        estado_antes_i8132 = _status_snapshot_oficial(atual_status_i8132 or {})
     except Exception:
         estado_antes_i8132 = {}
     # CAT1-HF9: quando o usuário marca Aprovado junto com Pronto/Entregue no
@@ -16041,11 +16032,11 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
                 (p for p in carregar_historico(force_refresh=True) if str((p or {}).get("numero_proposta") or "") == str(numero)),
                 None,
             )
-            estado_antes_i8132 = _status_resumo(atual_status_i8132 or {})
+            estado_antes_i8132 = _status_snapshot_oficial(atual_status_i8132 or {})
         except Exception:
             pass
 
-    nova_conclusao_producao_i8132 = bool(novos["pronto"] or novos["entregue"]) and not bool(estado_antes_i8132.get("pronto"))
+    nova_conclusao_producao_i8132 = _status_exige_consumo_material(estado_antes_i8132, novos)
     if nova_conclusao_producao_i8132:
         consumidor_i8132 = globals().get("_i8132_consumir_reserva_pedido")
         if callable(consumidor_i8132):
@@ -16061,50 +16052,16 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
     controle = {"anteriores": None, "nova_conclusao": False, "aprovou_agora": False, "mudancas": []}
 
     def _mutar(proposta):
-        estado_antes = _status_resumo(proposta)
-        anteriores = {campo: bool(estado_antes.get(campo)) for campo in ("aprovado", "pago", "pronto", "entregue")}
-        controle["anteriores"] = anteriores
-        antes_concluida = proposta_concluida(proposta)
-        proposta.update(novos)
-        agora_status = agora_local().strftime("%d/%m/%Y %H:%M")
-        for campo, campo_data in (
-            ("aprovado", "aprovado_em"), ("pago", "pago_em"),
-            ("pronto", "pronto_em"), ("entregue", "entregue_em"),
-        ):
-            if novos[campo] and not anteriores[campo]:
-                if campo == "pronto":
-                    # I8.13-HF2: só uma transição observada nesta versão cria uma data de Pronto confiável.
-                    proposta["pronto_em"] = agora_status
-                    proposta["pronto_por"] = usuario_status
-                    proposta["pronto_em_confiavel"] = True
-                elif not proposta.get(campo_data):
-                    proposta[campo_data] = agora_status
-            elif not novos[campo] and anteriores[campo]:
-                proposta.pop(campo_data, None)
-                if campo == "pronto":
-                    proposta.pop("pronto_por", None)
-                    proposta.pop("pronto_em_confiavel", None)
-
-        rotulos = {
-            "aprovado": "Orçamento aprovado",
-            "pago": "Pagamento confirmado",
-            "pronto": "Pedido pronto",
-            "entregue": "Entrega concluída",
-        }
-        for campo, valor in novos.items():
-            if anteriores[campo] != valor:
-                texto = rotulos[campo] if valor else f"{rotulos[campo]} desmarcado"
-                controle["mudancas"].append(texto)
-                registrar_evento_proposta(proposta, texto, usuario=usuario_status)
-
-        controle["aprovou_agora"] = novos["aprovado"] and not anteriores["aprovado"]
-        depois_concluida = proposta_concluida(proposta)
-        controle["nova_conclusao"] = depois_concluida and not antes_concluida
-        if controle["nova_conclusao"]:
-            descricao = "Entregue — operação finalizada e disponível no Histórico"
-            if proposta_faturamento_mensal(proposta):
-                descricao += "; pagamento segue para Faturamento Mensal"
-            registrar_evento_proposta(proposta, descricao, usuario=usuario_status)
+        resultado = _status_aplicar_na_proposta(
+            proposta,
+            novos,
+            now_text=agora_local().strftime("%d/%m/%Y %H:%M"),
+            usuario=usuario_status,
+            registrar_evento=lambda p, descricao, usuario: registrar_evento_proposta(
+                p, descricao, usuario=usuario
+            ),
+        )
+        controle.update(resultado)
 
     ok, atualizado, motivo = atualizar_proposta_com_leitura_fresca(numero, _mutar)
     if not ok:
@@ -16115,7 +16072,7 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
     if confirmado is None:
         return False, "A proposta não foi localizada após a gravação."
     estado_confirmado = _status_resumo(confirmado)
-    if any(bool(estado_confirmado.get(campo)) != valor for campo, valor in novos.items()):
+    if not _status_persistencia_confere(confirmado, novos):
         return False, "O banco recebeu outra atualização simultânea. Reabra a proposta e confirme os status atuais."
 
     if controle["mudancas"]:
