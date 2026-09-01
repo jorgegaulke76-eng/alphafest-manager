@@ -778,3 +778,9 @@ hangelog
 - Seleção de cliente cadastrado preenche automaticamente identificação e preserva Perfil Comercial existente.
 - Cliente novo continua livre e não exige cadastro prévio.
 - Autopreenchimento só ocorre ao trocar a seleção, sem sobrescrever ajustes manuais da proposta.
+
+## 20.4.9-I8.13.5-HF10 — Cliente novo pelo Orçamento
+- Novo Orçamento completa o ciclo da HF9: cliente realmente novo é cadastrado no cadastro mestre ao salvar a proposta.
+- Proposta recebe `relacionamento_id` do cliente criado, evitando herdar vínculo de cliente anterior em edições.
+- Identificadores novos não fazem fallback silencioso por nome, protegendo clientes homônimos.
+- Jorge e Anna usam a mesma regra; clientes existentes não são alterados automaticamente.

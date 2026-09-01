@@ -125,6 +125,8 @@ from relacionamentos_service import (
     chave_cliente as _rel_chave_cliente,
     pontuacao_cadastro_relacionamento as _rel_pontuacao_cadastro,
     localizar_cliente_comercial as _rel_localizar_cliente_comercial,
+    localizar_cliente_orcamento as _rel_localizar_cliente_orcamento,
+    preparar_cliente_novo_orcamento as _rel_preparar_cliente_novo_orcamento,
     localizar_relacionamento as _rel_localizar_relacionamento,
     relacionamento_da_proposta as _rel_relacionamento_da_proposta,
     proposta_com_dados_atuais as _rel_proposta_com_dados_atuais,
@@ -3799,7 +3801,55 @@ def carregar_clientes():
 def salvar_clientes(lista):
     if not isinstance(lista, list):
         raise ValueError("O cadastro de clientes precisa ser uma lista.")
-    save_document("clientes_db", lista, ARQUIVO_CLIENTES)
+    return save_document("clientes_db", lista, ARQUIVO_CLIENTES)
+
+
+def garantir_cliente_orcamento(nome, documento="", whatsapp="", *, origem="Novo Orçamento"):
+    """HF10: garante vínculo do orçamento ao cadastro mestre sem duplicar identificadores.
+
+    Retorna ``(ok, cliente, criado, mensagem_erro)``. Cliente existente nunca é
+    alterado automaticamente. Um cliente novo só é considerado criado depois de
+    o cadastro mestre confirmar a persistência.
+    """
+    clientes = carregar_clientes()
+    cliente = _rel_localizar_cliente_orcamento(
+        clientes, nome=nome, documento=documento, whatsapp=whatsapp
+    )
+    if cliente:
+        if not str(cliente.get("id", "") or "").strip():
+            cliente["id"] = f"REL-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
+            if not salvar_clientes(clientes):
+                return False, None, False, "Não foi possível confirmar o vínculo do cliente no cadastro mestre. Tente salvar novamente."
+        return True, cliente, False, ""
+
+    novo = _rel_preparar_cliente_novo_orcamento(
+        nome=nome,
+        documento=documento,
+        whatsapp=whatsapp,
+        cliente_id=f"REL-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
+        criado_em=agora_local().strftime("%d/%m/%Y %H:%M"),
+        origem=origem,
+    )
+    if not novo:
+        return False, None, False, "Informe o nome do cliente antes de salvar o orçamento."
+
+    clientes.append(novo)
+    if not salvar_clientes(clientes):
+        return False, None, False, (
+            "O novo cliente ainda não foi confirmado no cadastro mestre. "
+            "A proposta não foi salva para evitar um vínculo incompleto. Tente novamente."
+        )
+
+    try:
+        registrar_auditoria(
+            "Cliente criado pelo Orçamento",
+            "Relacionamentos",
+            novo.get("id", ""),
+            {"nome": novo.get("nome", ""), "whatsapp": novo.get("whatsapp", ""), "origem": origem},
+        )
+    except Exception:
+        pass
+    return True, novo, True, ""
 
 
 def normalizar_texto_cliente(valor):
@@ -15593,7 +15643,12 @@ def dialog_orcamento_anna(proposta=None):
                 st.error("Informe o nome do cliente.")
                 return
             numero = numero_original or ""
-            cliente_comercial_i811 = localizar_cliente_comercial(nome, doc, wa)
+            ok_cliente_i811, cliente_comercial_i811, cliente_novo_i811, erro_cliente_i811 = garantir_cliente_orcamento(
+                nome, doc, wa, origem="Novo Orçamento · Anna"
+            )
+            if not ok_cliente_i811:
+                st.error(erro_cliente_i811)
+                return
             perfil_salvar_i811 = resumo_perfil_comercial(cliente_comercial_i811) if cliente_comercial_i811 else resumo_perfil_comercial({})
             mensal_salvar_i811 = bool(perfil_salvar_i811.get("faturamento_mensal"))
             modalidade_salvar_i811 = I811_MODALIDADE_MENSAL if mensal_salvar_i811 else I811_MODALIDADE_NORMAL
@@ -15627,6 +15682,10 @@ def dialog_orcamento_anna(proposta=None):
             ok_salvar, retorno_salvar = _anna_salvar_proposta(dados, numero_original)
             if ok_salvar:
                 registrar_atividade(obter_usuario_atual(), "Proposta salva", "Orçamentos", detalhe=f"{retorno_salvar} · {nome.strip()}", evento=True)
+                if cliente_novo_i811:
+                    st.session_state["_mensagem_sucesso_pendente"] = (
+                        f"Cliente {nome.strip()} cadastrado e proposta {retorno_salvar} salva com sucesso."
+                    )
                 st.session_state["anna_modal_itens"] = []
                 st.session_state[chave_modal] = False
                 st.rerun()
@@ -25443,7 +25502,12 @@ if pagina_atual == "novo_orcamento":
             if st.session_state.editar_numero:
                 antigo = next((p for p in carregar_historico() if p.get("numero_proposta") == numero), {})
 
-            cliente_comercial_i811 = localizar_cliente_comercial(nome, doc, wa)
+            ok_cliente_i811, cliente_comercial_i811, cliente_novo_i811, erro_cliente_i811 = garantir_cliente_orcamento(
+                nome, doc, wa, origem="Novo Orçamento · Jorge"
+            )
+            if not ok_cliente_i811:
+                st.error(erro_cliente_i811)
+                st.stop()
             perfil_i811 = resumo_perfil_comercial(cliente_comercial_i811) if cliente_comercial_i811 else resumo_perfil_comercial({})
             mensal_i811 = bool(perfil_i811.get("faturamento_mensal"))
             modalidade_i811 = I811_MODALIDADE_MENSAL if mensal_i811 else I811_MODALIDADE_NORMAL
@@ -25520,7 +25584,12 @@ if pagina_atual == "novo_orcamento":
             # A mensagem e o layout padrão permanecem exatamente os mesmos.
             st.session_state["_ultima_proposta_salva"] = dict(dados)
             agendar_limpeza_formulario()
-            rerun_na_aba("novo_orcamento", "Proposta salva com sucesso e operação atualizada.")
+            mensagem_salva_i811 = (
+                f"Cliente {nome.strip()} cadastrado e proposta salva com sucesso."
+                if cliente_novo_i811
+                else "Proposta salva com sucesso e operação atualizada."
+            )
+            rerun_na_aba("novo_orcamento", mensagem_salva_i811)
 
 if pagina_atual == "historico":
     if usuario_em_operacao_protegida(obter_usuario_atual()):

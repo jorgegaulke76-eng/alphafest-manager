@@ -89,6 +89,76 @@ def localizar_cliente_comercial(
     return None
 
 
+
+def localizar_cliente_orcamento(
+    clientes: Iterable[dict[str, Any]] | None,
+    *,
+    nome: Any = "",
+    documento: Any = "",
+    whatsapp: Any = "",
+) -> dict[str, Any] | None:
+    """Localiza cliente para vínculo do orçamento sem confundir homônimos.
+
+    Regra de segurança:
+    - documento informado e reconhecido vence;
+    - depois WhatsApp reconhecido;
+    - nome só é usado como fallback quando documento e WhatsApp não foram informados.
+
+    Assim, um WhatsApp realmente novo não é ligado silenciosamente a outro cadastro
+    apenas porque o nome é igual.
+    """
+    lista = [c for c in (clientes or []) if isinstance(c, dict)]
+    doc = digitos(documento)
+    wa = telefone_chave(whatsapp)
+    nome_norm = normalizar_texto_cliente(nome).casefold()
+
+    if doc:
+        achados = [c for c in lista if digitos(c.get("documento")) == doc]
+        if len(achados) == 1:
+            return achados[0]
+    if wa:
+        achados = [c for c in lista if telefone_chave(c.get("whatsapp")) == wa]
+        if len(achados) == 1:
+            return achados[0]
+
+    # Com identificador novo informado, não cai para nome: isso evita vincular
+    # Maria Silva (telefone novo) a outra Maria Silva já cadastrada.
+    if doc or wa:
+        return None
+
+    if nome_norm:
+        achados = [c for c in lista if normalizar_texto_cliente(c.get("nome")).casefold() == nome_norm]
+        if len(achados) == 1:
+            return achados[0]
+    return None
+
+
+def preparar_cliente_novo_orcamento(
+    *,
+    nome: Any,
+    documento: Any = "",
+    whatsapp: Any = "",
+    cliente_id: Any,
+    criado_em: Any,
+    origem: str = "Novo Orçamento",
+) -> dict[str, Any] | None:
+    """Prepara o cadastro mestre mínimo criado a partir do próprio orçamento."""
+    nome_limpo = normalizar_texto_cliente(nome)
+    if not nome_limpo:
+        return None
+    return {
+        "id": str(cliente_id or "").strip(),
+        "nome": nome_limpo,
+        "documento": normalizar_texto_cliente(documento),
+        "whatsapp": normalizar_texto_cliente(whatsapp),
+        "email": "",
+        "cidade": "",
+        "aniversario": "",
+        "observacoes": "",
+        "origem": str(origem or "Novo Orçamento"),
+        "criado_em": str(criado_em or "").strip(),
+    }
+
 def localizar_relacionamento(
     clientes: Iterable[dict[str, Any]] | None,
     *,

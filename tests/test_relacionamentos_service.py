@@ -3,6 +3,8 @@ import unittest
 from relacionamentos_service import (
     chave_cliente,
     localizar_cliente_comercial,
+    localizar_cliente_orcamento,
+    preparar_cliente_novo_orcamento,
     localizar_relacionamento,
     relacionamento_da_proposta,
     proposta_com_dados_atuais,
@@ -32,6 +34,30 @@ class RelacionamentosServiceTests(unittest.TestCase):
     def test_localizacao_comercial_prioriza_documento(self):
         achado = localizar_cliente_comercial(self.clientes, nome="Outro", documento="12345678900", whatsapp="000")
         self.assertEqual(achado["id"], "C1")
+
+    def test_localizacao_orcamento_reconhece_whatsapp_com_codigo_55(self):
+        achado = localizar_cliente_orcamento(self.clientes, nome="Outro", whatsapp="+55 (11) 99999-0001")
+        self.assertEqual(achado["id"], "C1")
+
+    def test_localizacao_orcamento_nao_confunde_mesmo_nome_com_whatsapp_novo(self):
+        achado = localizar_cliente_orcamento(self.clientes, nome="Cliente Um", whatsapp="11 97777-9999")
+        self.assertIsNone(achado)
+
+    def test_localizacao_orcamento_pode_usar_nome_quando_nao_ha_identificador(self):
+        achado = localizar_cliente_orcamento(self.clientes, nome="Cliente Dois")
+        self.assertEqual(achado["id"], "C2")
+
+    def test_prepara_cliente_novo_do_orcamento_sem_inventar_dados(self):
+        novo = preparar_cliente_novo_orcamento(
+            nome="  Maria   Nova ", documento="123.000.000-00", whatsapp="(11) 97777-0000",
+            cliente_id="REL-NOVO", criado_em="01/09/2026 17:40",
+        )
+        self.assertEqual(novo["id"], "REL-NOVO")
+        self.assertEqual(novo["nome"], "Maria Nova")
+        self.assertEqual(novo["documento"], "123.000.000-00")
+        self.assertEqual(novo["whatsapp"], "(11) 97777-0000")
+        self.assertEqual(novo["origem"], "Novo Orçamento")
+        self.assertEqual(novo["email"], "")
 
     def test_localizacao_relacional_prioriza_whatsapp_e_faz_fallback_nome(self):
         self.assertEqual(localizar_relacionamento(self.clientes, nome="Errado", whatsapp="11988880002")["id"], "C2")
