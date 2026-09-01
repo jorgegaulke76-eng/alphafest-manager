@@ -1,4 +1,4 @@
-"""20.4.9-I8.13.4-HF6 — auditoria de sincronização operacional.
+"""20.4.9-I8.13.4-HF7 — auditoria e saneamento seguro de sincronização operacional.
 
 Motor puro/somente leitura. Compara a Fonte Única de Status do Histórico com
 projeções operacionais (Fluxo/Produção, risco de prazo e fila de saída) para
@@ -25,6 +25,86 @@ def _indexar(itens: Iterable[dict] | None) -> dict[str, dict]:
             out[numero] = item
     return out
 
+
+
+def correcoes_seguras_status(record: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Lista apenas correções históricas que completam pré-requisitos obrigatórios.
+
+    Regras conservadoras da HF7:
+    - Entregue implica Pronto;
+    - Pronto implica Aprovado;
+    - Pago implica Aprovado.
+
+    Nunca infere ``Pago``, nunca desfaz um status e não cria datas históricas.
+    """
+    record = record or {}
+    aprovado = status_bool(record, "aprovado")
+    pago = status_bool(record, "pago")
+    pronto = status_bool(record, "pronto")
+    entregue = status_bool(record, "entregue")
+    correcoes: list[dict[str, Any]] = []
+
+    if entregue and not pronto:
+        correcoes.append({
+            "campo": "pronto",
+            "valor_anterior": False,
+            "valor_novo": True,
+            "motivo": "Entregue exige Pronto",
+        })
+
+    if not aprovado and (pago or pronto or entregue):
+        motivos = []
+        if pago:
+            motivos.append("Pago")
+        if pronto:
+            motivos.append("Pronto")
+        elif entregue:
+            motivos.append("Entregue")
+        correcoes.append({
+            "campo": "aprovado",
+            "valor_anterior": False,
+            "valor_novo": True,
+            "motivo": f"{'/'.join(motivos)} exige Aprovado",
+        })
+    return correcoes
+
+
+def aplicar_correcoes_seguras_status(record: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Aplica no registro somente as correções retornadas acima e devolve o que mudou."""
+    if not isinstance(record, dict):
+        return []
+    correcoes = correcoes_seguras_status(record)
+    for correcao in correcoes:
+        record[str(correcao["campo"])] = True
+    return correcoes
+
+
+def planejar_saneamento_status_historicos(
+    propostas: Iterable[dict] | None,
+) -> dict[str, Any]:
+    """Cria uma prévia sem mutar as propostas."""
+    planos: list[dict[str, Any]] = []
+    total_alteracoes = 0
+    for proposta in propostas or []:
+        if not isinstance(proposta, dict):
+            continue
+        numero = _numero(proposta)
+        if not numero:
+            continue
+        correcoes = correcoes_seguras_status(proposta)
+        if not correcoes:
+            continue
+        planos.append({
+            "pedido": numero,
+            "cliente": str(proposta.get("cliente_nome") or proposta.get("cliente") or "").strip(),
+            "correcoes": correcoes,
+        })
+        total_alteracoes += len(correcoes)
+    return {
+        "propostas": len(planos),
+        "alteracoes": total_alteracoes,
+        "planos": planos,
+    }
 
 def auditar_consistencia_operacional(
     propostas: Iterable[dict] | None,
@@ -95,10 +175,13 @@ def auditar_consistencia_operacional(
         if estado.get("pago") and not estado.get("aprovado"):
             contradicoes.append({"pedido": numero, "problema": "Pago sem Aprovado"})
         # A leitura oficial faz Entregue implicar Pronto; ainda assim vale apontar
-        # combinação bruta suspeita para saneamento futuro sem bloquear a operação.
+        # combinações brutas suspeitas para o saneamento histórico seguro da HF7.
         proposta = por_numero[numero]
         bruto_entregue = status_bool(proposta, "entregue")
         bruto_pronto = status_bool(proposta, "pronto")
+        bruto_aprovado = status_bool(proposta, "aprovado")
+        if bruto_pronto and not bruto_aprovado:
+            contradicoes.append({"pedido": numero, "problema": "Pronto sem Aprovado"})
         if bruto_entregue and not bruto_pronto:
             contradicoes.append({"pedido": numero, "problema": "Registro bruto Entregue sem Pronto"})
 

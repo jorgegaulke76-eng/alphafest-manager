@@ -63,7 +63,11 @@ from risco_producao_engine import montar_previsao_producao as _i8127_engine_prev
 from central_producao_engine import montar_central_producao as _i8128_engine_central, resumo_central as _i8128_engine_resumo, reconciliar_etapa_status_oficial as _i8128_reconciliar_etapa_status, reconciliar_etapa_aprovacao_oficial as _i8134_reconciliar_etapa_aprovacao
 from central_entregas_engine import montar_fila as _i813_engine_fila, resumo_fila as _i813_engine_resumo, dias_aguardando as _i813_engine_dias_aguardando, ordenar_historico_entregues as _i813_engine_ordenar_entregues
 from prioridade_operacional_engine import montar_prioridades_operacionais as _i8131_engine_prioridades, resumo_prioridades as _i8131_engine_resumo, indexar_prioridades as _i8131_engine_indexar
-from consistencia_operacional_engine import auditar_consistencia_operacional as _i8134_engine_consistencia
+from consistencia_operacional_engine import (
+    auditar_consistencia_operacional as _i8134_engine_consistencia,
+    planejar_saneamento_status_historicos as _i8134_planejar_saneamento_status,
+    aplicar_correcoes_seguras_status as _i8134_aplicar_correcoes_status,
+)
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -8967,6 +8971,115 @@ def executar_auditoria_sincronizacao_operacional(force_refresh=True, registrar=F
     return rel_depois
 
 
+
+def executar_saneamento_status_historicos_seguro():
+    """HF7 — completa apenas pré-requisitos lógicos em registros históricos.
+
+    Cada proposta é atualizada sobre leitura fresca/CAS. As correções oficiais
+    só são auditadas depois da confirmação do banco. Não infere pagamento,
+    não desfaz status, não altera estoque e não cria datas retroativas.
+    """
+    historico_inicial = carregar_historico(force_refresh=True)
+    plano_inicial = _i8134_planejar_saneamento_status(historico_inicial)
+    resultados = []
+    total_aplicado = 0
+    falhas = []
+
+    for plano in plano_inicial.get("planos", []):
+        numero = str(plano.get("pedido") or "").strip()
+        if not numero:
+            continue
+        aplicadas = []
+
+        def _mutar_saneamento(proposta):
+            aplicadas.clear()
+            aplicadas.extend(_i8134_aplicar_correcoes_status(proposta))
+
+        ok, _atualizada, motivo = atualizar_proposta_com_leitura_fresca(numero, _mutar_saneamento)
+        if not ok:
+            falhas.append({"pedido": numero, "motivo": str(motivo or "Falha de gravação")})
+            continue
+
+        for correcao in list(aplicadas):
+            campo = str(correcao.get("campo") or "")
+            registrar_mudanca_oficial(
+                "Proposta", numero, f"status.{campo}",
+                correcao.get("valor_anterior"), correcao.get("valor_novo"),
+                origem="Saneamento Histórico HF7",
+                contexto={
+                    "motivo": correcao.get("motivo"),
+                    "saneamento_seguro": True,
+                    "sem_inferencia_pagamento": True,
+                },
+            )
+            resultados.append({
+                "Pedido": numero,
+                "Campo": f"status.{campo}",
+                "Mudança": "NÃO → SIM",
+                "Motivo": correcao.get("motivo"),
+                "Resultado": "OK",
+            })
+            total_aplicado += 1
+
+    # Reconciliar todas as projeções somente depois das propostas confirmadas.
+    historico_final = carregar_historico(force_refresh=True)
+    sincronizar_producao_com_propostas(historico_final)
+    relatorio_final = executar_auditoria_sincronizacao_operacional(force_refresh=True, registrar=True)
+    plano_restante = _i8134_planejar_saneamento_status(carregar_historico(force_refresh=True))
+
+    try:
+        registrar_auditoria(
+            "Saneamento histórico seguro de status", "Sistema", "Historico/Propostas",
+            {
+                "origem": "Saneamento Histórico HF7",
+                "propostas_previstas": int(plano_inicial.get("propostas", 0) or 0),
+                "alteracoes_previstas": int(plano_inicial.get("alteracoes", 0) or 0),
+                "alteracoes_confirmadas": total_aplicado,
+                "falhas": falhas[:50],
+                "alteracoes_restantes": int(plano_restante.get("alteracoes", 0) or 0),
+            },
+            resultado="OK" if not falhas else "ATENCAO",
+        )
+    except Exception:
+        pass
+
+    retorno = {
+        "plano_inicial": plano_inicial,
+        "alteracoes_confirmadas": total_aplicado,
+        "resultados": resultados,
+        "falhas": falhas,
+        "plano_restante": plano_restante,
+        "sincronizacao": relatorio_final,
+        "momento": agora_local().isoformat(),
+    }
+    st.session_state["_i8134_hf7_ultimo_saneamento"] = copy.deepcopy(retorno)
+    return retorno
+
+
+def renderizar_previa_saneamento_status_hf7(plano):
+    plano = plano or {}
+    propostas = int(plano.get("propostas", 0) or 0)
+    alteracoes = int(plano.get("alteracoes", 0) or 0)
+    c1, c2 = st.columns(2)
+    c1.metric("Propostas a sanear", propostas)
+    c2.metric("Correções seguras", alteracoes)
+    linhas = []
+    for item in plano.get("planos", []) or []:
+        for correcao in item.get("correcoes", []) or []:
+            linhas.append({
+                "Pedido": item.get("pedido"),
+                "Cliente": item.get("cliente"),
+                "Campo": f"status.{correcao.get('campo')}",
+                "Atual": "NÃO",
+                "Novo": "SIM",
+                "Motivo": correcao.get("motivo"),
+            })
+    if linhas:
+        st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
+    else:
+        st.success("Nenhuma inconsistência histórica segura para corrigir.")
+
+
 def renderizar_auditoria_sincronizacao_operacional(relatorio, *, expandido=False):
     """Bloco compacto reutilizável nas telas operacionais."""
     relatorio = relatorio or {}
@@ -8982,7 +9095,7 @@ def renderizar_auditoria_sincronizacao_operacional(relatorio, *, expandido=False
             f"🔎 Auditoria de sincronização encontrou {problemas} ponto(s) para revisão. "
             "Apenas divergências seguras do espelho do Fluxo são corrigidas automaticamente."
         )
-    with st.expander("🔎 Ver auditoria de sincronização das telas · HF6", expanded=expandido):
+    with st.expander("🔎 Ver auditoria de sincronização das telas · HF7", expanded=expandido):
         cont = relatorio.get("contagens") or {}
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Pedidos operacionais", cont.get("operacionais_oficiais", 0))
@@ -33384,19 +33497,62 @@ if pagina_atual == "configuracoes":
                 st.rerun()
 
         with tab_audit:
-            st.subheader("🔗 Auditoria de Sincronização Operacional · HF6")
+            st.subheader("🔗 Auditoria de Sincronização Operacional · HF7")
             st.caption(
                 "Compara Histórico, Fluxo/Produção, Risco e Entregas usando leitura fresca. "
-                "O único reparo automático persistente é o espelho do Fluxo; status oficiais nunca são alterados pela auditoria."
+                "O reparo automático normal continua restrito ao espelho do Fluxo; status oficiais só podem ser completados "
+                "pelo saneamento histórico seguro abaixo, com prévia e confirmação explícita."
             )
-            if st.button("🔄 Auditar e sincronizar telas agora", key="hf6_auditar_sincronizar", use_container_width=True, type="primary"):
+            if st.button("🔄 Auditar e sincronizar telas agora", key="hf7_auditar_sincronizar", use_container_width=True, type="primary"):
                 with st.spinner("Conferindo a Fonte Única e reconciliando projeções seguras..."):
-                    rel_manual_hf6 = executar_auditoria_sincronizacao_operacional(force_refresh=True, registrar=True)
-                renderizar_auditoria_sincronizacao_operacional(rel_manual_hf6, expandido=True)
+                    rel_manual_hf7 = executar_auditoria_sincronizacao_operacional(force_refresh=True, registrar=True)
+                renderizar_auditoria_sincronizacao_operacional(rel_manual_hf7, expandido=True)
             elif st.session_state.get("_i8134_relatorio_sincronizacao"):
                 renderizar_auditoria_sincronizacao_operacional(
                     st.session_state.get("_i8134_relatorio_sincronizacao"), expandido=False
                 )
+
+            st.divider()
+            st.markdown("### 🧹 Saneamento seguro de status históricos · HF7")
+            st.caption(
+                "Completa somente pré-requisitos obrigatórios: Entregue → Pronto; Pronto → Aprovado; Pago → Aprovado. "
+                "Nunca infere Pago, nunca desfaz status, não altera estoque e não cria datas retroativas."
+            )
+            if st.button("🔍 Preparar prévia do saneamento", key="hf7_preparar_saneamento", use_container_width=True):
+                plano_hf7 = _i8134_planejar_saneamento_status(carregar_historico(force_refresh=True))
+                st.session_state["_i8134_hf7_previa_saneamento"] = copy.deepcopy(plano_hf7)
+            plano_hf7 = st.session_state.get("_i8134_hf7_previa_saneamento")
+            if isinstance(plano_hf7, dict):
+                renderizar_previa_saneamento_status_hf7(plano_hf7)
+                if int(plano_hf7.get("alteracoes", 0) or 0) > 0:
+                    confirmar_hf7 = st.checkbox(
+                        "Confirmo aplicar somente as correções seguras mostradas acima.",
+                        key="hf7_confirmar_saneamento",
+                    )
+                    if st.button(
+                        "🧹 Corrigir inconsistências históricas seguras",
+                        key="hf7_aplicar_saneamento",
+                        use_container_width=True,
+                        type="primary",
+                        disabled=not confirmar_hf7,
+                    ):
+                        with st.spinner("Aplicando correções uma proposta por vez e confirmando no banco..."):
+                            resultado_hf7 = executar_saneamento_status_historicos_seguro()
+                        st.session_state["_i8134_hf7_previa_saneamento"] = copy.deepcopy(resultado_hf7.get("plano_restante") or {})
+                        if resultado_hf7.get("falhas"):
+                            st.warning(
+                                f"{resultado_hf7.get('alteracoes_confirmadas', 0)} correção(ões) confirmada(s); "
+                                f"{len(resultado_hf7.get('falhas') or [])} proposta(s) exigem nova tentativa/revisão."
+                            )
+                            st.dataframe(pd.DataFrame(resultado_hf7.get("falhas") or []), use_container_width=True, hide_index=True)
+                        else:
+                            st.success(
+                                f"✅ {resultado_hf7.get('alteracoes_confirmadas', 0)} correção(ões) histórica(s) confirmada(s) no banco. "
+                                "Projeções operacionais reconciliadas em seguida."
+                            )
+                        renderizar_auditoria_sincronizacao_operacional(
+                            resultado_hf7.get("sincronizacao") or {}, expandido=True
+                        )
             st.divider()
             auditoria = carregar_auditoria()
             if not auditoria:
