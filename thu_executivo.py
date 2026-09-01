@@ -11,7 +11,12 @@ from typing import Any, Callable
 import streamlit as st
 
 from alpha_core import listar_atrasados_operacionais
-from proposal_status import status_bool as _status_bool, proposta_pronta as _status_pronta
+from proposal_status import (
+    status_bool as _status_bool,
+    proposta_pronta as _status_pronta,
+    proposta_encerrada as _status_encerrada,
+    proposta_concluida as _status_concluida,
+)
 
 
 def _bool(value: Any) -> bool:
@@ -69,18 +74,29 @@ def calcular_briefing(
     ]
     recebido_hoje = sum(_valor_total(p, calcular_valores) for p in pagos_hoje)
 
-    aprovados_abertos = [p for p in propostas if _status_bool(p, "aprovado") and not _status_bool(p, "entregue")]
+    # I8.13.5-HF1 — o THU não mantém mais uma regra operacional paralela.
+    # A mesma lista de propostas operacionalmente válidas sustenta os valores;
+    # as CONTAGENS operacionais (prontos, entregas hoje e atrasados) vêm
+    # diretamente de calcular_indicadores_unificados, a mesma fonte da Central.
+    propostas_ativas = [
+        p for p in propostas
+        if not _status_encerrada(p) and not _status_concluida(p)
+    ]
+    aprovados_abertos = [
+        p for p in propostas_ativas
+        if _status_bool(p, "aprovado") and not _status_bool(p, "entregue")
+    ]
     previsto_aberto = sum(_valor_total(p, calcular_valores) for p in aprovados_abertos)
 
-    entregas_hoje = [p for p in aprovados_abertos if _data(p.get("data_entrega")) == hoje]
-    prontos_aguardando = [p for p in aprovados_abertos if _status_pronta(p)]
-    # HF2: não recalcular atraso com regra própria. O THU consome a lista
-    # oficial do Alpha Core para garantir os mesmos pedidos e a mesma contagem.
-    atrasados = listar_atrasados_operacionais(propostas, hoje)
+    entregas_hoje_qtd = int(indicadores.get("entregas_hoje_abertas", 0) or 0)
+    prontos_aguardando_qtd = int(
+        indicadores.get("prontos_operacionais", indicadores.get("prontos_aguardando_entrega", 0)) or 0
+    )
+    atrasados_qtd = int(indicadores.get("atrasados_operacionais", 0) or 0)
 
     alertas: list[str] = []
-    if atrasados:
-        alertas.append(f"{len(atrasados)} pedido(s) com prazo vencido")
+    if atrasados_qtd:
+        alertas.append(f"{atrasados_qtd} pedido(s) com prazo vencido")
     if indicadores.get("aguardando_aprovacao", 0):
         alertas.append(f"{indicadores['aguardando_aprovacao']} orçamento(s) aguardando aprovação")
     if indicadores.get("pagamentos_pendentes", 0):
@@ -91,9 +107,9 @@ def calcular_briefing(
     return {
         "recebido_hoje": recebido_hoje,
         "previsto_aberto": previsto_aberto,
-        "entregas_hoje": len(entregas_hoje),
-        "prontos_aguardando_entrega": len(prontos_aguardando),
-        "atrasados": len(atrasados),
+        "entregas_hoje": entregas_hoje_qtd,
+        "prontos_aguardando_entrega": prontos_aguardando_qtd,
+        "atrasados": atrasados_qtd,
         "pedidos_ativos": int(indicadores.get("pedidos_ativos", indicadores.get("propostas_abertas", 0))),
         "aguardando_aprovacao": int(indicadores.get("aguardando_aprovacao", 0)),
         "pagamentos_pendentes": int(indicadores.get("pagamentos_pendentes", 0)),
