@@ -12655,12 +12655,47 @@ def montar_fila_operacional(historico, tarefas, atendimentos, limite=10):
             "acao": proxima_acao_atendimento(atendimento),
             "referencia": atendimento.get("id", ""),
         })
+    # HF4 — a Central do Jorge usa a MESMA fonte oficial do Histórico.
+    # Nunca decide encerramento por um campo cru/legado isolado, pois propostas
+    # antigas podem guardar Entregue/Aprovado em aliases diferentes.
+    mapa_status_oficial_fila = {}
     for proposta in historico:
-        if proposta.get("entregue", False):
+        numero_fila = str(proposta.get("numero_proposta") or "").strip()
+        estado_fila = _status_resumo(proposta)
+        if numero_fila:
+            mapa_status_oficial_fila[numero_fila] = estado_fila
+
+        # Baixa oficial: Entregue OU encerrado/não fechado sai imediatamente
+        # da fila operacional. Pronto continua aberto porque ainda aguarda saída.
+        if estado_fila.get("entregue") or estado_fila.get("encerrada"):
             continue
+
         entrega = data_entrega_segura(proposta.get("data_entrega"))
-        if entrega:
-            dias = (entrega - hoje).days
+        if not entrega:
+            continue
+        dias = (entrega - hoje).days
+
+        if estado_fila.get("pronto"):
+            # Não classificar um pedido já produzido como atraso de produção.
+            peso = 850 + (min(abs(dias), 30) if dias < 0 else 0)
+            detalhe = "Pronto aguardando retirada/entrega"
+            acao = "Abrir Entregas e confirmar saída"
+        elif not estado_fila.get("aprovado"):
+            # Ainda é proposta/orçamento: pode ser urgente comercialmente, mas
+            # não deve reaparecer como pedido atrasado de produção.
+            if dias < 0:
+                peso = 760 + min(abs(dias), 30)
+                detalhe = f"Aguardando aprovação comercial · prazo vencido há {abs(dias)} dia(s)"
+            elif dias == 0:
+                peso = 740
+                detalhe = "Aguardando aprovação comercial · prazo hoje"
+            elif dias <= 2:
+                peso = 640 - dias
+                detalhe = f"Aguardando aprovação comercial · prazo em {dias} dia(s)"
+            else:
+                continue
+            acao = "Revisar aprovação no Histórico"
+        else:
             if dias < 0:
                 peso = 900 + min(abs(dias), 30)
                 detalhe = f"Atrasado há {abs(dias)} dia(s)"
@@ -12672,16 +12707,27 @@ def montar_fila_operacional(historico, tarefas, atendimentos, limite=10):
                 detalhe = f"Entrega em {dias} dia(s)"
             else:
                 continue
-            itens.append({
-                "peso": peso,
-                "tipo": "Pedido",
-                "titulo": f"{proposta.get('numero_proposta', '—')} · {proposta.get('cliente_nome', 'Cliente')}",
-                "detalhe": detalhe,
-                "acao": "Revisar pedido e confirmar próxima etapa",
-                "referencia": proposta.get("numero_proposta", ""),
-            })
+            acao = "Revisar pedido e confirmar próxima etapa"
+
+        itens.append({
+            "peso": peso,
+            "tipo": "Pedido",
+            "titulo": f"{proposta.get('numero_proposta', '—')} · {proposta.get('cliente_nome', 'Cliente')}",
+            "detalhe": detalhe,
+            "acao": acao,
+            "referencia": proposta.get("numero_proposta", ""),
+        })
+
     for tarefa in tarefas:
         if not tarefa.get("ativa", True):
+            continue
+        numero_tarefa_fila = str(tarefa.get("numero_proposta") or "").strip()
+        estado_tarefa_fila = mapa_status_oficial_fila.get(numero_tarefa_fila, {})
+        # Registro manual antigo nunca pode ressuscitar pedido que a fonte oficial
+        # já deu baixa/encerrou. Também não libera produção antes da aprovação.
+        if estado_tarefa_fila.get("entregue") or estado_tarefa_fila.get("encerrada"):
+            continue
+        if estado_tarefa_fila and not estado_tarefa_fila.get("aprovado"):
             continue
         status = normalizar_status_fluxo(tarefa.get("status"))
         mapa = {
@@ -12708,11 +12754,16 @@ def montar_fila_operacional(historico, tarefas, atendimentos, limite=10):
 
 
 def proxima_acao_proposta(proposta):
-    """Retorna a ação operacional mais útil para uma proposta."""
-    if proposta.get("entregue", False):
+    """Retorna a ação operacional mais útil usando a fonte oficial de status."""
+    estado = _status_resumo(proposta)
+    if estado.get("entregue"):
         return "Registrar pós-venda"
-    if proposta.get("aprovado", False):
-        if not proposta.get("pago", False):
+    if estado.get("encerrada"):
+        return "Pedido encerrado — consultar Histórico"
+    if estado.get("pronto"):
+        return "Confirmar retirada/entrega"
+    if estado.get("aprovado"):
+        if not estado.get("pago") and not estado.get("mensalista"):
             return "Confirmar pagamento e acompanhar produção"
         return "Acompanhar produção e entrega"
     if proposta.get("enviado", False):
