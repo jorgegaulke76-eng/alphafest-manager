@@ -25717,11 +25717,13 @@ if pagina_atual == "historico":
             else:
                 proxima_acao = "Concluir produção e marcar como Pronto"
             st.info(f"🎯 **Próxima ação:** {proxima_acao}")
-            timeline_prop = prop.get("timeline", []) if isinstance(prop.get("timeline"), list) else []
-            if timeline_prop:
-                with st.expander("🕒 Linha do tempo da proposta"):
-                    for evento in reversed(timeline_prop[-20:]):
-                        st.write(f"**{evento.get('data', '—')}** · {evento.get('descricao', 'Atualização')}")
+            # I8.13.4-HF1 — o Histórico usa a mesma linha do tempo oficial do
+            # restante do Manager. A auditoria central vem primeiro (usuário +
+            # campo + valor anterior → novo) e os eventos legados permanecem
+            # preservados no mesmo bloco, sem uma segunda fonte visual.
+            renderizar_linha_tempo_oficial_proposta(
+                prop, prefixo=f"historico_timeline_oficial_{num_p}"
+            )
 
             st.divider()
             renderizar_caixa_projeto(prop, prefixo="hist")
