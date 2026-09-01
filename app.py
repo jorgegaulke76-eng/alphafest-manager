@@ -2950,55 +2950,128 @@ def localizar_cliente_comercial(nome="", documento="", whatsapp=""):
 
 
 
-def autopreencher_cliente_whatsapp_i8111():
-    """Reconhece cliente cadastrado pelo WhatsApp no formulário do Jorge.
+def _orcamento_autopreencher_cliente_por_whatsapp(
+    *,
+    prefixo,
+    nome_key,
+    documento_key,
+    whatsapp_key,
+    reconhecido_id_key,
+    mensagem_key,
+):
+    """HF9: identifica cliente pelo WhatsApp sem deixar dados antigos misturados.
 
-    O callback roda antes do rerun do Streamlit, então os demais campos podem
-    ser preenchidos com segurança antes da criação dos widgets no novo ciclo.
-    A Anna não usa este fluxo nesta versão; sua extensão depende de homologação.
+    Regras:
+    - WhatsApp cadastrado: preenche Nome/CPF-CNPJ e sincroniza o seletor visual;
+    - WhatsApp novo: mantém o modo Cliente novo e libera digitação manual;
+    - ao trocar um WhatsApp reconhecido por outro não cadastrado, remove somente
+      Nome/Documento que vieram do autopreenchimento, preservando edição manual;
+    - o próprio WhatsApp digitado nunca é reescrito pelo callback.
     """
-    whatsapp = str(st.session_state.get("form_whatsapp", "") or "").strip()
-    digitos = _telefone_chave(whatsapp)
-    if len(digitos) < 8:
-        st.session_state.pop("_i8111_cliente_reconhecido_id", None)
-        st.session_state.pop("_i8111_cliente_reconhecido_msg", None)
+    whatsapp = str(st.session_state.get(whatsapp_key, "") or "").strip()
+    chave_wa = _telefone_chave(whatsapp)
+    seletor_key = f"{prefixo}_seletor"
+    marcador_key = f"{prefixo}_token"
+    auto_key = f"{prefixo}_whatsapp_autofill"
+
+    anterior = st.session_state.get(auto_key)
+    anterior = anterior if isinstance(anterior, dict) else {}
+    if not anterior and st.session_state.get(marcador_key):
+        # O cliente pode ter vindo do seletor (não do WhatsApp). Nesse caso,
+        # também tratamos Nome/Documento como dados carregados automaticamente.
+        token_anterior = str(st.session_state.get(marcador_key) or "")
+        cliente_anterior = next(
+            (c for c in carregar_clientes() if _orcamento_cliente_ref(c) == token_anterior),
+            None,
+        )
+        if cliente_anterior:
+            anterior = {
+                "token": token_anterior,
+                "nome": str(cliente_anterior.get("nome") or "").strip(),
+                "documento": str(cliente_anterior.get("documento") or "").strip(),
+            }
+
+    def _limpar_autopreenchimento_anterior():
+        # Só apaga o que ainda estiver exatamente igual ao valor injetado.
+        # Se Jorge/Anna editou manualmente, o dado digitado é preservado.
+        nome_auto = str(anterior.get("nome") or "")
+        doc_auto = str(anterior.get("documento") or "")
+        if nome_auto and str(st.session_state.get(nome_key, "") or "") == nome_auto:
+            st.session_state[nome_key] = ""
+        if doc_auto and str(st.session_state.get(documento_key, "") or "") == doc_auto:
+            st.session_state[documento_key] = ""
+
+    if len(chave_wa) < 8:
+        _limpar_autopreenchimento_anterior()
+        st.session_state.pop(auto_key, None)
+        st.session_state.pop(reconhecido_id_key, None)
+        st.session_state.pop(mensagem_key, None)
+        st.session_state[seletor_key] = ORCAMENTO_CLIENTE_LIVRE
+        st.session_state.pop(marcador_key, None)
         return
+
     cliente = localizar_cliente_comercial(whatsapp=whatsapp)
     if not cliente:
-        st.session_state.pop("_i8111_cliente_reconhecido_id", None)
-        st.session_state["_i8111_cliente_reconhecido_msg"] = "nao_encontrado"
+        _limpar_autopreenchimento_anterior()
+        st.session_state.pop(auto_key, None)
+        st.session_state.pop(reconhecido_id_key, None)
+        st.session_state[mensagem_key] = "nao_encontrado"
+        # Mantém o orçamento no caminho de cadastro/digitação de cliente novo.
+        # O marcador é removido antes do rerun para o seletor não apagar o WhatsApp novo.
+        st.session_state[seletor_key] = ORCAMENTO_CLIENTE_LIVRE
+        st.session_state.pop(marcador_key, None)
         return
-    st.session_state["form_cliente"] = str(cliente.get("nome", "") or "").strip()
-    st.session_state["form_documento"] = str(cliente.get("documento", "") or "").strip()
-    # Não reescreve a própria chave form_whatsapp dentro do callback que foi
-    # disparado por ela; preserva exatamente o número confirmado pelo usuário.
-    st.session_state["_i8111_cliente_reconhecido_id"] = cliente.get("id", "")
-    st.session_state["_i8111_cliente_reconhecido_msg"] = "encontrado"
+
+    nome_cliente = str(cliente.get("nome", "") or "").strip()
+    documento_cliente = str(cliente.get("documento", "") or "").strip()
+    token = _orcamento_cliente_ref(cliente)
+
+    st.session_state[nome_key] = nome_cliente
+    st.session_state[documento_key] = documento_cliente
+    st.session_state[auto_key] = {
+        "token": token,
+        "nome": nome_cliente,
+        "documento": documento_cliente,
+        "whatsapp_chave": chave_wa,
+    }
+    st.session_state[reconhecido_id_key] = cliente.get("id", "")
+    st.session_state[mensagem_key] = "encontrado"
+
+    # Espelha também no seletor Cliente cadastrado, para a tela não dizer
+    # "Cliente novo" enquanto os dados de um cadastro existente estão ativos.
+    opcoes, mapa = _orcamento_opcoes_cliente()
+    rotulo_cliente = next(
+        (rotulo for rotulo in opcoes[1:] if _orcamento_cliente_ref(mapa.get(rotulo)) == token),
+        None,
+    )
+    if rotulo_cliente:
+        st.session_state[seletor_key] = rotulo_cliente
+        st.session_state[marcador_key] = token
+
+
+def autopreencher_cliente_whatsapp_i8111():
+    """HF9: reconhecimento por WhatsApp no Novo Orçamento do Jorge."""
+    _orcamento_autopreencher_cliente_por_whatsapp(
+        prefixo="jorge_orc_cliente",
+        nome_key="form_cliente",
+        documento_key="form_documento",
+        whatsapp_key="form_whatsapp",
+        reconhecido_id_key="_i8111_cliente_reconhecido_id",
+        mensagem_key="_i8111_cliente_reconhecido_msg",
+    )
 
 
 def autopreencher_cliente_whatsapp_anna_i811hf2():
-    """HF2: espelha no modal da Anna a identificação por WhatsApp homologada no Jorge.
-
-    Mantém chaves próprias do modal para não interferir no formulário principal.
-    O callback apenas lê o cadastro mestre e preenche identificação do cliente;
-    nenhuma condição comercial é criada ou alterada aqui.
-    """
-    whatsapp = str(st.session_state.get("anna_modal_whatsapp", "") or "").strip()
-    digitos = _telefone_chave(whatsapp)
-    if len(digitos) < 8:
-        st.session_state.pop("_i811hf2_anna_cliente_reconhecido_id", None)
-        st.session_state.pop("_i811hf2_anna_cliente_reconhecido_msg", None)
-        return
-    cliente = localizar_cliente_comercial(whatsapp=whatsapp)
-    if not cliente:
-        st.session_state.pop("_i811hf2_anna_cliente_reconhecido_id", None)
-        st.session_state["_i811hf2_anna_cliente_reconhecido_msg"] = "nao_encontrado"
-        return
-    st.session_state["anna_modal_cliente"] = str(cliente.get("nome", "") or "").strip()
-    st.session_state["anna_modal_documento"] = str(cliente.get("documento", "") or "").strip()
-    # Preserva exatamente o número confirmado pela Anna no campo que disparou o callback.
-    st.session_state["_i811hf2_anna_cliente_reconhecido_id"] = cliente.get("id", "")
-    st.session_state["_i811hf2_anna_cliente_reconhecido_msg"] = "encontrado"
+    """HF9: mesma regra de reconhecimento por WhatsApp no modal da Anna."""
+    numero_original = str(st.session_state.get("anna_modal_numero_original", "") or "").strip()
+    _orcamento_autopreencher_cliente_por_whatsapp(
+        prefixo=f"anna_orc_cliente_{numero_original or 'novo'}",
+        nome_key="anna_modal_cliente",
+        documento_key="anna_modal_documento",
+        whatsapp_key="anna_modal_whatsapp",
+        reconhecido_id_key="_i811hf2_anna_cliente_reconhecido_id",
+        mensagem_key="_i811hf2_anna_cliente_reconhecido_msg",
+    )
 
 
 def resumo_cliente_reconhecido_i8111(cliente):
@@ -3129,7 +3202,7 @@ def _orcamento_campos_cliente(prefixo, *, nome_key, documento_key, whatsapp_key)
             st.session_state[documento_key] = ""
             st.session_state[whatsapp_key] = ""
             st.session_state.pop(marcador_key, None)
-        st.caption("✍️ Cliente novo: preencha os dados abaixo. O orçamento continua livre e não exige cadastro prévio.")
+        st.caption("✍️ Cliente novo: preencha os dados abaixo normalmente no próprio orçamento. Se o WhatsApp ainda não existir, este fluxo permanece livre para o novo cadastro.")
         return None
 
     cliente = mapa.get(escolha)
@@ -15221,6 +15294,7 @@ def dialog_orcamento_anna(proposta=None):
     registrar_atividade(obter_usuario_atual(), "Corrigindo um orçamento" if proposta else "Digitando novo orçamento", "Orçamentos")
     proposta = dict(proposta or {})
     numero_original = proposta.get("numero_proposta")
+    st.session_state["anna_modal_numero_original"] = str(numero_original or "")
 
     # Inicializa o formulário somente uma vez por proposta/modal.
     chave_modal = f"anna_modal_iniciado_{numero_original or 'novo'}"
@@ -15327,7 +15401,7 @@ def dialog_orcamento_anna(proposta=None):
         if perfil_modal_i811.get("qtd_regras_ativas", 0):
             st.caption(f"💰 Perfil Comercial encontrado: {perfil_modal_i811.get('qtd_regras_ativas')} abatimento(s) fixo(s) ativo(s) por produto.")
     elif msg_modal_i811 == "nao_encontrado":
-        st.info("ℹ️ WhatsApp ainda não localizado nos Relacionamentos. A proposta pode ser criada normalmente e o cliente pode ser cadastrado depois.")
+        st.info("ℹ️ WhatsApp ainda não cadastrado. Continue preenchendo os dados normalmente como **Cliente novo** no próprio orçamento.")
 
     # I8.11.3 — digitação viva do item no modal da Anna. O diálogo do Streamlit
     # já executa isoladamente; por isso quantidade e valor podem recalcular a prévia
@@ -25199,7 +25273,7 @@ if pagina_atual == "novo_orcamento":
         if resumo_rec_i8111:
             st.caption(resumo_rec_i8111)
     elif msg_identificacao_i8111 == "nao_encontrado":
-        st.info("ℹ️ WhatsApp ainda não localizado nos Relacionamentos. A proposta pode ser criada normalmente e o cliente pode ser cadastrado depois.")
+        st.info("ℹ️ WhatsApp ainda não cadastrado. Continue preenchendo os dados normalmente como **Cliente novo** no próprio orçamento.")
 
     # CAT1-HF5 — produto fica fora do form para que a seleção no Catálogo Oficial
     # possa preencher os dados do item imediatamente. Os demais campos continuam
