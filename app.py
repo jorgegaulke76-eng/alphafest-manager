@@ -68,6 +68,13 @@ from consistencia_operacional_engine import (
     planejar_saneamento_status_historicos as _i8134_planejar_saneamento_status,
     aplicar_correcoes_seguras_status as _i8134_aplicar_correcoes_status,
 )
+from fluxo_operacional_service import (
+    inferir_processos,
+    status_inicial_fluxo,
+    normalizar_status_fluxo,
+    reconciliar_lista_fluxo as _fluxo_reconciliar_lista_fluxo,
+)
+from status_diagnostics_service import diagnosticar_sincronizacao_status
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -3244,49 +3251,6 @@ def proposta_concluida(prop):
 def proposta_ativa_operacional(prop):
     """Fonte única para listas e contadores operacionais da Anna, Jorge e THU."""
     return _status_proposta_ativa(prop)
-
-
-def diagnosticar_sincronizacao_status(historico):
-    """HF3: compara a antiga regra fixa com a fonte única atual.
-
-    Serve somente como diagnóstico executivo; não altera nenhuma proposta.
-    """
-    divergencias = []
-    contradicoes = []
-    for prop in (historico or []):
-        if not isinstance(prop, dict):
-            continue
-        numero = str(prop.get("numero_proposta") or "SEM-NÚMERO")
-        cliente = str(prop.get("cliente_nome") or prop.get("cliente") or "Cliente")
-        estado_oficial = _status_resumo(prop)
-        aprovado = bool(estado_oficial.get("aprovado"))
-        pago = bool(estado_oficial.get("pago"))
-        pronto = bool(estado_oficial.get("pronto"))
-        entregue = bool(estado_oficial.get("entregue"))
-        legado_concluido = aprovado and pago and entregue
-        oficial_concluido = proposta_concluida(prop)
-        if legado_concluido != oficial_concluido:
-            divergencias.append({
-                "Proposta": numero,
-                "Cliente": cliente,
-                "Cobrança": "Mensal" if proposta_faturamento_mensal(prop) else "Por proposta",
-                "Aprovado": "Sim" if aprovado else "Não",
-                "Pago": "Sim" if pago else "Não",
-                "Pronto": "Sim" if pronto else "Não",
-                "Entregue": "Sim" if entregue else "Não",
-                "Regra oficial": "Concluída" if oficial_concluido else "Ativa",
-            })
-        if entregue and not pronto:
-            contradicoes.append({"Proposta": numero, "Cliente": cliente, "Problema": "Entregue sem Pronto (registro legado; leitura oficial corrige em memória)"})
-        if entregue and not aprovado:
-            contradicoes.append({"Proposta": numero, "Cliente": cliente, "Problema": "Entregue sem aprovação"})
-        if pago and not aprovado:
-            contradicoes.append({"Proposta": numero, "Cliente": cliente, "Problema": "Pago sem aprovação"})
-    return {
-        "avaliadas": len([p for p in (historico or []) if isinstance(p, dict)]),
-        "divergencias_legadas": divergencias,
-        "contradicoes": contradicoes,
-    }
 
 
 def calcular_valores_proposta(prop):
@@ -8670,202 +8634,26 @@ def salvar_producao(lista):
     return bool(save_document("producao_db", lista, ARQUIVO_PRODUCAO))
 
 
-def inferir_processos(produto, especificacoes=""):
-    texto = f"{produto} {especificacoes}".lower()
-    processos = []
-    if any(x in texto for x in ["personaliz", "tema:", "nome:", "topo", "convite", "caixa", "tag"]):
-        processos.append("Criação/ajuste de arte")
-    if "papel de arroz" in texto or "papel arroz" in texto:
-        processos.append("Papel de arroz")
-    if any(x in texto for x in ["3d", "pla", "impressão 3d", "impressao 3d"]):
-        processos.append("Impressão 3D")
-    if any(x in texto for x in ["laser", "mdf", "acrílico", "acrilico"]):
-        processos.append("Corte/laser")
-    if any(x in texto for x in ["balão", "balao", "bubble", "balloon", "arco"]):
-        processos.append("Balões")
-    if any(x in texto for x in ["papelaria", "topo", "caixa", "adesivo", "tag", "convite", "banner", "faixa"]):
-        processos.append("Impressão papelaria")
-    if any(x in texto for x in ["montagem", "cachepô", "cachepo", "lembranc", "tubolata", "centro de mesa"]):
-        processos.append("Montagem")
-    if not processos:
-        processos = ["Montagem", "Acabamento"]
-    # mantém ordem e remove repetições
-    return list(dict.fromkeys(processos))
-
-
-def status_inicial_fluxo(produto, especificacoes=""):
-    processos = inferir_processos(produto, especificacoes)
-    return "Arte pendente" if "Criação/ajuste de arte" in processos else "Pronto para produzir"
-
-
-def normalizar_status_fluxo(status, entregue=False):
-    if entregue:
-        return "Entregue"
-    mapa_antigo = {
-        "A fazer": "Pronto para produzir",
-        "Em produção": "Em produção",
-        "Aguardando aprovação": "Aguardando aprovação",
-        "Pronto": "Pronto",
-        "Entregue": "Entregue",
-    }
-    status = mapa_antigo.get(status, status)
-    return status if status in STATUS_FLUXO else "Pedido recebido"
-
-
-def adicionar_evento_timeline(tarefa, descricao):
+def adicionar_evento_timeline(tarefa, descricao, usuario=""):
     timeline = tarefa.get("timeline")
     if not isinstance(timeline, list):
         timeline = []
-    timeline.append({
+    evento = {
         "data": agora_local().strftime("%d/%m/%Y %H:%M"),
         "descricao": descricao,
-    })
+    }
+    if str(usuario or "").strip():
+        evento["usuario"] = str(usuario).strip()
+    timeline.append(evento)
     tarefa["timeline"] = timeline[-50:]
 
 
-def _i8134_itens_fluxo_proposta(prop):
-    """Retorna itens operacionais; nunca deixa uma proposta ativa sem representação no Fluxo."""
-    itens = [dict(i) for i in ((prop or {}).get("itens") or []) if isinstance(i, dict)]
-    if itens:
-        return itens
-    # Compatibilidade defensiva com registros antigos/incompletos: a Central do Dia
-    # é por proposta, então o Fluxo precisa ao menos de um cartão representativo.
-    nome = str(
-        (prop or {}).get("produto")
-        or (prop or {}).get("descricao_produto")
-        or (prop or {}).get("descricao")
-        or "Pedido sem item estruturado"
-    ).strip() or "Pedido sem item estruturado"
-    return [{
-        "produto": nome,
-        "quantidade": (prop or {}).get("quantidade", 1) or 1,
-        "especificacoes": "Registro operacional sem itens estruturados; revisar proposta se necessário.",
-        "_fallback_fluxo": True,
-    }]
-
-
 def _i8134_reconciliar_lista_fluxo(tarefas_base, propostas_fonte):
-    """Projeta o Fluxo a partir do Histórico oficial preservando somente campos manuais."""
-    tarefas = copy.deepcopy(tarefas_base) if isinstance(tarefas_base, list) else []
-    existentes = {str(t.get("id") or ""): t for t in tarefas if isinstance(t, dict) and str(t.get("id") or "")}
-    ids_ativos = set()
-    alterado = False
-
-    for prop in (propostas_fonte or []):
-        if not isinstance(prop, dict) or not proposta_ativa_operacional(prop):
-            continue
-        numero = str(prop.get("numero_proposta") or "SEM-NUMERO").strip() or "SEM-NUMERO"
-        estado_oficial_prop = _status_resumo(prop)
-        for indice, item in enumerate(_i8134_itens_fluxo_proposta(prop)):
-            tarefa_id = f"{numero}::{indice}"
-            ids_ativos.add(tarefa_id)
-            produto = str(item.get("produto") or item.get("nome") or "Produto não informado")
-            especificacoes = str(item.get("especificacoes") or item.get("detalhes") or "")
-            processos = inferir_processos(produto, especificacoes)
-            status_inicial_operacional = status_inicial_fluxo(produto, especificacoes)
-            status_base = (
-                "Pronto" if estado_oficial_prop.get("pronto")
-                else status_inicial_operacional if estado_oficial_prop.get("aprovado")
-                else "Pedido recebido"
-            )
-            base = {
-                "id": tarefa_id,
-                "numero_proposta": numero,
-                "indice_item": indice,
-                "cliente_nome": prop.get("cliente_nome", prop.get("cliente", "Cliente não informado")),
-                "whatsapp": prop.get("whatsapp", prop.get("cliente_wa", "")),
-                "data_entrega": prop.get("data_entrega", ""),
-                "produto": produto,
-                "especificacoes": especificacoes,
-                "quantidade": item.get("quantidade", item.get("qtd", 0)),
-                "status": status_base,
-                "status_antes_finalizacao": status_inicial_operacional if estado_oficial_prop.get("pronto") else "",
-                "prioridade": "Normal",
-                "processos": processos,
-                "necessita_arte": "Criação/ajuste de arte" in processos,
-                "observacao_interna": "",
-                "timeline": [{"data": agora_local().strftime("%d/%m/%Y %H:%M"), "descricao": "Pedido incluído no fluxo"}],
-                "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
-                "origem_espelho": "historico_oficial",
-            }
-            if item.get("_fallback_fluxo"):
-                base["registro_fallback"] = True
-
-            if tarefa_id not in existentes:
-                tarefas.append(base)
-                existentes[tarefa_id] = base
-                alterado = True
-                continue
-
-            atual = existentes[tarefa_id]
-            for campo in ["numero_proposta", "indice_item", "cliente_nome", "whatsapp", "data_entrega", "produto", "especificacoes", "quantidade"]:
-                if atual.get(campo) != base[campo]:
-                    atual[campo] = base[campo]
-                    alterado = True
-            if atual.get("ativa") is False:
-                atual["ativa"] = True
-                alterado = True
-            if not isinstance(atual.get("processos"), list):
-                atual["processos"] = processos
-                alterado = True
-            if "necessita_arte" not in atual:
-                atual["necessita_arte"] = "Criação/ajuste de arte" in atual.get("processos", [])
-                alterado = True
-            if atual.get("origem_espelho") != "historico_oficial":
-                atual["origem_espelho"] = "historico_oficial"
-                alterado = True
-
-            # Reconcilia aprovação comercial sem apagar a etapa manual já executada.
-            status_para_finalizacao = atual.get("status")
-            if not estado_oficial_prop.get("pronto"):
-                status_aprovacao, status_antes_aprovacao = _i8134_reconciliar_etapa_aprovacao(
-                    atual.get("status"),
-                    estado_oficial_prop.get("aprovado", False),
-                    atual.get("status_antes_aprovacao"),
-                    status_inicial_operacional,
-                )
-                if status_antes_aprovacao and atual.get("status_antes_aprovacao") != status_antes_aprovacao:
-                    atual["status_antes_aprovacao"] = status_antes_aprovacao
-                    alterado = True
-                if normalizar_status_fluxo(atual.get("status")) != normalizar_status_fluxo(status_aprovacao):
-                    atual["status"] = status_aprovacao
-                    adicionar_evento_timeline(
-                        atual,
-                        "Orçamento aprovado; pedido liberado para a etapa operacional preservada"
-                        if estado_oficial_prop.get("aprovado")
-                        else "Aprovação comercial removida; pedido voltou a aguardar liberação",
-                    )
-                    atual["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
-                    alterado = True
-                status_para_finalizacao = atual.get("status")
-
-            novo_status, status_antes_finalizacao = _i8128_reconciliar_etapa_status(
-                status_para_finalizacao,
-                estado_oficial_prop.get("pronto", False),
-                estado_oficial_prop.get("entregue", False),
-                atual.get("status_antes_finalizacao") or atual.get("status_antes_entrega"),
-            )
-            if status_antes_finalizacao and atual.get("status_antes_finalizacao") != status_antes_finalizacao:
-                atual["status_antes_finalizacao"] = status_antes_finalizacao
-                alterado = True
-            if normalizar_status_fluxo(atual.get("status")) != normalizar_status_fluxo(novo_status):
-                atual["status"] = novo_status
-                atual["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
-                alterado = True
-            if not isinstance(atual.get("timeline"), list):
-                atual["timeline"] = []
-                alterado = True
-
-    # Tudo que não corresponde mais a proposta operacional ativa fica preservado,
-    # porém inativo para auditoria/histórico da produção.
-    for tarefa in tarefas:
-        if not isinstance(tarefa, dict):
-            continue
-        ativa = str(tarefa.get("id") or "") in ids_ativos
-        if bool(tarefa.get("ativa", True)) != ativa:
-            tarefa["ativa"] = ativa
-            alterado = True
-    return tarefas, alterado
+    """I8.13.5 — adaptador fino para o serviço puro do Fluxo Operacional."""
+    return _fluxo_reconciliar_lista_fluxo(
+        tarefas_base, propostas_fonte,
+        now_text=agora_local().strftime("%d/%m/%Y %H:%M"),
+    )
 
 
 def sincronizar_producao_com_propostas(historico=None):
