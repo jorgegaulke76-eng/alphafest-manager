@@ -1390,6 +1390,24 @@ def _pix_empresa_sem_documento(valor):
             texto = texto[:achado.start()].rstrip(" -–—|:")
     return texto
 
+def _orcamento_item_publico_cliente(item):
+    """HF13: projeção explícita do item que pode sair para o cliente.
+
+    A confirmação visual do Catálogo é uma ferramenta interna do orçamento.
+    Metadados de Catálogo, descrição comercial, categoria, material, galeria,
+    fotos, vídeo ou qualquer outra chave interna NÃO entram no HTML nem na
+    mensagem de WhatsApp. Só os campos abaixo, já aprovados para a proposta,
+    podem ser publicados.
+    """
+    item = item or {}
+    return {
+        "produto": item.get("produto", ""),
+        "especificacoes": item.get("especificacoes", ""),
+        "quantidade": item.get("quantidade", 0),
+        "valor_unitario": item.get("valor_unitario", 0),
+    }
+
+
 def formatar_msg_whatsapp(prop):
     """Monta a mensagem compacta aprovada para envio pelo WhatsApp."""
     prop = prop or {}
@@ -1422,10 +1440,11 @@ def formatar_msg_whatsapp(prop):
     itens_txt = []
     subtotal_calculado = 0.0
     for indice, item in enumerate(itens, start=1):
-        produto = str(item.get("produto", "")).strip() or "Produto não informado"
-        detalhes = str(item.get("especificacoes", "")).strip() or "Não informado"
-        quantidade = numero(item.get("quantidade", 0))
-        valor_unitario = numero(item.get("valor_unitario", 0))
+        item_publico = _orcamento_item_publico_cliente(item)
+        produto = str(item_publico.get("produto", "")).strip() or "Produto não informado"
+        detalhes = str(item_publico.get("especificacoes", "")).strip() or "Não informado"
+        quantidade = numero(item_publico.get("quantidade", 0))
+        valor_unitario = numero(item_publico.get("valor_unitario", 0))
         subtotal_item = quantidade * valor_unitario
         subtotal_calculado += subtotal_item
         itens_txt.extend([
@@ -2133,14 +2152,15 @@ def gerar_html(proposta):
     linhas = []
 
     for item in itens or []:
-        produto = esc(item.get("produto", ""), "Produto não informado")
+        item_publico = _orcamento_item_publico_cliente(item)
+        produto = esc(item_publico.get("produto", ""), "Produto não informado")
         especificacoes = esc(
-            item.get("especificacoes", ""),
+            item_publico.get("especificacoes", ""),
             "—"
         )
 
         try:
-            quantidade = float(item.get("quantidade", 0))
+            quantidade = float(item_publico.get("quantidade", 0))
         except (TypeError, ValueError):
             quantidade = 0
 
@@ -2151,7 +2171,7 @@ def gerar_html(proposta):
         )
 
         try:
-            valor_unitario = float(item.get("valor_unitario", 0))
+            valor_unitario = float(item_publico.get("valor_unitario", 0))
         except (TypeError, ValueError):
             valor_unitario = 0
 

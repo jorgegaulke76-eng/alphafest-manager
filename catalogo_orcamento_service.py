@@ -1,6 +1,6 @@
 """Regras puras de Catálogo Oficial usadas pelo fluxo de orçamento.
 
-I8.13.5-HF11
+I8.13.5-HF13
 
 Este módulo não conhece Streamlit, Supabase nem session_state. Ele centraliza
 identidade de produto, aliases, resolução híbrida Catálogo/texto livre, o
@@ -290,18 +290,17 @@ def snapshot_item_catalogo(
     meta: Optional[Mapping[str, Any]],
     produto_catalogo: Optional[Mapping[str, Any]],
 ) -> Dict[str, str]:
-    """Metadados comerciais seguros que acompanham o item da proposta.
+    """HF13: identidade interna mínima do Catálogo no item da proposta.
 
-    Não contém Tema, Nome personalizado, Cor/Material digitado no pedido ou
-    Outros Detalhes; esses campos continuam integralmente manuais na tela.
+    A descrição, material, categoria e mídias usados na confirmação visual
+    permanecem somente no Catálogo/UI e não são persistidos no item da proposta.
+    Isso reforça a separação entre a prévia interna e o conteúdo público enviado
+    ao cliente. Tema, nome, cor/material e detalhes do pedido seguem manuais.
     """
     meta = meta or {}
-    produto_catalogo = produto_catalogo or {}
+    _ = produto_catalogo  # assinatura preservada por compatibilidade
     return {
         "produto_origem": str(meta.get("origem") or "livre"),
         "produto_digitado": str(meta.get("digitado") or ""),
         "produto_catalogo_id": str(meta.get("catalogo_id") or ""),
-        "produto_catalogo_descricao": str(produto_catalogo.get("DescricaoCurta") or produto_catalogo.get("Descricao") or ""),
-        "produto_catalogo_material": str(produto_catalogo.get("Material") or ""),
-        "produto_catalogo_categoria": str(produto_catalogo.get("Categoria") or ""),
     }

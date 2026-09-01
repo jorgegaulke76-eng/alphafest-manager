@@ -92,11 +92,15 @@ class CatalogoOrcamentoServiceTests(unittest.TestCase):
         self.assertEqual(produto["Nome"], "TOPO DE BOLO")
         self.assertIsNone(produto_catalogo_da_meta({"origem": "livre", "produto_oficial": "TOPO DE BOLO"}, self.catalogo))
 
-    def test_snapshot_nao_injeta_campos_de_personalizacao(self):
+    def test_snapshot_guarda_so_identidade_interna_sem_dados_da_previa(self):
         meta = {"origem": "catalogo_alias", "digitado": "papel arroz", "catalogo_id": "CAT-1"}
         snap = snapshot_item_catalogo(meta, self.catalogo[0])
-        self.assertEqual(snap["produto_catalogo_descricao"], "Impressão comestível")
-        self.assertEqual(snap["produto_catalogo_material"], "Papel comestível")
+        self.assertEqual(snap["produto_origem"], "catalogo_alias")
+        self.assertEqual(snap["produto_digitado"], "papel arroz")
+        self.assertEqual(snap["produto_catalogo_id"], "CAT-1")
+        self.assertNotIn("produto_catalogo_descricao", snap)
+        self.assertNotIn("produto_catalogo_material", snap)
+        self.assertNotIn("produto_catalogo_categoria", snap)
         self.assertNotIn("tema", snap)
         self.assertNotIn("nome", snap)
         self.assertNotIn("cor", snap)
