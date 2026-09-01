@@ -8685,38 +8685,48 @@ def adicionar_evento_timeline(tarefa, descricao):
     tarefa["timeline"] = timeline[-50:]
 
 
-def sincronizar_producao_com_propostas(historico=None):
-    """Sincroniza dados básicos do Fluxo com uma fotografia oficial das propostas.
+def _i8134_itens_fluxo_proposta(prop):
+    """Retorna itens operacionais; nunca deixa uma proposta ativa sem representação no Fluxo."""
+    itens = [dict(i) for i in ((prop or {}).get("itens") or []) if isinstance(i, dict)]
+    if itens:
+        return itens
+    # Compatibilidade defensiva com registros antigos/incompletos: a Central do Dia
+    # é por proposta, então o Fluxo precisa ao menos de um cartão representativo.
+    nome = str(
+        (prop or {}).get("produto")
+        or (prop or {}).get("descricao_produto")
+        or (prop or {}).get("descricao")
+        or "Pedido sem item estruturado"
+    ).strip() or "Pedido sem item estruturado"
+    return [{
+        "produto": nome,
+        "quantidade": (prop or {}).get("quantidade", 1) or 1,
+        "especificacoes": "Registro operacional sem itens estruturados; revisar proposta se necessário.",
+        "_fallback_fluxo": True,
+    }]
 
-    HF1: quando a Central já fez uma leitura fresca do banco, ela passa a mesma
-    lista para esta função. Assim o ``producao_db`` nunca reconstrói cliente,
-    entrega ou condição de entrega a partir de uma leitura possivelmente antiga.
-    O ``producao_db`` continua guardando somente a etapa manual de trabalho.
-    """
-    tarefas = carregar_producao(force_refresh=True)
-    existentes = {t.get("id"): t for t in tarefas}
+
+def _i8134_reconciliar_lista_fluxo(tarefas_base, propostas_fonte):
+    """Projeta o Fluxo a partir do Histórico oficial preservando somente campos manuais."""
+    tarefas = copy.deepcopy(tarefas_base) if isinstance(tarefas_base, list) else []
+    existentes = {str(t.get("id") or ""): t for t in tarefas if isinstance(t, dict) and str(t.get("id") or "")}
     ids_ativos = set()
     alterado = False
-    propostas_fonte = historico if isinstance(historico, list) else carregar_historico()
-    for prop in propostas_fonte:
-        if not isinstance(prop, dict) or proposta_encerrada(prop):
+
+    for prop in (propostas_fonte or []):
+        if not isinstance(prop, dict) or not proposta_ativa_operacional(prop):
             continue
-        numero = str(prop.get("numero_proposta", "SEM-NUMERO"))
-        for indice, item in enumerate(prop.get("itens", []) or []):
+        numero = str(prop.get("numero_proposta") or "SEM-NUMERO").strip() or "SEM-NUMERO"
+        estado_oficial_prop = _status_resumo(prop)
+        for indice, item in enumerate(_i8134_itens_fluxo_proposta(prop)):
             tarefa_id = f"{numero}::{indice}"
             ids_ativos.add(tarefa_id)
-            produto = item.get("produto", "Produto não informado")
-            especificacoes = item.get("especificacoes", "")
+            produto = str(item.get("produto") or item.get("nome") or "Produto não informado")
+            especificacoes = str(item.get("especificacoes") or item.get("detalhes") or "")
             processos = inferir_processos(produto, especificacoes)
-            estado_oficial_prop = _status_resumo(prop)
-            # I8.13.4-HF2 — aprovação comercial e etapa de produção passam a
-            # conversar explicitamente. Antes de Aprovado, o item permanece
-            # como Pedido recebido. "Aguardando aprovação" continua sendo
-            # exclusivamente a aprovação da ARTE dentro do Fluxo.
             status_inicial_operacional = status_inicial_fluxo(produto, especificacoes)
             status_base = (
-                "Entregue" if estado_oficial_prop.get("entregue")
-                else "Pronto" if estado_oficial_prop.get("pronto")
+                "Pronto" if estado_oficial_prop.get("pronto")
                 else status_inicial_operacional if estado_oficial_prop.get("aprovado")
                 else "Pedido recebido"
             )
@@ -8724,90 +8734,141 @@ def sincronizar_producao_com_propostas(historico=None):
                 "id": tarefa_id,
                 "numero_proposta": numero,
                 "indice_item": indice,
-                "cliente_nome": prop.get("cliente_nome", "Cliente não informado"),
+                "cliente_nome": prop.get("cliente_nome", prop.get("cliente", "Cliente não informado")),
                 "whatsapp": prop.get("whatsapp", prop.get("cliente_wa", "")),
                 "data_entrega": prop.get("data_entrega", ""),
                 "produto": produto,
                 "especificacoes": especificacoes,
-                "quantidade": item.get("quantidade", 0),
+                "quantidade": item.get("quantidade", item.get("qtd", 0)),
                 "status": status_base,
-                "status_antes_finalizacao": status_inicial_fluxo(produto, especificacoes) if estado_oficial_prop.get("pronto") else "",
+                "status_antes_finalizacao": status_inicial_operacional if estado_oficial_prop.get("pronto") else "",
                 "prioridade": "Normal",
                 "processos": processos,
                 "necessita_arte": "Criação/ajuste de arte" in processos,
                 "observacao_interna": "",
                 "timeline": [{"data": agora_local().strftime("%d/%m/%Y %H:%M"), "descricao": "Pedido incluído no fluxo"}],
                 "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
+                "origem_espelho": "historico_oficial",
             }
+            if item.get("_fallback_fluxo"):
+                base["registro_fallback"] = True
+
             if tarefa_id not in existentes:
                 tarefas.append(base)
                 existentes[tarefa_id] = base
                 alterado = True
-            else:
-                atual = existentes[tarefa_id]
-                for campo in ["cliente_nome", "whatsapp", "data_entrega", "produto", "especificacoes", "quantidade"]:
-                    if atual.get(campo) != base[campo]:
-                        atual[campo] = base[campo]
-                        alterado = True
-                if not isinstance(atual.get("processos"), list):
-                    atual["processos"] = processos
-                    alterado = True
-                if "necessita_arte" not in atual:
-                    atual["necessita_arte"] = "Criação/ajuste de arte" in atual.get("processos", [])
-                    alterado = True
-                # Primeiro reconcilia a aprovação comercial; depois os marcos
-                # finais Pronto/Entregue. Assim o Historico libera ou recolhe o
-                # pedido do Fluxo sem apagar a etapa manual já executada.
-                status_para_finalizacao = atual.get("status")
-                if not estado_oficial_prop.get("pronto") and not estado_oficial_prop.get("entregue"):
-                    status_aprovacao, status_antes_aprovacao = _i8134_reconciliar_etapa_aprovacao(
-                        atual.get("status"),
-                        estado_oficial_prop.get("aprovado", False),
-                        atual.get("status_antes_aprovacao"),
-                        status_inicial_operacional,
-                    )
-                    if status_antes_aprovacao and atual.get("status_antes_aprovacao") != status_antes_aprovacao:
-                        atual["status_antes_aprovacao"] = status_antes_aprovacao
-                        alterado = True
-                    if normalizar_status_fluxo(atual.get("status")) != normalizar_status_fluxo(status_aprovacao):
-                        descricao_aprovacao = (
-                            "Orçamento aprovado; pedido liberado para a etapa operacional preservada"
-                            if estado_oficial_prop.get("aprovado")
-                            else "Aprovação comercial removida; pedido voltou a aguardar liberação"
-                        )
-                        atual["status"] = status_aprovacao
-                        adicionar_evento_timeline(atual, descricao_aprovacao)
-                        atual["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
-                        alterado = True
-                    status_para_finalizacao = atual.get("status")
+                continue
 
-                novo_status, status_antes_finalizacao = _i8128_reconciliar_etapa_status(
-                    status_para_finalizacao,
-                    estado_oficial_prop.get("pronto", False),
-                    estado_oficial_prop.get("entregue", False),
-                    atual.get("status_antes_finalizacao") or atual.get("status_antes_entrega"),
+            atual = existentes[tarefa_id]
+            for campo in ["numero_proposta", "indice_item", "cliente_nome", "whatsapp", "data_entrega", "produto", "especificacoes", "quantidade"]:
+                if atual.get(campo) != base[campo]:
+                    atual[campo] = base[campo]
+                    alterado = True
+            if atual.get("ativa") is False:
+                atual["ativa"] = True
+                alterado = True
+            if not isinstance(atual.get("processos"), list):
+                atual["processos"] = processos
+                alterado = True
+            if "necessita_arte" not in atual:
+                atual["necessita_arte"] = "Criação/ajuste de arte" in atual.get("processos", [])
+                alterado = True
+            if atual.get("origem_espelho") != "historico_oficial":
+                atual["origem_espelho"] = "historico_oficial"
+                alterado = True
+
+            # Reconcilia aprovação comercial sem apagar a etapa manual já executada.
+            status_para_finalizacao = atual.get("status")
+            if not estado_oficial_prop.get("pronto"):
+                status_aprovacao, status_antes_aprovacao = _i8134_reconciliar_etapa_aprovacao(
+                    atual.get("status"),
+                    estado_oficial_prop.get("aprovado", False),
+                    atual.get("status_antes_aprovacao"),
+                    status_inicial_operacional,
                 )
-                if status_antes_finalizacao and atual.get("status_antes_finalizacao") != status_antes_finalizacao:
-                    atual["status_antes_finalizacao"] = status_antes_finalizacao
+                if status_antes_aprovacao and atual.get("status_antes_aprovacao") != status_antes_aprovacao:
+                    atual["status_antes_aprovacao"] = status_antes_aprovacao
                     alterado = True
-                if atual.get("status") != novo_status:
-                    atual["status"] = novo_status
+                if normalizar_status_fluxo(atual.get("status")) != normalizar_status_fluxo(status_aprovacao):
+                    atual["status"] = status_aprovacao
+                    adicionar_evento_timeline(
+                        atual,
+                        "Orçamento aprovado; pedido liberado para a etapa operacional preservada"
+                        if estado_oficial_prop.get("aprovado")
+                        else "Aprovação comercial removida; pedido voltou a aguardar liberação",
+                    )
+                    atual["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
                     alterado = True
-                if not isinstance(atual.get("timeline"), list):
-                    atual["timeline"] = []
-                    alterado = True
+                status_para_finalizacao = atual.get("status")
+
+            novo_status, status_antes_finalizacao = _i8128_reconciliar_etapa_status(
+                status_para_finalizacao,
+                estado_oficial_prop.get("pronto", False),
+                estado_oficial_prop.get("entregue", False),
+                atual.get("status_antes_finalizacao") or atual.get("status_antes_entrega"),
+            )
+            if status_antes_finalizacao and atual.get("status_antes_finalizacao") != status_antes_finalizacao:
+                atual["status_antes_finalizacao"] = status_antes_finalizacao
+                alterado = True
+            if normalizar_status_fluxo(atual.get("status")) != normalizar_status_fluxo(novo_status):
+                atual["status"] = novo_status
+                atual["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                alterado = True
+            if not isinstance(atual.get("timeline"), list):
+                atual["timeline"] = []
+                alterado = True
+
+    # Tudo que não corresponde mais a proposta operacional ativa fica preservado,
+    # porém inativo para auditoria/histórico da produção.
     for tarefa in tarefas:
-        ativa = tarefa.get("id") in ids_ativos
-        if tarefa.get("ativa") != ativa:
+        if not isinstance(tarefa, dict):
+            continue
+        ativa = str(tarefa.get("id") or "") in ids_ativos
+        if bool(tarefa.get("ativa", True)) != ativa:
             tarefa["ativa"] = ativa
             alterado = True
-    if alterado:
-        if not salvar_producao(tarefas):
-            # Não deixa uma reconciliação não confirmada virar verdade visual.
-            invalidate_document_cache("producao_db")
-            return carregar_producao(force_refresh=True)
-    return tarefas
+    return tarefas, alterado
 
+
+def sincronizar_producao_com_propostas(historico=None):
+    """I8.13.4-HF3 — garante cobertura Central do Dia ↔ Fluxo.
+
+    O universo de pedidos vem SEMPRE do Histórico oficial. ``producao_db`` guarda
+    apenas campos manuais da etapa. Se a persistência da reconciliação sofrer
+    conflito, a projeção correta continua visível nesta execução e o sistema
+    tenta reparar na próxima leitura, em vez de esconder pedidos novos.
+    """
+    propostas_fonte = historico if isinstance(historico, list) else carregar_historico(force_refresh=True)
+    tarefas_atuais = carregar_producao(force_refresh=True)
+    projetadas, alterado = _i8134_reconciliar_lista_fluxo(tarefas_atuais, propostas_fonte)
+    if not alterado:
+        st.session_state.pop("_i8134_fluxo_sync_pendente", None)
+        return projetadas
+
+    func_mutar_doc = getattr(_cloud_db, "mutate_document", None) if _cloud_db else None
+    if callable(func_mutar_doc):
+        def _reconciliar_fresco(base_atual):
+            reconciliado, _ = _i8134_reconciliar_lista_fluxo(base_atual, propostas_fonte)
+            return reconciliado
+        ok_sync, confirmado, motivo_sync = func_mutar_doc(
+            "producao_db", ARQUIVO_PRODUCAO, [], _reconciliar_fresco, retries=5
+        )
+        if ok_sync and isinstance(confirmado, list):
+            invalidate_document_cache("producao_db")
+            _document_cache()["producao_db"] = {
+                "time": time.monotonic(), "value": copy.deepcopy(confirmado),
+            }
+            st.session_state.pop("_i8134_fluxo_sync_pendente", None)
+            return confirmado
+        st.session_state["_i8134_fluxo_sync_pendente"] = str(motivo_sync or "reconciliação não confirmada")
+        # Integridade visual: nunca esconder pedidos oficiais por falha do espelho.
+        return projetadas
+
+    if salvar_producao(projetadas):
+        st.session_state.pop("_i8134_fluxo_sync_pendente", None)
+        return projetadas
+    st.session_state["_i8134_fluxo_sync_pendente"] = "gravação do espelho não confirmada"
+    return projetadas
 
 def salvar_tarefa_producao(tarefa_id, novos_dados):
     """I8.13.4-HF2 — salva uma etapa do Fluxo e reconcilia com a proposta oficial.
@@ -8820,7 +8881,12 @@ def salvar_tarefa_producao(tarefa_id, novos_dados):
     numero = str(novos_dados.get("numero_proposta") or "").strip()
     alvo = next((t for t in tarefas if t.get("id") == tarefa_id), None)
     if alvo is None:
-        return False, "Item de produção não encontrado."
+        # HF3: se a proposta acabou de entrar na Central, reconstrói o espelho
+        # oficial antes de concluir que o item não existe.
+        tarefas = sincronizar_producao_com_propostas(carregar_historico(force_refresh=True))
+        alvo = next((t for t in tarefas if t.get("id") == tarefa_id), None)
+    if alvo is None:
+        return False, "Item de produção não encontrado após reconciliação com o Histórico."
 
     status_anterior = normalizar_status_fluxo(alvo.get("status"))
     status_novo = normalizar_status_fluxo(novos_dados.get("status", status_anterior))
@@ -21853,7 +21919,8 @@ def renderizar_workspace_anna_isolado():
     if a1.button("💬 Novo atendimento", use_container_width=True): dialog_atendimento_anna()
     if a2.button("➕ Novo orçamento", type="primary", use_container_width=True): dialog_orcamento_anna()
     if a3.button("👤 Novo cliente", use_container_width=True): dialog_cliente_anna()
-    if a4.button("📦 Fluxo de pedidos", use_container_width=True): dialog_fluxo_anna()
+    if a4.button("📦 Fluxo de pedidos", use_container_width=True):
+        rerun_na_aba("fluxo", "Abrindo o Fluxo operacional único de pedidos.")
     if a5.button("📋 Histórico", use_container_width=True):
         rerun_na_aba("historico")
 
@@ -21903,7 +21970,7 @@ def renderizar_workspace_anna_isolado():
 # O conjunto de abas continua estável no código; a exibição é personalizada por usuário.
 if (
     usuario_em_operacao_protegida(obter_usuario_atual())
-    and st.session_state.get("_pagina_principal", "central") not in {"historico", "catalogo"}
+    and st.session_state.get("_pagina_principal", "central") not in {"historico", "catalogo", "fluxo"}
 ):
     renderizar_workspace_anna_isolado()
     st.stop()
@@ -25891,6 +25958,35 @@ if pagina_atual == "fluxo":
     tarefas = sincronizar_producao_com_propostas(historico_fluxo_i8128hf1)
     tarefas_ativas = [t for t in tarefas if t.get("ativa", True)]
 
+    # HF3 — diagnóstico de cobertura: a Central do Dia e o Fluxo usam o mesmo
+    # universo de propostas operacionais. Nenhum pedido ativo pode desaparecer
+    # apenas porque ainda não havia linha persistida no producao_db.
+    numeros_central_fluxo_hf3 = {
+        str((p or {}).get("numero_proposta") or "").strip()
+        for p in historico_fluxo_i8128hf1
+        if isinstance(p, dict) and proposta_ativa_operacional(p) and str((p or {}).get("numero_proposta") or "").strip()
+    }
+    numeros_tarefas_fluxo_hf3 = {
+        str((t or {}).get("numero_proposta") or "").strip()
+        for t in tarefas_ativas if isinstance(t, dict) and str((t or {}).get("numero_proposta") or "").strip()
+    }
+    faltando_fluxo_hf3 = sorted(numeros_central_fluxo_hf3 - numeros_tarefas_fluxo_hf3)
+    sync_pendente_fluxo_hf3 = st.session_state.get("_i8134_fluxo_sync_pendente")
+    if faltando_fluxo_hf3:
+        st.error(
+            f"🔗 Cobertura Central ↔ Fluxo incompleta: {len(faltando_fluxo_hf3)} pedido(s) ainda sem representação. "
+            "Atualize a tela; o Manager tentará reconstruir o espelho automaticamente."
+        )
+    else:
+        st.success(
+            f"🔗 Central ↔ Fluxo sincronizados: {len(numeros_central_fluxo_hf3)} pedido(s) operacional(is) representado(s)."
+        )
+    if sync_pendente_fluxo_hf3:
+        st.warning(
+            "⚠️ A lista oficial está sendo exibida corretamente, mas a persistência do espelho de produção ainda será "
+            f"reconfirmada automaticamente. Diagnóstico: {sync_pendente_fluxo_hf3}."
+        )
+
     # Só pedidos oficialmente Aprovados contam como trabalho operacional.
     # Propostas ainda pendentes continuam visíveis na Visão Geral como
     # "Pedido recebido", mas não geram falso atraso de produção.
@@ -25920,7 +26016,7 @@ if pagina_atual == "fluxo":
     m3.metric("🟡 Aprovação comercial", aprovacao_comercial)
     m4.metric("🎨 Aprovação da arte", aprovacao_arte)
     m5.metric("🔵 Prontos para produzir", produzir)
-    m6.metric("✅ Prontos", prontos)
+    m6.metric("📦 Prontos p/ entrega", prontos)
     st.caption("HF2: aprovação comercial vem do Histórico; aprovação da arte e etapa produtiva permanecem no Fluxo. Uma não substitui a outra.")
 
     # I8.12.7 — camada material/prazo, derivada da mesma fonte usada em Compras e Central.

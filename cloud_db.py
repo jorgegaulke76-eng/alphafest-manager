@@ -38,6 +38,7 @@ __all__ = [
     "connection_test",
     "load_document",
     "save_document",
+    "mutate_document",
     "mutate_list_record",
     "append_list_record",
     "upload_catalog_image",
@@ -194,6 +195,81 @@ def save_document(document_key: str, value: Any, local_path: str) -> bool:
     return True
 
 
+
+
+def mutate_document(document_key: str, local_path: str, default: Any, updater, retries: int = 4):
+    """Atualiza um documento inteiro com leitura fresca + compare-and-swap.
+
+    I8.13.4-HF3 — usado para reconciliações determinísticas (como o espelho
+    Histórico -> Fluxo) sem sobrescrever silenciosamente uma gravação feita
+    por outra sessão entre a leitura e o salvamento. O ``updater`` recebe uma
+    cópia do valor mais novo e deve devolver o documento completo reconciliado.
+
+    Retorna ``(ok, documento_atualizado, motivo)``.
+    """
+    if not callable(updater):
+        return False, None, "updater inválido"
+
+    def aplicar(base):
+        copia = json.loads(json.dumps(base, ensure_ascii=False))
+        novo = updater(copia)
+        return copia if novo is None else novo
+
+    if not online_configured():
+        atual = _read_local(local_path, default)
+        try:
+            novo_doc = aplicar(atual)
+            _write_local(local_path, novo_doc)
+        except (OSError, ValueError, TypeError):
+            return False, atual, "falha ao reconciliar contingência local"
+        # Sem banco online não há confirmação oficial.
+        return False, novo_doc, "contingência local sem confirmação online"
+
+    url, _ = _config()
+    ultimo_erro = "conflito de concorrência"
+    for _ in range(max(1, int(retries or 1))):
+        try:
+            leitura = _SESSION.get(
+                f"{url}/rest/v1/app_data",
+                headers=_headers(),
+                params={"select": "value,updated_at", "key": f"eq.{document_key}", "limit": "1"},
+                timeout=TIMEOUT,
+            )
+            leitura.raise_for_status()
+            rows = leitura.json()
+            if not rows:
+                base = _read_local(local_path, default)
+                if not save_document(document_key, base, local_path):
+                    return False, base, "documento não encontrado"
+                continue
+
+            row = rows[0]
+            atual = row.get("value", default)
+            updated_at = row.get("updated_at")
+            novo_doc = aplicar(atual)
+            novo_updated_at = datetime.now(timezone.utc).isoformat()
+            params = {"key": f"eq.{document_key}", "select": "key"}
+            if updated_at:
+                params["updated_at"] = f"eq.{updated_at}"
+            resposta = _SESSION.patch(
+                f"{url}/rest/v1/app_data",
+                headers=_headers({"Prefer": "return=representation"}),
+                params=params,
+                json={"value": novo_doc, "updated_at": novo_updated_at},
+                timeout=TIMEOUT,
+            )
+            resposta.raise_for_status()
+            confirmacao = resposta.json()
+            if confirmacao:
+                try:
+                    _write_local(local_path, novo_doc)
+                except OSError:
+                    pass
+                return True, novo_doc, "online"
+            ultimo_erro = "conflito detectado; nova tentativa realizada"
+        except (requests.RequestException, ValueError, TypeError) as exc:
+            ultimo_erro = f"{exc.__class__.__name__}"
+    return False, None, ultimo_erro
 
 def append_list_record(document_key: str, local_path: str, default: Any, record: Any, max_items: int = 5000, retries: int = 4):
     """Acrescenta um registro a um documento-lista com compare-and-swap.
