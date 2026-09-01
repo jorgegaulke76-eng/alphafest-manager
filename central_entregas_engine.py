@@ -15,6 +15,8 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Iterable
 
+from proposal_status import resumo_status
+
 
 def _bool(value: Any) -> bool:
     if isinstance(value, bool):
@@ -116,8 +118,11 @@ def montar_fila(propostas: Iterable[dict], hoje: date, resumo_produtos=None) -> 
     for proposta in propostas or []:
         if not isinstance(proposta, dict):
             continue
-        status = _status(proposta)
-        if not status["pronto"] or status["entregue"]:
+        # HF6: Entregas usa a mesma Fonte Única do Histórico/Central.
+        # Propostas encerradas/não fechadas não podem reaparecer na fila de saída
+        # apenas por possuírem um marcador legado de Pronto.
+        status = resumo_status(proposta)
+        if not status.get("ativa") or not status.get("pronto") or status.get("entregue"):
             continue
         entrega = _date(proposta.get("data_entrega"))
         dias = dias_aguardando(proposta, hoje)

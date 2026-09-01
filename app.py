@@ -63,6 +63,7 @@ from risco_producao_engine import montar_previsao_producao as _i8127_engine_prev
 from central_producao_engine import montar_central_producao as _i8128_engine_central, resumo_central as _i8128_engine_resumo, reconciliar_etapa_status_oficial as _i8128_reconciliar_etapa_status, reconciliar_etapa_aprovacao_oficial as _i8134_reconciliar_etapa_aprovacao
 from central_entregas_engine import montar_fila as _i813_engine_fila, resumo_fila as _i813_engine_resumo, dias_aguardando as _i813_engine_dias_aguardando, ordenar_historico_entregues as _i813_engine_ordenar_entregues
 from prioridade_operacional_engine import montar_prioridades_operacionais as _i8131_engine_prioridades, resumo_prioridades as _i8131_engine_resumo, indexar_prioridades as _i8131_engine_indexar
+from consistencia_operacional_engine import auditar_consistencia_operacional as _i8134_engine_consistencia
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -8903,6 +8904,120 @@ def sincronizar_producao_com_propostas(historico=None):
     st.session_state["_i8134_fluxo_sync_pendente"] = "gravação do espelho não confirmada"
     return projetadas
 
+
+def executar_auditoria_sincronizacao_operacional(force_refresh=True, registrar=False):
+    """HF6 — audita e reconcilia as projeções operacionais contra o Histórico oficial.
+
+    Reparos automáticos são restritos ao espelho ``producao_db``. Status oficiais
+    nunca são inventados ou alterados pela auditoria. Risco, Entregas e painéis
+    são recalculados a partir de leituras frescas da mesma proposta oficial.
+    """
+    historico_sync = carregar_historico(force_refresh=bool(force_refresh))
+    tarefas_antes = carregar_producao(force_refresh=bool(force_refresh))
+    consumos_sync = carregar_consumos_pedidos(force_refresh=bool(force_refresh))
+    estoque_sync = carregar_estoque(force_refresh=bool(force_refresh))
+    planejamentos_sync = carregar_planejamentos_compras(force_refresh=bool(force_refresh))
+
+    # A previsão já é derivada. Nesta HF6 ela também exclui propostas encerradas
+    # pela mesma Fonte Única usada na Central.
+    previsao_sync = _i8127_previsao_producao(
+        historico=historico_sync, consumos=consumos_sync, estoque=estoque_sync,
+        planejamentos=planejamentos_sync,
+    )
+    fila_saida_sync = _i813_engine_fila(
+        historico_sync, hoje_local(), resumo_produtos=resumo_produtos_pedido
+    )
+    rel_antes = _i8134_engine_consistencia(
+        historico_sync, tarefas_antes, previsao_sync, fila_saida_sync
+    )
+
+    # Único reparo persistente seguro: reconstruir/inativar o espelho do Fluxo
+    # conforme as propostas oficiais, preservando etapa manual dos pedidos ativos.
+    tarefas_depois = sincronizar_producao_com_propostas(historico_sync)
+    rel_depois = _i8134_engine_consistencia(
+        historico_sync, tarefas_depois, previsao_sync, fila_saida_sync
+    )
+    reparos = max(0, int(rel_antes.get("problemas", 0)) - int(rel_depois.get("problemas", 0)))
+    rel_depois["problemas_antes"] = int(rel_antes.get("problemas", 0))
+    rel_depois["reparos_automaticos"] = reparos
+    rel_depois["momento"] = agora_local().isoformat()
+
+    st.session_state["_i8134_relatorio_sincronizacao"] = copy.deepcopy(rel_depois)
+    st.session_state["_i8134_relatorio_sincronizacao_ts"] = time.monotonic()
+
+    if registrar or reparos or not rel_depois.get("ok"):
+        try:
+            registrar_auditoria(
+                "Auditoria de sincronização operacional", "Sistema", "Central/Fluxo/Histórico",
+                {
+                    "origem": "Auditoria de Sincronização HF6",
+                    "problemas_antes": int(rel_antes.get("problemas", 0)),
+                    "problemas_depois": int(rel_depois.get("problemas", 0)),
+                    "reparos_automaticos": reparos,
+                    "fluxo_faltantes": rel_depois.get("fluxo_faltantes", [])[:20],
+                    "risco_indevido": rel_depois.get("risco_indevido", [])[:20],
+                    "previsao_indevida": rel_depois.get("previsao_indevida", [])[:20],
+                    "saida_indevida": rel_depois.get("saida_indevida", [])[:20],
+                    "contradicoes": rel_depois.get("contradicoes", [])[:20],
+                },
+                resultado="OK" if rel_depois.get("ok") else "ATENCAO",
+            )
+        except Exception:
+            pass
+    return rel_depois
+
+
+def renderizar_auditoria_sincronizacao_operacional(relatorio, *, expandido=False):
+    """Bloco compacto reutilizável nas telas operacionais."""
+    relatorio = relatorio or {}
+    reparos = int(relatorio.get("reparos_automaticos", 0) or 0)
+    problemas = int(relatorio.get("problemas", 0) or 0)
+    if problemas == 0:
+        texto = "🔗 Auditoria de sincronização: Central, Histórico, Fluxo, Risco e Entregas coerentes."
+        if reparos:
+            texto += f" {reparos} divergência(s) de espelho corrigida(s) automaticamente."
+        st.success(texto)
+    else:
+        st.warning(
+            f"🔎 Auditoria de sincronização encontrou {problemas} ponto(s) para revisão. "
+            "Apenas divergências seguras do espelho do Fluxo são corrigidas automaticamente."
+        )
+    with st.expander("🔎 Ver auditoria de sincronização das telas · HF6", expanded=expandido):
+        cont = relatorio.get("contagens") or {}
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Pedidos operacionais", cont.get("operacionais_oficiais", 0))
+        c2.metric("Fluxo representados", cont.get("fluxo_ativos", 0))
+        c3.metric("Previsão/Risco", cont.get("previsao", 0))
+        c4.metric("Prontos em Entregas", cont.get("fila_saida", 0))
+        grupos = [
+            ("Pedidos ativos sem Fluxo", relatorio.get("fluxo_faltantes") or []),
+            ("Fluxo ativo para pedido já encerrado", relatorio.get("fluxo_fechados_ativos") or []),
+            ("Fluxo órfão", relatorio.get("fluxo_orfaos") or []),
+            ("Previsão ausente", relatorio.get("previsao_faltantes") or []),
+            ("Previsão indevida", relatorio.get("previsao_indevida") or []),
+            ("Risco indevido", relatorio.get("risco_indevido") or []),
+            ("Pronto ausente em Entregas", relatorio.get("saida_faltantes") or []),
+            ("Entrega indevida", relatorio.get("saida_indevida") or []),
+        ]
+        linhas_sync = []
+        for tipo_sync, numeros_sync in grupos:
+            for numero_sync in numeros_sync[:50]:
+                linhas_sync.append({"Tipo": tipo_sync, "Pedido": numero_sync})
+        for contradicao_sync in relatorio.get("contradicoes") or []:
+            linhas_sync.append({
+                "Tipo": "Status contraditório",
+                "Pedido": contradicao_sync.get("pedido"),
+                "Detalhe": contradicao_sync.get("problema"),
+            })
+        if linhas_sync:
+            st.dataframe(pd.DataFrame(linhas_sync), use_container_width=True, hide_index=True)
+        else:
+            st.caption("Nenhuma divergência detectada nesta leitura fresca.")
+        st.caption(
+            "Regra: Histórico/Proposta é a verdade oficial. Fluxo/Produção é espelho operacional; "
+            "Risco e Entregas são recalculados, nunca gravados como status paralelo."
+        )
+
 def salvar_tarefa_producao(tarefa_id, novos_dados):
     """I8.13.4-HF2 — salva uma etapa do Fluxo e reconcilia com a proposta oficial.
 
@@ -15312,6 +15427,13 @@ with st.sidebar:
                 f"{'confirmada' if ultima_auditoria_i8134.get('ok') else 'não confirmada'} · "
                 f"{str(ultima_auditoria_i8134.get('momento') or '—')[:19]}"
             )
+        rel_sync_monitor_hf6 = st.session_state.get("_i8134_relatorio_sincronizacao") or {}
+        if rel_sync_monitor_hf6:
+            problemas_sync_monitor = int(rel_sync_monitor_hf6.get("problemas", 0) or 0)
+            if problemas_sync_monitor == 0:
+                st.caption("🔗 Telas operacionais: sincronizadas")
+            else:
+                st.caption(f"🟡 Telas operacionais: {problemas_sync_monitor} divergência(s) em revisão")
         st.caption(f"Boot: {total_monitor - falhas_monitor}/{total_monitor} etapas • {tempo_monitor:.2f}s")
         if contingencias_monitor:
             st.caption(f"🟡 {contingencias_monitor} módulo(s) em contingência controlada")
@@ -22776,6 +22898,13 @@ if pagina_atual == "central":
     central_prod_central_i8128 = _i8128_engine_central(previsao_central_i8127, tarefas_ativas_central, hoje=hoje_local())
     resumo_prod_central_i8128 = _i8128_engine_resumo(central_prod_central_i8128)
 
+    # HF6 — auditoria automática da coerência entre as telas operacionais.
+    rel_sync_central_hf6 = _i8134_engine_consistencia(
+        historico_central, tarefas_ativas_central, previsao_central_i8127, fila_saida_central_i813
+    )
+    if str(usuario_atual.get("nome", "")).strip().casefold() == "jorge":
+        renderizar_auditoria_sincronizacao_operacional(rel_sync_central_hf6, expandido=False)
+
     # I8.13.1 — prioridade é derivada, nunca um novo status gravado.
     fila_saida_central_i8131 = _i813_engine_fila(
         historico_central, hoje_local(), resumo_produtos=resumo_produtos_pedido
@@ -26166,6 +26295,16 @@ if pagina_atual == "fluxo":
         fr4_i8127.metric("🟢 Material liberado", sum(1 for p in previsao_fluxo_i8127 if p.get("chave") == "liberado"))
         st.caption("I8.12.7: esses indicadores não mudam a etapa manual do Fluxo; apenas mostram disponibilidade de material e risco de entrega com a mesma fonte de Estoque/Compras.")
 
+    # HF6 — o Fluxo também verifica a mesma cobertura da Central/Histórico.
+    fila_saida_fluxo_hf6 = _i813_engine_fila(
+        historico_fluxo_i8128hf1, hoje_local(), resumo_produtos=resumo_produtos_pedido
+    )
+    rel_sync_fluxo_hf6 = _i8134_engine_consistencia(
+        historico_fluxo_i8128hf1, tarefas_ativas, previsao_fluxo_i8127, fila_saida_fluxo_hf6
+    )
+    if rel_sync_fluxo_hf6.get("problemas"):
+        renderizar_auditoria_sincronizacao_operacional(rel_sync_fluxo_hf6, expandido=True)
+
     # I8.12.8 — Central de Produção: mesma previsão + andamento manual já existente.
     central_prod_i8128 = _i8128_engine_central(previsao_fluxo_i8127, tarefas_ativas, hoje=hoje_local())
     resumo_prod_i8128 = _i8128_engine_resumo(central_prod_i8128)
@@ -27085,9 +27224,10 @@ if pagina_atual == "compras_custos":
                     st.error(msg_arq_i8122)
 
     # I8.12.7 — Previsão de Produção e Risco de Entrega.
+    historico_risco_hf6 = carregar_historico(force_refresh=True)
     previsao_i8127 = _i8127_previsao_producao(
-        historico=carregar_historico(), consumos=consumos_i8124, estoque=estoque_i8122,
-        planejamentos=carregar_planejamentos_compras(),
+        historico=historico_risco_hf6, consumos=consumos_i8124, estoque=estoque_i8122,
+        planejamentos=carregar_planejamentos_compras(force_refresh=True),
     )
     st.markdown("### 🚦 Previsão de Produção e Risco de Entrega · I8.12.7-HF1")
     st.caption(
@@ -27095,6 +27235,17 @@ if pagina_atual == "compras_custos":
         "as pendências reais do estoque, as solicitações ao fornecedor e a data de entrega. Nesta etapa o Manager não inventa "
         "tempo de fabricação; o risco considera somente prazo e disponibilidade/recebimento de materiais."
     )
+    tarefas_risco_hf6 = sincronizar_producao_com_propostas(historico_risco_hf6)
+    fila_saida_risco_hf6 = _i813_engine_fila(
+        historico_risco_hf6, hoje_local(), resumo_produtos=resumo_produtos_pedido
+    )
+    rel_sync_risco_hf6 = _i8134_engine_consistencia(
+        historico_risco_hf6, tarefas_risco_hf6, previsao_i8127, fila_saida_risco_hf6
+    )
+    if rel_sync_risco_hf6.get("problemas"):
+        renderizar_auditoria_sincronizacao_operacional(rel_sync_risco_hf6, expandido=True)
+    else:
+        st.caption("🔗 Auditoria HF6: risco/prazo está alinhado à Fonte Única de Status nesta leitura fresca.")
     if not previsao_i8127:
         st.success("✅ Nenhum pedido aprovado e não entregue precisa de previsão neste momento.")
     else:
@@ -33233,6 +33384,20 @@ if pagina_atual == "configuracoes":
                 st.rerun()
 
         with tab_audit:
+            st.subheader("🔗 Auditoria de Sincronização Operacional · HF6")
+            st.caption(
+                "Compara Histórico, Fluxo/Produção, Risco e Entregas usando leitura fresca. "
+                "O único reparo automático persistente é o espelho do Fluxo; status oficiais nunca são alterados pela auditoria."
+            )
+            if st.button("🔄 Auditar e sincronizar telas agora", key="hf6_auditar_sincronizar", use_container_width=True, type="primary"):
+                with st.spinner("Conferindo a Fonte Única e reconciliando projeções seguras..."):
+                    rel_manual_hf6 = executar_auditoria_sincronizacao_operacional(force_refresh=True, registrar=True)
+                renderizar_auditoria_sincronizacao_operacional(rel_manual_hf6, expandido=True)
+            elif st.session_state.get("_i8134_relatorio_sincronizacao"):
+                renderizar_auditoria_sincronizacao_operacional(
+                    st.session_state.get("_i8134_relatorio_sincronizacao"), expandido=False
+                )
+            st.divider()
             auditoria = carregar_auditoria()
             if not auditoria:
                 st.info("A auditoria começará a registrar backups, migrações, exclusões e restaurações.")

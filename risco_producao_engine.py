@@ -135,7 +135,15 @@ def montar_previsao_producao(
     for proposta in propostas_validas:
         numero = str(proposta.get("numero_proposta") or "").strip()
         estado_oficial = resumo_status_proposta(proposta)
-        if not numero or not estado_oficial.get("aprovado") or estado_oficial.get("entregue"):
+        # HF6: a previsão usa a MESMA regra de atividade operacional da Central.
+        # Propostas encerradas/não fechadas, entregues ou inativas jamais podem
+        # reaparecer como risco apenas porque ainda possuem Aprovado em registro legado.
+        if (
+            not numero
+            or not estado_oficial.get("aprovado")
+            or not estado_oficial.get("ativa")
+            or estado_oficial.get("entregue")
+        ):
             continue
         entrega = _data(proposta.get("data_entrega"))
         dias = (entrega - hoje).days if entrega else None
