@@ -1573,9 +1573,13 @@ def alternar_status(num_proposta, campo, novo_valor):
 
     alterou_aprovacao = {"valor": False}
     evento_status_hf4 = {"texto": ""}
+    auditoria_status_i8134 = {"antes": {}}
 
     def _mutar(p):
         estado_anterior = _status_resumo(p)
+        auditoria_status_i8134["antes"] = {
+            c: bool(estado_anterior.get(c)) for c in ("aprovado", "pago", "pronto", "entregue")
+        }
         valor_anterior = bool(estado_anterior.get(campo))
         valor_novo = bool(novo_valor)
         # Entregue é fechamento operacional e, por definição, já está Pronto.
@@ -1630,6 +1634,15 @@ def alternar_status(num_proposta, campo, novo_valor):
     if proposta_alterada and evento_status_hf4["texto"]:
         cliente_evt = str(proposta_alterada.get("cliente_nome") or proposta_alterada.get("cliente") or "Cliente").strip()
         registrar_atividade(obter_usuario_atual(), "Status da proposta atualizado", "Propostas", detalhe=f"{num_proposta} · {cliente_evt} · {evento_status_hf4['texto']}", evento=True)
+        estado_depois_i8134 = _status_resumo(proposta_alterada)
+        for campo_aud in ("aprovado", "pago", "pronto", "entregue"):
+            registrar_mudanca_oficial(
+                "Proposta", num_proposta, f"status.{campo_aud}",
+                bool(auditoria_status_i8134.get("antes", {}).get(campo_aud)),
+                bool(estado_depois_i8134.get(campo_aud)),
+                origem="alternar_status",
+                contexto={"cliente": cliente_evt},
+            )
     historico_pos_status = carregar_historico(force_refresh=True) if proposta_alterada else None
     if historico_pos_status is not None:
         # Fonte única: Aprovado/Pago/Pronto/Entregue reconciliam imediatamente o Fluxo.
@@ -1787,6 +1800,50 @@ def _hf8_render_status_proposta_jorge_inline(num_proposta, prefixo="hf8_orcament
             carimbos.append(f"{rotulo}: {valor}")
     if carimbos:
         st.caption(" · ".join(carimbos))
+    renderizar_linha_tempo_oficial_proposta(proposta, prefixo=f"{prefixo}_timeline")
+
+
+def atualizar_observacao_operacional_proposta(num_proposta, observacao):
+    """Atualiza a observação sobre leitura fresca e registra a mudança oficial."""
+    numero = str(num_proposta or "").strip()
+    novo_texto = str(observacao or "").strip()[:2000]
+    controle = {"antes": "", "depois": novo_texto, "mudou": False}
+    usuario = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
+
+    # Evita um PATCH adicional quando o usuário apenas salva status sem mudar
+    # a observação. A comparação é feita contra uma leitura fresca do banco.
+    try:
+        proposta_atual = next(
+            (p for p in carregar_historico(force_refresh=True)
+             if str((p or {}).get("numero_proposta") or "").strip() == numero),
+            None,
+        )
+    except Exception:
+        proposta_atual = None
+    if isinstance(proposta_atual, dict):
+        atual_texto = str(proposta_atual.get("observacao_operacional") or "")
+        if atual_texto == novo_texto:
+            return True, "Observação sem alteração."
+
+    def _mutar(proposta):
+        anterior = str(proposta.get("observacao_operacional") or "")
+        controle["antes"] = anterior
+        controle["mudou"] = anterior != novo_texto
+        if not controle["mudou"]:
+            return
+        proposta["observacao_operacional"] = novo_texto
+        registrar_evento_proposta(proposta, "Observação operacional atualizada", usuario=usuario)
+
+    ok, proposta, motivo = atualizar_proposta_com_leitura_fresca(numero, _mutar)
+    if not ok:
+        return False, str(motivo or "falha de gravação")
+    if controle["mudou"]:
+        registrar_mudanca_oficial(
+            "Proposta", numero, "observacao_operacional", controle["antes"], novo_texto,
+            origem="Central do Dia",
+            contexto={"cliente": str((proposta or {}).get("cliente_nome") or (proposta or {}).get("cliente") or "")},
+        )
+    return True, "Observação operacional confirmada no banco."
 
 
 # --- 20.4.9-I8.13: Central de Entregas & Retiradas ---
@@ -1799,8 +1856,14 @@ def atualizar_logistica_pedido(num_proposta, *, tipo_entrega=None, observacao=No
     usuario = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
     agora_txt = agora_local().strftime("%d/%m/%Y %H:%M")
     tipos_validos = {"Retirada na AlphaFest", "Entrega AlphaFest", "Motoboy", "Outro"}
+    auditoria_logistica_i8134 = {"antes": {}}
 
     def _mutar(proposta):
+        auditoria_logistica_i8134["antes"] = {
+            "logistica_tipo": proposta.get("logistica_tipo"),
+            "logistica_observacao": proposta.get("logistica_observacao"),
+            "cliente_avisado_em": proposta.get("cliente_avisado_em"),
+        }
         mudou = False
         if tipo_entrega is not None:
             tipo = str(tipo_entrega or "").strip()
@@ -1824,10 +1887,19 @@ def atualizar_logistica_pedido(num_proposta, *, tipo_entrega=None, observacao=No
 
     ok, proposta, _ = atualizar_proposta_com_leitura_fresca(num_proposta, _mutar)
     if ok and proposta:
+        cliente_log_i8134 = str(proposta.get("cliente_nome") or proposta.get("cliente") or "Cliente")
         registrar_atividade(
             obter_usuario_atual(), "Logística do pedido atualizada", "Entregas & Retiradas",
-            detalhe=f"{num_proposta} · {proposta.get('cliente_nome') or 'Cliente'}", evento=True,
+            detalhe=f"{num_proposta} · {cliente_log_i8134}", evento=True,
         )
+        for campo_aud in ("logistica_tipo", "logistica_observacao", "cliente_avisado_em"):
+            registrar_mudanca_oficial(
+                "Proposta", num_proposta, campo_aud,
+                auditoria_logistica_i8134.get("antes", {}).get(campo_aud),
+                proposta.get(campo_aud),
+                origem="Entregas & Retiradas",
+                contexto={"cliente": cliente_log_i8134},
+            )
     return bool(ok)
 
 
@@ -1859,9 +1931,11 @@ def alternar_motivo_nao_fechado(num_proposta, motivo, novo_valor):
     campo, rotulo = campos[motivo]
     outro_campo = "nao_fechado_sem_retorno" if campo == "nao_fechado_pagamento" else "nao_fechado_pagamento"
     usuario_status = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
+    auditoria_nf_i8134 = {"antes": False}
 
     def _mutar(proposta):
         anterior = valor_bool(proposta.get(campo))
+        auditoria_nf_i8134["antes"] = anterior
         proposta[campo] = bool(novo_valor)
         if novo_valor:
             proposta[outro_campo] = False
@@ -1874,7 +1948,14 @@ def alternar_motivo_nao_fechado(num_proposta, motivo, novo_valor):
         if anterior != bool(novo_valor):
             registrar_evento_proposta(proposta, rotulo if novo_valor else f"{rotulo} desmarcado", usuario=usuario_status)
 
-    ok, _, _ = atualizar_proposta_com_leitura_fresca(num_proposta, _mutar)
+    ok, proposta_nf_i8134, _ = atualizar_proposta_com_leitura_fresca(num_proposta, _mutar)
+    if ok and isinstance(proposta_nf_i8134, dict):
+        registrar_mudanca_oficial(
+            "Proposta", num_proposta, campo, auditoria_nf_i8134.get("antes"),
+            valor_bool(proposta_nf_i8134.get(campo)),
+            origem="Encerramento comercial",
+            contexto={"motivo": motivo, "cliente": str(proposta_nf_i8134.get("cliente_nome") or proposta_nf_i8134.get("cliente") or "")},
+        )
     return ok
 
 
@@ -14258,10 +14339,14 @@ def carregar_auditoria():
 
 
 def registrar_auditoria(acao, entidade="Sistema", identificador="", detalhes=None, resultado="OK"):
-    """Registra ações importantes sem impedir a operação caso a auditoria falhe."""
+    """Registra ações importantes sem impedir a operação caso a auditoria falhe.
+
+    I8.13.4 usa append com compare-and-swap quando a camada cloud oferece esse
+    recurso. Assim, ações simultâneas não sobrescrevem silenciosamente eventos
+    recentes da auditoria.
+    """
     try:
-        registros = carregar_auditoria()
-        registros.insert(0, {
+        registro = {
             "id": agora_local().strftime("AUD%Y%m%d%H%M%S%f"),
             "data_hora": agora_local().isoformat(),
             "usuario": _usuario_auditoria(),
@@ -14270,11 +14355,135 @@ def registrar_auditoria(acao, entidade="Sistema", identificador="", detalhes=Non
             "identificador": str(identificador or ""),
             "resultado": str(resultado),
             "detalhes": detalhes if isinstance(detalhes, dict) else ({"mensagem": str(detalhes)} if detalhes else {}),
-        })
-        # Limite operacional para evitar crescimento indefinido; backups preservam o histórico.
-        save_document("auditoria_db", registros[:5000], ARQUIVO_AUDITORIA)
-    except Exception:
-        pass
+        }
+        append_func = getattr(_cloud_db, "append_list_record", None) if _cloud_db else None
+        if callable(append_func):
+            ok, documento, motivo = append_func(
+                "auditoria_db", ARQUIVO_AUDITORIA, [], registro, max_items=5000, retries=4
+            )
+            invalidate_document_cache("auditoria_db")
+            if ok and isinstance(documento, list):
+                _document_cache()["auditoria_db"] = {
+                    "time": time.monotonic(),
+                    "value": copy.deepcopy(documento),
+                }
+            st.session_state["_last_audit_status"] = {
+                "ok": bool(ok), "momento": registro["data_hora"], "motivo": str(motivo or "")
+            }
+            return bool(ok)
+
+        registros = carregar_auditoria()
+        registros.insert(0, registro)
+        ok = bool(save_document("auditoria_db", registros[:5000], ARQUIVO_AUDITORIA))
+        st.session_state["_last_audit_status"] = {
+            "ok": ok, "momento": registro["data_hora"], "motivo": "compatibilidade"
+        }
+        return ok
+    except Exception as exc:
+        try:
+            st.session_state["_last_audit_status"] = {
+                "ok": False, "momento": agora_local().isoformat(), "motivo": exc.__class__.__name__
+            }
+        except Exception:
+            pass
+        return False
+
+
+def registrar_mudanca_oficial(entidade, identificador, campo, valor_anterior, valor_novo, *, origem="Manager", contexto=None):
+    """Registra uma mudança de valor com fotografia anterior e posterior."""
+    if valor_anterior == valor_novo:
+        return False
+    detalhes = {
+        "campo": str(campo or ""),
+        "valor_anterior": valor_anterior,
+        "valor_novo": valor_novo,
+        "origem": str(origem or "Manager"),
+    }
+    if isinstance(contexto, dict):
+        detalhes.update(contexto)
+    return registrar_auditoria(
+        f"Alterar {campo}", entidade, identificador, detalhes, resultado="OK"
+    )
+
+
+def auditoria_por_identificador(identificador, entidade=None, limite=100):
+    identificador = str(identificador or "").strip()
+    entidade_cf = str(entidade or "").strip().casefold()
+    if not identificador:
+        return []
+    saida = []
+    for reg in carregar_auditoria():
+        if not isinstance(reg, dict):
+            continue
+        if entidade_cf and str(reg.get("entidade") or "").strip().casefold() != entidade_cf:
+            continue
+        detalhes = reg.get("detalhes") if isinstance(reg.get("detalhes"), dict) else {}
+        referencias = {
+            str(reg.get("identificador") or "").strip(),
+            str(detalhes.get("numero_proposta") or "").strip(),
+            str(detalhes.get("proposta") or "").strip(),
+        }
+        if identificador in referencias:
+            saida.append(reg)
+        if len(saida) >= max(1, int(limite or 1)):
+            break
+    return saida
+
+
+def _fmt_valor_auditoria(valor):
+    if isinstance(valor, bool):
+        return "SIM" if valor else "NÃO"
+    if valor is None or valor == "":
+        return "—"
+    texto = str(valor)
+    return texto if len(texto) <= 120 else texto[:117] + "..."
+
+
+def renderizar_linha_tempo_oficial_proposta(proposta, prefixo="timeline_oficial"):
+    """Exibe a trilha oficial + eventos legados da própria proposta."""
+    if not isinstance(proposta, dict):
+        return
+    numero = str(proposta.get("numero_proposta") or "").strip()
+    if not numero:
+        return
+    eventos_audit = auditoria_por_identificador(numero, entidade="Proposta", limite=40)
+    eventos_legado = proposta.get("timeline") if isinstance(proposta.get("timeline"), list) else []
+    if not eventos_audit and not eventos_legado:
+        return
+
+    with st.expander("🧾 Linha do tempo oficial", expanded=False):
+        st.caption("Ações novas usam auditoria central; eventos anteriores continuam preservados na linha histórica da proposta.")
+        if eventos_audit:
+            for reg in eventos_audit[:20]:
+                try:
+                    dt = datetime.fromisoformat(str(reg.get("data_hora") or ""))
+                    data_fmt = dt.astimezone(agora_local().tzinfo).strftime("%d/%m/%Y %H:%M:%S")
+                except Exception:
+                    data_fmt = str(reg.get("data_hora") or "")
+                detalhes = reg.get("detalhes") if isinstance(reg.get("detalhes"), dict) else {}
+                mudanca = ""
+                if detalhes.get("campo"):
+                    mudanca = (
+                        f" · **{detalhes.get('campo')}**: "
+                        f"{_fmt_valor_auditoria(detalhes.get('valor_anterior'))} → "
+                        f"{_fmt_valor_auditoria(detalhes.get('valor_novo'))}"
+                    )
+                st.markdown(
+                    f"**{data_fmt}** · {reg.get('usuario') or 'Sistema'} · "
+                    f"{reg.get('acao') or 'Atualização'}{mudanca}"
+                )
+        elif eventos_legado:
+            st.info("Ainda não há eventos na auditoria central para esta proposta; abaixo estão os eventos históricos preservados.")
+
+        if eventos_legado:
+            st.markdown("**Histórico anterior / eventos operacionais**")
+            for evt in list(reversed(eventos_legado[-20:])):
+                if not isinstance(evt, dict):
+                    continue
+                st.write(
+                    f"{evt.get('data') or '—'} · {evt.get('usuario') or 'Sistema'} · "
+                    f"{evt.get('descricao') or 'Atualização'}"
+                )
 
 
 def carregar_lixeira():
@@ -14767,6 +14976,14 @@ with st.sidebar:
             st.caption(
                 f"{icone_gravacao} Última gravação: {ultima_gravacao.get('documento', '—')} · "
                 f"{ultima_gravacao.get('momento', '—')}"
+            )
+        ultima_auditoria_i8134 = st.session_state.get("_last_audit_status") or {}
+        if ultima_auditoria_i8134:
+            icone_auditoria_i8134 = "🧾" if ultima_auditoria_i8134.get("ok") else "🔴"
+            st.caption(
+                f"{icone_auditoria_i8134} Auditoria oficial: "
+                f"{'confirmada' if ultima_auditoria_i8134.get('ok') else 'não confirmada'} · "
+                f"{str(ultima_auditoria_i8134.get('momento') or '—')[:19]}"
             )
         st.caption(f"Boot: {total_monitor - falhas_monitor}/{total_monitor} etapas • {tempo_monitor:.2f}s")
         if contingencias_monitor:
@@ -15636,6 +15853,15 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
             obter_usuario_atual(), "Status da proposta atualizado", "Propostas",
             detalhe=f"{numero} · {cliente_evt} · " + " / ".join(controle["mudancas"]), evento=True,
         )
+        estado_depois_i8134 = _status_resumo(confirmado)
+        for campo_aud in ("aprovado", "pago", "pronto", "entregue"):
+            registrar_mudanca_oficial(
+                "Proposta", numero, f"status.{campo_aud}",
+                bool((controle.get("anteriores") or {}).get(campo_aud)),
+                bool(estado_depois_i8134.get(campo_aud)),
+                origem="salvar_andamento_proposta",
+                contexto={"cliente": cliente_evt},
+            )
         # A mesma fotografia fresca alimenta Fluxo/Centrais.
         sincronizar_producao_com_propostas(historico_confirmado)
     if proposta_concluida(confirmado):
@@ -22511,13 +22737,12 @@ if pagina_atual == "central":
                     if not ok_andamento:
                         st.error(msg_andamento)
                         st.stop()
-                    historico_atual_central = carregar_historico()
-                    for proposta_atualizar in historico_atual_central:
-                        if str(proposta_atualizar.get("numero_proposta")) == str(numero_central_selecionado):
-                            proposta_atualizar["observacao_operacional"] = observacao_central.strip()
-                            proposta_atualizar["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
-                            break
-                    salvar_historico_completo(historico_atual_central)
+                    ok_obs_i8134, msg_obs_i8134 = atualizar_observacao_operacional_proposta(
+                        numero_central_selecionado, observacao_central
+                    )
+                    if not ok_obs_i8134:
+                        st.error(f"Status salvos, mas a observação não foi confirmada: {msg_obs_i8134}")
+                        st.stop()
 
                     # Limpa somente o estado do editor salvo. Isso força a Central do Dia
                     # a reconstruir todos os resumos, alertas e filas com os dados novos,
@@ -32597,7 +32822,15 @@ if pagina_atual == "configuracoes":
                         data_fmt = datetime.fromisoformat(reg.get("data_hora", "")).astimezone(agora_local().tzinfo).strftime("%d/%m/%Y %H:%M:%S")
                     except Exception:
                         data_fmt = reg.get("data_hora", "")
-                    linhas.append({"Data": data_fmt, "Usuário": reg.get("usuario"), "Ação": reg.get("acao"), "Entidade": reg.get("entidade"), "Identificador": reg.get("identificador"), "Resultado": reg.get("resultado")})
+                    detalhes_reg = reg.get("detalhes") if isinstance(reg.get("detalhes"), dict) else {}
+                    mudanca_reg = ""
+                    if detalhes_reg.get("campo"):
+                        mudanca_reg = (
+                            f"{detalhes_reg.get('campo')}: "
+                            f"{_fmt_valor_auditoria(detalhes_reg.get('valor_anterior'))} → "
+                            f"{_fmt_valor_auditoria(detalhes_reg.get('valor_novo'))}"
+                        )
+                    linhas.append({"Data": data_fmt, "Usuário": reg.get("usuario"), "Ação": reg.get("acao"), "Mudança": mudanca_reg, "Entidade": reg.get("entidade"), "Identificador": reg.get("identificador"), "Resultado": reg.get("resultado")})
                 st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
                 st.download_button("⬇️ Exportar auditoria JSON", json.dumps(auditoria, ensure_ascii=False, indent=2), file_name=f"auditoria_festmanager_{hoje_local().isoformat()}.json", mime="application/json", use_container_width=True)
 

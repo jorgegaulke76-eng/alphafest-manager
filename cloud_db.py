@@ -39,6 +39,7 @@ __all__ = [
     "load_document",
     "save_document",
     "mutate_list_record",
+    "append_list_record",
     "upload_catalog_image",
     "upload_library_file",
     "catalog_public_url",
@@ -192,6 +193,81 @@ def save_document(document_key: str, value: Any, local_path: str) -> bool:
         pass
     return True
 
+
+
+def append_list_record(document_key: str, local_path: str, default: Any, record: Any, max_items: int = 5000, retries: int = 4):
+    """Acrescenta um registro a um documento-lista com compare-and-swap.
+
+    I8.13.4: usado pela auditoria oficial para que duas sessões não percam
+    eventos quando Jorge e Anna gravam quase ao mesmo tempo. O registro entra
+    no início da lista e o documento é limitado a ``max_items``.
+
+    Retorna ``(ok, documento_atualizado, motivo)``.
+    """
+    if not isinstance(default, list):
+        default = []
+    limite = max(1, int(max_items or 1))
+
+    def montar(base):
+        atual = base if isinstance(base, list) else []
+        copia = json.loads(json.dumps(atual, ensure_ascii=False))
+        novo = json.loads(json.dumps(record, ensure_ascii=False))
+        return [novo] + copia[: max(0, limite - 1)]
+
+    if not online_configured():
+        atual = _read_local(local_path, default)
+        novo_doc = montar(atual)
+        try:
+            _write_local(local_path, novo_doc)
+            return True, novo_doc, "local"
+        except OSError:
+            return False, atual, "falha ao gravar contingência local"
+
+    url, _ = _config()
+    ultimo_erro = "conflito de concorrência"
+    for _ in range(max(1, int(retries or 1))):
+        try:
+            leitura = _SESSION.get(
+                f"{url}/rest/v1/app_data",
+                headers=_headers(),
+                params={"select": "value,updated_at", "key": f"eq.{document_key}", "limit": "1"},
+                timeout=TIMEOUT,
+            )
+            leitura.raise_for_status()
+            rows = leitura.json()
+            if not rows:
+                base = _read_local(local_path, default)
+                if not save_document(document_key, base, local_path):
+                    return False, base, "documento não encontrado"
+                continue
+
+            row = rows[0]
+            atual = row.get("value", default)
+            updated_at = row.get("updated_at")
+            novo_doc = montar(atual)
+            novo_updated_at = datetime.now(timezone.utc).isoformat()
+            params = {"key": f"eq.{document_key}", "select": "key"}
+            if updated_at:
+                params["updated_at"] = f"eq.{updated_at}"
+            resposta = _SESSION.patch(
+                f"{url}/rest/v1/app_data",
+                headers=_headers({"Prefer": "return=representation"}),
+                params=params,
+                json={"value": novo_doc, "updated_at": novo_updated_at},
+                timeout=TIMEOUT,
+            )
+            resposta.raise_for_status()
+            confirmacao = resposta.json()
+            if confirmacao:
+                try:
+                    _write_local(local_path, novo_doc)
+                except OSError:
+                    pass
+                return True, novo_doc, "online"
+            ultimo_erro = "conflito detectado; nova tentativa realizada"
+        except (requests.RequestException, ValueError, TypeError) as exc:
+            ultimo_erro = f"{exc.__class__.__name__}"
+    return False, None, ultimo_erro
 
 
 def mutate_list_record(document_key: str, local_path: str, default: Any, identity_field: str, identity_value: Any, updater, retries: int = 3):
