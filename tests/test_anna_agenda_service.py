@@ -56,13 +56,13 @@ def test_agenda_contem_somente_campos_operacionais_solicitados():
     assert "video" not in linha
 
 
-def test_status_resumido_distingue_aprovacao_producao_pronto_e_pagamento():
+def test_status_resumido_distingue_marcos_reais_sem_inferir_producao():
     hoje = date(2026, 9, 2)
     assert status_resumido_agenda(_prop("P1", "04/09/2026"), hoje) == "Aguardando aprovação"
-    assert status_resumido_agenda(_prop("P2", "04/09/2026", aprovado=True), hoje) == "Em produção · Pagamento pendente"
-    assert status_resumido_agenda(_prop("P3", "04/09/2026", aprovado=True, pago=True), hoje) == "Em produção · Pago"
-    assert status_resumido_agenda(_prop("P4", "04/09/2026", aprovado=True, pago=True, pronto=True), hoje) == "Pronto / aguardando saída · Pago"
-    assert status_resumido_agenda(_prop("P5", "04/09/2026", aprovado=True, mensal=True), hoje) == "Em produção · Mensal"
+    assert status_resumido_agenda(_prop("P2", "04/09/2026", aprovado=True), hoje) == "Aprovado · Pagamento pendente"
+    assert status_resumido_agenda(_prop("P3", "04/09/2026", aprovado=True, pago=True), hoje) == "Aprovado · Pago"
+    assert status_resumido_agenda(_prop("P4", "04/09/2026", aprovado=True, pago=True, pronto=True), hoje) == "Pronto / aguardando retirada ou entrega · Pago"
+    assert status_resumido_agenda(_prop("P5", "04/09/2026", aprovado=True, mensal=True), hoje) == "Aprovado · Mensal"
 
 
 def test_agenda_marca_prazo_vencido_e_entrega_hoje_e_ordena_urgencia():
@@ -106,3 +106,31 @@ def test_pdf_agenda_e_imprimivel_e_nao_embute_imagens():
     assert pdf and pdf.startswith(b"%PDF")
     # O gerador usa exclusivamente texto e tabela; nenhum XObject de imagem deve existir.
     assert b"/Subtype /Image" not in pdf
+
+
+def test_agenda_recupera_pedido_pago_com_marca_comercial_antiga():
+    hoje = date(2026, 9, 2)
+    proposta = _prop("P-RECUPERA", "30/09/2026", aprovado=True, pago=True)
+    proposta.update({
+        "nao_fechado_sem_retorno": True,
+        "encerrado": True,
+        "status_comercial": "nao_fechado_sem_retorno",
+    })
+    linhas = montar_agenda_anna([proposta], hoje)
+    assert len(linhas) == 1
+    assert linhas[0]["numero_proposta"] == "P-RECUPERA"
+    assert linhas[0]["status"] == "Aprovado · Pago"
+
+
+def test_agenda_mantem_cancelamento_explicito_fora_mesmo_se_pago():
+    hoje = date(2026, 9, 2)
+    proposta = _prop("P-CANCELA", "30/09/2026", aprovado=True, pago=True)
+    proposta.update({"status_comercial": "cancelado", "encerrado": True})
+    assert montar_agenda_anna([proposta], hoje) == []
+
+
+def test_status_atraso_separa_producao_saida_e_prazo_sem_aprovacao():
+    hoje = date(2026, 9, 2)
+    assert status_resumido_agenda(_prop("P-A", "01/09/2026", aprovado=True, pago=True), hoje).startswith("ATRASADO · Aprovado · Pago")
+    assert status_resumido_agenda(_prop("P-B", "01/09/2026", aprovado=True, pago=True, pronto=True), hoje).startswith("SAÍDA ATRASADA · Pronto")
+    assert status_resumido_agenda(_prop("P-C", "01/09/2026", aprovado=False), hoje).startswith("Prazo vencido · Aguardando aprovação")

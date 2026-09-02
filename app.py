@@ -15332,18 +15332,34 @@ iniciar_estado("alerta_proposta_numero", None)
 aplicar_limpeza_formulario_pendente()
 aplicar_proposta_pendente_no_formulario()
 
-# --- ALERTAS DE ENTREGA MELHORADOS ---
+# --- ALERTAS DE ENTREGA ALINHADOS À FONTE ÚNICA (HF18) ---
+# A Agenda da Anna, Histórico, THU e operação precisam partir do mesmo universo:
+# proposta ativa = não encerrada/cancelada e ainda não Entregue. A data sozinha
+# nunca reabre um registro histórico nem transforma orçamento não aprovado em
+# atraso de produção.
 hoje = hoje_local()
-alertas_hoje, alertas_atrasados, alertas_proximos = [], [], []
+alertas_hoje, alertas_atrasados, alertas_saida_atrasada, alertas_proximos, alertas_prazo_aprovacao = [], [], [], [], []
 for p in carregar_historico():
+    estado_alerta = _status_resumo(p)
+    if not estado_alerta.get("ativa"):
+        continue
     entrega = data_entrega_segura(p.get("data_entrega"))
-    if not entrega or bool(_status_resumo(p).get("entregue")):
+    if not entrega:
         continue
     dias = (entrega - hoje).days
+
+    if not estado_alerta.get("aprovado"):
+        if dias < 0:
+            alertas_prazo_aprovacao.append((p, abs(dias)))
+        continue
+
     if dias < 0:
-        alertas_atrasados.append((p, abs(dias)))
+        if estado_alerta.get("pronto"):
+            alertas_saida_atrasada.append((p, abs(dias)))
+        else:
+            alertas_atrasados.append((p, abs(dias)))
     elif dias == 0:
-        alertas_hoje.append(p)
+        alertas_hoje.append((p, bool(estado_alerta.get("pronto"))))
     elif dias <= 3:
         alertas_proximos.append((p, dias))
 
@@ -15352,10 +15368,16 @@ def renderizar_alertas_clicaveis(titulo, alertas, tipo, prefixo):
         return
     if tipo == "atrasado":
         st.error(titulo)
-        pares = [(p, f"{dias} dia(s) em atraso") for p, dias in alertas]
+        pares = [(p, f"Produção atrasada há {dias} dia(s)") for p, dias in alertas]
+    elif tipo == "saida_atrasada":
+        st.error(titulo)
+        pares = [(p, f"Pronto; retirada/entrega atrasada há {dias} dia(s)") for p, dias in alertas]
+    elif tipo == "prazo_aprovacao":
+        st.warning(titulo)
+        pares = [(p, f"Prazo venceu há {dias} dia(s); ainda aguarda aprovação") for p, dias in alertas]
     elif tipo == "hoje":
         st.warning(titulo)
-        pares = [(p, "Entrega hoje") for p in alertas]
+        pares = [(p, "Saída hoje" if pronto else "Entrega hoje; produção ainda não concluída") for p, pronto in alertas]
     else:
         st.info(titulo)
         pares = [(p, f"Entrega em {dias} dia(s)") for p, dias in alertas]
@@ -15370,8 +15392,10 @@ def renderizar_alertas_clicaveis(titulo, alertas, tipo, prefixo):
             st.rerun()
 
 def renderizar_painel_alertas(prefixo):
-    renderizar_alertas_clicaveis("🚨 Entregas atrasadas", alertas_atrasados, "atrasado", prefixo)
-    renderizar_alertas_clicaveis("⚠️ Entregas para hoje", alertas_hoje, "hoje", prefixo)
+    renderizar_alertas_clicaveis("🚨 Produção atrasada", alertas_atrasados, "atrasado", prefixo)
+    renderizar_alertas_clicaveis("🚚 Retiradas/entregas atrasadas", alertas_saida_atrasada, "saida_atrasada", prefixo)
+    renderizar_alertas_clicaveis("⏰ Propostas com prazo vencido aguardando aprovação", alertas_prazo_aprovacao, "prazo_aprovacao", prefixo)
+    renderizar_alertas_clicaveis("⚠️ Entregas/saídas para hoje", alertas_hoje, "hoje", prefixo)
     renderizar_alertas_clicaveis("📅 Próximas entregas", alertas_proximos, "proximo", prefixo)
 
     if not st.session_state.alerta_proposta_numero:
@@ -21976,7 +22000,7 @@ def renderizar_workspace_anna_isolado():
         if m4.button("🔎 Ver quais são", key="anna_ver_entregas_hoje", use_container_width=True):
             dialog_entregas_hoje_anna(historico)
 
-    # HF17 — roteiro diário imprimível da Anna. Somente leitura e somente dados:
+    # HF18 — roteiro diário imprimível da Anna alinhado ao Histórico. Somente leitura e somente dados:
     # número, status, cliente, telefone, produtos e data de entrega.
     st.markdown("### 🗓️ Agenda diária para impressão")
     st.caption(
@@ -21991,7 +22015,7 @@ def renderizar_workspace_anna_isolado():
         ag1, ag2, ag3, ag4 = st.columns(4)
         ag1.metric("Abertos", resumo_agenda_anna_hf17["abertas"])
         ag2.metric("Aguardando aprovação", resumo_agenda_anna_hf17["aguardando_aprovacao"])
-        ag3.metric("Em produção", resumo_agenda_anna_hf17["em_producao"])
+        ag3.metric("Aprovados / andamento", resumo_agenda_anna_hf17["em_producao"])
         ag4.metric("Prontos", resumo_agenda_anna_hf17["prontas"])
 
         previa_agenda_hf17 = pd.DataFrame([

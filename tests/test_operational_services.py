@@ -106,6 +106,49 @@ class ThuOperationalConsistencyTests(unittest.TestCase):
         self.assertEqual(thu["entregas_hoje"], 1)
 
 
+
+class ProposalStatusHF18RegressionTests(unittest.TestCase):
+    def test_marca_nao_fechado_antiga_nao_esconde_pedido_que_depois_foi_pago(self):
+        from proposal_status import proposta_ativa_operacional, proposta_encerrada
+        p = {
+            "numero_proposta": "P-LEGADO",
+            "aprovado": True, "pago": True, "pronto": False, "entregue": False,
+            "nao_fechado_pagamento": True, "encerrado": True,
+            "status_comercial": "nao_fechado_pagamento",
+        }
+        self.assertFalse(proposta_encerrada(p))
+        self.assertTrue(proposta_ativa_operacional(p))
+
+    def test_cancelamento_explicito_continua_encerrando_pedido_pago(self):
+        from proposal_status import proposta_ativa_operacional, proposta_encerrada
+        p = {
+            "numero_proposta": "P-CANCELADO",
+            "aprovado": True, "pago": True, "entregue": False,
+            "status_comercial": "cancelado", "encerrado": True,
+        }
+        self.assertTrue(proposta_encerrada(p))
+        self.assertFalse(proposta_ativa_operacional(p))
+
+    def test_salvar_status_pago_limpa_marca_nao_fechado_obsoleta(self):
+        from proposal_status_service import normalizar_status_desejados, aplicar_status_na_proposta
+        proposta = {
+            "numero_proposta": "P-REABRE",
+            "aprovado": True, "pago": False, "pronto": False, "entregue": False,
+            "nao_fechado_sem_retorno": True, "encerrado": True,
+            "status_comercial": "nao_fechado_sem_retorno",
+        }
+        eventos = []
+        resultado = aplicar_status_na_proposta(
+            proposta, normalizar_status_desejados(True, True, False, False),
+            now_text="02/09/2026 09:00", usuario="Anna",
+            registrar_evento=lambda p, descricao, usuario: eventos.append(descricao),
+        )
+        self.assertTrue(resultado["reabriu_encerramento_comercial"])
+        self.assertFalse(proposta["nao_fechado_sem_retorno"])
+        self.assertFalse(proposta["encerrado"])
+        self.assertEqual(proposta["status_comercial"], "")
+        self.assertIn("Encerramento comercial antigo removido após avanço do pedido", eventos)
+
 if __name__ == "__main__":
     unittest.main()
 

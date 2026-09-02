@@ -36,3 +36,9 @@
 - HF17: Agenda Operacional imprimível da Anna — em homologação; roteiro de início/fim do dia com propostas abertas, status, cliente, WhatsApp, produtos e entrega, sem imagens e sem automações.
 - Próximo após homologação: usar o retorno operacional de Jorge/Anna para decidir o próximo ganho do THU sem ampliar permissões automaticamente.
 
+
+## 20.4.9-I8.13.5-HF18 — Reconciliação Agenda Anna x Histórico
+- Em homologação: Agenda diária da Anna e Histórico passam a usar a mesma regra de pedido aberto.
+- Pedidos pagos/prontos com marca comercial antiga são recuperados para a operação quando houve avanço real posterior.
+- Cancelados/arquivados continuam fora.
+- Status da agenda mostra apenas marcos oficiais e não presume “Em produção”.

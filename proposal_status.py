@@ -55,6 +55,14 @@ def proposta_faturamento_mensal(record: dict[str, Any] | None) -> bool:
 
 
 def proposta_encerrada(record: dict[str, Any] | None) -> bool:
+    """Retorna se a proposta está realmente fora da operação.
+
+    HF18: marcas antigas de "não fechado" podem ter permanecido gravadas em
+    propostas que depois avançaram de verdade (Pago/Pronto/Entregue). Esses
+    marcadores comerciais deixam de encerrar a leitura quando existe progresso
+    operacional posterior inequívoco. Cancelamentos/arquivamentos explícitos
+    continuam prevalecendo.
+    """
     record = record or {}
     status = str(
         record.get("status_comercial")
@@ -62,13 +70,34 @@ def proposta_encerrada(record: dict[str, Any] | None) -> bool:
         or record.get("status")
         or ""
     ).strip().casefold()
-    motivo_nao_fechado = valor_bool(record.get("nao_fechado_pagamento")) or valor_bool(record.get("nao_fechado_sem_retorno"))
-    return motivo_nao_fechado or status_bool(record, "encerrado") or status in {
-        "encerrado", "encerrada", "encerrado sem retorno", "encerrado por preço", "encerrado por preco",
-        "encerrado pelo cliente", "encerrado por prazo", "cancelado", "cancelada", "recusado", "recusada",
-        "nao_fechado_pagamento", "não fechado — falta de pagamento", "nao_fechado_sem_retorno",
-        "não fechado — sem retorno do cliente", "arquivado", "arquivada", "excluído", "excluida", "excluída",
+
+    # Cancelamento/recusa/arquivamento são encerramentos definitivos. Já rótulos
+    # genéricos de "encerrado" ou "não fechado" podem ser marcas comerciais
+    # antigas que ficaram gravadas antes de o pedido avançar.
+    hard_status = status in {
+        "cancelado", "cancelada", "recusado", "recusada",
+        "arquivado", "arquivada", "excluído", "excluida", "excluída",
     }
+    if hard_status:
+        return True
+
+    motivo_nao_fechado = valor_bool(record.get("nao_fechado_pagamento")) or valor_bool(record.get("nao_fechado_sem_retorno"))
+    status_encerramento_comercial = status in {
+        "encerrado", "encerrada", "encerrado sem retorno", "encerrado por preço", "encerrado por preco",
+        "encerrado pelo cliente", "encerrado por prazo",
+        "nao_fechado_pagamento", "não fechado — falta de pagamento",
+        "nao_fechado_sem_retorno", "não fechado — sem retorno do cliente",
+    }
+    progrediu_depois = status_bool(record, "pago") or status_bool(record, "pronto") or status_bool(record, "entregue")
+
+    # Pago/Pronto/Entregue é evidência inequívoca de que a proposta voltou a ser
+    # um pedido real depois do encerramento comercial antigo.
+    encerrado_flag = status_bool(record, "encerrado")
+    encerramento_apenas_comercial = motivo_nao_fechado or status_encerramento_comercial
+    if progrediu_depois and encerramento_apenas_comercial:
+        return False
+
+    return encerramento_apenas_comercial or encerrado_flag
 
 
 def proposta_pronta(record: dict[str, Any] | None) -> bool:

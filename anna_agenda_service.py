@@ -39,6 +39,12 @@ def _telefone(proposta: dict[str, Any]) -> str:
 
 
 def status_resumido_agenda(proposta: dict[str, Any] | None, hoje: date | None = None) -> str:
+    """Resumo fiel aos marcos oficiais, sem inferir produção iniciada.
+
+    HF18 evita chamar automaticamente todo pedido aprovado de "Em produção".
+    A agenda mostra o que está realmente marcado (Aprovado/Pago/Pronto) e usa a
+    data apenas para destacar prazo/saída.
+    """
     proposta = proposta or {}
     hoje = hoje or date.today()
     estado = resumo_status(proposta)
@@ -46,24 +52,28 @@ def status_resumido_agenda(proposta: dict[str, Any] | None, hoje: date | None = 
 
     partes: list[str] = []
     if entrega and entrega < hoje:
-        partes.append("ATRASADO")
+        if estado.get("aprovado") and estado.get("pronto"):
+            partes.append("SAÍDA ATRASADA")
+        elif estado.get("aprovado"):
+            partes.append("ATRASADO")
+        else:
+            partes.append("Prazo vencido")
     elif entrega == hoje:
-        partes.append("Entrega hoje")
+        partes.append("Saída hoje" if estado.get("pronto") else "Entrega hoje")
 
     if not estado.get("aprovado"):
         partes.append("Aguardando aprovação")
     elif estado.get("pronto"):
-        partes.append("Pronto / aguardando saída")
+        partes.append("Pronto / aguardando retirada ou entrega")
     else:
-        partes.append("Em produção")
+        partes.append("Aprovado")
 
-    if estado.get("aprovado"):
-        if estado.get("mensalista"):
-            partes.append("Mensal")
-        elif estado.get("pago"):
-            partes.append("Pago")
-        else:
-            partes.append("Pagamento pendente")
+    if estado.get("mensalista"):
+        partes.append("Mensal")
+    elif estado.get("pago"):
+        partes.append("Pago")
+    elif estado.get("aprovado"):
+        partes.append("Pagamento pendente")
 
     return " · ".join(partes)
 
@@ -109,9 +119,17 @@ def resumo_agenda_anna(linhas: Iterable[dict[str, Any]] | None) -> dict[str, int
     return {
         "abertas": len(linhas),
         "aguardando_aprovacao": sum("Aguardando aprovação" in str(x.get("status") or "") for x in linhas),
-        "em_producao": sum("Em produção" in str(x.get("status") or "") for x in linhas),
-        "prontas": sum("Pronto / aguardando saída" in str(x.get("status") or "") for x in linhas),
-        "atrasadas": sum("ATRASADO" in str(x.get("status") or "") for x in linhas),
+        "em_producao": sum(
+            "Aprovado" in str(x.get("status") or "")
+            and "Pronto / aguardando retirada ou entrega" not in str(x.get("status") or "")
+            for x in linhas
+        ),
+        "prontas": sum("Pronto / aguardando retirada ou entrega" in str(x.get("status") or "") for x in linhas),
+        "atrasadas": sum(
+            "ATRASADO" in str(x.get("status") or "")
+            or "SAÍDA ATRASADA" in str(x.get("status") or "")
+            for x in linhas
+        ),
     }
 
 
@@ -189,7 +207,7 @@ def gerar_pdf_agenda_anna(
         Paragraph(
             f"<b>{html_lib.escape(str(momento))}</b> · Emitida em {gerado_em.strftime('%d/%m/%Y às %H:%M')} · "
             f"{resumo['abertas']} proposta(s)/pedido(s) aberto(s)<br/>"
-            f"Aguardando aprovação: {resumo['aguardando_aprovacao']} · Em produção: {resumo['em_producao']} · "
+            f"Aguardando aprovação: {resumo['aguardando_aprovacao']} · Aprovados/em andamento: {resumo['em_producao']} · "
             f"Prontos: {resumo['prontas']} · Atrasados: {resumo['atrasadas']}",
             subtitulo,
         ),

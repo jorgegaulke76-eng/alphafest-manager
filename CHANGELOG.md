@@ -826,3 +826,9 @@ hangelog
 - A agenda é exclusivamente operacional: não altera proposta, status, contato, pagamento, produção ou entrega.
 - Importação resiliente: uma atualização parcial do módulo da agenda não derruba o AlphaFest Manager; a Central continua disponível e informa a indisponibilidade da agenda.
 - Nenhum JSON, SQL ou banco operacional foi alterado.
+
+## 20.4.9-I8.13.5-HF18
+- Agenda da Anna e alertas do Histórico alinhados à mesma Fonte Única de status.
+- Recuperação segura de pedidos com marca comercial antiga de “não fechado” que depois avançaram para Pago/Pronto/Entregue.
+- Status da agenda agora mostra marcos reais, sem inferir produção iniciada.
+- Alertas históricos separam atraso de produção, atraso de saída e prazo vencido aguardando aprovação.

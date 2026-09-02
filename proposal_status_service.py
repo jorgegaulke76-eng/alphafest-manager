@@ -70,6 +70,31 @@ def aplicar_status_na_proposta(
     for campo in STATUS_FIELDS:
         proposta[campo] = bool(desejados.get(campo))
 
+    # HF18: se uma proposta antes marcada como "não fechada" avançou depois
+    # para pagamento/produção/entrega, remove os marcadores comerciais obsoletos
+    # que poderiam escondê-la da Agenda/Fluxo. Cancelamentos explícitos não são
+    # alterados aqui.
+    reabriu_encerramento_comercial = False
+    status_comercial = str(proposta.get("status_comercial") or "").strip().casefold()
+    tinha_motivo_nao_fechado = (
+        valor_bool(proposta.get("nao_fechado_pagamento"))
+        or valor_bool(proposta.get("nao_fechado_sem_retorno"))
+        or status_comercial.startswith("nao_fechado_")
+        or status_comercial.startswith("não fechado")
+        or status_comercial.startswith("encerrado")
+    )
+    if tinha_motivo_nao_fechado and (desejados.get("pago") or desejados.get("pronto") or desejados.get("entregue")):
+        proposta["nao_fechado_pagamento"] = False
+        proposta["nao_fechado_sem_retorno"] = False
+        proposta["encerrado"] = False
+        if (
+            status_comercial.startswith("nao_fechado_")
+            or status_comercial.startswith("não fechado")
+            or status_comercial.startswith("encerrado")
+        ):
+            proposta["status_comercial"] = ""
+        reabriu_encerramento_comercial = True
+
     mudancas: list[str] = []
     for campo in STATUS_FIELDS:
         valor_novo = bool(desejados.get(campo))
@@ -95,6 +120,11 @@ def aplicar_status_na_proposta(
             if callable(registrar_evento):
                 registrar_evento(proposta, texto, usuario)
 
+    if reabriu_encerramento_comercial:
+        mudancas.append("Encerramento comercial antigo removido após avanço do pedido")
+        if callable(registrar_evento):
+            registrar_evento(proposta, "Encerramento comercial antigo removido após avanço do pedido", usuario)
+
     aprovou_agora = bool(desejados.get("aprovado")) and not bool(anteriores.get("aprovado"))
     depois_concluida = proposta_concluida(proposta)
     nova_conclusao = depois_concluida and not antes_concluida
@@ -108,5 +138,6 @@ def aplicar_status_na_proposta(
         "anteriores": anteriores,
         "mudancas": mudancas,
         "aprovou_agora": aprovou_agora,
+        "reabriu_encerramento_comercial": reabriu_encerramento_comercial,
         "nova_conclusao": nova_conclusao,
     }
