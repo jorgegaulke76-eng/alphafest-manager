@@ -318,6 +318,7 @@ def montar_agenda_executiva(
     cobrancas: list[dict[str, Any]] | None,
     prioridades_operacionais: list[dict[str, Any]] | None,
     sinais_continuidade: list[dict[str, Any]] | None = None,
+    sinais_prevencao: list[dict[str, Any]] | None = None,
     *,
     limite: int = 8,
 ) -> list[dict[str, Any]]:
@@ -335,6 +336,10 @@ def montar_agenda_executiva(
     HF24 incorpora também os sinais de continuidade da HF21. Esse sinal nunca
     altera o pedido e, quando a mesma proposta já possui uma urgência operacional
     mais forte, aparece apenas como contexto secundário.
+
+    HF25 acrescenta sinais preventivos de prazo/pressão de agenda. Eles ficam
+    abaixo das urgências operacionais concretas e servem para agir antes de o
+    pedido entrar em atraso, sem afirmar uma capacidade produtiva exata.
     """
     agrupados: dict[str, dict[str, Any]] = {}
 
@@ -431,6 +436,25 @@ def montar_agenda_executiva(
             motivo=str(item.get("motivo") or "Sem mudança de status registrada"),
             acao=str(item.get("acao") or "Abrir o pedido e conferir o próximo passo"),
             origem="continuidade",
+        )
+
+    # HF25 — prevenção de prazo/carga futura. O serviço produz somente sinais
+    # qualitativos e nunca substitui uma urgência operacional concreta do mesmo
+    # pedido. Quando coexistem, aparece como contexto secundário.
+    for item in sinais_prevencao or []:
+        if not isinstance(item, dict):
+            continue
+        nivel = str(item.get("nivel") or "normal").strip().casefold()
+        janela = "hoje" if nivel == "alta" else "acompanhar"
+        _adicionar_sinal(
+            item,
+            dominio="Prevenção prazo",
+            icone="🛡️",
+            score=int(item.get("prioridade") or 0),
+            janela=janela,
+            motivo=str(item.get("motivo") or "Janela de produção merece conferência preventiva"),
+            acao=str(item.get("acao") or "Revisar sequência e proteger a data de entrega"),
+            origem="prevencao_prazo",
         )
 
     score_por_rank = {0: 1600, 1: 1400, 2: 1120, 3: 820, 4: 520}

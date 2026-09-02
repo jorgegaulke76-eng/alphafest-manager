@@ -20,6 +20,7 @@ import time
 import copy
 import calendar
 import requests
+import inspect
 
 _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 
@@ -179,6 +180,12 @@ try:
 except Exception as _thu_continuidade_import_exc:
     _thu_continuidade_montar_sinais = None
     THU_CONTINUIDADE_IMPORT_ERROR = str(_thu_continuidade_import_exc)
+try:
+    from thu_prevencao_prazo_service import montar_sinais_prevencao_prazo as _thu_prevencao_montar_sinais
+    THU_PREVENCAO_IMPORT_ERROR = ""
+except Exception as _thu_prevencao_import_exc:
+    _thu_prevencao_montar_sinais = None
+    THU_PREVENCAO_IMPORT_ERROR = str(_thu_prevencao_import_exc)
 try:
     from biblioteca_3d_service import (
         arquivo_3d_valido as _b3d_arquivo_valido,
@@ -22769,11 +22776,29 @@ if pagina_atual == "central":
             hoje_central,
             limite=20,
         )
+        # HF25 — calcula a fotografia de produção também para a Agenda Executiva.
+        # Isso permite prevenção de prazo/material sem criar uma fonte paralela.
+        _previsao_agenda_hf25 = _i8127_previsao_producao(historico=historico_central)
+        _central_prod_agenda_hf25 = _i8128_engine_central(
+            _previsao_agenda_hf25, tarefas_ativas_central, hoje=hoje_central
+        )
         _prioridades_operacionais_agenda_hf16 = _i8131_engine_prioridades(
             historico_central,
             hoje_central,
+            central_producao=_central_prod_agenda_hf25,
             fila_entregas=fila_saida_central_i813,
             resumo_produtos=resumo_produtos_pedido,
+        )
+        _sinais_prev_hf25 = (
+            _thu_prevencao_montar_sinais(
+                historico_central,
+                hoje_central,
+                central_producao=_central_prod_agenda_hf25,
+                limite=20,
+                horizonte_dias=10,
+            )
+            if _thu_prevencao_montar_sinais
+            else []
         )
 
         # HF24 — o sinal de continuidade da HF21 passa a alimentar também a
@@ -22802,31 +22827,79 @@ if pagina_atual == "central":
             else []
         )
 
-        agenda_executiva_hf16 = _thu_comercial_montar_agenda(
-            retornos_comerciais_hf14,
-            cobrancas_hf15,
-            _prioridades_operacionais_agenda_hf16,
-            _sinais_cont_hf21,
-            limite=8,
-        )
+        # HF25 — compatibilidade com atualização parcial: se o app.py novo
+        # subir antes do thu_comercial_service novo, mantém a Agenda Executiva
+        # funcionando sem o quinto sinal em vez de derrubar o Streamlit.
+        _agenda_params_hf25 = set(inspect.signature(_thu_comercial_montar_agenda).parameters)
+        if "sinais_prevencao" in _agenda_params_hf25:
+            agenda_executiva_hf16 = _thu_comercial_montar_agenda(
+                retornos_comerciais_hf14,
+                cobrancas_hf15,
+                _prioridades_operacionais_agenda_hf16,
+                _sinais_cont_hf21,
+                _sinais_prev_hf25,
+                limite=10,
+            )
+        else:
+            agenda_executiva_hf16 = _thu_comercial_montar_agenda(
+                retornos_comerciais_hf14,
+                cobrancas_hf15,
+                _prioridades_operacionais_agenda_hf16,
+                _sinais_cont_hf21,
+                limite=10,
+            )
 
         st.divider()
         st.markdown("#### 🧠 THU • Agenda executiva")
         st.caption(
             "Uma única ordem de ação para o Jorge. O mesmo pedido aparece só uma vez na agenda, "
             "mesmo quando exige atenção em mais de uma área. A HF24 também considera o sinal de "
-            "sem avanço registrado da Agenda da Anna. Os blocos detalhados abaixo continuam como "
-            "trilha de conferência; a agenda não envia mensagens, não registra contatos e não muda status."
+            "sem avanço registrado da Agenda da Anna. A HF25 acrescenta prevenção de prazo: "
+            "janela restante, estágio/material e concentração de entregas futuras entram como sinal assistido, "
+            "sem afirmar capacidade exata. Os blocos detalhados continuam como trilha de conferência; "
+            "a agenda não envia mensagens, não registra contatos e não muda status."
         )
         if agenda_executiva_hf16:
             _ag_agora_hf16 = sum(1 for x in agenda_executiva_hf16 if x.get("janela") == "agora")
             _ag_hoje_hf16 = sum(1 for x in agenda_executiva_hf16 if x.get("janela") == "hoje")
             _ag_acompanhar_hf16 = sum(1 for x in agenda_executiva_hf16 if x.get("janela") == "acompanhar")
-            _agm1_hf16, _agm2_hf16, _agm3_hf16, _agm4_hf16 = st.columns(4)
+            _ag_prev_hf25 = sum(
+                1 for x in agenda_executiva_hf16
+                if any(str(s.get("origem") or "") == "prevencao_prazo" for s in (x.get("sinais") or []))
+            )
+            _agm1_hf16, _agm2_hf16, _agm3_hf16, _agm4_hf16, _agm5_hf25 = st.columns(5)
             _agm1_hf16.metric("🔴 Fazer agora", _ag_agora_hf16)
             _agm2_hf16.metric("🟠 Resolver hoje", _ag_hoje_hf16)
             _agm3_hf16.metric("🔵 Acompanhar", _ag_acompanhar_hf16)
-            _agm4_hf16.metric("📋 Pedidos únicos", len(agenda_executiva_hf16))
+            _agm4_hf16.metric("🛡️ Preventivos", _ag_prev_hf25)
+            _agm5_hf25.metric("📋 Pedidos únicos", len(agenda_executiva_hf16))
+
+            if THU_PREVENCAO_IMPORT_ERROR:
+                st.caption("🛡️ Radar preventivo indisponível nesta atualização parcial; a Agenda Executiva continua com as demais fontes.")
+            elif _sinais_prev_hf25:
+                with st.expander(
+                    f"🛡️ Prevenção dos próximos 10 dias ({len(_sinais_prev_hf25)})",
+                    expanded=False,
+                ):
+                    st.caption(
+                        "Leitura preventiva e qualitativa: não é uma medição exata de capacidade. "
+                        "Ela cruza prazo informado, janela restante, estágio/material e concentração de entregas."
+                    )
+                    for _prev_hf25 in _sinais_prev_hf25[:6]:
+                        _entrega_prev_hf25 = _prev_hf25.get("data_entrega")
+                        _entrega_txt_prev_hf25 = (
+                            _entrega_prev_hf25.strftime("%d/%m/%Y")
+                            if isinstance(_entrega_prev_hf25, date)
+                            else str(_entrega_prev_hf25 or "Sem data")
+                        )
+                        st.write(
+                            f"• **{html.escape(str(_prev_hf25.get('numero_proposta') or '—'))} — "
+                            f"{html.escape(str(_prev_hf25.get('cliente_nome') or 'Cliente'))}** · "
+                            f"Entrega {_entrega_txt_prev_hf25} · {_prev_hf25.get('motivo', '')}"
+                        )
+                        st.caption(f"Próxima ação: {_prev_hf25.get('acao', 'Revisar sequência de produção')}")
+                    if len(_sinais_prev_hf25) > 6:
+                        st.caption(f"Mais {len(_sinais_prev_hf25) - 6} sinal(is) preventivo(s) calculado(s).")
 
             for _ag_hf16 in agenda_executiva_hf16[:6]:
                 _janela_ag_hf16 = str(_ag_hf16.get("janela") or "acompanhar")

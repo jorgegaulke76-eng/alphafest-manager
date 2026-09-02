@@ -93,7 +93,25 @@ def test_hf24_mantem_bloco_sem_avanco_como_auditoria_e_nao_substitui_a_agenda():
     assert 'fotografia/sinais já calculados acima' in fonte
 
 
-def test_hf24_arquivos_de_versao_estao_alinhados():
-    esperado = '20.4.9-I8.13.5-HF24'
+def test_hf25_arquivos_de_versao_estao_alinhados():
+    esperado = '20.4.9-I8.13.5-HF25'
     assert Path('VERSAO').read_text(encoding='utf-8').strip() == esperado
     assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == esperado
+
+
+def test_hf25_agenda_executiva_incorpora_radar_preventivo_sem_novo_status():
+    fonte = Path("app.py").read_text(encoding="utf-8")
+    trecho = fonte.split('#### 🧠 THU • Agenda executiva', 1)[0].rsplit('retornos_comerciais_hf14 =', 1)[1]
+    assert '_thu_prevencao_montar_sinais(' in trecho
+    assert '_central_prod_agenda_hf25' in trecho
+    assert '_sinais_prev_hf25' in trecho
+    assert '🛡️ Prevenção dos próximos 10 dias' in fonte
+    assert 'não é uma medição exata de capacidade' in fonte
+    assert 'prevencao_prazo' in fonte
+
+
+def test_hf25_atualizacao_parcial_nao_quebra_agenda_executiva():
+    fonte = Path('app.py').read_text(encoding='utf-8')
+    assert 'inspect.signature(_thu_comercial_montar_agenda)' in fonte
+    assert '"sinais_prevencao" in _agenda_params_hf25' in fonte
+    assert 'compatibilidade com atualização parcial' in fonte

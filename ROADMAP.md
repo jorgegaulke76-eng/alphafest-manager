@@ -39,5 +39,6 @@
 - HF21: THU • Sem avanço registrado (Jorge) — homologado; usa as fotografias diárias da Anna para sinalizar permanência no mesmo estágio/status, sem alterar permissões ou pedidos.
 - HF22: Biblioteca 3D privada (Jorge) — homologado; preserva imagem + arquivo 3D diretamente no Manager, sem link externo e sem acesso da Anna.
 - HF23: Catálogo 3D (Jorge) — homologado; transforma o mesmo acervo privado em fonte única para gerar seleções HTML com nome, descrição, tempo e 1 imagem, sem expor o arquivo 3D.
-- HF24: Continuidade na Agenda Executiva do THU (Jorge) — incorpora o sinal de sem avanço à ordem única de decisão, com deduplicação e sem automatizar status/contato.
-- Próximo após homologação: observar o uso real da Agenda Executiva consolidada e então avançar para prevenção de prazo/capacidade, evitando criar novos painéis antes de validar a rotina.
+- HF24: Continuidade na Agenda Executiva do THU (Jorge) — homologado; incorpora o sinal de sem avanço à ordem única de decisão, com deduplicação e sem automatizar status/contato.
+- HF25: Prevenção de prazo e pressão de agenda (Jorge) — incorpora radar preventivo de 3–10 dias à Agenda Executiva, usando prazo informado, dias úteis restantes, estágio/material e concentração de entregas, sem fingir capacidade exata.
+- Próximo após homologação: observar se o radar preventivo antecipa problemas reais; só então evoluir para capacidade quantitativa onde houver tempo produtivo confiável por item/processo.

@@ -868,3 +868,12 @@ hangelog
 - Bloco detalhado da HF21 continua disponível como auditoria e usa o mesmo conjunto de sinais calculado para a Agenda Executiva.
 - Nenhum envio, contato ou status é automatizado.
 - Arquivos `VERSAO` e `VERSAO.txt` realinhados em HF24.
+
+## 20.4.9-I8.13.5-HF25 — THU • Prevenção de prazo e pressão de agenda
+- Agenda Executiva do Jorge passa a antecipar risco de prazo entre 3 e 10 dias antes da entrega.
+- Radar cruza prazo de produção informado, dias úteis restantes, estágio/material e concentração de pedidos na mesma data.
+- Concentração é tratada como pressão qualitativa de agenda; o Manager não inventa capacidade produtiva exata.
+- Sinais preventivos entram na deduplicação da Agenda Executiva e nunca substituem uma urgência operacional concreta do mesmo pedido.
+- Expander preventivo fica dentro da própria Agenda Executiva, evitando criar outro painel isolado.
+- Nenhum status, contato, banco ou dado operacional é alterado automaticamente.
+- Atualização parcial entre `app.py` e `thu_comercial_service.py` é tolerada sem derrubar a Central.

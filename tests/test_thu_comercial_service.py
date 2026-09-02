@@ -324,3 +324,43 @@ class ThuComercialServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_hf25_agenda_executiva_incorpora_prevencao_de_prazo():
+    prevencao = [{
+        "numero_proposta": "P-PREV",
+        "cliente_nome": "Cliente Preventivo",
+        "nivel": "alta",
+        "prioridade": 920,
+        "motivo": "restam poucos dias úteis para o prazo informado",
+        "acao": "Programar início da produção",
+    }]
+    agenda = montar_agenda_executiva([], [], [], [], prevencao)
+    assert len(agenda) == 1
+    assert agenda[0]["dominio"] == "Prevenção prazo"
+    assert agenda[0]["origem"] == "prevencao_prazo"
+    assert agenda[0]["janela"] == "hoje"
+
+
+def test_hf25_prevencao_fica_secundaria_quando_ha_urgencia_operacional():
+    operacao = [{
+        "numero_proposta": "P1",
+        "cliente_nome": "Cliente 1",
+        "prioridade_rank": 1,
+        "prioridade_chave": "vence_hoje",
+        "area": "Produção",
+        "motivo_prioridade": "Entrega hoje e produção não concluída",
+        "proxima_acao": "Concluir produção",
+    }]
+    prevencao = [{
+        "numero_proposta": "P1",
+        "cliente_nome": "Cliente 1",
+        "nivel": "alta",
+        "prioridade": 980,
+        "motivo": "janela apertada",
+        "acao": "proteger prazo",
+    }]
+    agenda = montar_agenda_executiva([], [], operacao, [], prevencao)
+    assert len(agenda) == 1
+    assert agenda[0]["dominio"] == "Produção"
+    assert "🛡️ Prevenção prazo" in agenda[0]["dominios_secundarios"]
