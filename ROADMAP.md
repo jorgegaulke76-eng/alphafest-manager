@@ -35,5 +35,5 @@
 - HF16: Agenda Executiva do THU (Jorge) — incorporada ao ciclo atual.
 - HF17: Agenda Operacional imprimível da Anna — substituída pela reconciliação da HF18.
 - HF18: Agenda Anna x Histórico na mesma Fonte Única — homologado.
-- HF19: Fechamento Diário Comparativo da Anna — em homologação; abertura registrada + comparação de entregues, avanços, novos e pendentes, somente leitura.
+- HF20: Fechamento Diário da Anna + agenda atualizável durante o expediente — em homologação; fotografia da manhã preservada, PDF atual regenerável e fechamento comparativo somente leitura.
 - Próximo após homologação: usar os resultados do fechamento diário para decidir o próximo ganho assistido do THU sem ampliar permissões automaticamente.

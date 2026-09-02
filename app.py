@@ -22102,6 +22102,28 @@ def renderizar_workspace_anna_isolado():
                         st.error("Não consegui confirmar o registro do início do dia no banco. Nada foi alterado; tente novamente quando a conexão estiver estável.")
 
         data_arquivo_hf19 = hoje_local().strftime("%Y-%m-%d")
+
+        # HF20 — além da fotografia fixa da manhã, a Anna pode regenerar uma agenda
+        # atual durante o expediente. Este PDF sempre usa o banco do momento e não
+        # altera nem substitui o snapshot registrado no início do dia.
+        pdf_atual_hf20 = _anna_gerar_pdf_agenda(agenda_anna_hf17, "Agenda atualizada", gerado_em=agora_local())
+        if pdf_atual_hf20:
+            hora_arquivo_hf20 = agora_local().strftime("%H%M")
+            st.download_button(
+                "🔄 Atualizar e baixar agenda atual (PDF)",
+                pdf_atual_hf20,
+                file_name=f"agenda_anna_{data_arquivo_hf19}_atual_{hora_arquivo_hf20}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="anna_agenda_atual_hf20",
+                help="Gera uma nova agenda com a situação atual do banco, sem alterar a fotografia registrada pela manhã.",
+            )
+            if snapshot_ok_hf19:
+                st.caption(
+                    "O roteiro registrado da manhã permanece congelado para o comparativo. "
+                    "Use o botão acima sempre que quiser imprimir uma agenda atualizada durante o dia."
+                )
+
         if snapshot_ok_hf19:
             linhas_manha_hf19 = list(snapshot_hoje_hf19.get("linhas") or [])
             try:
@@ -22143,19 +22165,6 @@ def renderizar_workspace_anna_isolado():
                 )
             elif not ANNA_FECHAMENTO_IMPORT_ERROR:
                 st.warning("A geração do PDF comparativo está indisponível neste ambiente. Os indicadores acima continuam disponíveis para conferência.")
-        else:
-            # A agenda atual continua imprimível mesmo sem linha de base, mas não é chamada de fechamento comparativo.
-            pdf_atual_hf19 = _anna_gerar_pdf_agenda(agenda_anna_hf17, "Agenda atual", gerado_em=agora_local())
-            if pdf_atual_hf19:
-                st.download_button(
-                    "📄 Baixar agenda atual (PDF)",
-                    pdf_atual_hf19,
-                    file_name=f"agenda_anna_{data_arquivo_hf19}_atual.pdf",
-                    mime="application/pdf",
-                    use_container_width=True,
-                    key="anna_agenda_atual_hf19",
-                )
-
     elif not ANNA_AGENDA_IMPORT_ERROR:
         st.success("Nenhuma proposta ou pedido aberto para a agenda de hoje.")
 

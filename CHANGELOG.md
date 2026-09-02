@@ -1,3 +1,9 @@
+# 20.4.9-I8.13.5-HF20 — Agenda Atualizável da Anna
+- Mantém o roteiro da manhã congelado para comparação.
+- Adiciona PDF atualizável a qualquer momento do dia, usando o banco atual.
+- Nome do arquivo inclui horário para diferenciar impressões sucessivas.
+- Nenhuma alteração automática em pedidos ou status.
+
 # 20.4.9-I8.13.5-HF19 — Fechamento Diário Comparativo da Anna
 - Agenda da Anna passa a registrar uma fotografia explícita do início do dia para servir como linha de base.
 - Fechamento compara a situação atual com a manhã e separa entregues, avanços de status, novos pedidos e pendências que seguem abertas.
