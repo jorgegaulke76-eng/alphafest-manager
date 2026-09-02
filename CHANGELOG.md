@@ -859,3 +859,12 @@ hangelog
 - Gerador permite selecionar modelos, conferir prévia responsiva e baixar HTML autocontido.
 - Catálogo de cliente recebe somente nome, descrição, tempo de impressão e uma imagem.
 - Arquivo 3D e metadados privados de armazenamento permanecem exclusivamente internos.
+
+## 20.4.9-I8.13.5-HF24 — Continuidade na Agenda Executiva do THU
+- O sinal `THU • Sem avanço registrado` passa a participar da ordem de decisão da Agenda Executiva do Jorge.
+- Deduplicação preservada: o mesmo pedido aparece uma única vez mesmo quando possui continuidade + operação + cobrança/retorno.
+- Urgência operacional concreta continua prevalecendo como ação principal; continuidade aparece como contexto secundário quando apropriado.
+- Pedidos recorrentes no mesmo estágio podem entrar em Resolver hoje/Acompanhar mesmo antes de virarem atraso.
+- Bloco detalhado da HF21 continua disponível como auditoria e usa o mesmo conjunto de sinais calculado para a Agenda Executiva.
+- Nenhum envio, contato ou status é automatizado.
+- Arquivos `VERSAO` e `VERSAO.txt` realinhados em HF24.

@@ -254,6 +254,59 @@ class ThuComercialServiceTests(unittest.TestCase):
         self.assertEqual(len(agenda), 2)
         self.assertEqual([x["numero_proposta"] for x in agenda], ["P4", "P3"])
 
+    def test_agenda_executiva_incorpora_sem_avanco_como_sinal_assistido(self):
+        continuidade = [{
+            "numero_proposta": "CONT",
+            "cliente_nome": "Cliente Continuidade",
+            "nivel": "alta",
+            "prioridade": 1020,
+            "motivo": "mesmo estágio há 4 dia(s)",
+            "acao": "Conferir se a produção avançou",
+        }]
+        agenda = montar_agenda_executiva([], [], [], continuidade)
+        self.assertEqual(len(agenda), 1)
+        self.assertEqual(agenda[0]["dominio"], "Sem avanço")
+        self.assertEqual(agenda[0]["origem"], "continuidade")
+        self.assertEqual(agenda[0]["janela"], "hoje")
+        self.assertEqual(agenda[0]["whatsapp"], "")
+        self.assertEqual(agenda[0]["mensagem_sugerida"], "")
+
+    def test_agenda_executiva_deduplica_operacao_e_sem_avanco_sem_trocar_causa_principal(self):
+        operacao = [{
+            "numero_proposta": "MESMO",
+            "cliente_nome": "Cliente Mesmo",
+            "prioridade_rank": 0,
+            "prioridade_chave": "atrasado_producao",
+            "area": "Produção",
+            "motivo_prioridade": "Prazo vencido e produção não concluída",
+            "proxima_acao": "Resolver produção",
+        }]
+        continuidade = [{
+            "numero_proposta": "MESMO",
+            "cliente_nome": "Cliente Mesmo",
+            "nivel": "urgente",
+            "prioridade": 1300,
+            "motivo": "prazo vencido · sem mudança de status desde a abertura",
+            "acao": "Conferir avanço",
+        }]
+        agenda = montar_agenda_executiva([], [], operacao, continuidade)
+        self.assertEqual(len(agenda), 1)
+        self.assertEqual(agenda[0]["dominio"], "Produção")
+        self.assertEqual(agenda[0]["sinais_qtd"], 2)
+        self.assertIn("⏳ Sem avanço", agenda[0]["dominios_secundarios"])
+
+    def test_agenda_executiva_sem_avanco_normal_vai_para_acompanhar(self):
+        continuidade = [{
+            "numero_proposta": "FUT",
+            "cliente_nome": "Cliente Futuro",
+            "nivel": "normal",
+            "prioridade": 810,
+            "motivo": "mesmo estágio há 2 dia(s)",
+            "acao": "Conferir próximo marco",
+        }]
+        agenda = montar_agenda_executiva([], [], [], continuidade)
+        self.assertEqual(agenda[0]["janela"], "acompanhar")
+
     def test_agenda_executiva_nao_muta_as_filas_de_origem(self):
         import copy
         retornos = [{

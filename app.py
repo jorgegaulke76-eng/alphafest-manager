@@ -22775,10 +22775,38 @@ if pagina_atual == "central":
             fila_entregas=fila_saida_central_i813,
             resumo_produtos=resumo_produtos_pedido,
         )
+
+        # HF24 — o sinal de continuidade da HF21 passa a alimentar também a
+        # Agenda Executiva. Calculamos uma única vez e reutilizamos no bloco
+        # detalhado abaixo para manter a mesma fotografia/ordem na tela.
+        _snapshots_cont_hf21 = load_document(
+            "agenda_anna_snapshots_db",
+            ARQUIVO_AGENDA_ANNA_SNAPSHOTS,
+            {},
+        )
+        if not isinstance(_snapshots_cont_hf21, dict):
+            _snapshots_cont_hf21 = {}
+        _linhas_cont_hf21 = (
+            _anna_montar_agenda(historico_central, hoje=hoje_central)
+            if _anna_montar_agenda
+            else []
+        )
+        _sinais_cont_hf21 = (
+            _thu_continuidade_montar_sinais(
+                _linhas_cont_hf21,
+                _snapshots_cont_hf21,
+                hoje_central,
+                limite=20,
+            )
+            if _thu_continuidade_montar_sinais
+            else []
+        )
+
         agenda_executiva_hf16 = _thu_comercial_montar_agenda(
             retornos_comerciais_hf14,
             cobrancas_hf15,
             _prioridades_operacionais_agenda_hf16,
+            _sinais_cont_hf21,
             limite=8,
         )
 
@@ -22786,8 +22814,9 @@ if pagina_atual == "central":
         st.markdown("#### 🧠 THU • Agenda executiva")
         st.caption(
             "Uma única ordem de ação para o Jorge. O mesmo pedido aparece só uma vez na agenda, "
-            "mesmo quando exige atenção em mais de uma área. Os blocos detalhados abaixo continuam "
-            "como trilha de conferência; a agenda não envia mensagens, não registra contatos e não muda status."
+            "mesmo quando exige atenção em mais de uma área. A HF24 também considera o sinal de "
+            "sem avanço registrado da Agenda da Anna. Os blocos detalhados abaixo continuam como "
+            "trilha de conferência; a agenda não envia mensagens, não registra contatos e não muda status."
         )
         if agenda_executiva_hf16:
             _ag_agora_hf16 = sum(1 for x in agenda_executiva_hf16 if x.get("janela") == "agora")
@@ -22872,28 +22901,8 @@ if pagina_atual == "central":
             "O alerta significa que não houve mudança de status registrada no Manager; "
             "não presume que o pedido ficou parado fisicamente e não altera nenhum dado."
         )
-        _snapshots_cont_hf21 = load_document(
-            "agenda_anna_snapshots_db",
-            ARQUIVO_AGENDA_ANNA_SNAPSHOTS,
-            {},
-        )
-        if not isinstance(_snapshots_cont_hf21, dict):
-            _snapshots_cont_hf21 = {}
-        _linhas_cont_hf21 = (
-            _anna_montar_agenda(historico_central, hoje=hoje_central)
-            if _anna_montar_agenda
-            else []
-        )
-        _sinais_cont_hf21 = (
-            _thu_continuidade_montar_sinais(
-                _linhas_cont_hf21,
-                _snapshots_cont_hf21,
-                hoje_central,
-                limite=8,
-            )
-            if _thu_continuidade_montar_sinais
-            else []
-        )
+        # HF24: fotografia/sinais já calculados acima para alimentar a Agenda
+        # Executiva e este detalhamento com exatamente a mesma fonte.
         if THU_CONTINUIDADE_IMPORT_ERROR:
             st.warning(
                 "O radar de continuidade não foi carregado nesta atualização. "

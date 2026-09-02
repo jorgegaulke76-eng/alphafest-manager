@@ -317,6 +317,7 @@ def montar_agenda_executiva(
     retornos: list[dict[str, Any]] | None,
     cobrancas: list[dict[str, Any]] | None,
     prioridades_operacionais: list[dict[str, Any]] | None,
+    sinais_continuidade: list[dict[str, Any]] | None = None,
     *,
     limite: int = 8,
 ) -> list[dict[str, Any]]:
@@ -330,6 +331,10 @@ def montar_agenda_executiva(
 
     Entradas ``aguardar`` e pedidos operacionais ``dentro_prazo`` não entram na
     agenda executiva para evitar transformar acompanhamento passivo em tarefa.
+
+    HF24 incorpora também os sinais de continuidade da HF21. Esse sinal nunca
+    altera o pedido e, quando a mesma proposta já possui uma urgência operacional
+    mais forte, aparece apenas como contexto secundário.
     """
     agrupados: dict[str, dict[str, Any]] = {}
 
@@ -405,6 +410,27 @@ def montar_agenda_executiva(
             motivo=str(item.get("motivo") or "Pagamento pendente"),
             acao=str(item.get("acao") or "Acompanhar pagamento"),
             origem="cobranca",
+        )
+
+    # HF24 — incorpora o radar de continuidade à ordem executiva. O score já
+    # nasce calibrado no serviço da HF21: prazo vencido/hoje pode exigir ação
+    # imediata; permanência recorrente com prazo futuro entra como hoje/acompanhar.
+    # Como os atrasos operacionais rank 0/1 usam 1600/1400, a continuidade não
+    # substitui a causa operacional mais concreta quando ambas coexistem.
+    for item in sinais_continuidade or []:
+        if not isinstance(item, dict):
+            continue
+        nivel = str(item.get("nivel") or "normal").strip().casefold()
+        janela = "agora" if nivel == "urgente" else "hoje" if nivel == "alta" else "acompanhar"
+        _adicionar_sinal(
+            item,
+            dominio="Sem avanço",
+            icone="⏳",
+            score=int(item.get("prioridade") or 0),
+            janela=janela,
+            motivo=str(item.get("motivo") or "Sem mudança de status registrada"),
+            acao=str(item.get("acao") or "Abrir o pedido e conferir o próximo passo"),
+            origem="continuidade",
         )
 
     score_por_rank = {0: 1600, 1: 1400, 2: 1120, 3: 820, 4: 520}

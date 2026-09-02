@@ -75,3 +75,25 @@ def test_hf23_catalogo_3d_continua_exclusivo_do_jorge():
     fonte = Path('app.py').read_text(encoding='utf-8')
     bloco_anna = fonte.split('PERMISSOES_PADRAO_ANNA = {', 1)[1].split('}', 1)[0]
     assert 'biblioteca_3d' not in bloco_anna
+
+
+def test_hf24_agenda_executiva_recebe_o_mesmo_sinal_de_continuidade_do_bloco_detalhado():
+    fonte = Path('app.py').read_text(encoding='utf-8')
+    trecho = fonte.split('#### 🧠 THU • Agenda executiva', 1)[0].rsplit('retornos_comerciais_hf14 =', 1)[1]
+    assert '_sinais_cont_hf21 = (' in trecho
+    assert '_thu_comercial_montar_agenda(' in trecho
+    assert '_sinais_cont_hf21,' in trecho
+    assert 'limite=20' in trecho
+
+
+def test_hf24_mantem_bloco_sem_avanco_como_auditoria_e_nao_substitui_a_agenda():
+    fonte = Path('app.py').read_text(encoding='utf-8')
+    assert 'A HF24 também considera o sinal de' in fonte
+    assert '#### ⏳ THU • Sem avanço registrado' in fonte
+    assert 'fotografia/sinais já calculados acima' in fonte
+
+
+def test_hf24_arquivos_de_versao_estao_alinhados():
+    esperado = '20.4.9-I8.13.5-HF24'
+    assert Path('VERSAO').read_text(encoding='utf-8').strip() == esperado
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == esperado
