@@ -899,3 +899,8 @@ hangelog
 - Timeline anterior pode ser aproveitada somente quando contém transições explícitas e coerentes.
 - Central do Jorge ganha memória descritiva por produto com amostras, mediana, faixa observada e quantidade observada.
 - Nenhum JSON/SQL novo e nenhuma transição automática criada para alimentar estatística.
+
+## 20.4.9-I8.13.5-HF28 — Estorno visível de reserva/consumo
+- Corrige a interface que escondia pedidos já reservados da seleção de estorno.
+- Adiciona lista própria de reservas/consumos ativos no perfil Jorge.
+- Reserva sem baixa física é apenas liberada; consumo real usa o estorno auditado do pedido.

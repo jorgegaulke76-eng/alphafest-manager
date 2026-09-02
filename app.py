@@ -28758,6 +28758,110 @@ if pagina_atual == "compras_custos":
             st.info(resultado_recon_i8124.get("mensagem") or "Nenhuma reserva foi alterada.")
 
     historico_pedidos_i8124 = carregar_historico(force_refresh=True)
+
+    # HF28 — o estorno precisa enxergar justamente os controles ATIVOS.
+    # A fila de liberação abaixo, por definição, exclui pedidos já reservados/consumidos;
+    # por isso o fluxo de correção/estorno é separado e usa a lista ativa como fonte.
+    mapa_historico_i8124 = {
+        str((p or {}).get("numero_proposta") or "").strip(): p
+        for p in (historico_pedidos_i8124 or [])
+        if isinstance(p, dict) and str((p or {}).get("numero_proposta") or "").strip()
+    }
+    ativos_estorno_i8124 = [
+        (resumo, consumo)
+        for resumo, consumo in resumos_i8124
+        if isinstance(consumo, dict) and str(consumo.get("id") or "").strip()
+    ]
+    if ativos_estorno_i8124:
+        st.markdown("#### ↩️ Reservas/consumos ativos — corrigir ou estornar")
+        st.caption(
+            "Use este bloco para liberar a reserva de um pedido já confirmado. "
+            "Se ainda não houve consumo físico, o estorno apenas libera a reserva. "
+            "Se já houve baixa real, o fluxo próprio do pedido devolve as baixas ativas ao estoque e preserva o histórico."
+        )
+        mapa_estorno_i8124 = {str(consumo.get("id")): (resumo, consumo) for resumo, consumo in ativos_estorno_i8124}
+        ids_estorno_i8124 = list(mapa_estorno_i8124)
+
+        def _rotulo_estorno_i8124(consumo_id):
+            resumo_rot_i8124, consumo_rot_i8124 = mapa_estorno_i8124.get(str(consumo_id), ({}, {}))
+            numero_rot_i8124 = str(consumo_rot_i8124.get("numero_proposta") or "").strip()
+            proposta_rot_i8124 = mapa_historico_i8124.get(numero_rot_i8124, {})
+            cliente_rot_i8124 = str((proposta_rot_i8124 or {}).get("cliente_nome") or "Cliente")
+            status_rot_i8124 = str((resumo_rot_i8124 or {}).get("status") or "Reserva/consumo ativo")
+            return f"{numero_rot_i8124} · {cliente_rot_i8124} · {status_rot_i8124}"
+
+        consumo_id_estorno_i8124 = st.selectbox(
+            "Pedido com reserva/consumo ativo",
+            ids_estorno_i8124,
+            format_func=_rotulo_estorno_i8124,
+            key="i8124_consumo_ativo_estorno",
+        )
+        resumo_estorno_i8124, consumo_estorno_i8124 = mapa_estorno_i8124.get(str(consumo_id_estorno_i8124), ({}, {}))
+        numero_estorno_i8124 = str(consumo_estorno_i8124.get("numero_proposta") or "").strip()
+        proposta_estorno_i8124 = mapa_historico_i8124.get(numero_estorno_i8124, {})
+
+        with st.container(border=True):
+            st.markdown(f"**{numero_estorno_i8124} — {(proposta_estorno_i8124 or {}).get('cliente_nome', 'Cliente')}**")
+            st.caption(
+                f"Situação de materiais: {resumo_estorno_i8124.get('status') or 'Reserva/consumo ativo'} · "
+                f"Entrega: {(proposta_estorno_i8124 or {}).get('data_entrega', '—')}"
+            )
+            linhas_estorno_i8124 = []
+            total_reservado_estorno_i8124 = 0.0
+            total_consumido_estorno_i8124 = 0.0
+            for nec_estorno_i8124 in resumo_estorno_i8124.get("necessidades") or []:
+                unidade_estorno_i8124 = str(nec_estorno_i8124.get("unidade") or "")
+                reservado_estorno_i8124 = max(0.0, valor_float(nec_estorno_i8124.get("reservado")))
+                consumido_estorno_i8124 = max(0.0, valor_float(nec_estorno_i8124.get("consumido")))
+                total_reservado_estorno_i8124 += reservado_estorno_i8124
+                total_consumido_estorno_i8124 += consumido_estorno_i8124
+                linhas_estorno_i8124.append({
+                    "Material": nec_estorno_i8124.get("material_nome") or "Material",
+                    "Necessário": f"{_i8121_quantidade(nec_estorno_i8124.get('necessario'))} {unidade_estorno_i8124}",
+                    "🔒 Reservado": f"{_i8121_quantidade(reservado_estorno_i8124)} {unidade_estorno_i8124}",
+                    "🏭 Consumido": f"{_i8121_quantidade(consumido_estorno_i8124)} {unidade_estorno_i8124}",
+                    "Falta": f"{_i8121_quantidade(nec_estorno_i8124.get('pendente'))} {unidade_estorno_i8124}",
+                })
+            if linhas_estorno_i8124:
+                st.dataframe(pd.DataFrame(linhas_estorno_i8124), use_container_width=True, hide_index=True)
+
+            if total_consumido_estorno_i8124 > 0.0000001:
+                st.warning(
+                    "⚠️ Este pedido já possui consumo físico registrado. O estorno devolverá ao estoque as baixas reais ativas deste pedido, "
+                    "além de liberar qualquer reserva remanescente. Faça isso somente se a correção física também for verdadeira."
+                )
+            elif total_reservado_estorno_i8124 > 0.0000001:
+                st.info("🔒 Este pedido possui somente reserva ativa. O estorno libera a reserva sem alterar o saldo físico do estoque.")
+            else:
+                st.info("Este controle não possui reserva física ativa no momento; o estorno encerrará o controle auditado do pedido.")
+
+            motivo_est_ativo_i8124 = st.text_input(
+                "Motivo do estorno",
+                key=f"i8124_motivo_est_ativo_{consumo_id_estorno_i8124}",
+                placeholder="Ex.: reserva feita no pedido errado, quantidade corrigida, pedido cancelado...",
+            )
+            conf_est_ativo_i8124 = st.checkbox(
+                "Confirmo o estorno auditado deste pedido",
+                key=f"i8124_conf_est_ativo_{consumo_id_estorno_i8124}",
+            )
+            if st.button(
+                "↩️ Estornar liberação de materiais",
+                key=f"i8124_estornar_ativo_{consumo_id_estorno_i8124}",
+                use_container_width=True,
+                disabled=not conf_est_ativo_i8124 or len(motivo_est_ativo_i8124.strip()) < 3,
+            ):
+                ok_est_ativo_i8124, msg_est_ativo_i8124 = _i8124_estornar_consumo(
+                    consumo_estorno_i8124.get("id"), motivo_est_ativo_i8124, usuario=usuario_compras
+                )
+                if ok_est_ativo_i8124:
+                    st.session_state.pop("i8124_consumo_ativo_estorno", None)
+                    st.session_state["_mensagem_sucesso_pendente"] = msg_est_ativo_i8124
+                    st.rerun()
+                else:
+                    st.error(msg_est_ativo_i8124)
+    else:
+        st.caption("Nenhuma reserva/consumo ativo disponível para estorno neste momento.")
+
     numeros_consumo_ativos_i8124 = {
         str(c.get("numero_proposta") or "").strip()
         for c in consumos_i8124
