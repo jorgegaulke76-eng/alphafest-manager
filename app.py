@@ -163,6 +163,17 @@ except Exception as _anna_agenda_import_exc:
     _anna_montar_agenda = _anna_resumo_agenda = _anna_gerar_pdf_agenda = None
     ANNA_AGENDA_IMPORT_ERROR = str(_anna_agenda_import_exc)
 try:
+    from anna_fechamento_service import (
+        criar_snapshot_inicio as _anna_criar_snapshot_inicio,
+        snapshot_valido as _anna_snapshot_valido,
+        comparar_fechamento as _anna_comparar_fechamento,
+        gerar_pdf_fechamento as _anna_gerar_pdf_fechamento,
+    )
+    ANNA_FECHAMENTO_IMPORT_ERROR = ""
+except Exception as _anna_fechamento_import_exc:
+    _anna_criar_snapshot_inicio = _anna_snapshot_valido = _anna_comparar_fechamento = _anna_gerar_pdf_fechamento = None
+    ANNA_FECHAMENTO_IMPORT_ERROR = str(_anna_fechamento_import_exc)
+try:
     from thu_embedded import THU_AVATAR_B64
 except Exception:
     THU_AVATAR_B64 = ""
@@ -489,6 +500,7 @@ ARQUIVO_ESTOQUE = "estoque_db.json"
 ARQUIVO_FICHAS_TECNICAS = "fichas_tecnicas_db.json"
 ARQUIVO_CONSUMO_PEDIDOS = "consumo_pedidos_db.json"
 ARQUIVO_PLANEJAMENTO_COMPRAS = "planejamento_compras_db.json"
+ARQUIVO_AGENDA_ANNA_SNAPSHOTS = "agenda_anna_snapshots_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -22036,30 +22048,114 @@ def renderizar_workspace_anna_isolado():
             height=min(420, 36 + 35 * len(previa_agenda_hf17)),
         )
 
-        pdf_manha_hf17 = _anna_gerar_pdf_agenda(agenda_anna_hf17, "Início do dia", gerado_em=agora_local())
-        pdf_fim_hf17 = _anna_gerar_pdf_agenda(agenda_anna_hf17, "Fechamento do dia", gerado_em=agora_local())
-        data_arquivo_hf17 = hoje_local().strftime("%Y-%m-%d")
-        ip1_hf17, ip2_hf17 = st.columns(2)
-        if pdf_manha_hf17:
-            ip1_hf17.download_button(
-                "🌅 Baixar agenda — início do dia (PDF)",
-                pdf_manha_hf17,
-                file_name=f"agenda_anna_{data_arquivo_hf17}_inicio_do_dia.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-                key="anna_agenda_inicio_hf17",
+        # HF19 — a agenda da manhã vira a linha de base do fechamento diário.
+        # Registrar a abertura salva apenas esta fotografia compacta; nenhuma proposta é alterada.
+        chave_dia_hf19 = hoje_local().strftime("%Y-%m-%d")
+        snapshots_hf19 = load_document(
+            "agenda_anna_snapshots_db",
+            ARQUIVO_AGENDA_ANNA_SNAPSHOTS,
+            {},
+        )
+        if not isinstance(snapshots_hf19, dict):
+            snapshots_hf19 = {}
+        snapshot_hoje_hf19 = snapshots_hf19.get(chave_dia_hf19)
+        snapshot_ok_hf19 = bool(_anna_snapshot_valido and _anna_snapshot_valido(snapshot_hoje_hf19))
+
+        st.markdown("#### 🌅 Início do dia")
+        if ANNA_FECHAMENTO_IMPORT_ERROR:
+            st.warning("O comparativo de início/fim do dia não foi carregado. A agenda atual e o restante da Central continuam disponíveis.")
+        elif snapshot_ok_hf19:
+            try:
+                registrado_hf19 = datetime.fromisoformat(str(snapshot_hoje_hf19.get("registrado_em") or ""))
+                texto_registro_hf19 = registrado_hf19.strftime("%d/%m/%Y às %H:%M")
+            except Exception:
+                texto_registro_hf19 = str(snapshot_hoje_hf19.get("registrado_em") or "hoje")
+            st.success(
+                f"Início do dia registrado em {texto_registro_hf19} · "
+                f"{len(snapshot_hoje_hf19.get('linhas') or [])} pedido(s)/proposta(s) na abertura. "
+                "Esta fotografia fica travada para o comparativo de hoje."
             )
-        if pdf_fim_hf17:
-            ip2_hf17.download_button(
-                "🌙 Baixar agenda — fechamento do dia (PDF)",
-                pdf_fim_hf17,
-                file_name=f"agenda_anna_{data_arquivo_hf17}_fechamento_do_dia.pdf",
-                mime="application/pdf",
-                use_container_width=True,
-                key="anna_agenda_fim_hf17",
+        else:
+            st.info(
+                "Antes de imprimir o roteiro da manhã, registre o início do dia. "
+                "O Manager guardará esta fotografia para comparar com o fechamento, sem mudar nenhum pedido."
             )
-        if not pdf_manha_hf17 or not pdf_fim_hf17:
-            st.warning("A geração do PDF está indisponível neste ambiente. A tabela acima continua disponível para conferência.")
+            if st.button(
+                "🌅 Registrar início do dia",
+                type="primary",
+                use_container_width=True,
+                key="anna_registrar_inicio_hf19",
+            ):
+                snapshot_novo_hf19 = _anna_criar_snapshot_inicio(agenda_anna_hf17, agora_local()) if _anna_criar_snapshot_inicio else None
+                if snapshot_novo_hf19:
+                    snapshots_novos_hf19 = dict(snapshots_hf19)
+                    snapshots_novos_hf19[chave_dia_hf19] = snapshot_novo_hf19
+                    # Retenção simples: últimos 60 dias de abertura, sem criar nova tabela ou custo.
+                    chaves_data_hf19 = sorted([k for k in snapshots_novos_hf19 if len(str(k)) == 10])
+                    for chave_antiga_hf19 in chaves_data_hf19[:-60]:
+                        snapshots_novos_hf19.pop(chave_antiga_hf19, None)
+                    if save_document("agenda_anna_snapshots_db", snapshots_novos_hf19, ARQUIVO_AGENDA_ANNA_SNAPSHOTS):
+                        snapshot_hoje_hf19 = snapshot_novo_hf19
+                        snapshot_ok_hf19 = True
+                        st.success("Início do dia registrado no banco. O roteiro da manhã e o fechamento comparativo já estão liberados.")
+                    else:
+                        st.error("Não consegui confirmar o registro do início do dia no banco. Nada foi alterado; tente novamente quando a conexão estiver estável.")
+
+        data_arquivo_hf19 = hoje_local().strftime("%Y-%m-%d")
+        if snapshot_ok_hf19:
+            linhas_manha_hf19 = list(snapshot_hoje_hf19.get("linhas") or [])
+            try:
+                gerado_manha_hf19 = datetime.fromisoformat(str(snapshot_hoje_hf19.get("registrado_em") or ""))
+            except Exception:
+                gerado_manha_hf19 = agora_local()
+            pdf_manha_hf19 = _anna_gerar_pdf_agenda(linhas_manha_hf19, "Início do dia", gerado_em=gerado_manha_hf19)
+            if pdf_manha_hf19:
+                st.download_button(
+                    "🖨️ Baixar roteiro registrado — início do dia (PDF)",
+                    pdf_manha_hf19,
+                    file_name=f"agenda_anna_{data_arquivo_hf19}_inicio_do_dia.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="anna_agenda_inicio_hf19",
+                )
+
+            st.markdown("#### 🌙 Fechamento do dia — comparação com a manhã")
+            comparativo_hf19 = _anna_comparar_fechamento(snapshot_hoje_hf19, historico, hoje=hoje_local()) if _anna_comparar_fechamento else {}
+            resumo_fech_hf19 = comparativo_hf19.get("resumo", {}) if isinstance(comparativo_hf19, dict) else {}
+            fc1_hf19, fc2_hf19, fc3_hf19, fc4_hf19 = st.columns(4)
+            fc1_hf19.metric("Entregues", int(resumo_fech_hf19.get("entregues", 0) or 0))
+            fc2_hf19.metric("Avançaram", int(resumo_fech_hf19.get("avancaram", 0) or 0))
+            fc3_hf19.metric("Entraram depois", int(resumo_fech_hf19.get("novas", 0) or 0))
+            fc4_hf19.metric("Seguem abertos", int(resumo_fech_hf19.get("seguem_abertos", 0) or 0))
+            st.caption(
+                "O fechamento compara o banco atual com a fotografia registrada pela manhã. "
+                "Entregas, avanços e novos pedidos são calculados automaticamente; nada é gravado nos pedidos."
+            )
+            pdf_fech_hf19 = _anna_gerar_pdf_fechamento(comparativo_hf19, gerado_em=agora_local()) if _anna_gerar_pdf_fechamento else None
+            if pdf_fech_hf19:
+                st.download_button(
+                    "🌙 Baixar fechamento comparativo do dia (PDF)",
+                    pdf_fech_hf19,
+                    file_name=f"agenda_anna_{data_arquivo_hf19}_fechamento_comparativo.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="anna_agenda_fim_hf19",
+                )
+            elif not ANNA_FECHAMENTO_IMPORT_ERROR:
+                st.warning("A geração do PDF comparativo está indisponível neste ambiente. Os indicadores acima continuam disponíveis para conferência.")
+        else:
+            # A agenda atual continua imprimível mesmo sem linha de base, mas não é chamada de fechamento comparativo.
+            pdf_atual_hf19 = _anna_gerar_pdf_agenda(agenda_anna_hf17, "Agenda atual", gerado_em=agora_local())
+            if pdf_atual_hf19:
+                st.download_button(
+                    "📄 Baixar agenda atual (PDF)",
+                    pdf_atual_hf19,
+                    file_name=f"agenda_anna_{data_arquivo_hf19}_atual.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                    key="anna_agenda_atual_hf19",
+                )
+
     elif not ANNA_AGENDA_IMPORT_ERROR:
         st.success("Nenhuma proposta ou pedido aberto para a agenda de hoje.")
 

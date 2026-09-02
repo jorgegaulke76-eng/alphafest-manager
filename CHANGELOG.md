@@ -1,3 +1,10 @@
+# 20.4.9-I8.13.5-HF19 — Fechamento Diário Comparativo da Anna
+- Agenda da Anna passa a registrar uma fotografia explícita do início do dia para servir como linha de base.
+- Fechamento compara a situação atual com a manhã e separa entregues, avanços de status, novos pedidos e pendências que seguem abertas.
+- PDF de fechamento é somente dados, sem imagens e sem alterar qualquer pedido.
+- Fotografia diária usa o mesmo banco `app_data`, sem nova tabela/SQL, com retenção de 60 dias.
+- Os 28 JSON/SQL existentes da HF18 permanecem intactos; apenas um novo documento de snapshot é adicionado.
+
 # 20.4.9-I8.13.5-HF15 — THU • Cobranças Assistidas
 - Segunda etapa do ciclo de inteligência assistida, ainda somente no perfil Jorge.
 - Central cria fila financeira para pedidos aprovados e não pagos, excluindo faturamento mensal.
