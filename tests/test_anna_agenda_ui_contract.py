@@ -93,8 +93,8 @@ def test_hf24_mantem_bloco_sem_avanco_como_auditoria_e_nao_substitui_a_agenda():
     assert 'fotografia/sinais já calculados acima' in fonte
 
 
-def test_hf26_arquivos_de_versao_estao_alinhados():
-    esperado = '20.4.9-I8.13.5-HF26'
+def test_hf27_arquivos_de_versao_estao_alinhados():
+    esperado = '20.4.9-I8.13.5-HF27'
     assert Path('VERSAO').read_text(encoding='utf-8').strip() == esperado
     assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == esperado
 

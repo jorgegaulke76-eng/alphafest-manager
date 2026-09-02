@@ -20,6 +20,12 @@ from typing import Any, Iterable
 
 from fluxo_operacional_service import normalizar_status_fluxo
 
+try:
+    from tempo_ciclo_producao_service import aplicar_transicao_ciclo as _aplicar_transicao_ciclo
+except Exception:
+    def _aplicar_transicao_ciclo(tarefa, status_anterior, status_novo, *, now_text, usuario_nome="Sistema"):
+        return copy.deepcopy(tarefa or {})
+
 ETAPAS_COM_CONSUMO = {"Em produção", "Pronto", "Entregue"}
 ETAPAS_FINALIZADAS = {"Pronto", "Entregue"}
 
@@ -132,6 +138,13 @@ def planejar_atalho_central(
             continue
         tarefa["status"] = novo_status
         tarefa["atualizado_em"] = str(now_text or "")
+        tarefa_ciclo = _aplicar_transicao_ciclo(
+            tarefa, status_atual, novo_status,
+            now_text=str(now_text or ""),
+            usuario_nome=str(usuario_nome or "Sistema") or "Sistema",
+        )
+        tarefa.clear()
+        tarefa.update(tarefa_ciclo)
         _adicionar_evento(
             tarefa,
             f"Central de Produção: {status_atual} → {novo_status} por {str(usuario_nome or 'Sistema') or 'Sistema'}",

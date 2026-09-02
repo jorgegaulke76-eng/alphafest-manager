@@ -196,6 +196,15 @@ except Exception as _thu_plano_amanha_import_exc:
     _thu_plano_amanha_montar = _thu_plano_amanha_resumo = None
     THU_PLANO_AMANHA_IMPORT_ERROR = str(_thu_plano_amanha_import_exc)
 try:
+    from tempo_ciclo_producao_service import (
+        aplicar_transicao_ciclo as _tempo_ciclo_aplicar_transicao,
+        resumir_tempos_observados as _tempo_ciclo_resumir,
+    )
+    TEMPO_CICLO_IMPORT_ERROR = ""
+except Exception as _tempo_ciclo_import_exc:
+    _tempo_ciclo_aplicar_transicao = _tempo_ciclo_resumir = None
+    TEMPO_CICLO_IMPORT_ERROR = str(_tempo_ciclo_import_exc)
+try:
     from biblioteca_3d_service import (
         arquivo_3d_valido as _b3d_arquivo_valido,
         imagem_valida as _b3d_imagem_valida,
@@ -8985,7 +8994,16 @@ def salvar_tarefa_producao(tarefa_id, novos_dados):
         anterior_local = normalizar_status_fluxo(tarefa.get("status"))
         tarefa.update(novos_dados)
         tarefa["status"] = status_novo
-        tarefa["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+        _agora_fluxo_hf27 = agora_local().strftime("%d/%m/%Y %H:%M")
+        tarefa["atualizado_em"] = _agora_fluxo_hf27
+        if anterior_local != status_novo and _tempo_ciclo_aplicar_transicao:
+            _tarefa_ciclo_hf27 = _tempo_ciclo_aplicar_transicao(
+                tarefa, anterior_local, status_novo,
+                now_text=_agora_fluxo_hf27,
+                usuario_nome=str((obter_usuario_atual() or {}).get("nome") or "Sistema"),
+            )
+            tarefa.clear()
+            tarefa.update(_tarefa_ciclo_hf27)
         if anterior_local != status_novo:
             adicionar_evento_timeline(tarefa, f"Status alterado de {anterior_local} para {status_novo}")
         else:
@@ -22827,6 +22845,17 @@ if pagina_atual == "central":
             if _thu_plano_amanha_resumo
             else {"total": 0, "producao": 0, "materiais": 0, "saidas": 0}
         )
+        # HF27 — memória descritiva dos ciclos explicitamente observados no Fluxo.
+        # Não alimenta capacidade/prazo ainda; apenas coleta e resume evidência.
+        _memoria_ciclo_hf27 = (
+            _tempo_ciclo_resumir(tarefas_central, limite_produtos=12)
+            if _tempo_ciclo_resumir
+            else {
+                "total_amostras": 0, "produtos_com_amostras": 0,
+                "em_andamento_com_inicio": 0, "em_producao_sem_inicio_confiavel": 0,
+                "produtos": [],
+            }
+        )
 
         # HF24 — o sinal de continuidade da HF21 passa a alimentar também a
         # Agenda Executiva. Calculamos uma única vez e reutilizamos no bloco
@@ -22881,8 +22910,9 @@ if pagina_atual == "central":
         st.caption(
             "Uma única ordem de ação para o Jorge. O mesmo pedido aparece só uma vez na agenda, "
             "mesmo quando exige atenção em mais de uma área. A HF24 também considera o sinal de "
-            "sem avanço registrado da Agenda da Anna. A HF25 acrescenta prevenção de prazo e a HF26 "
-            "transforma esses sinais em um plano curto para o próximo dia, sem empurrar urgências de hoje para amanhã. "
+            "sem avanço registrado da Agenda da Anna. A HF25 acrescenta prevenção de prazo, a HF26 "
+            "transforma esses sinais em um plano curto para o próximo dia e a HF27 começa a formar uma memória "
+            "de tempo de ciclo observado, sem fingir tempo de mão de obra ou capacidade exata. "
             "Os blocos detalhados continuam como trilha de conferência; a agenda não envia mensagens, "
             "não registra contatos e não muda status."
         )
@@ -22929,6 +22959,56 @@ if pagina_atual == "central":
                 f"🗓️ Plano de amanhã ({_amanha_hf26.strftime('%d/%m')}): "
                 "nenhuma preparação preventiva específica além das prioridades já mostradas hoje."
             )
+
+        # HF27 — coleta silenciosa do intervalo Em produção → Pronto/Entregue.
+        # É memória de ciclo observado, não cronômetro de mão de obra.
+        if TEMPO_CICLO_IMPORT_ERROR:
+            st.caption(
+                "⏱️ Memória de tempos indisponível nesta atualização parcial; "
+                "produção, Agenda Executiva e Plano de Amanhã continuam funcionando normalmente."
+            )
+        else:
+            with st.expander("⏱️ Memória de tempos de produção · HF27", expanded=False):
+                st.caption(
+                    "Aprendizado somente leitura a partir de transições explícitas do Fluxo. O intervalo entre "
+                    "'Em produção' e 'Pronto/Entregue' é chamado de tempo de ciclo observado: pode incluir pausas, "
+                    "espera e tempo de máquina autônoma. Ainda NÃO é usado como capacidade exata nem promessa de prazo."
+                )
+                _tc1_hf27, _tc2_hf27, _tc3_hf27, _tc4_hf27 = st.columns(4)
+                _tc1_hf27.metric("⏱️ Ciclos observados", int(_memoria_ciclo_hf27.get("total_amostras") or 0))
+                _tc2_hf27.metric("📦 Produtos com base", int(_memoria_ciclo_hf27.get("produtos_com_amostras") or 0))
+                _tc3_hf27.metric("🔵 Ciclos em andamento", int(_memoria_ciclo_hf27.get("em_andamento_com_inicio") or 0))
+                _tc4_hf27.metric("⚪ Sem início confiável", int(_memoria_ciclo_hf27.get("em_producao_sem_inicio_confiavel") or 0))
+
+                _produtos_ciclo_hf27 = list(_memoria_ciclo_hf27.get("produtos") or [])
+                if _produtos_ciclo_hf27:
+                    _linhas_ciclo_hf27 = []
+                    for _tc_hf27 in _produtos_ciclo_hf27:
+                        _linhas_ciclo_hf27.append({
+                            "Produto": _tc_hf27.get("produto", "Item do pedido"),
+                            "Amostras": int(_tc_hf27.get("amostras") or 0),
+                            "Mediana do ciclo": _tc_hf27.get("mediana", "—"),
+                            "Faixa observada": f"{_tc_hf27.get('minimo', '—')} a {_tc_hf27.get('maximo', '—')}",
+                            "Qtd observada": _tc_hf27.get("quantidade_observada", "—"),
+                            "Base": _tc_hf27.get("nivel", "Base inicial"),
+                            "Processos": ", ".join(_tc_hf27.get("processos") or []) or "—",
+                        })
+                    st.dataframe(pd.DataFrame(_linhas_ciclo_hf27), use_container_width=True, hide_index=True)
+                else:
+                    st.info(
+                        "Ainda não há um ciclo completo confiável para resumir. A coleta começa quando um item entra "
+                        "explicitamente em 'Em produção' e depois é concluído como 'Pronto' ou 'Entregue'."
+                    )
+                if int(_memoria_ciclo_hf27.get("em_producao_sem_inicio_confiavel") or 0):
+                    st.caption(
+                        "Itens já em produção antes da HF27 só entram na memória se houver um evento explícito de início "
+                        "na timeline. O Manager não inventa horário retroativo."
+                    )
+                st.caption(
+                    "A quantidade do item é preservada em cada amostra, porque um lote de 1 unidade não é comparável "
+                    "automaticamente a um lote de 100. Critério para a próxima evolução: primeiro acumular amostras; só depois "
+                    "usar tempos em cálculos quantitativos de capacidade."
+                )
 
         if agenda_executiva_hf16:
             _ag_agora_hf16 = sum(1 for x in agenda_executiva_hf16 if x.get("janela") == "agora")

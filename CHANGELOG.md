@@ -884,3 +884,18 @@ hangelog
 - Expander preventivo fica dentro da própria Agenda Executiva, evitando criar outro painel isolado.
 - Nenhum status, contato, banco ou dado operacional é alterado automaticamente.
 - Atualização parcial entre `app.py` e `thu_comercial_service.py` é tolerada sem derrubar a Central.
+
+
+## 20.4.9-I8.13.5-HF26 — THU • Plano de amanhã
+- Agenda Executiva do Jorge organiza preparação do próximo dia em Produção, Materiais e Saídas.
+- Reaproveita prevenção da HF25 sem repetir atrasos/urgências de hoje.
+- Pedidos Prontos com saída amanhã podem entrar como preparação logística.
+- Nenhuma ação é executada automaticamente.
+
+## 20.4.9-I8.13.5-HF27 — THU • Memória de tempo de ciclo observado
+- Fluxo passa a registrar ciclos observados somente entre início explícito de produção e conclusão Pronto/Entregue.
+- Tempo observado não é tratado como mão de obra nem capacidade exata.
+- Quantidade do item é preservada em cada amostra.
+- Timeline anterior pode ser aproveitada somente quando contém transições explícitas e coerentes.
+- Central do Jorge ganha memória descritiva por produto com amostras, mediana, faixa observada e quantidade observada.
+- Nenhum JSON/SQL novo e nenhuma transição automática criada para alimentar estatística.

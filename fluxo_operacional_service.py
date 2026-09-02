@@ -21,6 +21,12 @@ from central_producao_engine import (
     reconciliar_etapa_aprovacao_oficial,
 )
 
+try:
+    from tempo_ciclo_producao_service import aplicar_transicao_ciclo as _aplicar_transicao_ciclo
+except Exception:
+    def _aplicar_transicao_ciclo(tarefa, status_anterior, status_novo, *, now_text, usuario_nome="Sistema"):
+        return copy.deepcopy(tarefa or {})
+
 
 def inferir_processos(produto: Any, especificacoes: Any = "") -> list[str]:
     texto = f"{produto or ''} {especificacoes or ''}".lower()
@@ -189,7 +195,14 @@ def reconciliar_lista_fluxo(
                     atual["status_antes_aprovacao"] = status_antes_aprovacao
                     alterado = True
                 if normalizar_status_fluxo(atual.get("status")) != normalizar_status_fluxo(status_aprovacao):
+                    _status_antes_hf27 = normalizar_status_fluxo(atual.get("status"))
                     atual["status"] = status_aprovacao
+                    _atual_ciclo_hf27 = _aplicar_transicao_ciclo(
+                        atual, _status_antes_hf27, status_aprovacao,
+                        now_text=now_text, usuario_nome="Sincronização do Fluxo",
+                    )
+                    atual.clear()
+                    atual.update(_atual_ciclo_hf27)
                     _adicionar_evento(
                         atual,
                         "Orçamento aprovado; pedido liberado para a etapa operacional preservada"
@@ -211,7 +224,14 @@ def reconciliar_lista_fluxo(
                 atual["status_antes_finalizacao"] = status_antes_finalizacao
                 alterado = True
             if normalizar_status_fluxo(atual.get("status")) != normalizar_status_fluxo(novo_status):
+                _status_antes_hf27 = normalizar_status_fluxo(atual.get("status"))
                 atual["status"] = novo_status
+                _atual_ciclo_hf27 = _aplicar_transicao_ciclo(
+                    atual, _status_antes_hf27, novo_status,
+                    now_text=now_text, usuario_nome="Sincronização do Fluxo",
+                )
+                atual.clear()
+                atual.update(_atual_ciclo_hf27)
                 atual["atualizado_em"] = now_text
                 alterado = True
             if not isinstance(atual.get("timeline"), list):

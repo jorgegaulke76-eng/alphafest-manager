@@ -41,5 +41,6 @@
 - HF23: Catálogo 3D (Jorge) — homologado; transforma o mesmo acervo privado em fonte única para gerar seleções HTML com nome, descrição, tempo e 1 imagem, sem expor o arquivo 3D.
 - HF24: Continuidade na Agenda Executiva do THU (Jorge) — homologado; incorpora o sinal de sem avanço à ordem única de decisão, com deduplicação e sem automatizar status/contato.
 - HF25: Prevenção de prazo e pressão de agenda (Jorge) — homologado; radar preventivo de 3–10 dias usando prazo informado, dias úteis restantes, estágio/material e concentração de entregas, sem fingir capacidade exata.
-- HF26: Plano de amanhã do THU (Jorge) — transforma os sinais preventivos homologados em preparação curta de Produção/Materiais/Saídas para o próximo dia, sem repetir urgências atuais.
-- Próximo após homologação: observar o uso combinado Radar + Plano de Amanhã; só então evoluir para capacidade quantitativa onde houver tempo produtivo confiável por item/processo.
+- HF26: Plano de amanhã do THU (Jorge) — homologado; transforma os sinais preventivos em preparação curta de Produção/Materiais/Saídas para o próximo dia, sem repetir urgências atuais.
+- HF27: Memória de tempo de ciclo observado (Jorge) — registra intervalos explícitos Em produção → Pronto/Entregue, preservando quantidade e sem confundir ciclo com mão de obra.
+- Próximo após homologação: acumular amostras reais da HF27 e observar variação por produto/quantidade; capacidade quantitativa só entra quando houver base suficiente e critério estatístico seguro.
