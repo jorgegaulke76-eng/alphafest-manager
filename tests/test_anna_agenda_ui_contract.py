@@ -93,8 +93,8 @@ def test_hf24_mantem_bloco_sem_avanco_como_auditoria_e_nao_substitui_a_agenda():
     assert 'fotografia/sinais já calculados acima' in fonte
 
 
-def test_hf25_arquivos_de_versao_estao_alinhados():
-    esperado = '20.4.9-I8.13.5-HF25'
+def test_hf26_arquivos_de_versao_estao_alinhados():
+    esperado = '20.4.9-I8.13.5-HF26'
     assert Path('VERSAO').read_text(encoding='utf-8').strip() == esperado
     assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == esperado
 
@@ -115,3 +115,17 @@ def test_hf25_atualizacao_parcial_nao_quebra_agenda_executiva():
     assert 'inspect.signature(_thu_comercial_montar_agenda)' in fonte
     assert '"sinais_prevencao" in _agenda_params_hf25' in fonte
     assert 'compatibilidade com atualização parcial' in fonte
+
+
+def test_hf26_plano_de_amanha_fica_dentro_da_agenda_executiva_e_somente_leitura():
+    fonte = Path('app.py').read_text(encoding='utf-8')
+    assert '🗓️ Plano de amanhã' in fonte
+    assert '_thu_plano_amanha_montar(' in fonte
+    assert 'não são repetidos aqui' in fonte
+    assert 'Nenhuma ação é registrada automaticamente' in fonte
+
+
+def test_hf26_importacao_do_plano_e_resiliente():
+    fonte = Path('app.py').read_text(encoding='utf-8')
+    assert 'THU_PLANO_AMANHA_IMPORT_ERROR' in fonte
+    assert 'Plano de amanhã indisponível nesta atualização parcial' in fonte

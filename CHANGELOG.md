@@ -1,3 +1,10 @@
+
+## 20.4.9-I8.13.5-HF26 — THU • Plano de amanhã
+- Reaproveita a prevenção da HF25 para preparar o próximo dia.
+- Separa ações em Produção, Materiais e Saídas.
+- Inclui pedidos já Prontos com saída prevista para amanhã.
+- Não repete atrasos nem pedidos não Prontos que já são urgência de hoje.
+- Somente leitura; sem alteração de bancos operacionais.
 # 20.4.9-I8.13.5-HF21 — THU • Sem avanço registrado
 
 - Novo radar somente leitura no perfil Jorge usando as fotografias diárias da Agenda da Anna.

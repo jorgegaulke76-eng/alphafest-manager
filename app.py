@@ -187,6 +187,15 @@ except Exception as _thu_prevencao_import_exc:
     _thu_prevencao_montar_sinais = None
     THU_PREVENCAO_IMPORT_ERROR = str(_thu_prevencao_import_exc)
 try:
+    from thu_plano_amanha_service import (
+        montar_plano_amanha as _thu_plano_amanha_montar,
+        resumo_plano_amanha as _thu_plano_amanha_resumo,
+    )
+    THU_PLANO_AMANHA_IMPORT_ERROR = ""
+except Exception as _thu_plano_amanha_import_exc:
+    _thu_plano_amanha_montar = _thu_plano_amanha_resumo = None
+    THU_PLANO_AMANHA_IMPORT_ERROR = str(_thu_plano_amanha_import_exc)
+try:
     from biblioteca_3d_service import (
         arquivo_3d_valido as _b3d_arquivo_valido,
         imagem_valida as _b3d_imagem_valida,
@@ -22800,6 +22809,24 @@ if pagina_atual == "central":
             if _thu_prevencao_montar_sinais
             else []
         )
+        # HF26 — plano do próximo dia reutiliza o radar homologado da HF25 e
+        # acrescenta apenas saídas já Prontas previstas para amanhã. Não
+        # repete atrasos nem pedidos ainda não Prontos que já são urgência hoje.
+        _plano_amanha_hf26 = (
+            _thu_plano_amanha_montar(
+                historico_central,
+                hoje_central,
+                sinais_prevencao=_sinais_prev_hf25,
+                limite=10,
+            )
+            if _thu_plano_amanha_montar
+            else []
+        )
+        _resumo_plano_amanha_hf26 = (
+            _thu_plano_amanha_resumo(_plano_amanha_hf26)
+            if _thu_plano_amanha_resumo
+            else {"total": 0, "producao": 0, "materiais": 0, "saidas": 0}
+        )
 
         # HF24 — o sinal de continuidade da HF21 passa a alimentar também a
         # Agenda Executiva. Calculamos uma única vez e reutilizamos no bloco
@@ -22854,11 +22881,55 @@ if pagina_atual == "central":
         st.caption(
             "Uma única ordem de ação para o Jorge. O mesmo pedido aparece só uma vez na agenda, "
             "mesmo quando exige atenção em mais de uma área. A HF24 também considera o sinal de "
-            "sem avanço registrado da Agenda da Anna. A HF25 acrescenta prevenção de prazo: "
-            "janela restante, estágio/material e concentração de entregas futuras entram como sinal assistido, "
-            "sem afirmar capacidade exata. Os blocos detalhados continuam como trilha de conferência; "
-            "a agenda não envia mensagens, não registra contatos e não muda status."
+            "sem avanço registrado da Agenda da Anna. A HF25 acrescenta prevenção de prazo e a HF26 "
+            "transforma esses sinais em um plano curto para o próximo dia, sem empurrar urgências de hoje para amanhã. "
+            "Os blocos detalhados continuam como trilha de conferência; a agenda não envia mensagens, "
+            "não registra contatos e não muda status."
         )
+
+        _amanha_hf26 = hoje_central + timedelta(days=1)
+        if THU_PLANO_AMANHA_IMPORT_ERROR:
+            st.caption(
+                "🗓️ Plano de amanhã indisponível nesta atualização parcial; "
+                "a Agenda Executiva e o Radar Preventivo continuam funcionando normalmente."
+            )
+        elif _plano_amanha_hf26:
+            with st.expander(
+                f"🗓️ Plano de amanhã — {_amanha_hf26.strftime('%d/%m')} ({len(_plano_amanha_hf26)})",
+                expanded=False,
+            ):
+                st.caption(
+                    "Preparação assistida para o próximo dia. Atrasos e pedidos ainda não Prontos com entrega amanhã "
+                    "continuam em Fazer agora e não são repetidos aqui. Nenhuma ação é registrada automaticamente."
+                )
+                _pam1_hf26, _pam2_hf26, _pam3_hf26, _pam4_hf26 = st.columns(4)
+                _pam1_hf26.metric("🏭 Produção", int(_resumo_plano_amanha_hf26.get("producao") or 0))
+                _pam2_hf26.metric("📦 Materiais", int(_resumo_plano_amanha_hf26.get("materiais") or 0))
+                _pam3_hf26.metric("🚚 Saídas", int(_resumo_plano_amanha_hf26.get("saidas") or 0))
+                _pam4_hf26.metric("📋 Itens", int(_resumo_plano_amanha_hf26.get("total") or 0))
+                for _pam_hf26 in _plano_amanha_hf26[:8]:
+                    _entrega_pam_hf26 = _pam_hf26.get("data_entrega")
+                    _entrega_txt_pam_hf26 = (
+                        _entrega_pam_hf26.strftime("%d/%m/%Y")
+                        if isinstance(_entrega_pam_hf26, date)
+                        else str(_entrega_pam_hf26 or "Sem data")
+                    )
+                    st.write(
+                        f"• **{_pam_hf26.get('icone', '📌')} {_pam_hf26.get('dominio', 'Operação')} · "
+                        f"{html.escape(str(_pam_hf26.get('numero_proposta') or '—'))} — "
+                        f"{html.escape(str(_pam_hf26.get('cliente_nome') or 'Cliente'))}** · "
+                        f"Entrega {_entrega_txt_pam_hf26}"
+                    )
+                    st.caption(str(_pam_hf26.get("motivo") or "Preparação preventiva"))
+                    st.caption(f"Ação planejada: {_pam_hf26.get('acao', 'Revisar pedido')}")
+                if len(_plano_amanha_hf26) > 8:
+                    st.caption(f"Mais {len(_plano_amanha_hf26) - 8} item(ns) no plano calculado.")
+        else:
+            st.caption(
+                f"🗓️ Plano de amanhã ({_amanha_hf26.strftime('%d/%m')}): "
+                "nenhuma preparação preventiva específica além das prioridades já mostradas hoje."
+            )
+
         if agenda_executiva_hf16:
             _ag_agora_hf16 = sum(1 for x in agenda_executiva_hf16 if x.get("janela") == "agora")
             _ag_hoje_hf16 = sum(1 for x in agenda_executiva_hf16 if x.get("janela") == "hoje")
