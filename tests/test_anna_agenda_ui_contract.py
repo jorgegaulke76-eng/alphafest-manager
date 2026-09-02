@@ -30,9 +30,9 @@ def test_hf21_importacao_do_radar_e_resiliente():
 
 def test_hf22_biblioteca_3d_existe_somente_para_jorge_na_navegacao():
     fonte = Path('app.py').read_text(encoding='utf-8')
-    assert '("biblioteca_3d", "🧊 Biblioteca 3D")' in fonte
+    assert '("biblioteca_3d", "🧊 Catálogo 3D")' in fonte
     assert 'acoes["biblioteca_3d"] = list(ACOES_PADRAO)' in fonte
-    assert 'A Biblioteca 3D é exclusiva do perfil Jorge.' in fonte
+    assert 'O Catálogo 3D é exclusivo do perfil Jorge.' in fonte
     # O conjunto operacional padrão da Anna não recebe a nova aba.
     bloco_anna = fonte.split('PERMISSOES_PADRAO_ANNA = {', 1)[1].split('}', 1)[0]
     assert 'biblioteca_3d' not in bloco_anna
@@ -57,3 +57,21 @@ def test_hf22_so_confirma_cadastro_quando_storage_e_banco_confirmam():
     assert 'Nada foi cadastrado para evitar uma falsa sensação de backup.' in trecho
     assert 'save_document("biblioteca_3d_db"' in trecho
     assert 'delete_private_3d_file' in trecho
+
+
+def test_hf23_catalogo_3d_reaproveita_acervo_e_gera_html_sem_expor_arquivo():
+    fonte = Path('app.py').read_text(encoding='utf-8')
+    trecho = fonte.split('if pagina_atual == "biblioteca_3d":', 1)[1].split('if pagina_atual == "historico":', 1)[0]
+    assert '📤 Gerar Catálogo 3D' in trecho
+    assert 'Modelos que entrarão no catálogo' in trecho
+    assert '✨ Preparar prévia e catálogo 3D' in trecho
+    assert 'gerar_html_catalogo_i87(' in trecho
+    assert 'mostrar_precos=False' in trecho
+    assert '📥 Gerar Catálogo 3D HTML' in trecho
+    assert 'Nenhum arquivo 3D, nome de arquivo ou caminho privado é exposto ao cliente.' in trecho
+
+
+def test_hf23_catalogo_3d_continua_exclusivo_do_jorge():
+    fonte = Path('app.py').read_text(encoding='utf-8')
+    bloco_anna = fonte.split('PERMISSOES_PADRAO_ANNA = {', 1)[1].split('}', 1)[0]
+    assert 'biblioteca_3d' not in bloco_anna

@@ -185,11 +185,13 @@ try:
         imagem_valida as _b3d_imagem_valida,
         criar_registro as _b3d_criar_registro,
         filtrar_modelos as _b3d_filtrar_modelos,
+        selecionar_modelos as _b3d_selecionar_modelos,
+        modelo_para_produto_catalogo as _b3d_modelo_para_catalogo,
         tamanho_legivel as _b3d_tamanho_legivel,
     )
     BIBLIOTECA_3D_IMPORT_ERROR = ""
 except Exception as _b3d_import_exc:
-    _b3d_arquivo_valido = _b3d_imagem_valida = _b3d_criar_registro = _b3d_filtrar_modelos = _b3d_tamanho_legivel = None
+    _b3d_arquivo_valido = _b3d_imagem_valida = _b3d_criar_registro = _b3d_filtrar_modelos = _b3d_selecionar_modelos = _b3d_modelo_para_catalogo = _b3d_tamanho_legivel = None
     BIBLIOTECA_3D_IMPORT_ERROR = str(_b3d_import_exc)
 try:
     from thu_embedded import THU_AVATAR_B64
@@ -408,6 +410,18 @@ def delete_private_3d_file(object_path):
 @st.cache_data(ttl=900, show_spinner=False)
 def _biblioteca3d_bytes_cache(object_path):
     return read_private_3d_file(object_path)
+
+
+def _biblioteca3d_imagem_data_uri(modelo):
+    """Carrega a imagem privada do modelo e a embute com segurança no catálogo HTML."""
+    modelo = dict(modelo or {})
+    object_path = str(modelo.get("imagem_path") or "").strip()
+    bruto = _biblioteca3d_bytes_cache(object_path) if object_path else None
+    if not bruto:
+        return ""
+    ext = Path(object_path).suffix.lower()
+    mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}.get(ext, "image/jpeg")
+    return f"data:{mime};base64,{base64.b64encode(bruto).decode('ascii')}"
 
 def catalog_public_url(object_path):
     func = getattr(_cloud_db, "catalog_public_url", None) if _cloud_db else None
@@ -665,7 +679,7 @@ ABAS_SISTEMA = [
     ("relatorios", "📊 Relatórios"),
     ("executivo", "📈 Executivo"),
     ("catalogo", "📦 Catálogo"),
-    ("biblioteca_3d", "🧊 Biblioteca 3D"),
+    ("biblioteca_3d", "🧊 Catálogo 3D"),
     ("relacionamentos", "🌐 Relacionamentos"),
     ("faturamento_mensal", "💳 Faturamento Mensal"),
     ("compras_custos", "🧾 Compras, Custos & Estoque"),
@@ -26438,17 +26452,17 @@ if pagina_atual == "novo_orcamento":
 if pagina_atual == "biblioteca_3d":
     _usuario_b3d = obter_usuario_atual() or {}
     if str(_usuario_b3d.get("nome") or "").strip().casefold() != "jorge":
-        st.error("A Biblioteca 3D é exclusiva do perfil Jorge.")
+        st.error("O Catálogo 3D é exclusivo do perfil Jorge.")
         st.stop()
 
-    st.markdown("# 🧊 Biblioteca 3D")
+    st.markdown("# 🧊 Catálogo 3D")
     st.caption(
-        "Acervo interno para preservar os arquivos de impressão 3D. "
-        "Sem link externo: o arquivo fica salvo no armazenamento privado do Manager."
+        "Acervo interno + gerador de catálogo para os modelos de impressão 3D. "
+        "O arquivo de produção permanece privado no Manager; o catálogo compartilha somente nome, descrição, tempo e uma imagem."
     )
 
     if BIBLIOTECA_3D_IMPORT_ERROR:
-        st.error("O módulo da Biblioteca 3D não foi carregado. O restante do Manager continua funcionando normalmente.")
+        st.error("O módulo do Catálogo 3D não foi carregado. O restante do Manager continua funcionando normalmente.")
         st.caption(BIBLIOTECA_3D_IMPORT_ERROR)
     else:
         biblioteca_b3d = load_document("biblioteca_3d_db", ARQUIVO_BIBLIOTECA_3D, [], force_refresh=False)
@@ -26459,6 +26473,115 @@ if pagina_atual == "biblioteca_3d":
         bm1, bm2 = st.columns(2)
         bm1.metric("Modelos salvos", len(biblioteca_b3d))
         bm2.metric("Arquivos preservados", _b3d_tamanho_legivel(total_bytes_b3d) if _b3d_tamanho_legivel else "—")
+
+        with st.expander("📤 Gerar Catálogo 3D", expanded=False):
+            st.caption(
+                "Use os mesmos modelos já preservados no acervo. O catálogo gerado leva somente nome, descrição, "
+                "tempo de impressão e uma imagem; o arquivo 3D privado nunca é incluído."
+            )
+            if not biblioteca_b3d:
+                st.info("Salve pelo menos um modelo 3D para liberar o gerador de catálogo.")
+            else:
+                modelos_ordenados_c3d = _b3d_filtrar_modelos(biblioteca_b3d, "") if _b3d_filtrar_modelos else list(biblioteca_b3d)
+                mapa_c3d = {str(x.get("id") or ""): x for x in modelos_ordenados_c3d if str(x.get("id") or "").strip()}
+                ids_c3d = list(mapa_c3d.keys())
+                titulo_c3d = st.text_input("Título do catálogo 3D", value="Catálogo 3D AlphaFest", key="catalogo3d_titulo_hf23")
+                subtitulo_c3d = st.text_input(
+                    "Subtítulo",
+                    value="Modelos disponíveis para impressão 3D",
+                    key="catalogo3d_subtitulo_hf23",
+                )
+                selecionados_c3d = st.multiselect(
+                    "Modelos que entrarão no catálogo",
+                    options=ids_c3d,
+                    default=ids_c3d,
+                    format_func=lambda item_id: str((mapa_c3d.get(str(item_id)) or {}).get("nome") or "Modelo 3D"),
+                    key="catalogo3d_modelos_hf23",
+                )
+                mostrar_wpp_c3d = st.checkbox(
+                    "Mostrar botão de consulta pelo WhatsApp",
+                    value=True,
+                    key="catalogo3d_whatsapp_hf23",
+                )
+                st.caption(f"Seleção atual: {len(selecionados_c3d)} de {len(ids_c3d)} modelo(s).")
+
+                assinatura_c3d = json.dumps(
+                    {
+                        "ids": sorted(str(x) for x in selecionados_c3d),
+                        "titulo": str(titulo_c3d or "").strip(),
+                        "subtitulo": str(subtitulo_c3d or "").strip(),
+                        "whatsapp": bool(mostrar_wpp_c3d),
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+                if st.button(
+                    "✨ Preparar prévia e catálogo 3D",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=not bool(selecionados_c3d),
+                    key="catalogo3d_preparar_hf23",
+                ):
+                    escolhidos_c3d = (
+                        _b3d_selecionar_modelos(biblioteca_b3d, selecionados_c3d)
+                        if _b3d_selecionar_modelos else [mapa_c3d[x] for x in selecionados_c3d if x in mapa_c3d]
+                    )
+                    produtos_c3d = []
+                    imagens_faltantes_c3d = []
+                    with st.spinner("Preparando imagens e catálogo 3D..."):
+                        for modelo_c3d in escolhidos_c3d:
+                            imagem_uri_c3d = _biblioteca3d_imagem_data_uri(modelo_c3d)
+                            if not imagem_uri_c3d:
+                                imagens_faltantes_c3d.append(str(modelo_c3d.get("nome") or "Modelo 3D"))
+                            produtos_c3d.append(_b3d_modelo_para_catalogo(modelo_c3d, imagem_uri_c3d))
+                        html_c3d = gerar_html_catalogo_i87(
+                            produtos_c3d,
+                            titulo=str(titulo_c3d or "Catálogo 3D AlphaFest").strip() or "Catálogo 3D AlphaFest",
+                            subtitulo=str(subtitulo_c3d or "").strip(),
+                            mostrar_precos=False,
+                            mostrar_material=True,
+                            mostrar_descricao=True,
+                            mostrar_whatsapp=bool(mostrar_wpp_c3d),
+                            mostrar_sem_foto=True,
+                            observacao_rodape=(
+                                "Catálogo 3D: os arquivos de produção permanecem preservados no acervo privado da AlphaFest "
+                                "e não são incluídos neste catálogo."
+                            ),
+                        )
+                    st.session_state["_catalogo3d_html_hf23"] = html_c3d
+                    st.session_state["_catalogo3d_assinatura_hf23"] = assinatura_c3d
+                    st.session_state["_catalogo3d_imagens_faltantes_hf23"] = imagens_faltantes_c3d
+
+                html_pronto_c3d = st.session_state.get("_catalogo3d_html_hf23")
+                assinatura_pronta_c3d = st.session_state.get("_catalogo3d_assinatura_hf23")
+                if html_pronto_c3d and assinatura_pronta_c3d == assinatura_c3d:
+                    faltantes_c3d = st.session_state.get("_catalogo3d_imagens_faltantes_hf23") or []
+                    if faltantes_c3d:
+                        st.warning(
+                            "A imagem privada não pôde ser recuperada agora para: " + " • ".join(faltantes_c3d[:8]) +
+                            (" • ..." if len(faltantes_c3d) > 8 else "")
+                        )
+                    _i882_render_preview_catalogo(
+                        html_pronto_c3d,
+                        key_prefix="catalogo3d_preview_hf23",
+                        habilitado=True,
+                        contexto="Catálogo 3D",
+                    )
+                    st.download_button(
+                        "📥 Gerar Catálogo 3D HTML",
+                        data=html_pronto_c3d,
+                        file_name=f"{slug_html(titulo_c3d or 'catalogo_3d_alphafest').lower()}.html",
+                        mime="text/html",
+                        type="primary",
+                        use_container_width=True,
+                        key="catalogo3d_download_hf23",
+                    )
+                    st.caption(
+                        "O HTML é autocontido: as imagens selecionadas ficam embutidas no catálogo. "
+                        "Nenhum arquivo 3D, nome de arquivo ou caminho privado é exposto ao cliente."
+                    )
+                elif html_pronto_c3d:
+                    st.info("A seleção ou o título mudou. Clique em **Preparar prévia e catálogo 3D** para atualizar o arquivo.")
 
         with st.expander("➕ Salvar novo modelo 3D", expanded=not bool(biblioteca_b3d)):
             st.caption("Cadastre somente o essencial. A imagem é uma referência visual e o arquivo 3D é a cópia preservada.")
@@ -26485,7 +26608,7 @@ if pagina_atual == "biblioteca_3d":
                     key="biblioteca3d_arquivo_upload",
                     help="Aceita projetos de impressão e pacotes comuns, incluindo 3MF e ZIP.",
                 )
-                salvar_b3d = st.form_submit_button("💾 Salvar na Biblioteca 3D", type="primary", use_container_width=True)
+                salvar_b3d = st.form_submit_button("💾 Salvar no Catálogo 3D", type="primary", use_container_width=True)
 
             if salvar_b3d:
                 erro_b3d = ""
@@ -26561,13 +26684,13 @@ if pagina_atual == "biblioteca_3d":
 
         st.markdown("### 📚 Arquivos salvos")
         busca_b3d = st.text_input(
-            "Pesquisar na Biblioteca 3D",
+            "Pesquisar no Catálogo 3D",
             placeholder="Nome, descrição ou arquivo",
             key="biblioteca3d_busca",
         )
         modelos_b3d = _b3d_filtrar_modelos(biblioteca_b3d, busca_b3d) if _b3d_filtrar_modelos else []
         if not modelos_b3d:
-            st.info("Nenhum modelo 3D encontrado." if biblioteca_b3d else "Sua Biblioteca 3D ainda está vazia.")
+            st.info("Nenhum modelo 3D encontrado." if biblioteca_b3d else "Seu Catálogo 3D ainda está vazio.")
         else:
             st.caption(f"{len(modelos_b3d)} modelo(s) encontrado(s).")
             for _idx_b3d, modelo_b3d in enumerate(modelos_b3d[:100]):

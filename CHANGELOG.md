@@ -852,3 +852,10 @@ hangelog
 - Recuperação segura de pedidos com marca comercial antiga de “não fechado” que depois avançaram para Pago/Pronto/Entregue.
 - Status da agenda agora mostra marcos reais, sem inferir produção iniciada.
 - Alertas históricos separam atraso de produção, atraso de saída e prazo vencido aguardando aprovação.
+
+
+## 20.4.9-I8.13.5-HF23 — Catálogo 3D
+- Biblioteca 3D do Jorge evolui para Catálogo 3D sem duplicar o acervo privado.
+- Gerador permite selecionar modelos, conferir prévia responsiva e baixar HTML autocontido.
+- Catálogo de cliente recebe somente nome, descrição, tempo de impressão e uma imagem.
+- Arquivo 3D e metadados privados de armazenamento permanecem exclusivamente internos.

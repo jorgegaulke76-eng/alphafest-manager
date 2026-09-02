@@ -1,4 +1,4 @@
-"""Serviço puro da Biblioteca 3D interna do Jorge (HF22).
+"""Serviço puro da Catálogo 3D interno do Jorge (HF23).
 
 A interface e a persistência ficam em ``app.py``/``cloud_db.py``. Este módulo
 concentra validações e transformação dos registros para manter o comportamento
@@ -96,6 +96,35 @@ def filtrar_modelos(modelos: Iterable[dict], termo: str = "") -> list[dict]:
             saida.append(item)
     return saida
 
+
+
+def selecionar_modelos(modelos: Iterable[dict], ids_selecionados: Iterable[str]) -> list[dict]:
+    """Retorna somente os modelos escolhidos, preservando a ordem alfabética do acervo."""
+    ids = {str(x or "").strip() for x in (ids_selecionados or []) if str(x or "").strip()}
+    return [x for x in ordenar_modelos(modelos) if str(x.get("id") or "").strip() in ids]
+
+
+def modelo_para_produto_catalogo(modelo: dict, imagem_data_uri: str = "") -> dict:
+    """Projeta um registro privado em um item seguro para o Catálogo 3D.
+
+    Deliberadamente não copia ``arquivo_path``, ``arquivo_nome`` nem tamanho do
+    arquivo. O catálogo para cliente recebe somente os dados visuais/comerciais
+    combinados com o Jorge: nome, descrição, tempo e uma imagem.
+    """
+    modelo = dict(modelo or {})
+    tempo = sanitizar_texto(modelo.get("tempo_impressao"), 120)
+    produto = {
+        "Nome": sanitizar_texto(modelo.get("nome"), 180) or "Modelo 3D",
+        "Categoria": "Modelos 3D",
+        "Subcategoria": "Impressão 3D",
+        "DescricaoCurta": sanitizar_texto(modelo.get("descricao"), 2500),
+        "Descricao": sanitizar_texto(modelo.get("descricao"), 2500),
+        "Material": f"Tempo de impressão: {tempo}" if tempo else "Tempo de impressão: consultar",
+        "Imagens": [str(imagem_data_uri).strip()] if str(imagem_data_uri or "").strip() else [],
+        "Ativo": True,
+        "biblioteca_3d_id": str(modelo.get("id") or "").strip(),
+    }
+    return produto
 
 def tamanho_legivel(valor: int) -> str:
     tamanho = max(0, int(valor or 0))

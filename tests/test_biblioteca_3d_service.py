@@ -6,6 +6,8 @@ from biblioteca_3d_service import (
     criar_registro,
     filtrar_modelos,
     tamanho_legivel,
+    selecionar_modelos,
+    modelo_para_produto_catalogo,
 )
 
 
@@ -49,6 +51,32 @@ class Biblioteca3DServiceTests(unittest.TestCase):
     def test_tamanho_legivel(self):
         self.assertEqual(tamanho_legivel(0), "0 B")
         self.assertIn("MB", tamanho_legivel(3_000_000))
+
+    def test_hf23_selecao_de_modelos_respeita_ids(self):
+        dados = [
+            {"id": "b", "nome": "Zebra"},
+            {"id": "a", "nome": "Dragao"},
+        ]
+        self.assertEqual([x["id"] for x in selecionar_modelos(dados, ["b"])], ["b"])
+
+    def test_hf23_catalogo_publico_nao_expoe_arquivo_privado(self):
+        modelo = {
+            "id": "abc",
+            "nome": "Zebra",
+            "descricao": "Modelo tricotado",
+            "tempo_impressao": "13 horas",
+            "imagem_path": "modelos/abc/imagem/zebra.webp",
+            "arquivo_path": "modelos/abc/arquivo/zebra.3mf",
+            "arquivo_nome": "zebra.3mf",
+            "arquivo_tamanho": 123456,
+        }
+        produto = modelo_para_produto_catalogo(modelo, "data:image/webp;base64,AAA")
+        self.assertEqual(produto["Nome"], "Zebra")
+        self.assertIn("13 horas", produto["Material"])
+        self.assertEqual(produto["Imagens"], ["data:image/webp;base64,AAA"])
+        self.assertNotIn("arquivo_path", produto)
+        self.assertNotIn("arquivo_nome", produto)
+        self.assertNotIn("arquivo_tamanho", produto)
 
 
 if __name__ == "__main__":
