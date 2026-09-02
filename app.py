@@ -113,6 +113,7 @@ from thu_comercial_service import (
     montar_retornos_comerciais as _thu_comercial_montar_retornos,
     aplicar_registro_cobranca as _thu_comercial_aplicar_registro_cobranca,
     montar_cobrancas_assistidas as _thu_comercial_montar_cobrancas,
+    montar_agenda_executiva as _thu_comercial_montar_agenda,
 )
 from catalogo_orcamento_service import (
     ORCAMENTO_PRODUTO_LIVRE as _catalogo_orcamento_livre,
@@ -22499,15 +22500,117 @@ if pagina_atual == "central":
         c6.metric("💰 Previsto hoje", f"R$ {valor_previsto_hoje:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."), help="Soma dos pedidos aprovados, ainda não entregues, previstos para hoje.")
         st.caption("Atrasados, entregas e valor previsto consideram somente pedidos aprovados. Aprovação considera orçamentos ainda abertos.")
 
-    # HF14 — primeiro passo do ciclo de automações/inteligência do THU, somente Jorge.
-    # O bloco depende de um envio explicitamente registrado; abrir o WhatsApp não
-    # é tratado como prova de envio e nenhuma mensagem/status é alterado sozinho.
+    # HF16 — consolida Retornos, Cobranças e prioridades operacionais em uma
+    # agenda executiva única por proposta. É somente leitura: nenhum contato,
+    # status ou decisão é registrado por este bloco.
     if usuario_eh_jorge_i8112hf1:
         retornos_comerciais_hf14 = _thu_comercial_montar_retornos(
             historico_central,
             hoje_central,
+            limite=20,
+        )
+        cobrancas_hf15 = _thu_comercial_montar_cobrancas(
+            historico_central,
+            hoje_central,
+            limite=20,
+        )
+        _prioridades_operacionais_agenda_hf16 = _i8131_engine_prioridades(
+            historico_central,
+            hoje_central,
+            fila_entregas=fila_saida_central_i813,
+            resumo_produtos=resumo_produtos_pedido,
+        )
+        agenda_executiva_hf16 = _thu_comercial_montar_agenda(
+            retornos_comerciais_hf14,
+            cobrancas_hf15,
+            _prioridades_operacionais_agenda_hf16,
             limite=8,
         )
+
+        st.divider()
+        st.markdown("#### 🧠 THU • Agenda executiva")
+        st.caption(
+            "Uma única ordem de ação para o Jorge. O mesmo pedido aparece só uma vez na agenda, "
+            "mesmo quando exige atenção em mais de uma área. Os blocos detalhados abaixo continuam "
+            "como trilha de conferência; a agenda não envia mensagens, não registra contatos e não muda status."
+        )
+        if agenda_executiva_hf16:
+            _ag_agora_hf16 = sum(1 for x in agenda_executiva_hf16 if x.get("janela") == "agora")
+            _ag_hoje_hf16 = sum(1 for x in agenda_executiva_hf16 if x.get("janela") == "hoje")
+            _ag_acompanhar_hf16 = sum(1 for x in agenda_executiva_hf16 if x.get("janela") == "acompanhar")
+            _agm1_hf16, _agm2_hf16, _agm3_hf16, _agm4_hf16 = st.columns(4)
+            _agm1_hf16.metric("🔴 Fazer agora", _ag_agora_hf16)
+            _agm2_hf16.metric("🟠 Resolver hoje", _ag_hoje_hf16)
+            _agm3_hf16.metric("🔵 Acompanhar", _ag_acompanhar_hf16)
+            _agm4_hf16.metric("📋 Pedidos únicos", len(agenda_executiva_hf16))
+
+            for _ag_hf16 in agenda_executiva_hf16[:6]:
+                _janela_ag_hf16 = str(_ag_hf16.get("janela") or "acompanhar")
+                _icone_janela_ag_hf16 = {
+                    "agora": "🔴",
+                    "hoje": "🟠",
+                    "acompanhar": "🔵",
+                }.get(_janela_ag_hf16, "🔵")
+                _rotulo_janela_ag_hf16 = {
+                    "agora": "FAZER AGORA",
+                    "hoje": "RESOLVER HOJE",
+                    "acompanhar": "ACOMPANHAR",
+                }.get(_janela_ag_hf16, "ACOMPANHAR")
+                _numero_ag_hf16 = str(_ag_hf16.get("numero_proposta") or "")
+                with st.container(border=True):
+                    _ag1_hf16, _ag2_hf16, _ag3_hf16 = st.columns([7, 2, 2])
+                    _ag1_hf16.markdown(
+                        f"**{_icone_janela_ag_hf16} {_rotulo_janela_ag_hf16} · "
+                        f"{html.escape(_numero_ag_hf16 or '—')} — "
+                        f"{html.escape(str(_ag_hf16.get('cliente_nome') or 'Cliente'))}**"
+                    )
+                    _ag1_hf16.caption(
+                        f"{_ag_hf16.get('icone', '📌')} {_ag_hf16.get('dominio', 'Operação')} · "
+                        f"{_ag_hf16.get('motivo', '')}"
+                    )
+                    _ag1_hf16.write(f"**Próxima ação:** {_ag_hf16.get('acao', 'Revisar pedido')}")
+                    _secundarios_ag_hf16 = list(_ag_hf16.get("dominios_secundarios") or [])
+                    if _secundarios_ag_hf16:
+                        _ag1_hf16.caption("Também exige atenção em: " + " · ".join(_secundarios_ag_hf16))
+
+                    _wa_ag_hf16 = re.sub(r"\D", "", str(_ag_hf16.get("whatsapp") or ""))
+                    if _wa_ag_hf16 and not _wa_ag_hf16.startswith("55"):
+                        _wa_ag_hf16 = "55" + _wa_ag_hf16
+                    _msg_ag_hf16 = str(_ag_hf16.get("mensagem_sugerida") or "")
+                    _origem_ag_hf16 = str(_ag_hf16.get("origem") or "")
+                    if _wa_ag_hf16 and _msg_ag_hf16 and _origem_ag_hf16 in ("retorno", "cobranca"):
+                        _rotulo_wa_ag_hf16 = "💳 Cobrar" if _origem_ag_hf16 == "cobranca" else "📱 Retomar"
+                        _ag2_hf16.link_button(
+                            _rotulo_wa_ag_hf16,
+                            f"https://wa.me/{_wa_ag_hf16}?text={quote(_msg_ag_hf16)}",
+                            use_container_width=True,
+                        )
+                    else:
+                        _ag2_hf16.button(
+                            "📌 Ação interna",
+                            key=f"thu_agenda_interna_hf16_{_numero_ag_hf16}",
+                            disabled=True,
+                            use_container_width=True,
+                        )
+                    _ag3_hf16.button(
+                        "📋 Abrir pedido",
+                        key=f"thu_agenda_abrir_hf16_{_numero_ag_hf16}",
+                        use_container_width=True,
+                        on_click=lambda n=_numero_ag_hf16: st.session_state.__setitem__("alerta_proposta_numero", n),
+                    )
+            if len(agenda_executiva_hf16) > 6:
+                st.caption(f"Mais {len(agenda_executiva_hf16) - 6} prioridade(s) consolidada(s) na agenda do THU.")
+            st.caption(
+                "Para registrar um retorno ou cobrança realmente realizado, use o botão correspondente no bloco específico abaixo. "
+                "Abrir o WhatsApp pela agenda não conta como contato."
+            )
+        else:
+            st.success("Agenda executiva sem ações pendentes neste momento.")
+
+    # HF14 — primeiro passo do ciclo de automações/inteligência do THU, somente Jorge.
+    # O bloco depende de um envio explicitamente registrado; abrir o WhatsApp não
+    # é tratado como prova de envio e nenhuma mensagem/status é alterado sozinho.
+    if usuario_eh_jorge_i8112hf1:
         st.divider()
         st.markdown("#### 💬 THU • Retornos comerciais")
         st.caption(
@@ -22579,11 +22682,6 @@ if pagina_atual == "central":
     # HF15 — segunda etapa do ciclo THU: cobrança assistida de pedidos aprovados
     # e não pagos, somente Jorge. Mensalistas ficam no fechamento mensal.
     if usuario_eh_jorge_i8112hf1:
-        cobrancas_hf15 = _thu_comercial_montar_cobrancas(
-            historico_central,
-            hoje_central,
-            limite=10,
-        )
         st.divider()
         st.markdown("#### 💳 THU • Cobranças assistidas")
         st.caption(
@@ -22669,56 +22767,57 @@ if pagina_atual == "central":
         else:
             st.success("Nenhum pedido com pagamento individual pendente para cobrança assistida.")
 
-    st.divider()
-    st.subheader("🎯 O que fazer agora")
-    prioridade = None
-    prioridade_atendimento = None
-    motivo = ""
-    atendimentos_urgentes = sorted(
-        [a for a in atendimentos_abertos_central if faixa_sla_atendimento(a, dados_atendimento_central.get("config", {}))[2] >= 2],
-        key=minutos_aguardando,
-        reverse=True,
-    )
-    if atendimentos_urgentes:
-        prioridade_atendimento = atendimentos_urgentes[0]
-        motivo = f"Atendimento aguardando há {tempo_aguardando_formatado(prioridade_atendimento)}"
-    elif pedidos_atrasados_central:
-        prioridade = sorted(pedidos_atrasados_central, key=lambda p: data_entrega_segura(p.get("data_entrega")) or date.max)[0]
-        motivo = "Pedido atrasado — verificar imediatamente"
-    elif entregas_hoje_central:
-        prioridade = entregas_hoje_central[0]
-        motivo = "Entrega prevista para hoje"
-    elif aguardando_aprovacao_central:
-        tarefa = aguardando_aprovacao_central[0]
-        prioridade = next((p for p in historico_central if p.get("numero_proposta") == tarefa.get("numero_proposta")), None)
-        motivo = "Aguardando aprovação do cliente"
-    elif pendentes_pagamento_central:
-        prioridade = pendentes_pagamento_central[0]
-        motivo = "Pagamento pendente"
+    if not usuario_eh_jorge_i8112hf1:
+        st.divider()
+        st.subheader("🎯 O que fazer agora")
+        prioridade = None
+        prioridade_atendimento = None
+        motivo = ""
+        atendimentos_urgentes = sorted(
+            [a for a in atendimentos_abertos_central if faixa_sla_atendimento(a, dados_atendimento_central.get("config", {}))[2] >= 2],
+            key=minutos_aguardando,
+            reverse=True,
+        )
+        if atendimentos_urgentes:
+            prioridade_atendimento = atendimentos_urgentes[0]
+            motivo = f"Atendimento aguardando há {tempo_aguardando_formatado(prioridade_atendimento)}"
+        elif pedidos_atrasados_central:
+            prioridade = sorted(pedidos_atrasados_central, key=lambda p: data_entrega_segura(p.get("data_entrega")) or date.max)[0]
+            motivo = "Pedido atrasado — verificar imediatamente"
+        elif entregas_hoje_central:
+            prioridade = entregas_hoje_central[0]
+            motivo = "Entrega prevista para hoje"
+        elif aguardando_aprovacao_central:
+            tarefa = aguardando_aprovacao_central[0]
+            prioridade = next((p for p in historico_central if p.get("numero_proposta") == tarefa.get("numero_proposta")), None)
+            motivo = "Aguardando aprovação do cliente"
+        elif pendentes_pagamento_central:
+            prioridade = pendentes_pagamento_central[0]
+            motivo = "Pagamento pendente"
 
-    if prioridade_atendimento:
-        with st.container(border=True):
-            st.markdown(f"### 📥 {html.escape(str(prioridade_atendimento.get('cliente', 'Contato')))}")
-            st.write(f"**Situação:** {prioridade_atendimento.get('status', 'Novo contato')}")
-            st.write(f"**Motivo:** {motivo}")
-            st.write(f"**Próxima ação:** {proxima_acao_atendimento(prioridade_atendimento)}")
-            st.caption("Abra a aba Atendimento para responder ou criar o orçamento.")
-    elif prioridade:
-        _, _, total_prioridade = calcular_valores_proposta(prioridade)
-        with st.container(border=True):
-            st.markdown(f"### {html.escape(str(prioridade.get('cliente_nome', 'Cliente')))}")
-            st.write(f"**Pedido:** {prioridade.get('numero_proposta', '—')}  •  **Entrega:** {prioridade.get('data_entrega', 'A combinar')}")
-            st.write(f"**Produtos:** {resumo_produtos_pedido(prioridade)}")
-            st.write(f"**Motivo:** {motivo}")
-            st.write(f"**Valor:** R$ {total_prioridade:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-            st.button(
-                "📋 Abrir e atualizar agora",
-                key="central_abrir_prioridade",
-                type="primary",
-                on_click=lambda n=prioridade.get("numero_proposta"): st.session_state.__setitem__("alerta_proposta_numero", n),
-            )
-    else:
-        st.success("Nenhuma prioridade crítica neste momento. Tudo em dia!")
+        if prioridade_atendimento:
+            with st.container(border=True):
+                st.markdown(f"### 📥 {html.escape(str(prioridade_atendimento.get('cliente', 'Contato')))}")
+                st.write(f"**Situação:** {prioridade_atendimento.get('status', 'Novo contato')}")
+                st.write(f"**Motivo:** {motivo}")
+                st.write(f"**Próxima ação:** {proxima_acao_atendimento(prioridade_atendimento)}")
+                st.caption("Abra a aba Atendimento para responder ou criar o orçamento.")
+        elif prioridade:
+            _, _, total_prioridade = calcular_valores_proposta(prioridade)
+            with st.container(border=True):
+                st.markdown(f"### {html.escape(str(prioridade.get('cliente_nome', 'Cliente')))}")
+                st.write(f"**Pedido:** {prioridade.get('numero_proposta', '—')}  •  **Entrega:** {prioridade.get('data_entrega', 'A combinar')}")
+                st.write(f"**Produtos:** {resumo_produtos_pedido(prioridade)}")
+                st.write(f"**Motivo:** {motivo}")
+                st.write(f"**Valor:** R$ {total_prioridade:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                st.button(
+                    "📋 Abrir e atualizar agora",
+                    key="central_abrir_prioridade",
+                    type="primary",
+                    on_click=lambda n=prioridade.get("numero_proposta"): st.session_state.__setitem__("alerta_proposta_numero", n),
+                )
+        else:
+            st.success("Nenhuma prioridade crítica neste momento. Tudo em dia!")
 
     # I8.12.4-HF3 — comunicação operacional do estoque, fila e compras pela Ficha Técnica.
     consumos_central_i8124 = carregar_consumos_pedidos()

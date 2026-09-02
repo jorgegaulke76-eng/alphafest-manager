@@ -1,4 +1,4 @@
-"""20.4.9-I8.13.5-HF15 — inteligência comercial/financeira assistida do THU.
+"""20.4.9-I8.13.5-HF16 — inteligência comercial/financeira assistida do THU.
 
 Serviço puro, sem Streamlit/Supabase. Ele registra metadados manuais de contato
 comercial/cobrança na própria proposta e monta filas assistidas usando somente a
@@ -311,3 +311,169 @@ def montar_cobrancas_assistidas(
         )
     )
     return saida[: max(0, int(limite or 0))]
+
+
+def montar_agenda_executiva(
+    retornos: list[dict[str, Any]] | None,
+    cobrancas: list[dict[str, Any]] | None,
+    prioridades_operacionais: list[dict[str, Any]] | None,
+    *,
+    limite: int = 8,
+) -> list[dict[str, Any]]:
+    """Consolida as filas assistidas do THU em uma agenda única por proposta.
+
+    A agenda é **somente leitura**. Ela não cria status, não registra contato e
+    não altera nenhuma proposta. A mesma proposta pode ter mais de um sinal
+    (por exemplo, atraso operacional + pagamento pendente), mas aparece uma só
+    vez na agenda. O sinal de maior urgência vira a ação principal e os demais
+    permanecem visíveis como contexto secundário.
+
+    Entradas ``aguardar`` e pedidos operacionais ``dentro_prazo`` não entram na
+    agenda executiva para evitar transformar acompanhamento passivo em tarefa.
+    """
+    agrupados: dict[str, dict[str, Any]] = {}
+
+    def _adicionar_sinal(
+        item: dict[str, Any],
+        *,
+        dominio: str,
+        icone: str,
+        score: int,
+        janela: str,
+        motivo: str,
+        acao: str,
+        origem: str,
+    ) -> None:
+        numero = str(item.get("numero_proposta") or "").strip()
+        if not numero:
+            return
+        cliente = str(item.get("cliente_nome") or item.get("cliente") or "Cliente").strip() or "Cliente"
+        grupo = agrupados.setdefault(
+            numero,
+            {
+                "numero_proposta": numero,
+                "cliente_nome": cliente,
+                "sinais": [],
+            },
+        )
+        if not str(grupo.get("cliente_nome") or "").strip() or grupo.get("cliente_nome") == "Cliente":
+            grupo["cliente_nome"] = cliente
+        grupo["sinais"].append({
+            "dominio": dominio,
+            "icone": icone,
+            "score": int(score),
+            "janela": janela,
+            "motivo": str(motivo or "").strip(),
+            "acao": str(acao or "").strip(),
+            "origem": origem,
+            "whatsapp": str(item.get("whatsapp") or "").strip(),
+            "whatsapp_chave": str(item.get("whatsapp_chave") or "").strip(),
+            "mensagem_sugerida": str(item.get("mensagem_sugerida") or "").strip(),
+        })
+
+    for item in retornos or []:
+        if not isinstance(item, dict):
+            continue
+        nivel = str(item.get("nivel") or "normal").strip().casefold()
+        if nivel == "aguardar":
+            continue
+        janela = "agora" if nivel == "urgente" else "hoje" if nivel == "alta" else "acompanhar"
+        _adicionar_sinal(
+            item,
+            dominio="Comercial",
+            icone="💬",
+            score=int(item.get("prioridade") or 0),
+            janela=janela,
+            motivo=str(item.get("motivo") or "Retorno comercial pendente"),
+            acao=str(item.get("acao") or "Retomar cliente"),
+            origem="retorno",
+        )
+
+    for item in cobrancas or []:
+        if not isinstance(item, dict):
+            continue
+        nivel = str(item.get("nivel") or "normal").strip().casefold()
+        if nivel == "aguardar":
+            continue
+        janela = "agora" if nivel == "urgente" else "hoje" if nivel == "alta" else "acompanhar"
+        _adicionar_sinal(
+            item,
+            dominio="Financeiro",
+            icone="💳",
+            score=int(item.get("prioridade") or 0) + 40,
+            janela=janela,
+            motivo=str(item.get("motivo") or "Pagamento pendente"),
+            acao=str(item.get("acao") or "Acompanhar pagamento"),
+            origem="cobranca",
+        )
+
+    score_por_rank = {0: 1600, 1: 1400, 2: 1120, 3: 820, 4: 520}
+    for item in prioridades_operacionais or []:
+        if not isinstance(item, dict):
+            continue
+        try:
+            rank = int(item.get("prioridade_rank", 9))
+        except (TypeError, ValueError):
+            rank = 9
+        chave = str(item.get("prioridade_chave") or "").strip()
+        if rank > 4 or chave == "dentro_prazo":
+            continue
+        janela = "agora" if rank <= 1 else "hoje" if rank == 2 else "acompanhar"
+        area = str(item.get("area") or "Produção").strip() or "Produção"
+        icone = "🚚" if area.casefold() == "entrega" else "🏭"
+        _adicionar_sinal(
+            item,
+            dominio=area,
+            icone=icone,
+            score=score_por_rank.get(rank, 0),
+            janela=janela,
+            motivo=str(item.get("motivo_prioridade") or item.get("prioridade_rotulo") or "Atenção operacional"),
+            acao=str(item.get("proxima_acao") or "Revisar pedido"),
+            origem="operacao",
+        )
+
+    agenda: list[dict[str, Any]] = []
+    ordem_janela = {"agora": 0, "hoje": 1, "acompanhar": 2}
+    for numero, grupo in agrupados.items():
+        sinais = list(grupo.get("sinais") or [])
+        if not sinais:
+            continue
+        sinais.sort(
+            key=lambda s: (
+                -int(s.get("score") or 0),
+                ordem_janela.get(str(s.get("janela") or "acompanhar"), 9),
+                str(s.get("dominio") or ""),
+            )
+        )
+        principal = sinais[0]
+        agenda.append({
+            "numero_proposta": numero,
+            "cliente_nome": grupo.get("cliente_nome") or "Cliente",
+            "prioridade_score": int(principal.get("score") or 0),
+            "janela": principal.get("janela") or "acompanhar",
+            "dominio": principal.get("dominio") or "Operação",
+            "icone": principal.get("icone") or "📌",
+            "motivo": principal.get("motivo") or "Atenção necessária",
+            "acao": principal.get("acao") or "Revisar pedido",
+            "origem": principal.get("origem") or "operacao",
+            "whatsapp": principal.get("whatsapp") or "",
+            "whatsapp_chave": principal.get("whatsapp_chave") or "",
+            "mensagem_sugerida": principal.get("mensagem_sugerida") or "",
+            "sinais": sinais,
+            "sinais_qtd": len(sinais),
+            "dominios_secundarios": [
+                f"{s.get('icone', '📌')} {s.get('dominio', 'Outro')}"
+                for s in sinais[1:]
+            ],
+        })
+
+    agenda.sort(
+        key=lambda item: (
+            ordem_janela.get(str(item.get("janela") or "acompanhar"), 9),
+            -int(item.get("prioridade_score") or 0),
+            str(item.get("cliente_nome") or "").casefold(),
+            str(item.get("numero_proposta") or ""),
+        )
+    )
+    return agenda[: max(0, int(limite or 0))]
+

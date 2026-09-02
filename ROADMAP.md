@@ -31,6 +31,7 @@
 
 ## Ciclo atual — I8.13.5 / THU assistido
 - HF14: Retornos Comerciais (Jorge) — homologado.
-- HF15: Cobranças Assistidas (Jorge) — em homologação.
-- Próximo após homologação: consolidar a agenda executiva do THU sem automatizar decisões/status.
+- HF15: Cobranças Assistidas (Jorge) — homologado.
+- HF16: Agenda Executiva do THU (Jorge) — em homologação.
+- Próximo após homologação: avaliar a extensão segura da agenda assistida para a Anna, preservando permissões e sem automatizar decisões/status.
 

@@ -6,6 +6,7 @@ from thu_comercial_service import (
     montar_retornos_comerciais,
     aplicar_registro_cobranca,
     montar_cobrancas_assistidas,
+    montar_agenda_executiva,
 )
 
 
@@ -137,6 +138,135 @@ class ThuComercialServiceTests(unittest.TestCase):
         self.assertEqual(fila[0]["whatsapp_chave"], "11999990000")
         self.assertIn("pagamento pendente", fila[0]["mensagem_sugerida"].lower())
         self.assertFalse(p["pago"])
+
+
+    def test_agenda_executiva_deduplica_pedido_com_operacao_e_cobranca(self):
+        cobrancas = [{
+            "numero_proposta": "DUP",
+            "cliente_nome": "Cliente DUP",
+            "nivel": "urgente",
+            "prioridade": 1160,
+            "motivo": "Pagamento pendente",
+            "acao": "Cobrar agora",
+            "whatsapp": "11 99999-0000",
+            "mensagem_sugerida": "Cobrança pronta",
+        }]
+        operacao = [{
+            "numero_proposta": "DUP",
+            "cliente_nome": "Cliente DUP",
+            "prioridade_rank": 0,
+            "prioridade_chave": "atrasado_producao",
+            "area": "Produção",
+            "motivo_prioridade": "Prazo vencido e produção não concluída",
+            "proxima_acao": "Resolver produção",
+        }]
+        agenda = montar_agenda_executiva([], cobrancas, operacao)
+        self.assertEqual(len(agenda), 1)
+        self.assertEqual(agenda[0]["numero_proposta"], "DUP")
+        self.assertEqual(agenda[0]["dominio"], "Produção")
+        self.assertEqual(agenda[0]["sinais_qtd"], 2)
+        self.assertIn("💳 Financeiro", agenda[0]["dominios_secundarios"])
+
+    def test_agenda_executiva_exclui_acompanhamento_passivo(self):
+        agenda = montar_agenda_executiva(
+            [{"numero_proposta": "RET", "nivel": "aguardar", "prioridade": 300}],
+            [{"numero_proposta": "COB", "nivel": "aguardar", "prioridade": 320}],
+            [{
+                "numero_proposta": "OK",
+                "prioridade_rank": 5,
+                "prioridade_chave": "dentro_prazo",
+                "area": "Produção",
+            }],
+        )
+        self.assertEqual(agenda, [])
+
+    def test_agenda_executiva_prioriza_janela_agora_antes_de_hoje(self):
+        agenda = montar_agenda_executiva(
+            [{
+                "numero_proposta": "AGORA",
+                "cliente_nome": "Agora",
+                "nivel": "urgente",
+                "prioridade": 1000,
+                "motivo": "Prazo vencido",
+                "acao": "Retomar agora",
+            }],
+            [],
+            [{
+                "numero_proposta": "HOJE",
+                "cliente_nome": "Hoje",
+                "prioridade_rank": 2,
+                "prioridade_chave": "proximo_prazo",
+                "area": "Produção",
+                "motivo_prioridade": "Próximo do prazo",
+                "proxima_acao": "Revisar produção",
+            }],
+        )
+        self.assertEqual([x["numero_proposta"] for x in agenda], ["AGORA", "HOJE"])
+        self.assertEqual(agenda[0]["janela"], "agora")
+        self.assertEqual(agenda[1]["janela"], "hoje")
+
+    def test_agenda_executiva_mantem_atalho_whatsapp_da_acao_principal(self):
+        agenda = montar_agenda_executiva(
+            [],
+            [{
+                "numero_proposta": "PIX",
+                "cliente_nome": "Cliente PIX",
+                "nivel": "urgente",
+                "prioridade": 1250,
+                "motivo": "Entregue e não pago",
+                "acao": "Cobrar",
+                "whatsapp": "11 99999-0000",
+                "whatsapp_chave": "11999990000",
+                "mensagem_sugerida": "Mensagem financeira",
+            }],
+            [],
+        )
+        self.assertEqual(agenda[0]["origem"], "cobranca")
+        self.assertEqual(agenda[0]["whatsapp_chave"], "11999990000")
+        self.assertEqual(agenda[0]["mensagem_sugerida"], "Mensagem financeira")
+
+    def test_agenda_executiva_operacional_nao_inventa_whatsapp(self):
+        agenda = montar_agenda_executiva([], [], [{
+            "numero_proposta": "OP",
+            "cliente_nome": "Operação",
+            "prioridade_rank": 1,
+            "prioridade_chave": "vence_hoje",
+            "area": "Produção",
+            "motivo_prioridade": "Entrega hoje",
+            "proxima_acao": "Finalizar produção",
+        }])
+        self.assertEqual(agenda[0]["origem"], "operacao")
+        self.assertEqual(agenda[0]["whatsapp"], "")
+        self.assertEqual(agenda[0]["mensagem_sugerida"], "")
+
+    def test_agenda_executiva_limite_e_aplicado_depois_da_ordenacao(self):
+        retornos = []
+        for i in range(5):
+            retornos.append({
+                "numero_proposta": f"P{i}",
+                "cliente_nome": f"Cliente {i}",
+                "nivel": "normal",
+                "prioridade": 700 + i,
+                "motivo": "Retorno",
+                "acao": "Acompanhar",
+            })
+        agenda = montar_agenda_executiva(retornos, [], [], limite=2)
+        self.assertEqual(len(agenda), 2)
+        self.assertEqual([x["numero_proposta"] for x in agenda], ["P4", "P3"])
+
+    def test_agenda_executiva_nao_muta_as_filas_de_origem(self):
+        import copy
+        retornos = [{
+            "numero_proposta": "R1",
+            "cliente_nome": "Cliente",
+            "nivel": "alta",
+            "prioridade": 900,
+            "motivo": "Retorno",
+            "acao": "Retomar",
+        }]
+        antes = copy.deepcopy(retornos)
+        montar_agenda_executiva(retornos, [], [])
+        self.assertEqual(retornos, antes)
 
 
 if __name__ == "__main__":

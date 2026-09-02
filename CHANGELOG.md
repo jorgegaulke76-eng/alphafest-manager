@@ -805,3 +805,14 @@ hangelog
 - Produto sem mídia e produto livre continuam sem bloqueio.
 - Prévia é somente leitura: preço oficial continua automático, enquanto Tema, Nome, Cor/Material, Idade/Data e Outros Detalhes permanecem manuais.
 - `VERSAO` e `VERSAO.txt` alinhados em 20.4.9-I8.13.5-HF11.
+
+## 20.4.9-I8.13.5-HF16 — THU • Agenda Executiva
+- Central do Jorge ganha uma agenda única que consolida Retornos Comerciais, Cobranças Assistidas e prioridades operacionais de Produção/Entrega.
+- A mesma proposta aparece uma única vez na agenda, mesmo quando possui mais de uma pendência; o sinal mais urgente vira a ação principal e os demais permanecem visíveis como contexto.
+- A agenda organiza em Fazer agora, Resolver hoje e Acompanhar.
+- Retornos/cobranças em estado “aguardar” e pedidos operacionais dentro do prazo não são transformados artificialmente em tarefa executiva.
+- Atalhos de WhatsApp apenas preparam a mensagem; abrir o WhatsApp pela agenda não registra contato e não envia nada automaticamente.
+- Os blocos específicos de Retornos e Cobranças continuam responsáveis pelo registro manual do contato real.
+- O antigo cartão único “O que fazer agora” é substituído pela Agenda Executiva somente no perfil Jorge; Anna permanece com a experiência homologada anterior.
+- Nenhum status, JSON, SQL ou banco novo foi criado.
+
