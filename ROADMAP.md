@@ -44,8 +44,9 @@
 - HF26: Plano de amanhã do THU (Jorge) — homologado; transforma os sinais preventivos em preparação curta de Produção/Materiais/Saídas para o próximo dia, sem repetir urgências atuais.
 - HF27: Memória de tempo de ciclo observado (Jorge) — registra intervalos explícitos Em produção → Pronto/Entregue, preservando quantidade e sem confundir ciclo com mão de obra.
 - HF28: Estorno visível de reserva/consumo por pedido (Jorge) — corrige a seleção administrativa para permitir liberar reservas já ativas pelo fluxo auditado do próprio pedido.
-- Próximo após homologação da HF31: acumular amostras e revisar variações reais; só depois avaliar referência por quantidade/processo e eventual capacidade quantitativa com base suficiente.
+- HF31: Qualidade da Base de Tempos — homologado; sinaliza variação extrema e distribuição por quantidade sem excluir amostras nem calcular capacidade.
+- HF32: Revisão Assistida dos Tempos — contexto humano auditado para variações, preservando a amostra original.
+- Próximo após homologação da HF32: acumular amostras revisadas e só então avaliar referência separada por quantidade/processo; capacidade quantitativa continua bloqueada até base suficiente.
 - HF29: Identificação do ciclo em andamento (Jorge) — mostra proposta, cliente, produto, quantidade e início explícito para cada ciclo observado aberto, sem alterar status.
 
 - HF30: Memória de ciclo alinhada à Fonte Única — homologado; corrige ciclos residuais de pedidos já Prontos/Entregues sem inventar duração.
-- HF31: Qualidade da Base de Tempos — sinaliza variação extrema e distribuição por quantidade sem excluir amostras nem calcular capacidade.

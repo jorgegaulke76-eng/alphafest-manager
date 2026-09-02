@@ -14643,6 +14643,30 @@ def carregar_auditoria():
     return dados if isinstance(dados, list) else []
 
 
+def revisoes_tempo_ciclo_auditoria():
+    """HF32: deriva a revisão mais recente das amostras a partir da auditoria."""
+    saida = []
+    for registro in carregar_auditoria():
+        if not isinstance(registro, dict):
+            continue
+        if str(registro.get("acao") or "").strip() != "Revisar tempo de ciclo":
+            continue
+        detalhes = registro.get("detalhes") if isinstance(registro.get("detalhes"), dict) else {}
+        chave = str(detalhes.get("chave_amostra") or "").strip()
+        if not chave:
+            continue
+        saida.append({
+            "chave_amostra": chave,
+            "categoria": str(detalhes.get("categoria") or "").strip(),
+            "categoria_label": str(detalhes.get("categoria_label") or "").strip(),
+            "observacao": str(detalhes.get("observacao") or "").strip(),
+            "data_hora": str(registro.get("data_hora") or ""),
+            "usuario": str(registro.get("usuario") or "Sistema"),
+            "numero_proposta": str(registro.get("identificador") or detalhes.get("numero_proposta") or ""),
+        })
+    return saida
+
+
 def registrar_auditoria(acao, entidade="Sistema", identificador="", detalhes=None, resultado="OK"):
     """Registra ações importantes sem impedir a operação caso a auditoria falhe.
 
@@ -22847,15 +22871,26 @@ if pagina_atual == "central":
         )
         # HF27 — memória descritiva dos ciclos explicitamente observados no Fluxo.
         # Não alimenta capacidade/prazo ainda; apenas coleta e resume evidência.
-        _memoria_ciclo_hf27 = (
-            _tempo_ciclo_resumir(tarefas_central, propostas_oficiais=historico_central, limite_produtos=12)
-            if _tempo_ciclo_resumir
-            else {
+        _revisoes_ciclo_hf32 = revisoes_tempo_ciclo_auditoria() if _tempo_ciclo_resumir else []
+        if _tempo_ciclo_resumir:
+            try:
+                _memoria_ciclo_hf27 = _tempo_ciclo_resumir(
+                    tarefas_central, propostas_oficiais=historico_central,
+                    revisoes=_revisoes_ciclo_hf32, limite_produtos=12,
+                )
+            except TypeError:
+                # Atualização parcial: serviço antigo continua entregando a memória
+                # homologada, apenas sem aplicar as revisões da HF32 até completar deploy.
+                _memoria_ciclo_hf27 = _tempo_ciclo_resumir(
+                    tarefas_central, propostas_oficiais=historico_central, limite_produtos=12
+                )
+        else:
+            _memoria_ciclo_hf27 = {
                 "total_amostras": 0, "produtos_com_amostras": 0,
                 "em_andamento_com_inicio": 0, "em_producao_sem_inicio_confiavel": 0,
+                "total_amostras_para_revisar": 0, "total_amostras_revisadas": 0,
                 "produtos": [],
             }
-        )
 
         # HF24 — o sinal de continuidade da HF21 passa a alimentar também a
         # Agenda Executiva. Calculamos uma única vez e reutilizamos no bloco
@@ -22912,8 +22947,8 @@ if pagina_atual == "central":
             "mesmo quando exige atenção em mais de uma área. A HF24 também considera o sinal de "
             "sem avanço registrado da Agenda da Anna. A HF25 acrescenta prevenção de prazo, a HF26 "
             "transforma esses sinais em um plano curto para o próximo dia; a HF27/HF30 formam a memória "
-            "de tempo de ciclo observado e a HF31 acrescenta controle de qualidade/variação por lote, "
-            "sem fingir tempo de mão de obra ou capacidade exata. "
+            "de tempo de ciclo observado; a HF31 acrescenta controle de qualidade/variação por lote e a HF32 "
+            "permite revisar o contexto dessas variações sem apagar amostras, sem fingir tempo de mão de obra ou capacidade exata. "
             "Os blocos detalhados continuam como trilha de conferência; a agenda não envia mensagens, "
             "não registra contatos e não muda status."
         )
@@ -22969,18 +23004,32 @@ if pagina_atual == "central":
                 "produção, Agenda Executiva e Plano de Amanhã continuam funcionando normalmente."
             )
         else:
-            with st.expander("⏱️ Memória de tempos de produção · HF31", expanded=False):
+            def _tempo_ciclo_formatar_hf32(valor):
+                try:
+                    _total_hf32 = max(0, int(round(float(valor or 0))))
+                except Exception:
+                    _total_hf32 = 0
+                if _total_hf32 < 60:
+                    return f"{_total_hf32} min"
+                _horas_hf32, _mins_hf32 = divmod(_total_hf32, 60)
+                if _horas_hf32 < 24:
+                    return f"{_horas_hf32}h {_mins_hf32:02d}min" if _mins_hf32 else f"{_horas_hf32}h"
+                _dias_hf32, _horas_hf32 = divmod(_horas_hf32, 24)
+                return f"{_dias_hf32}d {_horas_hf32}h" if _horas_hf32 else f"{_dias_hf32}d"
+
+            with st.expander("⏱️ Memória de tempos de produção · HF32", expanded=False):
                 st.caption(
                     "Aprendizado somente leitura a partir de transições explícitas do Fluxo. O intervalo entre "
                     "'Em produção' e 'Pronto/Entregue' é chamado de tempo de ciclo observado: pode incluir pausas, "
                     "espera e tempo de máquina autônoma. Ainda NÃO é usado como capacidade exata nem promessa de prazo."
                 )
-                _tc1_hf27, _tc2_hf27, _tc3_hf27, _tc4_hf27, _tc5_hf31 = st.columns(5)
+                _tc1_hf27, _tc2_hf27, _tc3_hf27, _tc4_hf27, _tc5_hf32, _tc6_hf32 = st.columns(6)
                 _tc1_hf27.metric("⏱️ Ciclos observados", int(_memoria_ciclo_hf27.get("total_amostras") or 0))
                 _tc2_hf27.metric("📦 Produtos com base", int(_memoria_ciclo_hf27.get("produtos_com_amostras") or 0))
                 _tc3_hf27.metric("🔵 Ciclos em andamento", int(_memoria_ciclo_hf27.get("em_andamento_com_inicio") or 0))
                 _tc4_hf27.metric("⚪ Sem início confiável", int(_memoria_ciclo_hf27.get("em_producao_sem_inicio_confiavel") or 0))
-                _tc5_hf31.metric("🔎 Revisar variação", int(_memoria_ciclo_hf27.get("total_amostras_para_revisar") or 0))
+                _tc5_hf32.metric("🔎 Pendentes revisão", int(_memoria_ciclo_hf27.get("total_amostras_para_revisar") or 0))
+                _tc6_hf32.metric("✅ Revisadas", int(_memoria_ciclo_hf27.get("total_amostras_revisadas") or 0))
 
                 # HF29 — não deixar o contador de ciclo em andamento virar uma caixa-preta.
                 # Mostramos exatamente qual item está sendo observado, sem alterar status.
@@ -23045,63 +23094,148 @@ if pagina_atual == "central":
                         })
                     st.dataframe(pd.DataFrame(_linhas_ciclo_hf27), use_container_width=True, hide_index=True)
                     st.caption(
-                        "HF31: a Faixa central é apenas uma leitura auxiliar sem durações marcadas para revisão. "
-                        "Nenhuma amostra é apagada ou alterada; a faixa total continua visível e estes dados ainda NÃO calculam capacidade."
+                        "HF31/HF32: a Faixa central é apenas uma leitura auxiliar sem durações estatisticamente extremas. "
+                        "Registrar contexto não apaga nem altera a amostra; a faixa total continua visível e estes dados ainda NÃO calculam capacidade."
                     )
                 else:
                     st.info(
                         "Ainda não há um ciclo completo confiável para resumir. A coleta começa quando um item entra "
                         "explicitamente em 'Em produção' e depois é concluído como 'Pronto' ou 'Entregue'."
                     )
-                _amostras_revisar_hf31 = list(_memoria_ciclo_hf27.get("amostras_para_revisar") or [])
-                if _amostras_revisar_hf31:
+                _amostras_variacao_hf32 = list(
+                    _memoria_ciclo_hf27.get("amostras_variacao")
+                    or _memoria_ciclo_hf27.get("amostras_para_revisar")
+                    or []
+                )
+                if _amostras_variacao_hf32:
                     with st.expander(
-                        f"🔎 Amostras com variação alta para conferir ({len(_amostras_revisar_hf31)})",
+                        f"🔎 Variações detectadas — revisar contexto ({len(_amostras_variacao_hf32)})",
                         expanded=False,
                     ):
                         st.caption(
-                            "Sinal estatístico de qualidade da base. A amostra permanece registrada e não é descartada. "
-                            "Use este bloco somente para conferir se houve pausa longa, espera, retrabalho ou outro contexto excepcional."
+                            "HF32: registre o contexto real da variação para qualificar a base. A revisão fica na auditoria. "
+                            "Nenhuma amostra é apagada ou alterada; a duração observada permanece intacta. "
+                            "A revisão apenas explica por que o ciclo saiu do padrão."
                         )
-                        for _idx_rev_hf31, _rev_hf31 in enumerate(_amostras_revisar_hf31[:10]):
-                            _num_rev_hf31 = str(_rev_hf31.get("numero_proposta") or "").strip()
-                            _qtd_rev_hf31 = _rev_hf31.get("quantidade")
+                        _categorias_hf32 = {
+                            "Pausa / espera": "pausa_espera",
+                            "Retrabalho / ajuste": "retrabalho_ajuste",
+                            "Máquina trabalhando sozinha": "maquina_autonoma",
+                            "Status atualizado depois": "status_atualizado_depois",
+                            "Lote / quantidade atípica": "lote_atipico",
+                            "Ciclo válido, duração real": "ciclo_valido_longo",
+                            "Outro contexto": "outro",
+                        }
+                        for _idx_rev_hf32, _rev_hf32 in enumerate(_amostras_variacao_hf32[:10]):
+                            _num_rev_hf32 = str(_rev_hf32.get("numero_proposta") or "").strip()
+                            _qtd_rev_hf32 = _rev_hf32.get("quantidade")
                             try:
-                                _qnum_rev_hf31 = float(_qtd_rev_hf31)
-                                _qtxt_rev_hf31 = str(int(_qnum_rev_hf31)) if _qnum_rev_hf31.is_integer() else str(_qnum_rev_hf31)
+                                _qnum_rev_hf32 = float(_qtd_rev_hf32)
+                                _qtxt_rev_hf32 = str(int(_qnum_rev_hf32)) if _qnum_rev_hf32.is_integer() else str(_qnum_rev_hf32)
                             except Exception:
-                                _qtxt_rev_hf31 = str(_qtd_rev_hf31 or "—")
+                                _qtxt_rev_hf32 = str(_qtd_rev_hf32 or "—")
+                            _chave_rev_hf32 = str(_rev_hf32.get("chave_revisao") or "").strip()
+                            if not _chave_rev_hf32:
+                                _chave_rev_hf32 = "|".join([
+                                    _num_rev_hf32,
+                                    str(_rev_hf32.get("tarefa_id") or "").strip(),
+                                    str(_rev_hf32.get("iniciado_em") or "").strip(),
+                                    str(_rev_hf32.get("concluido_em") or "").strip(),
+                                    str(int(_rev_hf32.get("duracao_minutos") or 0)),
+                                ])
+                            _sufixo_rev_hf32 = hashlib.sha1(_chave_rev_hf32.encode("utf-8")).hexdigest()[:10]
+                            _revisao_atual_hf32 = _rev_hf32.get("revisao") if isinstance(_rev_hf32.get("revisao"), dict) else {}
                             with st.container(border=True):
-                                _ra_hf31, _rb_hf31 = st.columns([8, 2])
-                                _ra_hf31.markdown(
-                                    f"**{html.escape(str(_rev_hf31.get('produto') or 'Item do pedido'))} — "
-                                    f"{html.escape(_num_rev_hf31 or 'Sem proposta')}**"
+                                _ra_hf32, _rb_hf32 = st.columns([8, 2])
+                                _ra_hf32.markdown(
+                                    f"**{html.escape(str(_rev_hf32.get('produto') or 'Item do pedido'))} — "
+                                    f"{html.escape(_num_rev_hf32 or 'Sem proposta')}**"
                                 )
-                                _ra_hf31.write(
-                                    f"Cliente: {html.escape(str(_rev_hf31.get('cliente_nome') or 'Cliente'))} · "
-                                    f"Qtd.: {html.escape(_qtxt_rev_hf31)}"
+                                _ra_hf32.write(
+                                    f"Cliente: {html.escape(str(_rev_hf32.get('cliente_nome') or 'Cliente'))} · "
+                                    f"Qtd.: {html.escape(_qtxt_rev_hf32)} · "
+                                    f"Duração: {html.escape(str(_tempo_ciclo_formatar_hf32(_rev_hf32.get('duracao_minutos'))))}"
                                 )
-                                _ra_hf31.caption(str(_rev_hf31.get("motivo_revisao") or "Variação alta para conferência."))
-                                _ra_hf31.caption(
-                                    f"Início: {str(_rev_hf31.get('iniciado_em') or '—')} · "
-                                    f"Fim: {str(_rev_hf31.get('concluido_em') or '—')}"
+                                _ra_hf32.caption(str(_rev_hf32.get("motivo_revisao") or "Variação alta para conferência."))
+                                _ra_hf32.caption(
+                                    f"Início: {str(_rev_hf32.get('iniciado_em') or '—')} · "
+                                    f"Fim: {str(_rev_hf32.get('concluido_em') or '—')}"
                                 )
-                                if _num_rev_hf31:
-                                    _rb_hf31.button(
+                                if _revisao_atual_hf32:
+                                    _rotulo_atual_hf32 = str(
+                                        _revisao_atual_hf32.get("categoria_label")
+                                        or _rev_hf32.get("revisao_categoria_label")
+                                        or "Contexto registrado"
+                                    )
+                                    _usuario_atual_hf32 = str(_revisao_atual_hf32.get("usuario") or "Sistema")
+                                    _data_atual_hf32 = str(_revisao_atual_hf32.get("data_hora") or "")
+                                    _ra_hf32.success(
+                                        f"✅ Revisada: {_rotulo_atual_hf32}"
+                                        + (f" · por {_usuario_atual_hf32}" if _usuario_atual_hf32 else "")
+                                        + (f" · {_data_atual_hf32}" if _data_atual_hf32 else "")
+                                    )
+                                    if str(_revisao_atual_hf32.get("observacao") or "").strip():
+                                        _ra_hf32.caption(f"Observação registrada: {_revisao_atual_hf32.get('observacao')}")
+                                else:
+                                    _ra_hf32.warning("🔎 Pendente de revisão de contexto")
+                                if _num_rev_hf32:
+                                    _rb_hf32.button(
                                         "📋 Abrir pedido",
-                                        key=f"tempo_ciclo_revisar_hf31_{_idx_rev_hf31}_{_num_rev_hf31}",
+                                        key=f"tempo_ciclo_revisar_hf32_{_idx_rev_hf32}_{_sufixo_rev_hf32}",
                                         use_container_width=True,
-                                        on_click=lambda n=_num_rev_hf31: st.session_state.__setitem__("alerta_proposta_numero", n),
+                                        on_click=lambda n=_num_rev_hf32: st.session_state.__setitem__("alerta_proposta_numero", n),
                                     )
                                 else:
-                                    _rb_hf31.button(
+                                    _rb_hf32.button(
                                         "📋 Sem proposta",
-                                        key=f"tempo_ciclo_revisar_sem_numero_hf31_{_idx_rev_hf31}",
+                                        key=f"tempo_ciclo_revisar_sem_numero_hf32_{_idx_rev_hf32}_{_sufixo_rev_hf32}",
                                         disabled=True,
                                         use_container_width=True,
                                     )
-                        if len(_amostras_revisar_hf31) > 10:
-                            st.caption(f"Mais {len(_amostras_revisar_hf31) - 10} amostra(s) aguardam conferência.")
+
+                                _labels_hf32 = list(_categorias_hf32.keys())
+                                _label_salvo_hf32 = str(_revisao_atual_hf32.get("categoria_label") or "").strip()
+                                _indice_label_hf32 = _labels_hf32.index(_label_salvo_hf32) if _label_salvo_hf32 in _labels_hf32 else 0
+                                with st.form(key=f"form_tempo_ciclo_revisao_hf32_{_sufixo_rev_hf32}", clear_on_submit=False):
+                                    _fc1_hf32, _fc2_hf32 = st.columns([4, 6])
+                                    _label_hf32 = _fc1_hf32.selectbox(
+                                        "Contexto da variação", _labels_hf32, index=_indice_label_hf32,
+                                        key=f"categoria_tempo_hf32_{_sufixo_rev_hf32}",
+                                    )
+                                    _obs_hf32 = _fc2_hf32.text_input(
+                                        "Observação curta (opcional)",
+                                        value=str(_revisao_atual_hf32.get("observacao") or ""),
+                                        key=f"obs_tempo_hf32_{_sufixo_rev_hf32}",
+                                        placeholder="Ex.: produção terminou antes, status foi atualizado no fim do expediente",
+                                    )
+                                    _salvar_rev_hf32 = st.form_submit_button(
+                                        "💾 Atualizar revisão" if _revisao_atual_hf32 else "✅ Registrar revisão",
+                                        use_container_width=True,
+                                    )
+                                    if _salvar_rev_hf32:
+                                        _detalhes_rev_hf32 = {
+                                            "chave_amostra": _chave_rev_hf32,
+                                            "numero_proposta": _num_rev_hf32,
+                                            "produto": str(_rev_hf32.get("produto") or "Item do pedido"),
+                                            "quantidade": _rev_hf32.get("quantidade"),
+                                            "iniciado_em": str(_rev_hf32.get("iniciado_em") or ""),
+                                            "concluido_em": str(_rev_hf32.get("concluido_em") or ""),
+                                            "duracao_minutos": int(_rev_hf32.get("duracao_minutos") or 0),
+                                            "categoria": _categorias_hf32.get(_label_hf32, "outro"),
+                                            "categoria_label": _label_hf32,
+                                            "observacao": str(_obs_hf32 or "").strip(),
+                                            "origem": "HF32_memoria_tempo",
+                                        }
+                                        if registrar_auditoria(
+                                            "Revisar tempo de ciclo", "Tempo de ciclo", _num_rev_hf32,
+                                            _detalhes_rev_hf32, resultado="OK",
+                                        ):
+                                            st.success("Revisão registrada na auditoria. A duração original foi preservada.")
+                                            st.rerun()
+                                        else:
+                                            st.error("Não foi possível confirmar a revisão no banco. Nenhuma amostra foi alterada.")
+                        if len(_amostras_variacao_hf32) > 10:
+                            st.caption(f"Mais {len(_amostras_variacao_hf32) - 10} variação(ões) detectada(s) na memória.")
 
                 if int(_memoria_ciclo_hf27.get("finalizados_sem_fim_confiavel") or 0):
                     st.caption(

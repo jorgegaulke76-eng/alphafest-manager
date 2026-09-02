@@ -924,3 +924,11 @@ hangelog
 - Mostra distribuição de amostras por quantidade/lote.
 - Detalhe de variação alta permite abrir a proposta de origem para contextualizar pausa, espera, retrabalho ou exceção.
 - Nenhum cálculo de capacidade ou prazo é liberado nesta etapa.
+
+
+## 20.4.9-I8.13.5-HF32 — Revisão Assistida dos Tempos
+- Variações estatísticas da memória de ciclo podem receber contexto humano sem apagar ou alterar a duração original.
+- Revisões são registradas no histórico de auditoria existente, sem novo banco operacional.
+- Classificações: pausa/espera, retrabalho/ajuste, máquina autônoma, status atualizado depois, lote atípico, ciclo válido longo ou outro.
+- Memória separa variações pendentes de revisão das já contextualizadas.
+- Faixa central, faixa total, mediana e total de amostras permanecem estatísticas observacionais; capacidade continua bloqueada.

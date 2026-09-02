@@ -3,7 +3,7 @@ from pathlib import Path
 
 def test_hf27_ui_expoe_memoria_sem_promessa_capacidade():
     src = Path("app.py").read_text(encoding="utf-8")
-    assert "⏱️ Memória de tempos de produção · HF31" in src
+    assert "⏱️ Memória de tempos de produção · HF32" in src
     assert "Ciclos observados" in src
     assert "Sem início confiável" in src
     assert "Ainda NÃO é usado como capacidade exata" in src
@@ -13,7 +13,8 @@ def test_hf27_ui_expoe_memoria_sem_promessa_capacidade():
 def test_hf27_importacao_e_resumo_sao_resilientes():
     src = Path("app.py").read_text(encoding="utf-8")
     assert "TEMPO_CICLO_IMPORT_ERROR" in src
-    assert "_tempo_ciclo_resumir(tarefas_central, propostas_oficiais=historico_central" in src
+    assert "_tempo_ciclo_resumir(" in src
+    assert "revisoes=_revisoes_ciclo_hf32" in src
 
 
 def test_hf29_ui_mostra_quais_ciclos_estao_em_andamento_e_abre_pedido():
@@ -32,10 +33,21 @@ def test_hf30_ui_explica_finalizado_sem_horario_sem_inventar_duracao():
 
 def test_hf31_ui_expoe_qualidade_da_base_sem_descartar_amostra():
     src = Path("app.py").read_text(encoding="utf-8")
-    assert "🔎 Revisar variação" in src
+    assert "🔎 Pendentes revisão" in src
+    assert "✅ Revisadas" in src
     assert "Faixa central" in src
     assert "Faixa total" in src
     assert "Lotes observados" in src
-    assert "Amostras com variação alta para conferir" in src
+    assert "Variações detectadas — revisar contexto" in src
     assert "Nenhuma amostra é apagada ou alterada" in src
-    assert "tempo_ciclo_revisar_hf31_" in src
+    assert "tempo_ciclo_revisar_hf32_" in src
+
+
+def test_hf32_ui_registra_contexto_na_auditoria_sem_excluir_amostra():
+    src = Path("app.py").read_text(encoding="utf-8")
+    assert "Variações detectadas — revisar contexto" in src
+    assert "Contexto da variação" in src
+    assert "✅ Registrar revisão" in src
+    assert "Revisar tempo de ciclo" in src
+    assert "A duração original foi preservada" in src
+    assert "revisoes_tempo_ciclo_auditoria" in src

@@ -22,6 +22,18 @@ from proposal_status import resumo_status
 
 _STATUS_EM_PRODUCAO = "Em produção"
 _STATUS_FINAIS = {"Pronto", "Entregue"}
+
+# HF32 — revisão humana do contexto de variações. A revisão nunca apaga nem
+# altera a duração observada; apenas acrescenta contexto auditado para uso futuro.
+CATEGORIAS_REVISAO_CICLO = {
+    "pausa_espera": "Pausa / espera",
+    "retrabalho_ajuste": "Retrabalho / ajuste",
+    "maquina_autonoma": "Máquina trabalhando sozinha",
+    "status_atualizado_depois": "Status atualizado depois",
+    "lote_atipico": "Lote / quantidade atípica",
+    "ciclo_valido_longo": "Ciclo válido, duração real",
+    "outro": "Outro contexto",
+}
 _FORMATOS_DATA = (
     "%d/%m/%Y %H:%M:%S",
     "%d/%m/%Y %H:%M",
@@ -230,6 +242,38 @@ def _chave_amostra(amostra: dict[str, Any]) -> tuple[str, str, int]:
     )
 
 
+def chave_revisao_amostra(amostra: dict[str, Any] | None) -> str:
+    """Chave estável da amostra usada pela revisão auditada da HF32."""
+    a = amostra or {}
+    partes = (
+        str(a.get("numero_proposta") or "").strip(),
+        str(a.get("tarefa_id") or a.get("id") or "").strip(),
+        str(a.get("iniciado_em") or "").strip(),
+        str(a.get("concluido_em") or "").strip(),
+        str(int(a.get("duracao_minutos") or 0)),
+    )
+    return "|".join(partes)
+
+
+def _mapa_revisoes_amostras(revisoes: Iterable[dict[str, Any]] | None) -> dict[str, dict[str, Any]]:
+    """Mantém a revisão mais recente de cada amostra sem reescrever auditoria."""
+    mapa: dict[str, dict[str, Any]] = {}
+    for revisao in (revisoes or []):
+        if not isinstance(revisao, dict):
+            continue
+        chave = str(revisao.get("chave_amostra") or "").strip()
+        if not chave:
+            chave = chave_revisao_amostra(revisao)
+        if not chave or chave.endswith("|0"):
+            continue
+        atual = mapa.get(chave)
+        data_nova = str(revisao.get("data_hora") or revisao.get("revisado_em") or "")
+        data_atual = str((atual or {}).get("data_hora") or (atual or {}).get("revisado_em") or "")
+        if atual is None or data_nova >= data_atual:
+            mapa[chave] = copy.deepcopy(revisao)
+    return mapa
+
+
 def _mapa_propostas_oficiais(propostas: Iterable[dict[str, Any]] | None) -> dict[str, dict[str, Any]]:
     """Indexa a Fonte Única por número sem alterar nenhum registro."""
     saida: dict[str, dict[str, Any]] = {}
@@ -435,11 +479,13 @@ def resumir_tempos_observados(
     tarefas: Iterable[dict[str, Any]] | None,
     *,
     propostas_oficiais: Iterable[dict[str, Any]] | None = None,
+    revisoes: Iterable[dict[str, Any]] | None = None,
     limite_produtos: int = 12,
 ) -> dict[str, Any]:
     """Monta memória descritiva; não calcula capacidade ou promessa de prazo."""
     tarefas_lista = [x for x in (tarefas or []) if isinstance(x, dict)]
     mapa_oficial = _mapa_propostas_oficiais(propostas_oficiais)
+    mapa_revisoes = _mapa_revisoes_amostras(revisoes)
     amostras = extrair_amostras(tarefas_lista, propostas_oficiais=propostas_oficiais)
     grupos: dict[str, dict[str, Any]] = {}
     for amostra in amostras:
@@ -466,16 +512,21 @@ def resumir_tempos_observados(
         med = int(round(float(median(vals))))
         indices_atipicos = _indices_atipicos_duracao(amostras_grupo)
         amostras_atipicas = [amostras_grupo[i] for i in sorted(indices_atipicos)]
+        revisadas_atipicas = [x for x in amostras_atipicas if chave_revisao_amostra(x) in mapa_revisoes]
+        pendentes_atipicas = len(amostras_atipicas) - len(revisadas_atipicas)
         vals_centrais = [int(x.get("duracao_minutos") or 0) for i, x in enumerate(amostras_grupo) if i not in indices_atipicos]
         if not vals_centrais:
             vals_centrais = vals[:]  # proteção: nunca produzir faixa vazia
         vals_centrais.sort()
         lotes_texto, lotes_detalhes = _resumo_quantidades(amostras_grupo)
-        qualidade = (
-            f"Revisar {len(amostras_atipicas)} variação(ões)"
-            if amostras_atipicas
-            else "Base em formação" if n < 5 else "Sem variação extrema sinalizada"
-        )
+        if pendentes_atipicas:
+            qualidade = f"Revisar {pendentes_atipicas} variação(ões)"
+            if revisadas_atipicas:
+                qualidade += f" · {len(revisadas_atipicas)} revisada(s)"
+        elif revisadas_atipicas:
+            qualidade = f"{len(revisadas_atipicas)} variação(ões) revisada(s)"
+        else:
+            qualidade = "Base em formação" if n < 5 else "Sem variação extrema sinalizada"
         quantidades = sorted(float(x) for x in grupo.get("quantidades") or [] if float(x) > 0)
         if quantidades:
             qmin, qmax = quantidades[0], quantidades[-1]
@@ -494,6 +545,8 @@ def resumir_tempos_observados(
             "faixa_central_minimo": formatar_duracao(vals_centrais[0]),
             "faixa_central_maximo": formatar_duracao(vals_centrais[-1]),
             "amostras_atipicas": len(amostras_atipicas),
+            "amostras_atipicas_pendentes": int(pendentes_atipicas),
+            "amostras_atipicas_revisadas": len(revisadas_atipicas),
             "qualidade": qualidade,
             "lotes_observados": lotes_texto,
             "lotes_detalhes": lotes_detalhes,
@@ -559,9 +612,11 @@ def resumir_tempos_observados(
     ciclos_em_andamento.sort(key=_ordem_inicio)
     ciclos_sem_inicio.sort(key=lambda x: str(x.get("numero_proposta") or x.get("produto") or "").casefold())
 
-    # HF31 — fila somente leitura para revisar durações estatisticamente muito
-    # distantes do restante do mesmo produto. Nada é descartado da mediana/base.
+    # HF31/HF32 — variações continuam preservadas; a HF32 permite registrar
+    # contexto humano auditado sem apagar, corrigir ou excluir a duração.
+    amostras_variacao: list[dict[str, Any]] = []
     amostras_para_revisar: list[dict[str, Any]] = []
+    amostras_revisadas: list[dict[str, Any]] = []
     for grupo in grupos.values():
         amostras_grupo = [x for x in grupo.get("amostras", []) if int(x.get("duracao_minutos") or 0) > 0]
         if len(amostras_grupo) < 4:
@@ -569,15 +624,29 @@ def resumir_tempos_observados(
         med_grupo = int(round(float(median([int(x.get("duracao_minutos") or 0) for x in amostras_grupo]))))
         for idx in sorted(_indices_atipicos_duracao(amostras_grupo)):
             amostra = copy.deepcopy(amostras_grupo[idx])
+            chave = chave_revisao_amostra(amostra)
+            revisao = copy.deepcopy(mapa_revisoes.get(chave) or {})
+            codigo = str(revisao.get("categoria") or "").strip()
+            amostra["chave_revisao"] = chave
             amostra["mediana_produto_minutos"] = med_grupo
             amostra["motivo_revisao"] = (
                 f"Duração {formatar_duracao(amostra.get('duracao_minutos'))} muito distante da mediana "
                 f"observada de {formatar_duracao(med_grupo)}; sinal para conferência, sem exclusão automática."
             )
-            amostras_para_revisar.append(amostra)
-    amostras_para_revisar.sort(
-        key=lambda x: (str(x.get("produto") or "").casefold(), -int(x.get("duracao_minutos") or 0))
-    )
+            amostra["revisao_registrada"] = bool(revisao)
+            amostra["revisao"] = revisao
+            amostra["revisao_categoria_label"] = str(
+                revisao.get("categoria_label") or CATEGORIAS_REVISAO_CICLO.get(codigo) or codigo
+            ).strip()
+            amostras_variacao.append(amostra)
+            if revisao:
+                amostras_revisadas.append(amostra)
+            else:
+                amostras_para_revisar.append(amostra)
+    ordem_variacao = lambda x: (str(x.get("produto") or "").casefold(), -int(x.get("duracao_minutos") or 0))
+    amostras_variacao.sort(key=ordem_variacao)
+    amostras_para_revisar.sort(key=ordem_variacao)
+    amostras_revisadas.sort(key=ordem_variacao)
 
     return {
         "total_amostras": len(amostras),
@@ -585,8 +654,12 @@ def resumir_tempos_observados(
         "em_andamento_com_inicio": em_andamento,
         "em_producao_sem_inicio_confiavel": sem_inicio,
         "finalizados_sem_fim_confiavel": finalizados_sem_fim_confiavel,
+        "amostras_variacao": amostras_variacao,
+        "total_variacoes_detectadas": len(amostras_variacao),
         "amostras_para_revisar": amostras_para_revisar,
         "total_amostras_para_revisar": len(amostras_para_revisar),
+        "amostras_revisadas": amostras_revisadas,
+        "total_amostras_revisadas": len(amostras_revisadas),
         "ciclos_em_andamento": ciclos_em_andamento,
         "ciclos_sem_inicio_confiavel": ciclos_sem_inicio,
         "produtos": linhas[: max(1, int(limite_produtos or 12))],
