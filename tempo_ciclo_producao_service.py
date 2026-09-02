@@ -326,22 +326,52 @@ def resumir_tempos_observados(
 
     em_andamento = 0
     sem_inicio = 0
+    ciclos_em_andamento: list[dict[str, Any]] = []
+    ciclos_sem_inicio: list[dict[str, Any]] = []
     for tarefa in tarefas_lista:
         if _status(tarefa.get("status")) != _STATUS_EM_PRODUCAO:
             continue
-        if (
-            isinstance(tarefa.get("ciclo_observado_atual"), dict)
+        inicio_atual = (
+            tarefa.get("ciclo_observado_atual")
+            if isinstance(tarefa.get("ciclo_observado_atual"), dict)
             and tarefa["ciclo_observado_atual"].get("iniciado_em")
-        ) or inicio_aberto_timeline(tarefa):
+            else inicio_aberto_timeline(tarefa)
+        )
+        detalhe_base = {
+            "numero_proposta": str(tarefa.get("numero_proposta") or "").strip(),
+            "cliente_nome": str(tarefa.get("cliente_nome") or tarefa.get("cliente") or "Cliente").strip() or "Cliente",
+            "produto": str(tarefa.get("produto") or "Item do pedido").strip() or "Item do pedido",
+            "quantidade": tarefa.get("quantidade"),
+            "tarefa_id": str(tarefa.get("id") or ""),
+        }
+        if inicio_atual:
             em_andamento += 1
+            ciclos_em_andamento.append({
+                **detalhe_base,
+                "iniciado_em": str(inicio_atual.get("iniciado_em") or "").strip(),
+                "iniciado_por": str(inicio_atual.get("iniciado_por") or "").strip(),
+                "origem_inicio": str(inicio_atual.get("origem") or "").strip(),
+            })
         else:
             # Não presumir início: só aceitamos metadado HF27 ou evento explícito da timeline.
             sem_inicio += 1
+            ciclos_sem_inicio.append(detalhe_base)
+
+    def _ordem_inicio(item: dict[str, Any]) -> tuple[int, str]:
+        dt = _parse_data(item.get("iniciado_em"))
+        if dt:
+            return (0, dt.isoformat())
+        return (1, str(item.get("numero_proposta") or item.get("produto") or "").casefold())
+
+    ciclos_em_andamento.sort(key=_ordem_inicio)
+    ciclos_sem_inicio.sort(key=lambda x: str(x.get("numero_proposta") or x.get("produto") or "").casefold())
 
     return {
         "total_amostras": len(amostras),
         "produtos_com_amostras": len(linhas),
         "em_andamento_com_inicio": em_andamento,
         "em_producao_sem_inicio_confiavel": sem_inicio,
+        "ciclos_em_andamento": ciclos_em_andamento,
+        "ciclos_sem_inicio_confiavel": ciclos_sem_inicio,
         "produtos": linhas[: max(1, int(limite_produtos or 12))],
     }

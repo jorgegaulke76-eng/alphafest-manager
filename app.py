@@ -22968,7 +22968,7 @@ if pagina_atual == "central":
                 "produção, Agenda Executiva e Plano de Amanhã continuam funcionando normalmente."
             )
         else:
-            with st.expander("⏱️ Memória de tempos de produção · HF27", expanded=False):
+            with st.expander("⏱️ Memória de tempos de produção · HF29", expanded=False):
                 st.caption(
                     "Aprendizado somente leitura a partir de transições explícitas do Fluxo. O intervalo entre "
                     "'Em produção' e 'Pronto/Entregue' é chamado de tempo de ciclo observado: pode incluir pausas, "
@@ -22979,6 +22979,52 @@ if pagina_atual == "central":
                 _tc2_hf27.metric("📦 Produtos com base", int(_memoria_ciclo_hf27.get("produtos_com_amostras") or 0))
                 _tc3_hf27.metric("🔵 Ciclos em andamento", int(_memoria_ciclo_hf27.get("em_andamento_com_inicio") or 0))
                 _tc4_hf27.metric("⚪ Sem início confiável", int(_memoria_ciclo_hf27.get("em_producao_sem_inicio_confiavel") or 0))
+
+                # HF29 — não deixar o contador de ciclo em andamento virar uma caixa-preta.
+                # Mostramos exatamente qual item está sendo observado, sem alterar status.
+                _ciclos_abertos_hf29 = list(_memoria_ciclo_hf27.get("ciclos_em_andamento") or [])
+                if _ciclos_abertos_hf29:
+                    st.markdown("**🔵 Ciclo(s) em andamento — qual pedido está sendo observado**")
+                    for _idx_ca_hf29, _ca_hf29 in enumerate(_ciclos_abertos_hf29[:6]):
+                        _num_ca_hf29 = str(_ca_hf29.get("numero_proposta") or "").strip()
+                        _qtd_ca_hf29 = _ca_hf29.get("quantidade")
+                        try:
+                            _qtd_num_ca_hf29 = float(_qtd_ca_hf29)
+                            _qtd_txt_ca_hf29 = str(int(_qtd_num_ca_hf29)) if _qtd_num_ca_hf29.is_integer() else str(_qtd_num_ca_hf29)
+                        except Exception:
+                            _qtd_txt_ca_hf29 = str(_qtd_ca_hf29 or "—")
+                        with st.container(border=True):
+                            _caa_hf29, _cab_hf29 = st.columns([8, 2])
+                            _caa_hf29.markdown(
+                                f"**{html.escape(_num_ca_hf29 or 'Sem proposta')} — "
+                                f"{html.escape(str(_ca_hf29.get('cliente_nome') or 'Cliente'))}**"
+                            )
+                            _caa_hf29.write(
+                                f"🧾 {html.escape(str(_ca_hf29.get('produto') or 'Item do pedido'))} · "
+                                f"Qtd.: {html.escape(_qtd_txt_ca_hf29)}"
+                            )
+                            _inicio_ca_hf29 = str(_ca_hf29.get("iniciado_em") or "").strip() or "Horário não informado"
+                            _por_ca_hf29 = str(_ca_hf29.get("iniciado_por") or "").strip()
+                            _caa_hf29.caption(
+                                f"Início explícito do ciclo: {_inicio_ca_hf29}"
+                                + (f" · por {_por_ca_hf29}" if _por_ca_hf29 else "")
+                            )
+                            if _num_ca_hf29:
+                                _cab_hf29.button(
+                                    "📋 Abrir pedido",
+                                    key=f"tempo_ciclo_abrir_hf29_{_idx_ca_hf29}_{_num_ca_hf29}",
+                                    use_container_width=True,
+                                    on_click=lambda n=_num_ca_hf29: st.session_state.__setitem__("alerta_proposta_numero", n),
+                                )
+                            else:
+                                _cab_hf29.button(
+                                    "📋 Sem proposta",
+                                    key=f"tempo_ciclo_sem_numero_hf29_{_idx_ca_hf29}",
+                                    disabled=True,
+                                    use_container_width=True,
+                                )
+                    if len(_ciclos_abertos_hf29) > 6:
+                        st.caption(f"Mais {len(_ciclos_abertos_hf29) - 6} ciclo(s) em andamento na memória.")
 
                 _produtos_ciclo_hf27 = list(_memoria_ciclo_hf27.get("produtos") or [])
                 if _produtos_ciclo_hf27:

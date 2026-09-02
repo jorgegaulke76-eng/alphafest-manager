@@ -127,3 +127,29 @@ def test_reconciliacao_oficial_pronto_fecha_ciclo_em_producao():
     assert alterado is True
     assert novas[0]["status"] == "Pronto"
     assert novas[0]["ciclos_observados"][-1]["duracao_minutos"] == 120
+
+
+def test_hf29_resumo_identifica_exatamente_ciclo_em_andamento():
+    tarefas = [{
+        "id": "P9::0",
+        "numero_proposta": "PROP-9",
+        "cliente_nome": "Cliente Teste",
+        "produto": "Caneca",
+        "quantidade": 5,
+        "status": "Em produção",
+        "ciclo_observado_atual": {
+            "iniciado_em": "02/09/2026 18:40",
+            "iniciado_por": "Jorge",
+            "origem": "transicao_fluxo",
+        },
+    }]
+    r = resumir_tempos_observados(tarefas)
+    assert r["em_andamento_com_inicio"] == 1
+    assert len(r["ciclos_em_andamento"]) == 1
+    aberto = r["ciclos_em_andamento"][0]
+    assert aberto["numero_proposta"] == "PROP-9"
+    assert aberto["cliente_nome"] == "Cliente Teste"
+    assert aberto["produto"] == "Caneca"
+    assert aberto["quantidade"] == 5
+    assert aberto["iniciado_em"] == "02/09/2026 18:40"
+    assert aberto["iniciado_por"] == "Jorge"

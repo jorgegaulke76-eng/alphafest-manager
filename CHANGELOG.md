@@ -904,3 +904,10 @@ hangelog
 - Corrige a interface que escondia pedidos já reservados da seleção de estorno.
 - Adiciona lista própria de reservas/consumos ativos no perfil Jorge.
 - Reserva sem baixa física é apenas liberada; consumo real usa o estorno auditado do pedido.
+
+## 20.4.9-I8.13.5-HF29 — THU • Identificação do ciclo em andamento
+- Memória de tempo passa a mostrar qual proposta/produto compõe cada ciclo em andamento.
+- Exibe cliente, quantidade, início explícito e usuário de início quando disponível.
+- Adiciona botão para abrir o pedido sem alterar status ou criar eventos.
+- Nenhum JSON/SQL operacional é modificado.
+

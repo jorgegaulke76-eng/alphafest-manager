@@ -45,3 +45,4 @@
 - HF27: Memória de tempo de ciclo observado (Jorge) — registra intervalos explícitos Em produção → Pronto/Entregue, preservando quantidade e sem confundir ciclo com mão de obra.
 - HF28: Estorno visível de reserva/consumo por pedido (Jorge) — corrige a seleção administrativa para permitir liberar reservas já ativas pelo fluxo auditado do próprio pedido.
 - Próximo após homologação: acumular amostras reais da HF27 e observar variação por produto/quantidade; capacidade quantitativa só entra quando houver base suficiente e critério estatístico seguro.
+- HF29: Identificação do ciclo em andamento (Jorge) — mostra proposta, cliente, produto, quantidade e início explícito para cada ciclo observado aberto, sem alterar status.
