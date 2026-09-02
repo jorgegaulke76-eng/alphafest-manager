@@ -816,3 +816,13 @@ hangelog
 - O antigo cartão único “O que fazer agora” é substituído pela Agenda Executiva somente no perfil Jorge; Anna permanece com a experiência homologada anterior.
 - Nenhum status, JSON, SQL ou banco novo foi criado.
 
+
+## 20.4.9-I8.13.5-HF17 — Agenda Operacional Imprimível da Anna
+- Central Operacional da Anna ganha uma agenda diária somente leitura com todas as propostas/pedidos ainda abertos.
+- Cada linha mostra somente dados: número da proposta, status resumido, cliente, WhatsApp, produto(s) e data de entrega; nenhuma foto, mídia ou descrição visual é incluída.
+- A lista é ordenada pela data de entrega mais urgente, com prazo vencido e entrega do dia destacados no status resumido.
+- Dois PDFs A4 paisagem podem ser gerados: `Início do dia` e `Fechamento do dia`, ambos com data/hora da emissão para registrar a fotografia daquele momento.
+- O PDF repete o cabeçalho da tabela em páginas adicionais e não embute imagens.
+- A agenda é exclusivamente operacional: não altera proposta, status, contato, pagamento, produção ou entrega.
+- Importação resiliente: uma atualização parcial do módulo da agenda não derruba o AlphaFest Manager; a Central continua disponível e informa a indisponibilidade da agenda.
+- Nenhum JSON, SQL ou banco operacional foi alterado.

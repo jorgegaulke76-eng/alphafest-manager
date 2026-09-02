@@ -153,6 +153,16 @@ from proposal_status import (
 from executive_center import renderizar_centro_executivo
 from pedido_resumo import resumo_produtos_pedido
 try:
+    from anna_agenda_service import (
+        montar_agenda_anna as _anna_montar_agenda,
+        resumo_agenda_anna as _anna_resumo_agenda,
+        gerar_pdf_agenda_anna as _anna_gerar_pdf_agenda,
+    )
+    ANNA_AGENDA_IMPORT_ERROR = ""
+except Exception as _anna_agenda_import_exc:
+    _anna_montar_agenda = _anna_resumo_agenda = _anna_gerar_pdf_agenda = None
+    ANNA_AGENDA_IMPORT_ERROR = str(_anna_agenda_import_exc)
+try:
     from thu_embedded import THU_AVATAR_B64
 except Exception:
     THU_AVATAR_B64 = ""
@@ -21881,6 +21891,8 @@ def dialog_propostas_hoje_anna(propostas):
     for idx, prop in enumerate(hoje):
         _renderizar_linha_proposta_anna(prop, f"orc_hoje_dialog_{idx}")
 
+
+
 def renderizar_workspace_anna_isolado():
     registrar_atividade(obter_usuario_atual(), "Na Central Operacional", "Central da Anna")
     usuario = obter_usuario_atual()
@@ -21963,6 +21975,69 @@ def renderizar_workspace_anna_isolado():
     if entregas_hoje:
         if m4.button("🔎 Ver quais são", key="anna_ver_entregas_hoje", use_container_width=True):
             dialog_entregas_hoje_anna(historico)
+
+    # HF17 — roteiro diário imprimível da Anna. Somente leitura e somente dados:
+    # número, status, cliente, telefone, produtos e data de entrega.
+    st.markdown("### 🗓️ Agenda diária para impressão")
+    st.caption(
+        "Roteiro com todas as propostas e pedidos ainda abertos. Sem imagens. "
+        "A lista é ordenada pela data de entrega mais urgente e reflete o banco no momento da impressão."
+    )
+    agenda_anna_hf17 = _anna_montar_agenda(historico, hoje=hoje_local()) if _anna_montar_agenda else []
+    resumo_agenda_anna_hf17 = _anna_resumo_agenda(agenda_anna_hf17) if _anna_resumo_agenda else {}
+    if ANNA_AGENDA_IMPORT_ERROR:
+        st.warning("A agenda imprimível não foi carregada nesta atualização. O restante da Central da Anna continua disponível normalmente.")
+    elif agenda_anna_hf17:
+        ag1, ag2, ag3, ag4 = st.columns(4)
+        ag1.metric("Abertos", resumo_agenda_anna_hf17["abertas"])
+        ag2.metric("Aguardando aprovação", resumo_agenda_anna_hf17["aguardando_aprovacao"])
+        ag3.metric("Em produção", resumo_agenda_anna_hf17["em_producao"])
+        ag4.metric("Prontos", resumo_agenda_anna_hf17["prontas"])
+
+        previa_agenda_hf17 = pd.DataFrame([
+            {
+                "Proposta": x.get("numero_proposta", "—"),
+                "Status": x.get("status", "—"),
+                "Cliente": x.get("cliente_nome", "Cliente"),
+                "WhatsApp": x.get("telefone", "—"),
+                "Produto(s)": x.get("produtos", "—"),
+                "Entrega": x.get("data_entrega", "—"),
+            }
+            for x in agenda_anna_hf17
+        ])
+        st.dataframe(
+            previa_agenda_hf17,
+            use_container_width=True,
+            hide_index=True,
+            height=min(420, 36 + 35 * len(previa_agenda_hf17)),
+        )
+
+        pdf_manha_hf17 = _anna_gerar_pdf_agenda(agenda_anna_hf17, "Início do dia", gerado_em=agora_local())
+        pdf_fim_hf17 = _anna_gerar_pdf_agenda(agenda_anna_hf17, "Fechamento do dia", gerado_em=agora_local())
+        data_arquivo_hf17 = hoje_local().strftime("%Y-%m-%d")
+        ip1_hf17, ip2_hf17 = st.columns(2)
+        if pdf_manha_hf17:
+            ip1_hf17.download_button(
+                "🌅 Baixar agenda — início do dia (PDF)",
+                pdf_manha_hf17,
+                file_name=f"agenda_anna_{data_arquivo_hf17}_inicio_do_dia.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="anna_agenda_inicio_hf17",
+            )
+        if pdf_fim_hf17:
+            ip2_hf17.download_button(
+                "🌙 Baixar agenda — fechamento do dia (PDF)",
+                pdf_fim_hf17,
+                file_name=f"agenda_anna_{data_arquivo_hf17}_fechamento_do_dia.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="anna_agenda_fim_hf17",
+            )
+        if not pdf_manha_hf17 or not pdf_fim_hf17:
+            st.warning("A geração do PDF está indisponível neste ambiente. A tabela acima continua disponível para conferência.")
+    elif not ANNA_AGENDA_IMPORT_ERROR:
+        st.success("Nenhuma proposta ou pedido aberto para a agenda de hoje.")
 
     st.markdown("### 🗓️ Orçamentos lançados hoje")
     if propostas_hoje:
