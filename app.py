@@ -111,6 +111,8 @@ from entregas_logistica_service import (
 from thu_comercial_service import (
     aplicar_registro_envio as _thu_comercial_aplicar_registro_envio,
     montar_retornos_comerciais as _thu_comercial_montar_retornos,
+    aplicar_registro_cobranca as _thu_comercial_aplicar_registro_cobranca,
+    montar_cobrancas_assistidas as _thu_comercial_montar_cobrancas,
 )
 from catalogo_orcamento_service import (
     ORCAMENTO_PRODUTO_LIVRE as _catalogo_orcamento_livre,
@@ -12682,6 +12684,56 @@ def registrar_envio_comercial_proposta(numero):
     return atualizar_proposta_com_leitura_fresca(numero, _mutar)
 
 
+def registrar_cobranca_financeira_proposta(numero):
+    """HF15: registra cobrança realmente feita sem marcar o pedido como Pago.
+
+    A cobrança é assistida e manual. O status financeiro continua soberano e só
+    muda quando Jorge/Anna registrar o pagamento pelos fluxos oficiais.
+    Mensalistas permanecem no fechamento mensal e não usam esta fila.
+    """
+    usuario = obter_usuario_atual() or {}
+    nome_usuario = str(usuario.get("nome") or "").strip()
+    if nome_usuario.casefold() != "jorge":
+        return False, None, "Registro de cobrança disponível somente para Jorge nesta homologação."
+
+    instante = agora_local().strftime("%d/%m/%Y %H:%M")
+    validacao = {"ok": False, "motivo": "Pedido não elegível para cobrança assistida."}
+
+    def _mutar(proposta):
+        estado = _status_resumo(proposta)
+        if estado.get("encerrada"):
+            validacao["motivo"] = "A proposta está encerrada e não pode receber nova cobrança."
+            return proposta
+        if estado.get("mensalista"):
+            validacao["motivo"] = "Cliente mensalista: acompanhe o pagamento pelo fechamento mensal."
+            return proposta
+        if not estado.get("aprovado"):
+            validacao["motivo"] = "O pedido ainda não está aprovado."
+            return proposta
+        if estado.get("pago"):
+            validacao["motivo"] = "O pedido já está marcado como Pago."
+            return proposta
+        validacao["ok"] = True
+        _thu_comercial_aplicar_registro_cobranca(
+            proposta,
+            now_text=instante,
+            usuario=nome_usuario or "Jorge",
+        )
+        qtd = int(proposta.get("cobrancas_qtd") or 1)
+        descricao = (
+            "Primeira cobrança de pagamento registrada"
+            if qtd <= 1
+            else "Novo acompanhamento de pagamento registrado"
+        )
+        registrar_evento_proposta(proposta, descricao, nome_usuario or "Jorge")
+        return proposta
+
+    ok, atualizada, motivo = atualizar_proposta_com_leitura_fresca(numero, _mutar)
+    if not validacao["ok"]:
+        return False, atualizada, validacao["motivo"]
+    return ok, atualizada, motivo
+
+
 def resumo_cliente_operacional(cliente, propostas):
     """Calcula um cartão operacional sem alterar nenhum dado do cliente."""
     propostas = propostas or []
@@ -22523,6 +22575,99 @@ if pagina_atual == "central":
         else:
             st.success("Nenhum orçamento com envio registrado está aguardando aprovação.")
             st.caption("Ao enviar um novo orçamento, use **Registrar envio**. A partir daí o THU passa a controlar o tempo de retorno.")
+
+    # HF15 — segunda etapa do ciclo THU: cobrança assistida de pedidos aprovados
+    # e não pagos, somente Jorge. Mensalistas ficam no fechamento mensal.
+    if usuario_eh_jorge_i8112hf1:
+        cobrancas_hf15 = _thu_comercial_montar_cobrancas(
+            historico_central,
+            hoje_central,
+            limite=10,
+        )
+        st.divider()
+        st.markdown("#### 💳 THU • Cobranças assistidas")
+        st.caption(
+            "Acompanha pedidos aprovados com pagamento individual pendente. "
+            "O THU prepara a cobrança e registra o contato, mas não envia mensagem nem marca Pago automaticamente. "
+            "Clientes de faturamento mensal continuam no fechamento mensal."
+        )
+        if cobrancas_hf15:
+            _mapa_cobranca_hf15 = {
+                str((p or {}).get("numero_proposta") or ""): p
+                for p in historico_central
+                if isinstance(p, dict)
+            }
+            _cobrar_agora_hf15 = [c for c in cobrancas_hf15 if c.get("nivel") != "aguardar"]
+            _valor_cobrancas_hf15 = sum(
+                calcular_valores_proposta(_mapa_cobranca_hf15.get(str(c.get("numero_proposta") or ""), {}))[2]
+                for c in cobrancas_hf15
+            )
+            _cbm1_hf15, _cbm2_hf15, _cbm3_hf15 = st.columns(3)
+            _cbm1_hf15.metric("Pagamento pendente", len(cobrancas_hf15))
+            _cbm2_hf15.metric("Cobrança sugerida agora", len(_cobrar_agora_hf15))
+            _cbm3_hf15.metric("Valor a receber", _i8112_moeda(_valor_cobrancas_hf15))
+
+            for _cob_hf15 in cobrancas_hf15[:5]:
+                _nivel_cob_hf15 = str(_cob_hf15.get("nivel") or "normal")
+                _icone_cob_hf15 = {
+                    "urgente": "🔴",
+                    "alta": "🟠",
+                    "normal": "🔵",
+                    "aguardar": "🟢",
+                }.get(_nivel_cob_hf15, "🔵")
+                _numero_cob_hf15 = str(_cob_hf15.get("numero_proposta") or "")
+                _prop_cob_hf15 = _mapa_cobranca_hf15.get(_numero_cob_hf15, {})
+                _valor_cob_hf15 = calcular_valores_proposta(_prop_cob_hf15)[2]
+                with st.container(border=True):
+                    _c1_hf15, _c2_hf15, _c3_hf15, _c4_hf15 = st.columns([2.6, 1, 1.15, 1])
+                    _c1_hf15.markdown(
+                        f"{_icone_cob_hf15} **{html.escape(_numero_cob_hf15 or '—')} — "
+                        f"{html.escape(str(_cob_hf15.get('cliente_nome') or 'Cliente'))}**"
+                    )
+                    _c1_hf15.caption(
+                        f"{_cob_hf15.get('motivo', 'Pagamento pendente')} · "
+                        f"Valor {_i8112_moeda(_valor_cob_hf15)} · Próxima ação: {_cob_hf15.get('acao', 'Acompanhar pagamento')}"
+                    )
+                    _wa_cob_hf15 = re.sub(r"\D", "", str(_cob_hf15.get("whatsapp") or ""))
+                    if _wa_cob_hf15 and not _wa_cob_hf15.startswith("55"):
+                        _wa_cob_hf15 = "55" + _wa_cob_hf15
+                    if _wa_cob_hf15:
+                        _c2_hf15.link_button(
+                            "💳 Cobrar",
+                            f"https://wa.me/{_wa_cob_hf15}?text={quote(str(_cob_hf15.get('mensagem_sugerida') or ''))}",
+                            use_container_width=True,
+                        )
+                    else:
+                        _c2_hf15.button(
+                            "📱 Sem WhatsApp",
+                            disabled=True,
+                            key=f"thu_cob_sem_wa_hf15_{_numero_cob_hf15}",
+                            use_container_width=True,
+                        )
+                    if _c3_hf15.button(
+                        "✅ Registrei cobrança",
+                        key=f"thu_cob_reg_hf15_{_numero_cob_hf15}",
+                        use_container_width=True,
+                        help="Clique somente depois de realmente cobrar/falar com o cliente. Isso não marca o pedido como Pago.",
+                    ):
+                        _ok_cob_hf15, _prop_reg_cob_hf15, _motivo_cob_hf15 = registrar_cobranca_financeira_proposta(_numero_cob_hf15)
+                        if _ok_cob_hf15:
+                            st.session_state["_mensagem_sucesso_pendente"] = (
+                                f"Cobrança da proposta {_numero_cob_hf15} registrada. O status Pago não foi alterado."
+                            )
+                            st.rerun()
+                        else:
+                            st.error(_motivo_cob_hf15 or "Não foi possível registrar a cobrança.")
+                    _c4_hf15.button(
+                        "📋 Abrir pedido",
+                        key=f"thu_cob_abrir_hf15_{_numero_cob_hf15}",
+                        use_container_width=True,
+                        on_click=lambda n=_numero_cob_hf15: st.session_state.__setitem__("alerta_proposta_numero", n),
+                    )
+            if len(cobrancas_hf15) > 5:
+                st.caption(f"Mais {len(cobrancas_hf15) - 5} pedido(s) acompanhado(s) pelo THU financeiro.")
+        else:
+            st.success("Nenhum pedido com pagamento individual pendente para cobrança assistida.")
 
     st.divider()
     st.subheader("🎯 O que fazer agora")

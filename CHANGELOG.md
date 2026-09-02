@@ -1,3 +1,10 @@
+# 20.4.9-I8.13.5-HF15 — THU • Cobranças Assistidas
+- Segunda etapa do ciclo de inteligência assistida, ainda somente no perfil Jorge.
+- Central cria fila financeira para pedidos aprovados e não pagos, excluindo faturamento mensal.
+- THU prioriza entregues/prontos/prazos próximos e tempo desde a última cobrança registrada.
+- WhatsApp é apenas preparado; **Registrei cobrança** não altera o status Pago.
+- Confirmação oficial de Pago remove automaticamente o pedido da fila financeira.
+
 # 20.4.9-I8.13.5-HF14 — THU • Retornos Comerciais
 - Primeiro passo do novo ciclo de automações/inteligência, homologado primeiro no perfil Jorge.
 - Envio/retorno de orçamento passa a ter registro explícito, sem presumir que abrir o WhatsApp significa enviar.

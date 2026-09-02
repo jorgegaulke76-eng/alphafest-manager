@@ -29,8 +29,8 @@ Compara projeções com a fonte oficial e identifica divergências.
 ### `status_diagnostics_service.py`
 Diagnóstico puro de compatibilidade/legado de status.
 
-### `thu_comercial_service.py` (HF14)
-Inteligência comercial assistida e testável: registro explícito de envio/retorno e priorização de follow-up. Não envia mensagens nem altera status automaticamente.
+### `thu_comercial_service.py` (HF14–HF15)
+Inteligência comercial/financeira assistida e testável: registro explícito de envio/retorno, priorização de follow-up e cobranças assistidas de pedidos aprovados não pagos. Não envia mensagens nem altera status automaticamente; faturamento mensal permanece separado.
 
 ## Regra para próximas evoluções
 

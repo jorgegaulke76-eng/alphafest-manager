@@ -28,3 +28,9 @@
 - Pesquisa universal visual.
 - Publicação e conexão do webhook Meta.
 - Respostas assistidas diretamente na Central Multicanal.
+
+## Ciclo atual — I8.13.5 / THU assistido
+- HF14: Retornos Comerciais (Jorge) — homologado.
+- HF15: Cobranças Assistidas (Jorge) — em homologação.
+- Próximo após homologação: consolidar a agenda executiva do THU sem automatizar decisões/status.
+
