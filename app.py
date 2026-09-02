@@ -174,6 +174,12 @@ except Exception as _anna_fechamento_import_exc:
     _anna_criar_snapshot_inicio = _anna_snapshot_valido = _anna_comparar_fechamento = _anna_gerar_pdf_fechamento = None
     ANNA_FECHAMENTO_IMPORT_ERROR = str(_anna_fechamento_import_exc)
 try:
+    from thu_continuidade_service import montar_sinais_sem_avanco as _thu_continuidade_montar_sinais
+    THU_CONTINUIDADE_IMPORT_ERROR = ""
+except Exception as _thu_continuidade_import_exc:
+    _thu_continuidade_montar_sinais = None
+    THU_CONTINUIDADE_IMPORT_ERROR = str(_thu_continuidade_import_exc)
+try:
     from thu_embedded import THU_AVATAR_B64
 except Exception:
     THU_AVATAR_B64 = ""
@@ -22810,6 +22816,89 @@ if pagina_atual == "central":
             )
         else:
             st.success("Agenda executiva sem ações pendentes neste momento.")
+
+        # HF21 — usa as fotografias diárias registradas pela Anna para mostrar ao
+        # Jorge pedidos que continuam no mesmo estágio/status. É um sinal de
+        # conferência, não uma afirmação de que não houve trabalho físico.
+        st.divider()
+        st.markdown("#### ⏳ THU • Sem avanço registrado")
+        st.caption(
+            "Compara a situação atual com as fotografias diárias da Agenda da Anna. "
+            "O alerta significa que não houve mudança de status registrada no Manager; "
+            "não presume que o pedido ficou parado fisicamente e não altera nenhum dado."
+        )
+        _snapshots_cont_hf21 = load_document(
+            "agenda_anna_snapshots_db",
+            ARQUIVO_AGENDA_ANNA_SNAPSHOTS,
+            {},
+        )
+        if not isinstance(_snapshots_cont_hf21, dict):
+            _snapshots_cont_hf21 = {}
+        _linhas_cont_hf21 = (
+            _anna_montar_agenda(historico_central, hoje=hoje_central)
+            if _anna_montar_agenda
+            else []
+        )
+        _sinais_cont_hf21 = (
+            _thu_continuidade_montar_sinais(
+                _linhas_cont_hf21,
+                _snapshots_cont_hf21,
+                hoje_central,
+                limite=8,
+            )
+            if _thu_continuidade_montar_sinais
+            else []
+        )
+        if THU_CONTINUIDADE_IMPORT_ERROR:
+            st.warning(
+                "O radar de continuidade não foi carregado nesta atualização. "
+                "A Agenda Executiva e os demais blocos do THU continuam disponíveis normalmente."
+            )
+        elif _sinais_cont_hf21:
+            _cont_urg_hf21 = sum(1 for x in _sinais_cont_hf21 if x.get("nivel") == "urgente")
+            _cont_rec_hf21 = sum(1 for x in _sinais_cont_hf21 if int(x.get("dias_mesma_fase") or 0) >= 2)
+            _ct1_hf21, _ct2_hf21, _ct3_hf21 = st.columns(3)
+            _ct1_hf21.metric("🔴 Prazo crítico sem mudança", _cont_urg_hf21)
+            _ct2_hf21.metric("🕒 Mesmo estágio há 2+ dias", _cont_rec_hf21)
+            _ct3_hf21.metric("📋 Sinais para conferir", len(_sinais_cont_hf21))
+
+            for _sinal_hf21 in _sinais_cont_hf21[:6]:
+                _nivel_hf21 = str(_sinal_hf21.get("nivel") or "normal")
+                _icone_hf21 = {"urgente": "🔴", "alta": "🟠", "normal": "🔵"}.get(_nivel_hf21, "🔵")
+                _numero_hf21 = str(_sinal_hf21.get("numero_proposta") or "")
+                with st.container(border=True):
+                    _sg1_hf21, _sg2_hf21 = st.columns([8, 2])
+                    _sg1_hf21.markdown(
+                        f"**{_icone_hf21} {_numero_hf21 or '—'} — "
+                        f"{html.escape(str(_sinal_hf21.get('cliente_nome') or 'Cliente'))}**"
+                    )
+                    _sg1_hf21.caption(
+                        f"{_sinal_hf21.get('fase_rotulo', 'Mesmo estágio')} · "
+                        f"{_sinal_hf21.get('motivo', '')}"
+                    )
+                    _sg1_hf21.write(
+                        f"**Próxima conferência:** {_sinal_hf21.get('acao', 'Abrir o pedido e revisar o próximo passo')}"
+                    )
+                    _sg2_hf21.button(
+                        "📋 Abrir pedido",
+                        key=f"thu_sem_avanco_abrir_hf21_{_numero_hf21}",
+                        use_container_width=True,
+                        on_click=lambda n=_numero_hf21: st.session_state.__setitem__("alerta_proposta_numero", n),
+                    )
+            if len(_sinais_cont_hf21) > 6:
+                st.caption(f"Mais {len(_sinais_cont_hf21) - 6} sinal(is) de continuidade para conferência.")
+        else:
+            _tem_snapshots_hf21 = any(
+                isinstance(v, dict) and isinstance(v.get("linhas"), list)
+                for v in _snapshots_cont_hf21.values()
+            )
+            if _tem_snapshots_hf21:
+                st.success("Nenhum pedido crítico ou recorrente sem mudança de status registrada neste momento.")
+            else:
+                st.info(
+                    "O histórico diário ainda está em formação. Registre o início do dia na Agenda da Anna; "
+                    "a partir dessas fotografias o THU passa a identificar continuidade de estágio."
+                )
 
     # HF14 — primeiro passo do ciclo de automações/inteligência do THU, somente Jorge.
     # O bloco depende de um envio explicitamente registrado; abrir o WhatsApp não

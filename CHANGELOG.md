@@ -1,3 +1,10 @@
+# 20.4.9-I8.13.5-HF21 — THU • Sem avanço registrado
+
+- Novo radar somente leitura no perfil Jorge usando as fotografias diárias da Agenda da Anna.
+- Sinaliza prazo hoje/vencido sem mudança de status desde a abertura e recorrência da mesma fase por 2+ dias.
+- Não presume ausência de trabalho físico; o alerta significa somente ausência de mudança de status registrada.
+- Nenhum status, contato ou mensagem é alterado automaticamente.
+
 # 20.4.9-I8.13.5-HF20 — Agenda Atualizável da Anna
 - Mantém o roteiro da manhã congelado para comparação.
 - Adiciona PDF atualizável a qualquer momento do dia, usando o banco atual.
