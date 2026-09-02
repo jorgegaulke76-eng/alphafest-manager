@@ -180,6 +180,18 @@ except Exception as _thu_continuidade_import_exc:
     _thu_continuidade_montar_sinais = None
     THU_CONTINUIDADE_IMPORT_ERROR = str(_thu_continuidade_import_exc)
 try:
+    from biblioteca_3d_service import (
+        arquivo_3d_valido as _b3d_arquivo_valido,
+        imagem_valida as _b3d_imagem_valida,
+        criar_registro as _b3d_criar_registro,
+        filtrar_modelos as _b3d_filtrar_modelos,
+        tamanho_legivel as _b3d_tamanho_legivel,
+    )
+    BIBLIOTECA_3D_IMPORT_ERROR = ""
+except Exception as _b3d_import_exc:
+    _b3d_arquivo_valido = _b3d_imagem_valida = _b3d_criar_registro = _b3d_filtrar_modelos = _b3d_tamanho_legivel = None
+    BIBLIOTECA_3D_IMPORT_ERROR = str(_b3d_import_exc)
+try:
     from thu_embedded import THU_AVATAR_B64
 except Exception:
     THU_AVATAR_B64 = ""
@@ -381,6 +393,22 @@ def upload_library_file(upload, produto_nome="produto", local_upload_dir="biblio
     destino.write_bytes(bytes(upload.getbuffer()))
     return str(destino).replace("\\", "/")
 
+def upload_private_3d_file(upload, folder="modelos"):
+    func = getattr(_cloud_db, "upload_private_3d_file", None) if _cloud_db else None
+    return str(func(upload, folder=folder) or "") if callable(func) else ""
+
+def read_private_3d_file(object_path):
+    func = getattr(_cloud_db, "read_private_3d_file", None) if _cloud_db else None
+    return func(object_path) if callable(func) else None
+
+def delete_private_3d_file(object_path):
+    func = getattr(_cloud_db, "delete_private_3d_file", None) if _cloud_db else None
+    return bool(func(object_path)) if callable(func) else False
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _biblioteca3d_bytes_cache(object_path):
+    return read_private_3d_file(object_path)
+
 def catalog_public_url(object_path):
     func = getattr(_cloud_db, "catalog_public_url", None) if _cloud_db else None
     return func(object_path) if callable(func) else ""
@@ -507,6 +535,7 @@ ARQUIVO_FICHAS_TECNICAS = "fichas_tecnicas_db.json"
 ARQUIVO_CONSUMO_PEDIDOS = "consumo_pedidos_db.json"
 ARQUIVO_PLANEJAMENTO_COMPRAS = "planejamento_compras_db.json"
 ARQUIVO_AGENDA_ANNA_SNAPSHOTS = "agenda_anna_snapshots_db.json"
+ARQUIVO_BIBLIOTECA_3D = "biblioteca_3d_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -636,6 +665,7 @@ ABAS_SISTEMA = [
     ("relatorios", "📊 Relatórios"),
     ("executivo", "📈 Executivo"),
     ("catalogo", "📦 Catálogo"),
+    ("biblioteca_3d", "🧊 Biblioteca 3D"),
     ("relacionamentos", "🌐 Relacionamentos"),
     ("faturamento_mensal", "💳 Faturamento Mensal"),
     ("compras_custos", "🧾 Compras, Custos & Estoque"),
@@ -764,11 +794,12 @@ def obter_perfil_configurado(usuario=None):
             # I8.11.1 / I8.12.1 nascem primeiro no perfil Jorge. A sobreposição
             # garante acesso mesmo quando usuarios_config.json veio de uma base
             # antiga, sem liberar os módulos de gestão no perfil operacional.
-            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"faturamento_mensal", "compras_custos", "entregas_retiradas"})
+            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"faturamento_mensal", "compras_custos", "entregas_retiradas", "biblioteca_3d"})
             acoes = dict(cfg.get("acoes") or {})
             acoes["faturamento_mensal"] = list(ACOES_PADRAO)
             acoes["compras_custos"] = list(ACOES_PADRAO)
             acoes["entregas_retiradas"] = list(ACOES_PADRAO)
+            acoes["biblioteca_3d"] = list(ACOES_PADRAO)
             cfg["acoes"] = acoes
         return cfg
     nome = str(usuario.get("nome", "")).casefold()
@@ -22206,7 +22237,7 @@ aplicar_visibilidade_abas(obter_usuario_atual())
 # Isso elimina o custo do st.tabs, que executava todos os 20 módulos a cada clique.
 GRUPOS_NAVEGACAO = {
     "🏠 Central": ["central"],
-    "📋 Operação": ["novo_orcamento", "historico", "fluxo", "entregas_retiradas", "catalogo", "projeto", "jornada"],
+    "📋 Operação": ["novo_orcamento", "historico", "fluxo", "entregas_retiradas", "catalogo", "biblioteca_3d", "projeto", "jornada"],
     "👥 Clientes": ["atendimento", "crm", "clientes_360", "relacionamentos"],
     "🧠 Inteligência": ["alpha", "intelligence", "memoria", "conhecimento"],
     "📈 Gestão": ["executivo", "relatorios", "faturamento_mensal", "compras_custos"],
@@ -26402,6 +26433,188 @@ if pagina_atual == "novo_orcamento":
                 else "Proposta salva com sucesso e operação atualizada."
             )
             rerun_na_aba("novo_orcamento", mensagem_salva_i811)
+
+
+if pagina_atual == "biblioteca_3d":
+    _usuario_b3d = obter_usuario_atual() or {}
+    if str(_usuario_b3d.get("nome") or "").strip().casefold() != "jorge":
+        st.error("A Biblioteca 3D é exclusiva do perfil Jorge.")
+        st.stop()
+
+    st.markdown("# 🧊 Biblioteca 3D")
+    st.caption(
+        "Acervo interno para preservar os arquivos de impressão 3D. "
+        "Sem link externo: o arquivo fica salvo no armazenamento privado do Manager."
+    )
+
+    if BIBLIOTECA_3D_IMPORT_ERROR:
+        st.error("O módulo da Biblioteca 3D não foi carregado. O restante do Manager continua funcionando normalmente.")
+        st.caption(BIBLIOTECA_3D_IMPORT_ERROR)
+    else:
+        biblioteca_b3d = load_document("biblioteca_3d_db", ARQUIVO_BIBLIOTECA_3D, [], force_refresh=False)
+        if not isinstance(biblioteca_b3d, list):
+            biblioteca_b3d = []
+
+        total_bytes_b3d = sum(max(0, int((x or {}).get("arquivo_tamanho") or 0)) for x in biblioteca_b3d if isinstance(x, dict))
+        bm1, bm2 = st.columns(2)
+        bm1.metric("Modelos salvos", len(biblioteca_b3d))
+        bm2.metric("Arquivos preservados", _b3d_tamanho_legivel(total_bytes_b3d) if _b3d_tamanho_legivel else "—")
+
+        with st.expander("➕ Salvar novo modelo 3D", expanded=not bool(biblioteca_b3d)):
+            st.caption("Cadastre somente o essencial. A imagem é uma referência visual e o arquivo 3D é a cópia preservada.")
+            with st.form("biblioteca_3d_novo_form", clear_on_submit=False):
+                nome_b3d = st.text_input("Nome *", placeholder="Ex.: Zebra tricotada")
+                descricao_b3d = st.text_area(
+                    "Descrição",
+                    placeholder="Ex.: Zebra estilo tricô, ideal para lembrancinha ou decoração.",
+                    height=110,
+                )
+                tempo_b3d = st.text_input("Tempo de impressão", placeholder="Ex.: 3h 20min")
+                bc1, bc2 = st.columns(2)
+                imagem_b3d = bc1.file_uploader(
+                    "1 imagem *",
+                    type=["png", "jpg", "jpeg", "webp"],
+                    accept_multiple_files=False,
+                    key="biblioteca3d_imagem_upload",
+                    help="Uma única imagem para localizar rapidamente o modelo.",
+                )
+                arquivo_b3d = bc2.file_uploader(
+                    "Arquivo 3D *",
+                    type=["3mf", "stl", "obj", "step", "stp", "amf", "zip", "rar", "7z", "gcode", "bgcode"],
+                    accept_multiple_files=False,
+                    key="biblioteca3d_arquivo_upload",
+                    help="Aceita projetos de impressão e pacotes comuns, incluindo 3MF e ZIP.",
+                )
+                salvar_b3d = st.form_submit_button("💾 Salvar na Biblioteca 3D", type="primary", use_container_width=True)
+
+            if salvar_b3d:
+                erro_b3d = ""
+                if not str(nome_b3d or "").strip():
+                    erro_b3d = "Informe o nome do modelo."
+                elif imagem_b3d is None:
+                    erro_b3d = "Envie uma imagem do modelo."
+                elif arquivo_b3d is None:
+                    erro_b3d = "Envie o arquivo 3D."
+                elif not _b3d_imagem_valida(getattr(imagem_b3d, "name", "")):
+                    erro_b3d = "A imagem precisa ser PNG, JPG, JPEG ou WEBP."
+                elif not _b3d_arquivo_valido(getattr(arquivo_b3d, "name", "")):
+                    erro_b3d = "Formato do arquivo 3D não suportado. Use 3MF, STL, OBJ, STEP/STP, AMF, ZIP/RAR/7Z ou GCODE/BGCODE."
+
+                if erro_b3d:
+                    st.error(erro_b3d)
+                else:
+                    registro_id_b3d = secrets.token_hex(12)
+                    with st.spinner("Salvando imagem e arquivo 3D no armazenamento privado..."):
+                        imagem_path_b3d = upload_private_3d_file(
+                            imagem_b3d,
+                            folder=f"modelos/{registro_id_b3d}/imagem",
+                        )
+                        arquivo_path_b3d = ""
+                        if imagem_path_b3d:
+                            arquivo_path_b3d = upload_private_3d_file(
+                                arquivo_b3d,
+                                folder=f"modelos/{registro_id_b3d}/arquivo",
+                            )
+
+                    if not imagem_path_b3d:
+                        st.error(
+                            "Não foi possível confirmar a imagem no armazenamento online. "
+                            "Nada foi cadastrado para evitar uma falsa sensação de backup."
+                        )
+                    elif not arquivo_path_b3d:
+                        delete_private_3d_file(imagem_path_b3d)
+                        st.error(
+                            "Não foi possível confirmar o arquivo 3D no armazenamento online. "
+                            "O cadastro foi cancelado e a imagem temporária foi removida."
+                        )
+                    else:
+                        try:
+                            novo_b3d = _b3d_criar_registro(
+                                nome=nome_b3d,
+                                descricao=descricao_b3d,
+                                tempo_impressao=tempo_b3d,
+                                imagem_path=imagem_path_b3d,
+                                arquivo_path=arquivo_path_b3d,
+                                arquivo_nome=getattr(arquivo_b3d, "name", "modelo.3mf"),
+                                arquivo_tamanho=len(bytes(arquivo_b3d.getbuffer())),
+                                criado_em=agora_local().isoformat(timespec="seconds"),
+                                registro_id=registro_id_b3d,
+                            )
+                        except Exception as exc:
+                            delete_private_3d_file(imagem_path_b3d)
+                            delete_private_3d_file(arquivo_path_b3d)
+                            st.error(f"Não foi possível validar o cadastro: {exc}")
+                        else:
+                            nova_biblioteca_b3d = [novo_b3d] + [x for x in biblioteca_b3d if isinstance(x, dict)]
+                            if save_document("biblioteca_3d_db", nova_biblioteca_b3d, ARQUIVO_BIBLIOTECA_3D):
+                                st.success(f"Modelo **{novo_b3d['nome']}** salvo com o arquivo 3D preservado.")
+                                st.session_state.pop("_biblioteca3d_download_id", None)
+                                st.session_state.pop("_biblioteca3d_download_bytes", None)
+                                st.rerun()
+                            else:
+                                delete_private_3d_file(imagem_path_b3d)
+                                delete_private_3d_file(arquivo_path_b3d)
+                                st.error(
+                                    "O arquivo chegou ao armazenamento, mas o cadastro não foi confirmado no banco. "
+                                    "Os uploads foram removidos para não deixar um registro incompleto."
+                                )
+
+        st.markdown("### 📚 Arquivos salvos")
+        busca_b3d = st.text_input(
+            "Pesquisar na Biblioteca 3D",
+            placeholder="Nome, descrição ou arquivo",
+            key="biblioteca3d_busca",
+        )
+        modelos_b3d = _b3d_filtrar_modelos(biblioteca_b3d, busca_b3d) if _b3d_filtrar_modelos else []
+        if not modelos_b3d:
+            st.info("Nenhum modelo 3D encontrado." if biblioteca_b3d else "Sua Biblioteca 3D ainda está vazia.")
+        else:
+            st.caption(f"{len(modelos_b3d)} modelo(s) encontrado(s).")
+            for _idx_b3d, modelo_b3d in enumerate(modelos_b3d[:100]):
+                _id_b3d = str(modelo_b3d.get("id") or f"item{_idx_b3d}")
+                with st.container(border=True):
+                    bi1, bi2 = st.columns([1.15, 3.85])
+                    imagem_bytes_b3d = _biblioteca3d_bytes_cache(str(modelo_b3d.get("imagem_path") or ""))
+                    if imagem_bytes_b3d:
+                        try:
+                            bi1.image(imagem_bytes_b3d, use_container_width=True)
+                        except Exception:
+                            bi1.caption("🖼️ Imagem salva")
+                    else:
+                        bi1.caption("🖼️ Imagem indisponível no momento")
+
+                    bi2.markdown(f"#### {html.escape(str(modelo_b3d.get('nome') or 'Modelo 3D'))}")
+                    if str(modelo_b3d.get("descricao") or "").strip():
+                        bi2.write(str(modelo_b3d.get("descricao") or ""))
+                    tempo_txt_b3d = str(modelo_b3d.get("tempo_impressao") or "").strip() or "Não informado"
+                    arq_nome_b3d = str(modelo_b3d.get("arquivo_nome") or "arquivo 3D")
+                    arq_tam_b3d = _b3d_tamanho_legivel(modelo_b3d.get("arquivo_tamanho") or 0) if _b3d_tamanho_legivel else ""
+                    bi2.caption(f"⏱️ Tempo de impressão: {tempo_txt_b3d} · 📦 {arq_nome_b3d} · {arq_tam_b3d}")
+
+                    preparar_b3d = bi2.button(
+                        "⬇️ Preparar arquivo para baixar",
+                        key=f"biblioteca3d_preparar_{_id_b3d}",
+                        use_container_width=True,
+                    )
+                    if preparar_b3d:
+                        with st.spinner("Buscando sua cópia preservada..."):
+                            dados_arq_b3d = read_private_3d_file(str(modelo_b3d.get("arquivo_path") or ""))
+                        if dados_arq_b3d:
+                            st.session_state["_biblioteca3d_download_id"] = _id_b3d
+                            st.session_state["_biblioteca3d_download_bytes"] = dados_arq_b3d
+                        else:
+                            st.error("Não foi possível recuperar o arquivo no armazenamento privado agora.")
+
+                    if st.session_state.get("_biblioteca3d_download_id") == _id_b3d and st.session_state.get("_biblioteca3d_download_bytes"):
+                        bi2.download_button(
+                            "📥 Baixar arquivo 3D",
+                            data=st.session_state.get("_biblioteca3d_download_bytes"),
+                            file_name=arq_nome_b3d,
+                            mime="application/octet-stream",
+                            key=f"biblioteca3d_download_{_id_b3d}",
+                            use_container_width=True,
+                        )
+
 
 if pagina_atual == "historico":
     if usuario_em_operacao_protegida(obter_usuario_atual()):

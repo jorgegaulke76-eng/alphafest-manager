@@ -43,6 +43,9 @@ __all__ = [
     "append_list_record",
     "upload_catalog_image",
     "upload_library_file",
+    "upload_private_3d_file",
+    "read_private_3d_file",
+    "delete_private_3d_file",
     "catalog_public_url",
     "catalog_render_url",
     "catalog_render_available",
@@ -568,6 +571,114 @@ def upload_library_file(upload: Any, produto_nome: str = "produto", local_upload
     local_path.write_bytes(content)
     return str(local_path).replace("\\", "/")
 
+
+
+BIBLIOTECA_3D_BUCKET = "biblioteca3d"
+
+
+def _ensure_private_3d_bucket() -> bool:
+    """Garante o bucket privado da Biblioteca 3D.
+
+    O bucket é criado sob demanda. A operação exige a credencial de servidor
+    já usada pelo Manager; se ela não tiver permissão, a gravação é abortada
+    em vez de cair para disco efêmero.
+    """
+    if not online_configured():
+        return False
+    url, _ = _config()
+    try:
+        response = _SESSION.get(
+            f"{url}/storage/v1/bucket/{BIBLIOTECA_3D_BUCKET}",
+            headers=_headers(),
+            timeout=TIMEOUT,
+        )
+        if response.ok:
+            return True
+        if response.status_code not in (400, 404):
+            return False
+        create = _SESSION.post(
+            f"{url}/storage/v1/bucket",
+            headers=_headers(),
+            json={
+                "id": BIBLIOTECA_3D_BUCKET,
+                "name": BIBLIOTECA_3D_BUCKET,
+                "public": False,
+            },
+            timeout=TIMEOUT,
+        )
+        return bool(create.ok or create.status_code in (200, 201, 409))
+    except requests.RequestException:
+        return False
+
+
+def upload_private_3d_file(upload: Any, folder: str = "modelos") -> str:
+    """Salva arquivo da Biblioteca 3D em bucket privado e retorna object path.
+
+    Não existe fallback local: o objetivo desta biblioteca é preservar o
+    arquivo. Se a nuvem não confirmar a gravação, retorna vazio e o cadastro
+    não deve ser concluído.
+    """
+    if upload is None or not _ensure_private_3d_bucket():
+        return ""
+
+    pasta = re.sub(r"[^A-Za-z0-9._/-]", "_", str(folder or "modelos").strip()).strip("/") or "modelos"
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", str(getattr(upload, "name", "arquivo.bin")))
+    unique_name = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{safe_name}"
+    object_path = f"{pasta}/{unique_name}"
+    content = bytes(upload.getbuffer())
+    if not content:
+        return ""
+    content_type = getattr(upload, "type", None) or "application/octet-stream"
+    url, _ = _config()
+    encoded_path = quote(object_path, safe="/")
+    try:
+        response = _SESSION.post(
+            f"{url}/storage/v1/object/{BIBLIOTECA_3D_BUCKET}/{encoded_path}",
+            headers={**_headers(), "Content-Type": content_type, "x-upsert": "false"},
+            data=content,
+            timeout=max(TIMEOUT, 45),
+        )
+        response.raise_for_status()
+        return object_path
+    except requests.RequestException:
+        return ""
+
+
+def read_private_3d_file(object_path: str) -> bytes | None:
+    """Lê um objeto privado da Biblioteca 3D usando a credencial do servidor."""
+    caminho = str(object_path or "").strip().lstrip("/")
+    if not caminho or not online_configured():
+        return None
+    url, _ = _config()
+    encoded_path = quote(caminho, safe="/")
+    try:
+        response = _SESSION.get(
+            f"{url}/storage/v1/object/{BIBLIOTECA_3D_BUCKET}/{encoded_path}",
+            headers=_headers(),
+            timeout=max(TIMEOUT, 45),
+        )
+        response.raise_for_status()
+        return bytes(response.content)
+    except requests.RequestException:
+        return None
+
+
+def delete_private_3d_file(object_path: str) -> bool:
+    """Remove um objeto privado; usado para limpar uploads incompletos."""
+    caminho = str(object_path or "").strip().lstrip("/")
+    if not caminho or not online_configured():
+        return False
+    url, _ = _config()
+    encoded_path = quote(caminho, safe="/")
+    try:
+        response = _SESSION.delete(
+            f"{url}/storage/v1/object/{BIBLIOTECA_3D_BUCKET}/{encoded_path}",
+            headers=_headers(),
+            timeout=TIMEOUT,
+        )
+        return bool(response.ok)
+    except requests.RequestException:
+        return False
 
 def catalog_public_url(object_path: str) -> str:
     """Retorna a URL pública determinística de um catálogo no bucket `catalogo`."""
