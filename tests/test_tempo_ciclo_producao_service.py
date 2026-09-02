@@ -153,3 +153,50 @@ def test_hf29_resumo_identifica_exatamente_ciclo_em_andamento():
     assert aberto["quantidade"] == 5
     assert aberto["iniciado_em"] == "02/09/2026 18:40"
     assert aberto["iniciado_por"] == "Jorge"
+
+
+
+def test_hf30_entregue_oficial_fecha_ciclo_residual_com_carimbo_confiavel():
+    tarefas = [{
+        "id": "P30::0", "numero_proposta": "P30", "cliente_nome": "Cristiane",
+        "produto": "PAPEL DE ARROZ", "quantidade": 1, "status": "Em produção", "ativa": False,
+        "ciclo_observado_atual": {"iniciado_em": "01/09/2026 13:54", "iniciado_por": "Jorge"},
+    }]
+    propostas = [{
+        "numero_proposta": "P30", "aprovado": True, "pronto": True, "entregue": True,
+        "entregue_em": "01/09/2026 14:30",
+    }]
+    r = resumir_tempos_observados(tarefas, propostas_oficiais=propostas)
+    assert r["total_amostras"] == 1
+    assert r["em_andamento_com_inicio"] == 0
+    assert r["finalizados_sem_fim_confiavel"] == 0
+    assert r["produtos"][0]["produto"] == "PAPEL DE ARROZ"
+    assert r["produtos"][0]["mediana"] == "36 min"
+
+
+def test_hf30_pronto_oficial_confiavel_fecha_ciclo_residual():
+    tarefas = [{
+        "id": "P31::0", "numero_proposta": "P31", "produto": "Topo", "quantidade": 2,
+        "status": "Em produção", "ativa": True,
+        "ciclo_observado_atual": {"iniciado_em": "02/09/2026 10:00"},
+    }]
+    propostas = [{
+        "numero_proposta": "P31", "aprovado": True, "pronto": True, "entregue": False,
+        "pronto_em": "02/09/2026 11:20", "pronto_em_confiavel": True,
+    }]
+    r = resumir_tempos_observados(tarefas, propostas_oficiais=propostas)
+    assert r["total_amostras"] == 1
+    assert r["em_andamento_com_inicio"] == 0
+    assert r["produtos"][0]["mediana"] == "1h 20min"
+
+
+def test_hf30_finalizado_sem_hora_nao_fica_em_andamento_nem_inventa_amostra():
+    tarefas = [{
+        "id": "P32::0", "numero_proposta": "P32", "produto": "Caneca", "status": "Em produção", "ativa": False,
+        "ciclo_observado_atual": {"iniciado_em": "02/09/2026 10:00"},
+    }]
+    propostas = [{"numero_proposta": "P32", "aprovado": True, "pronto": True, "entregue": True}]
+    r = resumir_tempos_observados(tarefas, propostas_oficiais=propostas)
+    assert r["total_amostras"] == 0
+    assert r["em_andamento_com_inicio"] == 0
+    assert r["finalizados_sem_fim_confiavel"] == 1

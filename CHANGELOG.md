@@ -911,3 +911,8 @@ hangelog
 - Adiciona botão para abrir o pedido sem alterar status ou criar eventos.
 - Nenhum JSON/SQL operacional é modificado.
 
+
+## 20.4.9-I8.13.5-HF30 — Memória de ciclo alinhada à Fonte Única
+- Pedido oficial Pronto/Entregue não permanece como ciclo em andamento por status residual do espelho de produção.
+- Carimbo final confiável pode fechar a amostra somente leitura; sem carimbo, nenhuma duração é inventada.
+- Nenhum dado operacional é alterado automaticamente.

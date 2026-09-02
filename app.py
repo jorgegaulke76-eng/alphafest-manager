@@ -22848,7 +22848,7 @@ if pagina_atual == "central":
         # HF27 — memória descritiva dos ciclos explicitamente observados no Fluxo.
         # Não alimenta capacidade/prazo ainda; apenas coleta e resume evidência.
         _memoria_ciclo_hf27 = (
-            _tempo_ciclo_resumir(tarefas_central, limite_produtos=12)
+            _tempo_ciclo_resumir(tarefas_central, propostas_oficiais=historico_central, limite_produtos=12)
             if _tempo_ciclo_resumir
             else {
                 "total_amostras": 0, "produtos_com_amostras": 0,
@@ -22968,7 +22968,7 @@ if pagina_atual == "central":
                 "produção, Agenda Executiva e Plano de Amanhã continuam funcionando normalmente."
             )
         else:
-            with st.expander("⏱️ Memória de tempos de produção · HF29", expanded=False):
+            with st.expander("⏱️ Memória de tempos de produção · HF30", expanded=False):
                 st.caption(
                     "Aprendizado somente leitura a partir de transições explícitas do Fluxo. O intervalo entre "
                     "'Em produção' e 'Pronto/Entregue' é chamado de tempo de ciclo observado: pode incluir pausas, "
@@ -23044,6 +23044,11 @@ if pagina_atual == "central":
                     st.info(
                         "Ainda não há um ciclo completo confiável para resumir. A coleta começa quando um item entra "
                         "explicitamente em 'Em produção' e depois é concluído como 'Pronto' ou 'Entregue'."
+                    )
+                if int(_memoria_ciclo_hf27.get("finalizados_sem_fim_confiavel") or 0):
+                    st.caption(
+                        f"⚪ {int(_memoria_ciclo_hf27.get('finalizados_sem_fim_confiavel') or 0)} ciclo(s) já finalizado(s) "
+                        "pela Fonte Única não possuem carimbo final confiável para calcular duração; não são tratados como em andamento."
                     )
                 if int(_memoria_ciclo_hf27.get("em_producao_sem_inicio_confiavel") or 0):
                     st.caption(

@@ -46,3 +46,5 @@
 - HF28: Estorno visível de reserva/consumo por pedido (Jorge) — corrige a seleção administrativa para permitir liberar reservas já ativas pelo fluxo auditado do próprio pedido.
 - Próximo após homologação: acumular amostras reais da HF27 e observar variação por produto/quantidade; capacidade quantitativa só entra quando houver base suficiente e critério estatístico seguro.
 - HF29: Identificação do ciclo em andamento (Jorge) — mostra proposta, cliente, produto, quantidade e início explícito para cada ciclo observado aberto, sem alterar status.
+
+- HF30: Memória de ciclo alinhada à Fonte Única — corrige ciclos residuais de pedidos já Prontos/Entregues sem inventar duração.

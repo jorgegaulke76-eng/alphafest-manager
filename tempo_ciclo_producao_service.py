@@ -17,6 +17,8 @@ from datetime import datetime
 from statistics import median
 from typing import Any, Iterable
 
+from proposal_status import resumo_status
+
 _STATUS_EM_PRODUCAO = "Em produção"
 _STATUS_FINAIS = {"Pronto", "Entregue"}
 _FORMATOS_DATA = (
@@ -227,9 +229,93 @@ def _chave_amostra(amostra: dict[str, Any]) -> tuple[str, str, int]:
     )
 
 
-def extrair_amostras(tarefas: Iterable[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """Extrai amostras persistidas + histórico explícito sem duplicação."""
+def _mapa_propostas_oficiais(propostas: Iterable[dict[str, Any]] | None) -> dict[str, dict[str, Any]]:
+    """Indexa a Fonte Única por número sem alterar nenhum registro."""
+    saida: dict[str, dict[str, Any]] = {}
+    for proposta in (propostas or []):
+        if not isinstance(proposta, dict):
+            continue
+        numero = str(proposta.get("numero_proposta") or "").strip()
+        if numero:
+            saida[numero] = proposta
+    return saida
+
+
+def _fim_oficial_confiavel(
+    proposta: dict[str, Any] | None,
+    *,
+    iniciado_em: Any,
+) -> tuple[str, str] | None:
+    """Retorna o primeiro fim oficial confiável posterior ao início do ciclo.
+
+    HF30: um pedido já Pronto/Entregue não pode continuar aparecendo como ciclo
+    aberto só porque o espelho ``producao_db`` foi desativado antes de reconciliar
+    sua etapa final. Para não inventar duração, só fechamos amostra quando existe
+    carimbo oficial de data/hora posterior ao início.
+    """
+    proposta = proposta or {}
+    estado = resumo_status(proposta)
+    dt_inicio = _parse_data(iniciado_em)
+    if not dt_inicio or not (estado.get("pronto") or estado.get("entregue")):
+        return None
+
+    candidatos: list[tuple[datetime, str, str]] = []
+    # ``pronto_em`` só é usado quando foi carimbado como confiável pela Fonte Única.
+    if estado.get("pronto") and proposta.get("pronto_em") and bool(proposta.get("pronto_em_confiavel")):
+        dt = _parse_data(proposta.get("pronto_em"))
+        if dt and dt > dt_inicio:
+            candidatos.append((dt, "Pronto", str(proposta.get("pronto_em"))))
+    # Entrega concluída possui carimbo oficial próprio e também encerra o ciclo.
+    if estado.get("entregue") and proposta.get("entregue_em"):
+        dt = _parse_data(proposta.get("entregue_em"))
+        if dt and dt > dt_inicio:
+            candidatos.append((dt, "Entregue", str(proposta.get("entregue_em"))))
+
+    if not candidatos:
+        return None
+    candidatos.sort(key=lambda x: x[0])
+    _, status_final, texto = candidatos[0]
+    return status_final, texto
+
+
+def _amostra_fechamento_oficial(
+    tarefa: dict[str, Any],
+    proposta: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Deriva amostra somente leitura quando a Fonte Única já encerrou o pedido."""
+    inicio = (
+        tarefa.get("ciclo_observado_atual")
+        if isinstance(tarefa.get("ciclo_observado_atual"), dict)
+        and tarefa["ciclo_observado_atual"].get("iniciado_em")
+        else inicio_aberto_timeline(tarefa)
+    )
+    if not inicio:
+        return None
+    fim = _fim_oficial_confiavel(proposta, iniciado_em=inicio.get("iniciado_em"))
+    if not fim:
+        return None
+    status_final, concluido_em = fim
+    minutos = _duracao_minutos(inicio.get("iniciado_em"), concluido_em)
+    if not minutos:
+        return None
+    return {
+        "iniciado_em": str(inicio.get("iniciado_em") or ""),
+        "concluido_em": str(concluido_em or ""),
+        "duracao_minutos": int(minutos),
+        "iniciado_por": str(inicio.get("iniciado_por") or ""),
+        "concluido_por": str((proposta or {}).get("entregue_por") or (proposta or {}).get("pronto_por") or "Fonte Única"),
+        "status_final": status_final,
+        "origem": "hf30_fechamento_status_oficial",
+    }
+
+
+def extrair_amostras(
+    tarefas: Iterable[dict[str, Any]] | None,
+    propostas_oficiais: Iterable[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Extrai amostras persistidas + timeline + fechamento oficial sem duplicação."""
     saida: list[dict[str, Any]] = []
+    mapa_oficial = _mapa_propostas_oficiais(propostas_oficiais)
     vistos: set[tuple[str, str, str, int]] = set()
     for tarefa in (tarefas or []):
         if not isinstance(tarefa, dict):
@@ -239,6 +325,13 @@ def extrair_amostras(tarefas: Iterable[dict[str, Any]] | None) -> list[dict[str,
         processos = [str(x) for x in (tarefa.get("processos") or []) if str(x).strip()]
         candidatas = [x for x in (tarefa.get("ciclos_observados") or []) if isinstance(x, dict)]
         candidatas += amostras_timeline_legado(tarefa)
+        # HF30 — se o Histórico oficial já está Pronto/Entregue, mas o espelho
+        # ficou com ciclo aberto, fechar em leitura usando somente carimbo confiável.
+        derivada_oficial = _amostra_fechamento_oficial(tarefa, mapa_oficial.get(numero))
+        if derivada_oficial:
+            inicio_derivado = str(derivada_oficial.get("iniciado_em") or "")
+            if not any(str(x.get("iniciado_em") or "") == inicio_derivado for x in candidatas if isinstance(x, dict)):
+                candidatas.append(derivada_oficial)
         for amostra in candidatas:
             minutos = int(amostra.get("duracao_minutos") or 0)
             if minutos <= 0:
@@ -276,11 +369,13 @@ def formatar_duracao(minutos: Any) -> str:
 def resumir_tempos_observados(
     tarefas: Iterable[dict[str, Any]] | None,
     *,
+    propostas_oficiais: Iterable[dict[str, Any]] | None = None,
     limite_produtos: int = 12,
 ) -> dict[str, Any]:
     """Monta memória descritiva; não calcula capacidade ou promessa de prazo."""
     tarefas_lista = [x for x in (tarefas or []) if isinstance(x, dict)]
-    amostras = extrair_amostras(tarefas_lista)
+    mapa_oficial = _mapa_propostas_oficiais(propostas_oficiais)
+    amostras = extrair_amostras(tarefas_lista, propostas_oficiais=propostas_oficiais)
     grupos: dict[str, dict[str, Any]] = {}
     for amostra in amostras:
         produto = str(amostra.get("produto") or "Item do pedido").strip() or "Item do pedido"
@@ -326,11 +421,15 @@ def resumir_tempos_observados(
 
     em_andamento = 0
     sem_inicio = 0
+    finalizados_sem_fim_confiavel = 0
     ciclos_em_andamento: list[dict[str, Any]] = []
     ciclos_sem_inicio: list[dict[str, Any]] = []
     for tarefa in tarefas_lista:
         if _status(tarefa.get("status")) != _STATUS_EM_PRODUCAO:
             continue
+        numero_tarefa = str(tarefa.get("numero_proposta") or "").strip()
+        proposta_oficial = mapa_oficial.get(numero_tarefa)
+        estado_oficial = resumo_status(proposta_oficial) if proposta_oficial else {}
         inicio_atual = (
             tarefa.get("ciclo_observado_atual")
             if isinstance(tarefa.get("ciclo_observado_atual"), dict)
@@ -344,6 +443,16 @@ def resumir_tempos_observados(
             "quantidade": tarefa.get("quantidade"),
             "tarefa_id": str(tarefa.get("id") or ""),
         }
+        # HF30 — Fonte Única final prevalece sobre status operacional residual.
+        # Um pedido Pronto/Entregue nunca continua como ciclo aberto. Se não houver
+        # carimbo de fim confiável, apenas deixamos de chamá-lo de "em andamento";
+        # nenhuma duração é inventada.
+        if estado_oficial.get("pronto") or estado_oficial.get("entregue"):
+            if inicio_atual and not _fim_oficial_confiavel(proposta_oficial, iniciado_em=inicio_atual.get("iniciado_em")):
+                finalizados_sem_fim_confiavel += 1
+            continue
+        if tarefa.get("ativa") is False:
+            continue
         if inicio_atual:
             em_andamento += 1
             ciclos_em_andamento.append({
@@ -371,6 +480,7 @@ def resumir_tempos_observados(
         "produtos_com_amostras": len(linhas),
         "em_andamento_com_inicio": em_andamento,
         "em_producao_sem_inicio_confiavel": sem_inicio,
+        "finalizados_sem_fim_confiavel": finalizados_sem_fim_confiavel,
         "ciclos_em_andamento": ciclos_em_andamento,
         "ciclos_sem_inicio_confiavel": ciclos_sem_inicio,
         "produtos": linhas[: max(1, int(limite_produtos or 12))],
