@@ -916,3 +916,11 @@ hangelog
 - Pedido oficial Pronto/Entregue não permanece como ciclo em andamento por status residual do espelho de produção.
 - Carimbo final confiável pode fechar a amostra somente leitura; sem carimbo, nenhuma duração é inventada.
 - Nenhum dado operacional é alterado automaticamente.
+
+
+## 20.4.9-I8.13.5-HF31 — Qualidade da Base de Tempos
+- Memória de ciclo passa a sinalizar variações estatisticamente extremas para conferência, sem apagar ou excluir amostras.
+- Exibe Faixa central e Faixa total separadamente.
+- Mostra distribuição de amostras por quantidade/lote.
+- Detalhe de variação alta permite abrir a proposta de origem para contextualizar pausa, espera, retrabalho ou exceção.
+- Nenhum cálculo de capacidade ou prazo é liberado nesta etapa.

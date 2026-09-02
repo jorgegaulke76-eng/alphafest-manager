@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import re
+from collections import Counter
 from datetime import datetime
 from statistics import median
 from typing import Any, Iterable
@@ -345,12 +346,76 @@ def extrair_amostras(
                 **copy.deepcopy(amostra),
                 "produto": produto,
                 "numero_proposta": numero,
+                "cliente_nome": str(tarefa.get("cliente_nome") or tarefa.get("cliente") or "Cliente").strip() or "Cliente",
                 "tarefa_id": str(tarefa.get("id") or ""),
                 "processos": processos,
                 "quantidade": tarefa.get("quantidade"),
             })
     return saida
 
+
+
+def _texto_quantidade(valor: Any) -> str:
+    try:
+        qtd = float(valor)
+        if qtd <= 0:
+            return "—"
+        return str(int(qtd)) if qtd.is_integer() else f"{qtd:.2f}".rstrip("0").rstrip(".")
+    except Exception:
+        return "—"
+
+
+def _indices_atipicos_duracao(amostras: list[dict[str, Any]]) -> set[int]:
+    """HF31: sinaliza variação extrema sem excluir ou reescrever amostra.
+
+    Usa o *modified z-score* baseado em mediana/MAD quando há pelo menos quatro
+    observações. É propositalmente conservador e serve apenas como fila de
+    revisão visual; capacidade e prazo continuam proibidos de usar esse sinal.
+    """
+    if len(amostras) < 4:
+        return set()
+    vals = [int(x.get("duracao_minutos") or 0) for x in amostras]
+    if any(v <= 0 for v in vals):
+        return set()
+    med = float(median(vals))
+    desvios = [abs(float(v) - med) for v in vals]
+    mad = float(median(desvios))
+    marcados: set[int] = set()
+    if mad > 0:
+        for idx, valor in enumerate(vals):
+            score = 0.6745 * abs(float(valor) - med) / mad
+            if score > 3.5:
+                marcados.add(idx)
+        return marcados
+
+    # Quando MAD=0 (muitas durações iguais), só sinalizar discrepância grande.
+    # Continua sendo aviso, nunca descarte automático.
+    for idx, valor in enumerate(vals):
+        diferenca = abs(float(valor) - med)
+        razao = (float(valor) / med) if med > 0 else 0.0
+        if diferenca >= max(60.0, med * 2.0) and (razao >= 3.0 or (razao > 0 and razao <= 1 / 3)):
+            marcados.add(idx)
+    return marcados
+
+
+def _resumo_quantidades(amostras: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
+    contador: Counter[str] = Counter()
+    ordem: dict[str, float] = {}
+    for amostra in amostras:
+        txt = _texto_quantidade(amostra.get("quantidade"))
+        if txt == "—":
+            contador[txt] += 1
+            ordem.setdefault(txt, float("inf"))
+            continue
+        contador[txt] += 1
+        try:
+            ordem.setdefault(txt, float(txt.replace(",", ".")))
+        except Exception:
+            ordem.setdefault(txt, float("inf"))
+    itens = sorted(contador.items(), key=lambda kv: (ordem.get(kv[0], float("inf")), kv[0]))
+    detalhes = [{"quantidade": qtd, "amostras": int(n)} for qtd, n in itens]
+    texto = " · ".join(f"{qtd} un × {n}" if qtd != "—" else f"Sem qtd × {n}" for qtd, n in itens) or "—"
+    return texto, detalhes
 
 def formatar_duracao(minutos: Any) -> str:
     try:
@@ -392,12 +457,25 @@ def resumir_tempos_observados(
 
     linhas: list[dict[str, Any]] = []
     for grupo in grupos.values():
-        vals = sorted(int(x.get("duracao_minutos") or 0) for x in grupo["amostras"] if int(x.get("duracao_minutos") or 0) > 0)
+        amostras_grupo = [x for x in grupo["amostras"] if int(x.get("duracao_minutos") or 0) > 0]
+        vals = sorted(int(x.get("duracao_minutos") or 0) for x in amostras_grupo)
         if not vals:
             continue
         n = len(vals)
         nivel = "Base inicial" if n < 3 else "Base crescente" if n < 5 else "Referência observada"
         med = int(round(float(median(vals))))
+        indices_atipicos = _indices_atipicos_duracao(amostras_grupo)
+        amostras_atipicas = [amostras_grupo[i] for i in sorted(indices_atipicos)]
+        vals_centrais = [int(x.get("duracao_minutos") or 0) for i, x in enumerate(amostras_grupo) if i not in indices_atipicos]
+        if not vals_centrais:
+            vals_centrais = vals[:]  # proteção: nunca produzir faixa vazia
+        vals_centrais.sort()
+        lotes_texto, lotes_detalhes = _resumo_quantidades(amostras_grupo)
+        qualidade = (
+            f"Revisar {len(amostras_atipicas)} variação(ões)"
+            if amostras_atipicas
+            else "Base em formação" if n < 5 else "Sem variação extrema sinalizada"
+        )
         quantidades = sorted(float(x) for x in grupo.get("quantidades") or [] if float(x) > 0)
         if quantidades:
             qmin, qmax = quantidades[0], quantidades[-1]
@@ -413,6 +491,12 @@ def resumir_tempos_observados(
             "mediana": formatar_duracao(med),
             "minimo": formatar_duracao(vals[0]),
             "maximo": formatar_duracao(vals[-1]),
+            "faixa_central_minimo": formatar_duracao(vals_centrais[0]),
+            "faixa_central_maximo": formatar_duracao(vals_centrais[-1]),
+            "amostras_atipicas": len(amostras_atipicas),
+            "qualidade": qualidade,
+            "lotes_observados": lotes_texto,
+            "lotes_detalhes": lotes_detalhes,
             "quantidade_observada": faixa_qtd,
             "nivel": nivel,
             "processos": sorted(str(x) for x in grupo["processos"] if str(x).strip()),
@@ -475,12 +559,34 @@ def resumir_tempos_observados(
     ciclos_em_andamento.sort(key=_ordem_inicio)
     ciclos_sem_inicio.sort(key=lambda x: str(x.get("numero_proposta") or x.get("produto") or "").casefold())
 
+    # HF31 — fila somente leitura para revisar durações estatisticamente muito
+    # distantes do restante do mesmo produto. Nada é descartado da mediana/base.
+    amostras_para_revisar: list[dict[str, Any]] = []
+    for grupo in grupos.values():
+        amostras_grupo = [x for x in grupo.get("amostras", []) if int(x.get("duracao_minutos") or 0) > 0]
+        if len(amostras_grupo) < 4:
+            continue
+        med_grupo = int(round(float(median([int(x.get("duracao_minutos") or 0) for x in amostras_grupo]))))
+        for idx in sorted(_indices_atipicos_duracao(amostras_grupo)):
+            amostra = copy.deepcopy(amostras_grupo[idx])
+            amostra["mediana_produto_minutos"] = med_grupo
+            amostra["motivo_revisao"] = (
+                f"Duração {formatar_duracao(amostra.get('duracao_minutos'))} muito distante da mediana "
+                f"observada de {formatar_duracao(med_grupo)}; sinal para conferência, sem exclusão automática."
+            )
+            amostras_para_revisar.append(amostra)
+    amostras_para_revisar.sort(
+        key=lambda x: (str(x.get("produto") or "").casefold(), -int(x.get("duracao_minutos") or 0))
+    )
+
     return {
         "total_amostras": len(amostras),
         "produtos_com_amostras": len(linhas),
         "em_andamento_com_inicio": em_andamento,
         "em_producao_sem_inicio_confiavel": sem_inicio,
         "finalizados_sem_fim_confiavel": finalizados_sem_fim_confiavel,
+        "amostras_para_revisar": amostras_para_revisar,
+        "total_amostras_para_revisar": len(amostras_para_revisar),
         "ciclos_em_andamento": ciclos_em_andamento,
         "ciclos_sem_inicio_confiavel": ciclos_sem_inicio,
         "produtos": linhas[: max(1, int(limite_produtos or 12))],

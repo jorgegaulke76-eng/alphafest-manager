@@ -22911,8 +22911,9 @@ if pagina_atual == "central":
             "Uma única ordem de ação para o Jorge. O mesmo pedido aparece só uma vez na agenda, "
             "mesmo quando exige atenção em mais de uma área. A HF24 também considera o sinal de "
             "sem avanço registrado da Agenda da Anna. A HF25 acrescenta prevenção de prazo, a HF26 "
-            "transforma esses sinais em um plano curto para o próximo dia e a HF27 começa a formar uma memória "
-            "de tempo de ciclo observado, sem fingir tempo de mão de obra ou capacidade exata. "
+            "transforma esses sinais em um plano curto para o próximo dia; a HF27/HF30 formam a memória "
+            "de tempo de ciclo observado e a HF31 acrescenta controle de qualidade/variação por lote, "
+            "sem fingir tempo de mão de obra ou capacidade exata. "
             "Os blocos detalhados continuam como trilha de conferência; a agenda não envia mensagens, "
             "não registra contatos e não muda status."
         )
@@ -22968,17 +22969,18 @@ if pagina_atual == "central":
                 "produção, Agenda Executiva e Plano de Amanhã continuam funcionando normalmente."
             )
         else:
-            with st.expander("⏱️ Memória de tempos de produção · HF30", expanded=False):
+            with st.expander("⏱️ Memória de tempos de produção · HF31", expanded=False):
                 st.caption(
                     "Aprendizado somente leitura a partir de transições explícitas do Fluxo. O intervalo entre "
                     "'Em produção' e 'Pronto/Entregue' é chamado de tempo de ciclo observado: pode incluir pausas, "
                     "espera e tempo de máquina autônoma. Ainda NÃO é usado como capacidade exata nem promessa de prazo."
                 )
-                _tc1_hf27, _tc2_hf27, _tc3_hf27, _tc4_hf27 = st.columns(4)
+                _tc1_hf27, _tc2_hf27, _tc3_hf27, _tc4_hf27, _tc5_hf31 = st.columns(5)
                 _tc1_hf27.metric("⏱️ Ciclos observados", int(_memoria_ciclo_hf27.get("total_amostras") or 0))
                 _tc2_hf27.metric("📦 Produtos com base", int(_memoria_ciclo_hf27.get("produtos_com_amostras") or 0))
                 _tc3_hf27.metric("🔵 Ciclos em andamento", int(_memoria_ciclo_hf27.get("em_andamento_com_inicio") or 0))
                 _tc4_hf27.metric("⚪ Sem início confiável", int(_memoria_ciclo_hf27.get("em_producao_sem_inicio_confiavel") or 0))
+                _tc5_hf31.metric("🔎 Revisar variação", int(_memoria_ciclo_hf27.get("total_amostras_para_revisar") or 0))
 
                 # HF29 — não deixar o contador de ciclo em andamento virar uma caixa-preta.
                 # Mostramos exatamente qual item está sendo observado, sem alterar status.
@@ -23034,17 +23036,73 @@ if pagina_atual == "central":
                             "Produto": _tc_hf27.get("produto", "Item do pedido"),
                             "Amostras": int(_tc_hf27.get("amostras") or 0),
                             "Mediana do ciclo": _tc_hf27.get("mediana", "—"),
-                            "Faixa observada": f"{_tc_hf27.get('minimo', '—')} a {_tc_hf27.get('maximo', '—')}",
-                            "Qtd observada": _tc_hf27.get("quantidade_observada", "—"),
+                            "Faixa central": f"{_tc_hf27.get('faixa_central_minimo', '—')} a {_tc_hf27.get('faixa_central_maximo', '—')}",
+                            "Faixa total": f"{_tc_hf27.get('minimo', '—')} a {_tc_hf27.get('maximo', '—')}",
+                            "Lotes observados": _tc_hf27.get("lotes_observados", "—"),
+                            "Qualidade": _tc_hf27.get("qualidade", "Base em formação"),
                             "Base": _tc_hf27.get("nivel", "Base inicial"),
                             "Processos": ", ".join(_tc_hf27.get("processos") or []) or "—",
                         })
                     st.dataframe(pd.DataFrame(_linhas_ciclo_hf27), use_container_width=True, hide_index=True)
+                    st.caption(
+                        "HF31: a Faixa central é apenas uma leitura auxiliar sem durações marcadas para revisão. "
+                        "Nenhuma amostra é apagada ou alterada; a faixa total continua visível e estes dados ainda NÃO calculam capacidade."
+                    )
                 else:
                     st.info(
                         "Ainda não há um ciclo completo confiável para resumir. A coleta começa quando um item entra "
                         "explicitamente em 'Em produção' e depois é concluído como 'Pronto' ou 'Entregue'."
                     )
+                _amostras_revisar_hf31 = list(_memoria_ciclo_hf27.get("amostras_para_revisar") or [])
+                if _amostras_revisar_hf31:
+                    with st.expander(
+                        f"🔎 Amostras com variação alta para conferir ({len(_amostras_revisar_hf31)})",
+                        expanded=False,
+                    ):
+                        st.caption(
+                            "Sinal estatístico de qualidade da base. A amostra permanece registrada e não é descartada. "
+                            "Use este bloco somente para conferir se houve pausa longa, espera, retrabalho ou outro contexto excepcional."
+                        )
+                        for _idx_rev_hf31, _rev_hf31 in enumerate(_amostras_revisar_hf31[:10]):
+                            _num_rev_hf31 = str(_rev_hf31.get("numero_proposta") or "").strip()
+                            _qtd_rev_hf31 = _rev_hf31.get("quantidade")
+                            try:
+                                _qnum_rev_hf31 = float(_qtd_rev_hf31)
+                                _qtxt_rev_hf31 = str(int(_qnum_rev_hf31)) if _qnum_rev_hf31.is_integer() else str(_qnum_rev_hf31)
+                            except Exception:
+                                _qtxt_rev_hf31 = str(_qtd_rev_hf31 or "—")
+                            with st.container(border=True):
+                                _ra_hf31, _rb_hf31 = st.columns([8, 2])
+                                _ra_hf31.markdown(
+                                    f"**{html.escape(str(_rev_hf31.get('produto') or 'Item do pedido'))} — "
+                                    f"{html.escape(_num_rev_hf31 or 'Sem proposta')}**"
+                                )
+                                _ra_hf31.write(
+                                    f"Cliente: {html.escape(str(_rev_hf31.get('cliente_nome') or 'Cliente'))} · "
+                                    f"Qtd.: {html.escape(_qtxt_rev_hf31)}"
+                                )
+                                _ra_hf31.caption(str(_rev_hf31.get("motivo_revisao") or "Variação alta para conferência."))
+                                _ra_hf31.caption(
+                                    f"Início: {str(_rev_hf31.get('iniciado_em') or '—')} · "
+                                    f"Fim: {str(_rev_hf31.get('concluido_em') or '—')}"
+                                )
+                                if _num_rev_hf31:
+                                    _rb_hf31.button(
+                                        "📋 Abrir pedido",
+                                        key=f"tempo_ciclo_revisar_hf31_{_idx_rev_hf31}_{_num_rev_hf31}",
+                                        use_container_width=True,
+                                        on_click=lambda n=_num_rev_hf31: st.session_state.__setitem__("alerta_proposta_numero", n),
+                                    )
+                                else:
+                                    _rb_hf31.button(
+                                        "📋 Sem proposta",
+                                        key=f"tempo_ciclo_revisar_sem_numero_hf31_{_idx_rev_hf31}",
+                                        disabled=True,
+                                        use_container_width=True,
+                                    )
+                        if len(_amostras_revisar_hf31) > 10:
+                            st.caption(f"Mais {len(_amostras_revisar_hf31) - 10} amostra(s) aguardam conferência.")
+
                 if int(_memoria_ciclo_hf27.get("finalizados_sem_fim_confiavel") or 0):
                     st.caption(
                         f"⚪ {int(_memoria_ciclo_hf27.get('finalizados_sem_fim_confiavel') or 0)} ciclo(s) já finalizado(s) "
