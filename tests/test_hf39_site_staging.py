@@ -10,12 +10,12 @@ ROOT = Path(__file__).resolve().parents[1]
 APP = (ROOT / "app.py").read_text(encoding="utf-8")
 
 
-class HF39SiteStagingTests(unittest.TestCase):
+class HF40SiteStagingRegressionTests(unittest.TestCase):
     def test_staging_injeta_noindex_e_aviso_sem_tocar_dominio(self):
         html = "<!doctype html><html><head><title>x</title></head><body>ok</body></html>"
         pagina = preparar_html_staging(html)
         self.assertIn('name="robots" content="noindex,nofollow,noarchive"', pagina)
-        self.assertIn("SITE PARALELO HF39", pagina)
+        self.assertIn("SITE PARALELO HF40", pagina)
         self.assertIn("NÃO PUBLICADO EM ALPHAFEST.COM.BR", pagina)
 
     def test_pacote_nao_contem_cname_e_traz_rollback(self):
@@ -39,16 +39,16 @@ class HF39SiteStagingTests(unittest.TestCase):
     def test_resumo_staging_preserva_endereco(self):
         resumo = resumo_staging(total_produtos=16)
         self.assertEqual(resumo["dominio_final"], "alphafest.com.br")
-        self.assertEqual(resumo["hospedagem_planejada"], "Cloudflare Pages")
+        self.assertEqual(resumo["hospedagem_planejada"], "Cloudflare Workers · Static Assets")
         self.assertFalse(resumo["dns_alterado"])
         self.assertEqual(resumo["produtos_snapshot"], 16)
 
     def test_app_expoe_staging_sem_publicacao_dns(self):
         trecho = APP.split('if pagina_atual == "site":', 1)[1].split('if pagina_atual == "crescimento":', 1)[0]
-        self.assertIn('"🚧 Site paralelo / staging — HF39"', trecho)
-        self.assertIn('"Cloudflare Pages"', trecho)
+        self.assertIn('"🚧 Site paralelo / staging — HF40"', trecho)
+        self.assertIn('"Cloudflare Workers · Static Assets"', trecho)
         self.assertIn('"DNS alterado", "NÃO"', trecho)
-        self.assertIn('alphafest-site-staging-hf39.zip', trecho)
+        self.assertIn('alphafest-site-staging-hf40.zip', trecho)
         self.assertIn('_site_gerar_pacote_staging(', trecho)
         self.assertIn('Nenhuma dessas etapas de DNS é executada automaticamente', trecho)
         self.assertNotIn('CNAME(', trecho)

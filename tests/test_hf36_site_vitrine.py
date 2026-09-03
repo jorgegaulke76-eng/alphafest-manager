@@ -69,7 +69,7 @@ class HF36SiteVitrineTests(unittest.TestCase):
             },
             logo_src="data:image/png;base64,abc",
         )
-        self.assertIn("PRÉVIA INTERNA HF39", html)
+        self.assertIn("PRÉVIA INTERNA HF40", html)
         self.assertIn('id="search"', html)
         self.assertIn('data-cat="todos"', html)
         self.assertIn("@media(max-width:620px)", html)
@@ -95,12 +95,12 @@ class HF36SiteVitrineTests(unittest.TestCase):
 
     def test_app_exibe_preview_desktop_e_celular_sem_publicar(self):
         trecho = APP.split('if pagina_atual == "site":', 1)[1].split('if pagina_atual == "crescimento":', 1)[0]
-        self.assertIn('"🌐 Nova vitrine pública — prévia HF39"', trecho)
+        self.assertIn('"🌐 Site completo — prévia HF40"', trecho)
         self.assertIn('["🖥️ Desktop", "📱 Celular"]', trecho)
-        self.assertIn('_site_gerar_html_vitrine(', trecho)
+        self.assertIn('_site_gerar_html_completo(', trecho)
         self.assertIn('components.html(html_vitrine_hf36', trecho)
         self.assertIn('"⬇️ Baixar esta prévia HTML"', trecho)
-        self.assertIn("o site atual continua intocado", trecho)
+        self.assertIn("o site atual permanece intocado", trecho)
         self.assertNotIn("publish_catalog_html(", trecho)
 
 

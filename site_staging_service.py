@@ -1,7 +1,7 @@
-"""Pacote de homologação paralelo do novo site AlphaFest (HF39).
+"""Pacote de homologação paralelo do novo site AlphaFest (HF40).
 
-O staging é um snapshot somente leitura da mesma vitrine gerada pelo Catálogo
-oficial. Não publica, não altera DNS e não cria CNAME para alphafest.com.br.
+O staging é um snapshot somente leitura do site completo gerado pelo Catálogo
+e pela configuração oficial do Manager. Não publica, não altera DNS e não cria CNAME para alphafest.com.br.
 """
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 DOMINIO_FINAL = "alphafest.com.br"
-HOSPEDAGEM_STAGING = "Cloudflare Pages"
+HOSPEDAGEM_STAGING = "Cloudflare Workers · Static Assets"
 
 
-def preparar_html_staging(html_site: str, *, versao: str = "HF39") -> str:
+def preparar_html_staging(html_site: str, *, versao: str = "HF40") -> str:
     """Transforma o HTML público em cópia de homologação não indexável."""
     pagina = str(html_site or "")
     meta = (
@@ -30,7 +30,7 @@ def preparar_html_staging(html_site: str, *, versao: str = "HF39") -> str:
             pagina = pagina[: pos + 1] + meta + pagina[pos + 1 :]
 
     aviso = (
-        f'<div class="staging-hf39" style="background:#17243a;color:#fff;text-align:center;'
+        f'<div class="staging-hf40" style="background:#17243a;color:#fff;text-align:center;'
         'font:800 11px/1.35 Arial,sans-serif;letter-spacing:.06em;padding:8px 12px">'
         f'SITE PARALELO {versao} · HOMOLOGAÇÃO · NÃO PUBLICADO EM {DOMINIO_FINAL.upper()}</div>'
     )
@@ -55,14 +55,14 @@ def gerar_pacote_staging(
     html_site: str,
     *,
     total_produtos: int = 0,
-    versao_manager: str = "20.4.9-I8.13.5-HF39",
+    versao_manager: str = "20.4.9-I8.13.5-HF40",
 ) -> bytes:
-    """Gera ZIP estático pronto para teste em Cloudflare Pages.
+    """Gera ZIP estático pronto para teste em Cloudflare Workers / Static Assets.
 
     O pacote propositalmente NÃO contém CNAME nem instruções executáveis de DNS.
     A troca de alphafest.com.br fica para a etapa final, manual e reversível.
     """
-    html_staging = preparar_html_staging(html_site, versao="HF39")
+    html_staging = preparar_html_staging(html_site, versao="HF40")
     status = resumo_staging(total_produtos=total_produtos)
     status.update({
         "versao_manager": versao_manager,
@@ -76,20 +76,20 @@ def gerar_pacote_staging(
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
 """
-    readme = f"""ALPHAFEST — SITE PARALELO / STAGING HF39
+    readme = f"""ALPHAFEST — SITE PARALELO / STAGING HF40
 
 OBJETIVO
 Testar o novo site em paralelo sem alterar o site atual nem o domínio {DOMINIO_FINAL}.
 
 ARQUIVOS
-- index.html: novo site/vitrine gerado do Catálogo oficial do Manager.
+- index.html: site completo HF40 gerado do Catálogo oficial e configuração oficial do Manager.
 - 404.html: fallback estático.
 - robots.txt + _headers: bloqueiam indexação durante a homologação.
 - STATUS-STAGING.json: registra o estado seguro do pacote.
 - CHECKLIST-VIRADA-DOMINIO.txt: roteiro futuro; NÃO executa nenhuma alteração.
 
 HOSPEDAGEM PLANEJADA
-{HOSPEDAGEM_STAGING} em endereço temporário *.pages.dev durante a homologação.
+{HOSPEDAGEM_STAGING} em endereço temporário *.workers.dev durante a homologação.
 
 IMPORTANTE
 Este pacote NÃO contém CNAME, não muda DNS e não assume {DOMINIO_FINAL}.
@@ -108,18 +108,19 @@ O site atual deve permanecer online até a aprovação final.
 [ ] 9. Manter possibilidade de rollback para os registros DNS anteriores.
 [ ] 10. Só depois retirar/desativar a hospedagem antiga.
 
-A HF39 NÃO executa nenhum item deste checklist automaticamente.
+A HF40 NÃO executa nenhum item deste checklist automaticamente.
 """
-    deploy = """STAGING EM CLOUDFLARE PAGES — ROTEIRO DE HOMOLOGAÇÃO
+    deploy = """STAGING EM CLOUDFLARE WORKERS · STATIC ASSETS — ROTEIRO DE HOMOLOGAÇÃO
 
-1. Criar um projeto Pages separado para o novo site AlphaFest.
-2. Fazer upload/deploy deste pacote estático.
-3. Usar o endereço temporário fornecido em *.pages.dev.
+1. Abrir o projeto estático separado do novo site AlphaFest no Cloudflare Workers & Pages.
+2. Fazer um novo deployment por Upload static files.
+3. Usar o endereço temporário fornecido em *.workers.dev.
 4. NÃO adicionar alphafest.com.br como domínio personalizado nesta fase.
 5. Conferir a homologação pelo endereço temporário.
 6. A conexão do domínio oficial fica reservada para a virada final.
 
 O staging contém noindex em HTML, robots.txt e _headers para reduzir o risco de indexação.
+O projeto de homologação já pode ser atualizado por New deployment sem tocar no domínio oficial.
 """
 
     buffer = io.BytesIO()
@@ -129,7 +130,7 @@ O staging contém noindex em HTML, robots.txt e _headers para reduzir o risco de
         zf.writestr("robots.txt", robots)
         zf.writestr("_headers", headers)
         zf.writestr("README-STAGING.txt", readme)
-        zf.writestr("DEPLOY-CLOUDFLARE-PAGES.txt", deploy)
+        zf.writestr("DEPLOY-CLOUDFLARE-WORKERS.txt", deploy)
         zf.writestr("CHECKLIST-VIRADA-DOMINIO.txt", checklist)
         zf.writestr("STATUS-STAGING.json", json.dumps(status, ensure_ascii=False, indent=2))
     return buffer.getvalue()

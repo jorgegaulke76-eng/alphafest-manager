@@ -983,3 +983,10 @@ hangelog
 - Hospedagem planejada para homologação: Cloudflare Pages em endereço temporário `*.pages.dev`.
 - `alphafest.com.br` permanece intocado; o pacote não contém `CNAME` e não executa alterações de DNS.
 - Inclui checklist futuro de virada com backup de DNS, HTTPS e rollback antes de desligar a hospedagem antiga.
+
+## 20.4.9-I8.13.5-HF40 — Site completo em paralelo
+- Mantém a vitrine homologada como núcleo comercial e acrescenta Início, Produtos, Serviços, Quem Somos e Contato.
+- Preserva a identidade visual aprovada e a responsividade desktop/celular.
+- Produtos continuam na Fonte Única do Catálogo; contato vem da configuração oficial do Manager.
+- Reaproveita seletivamente a essência institucional e os tipos de serviço do site legado, sem importar automaticamente fotos antigas.
+- Atualiza o staging para o fluxo homologado Cloudflare Workers · Static Assets (`*.workers.dev`), sem CNAME ou DNS automático.
