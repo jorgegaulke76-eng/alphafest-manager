@@ -75,7 +75,7 @@ class HF35SiteManagerTests(unittest.TestCase):
     def test_hf35_nao_publica_site_automaticamente(self):
         trecho = APP.split('if pagina_atual == "site":', 1)[1].split('if pagina_atual == "crescimento":', 1)[0]
         self.assertIn('Nada será publicado automaticamente', trecho)
-        self.assertIn('A HF35 não substitui nem publica o site atual', trecho)
+        self.assertIn('nenhuma página pública é alterada ou publicada', trecho)
         self.assertNotIn('publish_catalog_html(', trecho)
 
 

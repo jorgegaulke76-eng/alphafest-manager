@@ -953,3 +953,11 @@ hangelog
 - Reaproveita o Assistente THU já existente para comparar o site legado `alphafest.com.br` com o Catálogo oficial; a análise continua manual para não prejudicar a performance.
 - O site atual não é alterado nem publicado automaticamente nesta etapa. A HF35 organiza a gestão e prepara a migração futura sem duplicar dados.
 - Não cria novo banco de produtos nem altera os documentos operacionais; o scan histórico continua no documento de Marketing já existente.
+
+
+## 20.4.9-I8.13.5-HF36 — Prévia da Nova Vitrine Pública
+- Central do Site ganha uma prévia responsiva com aparência de site real, disponível em Desktop e Celular dentro do Manager.
+- A vitrine é gerada somente em memória a partir do mesmo Catálogo oficial: apenas produtos ativos, marcados para o site e prontos entram na visualização.
+- Adiciona busca, filtros por categoria, destaque visual, cards, preço/valor sob consulta e CTA de orçamento via WhatsApp.
+- Adiciona exportação opcional do HTML de prévia para conferência, sem publicar ou alterar o domínio atual.
+- Não cria banco paralelo, não altera produtos e não executa migração/publicação automática.

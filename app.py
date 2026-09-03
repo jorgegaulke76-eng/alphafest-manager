@@ -32,6 +32,7 @@ _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
 from site_manager_service import resumir_catalogo_site as _site_resumir_catalogo, ordenar_produtos_site as _site_ordenar_produtos
+from site_vitrine_service import resumir_vitrine as _site_resumir_vitrine, gerar_html_vitrine as _site_gerar_html_vitrine
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
@@ -24976,7 +24977,7 @@ if pagina_atual == "clientes_360":
 if pagina_atual == "site":
     st.markdown("# 🌐 Central do Site AlphaFest")
     st.caption(
-        "HF35 • O Catálogo do Manager é a Fonte Única da futura vitrine. "
+        "HF36 • O Catálogo do Manager continua como Fonte Única da futura vitrine. "
         "O site atual permanece online e é usado como acervo/legado até a migração ser aprovada."
     )
 
@@ -25004,6 +25005,58 @@ if pagina_atual == "site":
         f"{resumo_site_hf35.get('prontos_nao_marcados', 0)} produto(s) já com foto/descrição e ainda não marcado(s) para o site. "
         "Preço pode permanecer sob consulta; não é requisito para exibir um personalizado."
     )
+
+    # HF36 — prévia responsiva da nova vitrine pública, gerada somente em memória.
+    resumo_vitrine_hf36 = _site_resumir_vitrine(catalogo_site_hf35)
+    empresa_vitrine_hf36 = carregar_config_empresa()
+    logo_b64_hf36, logo_ext_hf36 = encontrar_logo_base64()
+    logo_src_hf36 = ""
+    if logo_b64_hf36:
+        ext_hf36 = str(logo_ext_hf36 or ".png").replace(".", "").lower() or "png"
+        if ext_hf36 == "jpg":
+            ext_hf36 = "jpeg"
+        logo_src_hf36 = f"data:image/{ext_hf36};base64,{logo_b64_hf36}"
+
+    with st.expander("🌐 Nova vitrine pública — prévia HF36", expanded=True):
+        st.caption(
+            "Prévia interna responsiva gerada diretamente do Catálogo oficial. Busca, categorias, destaques e botões de orçamento "
+            "já funcionam aqui, mas nenhuma página pública é alterada ou publicada."
+        )
+        pv1_hf36, pv2_hf36, pv3_hf36 = st.columns(3)
+        pv1_hf36.metric("Produtos exibidos", resumo_vitrine_hf36.get("total", 0))
+        pv2_hf36.metric("Categorias", resumo_vitrine_hf36.get("total_categorias", 0))
+        pv3_hf36.metric("Destaques", resumo_vitrine_hf36.get("destaques", 0))
+
+        modo_vitrine_hf36 = st.radio(
+            "Visualização",
+            ["🖥️ Desktop", "📱 Celular"],
+            horizontal=True,
+            key="site_hf36_modo_preview",
+        )
+        html_vitrine_hf36 = _site_gerar_html_vitrine(
+            catalogo_site_hf35,
+            empresa_vitrine_hf36,
+            logo_src=logo_src_hf36,
+            imagem_resolver=_catalogo_html_src_imagem,
+            modo_preview=True,
+        )
+        if resumo_vitrine_hf36.get("total", 0) <= 0:
+            st.info("A vitrine aparecerá quando houver produto ativo, marcado para o site e pronto para apresentação.")
+        elif modo_vitrine_hf36 == "📱 Celular":
+            esp1_hf36, cel_hf36, esp2_hf36 = st.columns([1.0, 0.62, 1.0])
+            with cel_hf36:
+                components.html(html_vitrine_hf36, height=980, scrolling=True)
+        else:
+            components.html(html_vitrine_hf36, height=900, scrolling=True)
+
+        st.download_button(
+            "⬇️ Baixar esta prévia HTML",
+            data=html_vitrine_hf36,
+            file_name="alphafest-vitrine-preview-hf36.html",
+            mime="text/html",
+            use_container_width=True,
+            key="site_hf36_download_preview",
+        )
 
     with st.expander(
         f"🛍️ Produtos marcados para a futura vitrine ({resumo_site_hf35.get('marcados_site', 0)})",
@@ -25048,30 +25101,6 @@ if pagina_atual == "site":
             ):
                 st.session_state.catalogo_edit_index = int(item_hf35.get("indice_catalogo") or 0)
                 rerun_na_aba("catalogo")
-
-    with st.expander("👀 Prévia da futura vitrine", expanded=False):
-        prontos_vitrine_hf35 = [x for x in produtos_site_hf35 if x.get("ativo") and x.get("publicar_site") and x.get("pronto")]
-        if not prontos_vitrine_hf35:
-            st.info("A prévia aparecerá aqui quando houver pelo menos um produto marcado para o site com foto e descrição.")
-        else:
-            st.caption(
-                "Esta é apenas uma prévia interna. A HF35 não substitui nem publica o site atual. "
-                "Ela mostra como o Catálogo oficial já pode alimentar a nova vitrine."
-            )
-            for inicio_hf35 in range(0, min(len(prontos_vitrine_hf35), 12), 3):
-                cols_vitrine_hf35 = st.columns(3)
-                for off_hf35, item_hf35 in enumerate(prontos_vitrine_hf35[inicio_hf35:inicio_hf35 + 3]):
-                    with cols_vitrine_hf35[off_hf35]:
-                        if item_hf35.get("imagem_principal"):
-                            try:
-                                st.image(item_hf35.get("imagem_principal"), use_container_width=True)
-                            except Exception:
-                                st.caption("🖼️ Foto cadastrada")
-                        st.markdown(("⭐ " if item_hf35.get("destaque") else "") + f"**{item_hf35.get('nome')}**")
-                        desc_hf35 = str(item_hf35.get("descricao") or "").strip()
-                        if desc_hf35:
-                            st.caption(desc_hf35[:180] + ("…" if len(desc_hf35) > 180 else ""))
-                        st.caption(formatar_preco_catalogo(item_hf35.get("preco")) if item_hf35.get("preco") else "Valor sob consulta")
 
     with st.expander(
         f"✨ Prontos no Catálogo e ainda não marcados para o site ({resumo_site_hf35.get('prontos_nao_marcados', 0)})",
@@ -25152,8 +25181,8 @@ if pagina_atual == "site":
                 rerun_na_aba("crescimento")
 
     st.info(
-        "🧭 **Próxima fase do site:** depois de homologarmos esta Central, montamos a nova vitrine pública a partir destes mesmos produtos. "
-        "A publicação/migração só será feita depois de você aprovar a prévia — o site atual não é alterado pela HF35."
+        "🧭 **HF36:** a nova vitrine já pode ser avaliada em Desktop e Celular dentro do Manager. "
+        "A publicação/migração só será feita depois de você aprovar esta prévia — o site atual continua intocado."
     )
 
 if pagina_atual == "crescimento":
