@@ -67,3 +67,6 @@
 
 - HF38: experiência móvel e WhatsApp contextual na nova vitrine, preservando preço opcional e Fonte Única.
 - Após homologar HF38: lapidar conteúdo institucional/estrutura final da vitrine e preparar publicação controlada sem retirar o site atual antes da validação final.
+
+- HF39: Site paralelo / staging seguro — gerar o novo site a partir da Fonte Única e homologar em endereço temporário, sem tocar em `alphafest.com.br`.
+- Após homologar HF39: reaproveitar seletivamente conteúdo institucional do site antigo (sobre, serviços, contato e materiais úteis), concluir a estrutura do novo site e só então preparar a virada manual do domínio com backup/rollback.

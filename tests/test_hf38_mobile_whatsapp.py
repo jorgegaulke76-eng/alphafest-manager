@@ -48,9 +48,9 @@ class HF38MobileWhatsappTests(unittest.TestCase):
 
     def test_app_continua_preview_sem_publicacao(self):
         trecho = APP.split('if pagina_atual == "site":', 1)[1].split('if pagina_atual == "crescimento":', 1)[0]
-        self.assertIn('"🌐 Nova vitrine pública — prévia HF38"', trecho)
+        self.assertIn('"🌐 Nova vitrine pública — prévia HF39"', trecho)
         self.assertIn('["🖥️ Desktop", "📱 Celular"]', trecho)
-        self.assertIn('alphafest-vitrine-preview-hf38.html', trecho)
+        self.assertIn('alphafest-vitrine-preview-hf39.html', trecho)
         self.assertNotIn('publish_catalog_html(', trecho)
 
 

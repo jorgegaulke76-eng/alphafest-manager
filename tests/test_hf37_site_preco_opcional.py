@@ -50,7 +50,7 @@ class HF37PrecoOpcionalSiteTests(unittest.TestCase):
 
     def test_hf37_continua_sem_publicacao_automatica(self):
         trecho = APP.split('if pagina_atual == "site":', 1)[1].split('if pagina_atual == "crescimento":', 1)[0]
-        self.assertIn('"🌐 Nova vitrine pública — prévia HF38"', trecho)
+        self.assertIn('"🌐 Nova vitrine pública — prévia HF39"', trecho)
         self.assertNotIn('publish_catalog_html(', trecho)
 
 

@@ -975,3 +975,11 @@ hangelog
 - Adiciona CTA fixo de orçamento no mobile.
 - Botões de produto passam a abrir o WhatsApp com produto + contexto de tamanho/personalização, cor, quantidade, material e prazo.
 - Continua sem publicação automática e sem banco paralelo.
+
+## 20.4.9-I8.13.5-HF39 — Site paralelo / staging seguro
+- Mantém a vitrine móvel/WhatsApp homologada na HF38 e adiciona ambiente paralelo de homologação.
+- Gera pacote ZIP estático a partir da mesma Fonte Única do Catálogo, sem cadastro paralelo.
+- Staging inclui `noindex`, `robots.txt` e `_headers` para evitar indexação durante os testes.
+- Hospedagem planejada para homologação: Cloudflare Pages em endereço temporário `*.pages.dev`.
+- `alphafest.com.br` permanece intocado; o pacote não contém `CNAME` e não executa alterações de DNS.
+- Inclui checklist futuro de virada com backup de DNS, HTTPS e rollback antes de desligar a hospedagem antiga.

@@ -161,7 +161,7 @@ def gerar_html_vitrine(
         )
 
     logo = f'<img class="brand-logo" src="{html.escape(str(logo_src), quote=True)}" alt="AlphaFest">' if logo_src else '<div class="brand-word">AlphaFest</div>'
-    preview_bar = '<div class="preview-bar">PRÉVIA INTERNA HF38 · AINDA NÃO PUBLICADA</div>' if modo_preview else ""
+    preview_bar = '<div class="preview-bar">PRÉVIA INTERNA HF39 · AINDA NÃO PUBLICADA</div>' if modo_preview else ""
     vazio = '<div class="empty">Nenhum produto pronto está marcado para o site.</div>' if not cards else ""
 
     return f'''<!doctype html>

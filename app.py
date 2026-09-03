@@ -33,6 +33,7 @@ _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
 from site_manager_service import resumir_catalogo_site as _site_resumir_catalogo, ordenar_produtos_site as _site_ordenar_produtos
 from site_vitrine_service import resumir_vitrine as _site_resumir_vitrine, gerar_html_vitrine as _site_gerar_html_vitrine
+from site_staging_service import gerar_pacote_staging as _site_gerar_pacote_staging, resumo_staging as _site_resumo_staging
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
@@ -24977,7 +24978,7 @@ if pagina_atual == "clientes_360":
 if pagina_atual == "site":
     st.markdown("# 🌐 Central do Site AlphaFest")
     st.caption(
-        "HF38 • O Catálogo do Manager continua como Fonte Única da futura vitrine. "
+        "HF39 • O Catálogo do Manager continua como Fonte Única do novo site paralelo. "
         "O site atual permanece online e é usado como acervo/legado até a migração ser aprovada."
     )
 
@@ -25006,7 +25007,7 @@ if pagina_atual == "site":
         "Por padrão o preço fica oculto no site; cada produto decide no Catálogo se o valor deve aparecer na vitrine."
     )
 
-    # HF38 — prévia móvel refinada + WhatsApp contextual, preservando preço opcional e Fonte Única.
+    # HF39 — mantém a vitrine HF38 e acrescenta staging paralelo sem tocar no domínio atual.
     resumo_vitrine_hf36 = _site_resumir_vitrine(catalogo_site_hf35)
     empresa_vitrine_hf36 = carregar_config_empresa()
     logo_b64_hf36, logo_ext_hf36 = encontrar_logo_base64()
@@ -25017,7 +25018,7 @@ if pagina_atual == "site":
             ext_hf36 = "jpeg"
         logo_src_hf36 = f"data:image/{ext_hf36};base64,{logo_b64_hf36}"
 
-    with st.expander("🌐 Nova vitrine pública — prévia HF38", expanded=True):
+    with st.expander("🌐 Nova vitrine pública — prévia HF39", expanded=True):
         st.caption(
             "Prévia interna responsiva gerada diretamente do Catálogo oficial. Busca, categorias, destaques e botões de orçamento "
             "já funcionam aqui, mas nenhuma página pública é alterada ou publicada."
@@ -25052,11 +25053,64 @@ if pagina_atual == "site":
         st.download_button(
             "⬇️ Baixar esta prévia HTML",
             data=html_vitrine_hf36,
-            file_name="alphafest-vitrine-preview-hf38.html",
+            file_name="alphafest-vitrine-preview-hf39.html",
             mime="text/html",
             use_container_width=True,
             key="site_hf36_download_preview",
         )
+
+    # HF39 — ambiente paralelo/staging: snapshot seguro da mesma Fonte Única, sem DNS/CNAME.
+    with st.expander("🚧 Site paralelo / staging — HF39", expanded=True):
+        st.caption(
+            "O novo site pode ser hospedado e testado em um endereço temporário sem alterar alphafest.com.br. "
+            "A HF39 não publica, não muda DNS e não desliga o site atual."
+        )
+        _stg_hf39 = _site_resumo_staging(total_produtos=resumo_vitrine_hf36.get("total", 0))
+        sg1_hf39, sg2_hf39, sg3_hf39, sg4_hf39 = st.columns(4)
+        sg1_hf39.metric("Site atual", "Protegido")
+        sg2_hf39.metric("Domínio final", "alphafest.com.br")
+        sg3_hf39.metric("Hospedagem planejada", "Cloudflare Pages")
+        sg4_hf39.metric("DNS alterado", "NÃO")
+
+        st.success(
+            "✅ **Endereço preservado:** o site atual continua respondendo em alphafest.com.br. "
+            "O novo site será homologado primeiro em endereço temporário `*.pages.dev`."
+        )
+        st.info(
+            "📦 O pacote abaixo é um **snapshot do mesmo Catálogo oficial** usado nesta tela. "
+            "Ele inclui proteção `noindex` para homologação e propositalmente não contém CNAME nem configuração de DNS."
+        )
+
+        html_staging_base_hf39 = _site_gerar_html_vitrine(
+            catalogo_site_hf35,
+            empresa_vitrine_hf36,
+            logo_src=logo_src_hf36,
+            imagem_resolver=_catalogo_html_src_imagem,
+            modo_preview=False,
+        )
+        pacote_staging_hf39 = _site_gerar_pacote_staging(
+            html_staging_base_hf39,
+            total_produtos=resumo_vitrine_hf36.get("total", 0),
+            versao_manager="20.4.9-I8.13.5-HF39",
+        )
+        st.download_button(
+            "⬇️ Baixar pacote do site paralelo (ZIP)",
+            data=pacote_staging_hf39,
+            file_name="alphafest-site-staging-hf39.zip",
+            mime="application/zip",
+            use_container_width=True,
+            key="site_hf39_download_staging",
+        )
+        with st.expander("🧭 Ver plano de virada do endereço", expanded=False):
+            st.markdown(
+                "1. Homologar o novo site no endereço temporário.  \n"
+                "2. Conferir desktop, celular, produtos, textos e WhatsApp.  \n"
+                "3. Reaproveitar somente o conteúdo aprovado do site antigo.  \n"
+                "4. Fazer backup do DNS atual.  \n"
+                "5. Somente na virada final conectar **alphafest.com.br** à nova hospedagem.  \n"
+                "6. Confirmar HTTPS e manter rollback antes de desligar a hospedagem antiga."
+            )
+            st.warning("Nenhuma dessas etapas de DNS é executada automaticamente pelo Manager.")
 
     with st.expander(
         f"🛍️ Produtos marcados para a futura vitrine ({resumo_site_hf35.get('marcados_site', 0)})",
@@ -25181,7 +25235,7 @@ if pagina_atual == "site":
                 rerun_na_aba("crescimento")
 
     st.info(
-        "🧭 **HF38:** a vitrine mantém o visual e o preço opcional já aprovados, com experiência móvel mais confortável e WhatsApp contextual por produto. "
+        "🧭 **HF39:** a vitrine aprovada permanece igual e agora há um ambiente paralelo de staging preparado para homologação sem tocar no domínio atual. "
         "A publicação/migração só será feita depois de você aprovar esta prévia — o site atual continua intocado."
     )
 
