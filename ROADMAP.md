@@ -64,3 +64,6 @@
 
 - HF37: controle individual `Exibir preço no site` no Catálogo; padrão oculto e vitrine orientada a orçamento para personalizados variáveis.
 - Após homologar HF37: validar modo Celular e lapidar conteúdo/estrutura da vitrine antes de preparar publicação controlada.
+
+- HF38: experiência móvel e WhatsApp contextual na nova vitrine, preservando preço opcional e Fonte Única.
+- Após homologar HF38: lapidar conteúdo institucional/estrutura final da vitrine e preparar publicação controlada sem retirar o site atual antes da validação final.

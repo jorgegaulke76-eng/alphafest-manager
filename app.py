@@ -24977,7 +24977,7 @@ if pagina_atual == "clientes_360":
 if pagina_atual == "site":
     st.markdown("# 🌐 Central do Site AlphaFest")
     st.caption(
-        "HF37 • O Catálogo do Manager continua como Fonte Única da futura vitrine. "
+        "HF38 • O Catálogo do Manager continua como Fonte Única da futura vitrine. "
         "O site atual permanece online e é usado como acervo/legado até a migração ser aprovada."
     )
 
@@ -25006,7 +25006,7 @@ if pagina_atual == "site":
         "Por padrão o preço fica oculto no site; cada produto decide no Catálogo se o valor deve aparecer na vitrine."
     )
 
-    # HF37 — prévia responsiva + controle individual de preço, sempre pela Fonte Única.
+    # HF38 — prévia móvel refinada + WhatsApp contextual, preservando preço opcional e Fonte Única.
     resumo_vitrine_hf36 = _site_resumir_vitrine(catalogo_site_hf35)
     empresa_vitrine_hf36 = carregar_config_empresa()
     logo_b64_hf36, logo_ext_hf36 = encontrar_logo_base64()
@@ -25017,7 +25017,7 @@ if pagina_atual == "site":
             ext_hf36 = "jpeg"
         logo_src_hf36 = f"data:image/{ext_hf36};base64,{logo_b64_hf36}"
 
-    with st.expander("🌐 Nova vitrine pública — prévia HF37", expanded=True):
+    with st.expander("🌐 Nova vitrine pública — prévia HF38", expanded=True):
         st.caption(
             "Prévia interna responsiva gerada diretamente do Catálogo oficial. Busca, categorias, destaques e botões de orçamento "
             "já funcionam aqui, mas nenhuma página pública é alterada ou publicada."
@@ -25052,7 +25052,7 @@ if pagina_atual == "site":
         st.download_button(
             "⬇️ Baixar esta prévia HTML",
             data=html_vitrine_hf36,
-            file_name="alphafest-vitrine-preview-hf37.html",
+            file_name="alphafest-vitrine-preview-hf38.html",
             mime="text/html",
             use_container_width=True,
             key="site_hf36_download_preview",
@@ -25181,7 +25181,7 @@ if pagina_atual == "site":
                 rerun_na_aba("crescimento")
 
     st.info(
-        "🧭 **HF37:** a nova vitrine mantém o visual aprovado e agora respeita o controle individual de preço do Catálogo. "
+        "🧭 **HF38:** a vitrine mantém o visual e o preço opcional já aprovados, com experiência móvel mais confortável e WhatsApp contextual por produto. "
         "A publicação/migração só será feita depois de você aprovar esta prévia — o site atual continua intocado."
     )
 

@@ -1,4 +1,4 @@
-"""Prévia responsiva da futura vitrine pública AlphaFest (HF37).
+"""Prévia responsiva da futura vitrine pública AlphaFest (HF38).
 
 Somente leitura: seleciona produtos diretamente do Catálogo oficial marcados
 para o site e prontos para apresentação. Não persiste, publica ou altera dados.
@@ -104,7 +104,7 @@ def gerar_html_vitrine(
     numero = re.sub(r"\D", "", str((empresa or {}).get("whatsapp_catalogo") or (empresa or {}).get("celular") or ""))
     if numero and not numero.startswith("55"):
         numero = "55" + numero
-    mensagem_geral = quote("Olá! Vim pelo site da AlphaFest e gostaria de fazer um orçamento.")
+    mensagem_geral = quote("Olá! Vim pelo site da AlphaFest e gostaria de fazer um orçamento. Preciso de ajuda para definir produto, tamanho/personalização, cor, quantidade, material e prazo.")
     whatsapp_geral = f"https://wa.me/{numero}?text={mensagem_geral}" if numero else "#"
 
     chips = ['<button class="filter active" data-cat="todos">Todos</button>']
@@ -139,7 +139,7 @@ def gerar_html_vitrine(
         if opcoes:
             texto_opcoes = " • ".join(opcoes[:5]) + (" …" if len(opcoes) > 5 else "")
             opcoes_html = f'<div class="options"><strong>Opções:</strong> {html.escape(texto_opcoes)}</div>'
-        msg = quote(f"Olá! Vim pelo site da AlphaFest e gostaria de informações sobre: {nome}")
+        msg = quote(f"Olá! Vim pelo site da AlphaFest e gostaria de um orçamento para: {nome}. Quero definir tamanho/personalização, cor, quantidade, material e prazo.")
         href = f"https://wa.me/{numero}?text={msg}" if numero else "#"
         busca = " ".join([nome, descricao, categoria, item.get("subcategoria") or "", item.get("material") or ""])
         busca = unicodedata.normalize("NFKD", busca).encode("ascii", "ignore").decode("ascii").casefold()
@@ -155,13 +155,13 @@ def gerar_html_vitrine(
                     <h3>{html.escape(nome)}</h3>
                     <p>{html.escape(descricao_curta)}</p>
                     {opcoes_html}
-                    <div class="{footer_classe}">{preco_html}<a class="cta small" href="{html.escape(href, quote=True)}" target="_blank" rel="noopener">Pedir orçamento</a></div>
+                    <div class="{footer_classe}">{preco_html}<a class="cta small" href="{html.escape(href, quote=True)}" target="_blank" rel="noopener" aria-label="Pedir orçamento de {html.escape(nome, quote=True)} pelo WhatsApp">Pedir orçamento</a></div>
                 </div>
             </article>'''
         )
 
     logo = f'<img class="brand-logo" src="{html.escape(str(logo_src), quote=True)}" alt="AlphaFest">' if logo_src else '<div class="brand-word">AlphaFest</div>'
-    preview_bar = '<div class="preview-bar">PRÉVIA INTERNA HF37 · AINDA NÃO PUBLICADA</div>' if modo_preview else ""
+    preview_bar = '<div class="preview-bar">PRÉVIA INTERNA HF38 · AINDA NÃO PUBLICADA</div>' if modo_preview else ""
     vazio = '<div class="empty">Nenhum produto pronto está marcado para o site.</div>' if not cards else ""
 
     return f'''<!doctype html>
@@ -174,8 +174,8 @@ def gerar_html_vitrine(
 .header{{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}}
 .header-in{{max-width:1240px;margin:auto;padding:12px 22px;display:flex;align-items:center;gap:18px}} .brand{{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}}
 .brand-logo{{width:68px;height:54px;object-fit:contain}} .brand-word{{font-size:26px;font-weight:900;color:var(--blue)}} .brand-copy strong{{display:block;font-size:16px}} .brand-copy span{{font-size:12px;color:#60748e}}
-.header-actions{{margin-left:auto;display:flex;gap:10px;align-items:center}} .ghost{{color:var(--blue);text-decoration:none;font-weight:800;padding:10px 12px}}
-.cta{{display:inline-flex;align-items:center;justify-content:center;background:var(--green);color:#fff;text-decoration:none;font-weight:900;border-radius:12px;padding:12px 17px;box-shadow:0 7px 18px rgba(37,211,102,.22)}} .cta.small{{padding:9px 12px;font-size:13px;border-radius:9px}}
+.header-actions{{margin-left:auto;display:flex;gap:10px;align-items:center}} .header-actions .cta{{white-space:nowrap}} .ghost{{color:var(--blue);text-decoration:none;font-weight:800;padding:10px 12px}}
+.cta{{display:inline-flex;align-items:center;justify-content:center;background:var(--green);color:#fff;text-decoration:none;font-weight:900;border-radius:12px;padding:12px 17px;box-shadow:0 7px 18px rgba(37,211,102,.22)}} .cta.small{{padding:10px 12px;font-size:13px;border-radius:9px;min-height:42px}}
 .hero{{background:radial-gradient(circle at 88% 12%,rgba(244,79,141,.18),transparent 25%),radial-gradient(circle at 10% 75%,rgba(45,183,229,.24),transparent 30%),linear-gradient(135deg,#f8fcff,#fff 48%,#fff7fb);border-bottom:1px solid var(--line)}}
 .hero-in{{max-width:1240px;margin:auto;padding:58px 22px 48px;display:grid;grid-template-columns:1.35fr .65fr;gap:40px;align-items:center}}
 .eyebrow{{color:var(--blue);font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.1em}} .hero h1{{font-size:clamp(38px,6vw,72px);line-height:.98;margin:12px 0 18px;letter-spacing:-.04em}} .hero h1 span{{background:linear-gradient(90deg,var(--blue),var(--cyan),var(--pink));-webkit-background-clip:text;background-clip:text;color:transparent}}
@@ -187,14 +187,15 @@ def gerar_html_vitrine(
 .grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}} .product-card{{border:1px solid var(--line);border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 10px 30px rgba(20,37,61,.06);display:flex;flex-direction:column;transition:.18s}} .product-card:hover{{transform:translateY(-3px);box-shadow:0 16px 36px rgba(20,37,61,.11)}}
 .photo{{position:relative;background:var(--soft);aspect-ratio:4/3;overflow:hidden}} .photo img{{width:100%;height:100%;object-fit:cover;display:block}} .placeholder{{height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#84a9ca}} .badge{{position:absolute;top:12px;left:12px;background:#fff;color:#a26100;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:900;box-shadow:0 3px 12px rgba(0,0,0,.12)}}
 .card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .category{{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:900;color:var(--blue)}} .card-body h3{{font-size:20px;line-height:1.15;margin:7px 0 10px}} .card-body p{{font-size:14px;line-height:1.55;color:#60748e;margin:0 0 12px;flex:1}} .options{{font-size:12px;color:#60748e;margin:0 0 12px}} .card-footer{{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid #edf3f8;padding-top:14px}} .card-footer.no-price .cta{{width:100%}} .price{{font-weight:950;font-size:17px}}
-.empty{{padding:50px;text-align:center;border:1px dashed var(--line);border-radius:18px;color:#60748e}} .footer{{background:#10243c;color:#d7e8f7}} .footer-in{{max-width:1240px;margin:auto;padding:34px 22px;display:flex;gap:24px;justify-content:space-between;align-items:center}} .footer strong{{color:#fff}} .footer small{{color:#9fb7cb}}
+.empty{{padding:50px;text-align:center;border:1px dashed var(--line);border-radius:18px;color:#60748e}} .mobile-whatsapp{{display:none}} .footer{{background:#10243c;color:#d7e8f7}} .footer-in{{max-width:1240px;margin:auto;padding:34px 22px;display:flex;gap:24px;justify-content:space-between;align-items:center}} .footer strong{{color:#fff}} .footer small{{color:#9fb7cb}}
 @media(max-width:900px){{.hero-in{{grid-template-columns:1fr}}.hero-card{{display:none}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
-@media(max-width:620px){{.brand-copy{{display:none}}.ghost{{display:none}}.header-in{{padding:9px 14px}}.brand-logo{{width:58px;height:46px}}.hero-in{{padding:36px 16px 32px}}.hero h1{{font-size:42px}}.hero p{{font-size:16px}}.main{{padding:26px 14px 55px}}.grid{{grid-template-columns:1fr}}.section-head{{align-items:flex-start;flex-direction:column}}.product-card{{border-radius:16px}}.footer-in{{flex-direction:column;align-items:flex-start}}}}
+@media(max-width:620px){{body{{padding-bottom:76px}}.preview-bar{{font-size:9px;padding:6px 10px}}.brand-copy{{display:none}}.ghost{{display:none}}.header-in{{padding:8px 12px;gap:8px}}.brand-logo{{width:54px;height:44px}}.header-actions .cta{{padding:10px 12px;font-size:13px;box-shadow:none}}.hero-in{{padding:30px 14px 26px}}.eyebrow{{font-size:11px}}.hero h1{{font-size:36px;line-height:1.02;margin:9px 0 14px}}.hero p{{font-size:15px;line-height:1.5}}.hero-actions{{gap:8px;margin-top:18px}}.hero-actions>a{{width:100%;min-height:46px}}.main{{padding:22px 12px 38px}}.section-head{{align-items:flex-start;flex-direction:column;gap:6px;margin:14px 0}}.section-head h2{{font-size:25px}}.search{{min-width:100%}}.search input{{font-size:16px;padding-top:13px;padding-bottom:13px}}.filters{{gap:7px;padding-bottom:12px}}.filter{{padding:10px 13px;min-height:42px}}.grid{{grid-template-columns:1fr;gap:16px}}.product-card{{border-radius:16px;box-shadow:0 7px 22px rgba(20,37,61,.07)}}.product-card:hover{{transform:none}}.photo{{aspect-ratio:4/3}}.card-body{{padding:15px}}.card-body h3{{font-size:19px}}.card-body p{{font-size:14px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}}.card-footer{{padding-top:12px}}.card-footer .cta{{min-height:46px}}.footer-in{{flex-direction:column;align-items:flex-start;padding-bottom:28px}}.mobile-whatsapp{{display:flex;position:fixed;left:12px;right:12px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50;align-items:center;justify-content:center;background:var(--green);color:#fff;text-decoration:none;font-weight:950;border-radius:14px;min-height:52px;box-shadow:0 10px 28px rgba(20,37,61,.25);border:2px solid rgba(255,255,255,.9)}}}}
 </style></head>
 <body>{preview_bar}
 <header class="header"><div class="header-in"><a class="brand" href="#inicio">{logo}<div class="brand-copy"><strong>{html.escape(nome_empresa)}</strong><span>{html.escape(subtitulo)}</span></div></a><div class="header-actions"><a class="ghost" href="#produtos">Ver produtos</a><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Falar no WhatsApp</a></div></div></header>
 <section class="hero" id="inicio"><div class="hero-in"><div><div class="eyebrow">Personalização que vira presença</div><h1>Seu evento, sua marca, <span>do seu jeito.</span></h1><p>{html.escape(slogan)} Escolha uma ideia na vitrine e fale com a AlphaFest para personalizar detalhes, quantidade e prazo.</p><div class="hero-actions"><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Explorar produtos ↓</a></div></div><aside class="hero-card"><div class="eyebrow">Vitrine AlphaFest</div><h2>Personalizados & Balões</h2><p>Produtos selecionados diretamente do Catálogo oficial do Manager.</p><div class="hero-stat"><div class="stat"><strong>{resumo['total']}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{resumo['total_categorias']}</strong><span>categorias</span></div></div></aside></div></section>
 <main class="main" id="produtos"><div class="section-head"><div><h2>Encontre seu personalizado</h2><p>Pesquise ou filtre por categoria.</p></div><div id="result-count">{resumo['total']} produto(s)</div></div><div class="toolbar"><label class="search"><input id="search" type="search" placeholder="Buscar produto, categoria ou descrição..."></label></div><div class="filters">{''.join(chips)}</div><div class="grid" id="grid">{''.join(cards)}</div>{vazio}</main>
+<a class="mobile-whatsapp" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Pedir orçamento</a>
 <footer class="footer"><div class="footer-in"><div><strong>{html.escape(nome_empresa)}</strong><br><small>{html.escape(subtitulo)}{(' · ' + html.escape(local)) if local else ''}</small></div><div>{html.escape(slogan)}</div></div></footer>
 <script>
 (function(){{let cat='todos';const cards=[...document.querySelectorAll('.product-card')];const input=document.getElementById('search');const count=document.getElementById('result-count');function norm(s){{return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}}function apply(){{const q=norm(input.value);let n=0;cards.forEach(c=>{{const okCat=cat==='todos'||c.dataset.cat===cat;const okQ=!q||norm(c.dataset.search).includes(q);const ok=okCat&&okQ;c.style.display=ok?'flex':'none';if(ok)n++;}});count.textContent=n+' produto(s)';}}document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');cat=b.dataset.cat;apply();}}));input.addEventListener('input',apply);apply();}})();

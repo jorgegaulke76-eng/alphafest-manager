@@ -968,3 +968,10 @@ hangelog
 - Com preço oculto, o card público mostra apenas `Pedir orçamento`; com preço habilitado e valor cadastrado, mostra o preço oficial.
 - A opção é parte do mesmo cadastro do produto e vale igualmente para Jorge e Anna.
 - Nenhuma publicação automática do site é realizada.
+
+## 20.4.9-I8.13.5-HF38 — Vitrine móvel + WhatsApp contextual
+- Mantém o visual e o preço opcional homologados na HF37.
+- Refina cards, tipografia, filtros e CTAs para uso em celular.
+- Adiciona CTA fixo de orçamento no mobile.
+- Botões de produto passam a abrir o WhatsApp com produto + contexto de tamanho/personalização, cor, quantidade, material e prazo.
+- Continua sem publicação automática e sem banco paralelo.
