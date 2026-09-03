@@ -50,3 +50,6 @@
 - HF29: Identificação do ciclo em andamento (Jorge) — mostra proposta, cliente, produto, quantidade e início explícito para cada ciclo observado aberto, sem alterar status.
 
 - HF30: Memória de ciclo alinhada à Fonte Única — homologado; corrige ciclos residuais de pedidos já Prontos/Entregues sem inventar duração.
+
+- HF33: Performance conservadora — reduzir custo de inicialização e imports sob demanda, preservando integralmente funções homologadas, Fonte Única e coerência Jorge/Anna.
+- Direção após HF33: melhorar/incorporar o site ao Manager e depois evoluir o Marketing Automatizado. A trilha de capacidade quantitativa fica pausada porque a operação atual é enxuta e a HF32 já atende a necessidade de tempos.

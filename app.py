@@ -11,7 +11,6 @@ from urllib.parse import quote
 from datetime import datetime, date, timedelta
 from zoneinfo import ZoneInfo
 from pathlib import Path
-import altair as alt
 import base64
 import io
 import zipfile
@@ -22,29 +21,84 @@ import calendar
 import requests
 import inspect
 
+from lazy_runtime import LazyModule
+
+# HF33: bibliotecas de visualização/marketing só são importadas ao abrir a função
+# que realmente precisa delas. Isso reduz o custo de boot das telas operacionais
+# sem aumentar TTL de dados nem criar leitura diferente entre Jorge e Anna.
+alt = LazyModule("altair")
+
 _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
-from marketing_template_engine import DEFAULT_TEMPLATE as MARKETING_DEFAULT_TEMPLATE, listar_templates as listar_templates_marketing, render_template as renderizar_template_marketing
-from template_library_engine import list_library_templates, install_template_zip, export_template_zip, hydrate_template_packages, load_library_template, set_layout_overrides
-from marketing_prompt_builder import build_master_prompt
-import marketing_design_intelligence as mdi
 
-# Compatibilidade entre bases antigas e novas do Design Intelligence.
-# Uma lista opcional ausente nunca deve impedir o AlphaFest Manager de iniciar.
-THEME_ORDER = getattr(mdi, "THEME_ORDER", ["Automático", "AlphaFest Clássico"])
-PALETTE_ORDER = getattr(
-    mdi,
-    "PALETTE_ORDER",
-    list(getattr(mdi, "PALETTE_PRESETS", {"Cores do tema": {}}).keys()) + ["Personalizada"],
-)
-calendar_theme_options = mdi.calendar_theme_options
-detect_theme = mdi.detect_theme
-get_theme = mdi.get_theme
-resolve_event_theme = mdi.resolve_event_theme
-resolve_palette = mdi.resolve_palette
-from marketing_ai_engine import generate_premium_square, apply_official_logo, adapt_square_to_channel
+# HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
+# padrão é estável e preserva campanhas existentes sem importar a engine no boot.
+MARKETING_DEFAULT_TEMPLATE = "anna_base_dinamica"
+_marketing_templates = LazyModule("marketing_template_engine")
+_template_library = LazyModule("template_library_engine")
+_marketing_prompt = LazyModule("marketing_prompt_builder")
+_mdi = LazyModule("marketing_design_intelligence")
+_marketing_ai = LazyModule("marketing_ai_engine")
+
+def listar_templates_marketing(*args, **kwargs):
+    return _marketing_templates.listar_templates(*args, **kwargs)
+
+def renderizar_template_marketing(*args, **kwargs):
+    return _marketing_templates.render_template(*args, **kwargs)
+
+def list_library_templates(*args, **kwargs):
+    return _template_library.list_library_templates(*args, **kwargs)
+
+def install_template_zip(*args, **kwargs):
+    return _template_library.install_template_zip(*args, **kwargs)
+
+def export_template_zip(*args, **kwargs):
+    return _template_library.export_template_zip(*args, **kwargs)
+
+def hydrate_template_packages(*args, **kwargs):
+    return _template_library.hydrate_template_packages(*args, **kwargs)
+
+def load_library_template(*args, **kwargs):
+    return _template_library.load_library_template(*args, **kwargs)
+
+def set_layout_overrides(*args, **kwargs):
+    return _template_library.set_layout_overrides(*args, **kwargs)
+
+def build_master_prompt(*args, **kwargs):
+    return _marketing_prompt.build_master_prompt(*args, **kwargs)
+
+def calendar_theme_options(*args, **kwargs):
+    return _mdi.calendar_theme_options(*args, **kwargs)
+
+def detect_theme(*args, **kwargs):
+    return _mdi.detect_theme(*args, **kwargs)
+
+def get_theme(*args, **kwargs):
+    return _mdi.get_theme(*args, **kwargs)
+
+def resolve_event_theme(*args, **kwargs):
+    return _mdi.resolve_event_theme(*args, **kwargs)
+
+def resolve_palette(*args, **kwargs):
+    return _mdi.resolve_palette(*args, **kwargs)
+
+def _theme_order():
+    return list(getattr(_mdi, "THEME_ORDER", ["Automático", "AlphaFest Clássico"]))
+
+def _palette_order():
+    presets = getattr(_mdi, "PALETTE_PRESETS", {"Cores do tema": {}})
+    return list(getattr(_mdi, "PALETTE_ORDER", list(presets.keys()) + ["Personalizada"]))
+
+def generate_premium_square(*args, **kwargs):
+    return _marketing_ai.generate_premium_square(*args, **kwargs)
+
+def apply_official_logo(*args, **kwargs):
+    return _marketing_ai.apply_official_logo(*args, **kwargs)
+
+def adapt_square_to_channel(*args, **kwargs):
+    return _marketing_ai.adapt_square_to_channel(*args, **kwargs)
 from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
 from painel_indicadores import calcular_indicadores_unificados
@@ -218,37 +272,82 @@ try:
 except Exception as _b3d_import_exc:
     _b3d_arquivo_valido = _b3d_imagem_valida = _b3d_criar_registro = _b3d_filtrar_modelos = _b3d_selecionar_modelos = _b3d_modelo_para_catalogo = _b3d_tamanho_legivel = None
     BIBLIOTECA_3D_IMPORT_ERROR = str(_b3d_import_exc)
-try:
-    from thu_embedded import THU_AVATAR_B64
-except Exception:
-    THU_AVATAR_B64 = ""
-try:
-    from thu_poses_embedded import THU_JOINHA_B64, THU_DICA_B64, THU_COMEMORANDO_B64, THU_ENTREGA_B64
-except Exception:
-    THU_JOINHA_B64 = THU_DICA_B64 = THU_COMEMORANDO_B64 = THU_ENTREGA_B64 = ""
-try:
-    from alpha_intelligence import render_alpha_intelligence
-    ALPHA_INTELLIGENCE_IMPORT_ERROR = ""
-except Exception as _alpha_import_exc:
-    render_alpha_intelligence = None
-    ALPHA_INTELLIGENCE_IMPORT_ERROR = str(_alpha_import_exc)
+# HF33: avatares grandes do THU e módulos analíticos opcionais são carregados
+# apenas quando a tela correspondente for aberta.
+_THU_FALLBACKS_CACHE = None
+_ALPHA_INTELLIGENCE_RENDERER = None
+_ALPHA_INTELLIGENCE_IMPORT_ATTEMPTED = False
+ALPHA_INTELLIGENCE_IMPORT_ERROR = ""
+_CENTRAL_OPORTUNIDADES_RENDERER = None
+_CENTRAL_OPORTUNIDADES_IMPORT_ATTEMPTED = False
+CENTRAL_OPORTUNIDADES_IMPORT_ERROR = ""
 
-try:
-    from central_oportunidades import render_central_oportunidades
-    CENTRAL_OPORTUNIDADES_IMPORT_ERROR = ""
-except Exception as _opp_import_exc:
-    render_central_oportunidades = None
-    CENTRAL_OPORTUNIDADES_IMPORT_ERROR = str(_opp_import_exc)
+def _thu_fallbacks_embutidos():
+    global _THU_FALLBACKS_CACHE
+    if _THU_FALLBACKS_CACHE is not None:
+        return _THU_FALLBACKS_CACHE
+    dados = {"avatar": "", "thu_joinha.png": "", "thu_dica.png": "", "thu_comemorando.png": "", "thu_entrega.png": ""}
+    try:
+        from thu_embedded import THU_AVATAR_B64 as _avatar
+        dados["avatar"] = _avatar or ""
+    except Exception:
+        pass
+    try:
+        from thu_poses_embedded import THU_JOINHA_B64 as _j, THU_DICA_B64 as _d, THU_COMEMORANDO_B64 as _c, THU_ENTREGA_B64 as _e
+        dados.update({"thu_joinha.png": _j or "", "thu_dica.png": _d or "", "thu_comemorando.png": _c or "", "thu_entrega.png": _e or ""})
+    except Exception:
+        pass
+    _THU_FALLBACKS_CACHE = dados
+    return dados
+
+def _obter_render_alpha_intelligence():
+    global _ALPHA_INTELLIGENCE_RENDERER, _ALPHA_INTELLIGENCE_IMPORT_ATTEMPTED, ALPHA_INTELLIGENCE_IMPORT_ERROR
+    if _ALPHA_INTELLIGENCE_IMPORT_ATTEMPTED:
+        return _ALPHA_INTELLIGENCE_RENDERER
+    _ALPHA_INTELLIGENCE_IMPORT_ATTEMPTED = True
+    inicio = time.perf_counter()
+    try:
+        from alpha_intelligence import render_alpha_intelligence as _renderer
+        _ALPHA_INTELLIGENCE_RENDERER = _renderer
+        registrar_boot("Alpha Intelligence (sob demanda)", "ok", duracao=time.perf_counter() - inicio) if "registrar_boot" in globals() else None
+    except Exception as exc:
+        ALPHA_INTELLIGENCE_IMPORT_ERROR = str(exc)
+        _ALPHA_INTELLIGENCE_RENDERER = None
+    return _ALPHA_INTELLIGENCE_RENDERER
+
+def _obter_render_central_oportunidades():
+    global _CENTRAL_OPORTUNIDADES_RENDERER, _CENTRAL_OPORTUNIDADES_IMPORT_ATTEMPTED, CENTRAL_OPORTUNIDADES_IMPORT_ERROR
+    if _CENTRAL_OPORTUNIDADES_IMPORT_ATTEMPTED:
+        return _CENTRAL_OPORTUNIDADES_RENDERER
+    _CENTRAL_OPORTUNIDADES_IMPORT_ATTEMPTED = True
+    inicio = time.perf_counter()
+    try:
+        from central_oportunidades import render_central_oportunidades as _renderer
+        _CENTRAL_OPORTUNIDADES_RENDERER = _renderer
+        registrar_boot("Central de oportunidades (sob demanda)", "ok", duracao=time.perf_counter() - inicio) if "registrar_boot" in globals() else None
+    except Exception as exc:
+        CENTRAL_OPORTUNIDADES_IMPORT_ERROR = str(exc)
+        _CENTRAL_OPORTUNIDADES_RENDERER = None
+    return _CENTRAL_OPORTUNIDADES_RENDERER
 
 try:
     from PIL import Image, ImageOps, ImageDraw, ImageFont, ImageFilter
 except Exception:
     Image = ImageOps = ImageDraw = ImageFont = ImageFilter = None
 
-try:
-    import qrcode
-except Exception:
-    qrcode = None
+_QRCODE_MODULE = None
+_QRCODE_IMPORT_ATTEMPTED = False
+def _qrcode_module():
+    global _QRCODE_MODULE, _QRCODE_IMPORT_ATTEMPTED
+    if _QRCODE_IMPORT_ATTEMPTED:
+        return _QRCODE_MODULE
+    _QRCODE_IMPORT_ATTEMPTED = True
+    try:
+        import qrcode as _qr
+        _QRCODE_MODULE = _qr
+    except Exception:
+        _QRCODE_MODULE = None
+    return _QRCODE_MODULE
 
 try:
     from reportlab.lib import colors as rl_colors
@@ -266,10 +365,19 @@ except Exception:
     SimpleDocTemplate = Paragraph = Spacer = Table = TableStyle = RLImage = PageBreak = KeepTogether = HRFlowable = None
     ImageReader = None
 
-try:
-    from openai import OpenAI
-except Exception:
-    OpenAI = None
+_OPENAI_CLASS = None
+_OPENAI_IMPORT_ATTEMPTED = False
+def _openai_class():
+    global _OPENAI_CLASS, _OPENAI_IMPORT_ATTEMPTED
+    if _OPENAI_IMPORT_ATTEMPTED:
+        return _OPENAI_CLASS
+    _OPENAI_IMPORT_ATTEMPTED = True
+    try:
+        from openai import OpenAI as _OpenAI
+        _OPENAI_CLASS = _OpenAI
+    except Exception:
+        _OPENAI_CLASS = None
+    return _OPENAI_CLASS
 
 # Importação resiliente da camada de dados.
 # Evita que uma atualização parcial de cloud_db.py derrube todo o aplicativo.
@@ -530,14 +638,14 @@ def diagnostico_boot_1424():
         "registrado_em": datetime.now().isoformat(timespec="seconds"),
     })
     registros.setdefault("Alpha Intelligence", {
-        "status": "ok" if render_alpha_intelligence is not None else "isolado",
-        "detalhe": ALPHA_INTELLIGENCE_IMPORT_ERROR,
+        "status": "ok" if _ALPHA_INTELLIGENCE_RENDERER is not None else ("isolado" if _ALPHA_INTELLIGENCE_IMPORT_ATTEMPTED and ALPHA_INTELLIGENCE_IMPORT_ERROR else "sob demanda"),
+        "detalhe": ALPHA_INTELLIGENCE_IMPORT_ERROR or "Carregado somente ao abrir o módulo.",
         "duracao": 0.0,
         "registrado_em": datetime.now().isoformat(timespec="seconds"),
     })
     registros.setdefault("Central de oportunidades", {
-        "status": "ok" if render_central_oportunidades is not None else "isolado",
-        "detalhe": CENTRAL_OPORTUNIDADES_IMPORT_ERROR,
+        "status": "ok" if _CENTRAL_OPORTUNIDADES_RENDERER is not None else ("isolado" if _CENTRAL_OPORTUNIDADES_IMPORT_ATTEMPTED and CENTRAL_OPORTUNIDADES_IMPORT_ERROR else "sob demanda"),
+        "detalhe": CENTRAL_OPORTUNIDADES_IMPORT_ERROR or "Carregada somente ao abrir Atendimento > Oportunidades.",
         "duracao": 0.0,
         "registrado_em": datetime.now().isoformat(timespec="seconds"),
     })
@@ -1255,18 +1363,14 @@ def _imagem_thu_base64(tela=None):
                 return conteudo, extensao
         except OSError:
             continue
-    # Garantia final: cada pose oficial também viaja embutida no código.
-    poses_embutidas = {
-        "thu_joinha.png": THU_JOINHA_B64,
-        "thu_dica.png": THU_DICA_B64,
-        "thu_comemorando.png": THU_COMEMORANDO_B64,
-        "thu_entrega.png": THU_ENTREGA_B64,
-    }
-    pose_b64 = poses_embutidas.get(pose) or THU_JOINHA_B64
+    # Garantia final: as poses oficiais continuam viajando no pacote, mas o
+    # módulo de ~2,7 MB só é importado se nenhum asset físico estiver disponível.
+    poses_embutidas = _thu_fallbacks_embutidos()
+    pose_b64 = poses_embutidas.get(pose) or poses_embutidas.get("thu_joinha.png", "")
     if pose_b64:
         return pose_b64, "png"
-    if THU_AVATAR_B64:
-        return THU_AVATAR_B64, "jpeg"
+    if poses_embutidas.get("avatar"):
+        return poses_embutidas["avatar"], "jpeg"
     return "", "png"
 
 
@@ -7116,6 +7220,7 @@ def _openai_api_key():
 def _gerar_pacote_copy_ia(produto, objetivo, campanha, canais, observacoes, tom, imagem_png=None):
     """Gera todas as descrições em uma única chamada, com visão opcional da imagem."""
     api_key = _openai_api_key()
+    OpenAI = _openai_class()
     if not api_key or OpenAI is None:
         return None, "Alpha local"
     nome = str(produto.get("Nome", "Produto personalizado")).strip()
@@ -13847,10 +13952,11 @@ def _i88_duplicar_registro(registro):
 # --- 20.4.9-I8.9.2.1: Link público renderizado via GitHub Pages ---
 def _i89_qr_png_bytes(conteudo):
     texto = str(conteudo or "").strip()
-    if not texto or qrcode is None:
+    qr_mod = _qrcode_module()
+    if not texto or qr_mod is None:
         return b""
     try:
-        qr = qrcode.QRCode(version=None, error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=8, border=3)
+        qr = qr_mod.QRCode(version=None, error_correction=qr_mod.constants.ERROR_CORRECT_M, box_size=8, border=3)
         qr.add_data(texto)
         qr.make(fit=True)
         img = qr.make_image(fill_color="black", back_color="white")
@@ -24306,6 +24412,7 @@ if pagina_atual == "atendimento":
     tab_oportunidades, tab_fila, tab_novo, tab_config, tab_integracoes = st.tabs(["🎯 Oportunidades", "📋 Caixa unificada", "➕ Registrar oportunidade", "⚙️ Modos e automações", "🔌 Integrações Meta"])
 
     with tab_oportunidades:
+        render_central_oportunidades = _obter_render_central_oportunidades()
         if render_central_oportunidades is None:
             st.warning("A Central de Oportunidades está temporariamente isolada para não interromper o atendimento.")
             if CENTRAL_OPORTUNIDADES_IMPORT_ERROR:
@@ -24816,6 +24923,7 @@ if pagina_atual == "alpha":
 
 if pagina_atual == "intelligence":
     st.header("🧠 Alpha Intelligence")
+    render_alpha_intelligence = None if usuario_em_operacao_protegida() else _obter_render_alpha_intelligence()
     if usuario_em_operacao_protegida():
         st.info("🛡️ Este módulo está em modo protegido durante o atendimento da Anna. Os módulos operacionais continuam disponíveis normalmente.")
     elif render_alpha_intelligence is None:
@@ -25097,12 +25205,14 @@ if pagina_atual == "crescimento":
                         observacoes = st.text_area("Oferta ou informação obrigatória", key="mkt_obs_rapido_2020", height=70)
                 else:
                     tema_sugerido_label = get_theme(tema_sugerido_id)["label"]
-                    indice_tema = THEME_ORDER.index(tema_sugerido_label) if tema_sugerido_label in THEME_ORDER else 0
-                    tema_visual = st.selectbox("🎨 Tema", THEME_ORDER, index=indice_tema, key="mkt_tema_visual_2020")
+                    theme_order_mkt = _theme_order()
+                    palette_order_mkt = _palette_order()
+                    indice_tema = theme_order_mkt.index(tema_sugerido_label) if tema_sugerido_label in theme_order_mkt else 0
+                    tema_visual = st.selectbox("🎨 Tema", theme_order_mkt, index=indice_tema, key="mkt_tema_visual_2020")
                     tema_efetivo_id = tema_sugerido_id if tema_visual == "Automático" else detect_theme(campanha, produto_mkt.get("Nome", ""), explicit=tema_visual)
                     tema_efetivo = get_theme(tema_efetivo_id)
                     cores_tema = tema_efetivo["palette"]
-                    paleta_escolhida = st.selectbox("Paleta de cores", PALETTE_ORDER, index=0, key="mkt_paleta_2020")
+                    paleta_escolhida = st.selectbox("Paleta de cores", palette_order_mkt, index=0, key="mkt_paleta_2020")
                     usar_metalico = st.toggle("Usar detalhe metálico/dourado", value=paleta_escolhida in {"Cores do tema", "Dourado Luxo"}, key="mkt_metalico_2020")
                     if paleta_escolhida == "Personalizada":
                         cp1, cp2, cp3 = st.columns(3); cp4, cp5, cp6 = st.columns(3)
@@ -34235,7 +34345,8 @@ if pagina_atual == "calendario":
             tipo_evento = x1.selectbox("Uso no Calendário Mestre", tipos_evento, index=tipos_evento.index(tipo_evento_atual) if tipo_evento_atual in tipos_evento else 0)
             tema_atual_id = detect_theme(atual.get("nome") if atual else nome_camp, atual.get("categoria") if atual else categoria, atual.get("observacoes") if atual else "", explicit=atual.get("tema_visual") if atual else None)
             tema_atual_label = get_theme(tema_atual_id)["label"]
-            tema_visual_cal = x2.selectbox("Tema/paleta visual", THEME_ORDER, index=THEME_ORDER.index(tema_atual_label) if tema_atual_label in THEME_ORDER else 0)
+            theme_order_cal = _theme_order()
+            tema_visual_cal = x2.selectbox("Tema/paleta visual", theme_order_cal, index=theme_order_cal.index(tema_atual_label) if tema_atual_label in theme_order_cal else 0)
             inicio_atual = _data_iso_segura(atual.get("data_inicio")) if atual else hoje_local()
             fim_atual = _data_iso_segura(atual.get("data_fim")) if atual else hoje_local()
             d1, d2, d3 = st.columns(3)
@@ -34325,6 +34436,7 @@ def _testar_integracao(chave):
     """Executa um teste leve, sem publicar, enviar mensagens ou alterar dados externos."""
     try:
         if chave == "openai":
+            OpenAI = _openai_class()
             if OpenAI is None:
                 return False, "Biblioteca OpenAI não instalada."
             client = OpenAI(api_key=_secret_valor("OPENAI_API_KEY"))

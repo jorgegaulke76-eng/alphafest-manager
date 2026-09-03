@@ -932,3 +932,10 @@ hangelog
 - Classificações: pausa/espera, retrabalho/ajuste, máquina autônoma, status atualizado depois, lote atípico, ciclo válido longo ou outro.
 - Memória separa variações pendentes de revisão das já contextualizadas.
 - Faixa central, faixa total, mediana e total de amostras permanecem estatísticas observacionais; capacidade continua bloqueada.
+
+## 20.4.9-I8.13.5-HF33 — Performance conservadora
+- Primeira rodada de performance sem remover, simplificar ou substituir funções homologadas.
+- Imports opcionais/pesados de Marketing, Design Intelligence, Alpha Intelligence, Central de Oportunidades, Altair, OpenAI, QR Code e poses embutidas do THU passam a ser carregados somente quando a função correspondente é usada.
+- A Fonte Única, o TTL atual dos documentos e a invalidação após gravação permanecem intactos; não foi criado cache paralelo entre Jorge e Anna.
+- Todas as telas, módulos e perfis preservam a mesma leitura operacional da HF32.
+- Nenhum JSON/SQL operacional é alterado.
