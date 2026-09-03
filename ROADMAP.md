@@ -55,3 +55,6 @@
 - Direção após HF33: melhorar/incorporar o site ao Manager e depois evoluir o Marketing Automatizado. A trilha de capacidade quantitativa fica pausada porque a operação atual é enxuta e a HF32 já atende a necessidade de tempos.
 
 - HF34: Health Monitor compatível com carga sob demanda — correção do falso alerta visual da HF33, preservando integralmente a otimização e a Fonte Única.
+
+- HF35: Central do Site AlphaFest — integrar a gestão do site ao Manager usando o Catálogo como Fonte Única, com leitura comum para Jorge/Anna, prévia interna e comparação manual com o site legado. Sem publicação automática nesta fase.
+- Após homologar HF35: construir a nova vitrine pública a partir dos produtos aprovados no mesmo Catálogo e só então planejar a migração/publicação do domínio, preservando o site atual até aprovação visual.

@@ -945,3 +945,11 @@ hangelog
 - `sob demanda` passa a ser estado saudável do diagnóstico, sem desfazer o ganho de performance.
 - Evita duplicação das etapas Alpha Intelligence/Central de Oportunidades após o primeiro carregamento.
 - Nenhum JSON/SQL operacional é alterado.
+
+## 20.4.9-I8.13.5-HF35 — Central do Site AlphaFest
+- Cria um módulo próprio **🌐 Site AlphaFest** dentro do Manager, disponível nos perfis Jorge e Anna com a mesma Fonte Única.
+- O Catálogo oficial passa a alimentar a leitura da futura vitrine: produtos ativos, `PublicarSite`, destaques, foto, descrição, categoria e preço/consulta são lidos diretamente do mesmo cadastro.
+- Adiciona indicadores de prontidão, lista dos produtos marcados para o site, candidatos prontos ainda não marcados e uma prévia interna da futura vitrine.
+- Reaproveita o Assistente THU já existente para comparar o site legado `alphafest.com.br` com o Catálogo oficial; a análise continua manual para não prejudicar a performance.
+- O site atual não é alterado nem publicado automaticamente nesta etapa. A HF35 organiza a gestão e prepara a migração futura sem duplicar dados.
+- Não cria novo banco de produtos nem altera os documentos operacionais; o scan histórico continua no documento de Marketing já existente.

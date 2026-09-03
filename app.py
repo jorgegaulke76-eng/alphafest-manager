@@ -31,6 +31,7 @@ alt = LazyModule("altair")
 _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
+from site_manager_service import resumir_catalogo_site as _site_resumir_catalogo, ordenar_produtos_site as _site_ordenar_produtos
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
@@ -812,6 +813,7 @@ ABAS_SISTEMA = [
     ("relatorios", "📊 Relatórios"),
     ("executivo", "📈 Executivo"),
     ("catalogo", "📦 Catálogo"),
+    ("site", "🌐 Site AlphaFest"),
     ("biblioteca_3d", "🧊 Catálogo 3D"),
     ("relacionamentos", "🌐 Relacionamentos"),
     ("faturamento_mensal", "💳 Faturamento Mensal"),
@@ -876,7 +878,7 @@ CAMPANHAS_PRODUTO_OPCOES = [
 
 PERMISSOES_PADRAO_ANNA = {
     "central", "atendimento", "crm", "jornada", "projeto", "novo_orcamento",
-    "historico", "fluxo", "catalogo", "relacionamentos"
+    "historico", "fluxo", "catalogo", "site", "relacionamentos"
 }
 
 ACOES_PADRAO = ["visualizar", "criar", "editar", "aprovar", "exportar", "excluir", "configurar", "publicar"]
@@ -930,23 +932,28 @@ def obter_perfil_configurado(usuario=None):
         # usuários veio de uma base/cloud antiga com ações vazias.
         nome_cfg = str(cfg.get("nome") or usuario.get("nome") or "").strip().casefold()
         if nome_cfg == "anna":
-            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"catalogo"})
+            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"catalogo", "site"})
             acoes = dict(cfg.get("acoes") or {})
             acoes["catalogo"] = sorted(
                 set(acoes.get("catalogo") or [])
                 | {"visualizar", "criar", "editar", "aprovar", "exportar"}
+            )
+            acoes["site"] = sorted(
+                set(acoes.get("site") or [])
+                | {"visualizar", "editar", "exportar"}
             )
             cfg["acoes"] = acoes
         elif nome_cfg == "jorge":
             # I8.11.1 / I8.12.1 nascem primeiro no perfil Jorge. A sobreposição
             # garante acesso mesmo quando usuarios_config.json veio de uma base
             # antiga, sem liberar os módulos de gestão no perfil operacional.
-            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"faturamento_mensal", "compras_custos", "entregas_retiradas", "biblioteca_3d"})
+            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"faturamento_mensal", "compras_custos", "entregas_retiradas", "biblioteca_3d", "site"})
             acoes = dict(cfg.get("acoes") or {})
             acoes["faturamento_mensal"] = list(ACOES_PADRAO)
             acoes["compras_custos"] = list(ACOES_PADRAO)
             acoes["entregas_retiradas"] = list(ACOES_PADRAO)
             acoes["biblioteca_3d"] = list(ACOES_PADRAO)
+            acoes["site"] = list(ACOES_PADRAO)
             cfg["acoes"] = acoes
         return cfg
     nome = str(usuario.get("nome", "")).casefold()
@@ -22214,7 +22221,7 @@ def renderizar_workspace_anna_isolado():
 
     st.markdown("### 📚 Catálogo")
     st.caption("⚡ CAT1 ativa • Kits Festa e catálogos antigos disponíveis no Acervo Histórico.")
-    k1, k2, k3, k4, k5, k6 = st.columns(6)
+    k1, k2, k3, k4, k5, k6, k7 = st.columns(7)
     if k1.button("➕ Cadastrar produto", use_container_width=True): dialog_catalogo_cadastro_anna()
     if k2.button("📋 Visualizar produtos", use_container_width=True): dialog_catalogo_visualizar_anna()
     if k3.button("📤 Gerar rápido", use_container_width=True): dialog_catalogo_gerar_anna()
@@ -22224,6 +22231,8 @@ def renderizar_workspace_anna_isolado():
         rerun_na_aba("catalogo")
     if k6.button("✨ Gerador / Modelos / Central", use_container_width=True):
         rerun_na_aba("catalogo")
+    if k7.button("🌐 Site AlphaFest", use_container_width=True):
+        rerun_na_aba("site")
 
     entregas_hoje = [p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]
     propostas_hoje = _ordenar_propostas_recentes([p for p in historico if proposta_ativa_operacional(p) and _proposta_eh_de_hoje(p)])
@@ -22414,7 +22423,7 @@ def renderizar_workspace_anna_isolado():
 # O conjunto de abas continua estável no código; a exibição é personalizada por usuário.
 if (
     usuario_em_operacao_protegida(obter_usuario_atual())
-    and st.session_state.get("_pagina_principal", "central") not in {"historico", "catalogo", "fluxo"}
+    and st.session_state.get("_pagina_principal", "central") not in {"historico", "catalogo", "fluxo", "site"}
 ):
     renderizar_workspace_anna_isolado()
     st.stop()
@@ -22429,7 +22438,7 @@ GRUPOS_NAVEGACAO = {
     "👥 Clientes": ["atendimento", "crm", "clientes_360", "relacionamentos"],
     "🧠 Inteligência": ["alpha", "intelligence", "memoria", "conhecimento"],
     "📈 Gestão": ["executivo", "relatorios", "faturamento_mensal", "compras_custos"],
-    "📢 Marketing": ["crescimento", "calendario"],
+    "📢 Marketing": ["site", "crescimento", "calendario"],
     "⚙️ Administração": ["configuracoes"],
 }
 ROTULOS_ABAS = dict(ABAS_SISTEMA)
@@ -24963,6 +24972,189 @@ if pagina_atual == "clientes_360":
     )
 
 
+
+if pagina_atual == "site":
+    st.markdown("# 🌐 Central do Site AlphaFest")
+    st.caption(
+        "HF35 • O Catálogo do Manager é a Fonte Única da futura vitrine. "
+        "O site atual permanece online e é usado como acervo/legado até a migração ser aprovada."
+    )
+
+    catalogo_site_hf35 = carregar_catalogo()
+    resumo_site_hf35 = _site_resumir_catalogo(catalogo_site_hf35)
+    produtos_site_hf35 = _site_ordenar_produtos(catalogo_site_hf35)
+
+    topo_site_1, topo_site_2 = st.columns([1.7, 1])
+    with topo_site_1:
+        st.info(
+            "📦 **Fonte oficial:** Catálogo do AlphaFest Manager. Nome, descrição, fotos, destaque e "
+            "marcação de publicação são lidos do mesmo cadastro usado nos demais módulos."
+        )
+    with topo_site_2:
+        st.link_button("🌐 Abrir site atual", ALPHAFEST_SITE_BASE, use_container_width=True)
+
+    sm1, sm2, sm3, sm4 = st.columns(4)
+    sm1.metric("Produtos ativos", resumo_site_hf35.get("ativos", 0))
+    sm2.metric("Marcados para o site", resumo_site_hf35.get("marcados_site", 0))
+    sm3.metric("Prontos na vitrine", resumo_site_hf35.get("prontos_marcados", 0))
+    sm4.metric("Precisam revisão", resumo_site_hf35.get("revisar_marcados", 0))
+
+    st.caption(
+        f"⭐ {resumo_site_hf35.get('destaques', 0)} destaque(s) marcado(s) • "
+        f"{resumo_site_hf35.get('prontos_nao_marcados', 0)} produto(s) já com foto/descrição e ainda não marcado(s) para o site. "
+        "Preço pode permanecer sob consulta; não é requisito para exibir um personalizado."
+    )
+
+    with st.expander(
+        f"🛍️ Produtos marcados para a futura vitrine ({resumo_site_hf35.get('marcados_site', 0)})",
+        expanded=True,
+    ):
+        marcados_hf35 = [x for x in produtos_site_hf35 if x.get("ativo") and x.get("publicar_site")]
+        if not marcados_hf35:
+            st.warning(
+                "Nenhum produto está marcado como **Publicar no site/catálogo online**. "
+                "Nada será publicado automaticamente. Marque os produtos no Catálogo quando desejar montar a vitrine."
+            )
+        for pos_hf35, item_hf35 in enumerate(marcados_hf35[:40]):
+            cimg_hf35, cinfo_hf35, cact_hf35 = st.columns([1.0, 2.8, 1.05])
+            img_hf35 = str(item_hf35.get("imagem_principal") or "").strip()
+            if img_hf35:
+                try:
+                    cimg_hf35.image(img_hf35, use_container_width=True)
+                except Exception:
+                    cimg_hf35.caption("🖼️ Foto cadastrada")
+            else:
+                cimg_hf35.caption("🖼️ Sem foto")
+            cinfo_hf35.markdown(
+                ("⭐ " if item_hf35.get("destaque") else "")
+                + f"**{item_hf35.get('nome', 'Produto')}**"
+            )
+            detalhes_hf35 = []
+            if item_hf35.get("categoria"):
+                detalhes_hf35.append(str(item_hf35.get("categoria")))
+            if item_hf35.get("preco"):
+                detalhes_hf35.append(formatar_preco_catalogo(item_hf35.get("preco")))
+            else:
+                detalhes_hf35.append("valor sob consulta")
+            cinfo_hf35.caption(" • ".join(detalhes_hf35))
+            if item_hf35.get("pronto"):
+                cinfo_hf35.success("✅ Pronto para a vitrine")
+            else:
+                cinfo_hf35.warning("⚠️ Revisar: " + ", ".join(item_hf35.get("faltas") or []))
+            if cact_hf35.button(
+                "📦 Abrir no Catálogo",
+                key=f"site_hf35_catalogo_{pos_hf35}_{item_hf35.get('indice_catalogo')}",
+                use_container_width=True,
+            ):
+                st.session_state.catalogo_edit_index = int(item_hf35.get("indice_catalogo") or 0)
+                rerun_na_aba("catalogo")
+
+    with st.expander("👀 Prévia da futura vitrine", expanded=False):
+        prontos_vitrine_hf35 = [x for x in produtos_site_hf35 if x.get("ativo") and x.get("publicar_site") and x.get("pronto")]
+        if not prontos_vitrine_hf35:
+            st.info("A prévia aparecerá aqui quando houver pelo menos um produto marcado para o site com foto e descrição.")
+        else:
+            st.caption(
+                "Esta é apenas uma prévia interna. A HF35 não substitui nem publica o site atual. "
+                "Ela mostra como o Catálogo oficial já pode alimentar a nova vitrine."
+            )
+            for inicio_hf35 in range(0, min(len(prontos_vitrine_hf35), 12), 3):
+                cols_vitrine_hf35 = st.columns(3)
+                for off_hf35, item_hf35 in enumerate(prontos_vitrine_hf35[inicio_hf35:inicio_hf35 + 3]):
+                    with cols_vitrine_hf35[off_hf35]:
+                        if item_hf35.get("imagem_principal"):
+                            try:
+                                st.image(item_hf35.get("imagem_principal"), use_container_width=True)
+                            except Exception:
+                                st.caption("🖼️ Foto cadastrada")
+                        st.markdown(("⭐ " if item_hf35.get("destaque") else "") + f"**{item_hf35.get('nome')}**")
+                        desc_hf35 = str(item_hf35.get("descricao") or "").strip()
+                        if desc_hf35:
+                            st.caption(desc_hf35[:180] + ("…" if len(desc_hf35) > 180 else ""))
+                        st.caption(formatar_preco_catalogo(item_hf35.get("preco")) if item_hf35.get("preco") else "Valor sob consulta")
+
+    with st.expander(
+        f"✨ Prontos no Catálogo e ainda não marcados para o site ({resumo_site_hf35.get('prontos_nao_marcados', 0)})",
+        expanded=False,
+    ):
+        candidatos_hf35 = [
+            x for x in produtos_site_hf35
+            if x.get("ativo") and x.get("pronto") and not x.get("publicar_site")
+        ]
+        if not candidatos_hf35:
+            st.success("Nenhum produto pronto está aguardando decisão de publicação.")
+        for pos_hf35, item_hf35 in enumerate(candidatos_hf35[:30]):
+            cc1_hf35, cc2_hf35 = st.columns([3.2, 1])
+            cc1_hf35.markdown(("⭐ " if item_hf35.get("destaque") else "") + f"**{item_hf35.get('nome')}**")
+            cc1_hf35.caption(
+                (str(item_hf35.get("categoria") or "Sem categoria"))
+                + " • "
+                + (formatar_preco_catalogo(item_hf35.get("preco")) if item_hf35.get("preco") else "valor sob consulta")
+            )
+            if cc2_hf35.button(
+                "Revisar no Catálogo",
+                key=f"site_hf35_candidato_{pos_hf35}_{item_hf35.get('indice_catalogo')}",
+                use_container_width=True,
+            ):
+                st.session_state.catalogo_edit_index = int(item_hf35.get("indice_catalogo") or 0)
+                rerun_na_aba("catalogo")
+
+    with st.expander("🔎 Site atual × Catálogo oficial", expanded=False):
+        st.caption(
+            "A análise do site é manual para não deixar o Manager lento. Ela lê apenas páginas públicas de alphafest.com.br "
+            "e reutiliza o mesmo mecanismo já existente no Assistente THU."
+        )
+        marketing_site_hf35 = carregar_marketing()
+        scan_site_hf35 = marketing_site_hf35.get("acervo_site_ultimo_scan") or {}
+        scan_site_hf35 = thu_site_reprocessar_scan(scan_site_hf35) if scan_site_hf35 else {}
+
+        if scan_site_hf35.get("ok"):
+            paginas_site_hf35 = [p for p in (scan_site_hf35.get("paginas") or []) if isinstance(p, dict) and p.get("ok")]
+            produtos_detectados_hf35 = [p for p in paginas_site_hf35 if str(p.get("tipo") or "") == "produto"]
+            pares_hf35 = 0
+            ausentes_hf35 = 0
+            for pg_hf35 in produtos_detectados_hf35:
+                match_hf35 = thu_site_sugerir_produto(
+                    str(pg_hf35.get("nome") or pg_hf35.get("texto_menu") or ""),
+                    catalogo_site_hf35,
+                    alternativas=[pg_hf35.get("texto_menu", ""), pg_hf35.get("titulo_html", ""), *(pg_hf35.get("headings") or [])[:5]],
+                )
+                if str((match_hf35 or {}).get("status") or "") in {"oficial", "provavel"}:
+                    pares_hf35 += 1
+                else:
+                    ausentes_hf35 += 1
+            sa1_hf35, sa2_hf35, sa3_hf35 = st.columns(3)
+            sa1_hf35.metric("Páginas lidas", len(paginas_site_hf35))
+            sa2_hf35.metric("Produtos com par no Catálogo", pares_hf35)
+            sa3_hf35.metric("Possíveis ausentes", ausentes_hf35)
+            st.caption(
+                "Última análise: "
+                + str(scan_site_hf35.get("lido_em") or "—")[:19].replace("T", " ")
+                + ". O site antigo é referência histórica; o Catálogo continua oficial."
+            )
+        else:
+            st.info("Ainda não há uma análise do site disponível nesta base, ou a última leitura não foi concluída.")
+
+        if st.button("🔄 Analisar site atual agora", key="site_hf35_scan", type="primary", use_container_width=True):
+            with st.spinner("Lendo o site público sem alterar nenhuma página..."):
+                novo_scan_hf35 = thu_site_analisar_acervo(42)
+            if novo_scan_hf35.get("ok"):
+                marketing_site_hf35["acervo_site_ultimo_scan"] = novo_scan_hf35
+                salvar_marketing(marketing_site_hf35)
+                st.session_state["_thu_acervo_site_scan_i3"] = novo_scan_hf35
+                st.session_state["_mensagem_sucesso_pendente"] = "Site atual analisado. A comparação usa o mesmo Catálogo oficial do Manager."
+                st.rerun()
+            else:
+                st.error(novo_scan_hf35.get("erro") or "Não foi possível analisar o site atual neste momento.")
+
+        if usuario_pode_ver_aba("crescimento", obter_usuario_atual()):
+            if st.button("📸 Abrir auditoria detalhada no Alpha Marketing", key="site_hf35_abrir_marketing", use_container_width=True):
+                rerun_na_aba("crescimento")
+
+    st.info(
+        "🧭 **Próxima fase do site:** depois de homologarmos esta Central, montamos a nova vitrine pública a partir destes mesmos produtos. "
+        "A publicação/migração só será feita depois de você aprovar a prévia — o site atual não é alterado pela HF35."
+    )
 
 if pagina_atual == "crescimento":
     if not feature_enabled("marketing_studio", True):
