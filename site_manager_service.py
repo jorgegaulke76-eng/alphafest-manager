@@ -51,6 +51,7 @@ def avaliar_produto_site(produto: Dict[str, Any]) -> Dict[str, Any]:
     ativo = produto.get("Ativo") is not False
     publicar = bool(produto.get("PublicarSite"))
     destaque = bool(produto.get("Destaque"))
+    exibir_preco_site = bool(produto.get("ExibirPrecoSite", False))
 
     faltas: List[str] = []
     if not nome:
@@ -77,6 +78,7 @@ def avaliar_produto_site(produto: Dict[str, Any]) -> Dict[str, Any]:
         "ativo": ativo,
         "publicar_site": publicar,
         "destaque": destaque,
+        "exibir_preco_site": exibir_preco_site,
         "faltas": faltas,
         "avisos": avisos,
         "pronto": pronto,

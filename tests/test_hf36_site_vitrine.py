@@ -18,6 +18,7 @@ class HF36SiteVitrineTests(unittest.TestCase):
                 "Preco": "25,00",
                 "PublicarSite": True,
                 "Destaque": True,
+                "ExibirPrecoSite": True,
                 "Variacoes": ["Rosa", "Azul"],
             },
             {
@@ -68,7 +69,7 @@ class HF36SiteVitrineTests(unittest.TestCase):
             },
             logo_src="data:image/png;base64,abc",
         )
-        self.assertIn("PRÉVIA INTERNA HF36", html)
+        self.assertIn("PRÉVIA INTERNA HF37", html)
         self.assertIn('id="search"', html)
         self.assertIn('data-cat="todos"', html)
         self.assertIn("@media(max-width:620px)", html)
@@ -78,7 +79,7 @@ class HF36SiteVitrineTests(unittest.TestCase):
         self.assertNotIn("Marcado incompleto", html)
         self.assertIn("https://wa.me/5511999998888", html)
         self.assertIn("R$ 25,00", html)
-        self.assertIn("Sob consulta", html)
+        self.assertNotIn("Sob consulta", html)
 
 
     def test_preview_nao_expoe_caminho_local_quando_imagem_nao_resolve(self):
@@ -94,7 +95,7 @@ class HF36SiteVitrineTests(unittest.TestCase):
 
     def test_app_exibe_preview_desktop_e_celular_sem_publicar(self):
         trecho = APP.split('if pagina_atual == "site":', 1)[1].split('if pagina_atual == "crescimento":', 1)[0]
-        self.assertIn('"🌐 Nova vitrine pública — prévia HF36"', trecho)
+        self.assertIn('"🌐 Nova vitrine pública — prévia HF37"', trecho)
         self.assertIn('["🖥️ Desktop", "📱 Celular"]', trecho)
         self.assertIn('_site_gerar_html_vitrine(', trecho)
         self.assertIn('components.html(html_vitrine_hf36', trecho)

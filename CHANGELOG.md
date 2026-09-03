@@ -961,3 +961,10 @@ hangelog
 - Adiciona busca, filtros por categoria, destaque visual, cards, preço/valor sob consulta e CTA de orçamento via WhatsApp.
 - Adiciona exportação opcional do HTML de prévia para conferência, sem publicar ou alterar o domínio atual.
 - Não cria banco paralelo, não altera produtos e não executa migração/publicação automática.
+
+## 20.4.9-I8.13.5-HF37 — Preço opcional por produto na vitrine
+- Mantém o visual da prévia HF36 e adiciona no Catálogo oficial o campo `ExibirPrecoSite`.
+- O campo nasce desativado por padrão, inclusive para produtos antigos sem essa chave.
+- Com preço oculto, o card público mostra apenas `Pedir orçamento`; com preço habilitado e valor cadastrado, mostra o preço oficial.
+- A opção é parte do mesmo cadastro do produto e vale igualmente para Jorge e Anna.
+- Nenhuma publicação automática do site é realizada.

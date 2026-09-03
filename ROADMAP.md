@@ -61,3 +61,6 @@
 
 - HF36: Prévia da Nova Vitrine Pública — site responsivo interno gerado da Fonte Única, com busca/categorias/WhatsApp e modos Desktop/Celular; nenhuma publicação nesta etapa.
 - Após homologar HF36: ajustar visual/conteúdo aprovado pelo usuário e então preparar publicação controlada sem retirar o site atual antes da validação final.
+
+- HF37: controle individual `Exibir preço no site` no Catálogo; padrão oculto e vitrine orientada a orçamento para personalizados variáveis.
+- Após homologar HF37: validar modo Celular e lapidar conteúdo/estrutura da vitrine antes de preparar publicação controlada.

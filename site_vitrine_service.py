@@ -1,4 +1,4 @@
-"""Prévia responsiva da futura vitrine pública AlphaFest (HF36).
+"""Prévia responsiva da futura vitrine pública AlphaFest (HF37).
 
 Somente leitura: seleciona produtos diretamente do Catálogo oficial marcados
 para o site e prontos para apresentação. Não persiste, publica ou altera dados.
@@ -116,7 +116,8 @@ def gerar_html_vitrine(
         nome = str(item.get("nome") or "Produto").strip() or "Produto"
         descricao = str(item.get("descricao") or "").strip()
         categoria = str(item.get("categoria") or "Outros").strip() or "Outros"
-        preco = _preco_br(item.get("preco"))
+        exibir_preco = bool(item.get("exibir_preco_site")) and bool(str(item.get("preco") or "").strip())
+        preco = _preco_br(item.get("preco")) if exibir_preco else ""
         img = str(item.get("imagem_principal") or "").strip()
         if img and imagem_resolver is not None:
             try:
@@ -144,6 +145,8 @@ def gerar_html_vitrine(
         busca = unicodedata.normalize("NFKD", busca).encode("ascii", "ignore").decode("ascii").casefold()
         badge = '<span class="badge">⭐ Destaque</span>' if item.get("destaque") else ""
         descricao_curta = descricao[:280] + ("…" if len(descricao) > 280 else "")
+        preco_html = f'<div class="price">{html.escape(preco)}</div>' if preco else ""
+        footer_classe = "card-footer" if preco else "card-footer no-price"
         cards.append(
             f'''<article class="product-card" data-cat="{html.escape(_slug(categoria), quote=True)}" data-search="{html.escape(busca, quote=True)}">
                 <div class="photo">{imagem_html}{badge}</div>
@@ -152,13 +155,13 @@ def gerar_html_vitrine(
                     <h3>{html.escape(nome)}</h3>
                     <p>{html.escape(descricao_curta)}</p>
                     {opcoes_html}
-                    <div class="card-footer"><div class="price">{html.escape(preco)}</div><a class="cta small" href="{html.escape(href, quote=True)}" target="_blank" rel="noopener">Pedir orçamento</a></div>
+                    <div class="{footer_classe}">{preco_html}<a class="cta small" href="{html.escape(href, quote=True)}" target="_blank" rel="noopener">Pedir orçamento</a></div>
                 </div>
             </article>'''
         )
 
     logo = f'<img class="brand-logo" src="{html.escape(str(logo_src), quote=True)}" alt="AlphaFest">' if logo_src else '<div class="brand-word">AlphaFest</div>'
-    preview_bar = '<div class="preview-bar">PRÉVIA INTERNA HF36 · AINDA NÃO PUBLICADA</div>' if modo_preview else ""
+    preview_bar = '<div class="preview-bar">PRÉVIA INTERNA HF37 · AINDA NÃO PUBLICADA</div>' if modo_preview else ""
     vazio = '<div class="empty">Nenhum produto pronto está marcado para o site.</div>' if not cards else ""
 
     return f'''<!doctype html>
@@ -183,7 +186,7 @@ def gerar_html_vitrine(
 .section-head{{display:flex;justify-content:space-between;gap:18px;align-items:end;margin:20px 0}} .section-head h2{{font-size:30px;margin:0}} .section-head p{{margin:5px 0 0;color:#667b94}} #result-count{{font-weight:800;color:var(--blue);white-space:nowrap}}
 .grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}} .product-card{{border:1px solid var(--line);border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 10px 30px rgba(20,37,61,.06);display:flex;flex-direction:column;transition:.18s}} .product-card:hover{{transform:translateY(-3px);box-shadow:0 16px 36px rgba(20,37,61,.11)}}
 .photo{{position:relative;background:var(--soft);aspect-ratio:4/3;overflow:hidden}} .photo img{{width:100%;height:100%;object-fit:cover;display:block}} .placeholder{{height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#84a9ca}} .badge{{position:absolute;top:12px;left:12px;background:#fff;color:#a26100;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:900;box-shadow:0 3px 12px rgba(0,0,0,.12)}}
-.card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .category{{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:900;color:var(--blue)}} .card-body h3{{font-size:20px;line-height:1.15;margin:7px 0 10px}} .card-body p{{font-size:14px;line-height:1.55;color:#60748e;margin:0 0 12px;flex:1}} .options{{font-size:12px;color:#60748e;margin:0 0 12px}} .card-footer{{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid #edf3f8;padding-top:14px}} .price{{font-weight:950;font-size:17px}}
+.card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .category{{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:900;color:var(--blue)}} .card-body h3{{font-size:20px;line-height:1.15;margin:7px 0 10px}} .card-body p{{font-size:14px;line-height:1.55;color:#60748e;margin:0 0 12px;flex:1}} .options{{font-size:12px;color:#60748e;margin:0 0 12px}} .card-footer{{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid #edf3f8;padding-top:14px}} .card-footer.no-price .cta{{width:100%}} .price{{font-weight:950;font-size:17px}}
 .empty{{padding:50px;text-align:center;border:1px dashed var(--line);border-radius:18px;color:#60748e}} .footer{{background:#10243c;color:#d7e8f7}} .footer-in{{max-width:1240px;margin:auto;padding:34px 22px;display:flex;gap:24px;justify-content:space-between;align-items:center}} .footer strong{{color:#fff}} .footer small{{color:#9fb7cb}}
 @media(max-width:900px){{.hero-in{{grid-template-columns:1fr}}.hero-card{{display:none}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
 @media(max-width:620px){{.brand-copy{{display:none}}.ghost{{display:none}}.header-in{{padding:9px 14px}}.brand-logo{{width:58px;height:46px}}.hero-in{{padding:36px 16px 32px}}.hero h1{{font-size:42px}}.hero p{{font-size:16px}}.main{{padding:26px 14px 55px}}.grid{{grid-template-columns:1fr}}.section-head{{align-items:flex-start;flex-direction:column}}.product-card{{border-radius:16px}}.footer-in{{flex-direction:column;align-items:flex-start}}}}

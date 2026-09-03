@@ -24977,7 +24977,7 @@ if pagina_atual == "clientes_360":
 if pagina_atual == "site":
     st.markdown("# 🌐 Central do Site AlphaFest")
     st.caption(
-        "HF36 • O Catálogo do Manager continua como Fonte Única da futura vitrine. "
+        "HF37 • O Catálogo do Manager continua como Fonte Única da futura vitrine. "
         "O site atual permanece online e é usado como acervo/legado até a migração ser aprovada."
     )
 
@@ -25003,10 +25003,10 @@ if pagina_atual == "site":
     st.caption(
         f"⭐ {resumo_site_hf35.get('destaques', 0)} destaque(s) marcado(s) • "
         f"{resumo_site_hf35.get('prontos_nao_marcados', 0)} produto(s) já com foto/descrição e ainda não marcado(s) para o site. "
-        "Preço pode permanecer sob consulta; não é requisito para exibir um personalizado."
+        "Por padrão o preço fica oculto no site; cada produto decide no Catálogo se o valor deve aparecer na vitrine."
     )
 
-    # HF36 — prévia responsiva da nova vitrine pública, gerada somente em memória.
+    # HF37 — prévia responsiva + controle individual de preço, sempre pela Fonte Única.
     resumo_vitrine_hf36 = _site_resumir_vitrine(catalogo_site_hf35)
     empresa_vitrine_hf36 = carregar_config_empresa()
     logo_b64_hf36, logo_ext_hf36 = encontrar_logo_base64()
@@ -25017,7 +25017,7 @@ if pagina_atual == "site":
             ext_hf36 = "jpeg"
         logo_src_hf36 = f"data:image/{ext_hf36};base64,{logo_b64_hf36}"
 
-    with st.expander("🌐 Nova vitrine pública — prévia HF36", expanded=True):
+    with st.expander("🌐 Nova vitrine pública — prévia HF37", expanded=True):
         st.caption(
             "Prévia interna responsiva gerada diretamente do Catálogo oficial. Busca, categorias, destaques e botões de orçamento "
             "já funcionam aqui, mas nenhuma página pública é alterada ou publicada."
@@ -25052,7 +25052,7 @@ if pagina_atual == "site":
         st.download_button(
             "⬇️ Baixar esta prévia HTML",
             data=html_vitrine_hf36,
-            file_name="alphafest-vitrine-preview-hf36.html",
+            file_name="alphafest-vitrine-preview-hf37.html",
             mime="text/html",
             use_container_width=True,
             key="site_hf36_download_preview",
@@ -25085,10 +25085,10 @@ if pagina_atual == "site":
             detalhes_hf35 = []
             if item_hf35.get("categoria"):
                 detalhes_hf35.append(str(item_hf35.get("categoria")))
-            if item_hf35.get("preco"):
-                detalhes_hf35.append(formatar_preco_catalogo(item_hf35.get("preco")))
+            if item_hf35.get("exibir_preco_site") and item_hf35.get("preco"):
+                detalhes_hf35.append("preço no site: " + formatar_preco_catalogo(item_hf35.get("preco")))
             else:
-                detalhes_hf35.append("valor sob consulta")
+                detalhes_hf35.append("preço oculto no site")
             cinfo_hf35.caption(" • ".join(detalhes_hf35))
             if item_hf35.get("pronto"):
                 cinfo_hf35.success("✅ Pronto para a vitrine")
@@ -25118,7 +25118,7 @@ if pagina_atual == "site":
             cc1_hf35.caption(
                 (str(item_hf35.get("categoria") or "Sem categoria"))
                 + " • "
-                + (formatar_preco_catalogo(item_hf35.get("preco")) if item_hf35.get("preco") else "valor sob consulta")
+                + (("preço no site: " + formatar_preco_catalogo(item_hf35.get("preco"))) if item_hf35.get("exibir_preco_site") and item_hf35.get("preco") else "preço oculto no site")
             )
             if cc2_hf35.button(
                 "Revisar no Catálogo",
@@ -25181,7 +25181,7 @@ if pagina_atual == "site":
                 rerun_na_aba("crescimento")
 
     st.info(
-        "🧭 **HF36:** a nova vitrine já pode ser avaliada em Desktop e Celular dentro do Manager. "
+        "🧭 **HF37:** a nova vitrine mantém o visual aprovado e agora respeita o controle individual de preço do Catálogo. "
         "A publicação/migração só será feita depois de você aprovar esta prévia — o site atual continua intocado."
     )
 
@@ -31611,6 +31611,15 @@ if pagina_atual == "catalogo":
                 "Publicar no site/catálogo online", value=bool(item_edicao.get("PublicarSite", False)),
                 key=f"cat_publicar_{sufixo}"
             )
+            exibir_preco_site = st.checkbox(
+                "Exibir preço no site",
+                value=bool(item_edicao.get("ExibirPrecoSite", False)),
+                key=f"cat_exibir_preco_site_{sufixo}",
+                help=(
+                    "Desativado por padrão. Quando desligado, a vitrine mostra apenas o botão de orçamento. "
+                    "Ative somente quando o valor cadastrado puder ser divulgado como preço público deste produto."
+                ),
+            )
             destaque_cat = st.checkbox(
                 "Produto em destaque", value=bool(item_edicao.get("Destaque", False)),
                 key=f"cat_destaque_{sufixo}"
@@ -31774,7 +31783,7 @@ if pagina_atual == "catalogo":
                     "ObservacaoInterna": observacao_interna.strip(), "PalavrasChave": palavras_chave.strip(),
                     "LegendaSocial": legenda_instagram.strip(), "Hashtags": hashtags.strip(),
                     "DescricaoMercadoLivre": texto_ml.strip(), "DescricaoShopee": texto_shopee.strip(),
-                    "PublicarSite": publicar_site, "Destaque": destaque_cat,
+                    "PublicarSite": publicar_site, "ExibirPrecoSite": bool(exibir_preco_site), "Destaque": destaque_cat,
                     "ArquivosBiblioteca": list(item_edicao.get("ArquivosBiblioteca", []) or []),
                     "AtualizadoEm": agora_local().isoformat(timespec="seconds"),
                 })
