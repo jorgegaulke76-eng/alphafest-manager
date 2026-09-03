@@ -309,7 +309,7 @@ def _obter_render_alpha_intelligence():
     try:
         from alpha_intelligence import render_alpha_intelligence as _renderer
         _ALPHA_INTELLIGENCE_RENDERER = _renderer
-        registrar_boot("Alpha Intelligence (sob demanda)", "ok", duracao=time.perf_counter() - inicio) if "registrar_boot" in globals() else None
+        registrar_boot("Alpha Intelligence", "ok", duracao=time.perf_counter() - inicio) if "registrar_boot" in globals() else None
     except Exception as exc:
         ALPHA_INTELLIGENCE_IMPORT_ERROR = str(exc)
         _ALPHA_INTELLIGENCE_RENDERER = None
@@ -324,7 +324,7 @@ def _obter_render_central_oportunidades():
     try:
         from central_oportunidades import render_central_oportunidades as _renderer
         _CENTRAL_OPORTUNIDADES_RENDERER = _renderer
-        registrar_boot("Central de oportunidades (sob demanda)", "ok", duracao=time.perf_counter() - inicio) if "registrar_boot" in globals() else None
+        registrar_boot("Central de oportunidades", "ok", duracao=time.perf_counter() - inicio) if "registrar_boot" in globals() else None
     except Exception as exc:
         CENTRAL_OPORTUNIDADES_IMPORT_ERROR = str(exc)
         _CENTRAL_OPORTUNIDADES_RENDERER = None
@@ -15419,8 +15419,16 @@ with st.sidebar:
     if pode_executar_acoes_tecnicas(_usuario_sidebar_atual):
         registros_monitor = diagnostico_boot_1424()
         total_monitor = len(registros_monitor)
-        falhas_monitor = sum(1 for item in registros_monitor.values() if str(item.get("status", "ok")) not in {"ok", "contingencia", "isolado"})
+        # HF34: "sob demanda" é um estado saudável da performance conservadora.
+        # O módulo ainda não foi carregado porque a função correspondente não foi aberta;
+        # isso não pode virar alerta de sistema nem sugerir falha operacional.
+        estados_saudaveis_monitor = {"ok", "contingencia", "isolado", "sob demanda"}
+        falhas_monitor = sum(
+            1 for item in registros_monitor.values()
+            if str(item.get("status", "ok")) not in estados_saudaveis_monitor
+        )
         contingencias_monitor = sum(1 for item in registros_monitor.values() if str(item.get("status", "ok")) in {"contingencia", "isolado"})
+        sob_demanda_monitor = sum(1 for item in registros_monitor.values() if str(item.get("status", "ok")) == "sob demanda")
         tempo_monitor = sum(float(item.get("duracao", 0.0) or 0.0) for item in registros_monitor.values())
         status_geral_monitor = "🟢 Estável" if falhas_monitor == 0 else "🔴 Atenção"
         banco_monitor = "🟢 Online" if conectado else "🟡 Contingência"
@@ -15457,7 +15465,9 @@ with st.sidebar:
                 st.caption("🔗 Telas operacionais: sincronizadas")
             else:
                 st.caption(f"🟡 Telas operacionais: {problemas_sync_monitor} divergência(s) em revisão")
-        st.caption(f"Boot: {total_monitor - falhas_monitor}/{total_monitor} etapas • {tempo_monitor:.2f}s")
+        st.caption(f"Boot: {total_monitor - falhas_monitor}/{total_monitor} verificações saudáveis • {tempo_monitor:.2f}s")
+        if sob_demanda_monitor:
+            st.caption(f"⚡ {sob_demanda_monitor} módulo(s) aguardando uso — carga sob demanda normal")
         if contingencias_monitor:
             st.caption(f"🟡 {contingencias_monitor} módulo(s) em contingência controlada")
         st.divider()

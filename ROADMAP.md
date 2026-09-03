@@ -53,3 +53,5 @@
 
 - HF33: Performance conservadora — reduzir custo de inicialização e imports sob demanda, preservando integralmente funções homologadas, Fonte Única e coerência Jorge/Anna.
 - Direção após HF33: melhorar/incorporar o site ao Manager e depois evoluir o Marketing Automatizado. A trilha de capacidade quantitativa fica pausada porque a operação atual é enxuta e a HF32 já atende a necessidade de tempos.
+
+- HF34: Health Monitor compatível com carga sob demanda — correção do falso alerta visual da HF33, preservando integralmente a otimização e a Fonte Única.

@@ -939,3 +939,9 @@ hangelog
 - A Fonte Única, o TTL atual dos documentos e a invalidação após gravação permanecem intactos; não foi criado cache paralelo entre Jorge e Anna.
 - Todas as telas, módulos e perfis preservam a mesma leitura operacional da HF32.
 - Nenhum JSON/SQL operacional é alterado.
+
+## 20.4.9-I8.13.5-HF34 — Health Monitor compatível com carga sob demanda
+- Corrige falso alerta de Sistema em Atenção quando módulos opcionais da HF33 ainda não foram carregados.
+- `sob demanda` passa a ser estado saudável do diagnóstico, sem desfazer o ganho de performance.
+- Evita duplicação das etapas Alpha Intelligence/Central de Oportunidades após o primeiro carregamento.
+- Nenhum JSON/SQL operacional é alterado.
