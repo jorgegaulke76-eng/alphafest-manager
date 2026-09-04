@@ -133,8 +133,8 @@ def selecionar_produtos_vitrine(
 ) -> List[Dict[str, Any]]:
     """Seleciona somente itens ativos, marcados e prontos, sem alterar a origem.
 
-    HF45.3 acrescenta um modo de prévia que usa diretamente Categoria e
-    Subcategoria do Catálogo Oficial. O modo padrão permanece idêntico ao HF44
+    HF45.4 mantém o modo de prévia que usa diretamente Categoria e
+    Subcategoria do Catálogo Oficial e acrescenta navegação visual hierárquica. O modo padrão permanece idêntico ao HF44
     para que a publicação oficial não mude enquanto a revisão da Anna não for
     concluída/homologada.
     """
@@ -204,12 +204,29 @@ def resumir_vitrine(
             for x in produtos
         })
         sem_subcategoria = sum(1 for x in produtos if str(x.get("subcategoria_publica") or "").strip() == "Sem subcategoria")
+        contagem_por_categoria = {
+            categoria: sum(1 for x in produtos if str(x.get("categoria_publica") or "Sem categoria").strip() == categoria)
+            for categoria in categorias
+        }
+        contagem_por_subcategoria = {
+            categoria: {
+                sub: sum(
+                    1 for x in produtos
+                    if str(x.get("categoria_publica") or "Sem categoria").strip() == categoria
+                    and str(x.get("subcategoria_publica") or "Sem subcategoria").strip() == sub
+                )
+                for sub in subcategorias_por_categoria.get(categoria, [])
+            }
+            for categoria in categorias
+        }
     else:
         presentes = {str(x.get("categoria_comercial") or "Festas & Personalizados").strip() for x in produtos}
         categorias = [cat for cat in CATEGORIAS_COMERCIAIS if cat in presentes]
         subcategorias_por_categoria = {}
         total_subcategorias = 0
         sem_subcategoria = 0
+        contagem_por_categoria = {categoria: sum(1 for x in produtos if str(x.get("categoria_comercial") or "Festas & Personalizados").strip() == categoria) for categoria in categorias}
+        contagem_por_subcategoria = {}
 
     return {
         "produtos": produtos,
@@ -220,6 +237,8 @@ def resumir_vitrine(
         "subcategorias_por_categoria": subcategorias_por_categoria,
         "total_subcategorias": total_subcategorias,
         "sem_subcategoria": sem_subcategoria,
+        "contagem_por_categoria": contagem_por_categoria,
+        "contagem_por_subcategoria": contagem_por_subcategoria,
         "modo_taxonomia_catalogo": bool(usar_taxonomia_catalogo),
     }
 
@@ -236,7 +255,7 @@ def gerar_html_vitrine(
     """Gera HTML autônomo da vitrine. Nenhuma publicação é realizada.
 
     Quando ``usar_taxonomia_catalogo`` é True, Categoria e Subcategoria do
-    Catálogo Oficial viram a navegação hierárquica da prévia HF45.3. O padrão
+    Catálogo Oficial viram a navegação hierárquica da prévia HF45.4. O padrão
     False preserva integralmente o comportamento público homologado no HF44.
     """
     resumo = resumir_vitrine(catalogo, usar_taxonomia_catalogo=usar_taxonomia_catalogo)
@@ -255,23 +274,35 @@ def gerar_html_vitrine(
     mensagem_geral = quote("Olá! Vim pelo site da AlphaFest e gostaria de fazer um orçamento. Preciso de ajuda para definir produto, tamanho/personalização, cor, quantidade, material e prazo.")
     whatsapp_geral = f"https://wa.me/{numero}?text={mensagem_geral}" if numero else "#"
 
-    chips = ['<button class="filter active" data-cat="todos">Todos</button>']
+    chips = [f'<button class="filter active" data-cat="todos"><span>Todos</span><b>{resumo["total"]}</b></button>'] if usar_taxonomia_catalogo else ['<button class="filter active" data-cat="todos">Todos</button>']
     for cat in categorias:
-        chips.append(f'<button class="filter" data-cat="{html.escape(_slug(cat), quote=True)}">{html.escape(cat)}</button>')
+        if usar_taxonomia_catalogo:
+            qtd_cat = int(resumo.get("contagem_por_categoria", {}).get(cat, 0) or 0)
+            chips.append(
+                f'<button class="filter category-filter" data-cat="{html.escape(_slug(cat), quote=True)}" data-label="{html.escape(cat, quote=True)}">'
+                f'<span>{html.escape(cat)}</span><b>{qtd_cat}</b></button>'
+            )
+        else:
+            chips.append(f'<button class="filter" data-cat="{html.escape(_slug(cat), quote=True)}">{html.escape(cat)}</button>')
 
     subchips: List[str] = []
     if usar_taxonomia_catalogo:
-        subchips.append('<button class="subfilter active" data-parent="*" data-sub="todos">Todas as subcategorias</button>')
+        subchips.append('<button class="subfilter active" data-parent="*" data-sub="todos" data-label="Todas"><span>Todas</span></button>')
         for cat in categorias:
             parent = _slug(cat)
             for sub in resumo.get("subcategorias_por_categoria", {}).get(cat, []):
+                qtd_sub = int(resumo.get("contagem_por_subcategoria", {}).get(cat, {}).get(sub, 0) or 0)
+                incompleta = ' incomplete' if sub == "Sem subcategoria" else ''
                 subchips.append(
-                    f'<button class="subfilter" data-parent="{html.escape(parent, quote=True)}" '
-                    f'data-sub="{html.escape(_slug(sub), quote=True)}">{html.escape(sub)}</button>'
+                    f'<button class="subfilter{incompleta}" data-parent="{html.escape(parent, quote=True)}" '
+                    f'data-sub="{html.escape(_slug(sub), quote=True)}" data-label="{html.escape(sub, quote=True)}">'
+                    f'<span>{html.escape(sub)}</span><b>{qtd_sub}</b></button>'
                 )
     subfilters_html = (
-        '<div class="subfilters" id="subfilters" hidden><span class="subfilters-label">Subcategoria:</span>'
-        + ''.join(subchips) + '</div>'
+        '<section class="taxonomy-step taxonomy-sub" id="subfilters" hidden>'
+        '<div class="taxonomy-heading"><div><span class="step-number">2</span><strong id="sub-title">Escolha uma subcategoria</strong></div>'
+        '<small>Mostra somente as subcategorias da categoria escolhida.</small></div>'
+        '<div class="subfilters">' + ''.join(subchips) + '</div></section>'
         if usar_taxonomia_catalogo else ''
     )
 
@@ -332,7 +363,7 @@ def gerar_html_vitrine(
     logo = f'<img class="brand-logo" src="{html.escape(str(logo_src), quote=True)}" alt="AlphaFest">' if logo_src else '<div class="brand-word">AlphaFest</div>'
     if modo_preview:
         preview_bar = (
-            '<div class="preview-bar">PRÉVIA INTERNA HF45.3 · CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
+            '<div class="preview-bar">PRÉVIA INTERNA HF45.4 · CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
             if usar_taxonomia_catalogo
             else '<div class="preview-bar">PRÉVIA INTERNA HF40 · AINDA NÃO PUBLICADA</div>'
         )
@@ -345,15 +376,23 @@ def gerar_html_vitrine(
     if usar_taxonomia_catalogo:
         script_filtros = r"""
 (function(){
-  let cat='todos', sub='todos';
+  let cat='todos', sub='todos', catLabel='Todos', subLabel='Todas';
   const cards=[...document.querySelectorAll('.product-card')];
   const input=document.getElementById('search');
   const count=document.getElementById('result-count');
   const subbox=document.getElementById('subfilters');
+  const subTitle=document.getElementById('sub-title');
+  const current=document.getElementById('taxonomy-current');
   const subbuttons=[...document.querySelectorAll('.subfilter')];
+  const catbuttons=[...document.querySelectorAll('.filter')];
   function norm(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}
+  function updateCurrent(){
+    if(!current)return;
+    if(cat==='todos') current.innerHTML='<strong>Todos os produtos</strong><span>Escolha uma categoria para ver as subcategorias.</span>';
+    else current.innerHTML='<strong>'+catLabel+'</strong><span>'+(sub==='todos'?'Todas as subcategorias':subLabel)+'</span>';
+  }
   function resetSub(){
-    sub='todos';
+    sub='todos'; subLabel='Todas';
     subbuttons.forEach(b=>{
       const geral=b.dataset.sub==='todos';
       const pertence=b.dataset.parent===cat;
@@ -361,6 +400,7 @@ def gerar_html_vitrine(
       b.classList.toggle('active',geral);
     });
     if(subbox) subbox.hidden=(cat==='todos');
+    if(subTitle) subTitle.textContent=cat==='todos'?'Escolha uma subcategoria':catLabel+' · escolha uma subcategoria';
   }
   function apply(){
     const q=norm(input.value); let n=0;
@@ -371,15 +411,16 @@ def gerar_html_vitrine(
       const ok=okCat&&okSub&&okQ;
       c.style.display=ok?'flex':'none'; if(ok)n++;
     });
-    count.textContent=n+' produto(s)';
+    count.textContent=n+' produto(s)'; updateCurrent();
   }
-  document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{
-    document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));
-    b.classList.add('active'); cat=b.dataset.cat; resetSub(); apply();
+  catbuttons.forEach(b=>b.addEventListener('click',()=>{
+    catbuttons.forEach(x=>x.classList.remove('active')); b.classList.add('active');
+    cat=b.dataset.cat; catLabel=b.dataset.label||'Todos'; resetSub(); apply();
+    if(cat!=='todos' && subbox && window.innerWidth<700) subbox.scrollIntoView({behavior:'smooth',block:'nearest'});
   }));
   subbuttons.forEach(b=>b.addEventListener('click',()=>{
     subbuttons.forEach(x=>x.classList.remove('active')); b.classList.add('active');
-    sub=b.dataset.sub; apply();
+    sub=b.dataset.sub; subLabel=b.dataset.label||b.textContent.trim(); apply();
   }));
   input.addEventListener('input',apply); resetSub(); apply();
 })();
@@ -408,19 +449,20 @@ def gerar_html_vitrine(
 .hero-card{{background:#fff;border:1px solid var(--line);border-radius:24px;padding:26px;box-shadow:0 24px 60px rgba(11,103,198,.12)}} .hero-stat{{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}} .stat{{padding:16px;border-radius:16px;background:var(--soft)}} .stat strong{{display:block;font-size:28px;color:var(--blue)}} .stat span{{font-size:12px;color:#60748e}}
 .main{{max-width:1240px;margin:auto;padding:36px 22px 70px}} .toolbar{{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}} .search{{flex:1;min-width:260px;position:relative}} .search input{{width:100%;border:1px solid var(--line);border-radius:14px;padding:14px 16px 14px 42px;font-size:15px;outline:none;background:#fff}} .search:before{{content:'🔎';position:absolute;left:14px;top:13px}}
 .filters{{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:thin}} .filter{{border:1px solid var(--line);background:#fff;color:var(--ink);padding:9px 13px;border-radius:999px;white-space:nowrap;font-weight:800;cursor:pointer}} .filter.active{{background:var(--blue);border-color:var(--blue);color:#fff}}
-.subfilters{{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:2px 0 16px;scrollbar-width:thin}} .subfilters[hidden]{{display:none}} .subfilters-label{{font-size:12px;font-weight:900;color:#60748e;white-space:nowrap}} .subfilter{{border:1px solid #cfe0ee;background:#f7fbff;color:#31526f;padding:8px 12px;border-radius:999px;white-space:nowrap;font-weight:800;cursor:pointer}} .subfilter.active{{background:#e8f4ff;border-color:#7db8e8;color:var(--blue)}}
+.taxonomy-nav{{display:grid;gap:12px;margin:8px 0 18px}} .taxonomy-step{{border:1px solid var(--line);background:#fff;border-radius:18px;padding:16px}} .taxonomy-heading{{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}} .taxonomy-heading>div{{display:flex;align-items:center;gap:9px}} .taxonomy-heading strong{{font-size:15px}} .taxonomy-heading small{{color:#71849c;font-size:12px}} .step-number{{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:#e8f4ff;color:var(--blue);font-weight:950}} .taxonomy-cats .filters{{padding-bottom:2px}} .category-filter{{display:inline-flex;align-items:center;gap:8px}} .filter b,.subfilter b{{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:#edf5fb;color:#50708d;font-size:11px}} .filter.active b{{background:rgba(255,255,255,.2);color:#fff}}
+.taxonomy-sub[hidden]{{display:none}} .subfilters{{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:2px 0;scrollbar-width:thin}} .subfilter{{border:1px solid #cfe0ee;background:#f7fbff;color:#31526f;padding:8px 12px;border-radius:999px;white-space:nowrap;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;gap:7px}} .subfilter.active{{background:#e8f4ff;border-color:#7db8e8;color:var(--blue)}} .subfilter.incomplete{{border-style:dashed;background:#fffbea;color:#856900}} .taxonomy-current{{display:flex;align-items:center;gap:10px;border-radius:13px;background:#f4f9fd;padding:10px 13px;color:#60748e;font-size:12px}} .taxonomy-current strong{{color:var(--ink);font-size:13px}} .taxonomy-current span:before{{content:'›';margin-right:10px;color:#91a6b8}}
 .section-head{{display:flex;justify-content:space-between;gap:18px;align-items:end;margin:20px 0}} .section-head h2{{font-size:30px;margin:0}} .section-head p{{margin:5px 0 0;color:#667b94}} #result-count{{font-weight:800;color:var(--blue);white-space:nowrap}}
 .grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}} .product-card{{border:1px solid var(--line);border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 10px 30px rgba(20,37,61,.06);display:flex;flex-direction:column;transition:.18s}} .product-card:hover{{transform:translateY(-3px);box-shadow:0 16px 36px rgba(20,37,61,.11)}}
 .photo{{position:relative;background:var(--soft);aspect-ratio:4/3;overflow:hidden}} .photo img{{width:100%;height:100%;object-fit:cover;display:block}} .placeholder{{height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#84a9ca}} .badge{{position:absolute;top:12px;left:12px;background:#fff;color:#a26100;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:900;box-shadow:0 3px 12px rgba(0,0,0,.12)}}
 .card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .category{{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:900;color:var(--blue)}} .subcategory{{font-size:12px;font-weight:800;color:#6a7f97;margin-top:4px}} .card-body h3{{font-size:20px;line-height:1.15;margin:7px 0 10px}} .card-body p{{font-size:14px;line-height:1.55;color:#60748e;margin:0 0 12px;flex:1}} .options{{font-size:12px;color:#60748e;margin:0 0 12px}} .card-footer{{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid #edf3f8;padding-top:14px}} .card-footer.no-price .cta{{width:100%}} .price{{font-weight:950;font-size:17px}}
 .empty{{padding:50px;text-align:center;border:1px dashed var(--line);border-radius:18px;color:#60748e}} .mobile-whatsapp{{display:none}} .footer{{background:#10243c;color:#d7e8f7}} .footer-in{{max-width:1240px;margin:auto;padding:34px 22px;display:flex;gap:24px;justify-content:space-between;align-items:center}} .footer strong{{color:#fff}} .footer small{{color:#9fb7cb}}
 @media(max-width:900px){{.hero-in{{grid-template-columns:1fr}}.hero-card{{display:none}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
-@media(max-width:620px){{body{{padding-bottom:76px}}.preview-bar{{font-size:9px;padding:6px 10px}}.brand-copy{{display:none}}.ghost{{display:none}}.header-in{{padding:8px 12px;gap:8px}}.brand-logo{{width:54px;height:44px}}.header-actions .cta{{padding:10px 12px;font-size:13px;box-shadow:none}}.hero-in{{padding:30px 14px 26px}}.eyebrow{{font-size:11px}}.hero h1{{font-size:36px;line-height:1.02;margin:9px 0 14px}}.hero p{{font-size:15px;line-height:1.5}}.hero-actions{{gap:8px;margin-top:18px}}.hero-actions>a{{width:100%;min-height:46px}}.main{{padding:22px 12px 38px}}.section-head{{align-items:flex-start;flex-direction:column;gap:6px;margin:14px 0}}.section-head h2{{font-size:25px}}.search{{min-width:100%}}.search input{{font-size:16px;padding-top:13px;padding-bottom:13px}}.filters{{gap:7px;padding-bottom:9px}}.filter{{padding:10px 13px;min-height:42px}}.subfilters{{gap:7px;padding-bottom:12px}}.subfilter{{padding:9px 12px;min-height:40px}}.grid{{grid-template-columns:1fr;gap:16px}}.product-card{{border-radius:16px;box-shadow:0 7px 22px rgba(20,37,61,.07)}}.product-card:hover{{transform:none}}.photo{{aspect-ratio:4/3}}.card-body{{padding:15px}}.card-body h3{{font-size:19px}}.card-body p{{font-size:14px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}}.card-footer{{padding-top:12px}}.card-footer .cta{{min-height:46px}}.footer-in{{flex-direction:column;align-items:flex-start;padding-bottom:28px}}.mobile-whatsapp{{display:flex;position:fixed;left:12px;right:12px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50;align-items:center;justify-content:center;background:var(--green);color:#fff;text-decoration:none;font-weight:950;border-radius:14px;min-height:52px;box-shadow:0 10px 28px rgba(20,37,61,.25);border:2px solid rgba(255,255,255,.9)}}}}
+@media(max-width:620px){{body{{padding-bottom:76px}}.preview-bar{{font-size:9px;padding:6px 10px}}.brand-copy{{display:none}}.ghost{{display:none}}.header-in{{padding:8px 12px;gap:8px}}.brand-logo{{width:54px;height:44px}}.header-actions .cta{{padding:10px 12px;font-size:13px;box-shadow:none}}.hero-in{{padding:30px 14px 26px}}.eyebrow{{font-size:11px}}.hero h1{{font-size:36px;line-height:1.02;margin:9px 0 14px}}.hero p{{font-size:15px;line-height:1.5}}.hero-actions{{gap:8px;margin-top:18px}}.hero-actions>a{{width:100%;min-height:46px}}.main{{padding:22px 12px 38px}}.section-head{{align-items:flex-start;flex-direction:column;gap:6px;margin:14px 0}}.section-head h2{{font-size:25px}}.search{{min-width:100%}}.search input{{font-size:16px;padding-top:13px;padding-bottom:13px}}.filters{{gap:7px;padding-bottom:9px}}.filter{{padding:10px 13px;min-height:42px}}.taxonomy-step{{padding:13px;border-radius:15px}}.taxonomy-heading{{align-items:flex-start;flex-direction:column;gap:5px}}.taxonomy-heading small{{font-size:11px}}.subfilters{{gap:7px;padding-bottom:2px}}.subfilter{{padding:9px 12px;min-height:40px}}.taxonomy-current{{align-items:flex-start;flex-direction:column;gap:3px}}.taxonomy-current span:before{{display:none}}.grid{{grid-template-columns:1fr;gap:16px}}.product-card{{border-radius:16px;box-shadow:0 7px 22px rgba(20,37,61,.07)}}.product-card:hover{{transform:none}}.photo{{aspect-ratio:4/3}}.card-body{{padding:15px}}.card-body h3{{font-size:19px}}.card-body p{{font-size:14px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}}.card-footer{{padding-top:12px}}.card-footer .cta{{min-height:46px}}.footer-in{{flex-direction:column;align-items:flex-start;padding-bottom:28px}}.mobile-whatsapp{{display:flex;position:fixed;left:12px;right:12px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50;align-items:center;justify-content:center;background:var(--green);color:#fff;text-decoration:none;font-weight:950;border-radius:14px;min-height:52px;box-shadow:0 10px 28px rgba(20,37,61,.25);border:2px solid rgba(255,255,255,.9)}}}}
 </style></head>
 <body>{preview_bar}
 <header class="header"><div class="header-in"><a class="brand" href="#inicio">{logo}<div class="brand-copy"><strong>{html.escape(nome_empresa)}</strong><span>{html.escape(subtitulo)}</span></div></a><div class="header-actions"><a class="ghost" href="#produtos">Ver produtos</a><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Falar no WhatsApp</a></div></div></header>
 <section class="hero" id="inicio"><div class="hero-in"><div><div class="eyebrow">Personalização que vira presença</div><h1>Seu evento, sua marca, <span>do seu jeito.</span></h1><p>{html.escape(slogan)} Escolha uma ideia na vitrine e fale com a AlphaFest para personalizar detalhes, quantidade e prazo.</p><div class="hero-actions"><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Explorar produtos ↓</a></div></div><aside class="hero-card"><div class="eyebrow">Vitrine AlphaFest</div><h2>Personalizados & Balões</h2><p>Ideias selecionadas para você encontrar uma referência e pedir seu orçamento.</p><div class="hero-stat"><div class="stat"><strong>{resumo['total']}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{resumo['total_categorias']}</strong><span>{html.escape(rotulo_categorias)}</span></div></div></aside></div></section>
-<main class="main" id="produtos"><div class="section-head"><div><h2>Encontre seu personalizado</h2><p>{html.escape(texto_escolha)}</p></div><div id="result-count">{resumo['total']} produto(s)</div></div><div class="toolbar"><label class="search"><input id="search" type="search" placeholder="Buscar produto, categoria, subcategoria ou descrição..."></label></div><div class="filters">{''.join(chips)}</div>{subfilters_html}<div class="grid" id="grid">{''.join(cards)}</div>{vazio}</main>
+<main class="main" id="produtos"><div class="section-head"><div><h2>Encontre seu personalizado</h2><p>{html.escape(texto_escolha)}</p></div><div id="result-count">{resumo['total']} produto(s)</div></div><div class="toolbar"><label class="search"><input id="search" type="search" placeholder="Buscar produto, categoria, subcategoria ou descrição..."></label></div>{('<div class="taxonomy-nav"><section class="taxonomy-step taxonomy-cats"><div class="taxonomy-heading"><div><span class="step-number">1</span><strong>Escolha uma categoria</strong></div><small>Use Todos para voltar à vitrine completa.</small></div><div class="filters">' + ''.join(chips) + '</div></section>' + subfilters_html + '<div class="taxonomy-current" id="taxonomy-current"><strong>Todos os produtos</strong><span>Escolha uma categoria para ver as subcategorias.</span></div></div>') if usar_taxonomia_catalogo else ('<div class="filters">' + ''.join(chips) + '</div>')}<div class="grid" id="grid">{''.join(cards)}</div>{vazio}</main>
 <a class="mobile-whatsapp" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Pedir orçamento</a>
 <footer class="footer"><div class="footer-in"><div><strong>{html.escape(nome_empresa)}</strong><br><small>{html.escape(subtitulo)}{(' · ' + html.escape(local)) if local else ''}</small></div><div>{html.escape(slogan)}</div></div></footer>
 <script>{script_filtros}</script></body></html>'''

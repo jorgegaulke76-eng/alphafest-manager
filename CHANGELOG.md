@@ -1042,3 +1042,11 @@ hangelog
 - Exibe indicadores de categorias, subcategorias e produtos da vitrine ainda sem subcategoria para apoiar a revisão.
 - O site oficial e o botão `Publicar site agora` permanecem no comportamento homologado do HF44; a taxonomia nova não é publicada nesta etapa.
 - Mantém Fonte Única, preço opcional, busca, WhatsApp, desktop/celular e publicação Cloudflare sem regressão.
+
+## 20.4.9-I8.13.5-HF45.4 — Navegação visual Categoria → Subcategoria
+- Evolui somente a prévia interna da nova taxonomia, sem publicar no site oficial.
+- Exibe a navegação em duas etapas visuais: primeiro Categoria, depois apenas as Subcategorias pertencentes à categoria escolhida.
+- Mostra contagem de produtos em cada categoria e subcategoria, além de um indicador da seleção atual.
+- `Todos` continua disponível para retornar à vitrine completa; busca, preço opcional, WhatsApp e responsividade permanecem preservados.
+- Itens ainda sem subcategoria ficam sinalizados na prévia para facilitar a revisão da Anna.
+- O fluxo de produção HF44 continua sem `usar_taxonomia_catalogo=True`; portanto, nenhuma mudança de navegação é publicada antes da homologação final.

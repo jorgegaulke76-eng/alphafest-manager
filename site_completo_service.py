@@ -63,7 +63,7 @@ def gerar_html_site_completo(
 ) -> str:
     """Gera o site completo sem publicar ou persistir qualquer dado.
 
-    HF45.3 permite uma prévia paralela usando Categoria → Subcategoria do
+    HF45.4 permite uma prévia paralela usando Categoria → Subcategoria do
     Catálogo Oficial. O parâmetro padrão permanece False para preservar o site
     público HF44 até a classificação ser revisada e homologada.
     """
@@ -108,7 +108,7 @@ def gerar_html_site_completo(
     # A barra identifica claramente qual estrutura está sendo homologada.
     if modo_preview:
         preview = (
-            '<div class="preview-bar">PRÉVIA INTERNA HF45.3 · CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
+            '<div class="preview-bar">PRÉVIA INTERNA HF45.4 · CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
             if usar_taxonomia_catalogo
             else '<div class="preview-bar">PRÉVIA INTERNA HF40 · SITE COMPLETO · AINDA NÃO PUBLICADO</div>'
         )
