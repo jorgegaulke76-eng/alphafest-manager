@@ -1035,3 +1035,10 @@ hangelog
 ## 20.4.9-I8.13.5-HF45.2-HF1
 - Corrigida apenas a identificação de versão: VERSAO e VERSAO.txt agora estão alinhados.
 - Sem alteração funcional sobre a HF45.2.
+
+## 20.4.9-I8.13.5-HF45.3 — Prévia Categoria → Subcategoria
+- Adiciona na Central do Site uma prévia paralela da navegação futura usando diretamente `Categoria` e `Subcategoria` do Catálogo Oficial.
+- A nova prévia mostra Categoria → Subcategoria → Produtos e se atualiza automaticamente quando as correções da Anna são salvas no HF45.2.
+- Exibe indicadores de categorias, subcategorias e produtos da vitrine ainda sem subcategoria para apoiar a revisão.
+- O site oficial e o botão `Publicar site agora` permanecem no comportamento homologado do HF44; a taxonomia nova não é publicada nesta etapa.
+- Mantém Fonte Única, preço opcional, busca, WhatsApp, desktop/celular e publicação Cloudflare sem regressão.

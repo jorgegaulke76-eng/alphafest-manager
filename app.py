@@ -25270,6 +25270,67 @@ if pagina_atual == "site":
             key="site_hf36_download_preview",
         )
 
+    # HF45.3 — estrutura futura do site, preparada em paralelo e sem publicação.
+    resumo_taxonomia_hf453 = _site_resumir_vitrine(
+        catalogo_site_hf35,
+        usar_taxonomia_catalogo=True,
+    )
+    with st.expander("🧭 Prévia Categoria → Subcategoria — HF45.3", expanded=False):
+        st.caption(
+            "Esta prévia usa diretamente **Categoria** e **Subcategoria** do Catálogo Oficial. "
+            "Ela se atualiza conforme as correções da Anna forem salvas no HF45.2. "
+            "Nada desta área é publicado no site oficial: o HF44 continua usando a estrutura homologada atual até a aprovação final."
+        )
+        tx1_hf453, tx2_hf453, tx3_hf453, tx4_hf453 = st.columns(4)
+        tx1_hf453.metric("Produtos da vitrine", resumo_taxonomia_hf453.get("total", 0))
+        tx2_hf453.metric("Categorias atuais", resumo_taxonomia_hf453.get("total_categorias", 0))
+        tx3_hf453.metric("Subcategorias atuais", resumo_taxonomia_hf453.get("total_subcategorias", 0))
+        tx4_hf453.metric("Sem subcategoria", resumo_taxonomia_hf453.get("sem_subcategoria", 0))
+
+        if resumo_taxonomia_hf453.get("sem_subcategoria", 0):
+            st.warning(
+                f"Ainda há {resumo_taxonomia_hf453.get('sem_subcategoria', 0)} produto(s) da vitrine sem subcategoria. "
+                "É esperado enquanto a folha da Anna está em revisão."
+            )
+        else:
+            st.success("✅ Todos os produtos atuais da vitrine já possuem subcategoria cadastrada.")
+
+        modo_taxonomia_hf453 = st.radio(
+            "Visualização da nova organização",
+            ["🖥️ Desktop", "📱 Celular"],
+            horizontal=True,
+            key="site_hf453_modo_preview",
+        )
+        html_taxonomia_hf453 = _site_gerar_html_completo(
+            catalogo_site_hf35,
+            empresa_vitrine_hf36,
+            logo_src=logo_src_hf36,
+            imagem_resolver=_catalogo_html_src_imagem,
+            modo_preview=True,
+            usar_taxonomia_catalogo=True,
+        )
+        if resumo_taxonomia_hf453.get("total", 0) <= 0:
+            st.info("A prévia aparecerá quando houver produto ativo, marcado para o site e pronto para apresentação.")
+        elif modo_taxonomia_hf453 == "📱 Celular":
+            _txe1_hf453, _txcel_hf453, _txe2_hf453 = st.columns([1.0, 0.62, 1.0])
+            with _txcel_hf453:
+                components.html(html_taxonomia_hf453, height=980, scrolling=True)
+        else:
+            components.html(html_taxonomia_hf453, height=900, scrolling=True)
+
+        st.download_button(
+            "⬇️ Baixar prévia Categoria → Subcategoria",
+            data=html_taxonomia_hf453,
+            file_name="alphafest-preview-categoria-subcategoria-hf45-3.html",
+            mime="text/html",
+            use_container_width=True,
+            key="site_hf453_download_preview",
+        )
+        st.info(
+            "🔒 **Produção protegida:** o botão Publicar site agora (HF44) ainda gera a navegação anterior. "
+            "A nova estrutura só será ativada em produção depois que a classificação da Anna for concluída e você aprovar esta prévia."
+        )
+
     # HF40 — ambiente paralelo/staging: site completo seguro, sem DNS/CNAME.
     with st.expander("🚧 Site paralelo / staging — HF40", expanded=False):
         st.caption(

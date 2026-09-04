@@ -59,14 +59,21 @@ def gerar_html_site_completo(
     logo_src: str = "",
     imagem_resolver: ImagemResolver = None,
     modo_preview: bool = True,
+    usar_taxonomia_catalogo: bool = False,
 ) -> str:
-    """Gera o site completo HF40 sem publicar ou persistir qualquer dado."""
+    """Gera o site completo sem publicar ou persistir qualquer dado.
+
+    HF45.3 permite uma prévia paralela usando Categoria → Subcategoria do
+    Catálogo Oficial. O parâmetro padrão permanece False para preservar o site
+    público HF44 até a classificação ser revisada e homologada.
+    """
     pagina = gerar_html_vitrine(
         catalogo,
         empresa,
         logo_src=logo_src,
         imagem_resolver=imagem_resolver,
         modo_preview=False,
+        usar_taxonomia_catalogo=usar_taxonomia_catalogo,
     )
 
     empresa = dict(empresa or {})
@@ -98,9 +105,13 @@ def gerar_html_site_completo(
 '''
     pagina = pagina.replace("</style>", css_extra + "</style>", 1)
 
-    # A barra de homologação pertence à HF40, não à antiga prévia da vitrine.
+    # A barra identifica claramente qual estrutura está sendo homologada.
     if modo_preview:
-        preview = '<div class="preview-bar">PRÉVIA INTERNA HF40 · SITE COMPLETO · AINDA NÃO PUBLICADO</div>'
+        preview = (
+            '<div class="preview-bar">PRÉVIA INTERNA HF45.3 · CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
+            if usar_taxonomia_catalogo
+            else '<div class="preview-bar">PRÉVIA INTERNA HF40 · SITE COMPLETO · AINDA NÃO PUBLICADO</div>'
+        )
         pagina = pagina.replace("<body>", "<body>" + preview, 1)
 
     # Navegação única, mantendo o header da vitrine homologada.

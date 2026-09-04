@@ -126,8 +126,18 @@ def _preco_br(valor: Any) -> str:
         return texto if texto.upper().startswith("R$") else f"R$ {texto}"
 
 
-def selecionar_produtos_vitrine(catalogo: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Seleciona somente itens ativos, marcados e prontos, sem alterar a origem."""
+def selecionar_produtos_vitrine(
+    catalogo: Iterable[Dict[str, Any]],
+    *,
+    usar_taxonomia_catalogo: bool = False,
+) -> List[Dict[str, Any]]:
+    """Seleciona somente itens ativos, marcados e prontos, sem alterar a origem.
+
+    HF45.3 acrescenta um modo de prévia que usa diretamente Categoria e
+    Subcategoria do Catálogo Oficial. O modo padrão permanece idêntico ao HF44
+    para que a publicação oficial não mude enquanto a revisão da Anna não for
+    concluída/homologada.
+    """
     saida: List[Dict[str, Any]] = []
     for indice, produto in enumerate(catalogo or []):
         if not isinstance(produto, dict):
@@ -143,25 +153,74 @@ def selecionar_produtos_vitrine(catalogo: Iterable[Dict[str, Any]]) -> List[Dict
         item["processos"] = _lista(produto.get("Processos") or produto.get("Processo") or produto.get("processos"))
         item["categoria_origem"] = str(item.get("categoria") or "").strip()
         item["categoria_comercial"] = categoria_comercial_produto(item)
+        if usar_taxonomia_catalogo:
+            item["categoria_publica"] = item["categoria_origem"] or "Sem categoria"
+            item["subcategoria_publica"] = item["subcategoria"] or "Sem subcategoria"
+        else:
+            item["categoria_publica"] = item["categoria_comercial"] or "Festas & Personalizados"
+            item["subcategoria_publica"] = ""
         saida.append(item)
-    saida.sort(key=lambda x: (
-        not bool(x.get("destaque")),
-        _ordem_categoria_comercial(str(x.get("categoria_comercial") or "")),
-        str(x.get("nome") or "").casefold(),
-    ))
+
+    if usar_taxonomia_catalogo:
+        saida.sort(key=lambda x: (
+            not bool(x.get("destaque")),
+            str(x.get("categoria_publica") or "").casefold(),
+            str(x.get("subcategoria_publica") or "").casefold(),
+            str(x.get("nome") or "").casefold(),
+        ))
+    else:
+        saida.sort(key=lambda x: (
+            not bool(x.get("destaque")),
+            _ordem_categoria_comercial(str(x.get("categoria_comercial") or "")),
+            str(x.get("nome") or "").casefold(),
+        ))
     return saida
 
 
-def resumir_vitrine(catalogo: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
-    produtos = selecionar_produtos_vitrine(catalogo)
-    presentes = {str(x.get("categoria_comercial") or "Festas & Personalizados").strip() for x in produtos}
-    categorias = [cat for cat in CATEGORIAS_COMERCIAIS if cat in presentes]
+def resumir_vitrine(
+    catalogo: Iterable[Dict[str, Any]],
+    *,
+    usar_taxonomia_catalogo: bool = False,
+) -> Dict[str, Any]:
+    produtos = selecionar_produtos_vitrine(catalogo, usar_taxonomia_catalogo=usar_taxonomia_catalogo)
+    if usar_taxonomia_catalogo:
+        categorias = sorted(
+            {str(x.get("categoria_publica") or "Sem categoria").strip() or "Sem categoria" for x in produtos},
+            key=str.casefold,
+        )
+        subcategorias_por_categoria: Dict[str, List[str]] = {}
+        for categoria in categorias:
+            subs = sorted(
+                {
+                    str(x.get("subcategoria_publica") or "Sem subcategoria").strip() or "Sem subcategoria"
+                    for x in produtos
+                    if str(x.get("categoria_publica") or "Sem categoria").strip() == categoria
+                },
+                key=str.casefold,
+            )
+            subcategorias_por_categoria[categoria] = subs
+        total_subcategorias = len({
+            (str(x.get("categoria_publica") or "Sem categoria").strip(), str(x.get("subcategoria_publica") or "Sem subcategoria").strip())
+            for x in produtos
+        })
+        sem_subcategoria = sum(1 for x in produtos if str(x.get("subcategoria_publica") or "").strip() == "Sem subcategoria")
+    else:
+        presentes = {str(x.get("categoria_comercial") or "Festas & Personalizados").strip() for x in produtos}
+        categorias = [cat for cat in CATEGORIAS_COMERCIAIS if cat in presentes]
+        subcategorias_por_categoria = {}
+        total_subcategorias = 0
+        sem_subcategoria = 0
+
     return {
         "produtos": produtos,
         "total": len(produtos),
         "destaques": sum(1 for x in produtos if x.get("destaque")),
         "categorias": categorias,
         "total_categorias": len(categorias),
+        "subcategorias_por_categoria": subcategorias_por_categoria,
+        "total_subcategorias": total_subcategorias,
+        "sem_subcategoria": sem_subcategoria,
+        "modo_taxonomia_catalogo": bool(usar_taxonomia_catalogo),
     }
 
 
@@ -172,9 +231,15 @@ def gerar_html_vitrine(
     logo_src: str = "",
     imagem_resolver: ImagemResolver = None,
     modo_preview: bool = True,
+    usar_taxonomia_catalogo: bool = False,
 ) -> str:
-    """Gera HTML autônomo da vitrine. Nenhuma publicação é realizada."""
-    resumo = resumir_vitrine(catalogo)
+    """Gera HTML autônomo da vitrine. Nenhuma publicação é realizada.
+
+    Quando ``usar_taxonomia_catalogo`` é True, Categoria e Subcategoria do
+    Catálogo Oficial viram a navegação hierárquica da prévia HF45.3. O padrão
+    False preserva integralmente o comportamento público homologado no HF44.
+    """
+    resumo = resumir_vitrine(catalogo, usar_taxonomia_catalogo=usar_taxonomia_catalogo)
     produtos = resumo["produtos"]
     categorias = resumo["categorias"]
 
@@ -194,12 +259,29 @@ def gerar_html_vitrine(
     for cat in categorias:
         chips.append(f'<button class="filter" data-cat="{html.escape(_slug(cat), quote=True)}">{html.escape(cat)}</button>')
 
+    subchips: List[str] = []
+    if usar_taxonomia_catalogo:
+        subchips.append('<button class="subfilter active" data-parent="*" data-sub="todos">Todas as subcategorias</button>')
+        for cat in categorias:
+            parent = _slug(cat)
+            for sub in resumo.get("subcategorias_por_categoria", {}).get(cat, []):
+                subchips.append(
+                    f'<button class="subfilter" data-parent="{html.escape(parent, quote=True)}" '
+                    f'data-sub="{html.escape(_slug(sub), quote=True)}">{html.escape(sub)}</button>'
+                )
+    subfilters_html = (
+        '<div class="subfilters" id="subfilters" hidden><span class="subfilters-label">Subcategoria:</span>'
+        + ''.join(subchips) + '</div>'
+        if usar_taxonomia_catalogo else ''
+    )
+
     cards: List[str] = []
     for item in produtos:
         nome = str(item.get("nome") or "Produto").strip() or "Produto"
         descricao = str(item.get("descricao") or "").strip()
         categoria_origem = str(item.get("categoria_origem") or item.get("categoria") or "").strip()
-        categoria = str(item.get("categoria_comercial") or "Festas & Personalizados").strip() or "Festas & Personalizados"
+        categoria = str(item.get("categoria_publica") or item.get("categoria_comercial") or "Festas & Personalizados").strip() or "Festas & Personalizados"
+        subcategoria_publica = str(item.get("subcategoria_publica") or "").strip() if usar_taxonomia_catalogo else ""
         exibir_preco = bool(item.get("exibir_preco_site")) and bool(str(item.get("preco") or "").strip())
         preco = _preco_br(item.get("preco")) if exibir_preco else ""
         img = str(item.get("imagem_principal") or "").strip()
@@ -225,17 +307,20 @@ def gerar_html_vitrine(
             opcoes_html = f'<div class="options"><strong>Opções:</strong> {html.escape(texto_opcoes)}</div>'
         msg = quote(f"Olá! Vim pelo site da AlphaFest e gostaria de um orçamento para: {nome}. Quero definir tamanho/personalização, cor, quantidade, material e prazo.")
         href = f"https://wa.me/{numero}?text={msg}" if numero else "#"
-        busca = " ".join([nome, descricao, categoria, categoria_origem, item.get("subcategoria") or "", item.get("material") or "", " ".join(item.get("processos") or [])])
+        busca = " ".join([nome, descricao, categoria, categoria_origem, subcategoria_publica, item.get("subcategoria") or "", item.get("material") or "", " ".join(item.get("processos") or [])])
         busca = unicodedata.normalize("NFKD", busca).encode("ascii", "ignore").decode("ascii").casefold()
         badge = '<span class="badge">⭐ Destaque</span>' if item.get("destaque") else ""
         descricao_curta = descricao[:280] + ("…" if len(descricao) > 280 else "")
         preco_html = f'<div class="price">{html.escape(preco)}</div>' if preco else ""
         footer_classe = "card-footer" if preco else "card-footer no-price"
+        sub_data = html.escape(_slug(subcategoria_publica), quote=True) if subcategoria_publica else ""
+        subcategoria_html = f'<div class="subcategory">{html.escape(subcategoria_publica)}</div>' if subcategoria_publica else ""
         cards.append(
-            f'''<article class="product-card" data-cat="{html.escape(_slug(categoria), quote=True)}" data-search="{html.escape(busca, quote=True)}">
+            f'''<article class="product-card" data-cat="{html.escape(_slug(categoria), quote=True)}" data-sub="{sub_data}" data-search="{html.escape(busca, quote=True)}">
                 <div class="photo">{imagem_html}{badge}</div>
                 <div class="card-body">
                     <div class="category">{html.escape(categoria)}</div>
+                    {subcategoria_html}
                     <h3>{html.escape(nome)}</h3>
                     <p>{html.escape(descricao_curta)}</p>
                     {opcoes_html}
@@ -245,8 +330,64 @@ def gerar_html_vitrine(
         )
 
     logo = f'<img class="brand-logo" src="{html.escape(str(logo_src), quote=True)}" alt="AlphaFest">' if logo_src else '<div class="brand-word">AlphaFest</div>'
-    preview_bar = '<div class="preview-bar">PRÉVIA INTERNA HF40 · AINDA NÃO PUBLICADA</div>' if modo_preview else ""
+    if modo_preview:
+        preview_bar = (
+            '<div class="preview-bar">PRÉVIA INTERNA HF45.3 · CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
+            if usar_taxonomia_catalogo
+            else '<div class="preview-bar">PRÉVIA INTERNA HF40 · AINDA NÃO PUBLICADA</div>'
+        )
+    else:
+        preview_bar = ""
     vazio = '<div class="empty">Nenhum produto pronto está marcado para o site.</div>' if not cards else ""
+    rotulo_categorias = "categorias do Catálogo" if usar_taxonomia_catalogo else "categorias comerciais"
+    texto_escolha = "Pesquise ou escolha uma categoria e depois uma subcategoria." if usar_taxonomia_catalogo else "Pesquise ou escolha uma categoria."
+
+    if usar_taxonomia_catalogo:
+        script_filtros = r"""
+(function(){
+  let cat='todos', sub='todos';
+  const cards=[...document.querySelectorAll('.product-card')];
+  const input=document.getElementById('search');
+  const count=document.getElementById('result-count');
+  const subbox=document.getElementById('subfilters');
+  const subbuttons=[...document.querySelectorAll('.subfilter')];
+  function norm(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}
+  function resetSub(){
+    sub='todos';
+    subbuttons.forEach(b=>{
+      const geral=b.dataset.sub==='todos';
+      const pertence=b.dataset.parent===cat;
+      b.hidden=!(geral||pertence);
+      b.classList.toggle('active',geral);
+    });
+    if(subbox) subbox.hidden=(cat==='todos');
+  }
+  function apply(){
+    const q=norm(input.value); let n=0;
+    cards.forEach(c=>{
+      const okCat=cat==='todos'||c.dataset.cat===cat;
+      const okSub=sub==='todos'||c.dataset.sub===sub;
+      const okQ=!q||norm(c.dataset.search).includes(q);
+      const ok=okCat&&okSub&&okQ;
+      c.style.display=ok?'flex':'none'; if(ok)n++;
+    });
+    count.textContent=n+' produto(s)';
+  }
+  document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); cat=b.dataset.cat; resetSub(); apply();
+  }));
+  subbuttons.forEach(b=>b.addEventListener('click',()=>{
+    subbuttons.forEach(x=>x.classList.remove('active')); b.classList.add('active');
+    sub=b.dataset.sub; apply();
+  }));
+  input.addEventListener('input',apply); resetSub(); apply();
+})();
+"""
+    else:
+        script_filtros = r"""
+(function(){let cat='todos';const cards=[...document.querySelectorAll('.product-card')];const input=document.getElementById('search');const count=document.getElementById('result-count');function norm(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}function apply(){const q=norm(input.value);let n=0;cards.forEach(c=>{const okCat=cat==='todos'||c.dataset.cat===cat;const okQ=!q||norm(c.dataset.search).includes(q);const ok=okCat&&okQ;c.style.display=ok?'flex':'none';if(ok)n++;});count.textContent=n+' produto(s)';}document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');cat=b.dataset.cat;apply();}));input.addEventListener('input',apply);apply();})();
+"""
 
     return f'''<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -266,21 +407,20 @@ def gerar_html_vitrine(
 .hero p{{font-size:18px;line-height:1.6;color:#50657f;max-width:720px}} .hero-actions{{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}} .secondary{{display:inline-flex;text-decoration:none;color:var(--ink);border:1px solid var(--line);background:#fff;padding:12px 17px;border-radius:12px;font-weight:850}}
 .hero-card{{background:#fff;border:1px solid var(--line);border-radius:24px;padding:26px;box-shadow:0 24px 60px rgba(11,103,198,.12)}} .hero-stat{{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}} .stat{{padding:16px;border-radius:16px;background:var(--soft)}} .stat strong{{display:block;font-size:28px;color:var(--blue)}} .stat span{{font-size:12px;color:#60748e}}
 .main{{max-width:1240px;margin:auto;padding:36px 22px 70px}} .toolbar{{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}} .search{{flex:1;min-width:260px;position:relative}} .search input{{width:100%;border:1px solid var(--line);border-radius:14px;padding:14px 16px 14px 42px;font-size:15px;outline:none;background:#fff}} .search:before{{content:'🔎';position:absolute;left:14px;top:13px}}
-.filters{{display:flex;gap:8px;overflow-x:auto;padding:2px 0 14px;scrollbar-width:thin}} .filter{{border:1px solid var(--line);background:#fff;color:var(--ink);padding:9px 13px;border-radius:999px;white-space:nowrap;font-weight:800;cursor:pointer}} .filter.active{{background:var(--blue);border-color:var(--blue);color:#fff}}
+.filters{{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:thin}} .filter{{border:1px solid var(--line);background:#fff;color:var(--ink);padding:9px 13px;border-radius:999px;white-space:nowrap;font-weight:800;cursor:pointer}} .filter.active{{background:var(--blue);border-color:var(--blue);color:#fff}}
+.subfilters{{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:2px 0 16px;scrollbar-width:thin}} .subfilters[hidden]{{display:none}} .subfilters-label{{font-size:12px;font-weight:900;color:#60748e;white-space:nowrap}} .subfilter{{border:1px solid #cfe0ee;background:#f7fbff;color:#31526f;padding:8px 12px;border-radius:999px;white-space:nowrap;font-weight:800;cursor:pointer}} .subfilter.active{{background:#e8f4ff;border-color:#7db8e8;color:var(--blue)}}
 .section-head{{display:flex;justify-content:space-between;gap:18px;align-items:end;margin:20px 0}} .section-head h2{{font-size:30px;margin:0}} .section-head p{{margin:5px 0 0;color:#667b94}} #result-count{{font-weight:800;color:var(--blue);white-space:nowrap}}
 .grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}} .product-card{{border:1px solid var(--line);border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 10px 30px rgba(20,37,61,.06);display:flex;flex-direction:column;transition:.18s}} .product-card:hover{{transform:translateY(-3px);box-shadow:0 16px 36px rgba(20,37,61,.11)}}
 .photo{{position:relative;background:var(--soft);aspect-ratio:4/3;overflow:hidden}} .photo img{{width:100%;height:100%;object-fit:cover;display:block}} .placeholder{{height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#84a9ca}} .badge{{position:absolute;top:12px;left:12px;background:#fff;color:#a26100;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:900;box-shadow:0 3px 12px rgba(0,0,0,.12)}}
-.card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .category{{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:900;color:var(--blue)}} .card-body h3{{font-size:20px;line-height:1.15;margin:7px 0 10px}} .card-body p{{font-size:14px;line-height:1.55;color:#60748e;margin:0 0 12px;flex:1}} .options{{font-size:12px;color:#60748e;margin:0 0 12px}} .card-footer{{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid #edf3f8;padding-top:14px}} .card-footer.no-price .cta{{width:100%}} .price{{font-weight:950;font-size:17px}}
+.card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .category{{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:900;color:var(--blue)}} .subcategory{{font-size:12px;font-weight:800;color:#6a7f97;margin-top:4px}} .card-body h3{{font-size:20px;line-height:1.15;margin:7px 0 10px}} .card-body p{{font-size:14px;line-height:1.55;color:#60748e;margin:0 0 12px;flex:1}} .options{{font-size:12px;color:#60748e;margin:0 0 12px}} .card-footer{{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid #edf3f8;padding-top:14px}} .card-footer.no-price .cta{{width:100%}} .price{{font-weight:950;font-size:17px}}
 .empty{{padding:50px;text-align:center;border:1px dashed var(--line);border-radius:18px;color:#60748e}} .mobile-whatsapp{{display:none}} .footer{{background:#10243c;color:#d7e8f7}} .footer-in{{max-width:1240px;margin:auto;padding:34px 22px;display:flex;gap:24px;justify-content:space-between;align-items:center}} .footer strong{{color:#fff}} .footer small{{color:#9fb7cb}}
 @media(max-width:900px){{.hero-in{{grid-template-columns:1fr}}.hero-card{{display:none}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
-@media(max-width:620px){{body{{padding-bottom:76px}}.preview-bar{{font-size:9px;padding:6px 10px}}.brand-copy{{display:none}}.ghost{{display:none}}.header-in{{padding:8px 12px;gap:8px}}.brand-logo{{width:54px;height:44px}}.header-actions .cta{{padding:10px 12px;font-size:13px;box-shadow:none}}.hero-in{{padding:30px 14px 26px}}.eyebrow{{font-size:11px}}.hero h1{{font-size:36px;line-height:1.02;margin:9px 0 14px}}.hero p{{font-size:15px;line-height:1.5}}.hero-actions{{gap:8px;margin-top:18px}}.hero-actions>a{{width:100%;min-height:46px}}.main{{padding:22px 12px 38px}}.section-head{{align-items:flex-start;flex-direction:column;gap:6px;margin:14px 0}}.section-head h2{{font-size:25px}}.search{{min-width:100%}}.search input{{font-size:16px;padding-top:13px;padding-bottom:13px}}.filters{{gap:7px;padding-bottom:12px}}.filter{{padding:10px 13px;min-height:42px}}.grid{{grid-template-columns:1fr;gap:16px}}.product-card{{border-radius:16px;box-shadow:0 7px 22px rgba(20,37,61,.07)}}.product-card:hover{{transform:none}}.photo{{aspect-ratio:4/3}}.card-body{{padding:15px}}.card-body h3{{font-size:19px}}.card-body p{{font-size:14px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}}.card-footer{{padding-top:12px}}.card-footer .cta{{min-height:46px}}.footer-in{{flex-direction:column;align-items:flex-start;padding-bottom:28px}}.mobile-whatsapp{{display:flex;position:fixed;left:12px;right:12px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50;align-items:center;justify-content:center;background:var(--green);color:#fff;text-decoration:none;font-weight:950;border-radius:14px;min-height:52px;box-shadow:0 10px 28px rgba(20,37,61,.25);border:2px solid rgba(255,255,255,.9)}}}}
+@media(max-width:620px){{body{{padding-bottom:76px}}.preview-bar{{font-size:9px;padding:6px 10px}}.brand-copy{{display:none}}.ghost{{display:none}}.header-in{{padding:8px 12px;gap:8px}}.brand-logo{{width:54px;height:44px}}.header-actions .cta{{padding:10px 12px;font-size:13px;box-shadow:none}}.hero-in{{padding:30px 14px 26px}}.eyebrow{{font-size:11px}}.hero h1{{font-size:36px;line-height:1.02;margin:9px 0 14px}}.hero p{{font-size:15px;line-height:1.5}}.hero-actions{{gap:8px;margin-top:18px}}.hero-actions>a{{width:100%;min-height:46px}}.main{{padding:22px 12px 38px}}.section-head{{align-items:flex-start;flex-direction:column;gap:6px;margin:14px 0}}.section-head h2{{font-size:25px}}.search{{min-width:100%}}.search input{{font-size:16px;padding-top:13px;padding-bottom:13px}}.filters{{gap:7px;padding-bottom:9px}}.filter{{padding:10px 13px;min-height:42px}}.subfilters{{gap:7px;padding-bottom:12px}}.subfilter{{padding:9px 12px;min-height:40px}}.grid{{grid-template-columns:1fr;gap:16px}}.product-card{{border-radius:16px;box-shadow:0 7px 22px rgba(20,37,61,.07)}}.product-card:hover{{transform:none}}.photo{{aspect-ratio:4/3}}.card-body{{padding:15px}}.card-body h3{{font-size:19px}}.card-body p{{font-size:14px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}}.card-footer{{padding-top:12px}}.card-footer .cta{{min-height:46px}}.footer-in{{flex-direction:column;align-items:flex-start;padding-bottom:28px}}.mobile-whatsapp{{display:flex;position:fixed;left:12px;right:12px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50;align-items:center;justify-content:center;background:var(--green);color:#fff;text-decoration:none;font-weight:950;border-radius:14px;min-height:52px;box-shadow:0 10px 28px rgba(20,37,61,.25);border:2px solid rgba(255,255,255,.9)}}}}
 </style></head>
 <body>{preview_bar}
 <header class="header"><div class="header-in"><a class="brand" href="#inicio">{logo}<div class="brand-copy"><strong>{html.escape(nome_empresa)}</strong><span>{html.escape(subtitulo)}</span></div></a><div class="header-actions"><a class="ghost" href="#produtos">Ver produtos</a><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Falar no WhatsApp</a></div></div></header>
-<section class="hero" id="inicio"><div class="hero-in"><div><div class="eyebrow">Personalização que vira presença</div><h1>Seu evento, sua marca, <span>do seu jeito.</span></h1><p>{html.escape(slogan)} Escolha uma ideia na vitrine e fale com a AlphaFest para personalizar detalhes, quantidade e prazo.</p><div class="hero-actions"><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Explorar produtos ↓</a></div></div><aside class="hero-card"><div class="eyebrow">Vitrine AlphaFest</div><h2>Personalizados & Balões</h2><p>Ideias selecionadas para você encontrar uma referência e pedir seu orçamento.</p><div class="hero-stat"><div class="stat"><strong>{resumo['total']}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{resumo['total_categorias']}</strong><span>categorias comerciais</span></div></div></aside></div></section>
-<main class="main" id="produtos"><div class="section-head"><div><h2>Encontre seu personalizado</h2><p>Pesquise ou escolha uma categoria.</p></div><div id="result-count">{resumo['total']} produto(s)</div></div><div class="toolbar"><label class="search"><input id="search" type="search" placeholder="Buscar produto, categoria ou descrição..."></label></div><div class="filters">{''.join(chips)}</div><div class="grid" id="grid">{''.join(cards)}</div>{vazio}</main>
+<section class="hero" id="inicio"><div class="hero-in"><div><div class="eyebrow">Personalização que vira presença</div><h1>Seu evento, sua marca, <span>do seu jeito.</span></h1><p>{html.escape(slogan)} Escolha uma ideia na vitrine e fale com a AlphaFest para personalizar detalhes, quantidade e prazo.</p><div class="hero-actions"><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Explorar produtos ↓</a></div></div><aside class="hero-card"><div class="eyebrow">Vitrine AlphaFest</div><h2>Personalizados & Balões</h2><p>Ideias selecionadas para você encontrar uma referência e pedir seu orçamento.</p><div class="hero-stat"><div class="stat"><strong>{resumo['total']}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{resumo['total_categorias']}</strong><span>{html.escape(rotulo_categorias)}</span></div></div></aside></div></section>
+<main class="main" id="produtos"><div class="section-head"><div><h2>Encontre seu personalizado</h2><p>{html.escape(texto_escolha)}</p></div><div id="result-count">{resumo['total']} produto(s)</div></div><div class="toolbar"><label class="search"><input id="search" type="search" placeholder="Buscar produto, categoria, subcategoria ou descrição..."></label></div><div class="filters">{''.join(chips)}</div>{subfilters_html}<div class="grid" id="grid">{''.join(cards)}</div>{vazio}</main>
 <a class="mobile-whatsapp" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Pedir orçamento</a>
 <footer class="footer"><div class="footer-in"><div><strong>{html.escape(nome_empresa)}</strong><br><small>{html.escape(subtitulo)}{(' · ' + html.escape(local)) if local else ''}</small></div><div>{html.escape(slogan)}</div></div></footer>
-<script>
-(function(){{let cat='todos';const cards=[...document.querySelectorAll('.product-card')];const input=document.getElementById('search');const count=document.getElementById('result-count');function norm(s){{return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}}function apply(){{const q=norm(input.value);let n=0;cards.forEach(c=>{{const okCat=cat==='todos'||c.dataset.cat===cat;const okQ=!q||norm(c.dataset.search).includes(q);const ok=okCat&&okQ;c.style.display=ok?'flex':'none';if(ok)n++;}});count.textContent=n+' produto(s)';}}document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');cat=b.dataset.cat;apply();}}));input.addEventListener('input',apply);apply();}})();
-</script></body></html>'''
+<script>{script_filtros}</script></body></html>'''
