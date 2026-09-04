@@ -14472,6 +14472,121 @@ def _i89_rl_galeria_produto(produto, largura=44 * mm):
     return galeria
 
 
+
+def gerar_pdf_revisao_catalogo_a4(produtos):
+    """HF45.1 — folha simples A4 para revisão manual de categoria/subcategoria.
+
+    Inclui todo o Catálogo Oficial (ativos e inativos), 6 produtos por página,
+    com foto, nome, classificação atual e espaço para a Anna anotar correções.
+    Não altera nenhum cadastro.
+    """
+    if not all([SimpleDocTemplate, Paragraph, Table, TableStyle, RLImage, PageBreak, A4, mm]):
+        return b""
+
+    itens = [dict(p or {}) for p in (produtos or [])]
+    itens.sort(key=lambda p: normalizar_identidade_produto(p.get("Nome", "")))
+    if not itens:
+        return b""
+
+    saida = io.BytesIO()
+    doc = SimpleDocTemplate(
+        saida,
+        pagesize=A4,
+        leftMargin=12 * mm,
+        rightMargin=12 * mm,
+        topMargin=22 * mm,
+        bottomMargin=12 * mm,
+        title="Folha de revisão do Catálogo AlphaFest",
+        author="AlphaFest",
+    )
+
+    estilos = getSampleStyleSheet()
+    cor_texto = rl_colors.HexColor("#17324a")
+    cor_muted = rl_colors.HexColor("#667788")
+    cor_borda = rl_colors.HexColor("#cfd9e2")
+    cor_fundo = rl_colors.HexColor("#f7f9fb")
+    estilo_nome = ParagraphStyle(
+        "hf451_nome", parent=estilos["BodyText"], fontName="Helvetica-Bold",
+        fontSize=9.2, leading=11, textColor=cor_texto, spaceAfter=2,
+    )
+    estilo_info = ParagraphStyle(
+        "hf451_info", parent=estilos["BodyText"], fontName="Helvetica",
+        fontSize=7.7, leading=10, textColor=cor_muted,
+    )
+    estilo_corr = ParagraphStyle(
+        "hf451_corr", parent=estilos["BodyText"], fontName="Helvetica",
+        fontSize=7.8, leading=11, textColor=cor_texto,
+    )
+
+    story = []
+    total = len(itens)
+    por_pagina = 6
+    for pos, prod in enumerate(itens, 1):
+        midias = _catalogo_midias_resumo(prod)
+        imagens = list(midias.get("imagens") or [])
+        imagem = _i89_rl_imagem(imagens[0] if imagens else "", 29 * mm, 29 * mm)
+
+        nome = html.escape(str(prod.get("Nome") or "Produto"))
+        categoria = html.escape(str(prod.get("Categoria") or "Sem categoria").strip() or "Sem categoria")
+        subcategoria = html.escape(str(prod.get("Subcategoria") or "Sem subcategoria").strip() or "Sem subcategoria")
+        status = "Ativo" if prod.get("Ativo", True) else "Inativo"
+
+        bloco_atual = [
+            Paragraph(f"<b>{pos}/{total} · {nome}</b>", estilo_nome),
+            Paragraph(f"<b>Categoria atual:</b> {categoria}", estilo_info),
+            Paragraph(f"<b>Subcategoria atual:</b> {subcategoria}", estilo_info),
+            Paragraph(f"<b>Status:</b> {status}", estilo_info),
+        ]
+        bloco_correcao = Paragraph(
+            "<b>Correção da Anna</b><br/>"
+            "Categoria: ___________________________________<br/><br/>"
+            "Subcategoria: ________________________________",
+            estilo_corr,
+        )
+
+        card = Table(
+            [[imagem, bloco_atual, bloco_correcao]],
+            colWidths=[33 * mm, 70 * mm, 83 * mm],
+            rowHeights=[38 * mm],
+            hAlign="LEFT",
+        )
+        card.setStyle(TableStyle([
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("BOX", (0,0), (-1,-1), 0.55, cor_borda),
+            ("INNERGRID", (0,0), (-1,-1), 0.35, cor_borda),
+            ("BACKGROUND", (1,0), (1,0), cor_fundo),
+            ("LEFTPADDING", (0,0), (-1,-1), 5),
+            ("RIGHTPADDING", (0,0), (-1,-1), 5),
+            ("TOPPADDING", (0,0), (-1,-1), 5),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+        ]))
+        story.append(card)
+        if pos % por_pagina == 0 and pos < total:
+            story.append(PageBreak())
+        elif pos < total:
+            story.append(Spacer(1, 1.5 * mm))
+
+    def cabecalho_rodape(canvas, doc_obj):
+        canvas.saveState()
+        canvas.setFillColor(cor_texto)
+        canvas.setFont("Helvetica-Bold", 11)
+        canvas.drawString(12 * mm, A4[1] - 13 * mm, "AlphaFest — Revisão de categorias e subcategorias")
+        canvas.setFillColor(cor_muted)
+        canvas.setFont("Helvetica", 7.5)
+        canvas.drawRightString(A4[0] - 12 * mm, A4[1] - 13 * mm, f"{total} produtos · 6 por página")
+        canvas.setStrokeColor(cor_borda)
+        canvas.line(12 * mm, A4[1] - 16 * mm, A4[0] - 12 * mm, A4[1] - 16 * mm)
+        canvas.setFont("Helvetica", 7)
+        canvas.drawCentredString(A4[0] / 2, 6 * mm, f"Uso interno para conferência manual · Página {doc_obj.page}")
+        canvas.restoreState()
+
+    try:
+        doc.build(story, onFirstPage=cabecalho_rodape, onLaterPages=cabecalho_rodape)
+        return saida.getvalue()
+    except Exception:
+        return b""
+
+
 def gerar_pdf_catalogo_i89(
     produtos,
     titulo="Catálogo AlphaFest",
@@ -32253,6 +32368,22 @@ if pagina_atual == "catalogo":
             formulario_catalogo(None)
 
         with aba_lista:
+            st.markdown("#### 🖨️ Revisão de categorias e subcategorias")
+            st.caption(
+                "HF45.1: gera uma folha A4 simples com todos os produtos do Catálogo Oficial, "
+                "6 por página, para a Anna anotar correções à mão. Nenhum cadastro é alterado."
+            )
+            _pdf_revisao_hf451 = gerar_pdf_revisao_catalogo_a4(catalogo) if catalogo else b""
+            st.download_button(
+                "🖨️ Baixar folha de revisão A4 — todos os produtos",
+                data=_pdf_revisao_hf451,
+                file_name="alphafest_revisao_categorias_subcategorias_A4.pdf",
+                mime="application/pdf",
+                key="hf451_pdf_revisao_catalogo",
+                use_container_width=True,
+                disabled=not bool(_pdf_revisao_hf451),
+            )
+            st.divider()
             termo_cat = st.text_input(
                 "🔎 Pesquisar produto ou categoria",
                 key="pesquisa_catalogo",

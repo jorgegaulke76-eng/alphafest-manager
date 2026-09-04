@@ -1018,3 +1018,9 @@ hangelog
 - API Token não é persistido em bancos/JSON; pode vir de Streamlit Secrets/ambiente ou ser usado somente na sessão.
 - Mantém ZIP de produção como fallback manual e não altera DNS, MX, webmail, Custom Domains ou Redirect Rules.
 - Atualiza o estado do `www` para o redirecionamento 301 já homologado.
+
+## 20.4.9-I8.13.5-HF45.1 — Folha A4 de revisão do Catálogo
+- Adiciona em `Catálogo → Produtos` um PDF A4 simples para revisão manual de categoria e subcategoria.
+- Inclui todos os produtos cadastrados, ativos e inativos, em ordem alfabética, 6 por página.
+- Mostra foto, nome, categoria/subcategoria atuais e espaço para correção da Anna.
+- Geração somente leitura; não altera o Catálogo Oficial nem o fluxo de publicação HF44.
