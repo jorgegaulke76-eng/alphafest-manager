@@ -1024,3 +1024,10 @@ hangelog
 - Inclui todos os produtos cadastrados, ativos e inativos, em ordem alfabética, 6 por página.
 - Mostra foto, nome, categoria/subcategoria atuais e espaço para correção da Anna.
 - Geração somente leitura; não altera o Catálogo Oficial nem o fluxo de publicação HF44.
+
+## 20.4.9-I8.13.5-HF45.1-HF1 — Geração A4 sob demanda
+- Corrige travamento/lentidão da aba `Catálogo → Produtos` causado pela geração automática do PDF em todo rerun.
+- A folha A4 agora é preparada somente ao clicar em `🖨️ Preparar folha A4` e, depois, liberada para download.
+- Fotos pequenas são carregadas em paralelo com timeout curto; foto indisponível não bloqueia o relatório.
+- Mantém todos os produtos, 6 por página, categoria/subcategoria atuais e espaço para correção manual da Anna.
+- Não altera cadastros e preserva integralmente o HF44 de publicação Cloudflare.

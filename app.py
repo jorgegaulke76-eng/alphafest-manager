@@ -14474,11 +14474,12 @@ def _i89_rl_galeria_produto(produto, largura=44 * mm):
 
 
 def gerar_pdf_revisao_catalogo_a4(produtos):
-    """HF45.1 — folha simples A4 para revisão manual de categoria/subcategoria.
+    """HF45.1-HF1 — folha simples A4 para revisão manual de categoria/subcategoria.
 
     Inclui todo o Catálogo Oficial (ativos e inativos), 6 produtos por página,
     com foto, nome, classificação atual e espaço para a Anna anotar correções.
-    Não altera nenhum cadastro.
+    A geração é sob demanda na interface. As fotos são carregadas em paralelo para
+    evitar travar a aba Produtos durante os reruns normais do Streamlit.
     """
     if not all([SimpleDocTemplate, Paragraph, Table, TableStyle, RLImage, PageBreak, A4, mm]):
         return b""
@@ -14487,6 +14488,71 @@ def gerar_pdf_revisao_catalogo_a4(produtos):
     itens.sort(key=lambda p: normalizar_identidade_produto(p.get("Nome", "")))
     if not itens:
         return b""
+
+    # Só uma imagem pequena por produto. Pré-carrega URLs em paralelo e com timeout
+    # curto; foto indisponível vira "Sem foto" sem impedir a geração da folha.
+    origens = []
+    for prod in itens:
+        try:
+            midias = _catalogo_midias_resumo(prod)
+            imagens = list(midias.get("imagens") or [])
+            origens.append(str(imagens[0] if imagens else "").strip())
+        except Exception:
+            origens.append("")
+
+    unicas = [x for x in dict.fromkeys(origens) if x]
+    bytes_por_origem = {}
+
+    def _hf451_carregar_imagem(origem):
+        try:
+            if origem.startswith("data:image/") and "," in origem:
+                return origem, base64.b64decode(origem.split(",", 1)[1])
+            if origem.startswith(("http://", "https://")):
+                resposta = requests.get(origem, timeout=3)
+                resposta.raise_for_status()
+                return origem, resposta.content
+            caminho = Path(origem)
+            if caminho.exists() and caminho.is_file():
+                return origem, caminho.read_bytes()
+        except Exception:
+            pass
+        return origem, b""
+
+    if unicas:
+        try:
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=min(10, len(unicas))) as executor:
+                for origem, bruto in executor.map(_hf451_carregar_imagem, unicas):
+                    bytes_por_origem[origem] = bruto
+        except Exception:
+            for origem in unicas:
+                chave, bruto = _hf451_carregar_imagem(origem)
+                bytes_por_origem[chave] = bruto
+
+    def _hf451_flow_imagem(origem, max_w=29 * mm, max_h=29 * mm):
+        bruto = bytes_por_origem.get(str(origem or "").strip(), b"")
+        if bruto:
+            try:
+                w = h = 1
+                if Image is not None:
+                    with Image.open(io.BytesIO(bruto)) as img:
+                        w, h = img.size
+                escala = min(float(max_w) / max(float(w), 1.0), float(max_h) / max(float(h), 1.0))
+                return RLImage(io.BytesIO(bruto), width=max(1, w * escala), height=max(1, h * escala))
+            except Exception:
+                pass
+        estilo_sem_foto = ParagraphStyle(
+            "hf451_sem_foto", fontName="Helvetica-Bold", fontSize=7.2, leading=9,
+            alignment=TA_CENTER, textColor=rl_colors.HexColor("#778899")
+        )
+        caixa = Table([[Paragraph("Sem foto", estilo_sem_foto)]], colWidths=[max_w], rowHeights=[max_h])
+        caixa.setStyle(TableStyle([
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("ALIGN", (0,0), (-1,-1), "CENTER"),
+            ("BACKGROUND", (0,0), (-1,-1), rl_colors.HexColor("#f3f5f7")),
+            ("BOX", (0,0), (-1,-1), 0.35, rl_colors.HexColor("#d8e0e6")),
+        ]))
+        return caixa
 
     saida = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -14522,9 +14588,7 @@ def gerar_pdf_revisao_catalogo_a4(produtos):
     total = len(itens)
     por_pagina = 6
     for pos, prod in enumerate(itens, 1):
-        midias = _catalogo_midias_resumo(prod)
-        imagens = list(midias.get("imagens") or [])
-        imagem = _i89_rl_imagem(imagens[0] if imagens else "", 29 * mm, 29 * mm)
+        imagem = _hf451_flow_imagem(origens[pos - 1])
 
         nome = html.escape(str(prod.get("Nome") or "Produto"))
         categoria = html.escape(str(prod.get("Categoria") or "Sem categoria").strip() or "Sem categoria")
@@ -14585,7 +14649,6 @@ def gerar_pdf_revisao_catalogo_a4(produtos):
         return saida.getvalue()
     except Exception:
         return b""
-
 
 def gerar_pdf_catalogo_i89(
     produtos,
@@ -32370,19 +32433,57 @@ if pagina_atual == "catalogo":
         with aba_lista:
             st.markdown("#### 🖨️ Revisão de categorias e subcategorias")
             st.caption(
-                "HF45.1: gera uma folha A4 simples com todos os produtos do Catálogo Oficial, "
+                "HF45.1-HF1: prepara sob demanda uma folha A4 simples com todos os produtos do Catálogo Oficial, "
                 "6 por página, para a Anna anotar correções à mão. Nenhum cadastro é alterado."
             )
-            _pdf_revisao_hf451 = gerar_pdf_revisao_catalogo_a4(catalogo) if catalogo else b""
-            st.download_button(
-                "🖨️ Baixar folha de revisão A4 — todos os produtos",
-                data=_pdf_revisao_hf451,
-                file_name="alphafest_revisao_categorias_subcategorias_A4.pdf",
-                mime="application/pdf",
-                key="hf451_pdf_revisao_catalogo",
+
+            # HF45.1-HF1: não gerar o PDF automaticamente em todo rerun do Streamlit.
+            # Com muitas fotos remotas isso bloqueava a aba Produtos antes mesmo de o botão aparecer.
+            _hf451_assinatura = hashlib.sha256(
+                json.dumps(
+                    [
+                        {
+                            "nome": str((p or {}).get("Nome") or ""),
+                            "categoria": str((p or {}).get("Categoria") or ""),
+                            "subcategoria": str((p or {}).get("Subcategoria") or ""),
+                            "ativo": bool((p or {}).get("Ativo", True)),
+                            "imagem": str(((p or {}).get("Imagens") or [""])[0] if isinstance((p or {}).get("Imagens"), list) and ((p or {}).get("Imagens") or []) else ""),
+                        }
+                        for p in (catalogo or [])
+                    ],
+                    ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+            if st.session_state.get("_hf451_pdf_assinatura") != _hf451_assinatura:
+                st.session_state.pop("_hf451_pdf_bytes", None)
+                st.session_state["_hf451_pdf_assinatura"] = _hf451_assinatura
+
+            _hf451_pdf_pronto = st.session_state.get("_hf451_pdf_bytes", b"")
+            _rotulo_gerar_hf451 = "🔄 Atualizar folha A4" if _hf451_pdf_pronto else "🖨️ Preparar folha A4"
+            if st.button(
+                _rotulo_gerar_hf451,
+                key="hf451_preparar_pdf_revisao",
                 use_container_width=True,
-                disabled=not bool(_pdf_revisao_hf451),
-            )
+                disabled=not bool(catalogo),
+            ):
+                with st.spinner("Preparando a folha A4 da Anna…"):
+                    _pdf_novo_hf451 = gerar_pdf_revisao_catalogo_a4(catalogo)
+                if _pdf_novo_hf451:
+                    st.session_state["_hf451_pdf_bytes"] = _pdf_novo_hf451
+                    _hf451_pdf_pronto = _pdf_novo_hf451
+                    st.success(f"Folha A4 preparada com {len(catalogo)} produto(s). Agora é só baixar.")
+                else:
+                    st.error("Não foi possível preparar a folha A4. Nenhum cadastro foi alterado.")
+
+            if _hf451_pdf_pronto:
+                st.download_button(
+                    "⬇️ Baixar folha de revisão A4 — todos os produtos",
+                    data=_hf451_pdf_pronto,
+                    file_name="alphafest_revisao_categorias_subcategorias_A4.pdf",
+                    mime="application/pdf",
+                    key="hf451_pdf_revisao_catalogo",
+                    use_container_width=True,
+                )
             st.divider()
             termo_cat = st.text_input(
                 "🔎 Pesquisar produto ou categoria",
