@@ -559,6 +559,26 @@ def delete_private_3d_file(object_path):
     func = getattr(_cloud_db, "delete_private_3d_file", None) if _cloud_db else None
     return bool(func(object_path)) if callable(func) else False
 
+
+# HF46.1 — armazenamento PRIVADO da Galeria de Trabalhos.
+# Fotos do dia não entram no bucket público do Catálogo e não são publicadas
+# no site até uma etapa posterior e explicitamente aprovada.
+def upload_private_gallery_image(upload, folder="trabalhos"):
+    func = getattr(_cloud_db, "upload_private_gallery_image", None) if _cloud_db else None
+    return str(func(upload, folder=folder) or "") if callable(func) else ""
+
+def read_private_gallery_image(object_path):
+    func = getattr(_cloud_db, "read_private_gallery_image", None) if _cloud_db else None
+    return func(object_path) if callable(func) else None
+
+def delete_private_gallery_image(object_path):
+    func = getattr(_cloud_db, "delete_private_gallery_image", None) if _cloud_db else None
+    return bool(func(object_path)) if callable(func) else False
+
+@st.cache_data(ttl=900, show_spinner=False)
+def _galeria_trabalho_bytes_cache(object_path):
+    return read_private_gallery_image(object_path)
+
 @st.cache_data(ttl=900, show_spinner=False)
 def _biblioteca3d_bytes_cache(object_path):
     return read_private_3d_file(object_path)
@@ -702,6 +722,7 @@ ARQUIVO_CONSUMO_PEDIDOS = "consumo_pedidos_db.json"
 ARQUIVO_PLANEJAMENTO_COMPRAS = "planejamento_compras_db.json"
 ARQUIVO_AGENDA_ANNA_SNAPSHOTS = "agenda_anna_snapshots_db.json"
 ARQUIVO_BIBLIOTECA_3D = "biblioteca_3d_db.json"
+ARQUIVO_GALERIA_TRABALHOS = "galeria_trabalhos_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -10963,6 +10984,284 @@ def salvar_catalogo(lista):
     st.session_state.pop("_thu_i7_periodo_analisado", None)
 
 
+
+
+def carregar_galeria_trabalhos():
+    """HF46.1 — registros internos de fotos dos trabalhos produzidos."""
+    dados = load_document("galeria_trabalhos_db", ARQUIVO_GALERIA_TRABALHOS, [])
+    return dados if isinstance(dados, list) else []
+
+
+def salvar_galeria_trabalhos(lista):
+    if not isinstance(lista, list):
+        raise ValueError("A Galeria de Trabalhos precisa ser uma lista.")
+    return save_document("galeria_trabalhos_db", lista, ARQUIVO_GALERIA_TRABALHOS)
+
+
+def _galeria_id_novo():
+    bruto = f"{agora_local().isoformat()}-{secrets.token_hex(8)}"
+    return "GAL-" + hashlib.sha256(bruto.encode("utf-8")).hexdigest()[:16].upper()
+
+
+def _galeria_produto_por_nome(catalogo, nome):
+    alvo = str(nome or "").strip()
+    if not alvo:
+        return {}
+    for item in catalogo or []:
+        if str((item or {}).get("Nome") or "").strip() == alvo:
+            return dict(item or {})
+    return {}
+
+
+def _galeria_status_registro(item):
+    if bool((item or {}).get("arquivado")):
+        return "Arquivado"
+    if bool((item or {}).get("selecionado_site")):
+        return "Selecionado para futura exposição"
+    if bool((item or {}).get("autorizado_publicacao")):
+        return "Autorizado — aguardando seleção"
+    return "Uso interno"
+
+
+def renderizar_galeria_trabalhos(catalogo):
+    """HF46.1 — coleta diária de fotos sem qualquer publicação no site."""
+    st.markdown("### 📸 Galeria de Trabalhos")
+    st.caption(
+        "HF46.1: espaço interno para a Anna guardar as fotos dos trabalhos entregues. "
+        "As imagens ficam em armazenamento privado. **Nada desta aba é publicado no site.**"
+    )
+    st.info(
+        "💡 Catálogo = o que a AlphaFest vende. Galeria = o que a AlphaFest já produziu. "
+        "A publicação no site será liberada somente em uma etapa posterior, após filtros e aprovação."
+    )
+
+    galeria = carregar_galeria_trabalhos()
+    ativos = [g for g in galeria if not bool((g or {}).get("arquivado"))]
+    autorizados = [g for g in ativos if bool((g or {}).get("autorizado_publicacao"))]
+    selecionados = [g for g in ativos if bool((g or {}).get("selecionado_site"))]
+    total_fotos = sum(len((g or {}).get("fotos") or []) for g in ativos)
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Trabalhos guardados", len(ativos))
+    m2.metric("Fotos privadas", total_fotos)
+    m3.metric("Autorizados", len(autorizados))
+    m4.metric("Pré-selecionados", len(selecionados))
+
+    nomes_produtos = sorted(
+        {str((p or {}).get("Nome") or "").strip() for p in (catalogo or []) if str((p or {}).get("Nome") or "").strip()},
+        key=lambda x: x.casefold(),
+    )
+
+    with st.expander("➕ Registrar fotos do trabalho do dia", expanded=not bool(ativos)):
+        st.caption("Você pode vincular ao Catálogo Oficial para herdar Categoria e Subcategoria automaticamente.")
+        produto_escolhido = st.selectbox(
+            "Produto do Catálogo (opcional)",
+            ["— selecionar / trabalho avulso —"] + nomes_produtos,
+            key="hf461_galeria_produto",
+        )
+        produto_ref = _galeria_produto_por_nome(catalogo, produto_escolhido) if not produto_escolhido.startswith("—") else {}
+        if produto_ref:
+            categoria_auto = str(produto_ref.get("Categoria") or "").strip()
+            subcategoria_auto = str(produto_ref.get("Subcategoria") or "").strip()
+            c1, c2 = st.columns(2)
+            c1.text_input("Categoria", value=categoria_auto, disabled=True, key="hf461_categoria_auto")
+            c2.text_input("Subcategoria", value=subcategoria_auto or "Sem subcategoria", disabled=True, key="hf461_subcategoria_auto")
+            categoria_gal = categoria_auto
+            subcategoria_gal = subcategoria_auto
+        else:
+            c1, c2 = st.columns(2)
+            categoria_gal = c1.text_input("Categoria", key="hf461_categoria_manual", placeholder="Ex.: Festas & Personalizados")
+            subcategoria_gal = c2.text_input("Subcategoria", key="hf461_subcategoria_manual", placeholder="Ex.: Topos de bolo")
+
+        d1, d2, d3 = st.columns(3)
+        tema_gal = d1.text_input("Tema", key="hf461_tema", placeholder="Ex.: Jardim encantado")
+        cor_gal = d2.text_input("Cor / estilo", key="hf461_cor", placeholder="Ex.: Rosa e dourado")
+        ocasiao_gal = d3.text_input("Ocasião", key="hf461_ocasiao", placeholder="Ex.: Aniversário")
+
+        fotos = st.file_uploader(
+            "Fotos do trabalho",
+            type=["png", "jpg", "jpeg", "webp"],
+            accept_multiple_files=True,
+            key="hf461_fotos",
+            help="Até 8 fotos por registro. As imagens são reduzidas para uso de portfólio e guardadas em área privada.",
+        )
+        if fotos and len(fotos) > 8:
+            st.warning("Use no máximo 8 fotos por trabalho. Selecione as melhores imagens do conjunto.")
+
+        observacao_gal = st.text_area(
+            "Observação interna (opcional)",
+            key="hf461_observacao",
+            placeholder="Ex.: foto final antes da embalagem; cliente pediu tons mais claros.",
+        )
+        autorizado_gal = st.checkbox(
+            "✅ Autorizado para futura exposição no site",
+            value=False,
+            key="hf461_autorizado",
+            help="Marque somente quando não houver impedimento de privacidade/uso da imagem.",
+        )
+        selecionado_gal = st.checkbox(
+            "⭐ Pré-selecionar para a futura Galeria do site",
+            value=False,
+            disabled=not autorizado_gal,
+            key="hf461_selecionado_site",
+            help="Ainda não publica. Apenas coloca o trabalho na fila de curadoria da futura galeria.",
+        )
+        destaque_gal = st.checkbox(
+            "✨ Candidato a destaque",
+            value=False,
+            disabled=not autorizado_gal,
+            key="hf461_destaque",
+        )
+
+        if st.button("💾 Guardar fotos na Galeria interna", type="primary", use_container_width=True, key="hf461_salvar"):
+            fotos_validas = list(fotos or [])[:8]
+            if not fotos_validas:
+                st.warning("Selecione pelo menos uma foto.")
+            elif not str(categoria_gal or "").strip():
+                st.warning("Informe a categoria ou vincule o trabalho a um produto do Catálogo.")
+            else:
+                caminhos = []
+                falhou = False
+                with st.spinner("Guardando as fotos em armazenamento privado…"):
+                    for foto in fotos_validas:
+                        caminho = upload_private_gallery_image(foto, folder="trabalhos")
+                        if not caminho:
+                            falhou = True
+                            break
+                        caminhos.append(caminho)
+                if falhou:
+                    for caminho in caminhos:
+                        delete_private_gallery_image(caminho)
+                    st.error(
+                        "Não foi possível confirmar o armazenamento privado de todas as fotos. "
+                        "Nenhum registro foi criado; tente novamente."
+                    )
+                else:
+                    agora = agora_local().strftime("%d/%m/%Y %H:%M")
+                    usuario = obter_usuario_atual()
+                    novo = {
+                        "id": _galeria_id_novo(),
+                        "produto": str(produto_ref.get("Nome") or produto_escolhido if produto_ref else "").strip(),
+                        "categoria": str(categoria_gal or "").strip(),
+                        "subcategoria": str(subcategoria_gal or "").strip(),
+                        "tema": str(tema_gal or "").strip(),
+                        "cor": str(cor_gal or "").strip(),
+                        "ocasiao": str(ocasiao_gal or "").strip(),
+                        "observacao": str(observacao_gal or "").strip(),
+                        "fotos": caminhos,
+                        "autorizado_publicacao": bool(autorizado_gal),
+                        "selecionado_site": bool(selecionado_gal and autorizado_gal),
+                        "destaque": bool(destaque_gal and autorizado_gal),
+                        "arquivado": False,
+                        "criado_em": agora,
+                        "criado_por": str((usuario or {}).get("nome") or "Equipe"),
+                    }
+                    galeria_nova = list(galeria) + [novo]
+                    if salvar_galeria_trabalhos(galeria_nova):
+                        st.success(f"Fotos guardadas com segurança. Registro {novo['id']} criado; nada foi publicado no site.")
+                        st.session_state.pop("hf461_fotos", None)
+                        st.rerun()
+                    else:
+                        for caminho in caminhos:
+                            delete_private_gallery_image(caminho)
+                        st.error("O banco não confirmou o registro. As fotos enviadas nesta tentativa foram descartadas.")
+
+    st.markdown("#### 🗂️ Acervo interno")
+    if not galeria:
+        st.info("A Galeria ainda está vazia. Use o formulário acima para guardar o primeiro trabalho.")
+        return
+
+    categorias_gal = sorted({str((g or {}).get("categoria") or "").strip() for g in galeria if str((g or {}).get("categoria") or "").strip()}, key=lambda x: x.casefold())
+    f1, f2, f3 = st.columns([2, 2, 1])
+    filtro_cat = f1.selectbox("Filtrar categoria", ["Todas"] + categorias_gal, key="hf461_filtro_cat")
+    filtro_status = f2.selectbox(
+        "Filtrar situação",
+        ["Todos", "Uso interno", "Autorizado — aguardando seleção", "Selecionado para futura exposição", "Arquivado"],
+        key="hf461_filtro_status",
+    )
+    mostrar_arquivados = f3.checkbox("Arquivados", value=False, key="hf461_mostrar_arquivados")
+
+    filtrados = []
+    for g in reversed(galeria):
+        if not mostrar_arquivados and bool((g or {}).get("arquivado")):
+            continue
+        if filtro_cat != "Todas" and str((g or {}).get("categoria") or "").strip() != filtro_cat:
+            continue
+        if filtro_status != "Todos" and _galeria_status_registro(g) != filtro_status:
+            continue
+        filtrados.append(g)
+
+    if not filtrados:
+        st.info("Nenhum trabalho encontrado com esses filtros.")
+        return
+
+    # Mostra um conjunto recente por vez para evitar baixar centenas de fotos privadas em um rerun.
+    limite = min(len(filtrados), 20)
+    st.caption(f"Mostrando {limite} de {len(filtrados)} registro(s) encontrados. Os mais recentes aparecem primeiro.")
+    for item in filtrados[:limite]:
+        gid = str(item.get("id") or "registro")
+        with st.container(border=True):
+            foto_paths = list(item.get("fotos") or [])
+            c_img, c_info, c_acoes = st.columns([1.4, 4.2, 2.2])
+            if foto_paths:
+                bruto = _galeria_trabalho_bytes_cache(str(foto_paths[0]))
+                if bruto:
+                    try:
+                        c_img.image(bruto, use_container_width=True)
+                    except Exception:
+                        c_img.write("🖼️")
+                else:
+                    c_img.caption("Foto privada indisponível")
+            else:
+                c_img.write("🖼️")
+
+            titulo = str(item.get("produto") or "Trabalho avulso").strip() or "Trabalho avulso"
+            c_info.markdown(f"**{html.escape(titulo)}**")
+            tax = " › ".join([x for x in [str(item.get("categoria") or "").strip(), str(item.get("subcategoria") or "").strip()] if x])
+            if tax:
+                c_info.caption(tax)
+            detalhes = [
+                f"Tema: {item.get('tema')}" if item.get("tema") else "",
+                f"Cor/estilo: {item.get('cor')}" if item.get("cor") else "",
+                f"Ocasião: {item.get('ocasiao')}" if item.get("ocasiao") else "",
+            ]
+            detalhes = [x for x in detalhes if x]
+            if detalhes:
+                c_info.write(" • ".join(detalhes))
+            c_info.caption(
+                f"{len(foto_paths)} foto(s) • {_galeria_status_registro(item)} • {item.get('criado_em','')} • {item.get('criado_por','Equipe')}"
+            )
+            if item.get("observacao"):
+                c_info.caption("Obs.: " + str(item.get("observacao")))
+
+            if not bool(item.get("arquivado")):
+                if bool(item.get("autorizado_publicacao")) and not bool(item.get("selecionado_site")):
+                    if c_acoes.button("⭐ Pré-selecionar", key=f"hf461_sel_{gid}", use_container_width=True):
+                        for reg in galeria:
+                            if str((reg or {}).get("id")) == gid:
+                                reg["selecionado_site"] = True
+                        if salvar_galeria_trabalhos(galeria):
+                            st.rerun()
+                elif bool(item.get("selecionado_site")):
+                    if c_acoes.button("↩️ Retirar da seleção", key=f"hf461_unsel_{gid}", use_container_width=True):
+                        for reg in galeria:
+                            if str((reg or {}).get("id")) == gid:
+                                reg["selecionado_site"] = False
+                                reg["destaque"] = False
+                        if salvar_galeria_trabalhos(galeria):
+                            st.rerun()
+                else:
+                    c_acoes.caption("🔒 Uso interno — sem autorização para exposição")
+                if c_acoes.button("📦 Arquivar", key=f"hf461_arq_{gid}", use_container_width=True):
+                    for reg in galeria:
+                        if str((reg or {}).get("id")) == gid:
+                            reg["arquivado"] = True
+                            reg["selecionado_site"] = False
+                            reg["destaque"] = False
+                    if salvar_galeria_trabalhos(galeria):
+                        st.rerun()
+            else:
+                c_acoes.caption("📦 Arquivado")
+
 def normalizar_identidade_produto(valor):
     """I8.13.5-HF8 — identidade de produto centralizada no serviço de Catálogo/Orçamento."""
     return _catalogo_normalizar_identidade(valor)
@@ -15392,6 +15691,7 @@ BACKUP_CONFIG_PADRAO = {
 DOCUMENTOS_BACKUP = [
     ("historico_orcamentos", ARQUIVO_HISTORICO, []),
     ("catalogo_db", ARQUIVO_CATALOGO, []),
+    ("galeria_trabalhos_db", ARQUIVO_GALERIA_TRABALHOS, []),
     ("clientes_db", ARQUIVO_CLIENTES, []),
     ("producao_db", ARQUIVO_PRODUCAO, []),
     ("config_empresa", ARQUIVO_EMPRESA, CONFIG_EMPRESA_PADRAO),
@@ -32450,7 +32750,7 @@ if pagina_atual == "catalogo":
             # Nas demais entradas, preservamos a ordem homologada da I8.8.4.
             _cat1_acervo_direto = bool(st.session_state.pop("_cat1_abrir_acervo_direto", False))
             if _cat1_acervo_direto:
-                aba_acervo, aba_gerador, aba_modelos, aba_central, aba_inteligencia, aba_cad, aba_lista, aba_saneamento, aba_cliente = st.tabs([
+                aba_acervo, aba_gerador, aba_modelos, aba_central, aba_inteligencia, aba_cad, aba_lista, aba_galeria, aba_saneamento, aba_cliente = st.tabs([
                     "📚 Acervo histórico",
                     "✨ Gerador I8.7.1",
                     "🧩 Modelos I8.8.3",
@@ -32458,27 +32758,30 @@ if pagina_atual == "catalogo":
                     "📊 Inteligência I8.10.1",
                     "➕ Cadastrar",
                     "📋 Produtos",
+                    "📸 Galeria de Trabalhos",
                     "🧹 Saneamento",
                     "📤 Catálogo para cliente",
                 ])
             else:
                 # I8.8.4: ao entrar pelo atalho da Central da Anna, as ferramentas
                 # liberadas aparecem primeiro e o Gerador já abre como aba padrão.
-                aba_gerador, aba_modelos, aba_central, aba_inteligencia, aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_cliente = st.tabs([
+                aba_gerador, aba_modelos, aba_central, aba_inteligencia, aba_cad, aba_lista, aba_galeria, aba_saneamento, aba_acervo, aba_cliente = st.tabs([
                     "✨ Gerador I8.7.1",
                     "🧩 Modelos I8.8.3",
                     "📤 Central I8.9.2.1",
                     "📊 Inteligência I8.10.1",
                     "➕ Cadastrar",
                     "📋 Produtos",
+                    "📸 Galeria de Trabalhos",
                     "🧹 Saneamento",
                     "📚 Acervo histórico",
                     "📤 Catálogo para cliente",
                 ])
         else:
-            aba_cad, aba_lista, aba_saneamento, aba_acervo, aba_gerador, aba_modelos, aba_central, aba_inteligencia, aba_cliente = st.tabs([
+            aba_cad, aba_lista, aba_galeria, aba_saneamento, aba_acervo, aba_gerador, aba_modelos, aba_central, aba_inteligencia, aba_cliente = st.tabs([
                 "➕ Cadastrar",
                 "📋 Produtos",
+                "📸 Galeria de Trabalhos",
                 "🧹 Saneamento",
                 "📚 Acervo histórico",
                 "✨ Gerador I8.7.1",
@@ -32778,6 +33081,9 @@ if pagina_atual == "catalogo":
                             "valor_unitario": preco_num,
                         })
                         st.success("Produto adicionado ao orçamento. Abra a aba Novo Orçamento.")
+
+        with aba_galeria:
+            renderizar_galeria_trabalhos(catalogo)
 
         with aba_saneamento:
             renderizar_saneamento_catalogo(catalogo)

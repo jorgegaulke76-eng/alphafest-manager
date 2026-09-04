@@ -1,5 +1,13 @@
 
 ## 20.4.9-I8.13.5-HF26 — THU • Plano de amanhã
+
+## 20.4.9-I8.13.5-HF46.1 — Galeria de Trabalhos interna
+
+- Criada área privada para a Anna guardar fotos diárias dos trabalhos finalizados, separada do Catálogo Oficial.
+- Fotos podem ser vinculadas ao produto e recebem Categoria/Subcategoria automaticamente.
+- Autorização, pré-seleção e destaque não publicam nada; servem somente à curadoria futura.
+- Imagens ficam em bucket privado dedicado e entram no backup lógico da Galeria.
+
 - Reaproveita a prevenção da HF25 para preparar o próximo dia.
 - Separa ações em Produção, Materiais e Saídas.
 - Inclui pedidos já Prontos com saída prevista para amanhã.

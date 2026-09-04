@@ -644,6 +644,113 @@ def upload_private_3d_file(upload: Any, folder: str = "modelos") -> str:
         return ""
 
 
+GALERIA_TRABALHOS_BUCKET = "galeriatrabalhos"
+
+
+def _ensure_private_gallery_bucket() -> bool:
+    """Garante um bucket privado separado para as fotos diárias da Galeria."""
+    if not online_configured():
+        return False
+    url, _ = _config()
+    try:
+        response = _SESSION.get(
+            f"{url}/storage/v1/bucket/{GALERIA_TRABALHOS_BUCKET}",
+            headers=_headers(), timeout=TIMEOUT,
+        )
+        if response.ok:
+            return True
+        if response.status_code not in (400, 404):
+            return False
+        create = _SESSION.post(
+            f"{url}/storage/v1/bucket",
+            headers=_headers(),
+            json={"id": GALERIA_TRABALHOS_BUCKET, "name": GALERIA_TRABALHOS_BUCKET, "public": False},
+            timeout=TIMEOUT,
+        )
+        return bool(create.ok or create.status_code in (200, 201, 409))
+    except requests.RequestException:
+        return False
+
+
+def _gallery_image_content(upload: Any) -> tuple[bytes, str, str]:
+    """Reduz fotos de celular para portfólio antes do armazenamento privado."""
+    content = bytes(upload.getbuffer()) if upload is not None else b""
+    content_type = getattr(upload, "type", None) or "image/jpeg"
+    extension = Path(str(getattr(upload, "name", "foto.jpg"))).suffix.lower() or ".jpg"
+    if not content:
+        return b"", content_type, extension
+    try:
+        from PIL import Image, ImageOps
+        import io
+        with Image.open(io.BytesIO(content)) as img:
+            img = ImageOps.exif_transpose(img).convert("RGB")
+            img.thumbnail((1800, 1800))
+            saida = io.BytesIO()
+            img.save(saida, format="WEBP", quality=82, method=6)
+            return saida.getvalue(), "image/webp", ".webp"
+    except Exception:
+        return content, content_type, extension
+
+
+def upload_private_gallery_image(upload: Any, folder: str = "trabalhos") -> str:
+    """Guarda foto da Galeria em bucket privado; sem fallback para bucket público."""
+    if upload is None or not _ensure_private_gallery_bucket():
+        return ""
+    pasta = re.sub(r"[^A-Za-z0-9._/-]", "_", str(folder or "trabalhos").strip()).strip("/") or "trabalhos"
+    content, content_type, extension = _gallery_image_content(upload)
+    if not content:
+        return ""
+    base_name = Path(str(getattr(upload, "name", "foto"))).stem
+    safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", base_name) or "foto"
+    unique_name = f"{datetime.now().strftime('%Y%m%d%H%M%S%f')}_{safe_name}{extension}"
+    object_path = f"{pasta}/{unique_name}"
+    url, _ = _config()
+    encoded_path = quote(object_path, safe="/")
+    try:
+        response = _SESSION.post(
+            f"{url}/storage/v1/object/{GALERIA_TRABALHOS_BUCKET}/{encoded_path}",
+            headers={**_headers(), "Content-Type": content_type, "x-upsert": "false"},
+            data=content, timeout=max(TIMEOUT, 45),
+        )
+        response.raise_for_status()
+        return object_path
+    except requests.RequestException:
+        return ""
+
+
+def read_private_gallery_image(object_path: str) -> bytes | None:
+    caminho = str(object_path or "").strip().lstrip("/")
+    if not caminho or not online_configured():
+        return None
+    url, _ = _config()
+    encoded_path = quote(caminho, safe="/")
+    try:
+        response = _SESSION.get(
+            f"{url}/storage/v1/object/{GALERIA_TRABALHOS_BUCKET}/{encoded_path}",
+            headers=_headers(), timeout=max(TIMEOUT, 45),
+        )
+        response.raise_for_status()
+        return bytes(response.content)
+    except requests.RequestException:
+        return None
+
+
+def delete_private_gallery_image(object_path: str) -> bool:
+    caminho = str(object_path or "").strip().lstrip("/")
+    if not caminho or not online_configured():
+        return False
+    url, _ = _config()
+    encoded_path = quote(caminho, safe="/")
+    try:
+        response = _SESSION.delete(
+            f"{url}/storage/v1/object/{GALERIA_TRABALHOS_BUCKET}/{encoded_path}",
+            headers=_headers(), timeout=TIMEOUT,
+        )
+        return bool(response.ok)
+    except requests.RequestException:
+        return False
+
+
 def read_private_3d_file(object_path: str) -> bytes | None:
     """Lê um objeto privado da Biblioteca 3D usando a credencial do servidor."""
     caminho = str(object_path or "").strip().lstrip("/")
