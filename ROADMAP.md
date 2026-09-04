@@ -96,3 +96,15 @@
 - [ ] Instalar HF43 e conferir a prévia no Manager.
 - [ ] Fazer New deployment HF43 no Worker `alphafest-novo` e validar filtros em `alphafest.com.br`.
 - [ ] Só depois resolver `www.alphafest.com.br`.
+
+
+### HF44 — Publicação assistida do site
+- [x] Site oficial HF43 homologado em `alphafest.com.br`.
+- [x] `www.alphafest.com.br` redirecionando em 301 para o domínio raiz.
+- [x] Fluxo de publicação API implementado sem automação de DNS.
+- [x] Confirmação explícita antes de publicar; marcação de produto continua apenas preparando a próxima versão.
+- [x] ZIP manual preservado como fallback/rollback.
+- [ ] Instalar HF44 e validar a tela de publicação assistida.
+- [ ] Criar API Token Cloudflare com permissão mínima de Workers Scripts e testar conexão sem publicar.
+- [ ] Fazer primeiro deployment HF44 pelo botão e validar `alphafest.com.br`.
+- [ ] Depois da homologação, configurar token em Streamlit Secrets para deixar o processo realmente em um clique.

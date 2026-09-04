@@ -1010,3 +1010,11 @@ hangelog
 - O agrupamento é derivado em leitura do mesmo Catálogo oficial, sem segundo cadastro ou persistência paralela.
 - Preserva busca pelas categorias internas, preço opcional, WhatsApp contextual, responsividade e pacote público de produção.
 - Mantém `www` pendente até validação da HF43 no domínio raiz.
+
+
+## 20.4.9-I8.13.5-HF44 — Publicação assistida do site
+- Adiciona `Publicar site agora` na Central do Site, mantendo confirmação explícita antes de qualquer deployment.
+- Usa a API oficial de Cloudflare Workers Static Assets para registrar manifesto, enviar somente blobs alterados e ativar uma nova versão do Worker `alphafest-novo`.
+- API Token não é persistido em bancos/JSON; pode vir de Streamlit Secrets/ambiente ou ser usado somente na sessão.
+- Mantém ZIP de produção como fallback manual e não altera DNS, MX, webmail, Custom Domains ou Redirect Rules.
+- Atualiza o estado do `www` para o redirecionamento 301 já homologado.

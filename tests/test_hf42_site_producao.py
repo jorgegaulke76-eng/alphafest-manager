@@ -69,14 +69,14 @@ class HF42SiteProducaoTests(unittest.TestCase):
         self.assertEqual(r["zona_cloudflare"], "Active")
         self.assertTrue(r["dns_cloudflare"])
         self.assertTrue(r["dominio_raiz_conectado"])
-        self.assertEqual(r["www"], "Pendente")
+        self.assertEqual(r["www"], "301 → alphafest.com.br")
         self.assertEqual(r["produtos_snapshot"], 16)
 
     def test_ui_manager_expoe_download_final_hf42(self):
         app = Path("app.py").read_text(encoding="utf-8")
-        self.assertIn('"🚀 Produção oficial — HF43"', app)
-        self.assertIn('alphafest-site-producao-hf43.zip', app)
-        self.assertIn('versao_manager="20.4.9-I8.13.5-HF43"', app)
+        self.assertIn('"🚀 Produção oficial — HF44"', app)
+        self.assertIn('alphafest-site-producao-hf44.zip', app)
+        self.assertIn('versao_manager="20.4.9-I8.13.5-HF44"', app)
         self.assertIn('_site_gerar_pacote_producao(', app)
 
     def test_pacote_final_nao_altera_dns(self):

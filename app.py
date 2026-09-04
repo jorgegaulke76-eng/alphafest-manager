@@ -37,6 +37,19 @@ from site_completo_service import gerar_html_site_completo as _site_gerar_html_c
 from site_staging_service import gerar_pacote_staging as _site_gerar_pacote_staging, resumo_staging as _site_resumo_staging
 from site_cutover_service import gerar_kit_pre_virada as _site_gerar_kit_pre_virada, resumo_pre_virada as _site_resumo_pre_virada
 from site_production_service import gerar_pacote_producao as _site_gerar_pacote_producao, resumo_producao as _site_resumo_producao
+try:
+    from site_cloudflare_publish_service import (
+        publicar_pacote as _site_cf_publicar_pacote,
+        testar_conexao as _site_cf_testar_conexao,
+        fingerprint_pacote as _site_cf_fingerprint_pacote,
+        credenciais_ambiente as _site_cf_credenciais_ambiente,
+        WORKER_PADRAO as _site_cf_worker_padrao,
+    )
+    SITE_CF_IMPORT_ERROR = ""
+except Exception as _site_cf_import_exc:
+    _site_cf_publicar_pacote = _site_cf_testar_conexao = _site_cf_fingerprint_pacote = _site_cf_credenciais_ambiente = None
+    _site_cf_worker_padrao = "alphafest-novo"
+    SITE_CF_IMPORT_ERROR = str(_site_cf_import_exc)
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
@@ -24981,8 +24994,8 @@ if pagina_atual == "clientes_360":
 if pagina_atual == "site":
     st.markdown("# 🌐 Central do Site AlphaFest")
     st.caption(
-        "HF43 • O Catálogo do Manager continua como Fonte Única do novo site. "
-        "O domínio principal já está conectado ao Worker homologado; a publicação final fica separada do DNS e mantém rollback."
+        "HF44 • O Catálogo do Manager continua como Fonte Única do site. "
+        "Marcar um produto prepara a próxima versão; a publicação no domínio oficial só acontece quando você confirma em **Publicar site agora**."
     )
 
     catalogo_site_hf35 = carregar_catalogo()
@@ -25020,6 +25033,11 @@ if pagina_atual == "site":
         "🧭 **HF43 · Categorias comerciais:** a vitrine agora agrupa os produtos em categorias mais claras para o cliente "
         "(Festas & Personalizados, Balões & Decoração, Gráfica Rápida, Brindes, Convites & Papelaria, Impressão 3D, "
         "Gravação a Laser e Kits Festa). O agrupamento é calculado somente a partir do Catálogo oficial e não cria outro cadastro."
+    )
+
+    st.success(
+        "🚀 **HF44 · Publicação assistida:** você pode cadastrar e marcar vários produtos, conferir a prévia e publicar todos de uma vez. "
+        "A marcação **não publica sozinha**; o envio ao Worker só ocorre após confirmação explícita. O ZIP manual continua como fallback."
     )
 
     # HF40 — mantém a vitrine homologada e acrescenta o site institucional completo sem tocar no domínio atual.
@@ -25156,47 +25174,164 @@ if pagina_atual == "site":
                 "Ele não contém credenciais, CNAME, comandos de DNS nem alteração automática."
             )
 
-        # HF43 — pacote de produção com categorias comerciais; remove staging/noindex, sem alterar DNS.
-        with st.expander("🚀 Produção oficial — HF43", expanded=True):
-            _prod_hf43 = _site_resumo_producao(total_produtos=resumo_vitrine_hf36.get("total", 0))
-            p1_hf42, p2_hf42, p3_hf42, p4_hf42 = st.columns(4)
-            p1_hf42.metric("Zona Cloudflare", _prod_hf43.get("zona_cloudflare", "—"))
-            p2_hf42.metric("Domínio principal", "Conectado")
-            p3_hf42.metric("Pacote público", "Pronto")
-            p4_hf42.metric("www", _prod_hf43.get("www", "Pendente"))
+        # HF44 — publicação assistida no Worker; continua sem tocar em DNS/MX/Custom Domains.
+        with st.expander("🚀 Produção oficial — HF44", expanded=True):
+            _prod_hf44 = _site_resumo_producao(total_produtos=resumo_vitrine_hf36.get("total", 0))
+            p1_hf44, p2_hf44, p3_hf44, p4_hf44 = st.columns(4)
+            p1_hf44.metric("Zona Cloudflare", _prod_hf44.get("zona_cloudflare", "—"))
+            p2_hf44.metric("Domínio principal", "Conectado")
+            p3_hf44.metric("Publicação", "Assistida")
+            p4_hf44.metric("www", _prod_hf44.get("www", "301 → raiz"))
             st.success(
-                "✅ `alphafest.com.br` já abre o Worker oficial. A HF43 mantém o pacote público sem faixa de homologação/`noindex` e troca apenas a navegação por categorias comerciais."
+                "✅ O site oficial está estável em `alphafest.com.br` e o `www` redireciona em 301. "
+                "A HF44 automatiza somente o deployment do conteúdo aprovado; DNS, MX, webmail, domínio e Redirect Rules ficam intocados."
             )
             st.info(
-                "ℹ️ O domínio oficial já está com a produção HF42. O ZIP abaixo atualiza somente a navegação da vitrine para as categorias comerciais da HF43. "
-                "Ele não altera DNS, MX, webmail nem Custom Domains."
+                "📌 **Fluxo novo:** cadastre/edite produtos → marque para a vitrine → confira a prévia → **Publicar site agora**. "
+                "Você pode acumular vários produtos e publicar tudo em um único envio."
             )
-            html_producao_hf43 = _site_gerar_html_completo(
+
+            html_producao_hf44 = _site_gerar_html_completo(
                 catalogo_site_hf35,
                 empresa_vitrine_hf36,
                 logo_src=logo_src_hf36,
                 imagem_resolver=_catalogo_html_src_imagem,
                 modo_preview=False,
             )
-            pacote_producao_hf43 = _site_gerar_pacote_producao(
-                html_producao_hf43,
+            pacote_producao_hf44 = _site_gerar_pacote_producao(
+                html_producao_hf44,
                 total_produtos=resumo_vitrine_hf36.get("total", 0),
-                versao_manager="20.4.9-I8.13.5-HF43",
-            )
-            st.download_button(
-                "⬇️ Baixar pacote FINAL de produção (ZIP)",
-                data=pacote_producao_hf43,
-                file_name="alphafest-site-producao-hf43.zip",
-                mime="application/zip",
-                use_container_width=True,
-                key="site_hf43_download_producao",
-            )
-            st.caption(
-                "Depois do deployment HF43, validar os filtros comerciais em `alphafest.com.br`; só então conectar `www.alphafest.com.br`."
+                versao_manager="20.4.9-I8.13.5-HF44",
             )
 
+            # Fallback/manual continua disponível para rollback e contingência.
+            st.download_button(
+                "⬇️ Baixar ZIP de produção (fallback manual)",
+                data=pacote_producao_hf44,
+                file_name="alphafest-site-producao-hf44.zip",
+                mime="application/zip",
+                use_container_width=True,
+                key="site_hf44_download_producao",
+            )
+
+            st.markdown("#### 🚀 Publicar alterações do Catálogo")
+            st.caption(
+                "A publicação usa a API oficial de Static Assets do Worker `alphafest-novo`. "
+                "O API Token é usado somente em memória e não é gravado em JSON, banco, ZIP ou histórico do Manager."
+            )
+
+            _cf_env_hf44 = _site_cf_credenciais_ambiente() if callable(_site_cf_credenciais_ambiente) else {}
+            _cf_secret_account_hf44 = ""
+            _cf_secret_token_hf44 = ""
+            _cf_secret_worker_hf44 = ""
+            try:
+                _cf_group_hf44 = st.secrets.get("cloudflare", {})
+                _cf_secret_account_hf44 = str(_cf_group_hf44.get("account_id", "") or "").strip()
+                _cf_secret_token_hf44 = str(_cf_group_hf44.get("api_token", "") or "").strip()
+                _cf_secret_worker_hf44 = str(_cf_group_hf44.get("worker_name", "") or "").strip()
+            except Exception:
+                pass
+
+            _cf_account_default_hf44 = _cf_secret_account_hf44 or str(_cf_env_hf44.get("account_id", "") or "")
+            _cf_token_seguro_hf44 = _cf_secret_token_hf44 or str(_cf_env_hf44.get("api_token", "") or "")
+            _cf_worker_hf44 = _cf_secret_worker_hf44 or str(_cf_env_hf44.get("worker_name", "") or "") or _site_cf_worker_padrao
+
+            with st.expander("🔐 Conexão Cloudflare", expanded=not bool(_cf_account_default_hf44 and _cf_token_seguro_hf44)):
+                _cf_account_hf44 = st.text_input(
+                    "Cloudflare Account ID",
+                    value=_cf_account_default_hf44,
+                    key="site_hf44_cf_account",
+                    help="Identificador da conta Cloudflare. Não é senha.",
+                ).strip()
+                st.text_input(
+                    "Worker de destino",
+                    value=_cf_worker_hf44,
+                    key="site_hf44_cf_worker_view",
+                    disabled=True,
+                )
+                if _cf_token_seguro_hf44:
+                    st.success("🔒 API Token carregado de configuração segura do ambiente/Streamlit Secrets.")
+                    _cf_token_hf44 = _cf_token_seguro_hf44
+                else:
+                    _cf_token_hf44 = st.text_input(
+                        "Cloudflare API Token",
+                        type="password",
+                        key="site_hf44_cf_token",
+                        help="O Manager usa este token apenas nesta sessão/publicação e não o salva.",
+                    ).strip()
+                    st.caption("Para uso diário com um clique, depois podemos guardar o token em Streamlit Secrets — nunca no Catálogo ou em JSON operacional.")
+
+                if SITE_CF_IMPORT_ERROR:
+                    st.error("Integração Cloudflare isolada: não foi possível carregar o módulo de publicação. O ZIP manual continua disponível.")
+                elif st.button("🔎 Testar conexão sem publicar", key="site_hf44_cf_testar", use_container_width=True):
+                    if not _cf_account_hf44 or not _cf_token_hf44:
+                        st.warning("Informe Account ID e API Token para testar.")
+                    else:
+                        try:
+                            with st.spinner("Conferindo acesso ao Worker sem alterar o site..."):
+                                _cf_teste_hf44 = _site_cf_testar_conexao(
+                                    account_id=_cf_account_hf44,
+                                    api_token=_cf_token_hf44,
+                                    worker_name=_cf_worker_hf44,
+                                )
+                            st.session_state["site_hf44_cf_ok"] = True
+                            st.success(f"✅ Conexão confirmada com o Worker `{_cf_teste_hf44.get('worker_name', _cf_worker_hf44)}`. Nenhuma publicação foi feita.")
+                        except Exception as _cf_test_exc_hf44:
+                            st.session_state["site_hf44_cf_ok"] = False
+                            st.error(f"Não foi possível validar a conexão: {_cf_test_exc_hf44}")
+
+            _cf_fingerprint_hf44 = ""
+            try:
+                if callable(_site_cf_fingerprint_pacote):
+                    _cf_fingerprint_hf44 = _site_cf_fingerprint_pacote(pacote_producao_hf44)
+            except Exception:
+                pass
+            _cf_ultimo_hf44 = str(st.session_state.get("site_hf44_ultimo_fingerprint", "") or "")
+            if _cf_fingerprint_hf44 and _cf_fingerprint_hf44 == _cf_ultimo_hf44:
+                st.info("✅ Este mesmo conteúdo já foi publicado nesta sessão. Se você alterar ou adicionar produtos, o Manager detectará uma nova versão.")
+
+            _cf_confirmar_hf44 = st.checkbox(
+                f"Conferi a prévia e quero publicar agora os {resumo_vitrine_hf36.get('total', 0)} produto(s) marcados/prontos.",
+                key="site_hf44_confirmar_publicacao",
+            )
+            _cf_pode_publicar_hf44 = bool(
+                callable(_site_cf_publicar_pacote)
+                and _cf_account_hf44
+                and _cf_token_hf44
+                and _cf_confirmar_hf44
+                and (_cf_fingerprint_hf44 != _cf_ultimo_hf44 or not _cf_fingerprint_hf44)
+            )
+            if st.button(
+                "🚀 Publicar site agora",
+                type="primary",
+                use_container_width=True,
+                disabled=not _cf_pode_publicar_hf44,
+                key="site_hf44_publicar_agora",
+            ):
+                try:
+                    with st.spinner("Enviando somente os arquivos alterados e ativando a nova versão do site..."):
+                        _cf_resultado_hf44 = _site_cf_publicar_pacote(
+                            pacote_producao_hf44,
+                            account_id=_cf_account_hf44,
+                            api_token=_cf_token_hf44,
+                            worker_name=_cf_worker_hf44,
+                            versao_manager="20.4.9-I8.13.5-HF44",
+                        )
+                    st.session_state["site_hf44_ultimo_fingerprint"] = str(_cf_resultado_hf44.get("fingerprint", "") or _cf_fingerprint_hf44)
+                    st.session_state["site_hf44_cf_ok"] = True
+                    st.success(
+                        f"✅ Site publicado no Worker `{_cf_worker_hf44}`. "
+                        f"Versão Cloudflare: `{_cf_resultado_hf44.get('version_id', 'confirmada')}` • "
+                        f"assets enviados agora: {_cf_resultado_hf44.get('assets_enviados', 0)}."
+                    )
+                    st.link_button("🌐 Abrir alphafest.com.br para conferir", "https://alphafest.com.br", use_container_width=True)
+                    st.caption("Se a conferência visual não estiver correta, o ZIP manual e as versões anteriores do Worker permanecem disponíveis para rollback.")
+                except Exception as _cf_publish_exc_hf44:
+                    st.error(f"A publicação foi interrompida com segurança: {_cf_publish_exc_hf44}")
+                    st.caption("Nenhum DNS, MX, webmail ou regra de redirecionamento é alterado por esta operação. Use o ZIP manual se precisar de contingência.")
+
     with st.expander(
-        f"🛍️ Produtos marcados para a futura vitrine ({resumo_site_hf35.get('marcados_site', 0)})",
+        f"🛍️ Produtos marcados para a vitrine/site ({resumo_site_hf35.get('marcados_site', 0)})",
         expanded=True,
     ):
         marcados_hf35 = [x for x in produtos_site_hf35 if x.get("ativo") and x.get("publicar_site")]
@@ -25318,8 +25453,8 @@ if pagina_atual == "site":
                 rerun_na_aba("crescimento")
 
     st.info(
-        "🧭 **HF43:** o site oficial já usa a estrutura Início, Produtos, Serviços, Quem Somos e Contato. "
-        "A evolução atual troca somente os filtros técnicos da vitrine por categorias comerciais, preservando layout, produtos, preços opcionais e WhatsApp."
+        "🚀 **HF44:** o site oficial já está migrado e com categorias comerciais homologadas. "
+        "Agora novos produtos podem ser acumulados no Catálogo e publicados em lote pelo botão **Publicar site agora**, sempre após conferência explícita da prévia."
     )
 
 if pagina_atual == "crescimento":
