@@ -1031,3 +1031,7 @@ hangelog
 - Fotos pequenas são carregadas em paralelo com timeout curto; foto indisponível não bloqueia o relatório.
 - Mantém todos os produtos, 6 por página, categoria/subcategoria atuais e espaço para correção manual da Anna.
 - Não altera cadastros e preserva integralmente o HF44 de publicação Cloudflare.
+
+## 20.4.9-I8.13.5-HF45.2-HF1
+- Corrigida apenas a identificação de versão: VERSAO e VERSAO.txt agora estão alinhados.
+- Sem alteração funcional sobre a HF45.2.
