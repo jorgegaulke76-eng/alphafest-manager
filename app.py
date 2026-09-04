@@ -32484,6 +32484,121 @@ if pagina_atual == "catalogo":
                     key="hf451_pdf_revisao_catalogo",
                     use_container_width=True,
                 )
+
+            # HF45.2 — digitação rápida das correções anotadas pela Anna.
+            # A grade altera somente Categoria/Subcategoria e nunca publica o site automaticamente.
+            st.markdown("#### ✏️ Digitar correções da Anna")
+            st.caption(
+                "Use a folha A4 impressa como referência. Preencha apenas o que a Anna corrigiu; "
+                "campos em branco mantêm a classificação atual. Salvar aqui atualiza somente o Catálogo Oficial — "
+                "o site continua dependendo da publicação assistida do HF44."
+            )
+
+            if st.session_state.pop("_hf452_reset_editor", False):
+                st.session_state.pop("hf452_editor_revisao", None)
+                st.session_state.pop("hf452_confirmar_salvar", None)
+
+            _hf452_ordenados = sorted(
+                list(enumerate(catalogo or [])),
+                key=lambda item: normalizar_identidade_produto((item[1] or {}).get("Nome", "")),
+            )
+            _hf452_linhas = []
+            for _ord_hf452, (_idx_hf452, _prod_hf452) in enumerate(_hf452_ordenados, 1):
+                _hf452_linhas.append({
+                    "ID": _ord_hf452,
+                    "Produto": str((_prod_hf452 or {}).get("Nome") or "Produto"),
+                    "Categoria atual": str((_prod_hf452 or {}).get("Categoria") or ""),
+                    "Subcategoria atual": str((_prod_hf452 or {}).get("Subcategoria") or ""),
+                    "Nova categoria": "",
+                    "Nova subcategoria": "",
+                })
+
+            _hf452_df_base = pd.DataFrame(_hf452_linhas)
+            _hf452_editado = st.data_editor(
+                _hf452_df_base,
+                key="hf452_editor_revisao",
+                use_container_width=True,
+                hide_index=True,
+                num_rows="fixed",
+                disabled=["ID", "Produto", "Categoria atual", "Subcategoria atual"],
+                column_config={
+                    "ID": st.column_config.NumberColumn("#", width="small"),
+                    "Produto": st.column_config.TextColumn("Produto", width="large"),
+                    "Categoria atual": st.column_config.TextColumn("Categoria atual", width="medium"),
+                    "Subcategoria atual": st.column_config.TextColumn("Subcategoria atual", width="medium"),
+                    "Nova categoria": st.column_config.TextColumn(
+                        "Nova categoria",
+                        width="medium",
+                        help="Deixe em branco para manter a categoria atual.",
+                    ),
+                    "Nova subcategoria": st.column_config.TextColumn(
+                        "Nova subcategoria",
+                        width="medium",
+                        help="Deixe em branco para manter a subcategoria atual.",
+                    ),
+                },
+            )
+
+            _hf452_alteracoes = []
+            if isinstance(_hf452_editado, pd.DataFrame):
+                for _pos_hf452, _linha_hf452 in _hf452_editado.iterrows():
+                    if _pos_hf452 >= len(_hf452_ordenados):
+                        continue
+                    _idx_catalogo_hf452, _produto_hf452 = _hf452_ordenados[_pos_hf452]
+                    _nova_cat_hf452 = str(_linha_hf452.get("Nova categoria") or "").strip()
+                    _nova_sub_hf452 = str(_linha_hf452.get("Nova subcategoria") or "").strip()
+                    if _nova_cat_hf452 or _nova_sub_hf452:
+                        _cat_final_hf452 = _nova_cat_hf452 or str((_produto_hf452 or {}).get("Categoria") or "").strip()
+                        _sub_final_hf452 = _nova_sub_hf452 or str((_produto_hf452 or {}).get("Subcategoria") or "").strip()
+                        _hf452_alteracoes.append({
+                            "indice": _idx_catalogo_hf452,
+                            "produto": str((_produto_hf452 or {}).get("Nome") or "Produto"),
+                            "categoria": _cat_final_hf452,
+                            "subcategoria": _sub_final_hf452,
+                        })
+
+            if _hf452_alteracoes:
+                st.info(f"{len(_hf452_alteracoes)} produto(s) com correção preenchida nesta revisão.")
+                _hf452_confirmar = st.checkbox(
+                    "Conferi as correções digitadas e quero salvar no Catálogo Oficial.",
+                    key="hf452_confirmar_salvar",
+                )
+            else:
+                st.caption("Nenhuma correção digitada ainda.")
+                _hf452_confirmar = False
+
+            if st.button(
+                "💾 Salvar correções de categoria e subcategoria",
+                key="hf452_salvar_revisao",
+                use_container_width=True,
+                disabled=not bool(_hf452_alteracoes and _hf452_confirmar),
+            ):
+                _catalogo_novo_hf452 = [dict(p or {}) for p in (catalogo or [])]
+                _agora_hf452 = agora_local().isoformat(timespec="seconds")
+                for _alt_hf452 in _hf452_alteracoes:
+                    _idx_alt_hf452 = int(_alt_hf452["indice"])
+                    if not (0 <= _idx_alt_hf452 < len(_catalogo_novo_hf452)):
+                        continue
+                    _registro_hf452 = dict(_catalogo_novo_hf452[_idx_alt_hf452] or {})
+                    _registro_hf452["Categoria"] = _alt_hf452["categoria"]
+                    _registro_hf452["Subcategoria"] = _alt_hf452["subcategoria"]
+                    _registro_hf452["AtualizadoEm"] = _agora_hf452
+                    _registro_hf452["RevisaoClassificacaoHF45"] = {
+                        "quando": _agora_hf452,
+                        "origem": "Folha A4 revisada pela Anna",
+                    }
+                    _catalogo_novo_hf452[_idx_alt_hf452] = _registro_hf452
+
+                salvar_catalogo(_catalogo_novo_hf452)
+                st.session_state.pop("_hf451_pdf_bytes", None)
+                st.session_state.pop("_hf451_pdf_assinatura", None)
+                st.session_state["_hf452_reset_editor"] = True
+                st.success(
+                    f"✅ {len(_hf452_alteracoes)} produto(s) atualizados no Catálogo Oficial. "
+                    "Nenhuma publicação no site foi feita."
+                )
+                st.rerun()
+
             st.divider()
             termo_cat = st.text_input(
                 "🔎 Pesquisar produto ou categoria",
