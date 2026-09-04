@@ -11082,10 +11082,10 @@ def renderizar_galeria_trabalhos(catalogo):
             type=["png", "jpg", "jpeg", "webp"],
             accept_multiple_files=True,
             key="hf461_fotos",
-            help="Até 8 fotos por registro. As imagens são reduzidas para uso de portfólio e guardadas em área privada.",
+            help="Até 20 fotos por envio. O mesmo trabalho pode receber novos lotes depois, sem limite total fixo no acervo.",
         )
-        if fotos and len(fotos) > 8:
-            st.warning("Use no máximo 8 fotos por trabalho. Selecione as melhores imagens do conjunto.")
+        if fotos and len(fotos) > 20:
+            st.warning("Envie no máximo 20 fotos por vez. Depois de salvar, você poderá acrescentar novos lotes ao mesmo trabalho.")
 
         observacao_gal = st.text_area(
             "Observação interna (opcional)",
@@ -11113,7 +11113,7 @@ def renderizar_galeria_trabalhos(catalogo):
         )
 
         if st.button("💾 Guardar fotos na Galeria interna", type="primary", use_container_width=True, key="hf461_salvar"):
-            fotos_validas = list(fotos or [])[:8]
+            fotos_validas = list(fotos or [])[:20]
             if not fotos_validas:
                 st.warning("Selecione pelo menos uma foto.")
             elif not str(categoria_gal or "").strip():
@@ -11234,6 +11234,50 @@ def renderizar_galeria_trabalhos(catalogo):
                 c_info.caption("Obs.: " + str(item.get("observacao")))
 
             if not bool(item.get("arquivado")):
+                with st.expander("➕ Adicionar mais fotos a este trabalho", expanded=False):
+                    novas_fotos = st.file_uploader(
+                        "Novo lote de fotos",
+                        type=["png", "jpg", "jpeg", "webp"],
+                        accept_multiple_files=True,
+                        key=f"hf461_add_fotos_{gid}",
+                        help="Até 20 fotos por envio. Você pode repetir quantas vezes precisar; não há limite total fixo por trabalho.",
+                    )
+                    if novas_fotos and len(novas_fotos) > 20:
+                        st.warning("Selecione no máximo 20 fotos neste lote. Depois você pode adicionar outro lote.")
+                    if st.button("💾 Adicionar fotos", key=f"hf461_add_btn_{gid}", use_container_width=True):
+                        lote = list(novas_fotos or [])[:20]
+                        if not lote:
+                            st.warning("Selecione pelo menos uma foto para adicionar.")
+                        else:
+                            novos_caminhos = []
+                            falhou_add = False
+                            with st.spinner("Adicionando fotos ao acervo privado…"):
+                                for foto in lote:
+                                    caminho = upload_private_gallery_image(foto, folder="trabalhos")
+                                    if not caminho:
+                                        falhou_add = True
+                                        break
+                                    novos_caminhos.append(caminho)
+                            if falhou_add:
+                                for caminho in novos_caminhos:
+                                    delete_private_gallery_image(caminho)
+                                st.error("Não foi possível confirmar todo o lote. Nenhuma foto nova foi adicionada.")
+                            else:
+                                atualizado = False
+                                for reg in galeria:
+                                    if str((reg or {}).get("id")) == gid:
+                                        reg["fotos"] = list((reg or {}).get("fotos") or []) + novos_caminhos
+                                        reg["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                                        atualizado = True
+                                        break
+                                if atualizado and salvar_galeria_trabalhos(galeria):
+                                    st.success(f"{len(novos_caminhos)} foto(s) adicionada(s). Total deste trabalho: {len(foto_paths) + len(novos_caminhos)}.")
+                                    st.rerun()
+                                else:
+                                    for caminho in novos_caminhos:
+                                        delete_private_gallery_image(caminho)
+                                    st.error("O banco não confirmou a atualização. O lote foi descartado.")
+
                 if bool(item.get("autorizado_publicacao")) and not bool(item.get("selecionado_site")):
                     if c_acoes.button("⭐ Pré-selecionar", key=f"hf461_sel_{gid}", use_container_width=True):
                         for reg in galeria:

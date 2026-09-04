@@ -26,3 +26,12 @@ def test_hf46_1_cloud_storage_nao_tem_fallback_publico():
     bloco = cloud[inicio:fim]
     assert "/storage/v1/object/{GALERIA_TRABALHOS_BUCKET}/" in bloco
     assert "/object/public/catalogo/" not in bloco
+
+
+def test_hf46_1_hf1_acervo_sem_limite_total_e_lotes_de_20():
+    app = Path("app.py").read_text(encoding="utf-8")
+    assert "Até 20 fotos por envio" in app
+    assert "não há limite total fixo por trabalho" in app
+    assert "➕ Adicionar mais fotos a este trabalho" in app
+    assert "list(novas_fotos or [])[:20]" in app
+    assert 'reg["fotos"] = list((reg or {}).get("fotos") or []) + novos_caminhos' in app
