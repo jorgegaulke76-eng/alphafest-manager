@@ -55,6 +55,7 @@ class HF454TaxonomiaSiteTests(unittest.TestCase):
         self.assertIn('id="taxonomy-current"', pagina)
         self.assertIn("c.dataset.sub===sub", pagina)
         self.assertIn("Todas as subcategorias", pagina)
+        self.assertIn(".subfilter[hidden]{display:none!important}", pagina)
         self.assertIn(">2</b></button>", pagina)  # Festas possui 2 produtos no exemplo
 
     def test_modo_padrao_preserva_hf44_sem_taxonomia(self):
@@ -76,7 +77,7 @@ class HF454TaxonomiaSiteTests(unittest.TestCase):
 
     def test_manager_expoe_previa_hf454_e_producao_hf44_continua_sem_flag(self):
         app = Path("app.py").read_text(encoding="utf-8")
-        self.assertIn('"🧭 Prévia Categoria → Subcategoria — HF45.4"', app)
+        self.assertIn('"🧭 Prévia Categoria → Subcategoria — HF45.4-HF1"', app)
         self.assertIn("usar_taxonomia_catalogo=True", app)
         bloco_prod = app.split('# HF44 — publicação assistida no Worker', 1)[1]
         chamada = bloco_prod.split('pacote_producao_hf44 =', 1)[0]

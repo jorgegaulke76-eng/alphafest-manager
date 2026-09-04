@@ -1050,3 +1050,9 @@ hangelog
 - `Todos` continua disponível para retornar à vitrine completa; busca, preço opcional, WhatsApp e responsividade permanecem preservados.
 - Itens ainda sem subcategoria ficam sinalizados na prévia para facilitar a revisão da Anna.
 - O fluxo de produção HF44 continua sem `usar_taxonomia_catalogo=True`; portanto, nenhuma mudança de navegação é publicada antes da homologação final.
+
+## 20.4.9-I8.13.5-HF45.4-HF1 — Correção do filtro de subcategorias
+
+- Corrigida a prévia Categoria → Subcategoria: subcategorias de outras categorias não aparecem mais após a seleção.
+- Ajuste somente na prévia interna; publicação HF44 preservada.
+

@@ -25275,7 +25275,7 @@ if pagina_atual == "site":
         catalogo_site_hf35,
         usar_taxonomia_catalogo=True,
     )
-    with st.expander("🧭 Prévia Categoria → Subcategoria — HF45.4", expanded=False):
+    with st.expander("🧭 Prévia Categoria → Subcategoria — HF45.4-HF1", expanded=False):
         st.caption(
             "Esta prévia usa diretamente **Categoria** e **Subcategoria** do Catálogo Oficial. "
             "Ela se atualiza conforme as correções da Anna forem salvas no HF45.2. "

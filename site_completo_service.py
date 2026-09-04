@@ -108,7 +108,7 @@ def gerar_html_site_completo(
     # A barra identifica claramente qual estrutura está sendo homologada.
     if modo_preview:
         preview = (
-            '<div class="preview-bar">PRÉVIA INTERNA HF45.4 · CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
+            '<div class="preview-bar">PRÉVIA INTERNA HF45.4-HF1 · CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
             if usar_taxonomia_catalogo
             else '<div class="preview-bar">PRÉVIA INTERNA HF40 · SITE COMPLETO · AINDA NÃO PUBLICADO</div>'
         )
