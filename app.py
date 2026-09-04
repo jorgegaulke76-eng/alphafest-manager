@@ -36,6 +36,7 @@ from site_vitrine_service import resumir_vitrine as _site_resumir_vitrine
 from site_completo_service import gerar_html_site_completo as _site_gerar_html_completo
 from site_staging_service import gerar_pacote_staging as _site_gerar_pacote_staging, resumo_staging as _site_resumo_staging
 from site_cutover_service import gerar_kit_pre_virada as _site_gerar_kit_pre_virada, resumo_pre_virada as _site_resumo_pre_virada
+from site_production_service import gerar_pacote_producao as _site_gerar_pacote_producao, resumo_producao as _site_resumo_producao
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
@@ -24980,8 +24981,8 @@ if pagina_atual == "clientes_360":
 if pagina_atual == "site":
     st.markdown("# 🌐 Central do Site AlphaFest")
     st.caption(
-        "HF40 • O Catálogo do Manager continua como Fonte Única do novo site paralelo. "
-        "O site atual permanece online e é usado como acervo/legado até a migração ser aprovada."
+        "HF42 • O Catálogo do Manager continua como Fonte Única do novo site. "
+        "O domínio principal já está conectado ao Worker homologado; a publicação final fica separada do DNS e mantém rollback."
     )
 
     catalogo_site_hf35 = carregar_catalogo()
@@ -25121,20 +25122,19 @@ if pagina_atual == "site":
             st.warning("Nenhuma dessas etapas de DNS é executada automaticamente pelo Manager.")
 
         # HF41 — preparação conservadora da virada: backup primeiro, DNS depois.
-        with st.expander("🔐 Preparação da virada do domínio — HF41", expanded=True):
+        with st.expander("🔐 Preparação da virada do domínio — HF41 (concluída)", expanded=False):
             _cut_hf41 = _site_resumo_pre_virada()
             c1_hf41, c2_hf41, c3_hf41, c4_hf41 = st.columns(4)
             c1_hf41.metric("Staging externo", _cut_hf41.get("staging_externo", "—"))
-            c2_hf41.metric("DNS alterado", "NÃO")
-            c3_hf41.metric("Backup DNS", _cut_hf41.get("backup_dns", "Pendente"))
+            c2_hf41.metric("DNS alterado", "SIM")
+            c3_hf41.metric("Backup DNS", "Confirmado")
             c4_hf41.metric("Rollback", _cut_hf41.get("rollback", "Preparado"))
             st.success(
                 "✅ **Site novo homologado:** Desktop, celular real, navegação e WhatsApp já passaram no ambiente paralelo."
             )
-            st.warning(
-                "⚠️ **Próxima trava de segurança:** antes de conectar `alphafest.com.br` à Cloudflare, "
-                "precisamos registrar onde o DNS é administrado hoje e salvar todos os registros atuais, principalmente MX/TXT de e-mail. "
-                "A HF41 continua sem alterar DNS automaticamente."
+            st.info(
+                "✅ **HF41 concluída:** backup DNS registrado; nameservers migrados para Cloudflare; zona Active; "
+                "domínio raiz conectado ao Worker `alphafest-novo`. O rollback anterior permanece documentado."
             )
             kit_hf41 = _site_gerar_kit_pre_virada(versao_manager="20.4.9-I8.13.5-HF41")
             st.download_button(
@@ -25148,6 +25148,45 @@ if pagina_atual == "site":
             st.caption(
                 "O kit contém uma ficha para copiar o DNS atual, checklist pré-virada e plano de rollback. "
                 "Ele não contém credenciais, CNAME, comandos de DNS nem alteração automática."
+            )
+
+        # HF42 — pacote final de produção: remove staging/noindex, sem alterar DNS.
+        with st.expander("🚀 Produção oficial — HF42", expanded=True):
+            _prod_hf42 = _site_resumo_producao(total_produtos=resumo_vitrine_hf36.get("total", 0))
+            p1_hf42, p2_hf42, p3_hf42, p4_hf42 = st.columns(4)
+            p1_hf42.metric("Zona Cloudflare", _prod_hf42.get("zona_cloudflare", "—"))
+            p2_hf42.metric("Domínio principal", "Conectado")
+            p3_hf42.metric("Pacote público", "Pronto")
+            p4_hf42.metric("www", _prod_hf42.get("www", "Pendente"))
+            st.success(
+                "✅ `alphafest.com.br` já abre o Worker homologado. A HF42 gera o pacote público final sem faixa de homologação e sem `noindex`."
+            )
+            st.warning(
+                "⚠️ O site oficial ainda mostra o pacote de staging HF40 até você fazer um **New deployment** com o ZIP de produção abaixo. "
+                "Este ZIP não altera DNS, MX, webmail nem Custom Domains."
+            )
+            html_producao_hf42 = _site_gerar_html_completo(
+                catalogo_site_hf35,
+                empresa_vitrine_hf36,
+                logo_src=logo_src_hf36,
+                imagem_resolver=_catalogo_html_src_imagem,
+                modo_preview=False,
+            )
+            pacote_producao_hf42 = _site_gerar_pacote_producao(
+                html_producao_hf42,
+                total_produtos=resumo_vitrine_hf36.get("total", 0),
+                versao_manager="20.4.9-I8.13.5-HF42",
+            )
+            st.download_button(
+                "⬇️ Baixar pacote FINAL de produção (ZIP)",
+                data=pacote_producao_hf42,
+                file_name="alphafest-site-producao-hf42.zip",
+                mime="application/zip",
+                use_container_width=True,
+                key="site_hf42_download_producao",
+            )
+            st.caption(
+                "Depois do deployment, validar `alphafest.com.br` em desktop/celular e só então conectar `www.alphafest.com.br`."
             )
 
     with st.expander(

@@ -114,7 +114,7 @@ def gerar_html_site_completo(
     sobre = f'''<section class="site-section alt" id="quem-somos"><div class="site-wrap"><div class="about-grid">
       <div><div class="section-kicker">Quem Somos</div><h2 class="section-title">Personalização com cuidado em cada detalhe.</h2>
       <p class="section-copy">A {html.escape(nome)} é especializada em personalizados para festas, eventos, marcas e presentes. Cada projeto nasce a partir do que o cliente precisa — tema, medida, cor, material, quantidade e prazo — para transformar uma ideia em algo realmente único.</p>
-      <div class="legacy-note">Esta apresentação reaproveita a essência institucional do site anterior, mas foi reescrita para o novo site. Produtos e dados de contato continuam vindo do Manager.</div></div>
+      {('<div class="legacy-note">Esta apresentação reaproveita a essência institucional do site anterior, mas foi reescrita para o novo site. Produtos e dados de contato continuam vindo do Manager.</div>' if modo_preview else '')}</div>
       <aside class="about-card"><h3>Por que falar com a AlphaFest?</h3><div class="about-points">
         <div class="about-point"><div>🎨</div><div><strong>Personalização de verdade</strong><span>Cada pedido pode ser ajustado à ocasião e à identidade do cliente.</span></div></div>
         <div class="about-point"><div>🧩</div><div><strong>Várias soluções no mesmo lugar</strong><span>Personalizados, gráfica, brindes, balões, impressão 3D e gravação a laser.</span></div></div>
@@ -144,7 +144,7 @@ def gerar_html_site_completo(
         <div class="about-point"><div>1️⃣</div><div><strong>Escolha uma referência</strong><span>Use a vitrine ou descreva sua ideia.</span></div></div>
         <div class="about-point"><div>2️⃣</div><div><strong>Defina os detalhes</strong><span>Tamanho, cor, quantidade, material, personalização e prazo.</span></div></div>
         <div class="about-point"><div>3️⃣</div><div><strong>Receba a orientação</strong><span>A AlphaFest confirma possibilidades, valor e próximos passos.</span></div></div>
-      </div></div></div><div class="site-footnote">Dados de contato exibidos nesta página são lidos da configuração oficial da empresa no AlphaFest Manager.</div></div></section>'''
+      </div></div></div>{('<div class="site-footnote">Dados de contato exibidos nesta página são lidos da configuração oficial da empresa no AlphaFest Manager.</div>' if modo_preview else '')}</div></section>'''
 
     # A ordem desejada é Início -> Produtos -> Serviços -> Quem Somos -> Contato.
     marcador_mobile = '<a class="mobile-whatsapp"'

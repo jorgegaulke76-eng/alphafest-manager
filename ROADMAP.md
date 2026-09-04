@@ -79,3 +79,11 @@
 - [x] Kit de segurança pré-virada e rollback dentro do Manager.
 - [ ] Capturar o DNS atual e confirmar onde a zona é administrada.
 - [ ] Só depois preparar a conexão de `alphafest.com.br` ao Worker homologado.
+
+### HF42 — Site oficial / produção final
+- [x] Nameservers migrados para Cloudflare e zona Active.
+- [x] `alphafest.com.br` conectado ao Worker `alphafest-novo`.
+- [x] Pacote público final gerado sem staging/noindex.
+- [ ] Fazer New deployment do pacote HF42 e validar domínio raiz em desktop/celular.
+- [ ] Conectar `www.alphafest.com.br` ao mesmo Worker ou redirecioná-lo para o domínio raiz.
+- [ ] Confirmar indexação/SEO básico após estabilização.

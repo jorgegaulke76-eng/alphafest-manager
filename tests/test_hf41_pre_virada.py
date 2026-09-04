@@ -55,7 +55,7 @@ class HF41PreViradaTests(unittest.TestCase):
 
     def test_ui_contract(self):
         app = Path("app.py").read_text(encoding="utf-8")
-        self.assertIn('"🔐 Preparação da virada do domínio — HF41"', app)
+        self.assertIn('"🔐 Preparação da virada do domínio — HF41 (concluída)"', app)
         self.assertIn('"⬇️ Baixar kit de segurança pré-virada (ZIP)"', app)
         self.assertIn('versao_manager="20.4.9-I8.13.5-HF41"', app)
 

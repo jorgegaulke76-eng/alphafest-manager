@@ -995,3 +995,10 @@ hangelog
 - Adiciona checklist pré-virada na Central do Site após homologação externa da HF40.
 - Gera kit de backup DNS e rollback, sem executar DNS ou conectar domínio.
 - Mantém `alphafest.com.br` intocado até captura e conferência de NS/A/AAAA/CNAME/MX/TXT.
+
+## 20.4.9-I8.13.5-HF42 — Site oficial / pacote final de produção
+- Reconhece a virada já realizada: zona Cloudflare Active e domínio raiz conectado ao Worker `alphafest-novo`.
+- Adiciona pacote final de produção sem faixa de homologação e sem `noindex`.
+- Acrescenta canonical, robots público e sitemap do domínio oficial.
+- Remove notas internas do Manager do HTML público, mantendo a Fonte Única sem exposição técnica.
+- Mantém DNS/e-mail fora da automação e deixa `www` para etapa separada após validação do domínio raiz.
