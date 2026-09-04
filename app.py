@@ -35,6 +35,7 @@ from site_manager_service import resumir_catalogo_site as _site_resumir_catalogo
 from site_vitrine_service import resumir_vitrine as _site_resumir_vitrine
 from site_completo_service import gerar_html_site_completo as _site_gerar_html_completo
 from site_staging_service import gerar_pacote_staging as _site_gerar_pacote_staging, resumo_staging as _site_resumo_staging
+from site_cutover_service import gerar_kit_pre_virada as _site_gerar_kit_pre_virada, resumo_pre_virada as _site_resumo_pre_virada
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
@@ -25118,6 +25119,36 @@ if pagina_atual == "site":
                 "6. Confirmar HTTPS e manter rollback antes de desligar a hospedagem antiga."
             )
             st.warning("Nenhuma dessas etapas de DNS é executada automaticamente pelo Manager.")
+
+        # HF41 — preparação conservadora da virada: backup primeiro, DNS depois.
+        with st.expander("🔐 Preparação da virada do domínio — HF41", expanded=True):
+            _cut_hf41 = _site_resumo_pre_virada()
+            c1_hf41, c2_hf41, c3_hf41, c4_hf41 = st.columns(4)
+            c1_hf41.metric("Staging externo", _cut_hf41.get("staging_externo", "—"))
+            c2_hf41.metric("DNS alterado", "NÃO")
+            c3_hf41.metric("Backup DNS", _cut_hf41.get("backup_dns", "Pendente"))
+            c4_hf41.metric("Rollback", _cut_hf41.get("rollback", "Preparado"))
+            st.success(
+                "✅ **Site novo homologado:** Desktop, celular real, navegação e WhatsApp já passaram no ambiente paralelo."
+            )
+            st.warning(
+                "⚠️ **Próxima trava de segurança:** antes de conectar `alphafest.com.br` à Cloudflare, "
+                "precisamos registrar onde o DNS é administrado hoje e salvar todos os registros atuais, principalmente MX/TXT de e-mail. "
+                "A HF41 continua sem alterar DNS automaticamente."
+            )
+            kit_hf41 = _site_gerar_kit_pre_virada(versao_manager="20.4.9-I8.13.5-HF41")
+            st.download_button(
+                "⬇️ Baixar kit de segurança pré-virada (ZIP)",
+                data=kit_hf41,
+                file_name="alphafest-pre-virada-hf41.zip",
+                mime="application/zip",
+                use_container_width=True,
+                key="site_hf41_download_cutover",
+            )
+            st.caption(
+                "O kit contém uma ficha para copiar o DNS atual, checklist pré-virada e plano de rollback. "
+                "Ele não contém credenciais, CNAME, comandos de DNS nem alteração automática."
+            )
 
     with st.expander(
         f"🛍️ Produtos marcados para a futura vitrine ({resumo_site_hf35.get('marcados_site', 0)})",

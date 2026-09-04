@@ -990,3 +990,8 @@ hangelog
 - Produtos continuam na Fonte Única do Catálogo; contato vem da configuração oficial do Manager.
 - Reaproveita seletivamente a essência institucional e os tipos de serviço do site legado, sem importar automaticamente fotos antigas.
 - Atualiza o staging para o fluxo homologado Cloudflare Workers · Static Assets (`*.workers.dev`), sem CNAME ou DNS automático.
+
+## 20.4.9-I8.13.5-HF41 — Preparação segura da virada do domínio
+- Adiciona checklist pré-virada na Central do Site após homologação externa da HF40.
+- Gera kit de backup DNS e rollback, sem executar DNS ou conectar domínio.
+- Mantém `alphafest.com.br` intocado até captura e conferência de NS/A/AAAA/CNAME/MX/TXT.

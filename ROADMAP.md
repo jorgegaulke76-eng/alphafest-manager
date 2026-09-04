@@ -73,3 +73,9 @@
 
 - HF40: Site completo paralelo — Início, Produtos, Serviços, Quem Somos e Contato na estética da vitrine homologada; Fonte Única preservada; staging no Cloudflare Workers · Static Assets.
 - Próxima etapa após homologar HF40: revisar textos/serviços no endereço temporário, validar celular e contato, depois acrescentar acabamento institucional/SEO local antes da preparação da virada de `alphafest.com.br`.
+
+### HF41 — Preparação da virada do domínio
+- [x] Staging externo HF40 homologado em Desktop e Celular.
+- [x] Kit de segurança pré-virada e rollback dentro do Manager.
+- [ ] Capturar o DNS atual e confirmar onde a zona é administrada.
+- [ ] Só depois preparar a conexão de `alphafest.com.br` ao Worker homologado.
