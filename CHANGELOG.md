@@ -1002,3 +1002,11 @@ hangelog
 - Acrescenta canonical, robots público e sitemap do domínio oficial.
 - Remove notas internas do Manager do HTML público, mantendo a Fonte Única sem exposição técnica.
 - Mantém DNS/e-mail fora da automação e deixa `www` para etapa separada após validação do domínio raiz.
+
+
+## 20.4.9-I8.13.5-HF43 — Categorias comerciais na vitrine
+- Substitui os filtros técnicos/específicos do Catálogo por categorias comerciais orientadas ao cliente.
+- Mantém `Todos` para exibir a vitrine completa e mostra somente grupos que possuam produtos publicados.
+- O agrupamento é derivado em leitura do mesmo Catálogo oficial, sem segundo cadastro ou persistência paralela.
+- Preserva busca pelas categorias internas, preço opcional, WhatsApp contextual, responsividade e pacote público de produção.
+- Mantém `www` pendente até validação da HF43 no domínio raiz.

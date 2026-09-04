@@ -24981,7 +24981,7 @@ if pagina_atual == "clientes_360":
 if pagina_atual == "site":
     st.markdown("# 🌐 Central do Site AlphaFest")
     st.caption(
-        "HF42 • O Catálogo do Manager continua como Fonte Única do novo site. "
+        "HF43 • O Catálogo do Manager continua como Fonte Única do novo site. "
         "O domínio principal já está conectado ao Worker homologado; a publicação final fica separada do DNS e mantém rollback."
     )
 
@@ -25014,6 +25014,12 @@ if pagina_atual == "site":
         "✨ **HF40 · Site completo:** Início · Produtos · Serviços · Quem Somos · Contato. "
         "A essência institucional e os tipos de serviço do site antigo foram reorganizados no novo padrão visual; "
         "endereço, e-mail e WhatsApp são lidos da configuração oficial do Manager. Fotos antigas não são importadas automaticamente."
+    )
+
+    st.success(
+        "🧭 **HF43 · Categorias comerciais:** a vitrine agora agrupa os produtos em categorias mais claras para o cliente "
+        "(Festas & Personalizados, Balões & Decoração, Gráfica Rápida, Brindes, Convites & Papelaria, Impressão 3D, "
+        "Gravação a Laser e Kits Festa). O agrupamento é calculado somente a partir do Catálogo oficial e não cria outro cadastro."
     )
 
     # HF40 — mantém a vitrine homologada e acrescenta o site institucional completo sem tocar no domínio atual.
@@ -25069,7 +25075,7 @@ if pagina_atual == "site":
         )
 
     # HF40 — ambiente paralelo/staging: site completo seguro, sem DNS/CNAME.
-    with st.expander("🚧 Site paralelo / staging — HF40", expanded=True):
+    with st.expander("🚧 Site paralelo / staging — HF40", expanded=False):
         st.caption(
             "O novo site pode ser hospedado e testado em um endereço temporário sem alterar alphafest.com.br. "
             "A HF40 não publica, não muda DNS e não desliga o site atual."
@@ -25150,43 +25156,43 @@ if pagina_atual == "site":
                 "Ele não contém credenciais, CNAME, comandos de DNS nem alteração automática."
             )
 
-        # HF42 — pacote final de produção: remove staging/noindex, sem alterar DNS.
-        with st.expander("🚀 Produção oficial — HF42", expanded=True):
-            _prod_hf42 = _site_resumo_producao(total_produtos=resumo_vitrine_hf36.get("total", 0))
+        # HF43 — pacote de produção com categorias comerciais; remove staging/noindex, sem alterar DNS.
+        with st.expander("🚀 Produção oficial — HF43", expanded=True):
+            _prod_hf43 = _site_resumo_producao(total_produtos=resumo_vitrine_hf36.get("total", 0))
             p1_hf42, p2_hf42, p3_hf42, p4_hf42 = st.columns(4)
-            p1_hf42.metric("Zona Cloudflare", _prod_hf42.get("zona_cloudflare", "—"))
+            p1_hf42.metric("Zona Cloudflare", _prod_hf43.get("zona_cloudflare", "—"))
             p2_hf42.metric("Domínio principal", "Conectado")
             p3_hf42.metric("Pacote público", "Pronto")
-            p4_hf42.metric("www", _prod_hf42.get("www", "Pendente"))
+            p4_hf42.metric("www", _prod_hf43.get("www", "Pendente"))
             st.success(
-                "✅ `alphafest.com.br` já abre o Worker homologado. A HF42 gera o pacote público final sem faixa de homologação e sem `noindex`."
+                "✅ `alphafest.com.br` já abre o Worker oficial. A HF43 mantém o pacote público sem faixa de homologação/`noindex` e troca apenas a navegação por categorias comerciais."
             )
-            st.warning(
-                "⚠️ O site oficial ainda mostra o pacote de staging HF40 até você fazer um **New deployment** com o ZIP de produção abaixo. "
-                "Este ZIP não altera DNS, MX, webmail nem Custom Domains."
+            st.info(
+                "ℹ️ O domínio oficial já está com a produção HF42. O ZIP abaixo atualiza somente a navegação da vitrine para as categorias comerciais da HF43. "
+                "Ele não altera DNS, MX, webmail nem Custom Domains."
             )
-            html_producao_hf42 = _site_gerar_html_completo(
+            html_producao_hf43 = _site_gerar_html_completo(
                 catalogo_site_hf35,
                 empresa_vitrine_hf36,
                 logo_src=logo_src_hf36,
                 imagem_resolver=_catalogo_html_src_imagem,
                 modo_preview=False,
             )
-            pacote_producao_hf42 = _site_gerar_pacote_producao(
-                html_producao_hf42,
+            pacote_producao_hf43 = _site_gerar_pacote_producao(
+                html_producao_hf43,
                 total_produtos=resumo_vitrine_hf36.get("total", 0),
-                versao_manager="20.4.9-I8.13.5-HF42",
+                versao_manager="20.4.9-I8.13.5-HF43",
             )
             st.download_button(
                 "⬇️ Baixar pacote FINAL de produção (ZIP)",
-                data=pacote_producao_hf42,
-                file_name="alphafest-site-producao-hf42.zip",
+                data=pacote_producao_hf43,
+                file_name="alphafest-site-producao-hf43.zip",
                 mime="application/zip",
                 use_container_width=True,
-                key="site_hf42_download_producao",
+                key="site_hf43_download_producao",
             )
             st.caption(
-                "Depois do deployment, validar `alphafest.com.br` em desktop/celular e só então conectar `www.alphafest.com.br`."
+                "Depois do deployment HF43, validar os filtros comerciais em `alphafest.com.br`; só então conectar `www.alphafest.com.br`."
             )
 
     with st.expander(
@@ -25312,8 +25318,8 @@ if pagina_atual == "site":
                 rerun_na_aba("crescimento")
 
     st.info(
-        "🧭 **HF40:** o site paralelo agora reúne Início, Produtos, Serviços, Quem Somos e Contato na estética aprovada da vitrine. "
-        "A publicação no domínio oficial continua bloqueada até a homologação completa — o site atual permanece intocado."
+        "🧭 **HF43:** o site oficial já usa a estrutura Início, Produtos, Serviços, Quem Somos e Contato. "
+        "A evolução atual troca somente os filtros técnicos da vitrine por categorias comerciais, preservando layout, produtos, preços opcionais e WhatsApp."
     )
 
 if pagina_atual == "crescimento":

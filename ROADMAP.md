@@ -84,6 +84,15 @@
 - [x] Nameservers migrados para Cloudflare e zona Active.
 - [x] `alphafest.com.br` conectado ao Worker `alphafest-novo`.
 - [x] Pacote público final gerado sem staging/noindex.
-- [ ] Fazer New deployment do pacote HF42 e validar domínio raiz em desktop/celular.
+- [x] Fazer New deployment do pacote HF42 e validar o domínio raiz em desktop.
 - [ ] Conectar `www.alphafest.com.br` ao mesmo Worker ou redirecioná-lo para o domínio raiz.
 - [ ] Confirmar indexação/SEO básico após estabilização.
+
+
+### HF43 — Categorias comerciais na vitrine
+- [x] Agrupamento comercial implementado sem novo banco/cadastro.
+- [x] `Todos` preservado e categorias vazias ocultadas automaticamente.
+- [x] Pacote público HF43 preparado com SEO/WhatsApp/preço opcional preservados.
+- [ ] Instalar HF43 e conferir a prévia no Manager.
+- [ ] Fazer New deployment HF43 no Worker `alphafest-novo` e validar filtros em `alphafest.com.br`.
+- [ ] Só depois resolver `www.alphafest.com.br`.

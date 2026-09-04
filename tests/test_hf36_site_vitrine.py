@@ -100,7 +100,7 @@ class HF36SiteVitrineTests(unittest.TestCase):
         self.assertIn('_site_gerar_html_completo(', trecho)
         self.assertIn('components.html(html_vitrine_hf36', trecho)
         self.assertIn('"⬇️ Baixar esta prévia HTML"', trecho)
-        self.assertIn("o site atual permanece intocado", trecho)
+        self.assertIn("o site oficial já usa a estrutura", trecho)
         self.assertNotIn("publish_catalog_html(", trecho)
 
 

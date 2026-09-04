@@ -1,7 +1,9 @@
-"""Prévia responsiva da futura vitrine pública AlphaFest (HF40).
+"""Vitrine pública responsiva AlphaFest (HF43).
 
 Somente leitura: seleciona produtos diretamente do Catálogo oficial marcados
-para o site e prontos para apresentação. Não persiste, publica ou altera dados.
+para o site e prontos para apresentação. A HF43 acrescenta uma camada de
+agrupamento comercial apenas para navegação pública, sem criar cadastro paralelo.
+Não persiste, publica ou altera dados.
 """
 from __future__ import annotations
 
@@ -15,6 +17,79 @@ from site_manager_service import avaliar_produto_site
 
 
 ImagemResolver = Optional[Callable[[str], str]]
+
+
+CATEGORIAS_COMERCIAIS = (
+    "Festas & Personalizados",
+    "Balões & Decoração",
+    "Gráfica Rápida",
+    "Brindes",
+    "Convites & Papelaria",
+    "Impressão 3D",
+    "Gravação a Laser",
+    "Kits Festa",
+)
+
+
+def _normalizar_texto(texto: Any) -> str:
+    base = unicodedata.normalize("NFKD", str(texto or ""))
+    base = "".join(c for c in base if not unicodedata.combining(c))
+    base = re.sub(r"[^a-zA-Z0-9]+", " ", base).strip().casefold()
+    return re.sub(r"\s+", " ", base)
+
+
+def _tem(texto: str, *termos: str) -> bool:
+    return any(_normalizar_texto(t) in texto for t in termos if str(t or "").strip())
+
+
+def categoria_comercial_produto(item: Dict[str, Any]) -> str:
+    """Agrupa a categoria técnica do Catálogo em uma categoria comercial pública.
+
+    A decisão é derivada somente dos dados existentes no produto. Nenhum valor é
+    salvo de volta no Catálogo e não existe segunda Fonte Única. Regras mais
+    específicas vêm antes das genéricas para evitar, por exemplo, que um troféu
+    impresso em 3D caia em Brindes.
+    """
+    nome = _normalizar_texto(item.get("nome"))
+    categoria = _normalizar_texto(item.get("categoria"))
+    subcategoria = _normalizar_texto(item.get("subcategoria"))
+    material = _normalizar_texto(item.get("material"))
+    processos = _normalizar_texto(" ".join(_lista(item.get("processos"))))
+    descricao = _normalizar_texto(item.get("descricao"))
+    nucleo = " ".join(x for x in [nome, categoria, subcategoria, material, processos] if x)
+    fonte = " ".join(x for x in [nucleo, descricao] if x)
+
+    if _tem(fonte, "kit festa", "kit personalizado", "composicao de festa", "composicao festa"):
+        return "Kits Festa"
+    if _tem(fonte, "gravacao a laser", "gravacao laser", "laser"):
+        return "Gravação a Laser"
+    # "3D" isolado na descrição pode significar apenas efeito visual. A técnica
+    # de produção só é assumida quando 3D está no nome/categoria/processo ou
+    # quando a descrição fala explicitamente em impressão 3D.
+    if _tem(nucleo, "3d") or _tem(descricao, "impressao 3d", "impresso em 3d", "produzido em 3d"):
+        return "Impressão 3D"
+    if _tem(fonte, "bubble", "balao", "baloes", "gas helio", "helio"):
+        return "Balões & Decoração"
+
+    # Itens tipicamente de festa devem vencer palavras genéricas como "brinde"
+    # presentes em categorias internas antigas (ex.: Bandeirola).
+    if _tem(nome, "bandeirola", "topo de bolo", "topo flork", "topper", "vela personalizada"):
+        return "Festas & Personalizados"
+
+    if _tem(fonte, "dtf", "adesivo", "banner", "faixa", "grafica", "grafico", "papel de arroz", "impressao rapida"):
+        return "Gráfica Rápida"
+    if _tem(fonte, "convite", "papelaria", "caixa cone", "sacola", "saco metalizado", "tag papel", "caixinha"):
+        return "Convites & Papelaria"
+    if _tem(fonte, "caneca", "copo", "ecobag", "medalha", "trofeu", "brinde", "squeeze", "chaveiro", "camiseta", "lembranca"):
+        return "Brindes"
+    return "Festas & Personalizados"
+
+
+def _ordem_categoria_comercial(nome: str) -> int:
+    try:
+        return CATEGORIAS_COMERCIAIS.index(str(nome))
+    except ValueError:
+        return len(CATEGORIAS_COMERCIAIS)
 
 
 def _slug(texto: str) -> str:
@@ -65,14 +140,22 @@ def selecionar_produtos_vitrine(catalogo: Iterable[Dict[str, Any]]) -> List[Dict
         item["variacoes"] = _lista(produto.get("Variacoes"))
         item["subcategoria"] = str(produto.get("Subcategoria") or "").strip()
         item["material"] = str(produto.get("Material") or "").strip()
+        item["processos"] = _lista(produto.get("Processos") or produto.get("Processo") or produto.get("processos"))
+        item["categoria_origem"] = str(item.get("categoria") or "").strip()
+        item["categoria_comercial"] = categoria_comercial_produto(item)
         saida.append(item)
-    saida.sort(key=lambda x: (not bool(x.get("destaque")), str(x.get("categoria") or "").casefold(), str(x.get("nome") or "").casefold()))
+    saida.sort(key=lambda x: (
+        not bool(x.get("destaque")),
+        _ordem_categoria_comercial(str(x.get("categoria_comercial") or "")),
+        str(x.get("nome") or "").casefold(),
+    ))
     return saida
 
 
 def resumir_vitrine(catalogo: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
     produtos = selecionar_produtos_vitrine(catalogo)
-    categorias = sorted({str(x.get("categoria") or "Outros").strip() or "Outros" for x in produtos}, key=str.casefold)
+    presentes = {str(x.get("categoria_comercial") or "Festas & Personalizados").strip() for x in produtos}
+    categorias = [cat for cat in CATEGORIAS_COMERCIAIS if cat in presentes]
     return {
         "produtos": produtos,
         "total": len(produtos),
@@ -115,7 +198,8 @@ def gerar_html_vitrine(
     for item in produtos:
         nome = str(item.get("nome") or "Produto").strip() or "Produto"
         descricao = str(item.get("descricao") or "").strip()
-        categoria = str(item.get("categoria") or "Outros").strip() or "Outros"
+        categoria_origem = str(item.get("categoria_origem") or item.get("categoria") or "").strip()
+        categoria = str(item.get("categoria_comercial") or "Festas & Personalizados").strip() or "Festas & Personalizados"
         exibir_preco = bool(item.get("exibir_preco_site")) and bool(str(item.get("preco") or "").strip())
         preco = _preco_br(item.get("preco")) if exibir_preco else ""
         img = str(item.get("imagem_principal") or "").strip()
@@ -141,7 +225,7 @@ def gerar_html_vitrine(
             opcoes_html = f'<div class="options"><strong>Opções:</strong> {html.escape(texto_opcoes)}</div>'
         msg = quote(f"Olá! Vim pelo site da AlphaFest e gostaria de um orçamento para: {nome}. Quero definir tamanho/personalização, cor, quantidade, material e prazo.")
         href = f"https://wa.me/{numero}?text={msg}" if numero else "#"
-        busca = " ".join([nome, descricao, categoria, item.get("subcategoria") or "", item.get("material") or ""])
+        busca = " ".join([nome, descricao, categoria, categoria_origem, item.get("subcategoria") or "", item.get("material") or "", " ".join(item.get("processos") or [])])
         busca = unicodedata.normalize("NFKD", busca).encode("ascii", "ignore").decode("ascii").casefold()
         badge = '<span class="badge">⭐ Destaque</span>' if item.get("destaque") else ""
         descricao_curta = descricao[:280] + ("…" if len(descricao) > 280 else "")
@@ -193,8 +277,8 @@ def gerar_html_vitrine(
 </style></head>
 <body>{preview_bar}
 <header class="header"><div class="header-in"><a class="brand" href="#inicio">{logo}<div class="brand-copy"><strong>{html.escape(nome_empresa)}</strong><span>{html.escape(subtitulo)}</span></div></a><div class="header-actions"><a class="ghost" href="#produtos">Ver produtos</a><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Falar no WhatsApp</a></div></div></header>
-<section class="hero" id="inicio"><div class="hero-in"><div><div class="eyebrow">Personalização que vira presença</div><h1>Seu evento, sua marca, <span>do seu jeito.</span></h1><p>{html.escape(slogan)} Escolha uma ideia na vitrine e fale com a AlphaFest para personalizar detalhes, quantidade e prazo.</p><div class="hero-actions"><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Explorar produtos ↓</a></div></div><aside class="hero-card"><div class="eyebrow">Vitrine AlphaFest</div><h2>Personalizados & Balões</h2><p>Ideias selecionadas para você encontrar uma referência e pedir seu orçamento.</p><div class="hero-stat"><div class="stat"><strong>{resumo['total']}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{resumo['total_categorias']}</strong><span>categorias</span></div></div></aside></div></section>
-<main class="main" id="produtos"><div class="section-head"><div><h2>Encontre seu personalizado</h2><p>Pesquise ou filtre por categoria.</p></div><div id="result-count">{resumo['total']} produto(s)</div></div><div class="toolbar"><label class="search"><input id="search" type="search" placeholder="Buscar produto, categoria ou descrição..."></label></div><div class="filters">{''.join(chips)}</div><div class="grid" id="grid">{''.join(cards)}</div>{vazio}</main>
+<section class="hero" id="inicio"><div class="hero-in"><div><div class="eyebrow">Personalização que vira presença</div><h1>Seu evento, sua marca, <span>do seu jeito.</span></h1><p>{html.escape(slogan)} Escolha uma ideia na vitrine e fale com a AlphaFest para personalizar detalhes, quantidade e prazo.</p><div class="hero-actions"><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Explorar produtos ↓</a></div></div><aside class="hero-card"><div class="eyebrow">Vitrine AlphaFest</div><h2>Personalizados & Balões</h2><p>Ideias selecionadas para você encontrar uma referência e pedir seu orçamento.</p><div class="hero-stat"><div class="stat"><strong>{resumo['total']}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{resumo['total_categorias']}</strong><span>categorias comerciais</span></div></div></aside></div></section>
+<main class="main" id="produtos"><div class="section-head"><div><h2>Encontre seu personalizado</h2><p>Pesquise ou escolha uma categoria.</p></div><div id="result-count">{resumo['total']} produto(s)</div></div><div class="toolbar"><label class="search"><input id="search" type="search" placeholder="Buscar produto, categoria ou descrição..."></label></div><div class="filters">{''.join(chips)}</div><div class="grid" id="grid">{''.join(cards)}</div>{vazio}</main>
 <a class="mobile-whatsapp" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Pedir orçamento</a>
 <footer class="footer"><div class="footer-in"><div><strong>{html.escape(nome_empresa)}</strong><br><small>{html.escape(subtitulo)}{(' · ' + html.escape(local)) if local else ''}</small></div><div>{html.escape(slogan)}</div></div></footer>
 <script>
