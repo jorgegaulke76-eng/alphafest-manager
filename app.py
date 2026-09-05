@@ -34,6 +34,7 @@ from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_T
 from site_manager_service import resumir_catalogo_site as _site_resumir_catalogo, ordenar_produtos_site as _site_ordenar_produtos
 from site_vitrine_service import resumir_vitrine as _site_resumir_vitrine
 from site_completo_service import gerar_html_site_completo as _site_gerar_html_completo
+from site_galeria_service import resumir_galeria_site as _site_resumir_galeria
 from site_staging_service import gerar_pacote_staging as _site_gerar_pacote_staging, resumo_staging as _site_resumo_staging
 from site_cutover_service import gerar_kit_pre_virada as _site_gerar_kit_pre_virada, resumo_pre_virada as _site_resumo_pre_virada
 from site_production_service import gerar_pacote_producao as _site_gerar_pacote_producao, resumo_producao as _site_resumo_producao
@@ -578,6 +579,16 @@ def delete_private_gallery_image(object_path):
 @st.cache_data(ttl=900, show_spinner=False)
 def _galeria_trabalho_bytes_cache(object_path):
     return read_private_gallery_image(object_path)
+
+def _galeria_trabalho_imagem_data_uri(object_path):
+    """HF47.1: embute foto PRIVADA apenas na prévia interna, sem tornar o bucket público."""
+    caminho = str(object_path or "").strip()
+    bruto = _galeria_trabalho_bytes_cache(caminho) if caminho else None
+    if not bruto:
+        return ""
+    ext = Path(caminho).suffix.lower()
+    mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}.get(ext, "image/jpeg")
+    return f"data:{mime};base64,{base64.b64encode(bruto).decode('ascii')}"
 
 @st.cache_data(ttl=900, show_spinner=False)
 def _biblioteca3d_bytes_cache(object_path):
@@ -25686,6 +25697,76 @@ if pagina_atual == "site":
         st.info(
             "🔒 **Produção protegida:** o botão Publicar site agora (HF44) ainda gera a navegação anterior. "
             "A nova estrutura só será ativada em produção depois que a classificação da Anna for concluída e você aprovar esta prévia."
+        )
+
+    # HF47.1 — Galeria pública em PRÉVIA INTERNA. As fotos continuam privadas
+    # no Supabase e só são lidas quando Jorge pede para preparar/atualizar a prévia.
+    galeria_site_hf471 = carregar_galeria_trabalhos()
+    resumo_galeria_hf471 = _site_resumir_galeria(galeria_site_hf471)
+    with st.expander("📸 Prévia Galeria no Site — HF47.1", expanded=False):
+        st.caption(
+            "A prévia usa somente trabalhos **autorizados e pré-selecionados** na Galeria do Manager. "
+            "Categoria → Subcategoria → Tema viram filtros no site e cada foto recebe o botão **Quero algo parecido**. "
+            "Nada é publicado no site oficial."
+        )
+        g1_hf471, g2_hf471, g3_hf471, g4_hf471 = st.columns(4)
+        g1_hf471.metric("Trabalhos selecionados", resumo_galeria_hf471.get("total_trabalhos", 0))
+        g2_hf471.metric("Fotos para a Galeria", resumo_galeria_hf471.get("total_fotos", 0))
+        g3_hf471.metric("Categorias", resumo_galeria_hf471.get("total_categorias", 0))
+        g4_hf471.metric("Temas", resumo_galeria_hf471.get("total_temas", 0))
+
+        st.info(
+            "⚡ Para manter o Manager rápido, as fotos privadas **não são carregadas ao abrir esta tela**. "
+            "Use o botão abaixo apenas quando quiser conferir a Galeria."
+        )
+        if st.button("🖼️ Preparar / atualizar prévia da Galeria", use_container_width=True, key="site_hf471_prepare"):
+            with st.spinner("Montando a prévia da Galeria com as fotos selecionadas…"):
+                st.session_state["site_hf471_html_preview"] = _site_gerar_html_completo(
+                    catalogo_site_hf35,
+                    empresa_vitrine_hf36,
+                    logo_src=logo_src_hf36,
+                    imagem_resolver=_catalogo_html_src_imagem,
+                    modo_preview=True,
+                    usar_taxonomia_catalogo=True,
+                    galeria_trabalhos=galeria_site_hf471,
+                    galeria_imagem_resolver=_galeria_trabalho_imagem_data_uri,
+                    incluir_galeria=True,
+                    limite_fotos_galeria=24,
+                )
+                st.session_state["site_hf471_preview_total"] = resumo_galeria_hf471.get("total_fotos", 0)
+            st.success("✅ Prévia preparada. Nenhuma publicação foi feita.")
+
+        html_galeria_hf471 = st.session_state.get("site_hf471_html_preview", "")
+        if html_galeria_hf471:
+            modo_galeria_hf471 = st.radio(
+                "Visualização da Galeria",
+                ["🖥️ Desktop", "📱 Celular"],
+                horizontal=True,
+                key="site_hf471_modo_preview",
+            )
+            if modo_galeria_hf471 == "📱 Celular":
+                _ge1_hf471, _gcel_hf471, _ge2_hf471 = st.columns([1.0, 0.62, 1.0])
+                with _gcel_hf471:
+                    components.html(html_galeria_hf471, height=1050, scrolling=True)
+            else:
+                components.html(html_galeria_hf471, height=980, scrolling=True)
+
+            st.download_button(
+                "⬇️ Baixar prévia da Galeria",
+                data=html_galeria_hf471,
+                file_name="alphafest-preview-galeria-hf47-1.html",
+                mime="text/html",
+                use_container_width=True,
+                key="site_hf471_download_preview",
+            )
+        elif resumo_galeria_hf471.get("total_fotos", 0):
+            st.caption("Clique em **Preparar / atualizar prévia da Galeria** para visualizar as fotos aqui.")
+        else:
+            st.warning("Ainda não há trabalho autorizado e pré-selecionado para a Galeria do site.")
+
+        st.info(
+            "🔒 **HF44 preservado:** Publicar site agora continua gerando o site oficial sem esta Galeria. "
+            "A ativação pública será feita somente depois da sua aprovação."
         )
 
     # HF40 — ambiente paralelo/staging: site completo seguro, sem DNS/CNAME.

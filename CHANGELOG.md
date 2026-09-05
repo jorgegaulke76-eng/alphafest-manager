@@ -1070,3 +1070,12 @@ hangelog
 - Evita revalidar o bucket privado a cada foto enviada.
 - Acelera a otimização WebP de fotos de celular sem comprometer a qualidade para portfólio.
 - Nenhuma alteração no site oficial ou no fluxo de publicação HF44.
+
+
+## 20.4.9-I8.13.5-HF47.1 — Galeria no site em prévia interna
+- Adiciona na Central do Site uma prévia da nova aba `Galeria`, sem publicar no domínio oficial.
+- Usa somente trabalhos da Galeria interna que estejam autorizados, pré-selecionados e não arquivados; não cria cadastro paralelo.
+- Exibe as fotos com filtros Categoria → Subcategoria → Tema e CTA contextual `Quero algo parecido` para WhatsApp.
+- A nova navegação da prévia fica: Início → Produtos → Galeria → Serviços → Quem Somos → Contato.
+- Para preservar performance, fotos privadas só são carregadas quando Jorge clica em `Preparar / atualizar prévia da Galeria`, com limite visual de 24 fotos na prévia.
+- O bucket continua privado e o HF44 permanece sem `incluir_galeria=True`; portanto, nada desta etapa vai para `alphafest.com.br`.

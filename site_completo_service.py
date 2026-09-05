@@ -15,6 +15,7 @@ from typing import Any, Callable, Dict, Iterable, Optional
 from urllib.parse import quote
 
 from site_vitrine_service import gerar_html_vitrine
+from site_galeria_service import gerar_fragmento_galeria
 
 ImagemResolver = Optional[Callable[[str], str]]
 
@@ -60,12 +61,17 @@ def gerar_html_site_completo(
     imagem_resolver: ImagemResolver = None,
     modo_preview: bool = True,
     usar_taxonomia_catalogo: bool = False,
+    galeria_trabalhos: Optional[Iterable[Dict[str, Any]]] = None,
+    galeria_imagem_resolver: ImagemResolver = None,
+    incluir_galeria: bool = False,
+    limite_fotos_galeria: Optional[int] = 24,
 ) -> str:
     """Gera o site completo sem publicar ou persistir qualquer dado.
 
     HF45.4 permite uma prévia paralela usando Categoria → Subcategoria do
-    Catálogo Oficial. O parâmetro padrão permanece False para preservar o site
-    público HF44 até a classificação ser revisada e homologada.
+    Catálogo Oficial. HF47.1 acrescenta, somente quando solicitado, a Galeria de
+    Trabalhos já autorizada/pré-selecionada no Manager. Os parâmetros padrão
+    permanecem desligados para preservar integralmente o site público HF44.
     """
     pagina = gerar_html_vitrine(
         catalogo,
@@ -90,6 +96,15 @@ def gerar_html_site_completo(
     whatsapp = _wa(numero, "Olá! Vim pelo novo site da AlphaFest e gostaria de conversar sobre um projeto personalizado.")
     mapa = "https://www.google.com/maps/search/?api=1&query=" + quote(endereco) if endereco else "#"
 
+    galeria_fragmento = {"html": "", "css": "", "js": "", "resumo": {"total_trabalhos": 0, "total_fotos": 0}}
+    if incluir_galeria:
+        galeria_fragmento = gerar_fragmento_galeria(
+            list(galeria_trabalhos or []),
+            empresa,
+            imagem_resolver=galeria_imagem_resolver,
+            limite_fotos=limite_fotos_galeria,
+        )
+
     css_extra = r'''
 .site-nav{position:sticky;top:79px;z-index:19;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
 .site-nav-in{max-width:1240px;margin:auto;padding:0 22px;display:flex;align-items:center;justify-content:center;gap:6px;overflow-x:auto;scrollbar-width:none}.site-nav-in::-webkit-scrollbar{display:none}
@@ -103,20 +118,24 @@ def gerar_html_site_completo(
 @media(max-width:940px){.services-grid{grid-template-columns:repeat(2,1fr)}.about-grid,.contact-grid{grid-template-columns:1fr}.site-nav{top:69px}}
 @media(max-width:620px){.site-nav{top:69px}.site-nav-in{justify-content:flex-start;padding:0 10px}.site-nav a{padding:10px 9px;font-size:12px}.site-section{padding:46px 14px}.section-title{font-size:30px}.services-grid{grid-template-columns:1fr}.service-card{padding:18px}.about-card,.contact-card{padding:20px}.contact-actions>a{width:100%}}
 '''
+    if incluir_galeria:
+        css_extra += str(galeria_fragmento.get("css") or "")
     pagina = pagina.replace("</style>", css_extra + "</style>", 1)
 
     # A barra identifica claramente qual estrutura está sendo homologada.
     if modo_preview:
-        preview = (
-            '<div class="preview-bar">PRÉVIA INTERNA HF45.4-HF1 · CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
-            if usar_taxonomia_catalogo
-            else '<div class="preview-bar">PRÉVIA INTERNA HF40 · SITE COMPLETO · AINDA NÃO PUBLICADO</div>'
-        )
+        if incluir_galeria:
+            preview = '<div class="preview-bar">PRÉVIA INTERNA HF47.1 · GALERIA + CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
+        elif usar_taxonomia_catalogo:
+            preview = '<div class="preview-bar">PRÉVIA INTERNA HF45.4-HF1 · CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
+        else:
+            preview = '<div class="preview-bar">PRÉVIA INTERNA HF40 · SITE COMPLETO · AINDA NÃO PUBLICADO</div>'
         pagina = pagina.replace("<body>", "<body>" + preview, 1)
 
     # Navegação única, mantendo o header da vitrine homologada.
-    nav = '''<nav class="site-nav" aria-label="Navegação principal"><div class="site-nav-in">
-      <a href="#inicio">Início</a><a href="#produtos">Produtos</a><a href="#servicos">Serviços</a><a href="#quem-somos">Quem Somos</a><a href="#contato">Contato</a>
+    galeria_nav = '<a href="#galeria">Galeria</a>' if incluir_galeria else ''
+    nav = f'''<nav class="site-nav" aria-label="Navegação principal"><div class="site-nav-in">
+      <a href="#inicio">Início</a><a href="#produtos">Produtos</a>{galeria_nav}<a href="#servicos">Serviços</a><a href="#quem-somos">Quem Somos</a><a href="#contato">Contato</a>
     </div></nav>'''
     marcador_header = "</header>"
     pagina = pagina.replace(marcador_header, marcador_header + nav, 1)
@@ -157,13 +176,18 @@ def gerar_html_site_completo(
         <div class="about-point"><div>3️⃣</div><div><strong>Receba a orientação</strong><span>A AlphaFest confirma possibilidades, valor e próximos passos.</span></div></div>
       </div></div></div>{('<div class="site-footnote">Dados de contato exibidos nesta página são lidos da configuração oficial da empresa no AlphaFest Manager.</div>' if modo_preview else '')}</div></section>'''
 
-    # A ordem desejada é Início -> Produtos -> Serviços -> Quem Somos -> Contato.
+    # HF47.1: Início -> Produtos -> Galeria -> Serviços -> Quem Somos -> Contato.
+    galeria_html = str(galeria_fragmento.get("html") or "") if incluir_galeria else ""
+    extras = galeria_html + servicos + sobre + contato
     marcador_mobile = '<a class="mobile-whatsapp"'
     pos = pagina.find(marcador_mobile)
     if pos >= 0:
-        pagina = pagina[:pos] + servicos + sobre + contato + pagina[pos:]
+        pagina = pagina[:pos] + extras + pagina[pos:]
     else:
-        pagina = pagina.replace("<footer class=\"footer\">", servicos + sobre + contato + '<footer class="footer">', 1)
+        pagina = pagina.replace("<footer class=\"footer\">", extras + '<footer class="footer">', 1)
+
+    if incluir_galeria and galeria_fragmento.get("js"):
+        pagina = pagina.replace("</body>", "<script>" + str(galeria_fragmento.get("js") or "") + "</script></body>", 1)
 
     # No site completo, o CTA de navegação deixa de falar só em "Ver produtos".
     pagina = pagina.replace('>Ver produtos</a>', '>Produtos</a>', 1)
