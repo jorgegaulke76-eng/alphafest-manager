@@ -1084,6 +1084,14 @@ hangelog
 - Para preservar performance, fotos privadas só são carregadas quando Jorge clica em `Preparar / atualizar prévia da Galeria`, com limite visual de 24 fotos na prévia.
 - O bucket continua privado e o HF44 permanece sem `incluir_galeria=True`; portanto, nada desta etapa vai para `alphafest.com.br`.
 
+
+## 20.4.9-I8.13.5-HF48.2 — Thu + Fox no novo visual comercial
+
+- Inclui mascotes oficiais em pontos estratégicos do site (hero, Galeria e CTA final).
+- Imagens WebP otimizadas e carregadas somente quando a prévia HF48.2 é preparada.
+- Mantém HF48.1 disponível para comparação e HF44 intacto para produção.
+- Nenhuma nova etapa operacional para a equipe.
+
 ## 20.4.9-I8.13.5-HF48.1 — Novo visual comercial do site em prévia interna
 - Cria uma nova proposta visual opt-in sem alterar a produção HF44.
 - Reorganiza o topo com busca principal, CTA de WhatsApp e navegação mais comercial.

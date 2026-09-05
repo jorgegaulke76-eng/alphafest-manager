@@ -67,13 +67,15 @@ def gerar_html_site_completo(
     incluir_galeria: bool = False,
     limite_fotos_galeria: Optional[int] = 24,
     visual_hf48: bool = False,
+    mascotes_hf48: bool = False,
 ) -> str:
     """Gera o site completo sem publicar ou persistir qualquer dado.
 
     HF45.4 permite uma prévia paralela usando Categoria → Subcategoria do
     Catálogo Oficial. HF47.1 acrescenta, somente quando solicitado, a Galeria de
     Trabalhos já autorizada/pré-selecionada no Manager. HF48.1 adiciona uma
-    camada visual comercial opt-in, inicialmente somente em prévia. Os parâmetros
+    camada visual comercial opt-in; HF48.2 pode acrescentar Thu + Fox sobre essa
+    mesma camada, também opt-in e inicialmente somente em prévia. Os parâmetros
     padrão permanecem desligados para preservar integralmente o site público HF44.
     """
     catalogo_lista = list(catalogo or [])
@@ -225,5 +227,6 @@ def gerar_html_site_completo(
             catalogo_lista,
             empresa,
             incluir_galeria=incluir_galeria,
+            usar_mascotes=mascotes_hf48,
         )
     return pagina

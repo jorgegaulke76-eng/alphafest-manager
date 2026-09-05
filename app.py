@@ -25839,6 +25839,65 @@ if pagina_atual == "site":
             "sem alterar Catálogo, Galeria ou fluxo de atualização."
         )
 
+    # HF48.2 — identidade visual Thu + Fox sobre a base comercial HF48.1.
+    # Continua somente em prévia; publicação HF44 permanece intocada.
+    with st.expander("🦊 Thu + Fox no novo Site — HF48.2", expanded=False):
+        st.caption(
+            "Aplica os mascotes oficiais enviados pela equipe sobre o novo visual comercial, sem alterar Catálogo, "
+            "Galeria, filtros, WhatsApp ou a publicação homologada. **Nada desta etapa é publicado automaticamente.**"
+        )
+        st.info(
+            "🎯 Uso proposital: Thu e Fox aparecem como assinatura de marca no hero, apoio da Galeria e chamada final. "
+            "O objetivo é reforçar identidade sem deixar o site infantil ou criar trabalho extra para a Anna."
+        )
+        if st.button("🦊 Preparar / atualizar prévia Thu + Fox HF48.2", use_container_width=True, key="site_hf482_prepare"):
+            with st.spinner("Aplicando Thu + Fox ao novo visual da AlphaFest…"):
+                st.session_state["site_hf482_html_preview"] = _site_gerar_html_completo(
+                    catalogo_site_hf35,
+                    empresa_vitrine_hf36,
+                    logo_src=logo_src_hf36,
+                    imagem_resolver=_catalogo_html_src_imagem,
+                    modo_preview=True,
+                    usar_taxonomia_catalogo=True,
+                    galeria_trabalhos=galeria_site_hf471,
+                    galeria_imagem_resolver=_galeria_trabalho_imagem_data_uri,
+                    incluir_galeria=True,
+                    limite_fotos_galeria=24,
+                    visual_hf48=True,
+                    mascotes_hf48=True,
+                )
+            st.success("✅ Prévia Thu + Fox preparada. O site oficial não foi alterado.")
+
+        html_hf482 = st.session_state.get("site_hf482_html_preview", "")
+        if html_hf482:
+            modo_hf482 = st.radio(
+                "Visualização Thu + Fox",
+                ["🖥️ Desktop", "📱 Celular"],
+                horizontal=True,
+                key="site_hf482_modo_preview",
+            )
+            if modo_hf482 == "📱 Celular":
+                _he1_hf482, _hcel_hf482, _he2_hf482 = st.columns([1.0, 0.62, 1.0])
+                with _hcel_hf482:
+                    components.html(html_hf482, height=1160, scrolling=True)
+            else:
+                components.html(html_hf482, height=1080, scrolling=True)
+
+            st.download_button(
+                "⬇️ Baixar prévia Thu + Fox HF48.2",
+                data=html_hf482,
+                file_name="alphafest-preview-thu-fox-hf48-2.html",
+                mime="text/html",
+                use_container_width=True,
+                key="site_hf482_download_preview",
+            )
+        else:
+            st.caption("Clique em **Preparar / atualizar prévia Thu + Fox HF48.2** para visualizar a identidade aplicada.")
+
+        st.info(
+            "🔒 **HF44 preservado:** o site oficial continua usando a versão homologada até uma aprovação explícita do novo visual."
+        )
+
     # HF40 — ambiente paralelo/staging: site completo seguro, sem DNS/CNAME.
     with st.expander("🚧 Site paralelo / staging — HF40", expanded=False):
         st.caption(

@@ -1,4 +1,4 @@
-"""HF48.1 — camada visual comercial do site AlphaFest.
+"""HF48.1/HF48.2 — camada visual comercial do site AlphaFest.
 
 Aplica somente apresentação/UX sobre o HTML já gerado pelos serviços HF40-HF47.
 Não altera Catálogo, Galeria, publicação Cloudflare, dados ou Fonte Única.
@@ -6,8 +6,10 @@ O recurso é opt-in e usado inicialmente apenas em prévia interna.
 """
 from __future__ import annotations
 
+import base64
 import html
 import re
+from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from site_vitrine_service import resumir_vitrine
@@ -46,6 +48,26 @@ def _icone_categoria(nome: str) -> str:
     return "⭐"
 
 
+
+def _asset_data_uri(nome: str) -> str:
+    """Carrega um mascote local otimizado e devolve data URI para a prévia auto-contida."""
+    caminho = Path(__file__).resolve().parent / "assets" / "mascotes" / nome
+    try:
+        dados = caminho.read_bytes()
+    except OSError:
+        return ""
+    mime = "image/webp" if caminho.suffix.lower() == ".webp" else "image/jpeg"
+    return f"data:{mime};base64,{base64.b64encode(dados).decode('ascii')}"
+
+
+def _mascotes_hf48() -> Dict[str, str]:
+    return {
+        "hero": _asset_data_uri("thu_fox_hero.webp"),
+        "galeria": _asset_data_uri("fox_galeria.webp"),
+        "cta": _asset_data_uri("thu_fox_cta.webp"),
+    }
+
+
 def _categorias_html(catalogo: Iterable[Dict[str, Any]]) -> str:
     resumo = resumir_vitrine(catalogo, usar_taxonomia_catalogo=True)
     categorias: List[str] = list(resumo.get("categorias") or [])
@@ -74,6 +96,7 @@ def aplicar_visual_hf48(
     empresa: Dict[str, Any],
     *,
     incluir_galeria: bool = False,
+    usar_mascotes: bool = False,
 ) -> str:
     """Retorna uma cópia visualmente reestilizada do site já gerado.
 
@@ -87,6 +110,7 @@ def aplicar_visual_hf48(
     total_categorias = int(resumo.get("total_categorias", 0) or 0)
     nome = str(empresa.get("nome") or "AlphaFest").strip() or "AlphaFest"
     slogan = str(empresa.get("slogan") or "O poder de estar presente em cada presente!").strip()
+    mascotes = _mascotes_hf48() if usar_mascotes else {"hero": "", "galeria": "", "cta": ""}
 
     css = r'''
 /* HF48.1 — nova linguagem visual comercial (somente opt-in) */
@@ -108,9 +132,17 @@ body{background:var(--hf48-bg)}
 .hf48-process{background:linear-gradient(120deg,#12233d,#173b67);color:#fff;padding:58px 24px}.hf48-process .hf48-section-heading h2,.hf48-process .hf48-section-heading p{color:#fff}.hf48-process-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.hf48-process-card{border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.075);border-radius:18px;padding:20px}.hf48-process-card b{display:flex;width:34px;height:34px;border-radius:50%;align-items:center;justify-content:center;background:#fff;color:#173b67;margin-bottom:12px}.hf48-process-card strong{display:block;font-size:16px}.hf48-process-card span{display:block;margin-top:7px;color:#c9d8e8;font-size:13px;line-height:1.5}
 .gallery-section{background:#fff!important}
 .footer{background:#0d1c31}.footer-in{max-width:1320px;padding:40px 24px}
+/* HF48.2 — Thu + Fox como assinatura visual, sem alterar a operação */
+.hf48-mascot-hero{min-height:360px;display:flex;align-items:center;padding-right:44%;background:linear-gradient(135deg,#fff,#f9fcff);}
+.hf48-mascot-hero .hf48-mascot-copy{position:relative;z-index:3}.hf48-mascot-hero .hf48-mascot-copy p{position:relative;z-index:3}
+.hf48-hero-mascot-img{position:absolute;right:10px;bottom:0;width:46%;max-height:96%;object-fit:contain;z-index:2;filter:drop-shadow(0 14px 24px rgba(18,35,61,.12))}
+.hf48-mascot-note{display:inline-flex;align-items:center;gap:7px;margin-top:14px;padding:8px 11px;border-radius:999px;background:#edf8ff;color:#1769aa;font-size:12px;font-weight:900}
+.hf48-gallery-intro{max-width:1320px;margin:0 auto 22px;display:flex;align-items:center;gap:18px;padding:16px 20px;border:1px solid #e6eef7;border-radius:20px;background:linear-gradient(120deg,#f7fbff,#fff7fb)}
+.hf48-gallery-intro img{width:104px;height:76px;object-fit:contain;flex:0 0 auto}.hf48-gallery-intro strong{display:block;font-size:18px;color:var(--hf48-navy)}.hf48-gallery-intro span{display:block;color:#667c93;font-size:13px;line-height:1.45;margin-top:4px}
+.hf48-brand-cta{max-width:1320px;margin:0 auto;padding:0 24px 58px}.hf48-brand-cta-in{display:grid;grid-template-columns:1fr 220px;align-items:center;gap:22px;border-radius:28px;padding:28px 30px;background:linear-gradient(120deg,#eaf7ff,#fff,#fff0f7);border:1px solid #e0e9f3;overflow:hidden}.hf48-brand-cta h2{margin:4px 0 8px;font-size:30px}.hf48-brand-cta p{margin:0 0 16px;color:#61778f}.hf48-brand-cta img{width:100%;max-height:185px;object-fit:contain}.hf48-brand-cta .cta{display:inline-flex}
 @media(max-width:1050px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-process-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:900px){.hf48-header-search{display:none}.site-nav{top:87px}.hero-in{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:620px){.hf48-topline{font-size:10px}.header-in{padding:8px 12px}.site-nav{top:69px}.hero-in{padding:36px 14px 32px}.hero h1{font-size:38px}.hf48-categories{padding:34px 14px}.hf48-section-heading{align-items:flex-start;flex-direction:column}.hf48-section-heading h2{font-size:28px}.hf48-category-grid{grid-template-columns:1fr 1fr;gap:9px}.hf48-category-card{padding:11px;gap:8px}.hf48-cat-icon{width:38px;height:38px;font-size:19px}.hf48-cat-copy strong{font-size:12px}.hf48-cat-copy small{font-size:10px}.main{padding:34px 12px 52px}.grid{grid-template-columns:1fr}.hf48-process{padding:42px 14px}.hf48-process-grid{grid-template-columns:1fr}.photo{aspect-ratio:4/3}}
+@media(max-width:620px){.hf48-topline{font-size:10px}.header-in{padding:8px 12px}.site-nav{top:69px}.hero-in{padding:36px 14px 32px}.hero h1{font-size:38px}.hf48-categories{padding:34px 14px}.hf48-section-heading{align-items:flex-start;flex-direction:column}.hf48-section-heading h2{font-size:28px}.hf48-category-grid{grid-template-columns:1fr 1fr;gap:9px}.hf48-category-card{padding:11px;gap:8px}.hf48-cat-icon{width:38px;height:38px;font-size:19px}.hf48-cat-copy strong{font-size:12px}.hf48-cat-copy small{font-size:10px}.main{padding:34px 12px 52px}.grid{grid-template-columns:1fr}.hf48-process{padding:42px 14px}.hf48-process-grid{grid-template-columns:1fr}.photo{aspect-ratio:4/3}.hf48-mascot-hero{min-height:auto;padding:24px 18px 250px}.hf48-hero-mascot-img{width:78%;right:11%;max-height:240px}.hf48-gallery-intro{margin:0 14px 18px;padding:12px}.hf48-gallery-intro img{width:80px;height:66px}.hf48-brand-cta{padding:0 14px 42px}.hf48-brand-cta-in{grid-template-columns:1fr;padding:22px}.hf48-brand-cta img{max-height:180px;order:-1}}
 '''
     pagina = pagina.replace("</style>", css + "</style>", 1)
 
@@ -124,14 +156,24 @@ body{background:var(--hf48-bg)}
     categorias_html = _categorias_html(catalogo)
 
     # Hero mais comercial: preserva estatísticas e CTAs, só reorganiza a linguagem.
-    hero_novo = f'''<section class="hero" id="inicio"><div class="hero-in"><div>
-      <div class="eyebrow">AlphaFest · Personalizados & Balões</div>
-      <h1>Ideias que viram <span>presentes, festas e marcas.</span></h1>
-      <p>{html.escape(slogan)} Explore produtos, veja trabalhos reais e peça uma personalização do seu jeito — quantidade, cor, material e prazo combinados com a AlphaFest.</p>
-      <div class="hero-actions"><a class="cta" href="#contato">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Ver produtos</a></div>
-      <div class="hf48-trust"><span>✓ Sem pedido mínimo</span><span>✓ Personalização sob medida</span><span>✓ Atendimento pelo WhatsApp</span></div>
-      </div><aside class="hero-card"><div class="eyebrow">Explore a AlphaFest</div><h2>Encontre uma referência e transforme em algo seu.</h2><p>Use categorias e subcategorias para chegar rápido ao que procura. Na Galeria, veja trabalhos reais já produzidos.</p>
-      <div class="hero-stat"><div class="stat"><strong>{total}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{total_categorias}</strong><span>categorias atuais</span></div></div></aside></div></section>'''
+    if mascotes.get("hero"):
+        hero_novo = f'''<section class="hero" id="inicio"><div class="hero-in"><div>
+          <div class="eyebrow">AlphaFest · Personalizados & Balões</div>
+          <h1>Ideias que viram <span>presentes, festas e marcas.</span></h1>
+          <p>{html.escape(slogan)} Explore produtos, veja trabalhos reais e peça uma personalização do seu jeito — quantidade, cor, material e prazo combinados com a AlphaFest.</p>
+          <div class="hero-actions"><a class="cta" href="#contato">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Ver produtos</a></div>
+          <div class="hf48-trust"><span>✓ Sem pedido mínimo</span><span>✓ Personalização sob medida</span><span>✓ Atendimento pelo WhatsApp</span></div>
+          </div><aside class="hero-card hf48-mascot-hero"><div class="hf48-mascot-copy"><div class="eyebrow">Thu + Fox · AlphaFest</div><h2>Uma marca feita para ficar na memória.</h2><p>Produtos, ideias e trabalhos reais com o jeito AlphaFest de transformar cada detalhe em presença.</p><div class="hero-stat"><div class="stat"><strong>{total}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{total_categorias}</strong><span>categorias atuais</span></div></div><div class="hf48-mascot-note">💙 Thu e Fox dão as boas-vindas</div></div><img class="hf48-hero-mascot-img" src="{mascotes['hero']}" alt="Thu e Fox, mascotes da AlphaFest"></aside></div></section>'''
+    else:
+        hero_novo = f'''<section class="hero" id="inicio"><div class="hero-in"><div>
+          <div class="eyebrow">AlphaFest · Personalizados & Balões</div>
+          <h1>Ideias que viram <span>presentes, festas e marcas.</span></h1>
+          <p>{html.escape(slogan)} Explore produtos, veja trabalhos reais e peça uma personalização do seu jeito — quantidade, cor, material e prazo combinados com a AlphaFest.</p>
+          <div class="hero-actions"><a class="cta" href="#contato">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Ver produtos</a></div>
+          <div class="hf48-trust"><span>✓ Sem pedido mínimo</span><span>✓ Personalização sob medida</span><span>✓ Atendimento pelo WhatsApp</span></div>
+          </div><aside class="hero-card"><div class="eyebrow">Explore a AlphaFest</div><h2>Encontre uma referência e transforme em algo seu.</h2><p>Use categorias e subcategorias para chegar rápido ao que procura. Na Galeria, veja trabalhos reais já produzidos.</p>
+          <div class="hero-stat"><div class="stat"><strong>{total}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{total_categorias}</strong><span>categorias atuais</span></div></div></aside></div></section>'''
+
     pagina = re.sub(r'<section class="hero" id="inicio">.*?</section>', hero_novo, pagina, count=1, flags=re.S)
 
     if categorias_html:
@@ -140,6 +182,12 @@ body{background:var(--hf48-bg)}
         if pos >= 0:
             pos += len('</section>')
             pagina = pagina[:pos] + categorias_html + pagina[pos:]
+
+    if incluir_galeria and mascotes.get("galeria"):
+        galeria_intro = f'''<div class="hf48-gallery-intro"><img src="{mascotes['galeria']}" alt="Fox, mascote da AlphaFest"><div><strong>A Fox separou inspirações reais para você.</strong><span>Use Categoria, Subcategoria e Tema para encontrar trabalhos já produzidos e pedir algo parecido pelo WhatsApp.</span></div></div>'''
+        marcador_galeria = '<section class="gallery-section" id="galeria">'
+        if marcador_galeria in pagina:
+            pagina = pagina.replace(marcador_galeria, marcador_galeria + galeria_intro, 1)
 
     # Processo simples e visual, sem criar novo cadastro ou etapa no Manager.
     processo = '''<section class="hf48-process" id="como-funciona"><div class="hf48-wrap"><div class="hf48-section-heading"><div><span class="hf48-kicker">Simples do começo ao fim</span><h2>Como pedir na AlphaFest</h2><p>Você encontra uma referência no site e a personalização acontece na conversa, sem formulário complicado.</p></div></div><div class="hf48-process-grid">
@@ -152,6 +200,10 @@ body{background:var(--hf48-bg)}
     marcador = '<section class="site-section pink" id="servicos">'
     if marcador in pagina:
         pagina = pagina.replace(marcador, processo + marcador, 1)
+
+    if mascotes.get("cta"):
+        marca_cta = f'''<section class="hf48-brand-cta"><div class="hf48-brand-cta-in"><div><span class="hf48-kicker">Fale com a AlphaFest</span><h2>Achou uma ideia? Thu e Fox ajudam você a transformar em algo seu.</h2><p>Envie a referência no WhatsApp e conte os detalhes. A equipe orienta material, quantidade, personalização e prazo.</p><a class="cta" href="#contato">💬 Quero pedir um orçamento</a></div><img src="{mascotes['cta']}" alt="Thu e Fox, mascotes da AlphaFest"></div></section>'''
+        pagina = pagina.replace('<footer class="footer">', marca_cta + '<footer class="footer">', 1)
 
     # Adiciona Categorias e Como funciona na navegação gerada pelo site completo.
     pagina = pagina.replace(
@@ -166,7 +218,8 @@ body{background:var(--hf48-bg)}
     )
 
     # Identifica a prévia corretamente sem alterar a produção.
-    pagina = re.sub(r'<div class="preview-bar">.*?</div>', '<div class="preview-bar">PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA</div>', pagina, count=1, flags=re.S)
+    preview_rotulo = 'PRÉVIA INTERNA HF48.2 · THU + FOX · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
+    pagina = re.sub(r'<div class="preview-bar">.*?</div>', f'<div class="preview-bar">{preview_rotulo}</div>', pagina, count=1, flags=re.S)
 
     js = r'''
 (function(){
