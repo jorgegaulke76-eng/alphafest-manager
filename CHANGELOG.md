@@ -1101,3 +1101,15 @@ hangelog
 - Reaproveita Catálogo, Categoria/Subcategoria, Galeria, preços opcionais e WhatsApp já existentes.
 - A prévia é preparada sob demanda para preservar performance; nada é publicado automaticamente.
 - Thu + Fox ficam reservados para a aplicação visual da etapa seguinte, sem impacto funcional.
+
+## 20.4.9-I8.13.5-HF48.2-HF1 — mascotes transparentes + cores AlphaFest
+- Remove o fundo branco dos assets Thu/Fox usados no site, preservando-os como WebP com transparência.
+- Retira os números de quantidade do card principal do hero (ex.: produtos/categorias) e usa mensagens comerciais de valor.
+- Amplia a paleta visual com azul, ciano, rosa, amarelo, verde e laranja inspirados no logo AlphaFest.
+- Mantém Catálogo, Galeria, filtros, WhatsApp, HF44 e publicação oficial sem mudanças; continua em prévia interna.
+
+## 20.4.9-I8.13.5-HF48.3 — visual aprovado na produção
+- Site oficial passa a ser gerado com a identidade aprovada Thu + Fox e paleta AlphaFest.
+- Hero sem contadores 24/17; benefícios comerciais no lugar.
+- Galeria + Categoria/Subcategoria integradas ao mesmo pacote do site.
+- Motor HF44 preservado para publicação Cloudflare assistida e rollback.

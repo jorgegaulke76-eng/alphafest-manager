@@ -46,7 +46,7 @@ def test_hf481_categoria_visual_dispara_filtro_existente():
     assert "scrollIntoView" in novo
 
 
-def test_hf481_manager_so_prepara_sob_demanda_e_hf44_nao_usa_flag():
+def test_hf481_manager_mantem_previa_e_hf483_promove_visual():
     app = Path("app.py").read_text(encoding="utf-8")
     assert '"🎨 Novo visual comercial do Site — HF48.1"' in app
     assert '"🎨 Preparar / atualizar novo visual HF48.1"' in app
@@ -54,4 +54,4 @@ def test_hf481_manager_so_prepara_sob_demanda_e_hf44_nao_usa_flag():
     assert "reaproveita exatamente os mesmos dados já cadastrados" in app
     bloco_prod = app.split('# HF44 — publicação assistida no Worker', 1)[1]
     chamada = bloco_prod.split('pacote_producao_hf44 =', 1)[0]
-    assert "visual_hf48=True" not in chamada
+    assert "visual_hf48=True" in chamada

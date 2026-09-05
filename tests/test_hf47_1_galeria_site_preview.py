@@ -82,7 +82,7 @@ def test_site_completo_hf471_adiciona_galeria_somente_quando_solicitada():
     assert "PRÉVIA INTERNA HF47.1" not in antigo
 
 
-def test_manager_prepara_previa_sob_demanda_e_hf44_permanece_sem_flag():
+def test_manager_prepara_previa_sob_demanda_e_hf483_promove_galeria():
     app = Path("app.py").read_text(encoding="utf-8")
     assert '"📸 Prévia Galeria no Site — HF47.1"' in app
     assert '"🖼️ Preparar / atualizar prévia da Galeria"' in app
@@ -91,7 +91,7 @@ def test_manager_prepara_previa_sob_demanda_e_hf44_permanece_sem_flag():
     assert "as fotos privadas **não são carregadas ao abrir esta tela**" in app
     bloco_prod = app.split('# HF44 — publicação assistida no Worker', 1)[1]
     chamada = bloco_prod.split('pacote_producao_hf44 =', 1)[0]
-    assert "incluir_galeria=True" not in chamada
+    assert "incluir_galeria=True" in chamada
 
 
 def test_navegacao_da_previa_fica_isolada_no_iframe_sem_href_hash():

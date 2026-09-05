@@ -75,13 +75,13 @@ class HF454TaxonomiaSiteTests(unittest.TestCase):
         self.assertIn('data-cat="categoria-nova"', novo)
         self.assertNotIn('id="subfilters"', antigo)
 
-    def test_manager_expoe_previa_hf454_e_producao_hf44_continua_sem_flag(self):
+    def test_manager_expoe_previa_hf454_e_producao_hf483_promove_taxonomia(self):
         app = Path("app.py").read_text(encoding="utf-8")
         self.assertIn('"🧭 Prévia Categoria → Subcategoria — HF45.4-HF1"', app)
         self.assertIn("usar_taxonomia_catalogo=True", app)
         bloco_prod = app.split('# HF44 — publicação assistida no Worker', 1)[1]
         chamada = bloco_prod.split('pacote_producao_hf44 =', 1)[0]
-        self.assertNotIn("usar_taxonomia_catalogo=True", chamada)
+        self.assertIn("usar_taxonomia_catalogo=True", chamada)
 
 
 if __name__ == "__main__":

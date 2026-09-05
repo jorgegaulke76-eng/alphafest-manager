@@ -25841,17 +25841,17 @@ if pagina_atual == "site":
 
     # HF48.2 — identidade visual Thu + Fox sobre a base comercial HF48.1.
     # Continua somente em prévia; publicação HF44 permanece intocada.
-    with st.expander("🦊 Thu + Fox no novo Site — HF48.2", expanded=False):
+    with st.expander("✅ Visual aprovado do Site — HF48.3", expanded=False):
         st.caption(
             "Aplica os mascotes oficiais enviados pela equipe sobre o novo visual comercial, sem alterar Catálogo, "
             "Galeria, filtros, WhatsApp ou a publicação homologada. **Nada desta etapa é publicado automaticamente.**"
         )
         st.info(
-            "🎯 Uso proposital: Thu e Fox aparecem como assinatura de marca no hero, apoio da Galeria e chamada final. "
+            "🎯 HF48.3: visual aprovado por Jorge/Anna, com Thu + Fox sem fundo, paleta AlphaFest e os indicadores 24/17 removidos do hero. "
             "O objetivo é reforçar identidade sem deixar o site infantil ou criar trabalho extra para a Anna."
         )
-        if st.button("🦊 Preparar / atualizar prévia Thu + Fox HF48.2", use_container_width=True, key="site_hf482_prepare"):
-            with st.spinner("Aplicando Thu + Fox ao novo visual da AlphaFest…"):
+        if st.button("🎨 Preparar / atualizar visual aprovado HF48.3", use_container_width=True, key="site_hf482_prepare"):
+            with st.spinner("Montando o visual aprovado da AlphaFest…"):
                 st.session_state["site_hf482_html_preview"] = _site_gerar_html_completo(
                     catalogo_site_hf35,
                     empresa_vitrine_hf36,
@@ -25866,12 +25866,12 @@ if pagina_atual == "site":
                     visual_hf48=True,
                     mascotes_hf48=True,
                 )
-            st.success("✅ Prévia Thu + Fox preparada. O site oficial não foi alterado.")
+            st.success("✅ Visual aprovado preparado. O site oficial só muda quando você usar Publicar site agora.")
 
         html_hf482 = st.session_state.get("site_hf482_html_preview", "")
         if html_hf482:
             modo_hf482 = st.radio(
-                "Visualização Thu + Fox",
+                "Visualização HF48.3",
                 ["🖥️ Desktop", "📱 Celular"],
                 horizontal=True,
                 key="site_hf482_modo_preview",
@@ -25884,18 +25884,18 @@ if pagina_atual == "site":
                 components.html(html_hf482, height=1080, scrolling=True)
 
             st.download_button(
-                "⬇️ Baixar prévia Thu + Fox HF48.2",
+                "⬇️ Baixar prévia do visual aprovado HF48.3",
                 data=html_hf482,
-                file_name="alphafest-preview-thu-fox-hf48-2.html",
+                file_name="alphafest-preview-thu-fox-hf48-2-hf1.html",
                 mime="text/html",
                 use_container_width=True,
                 key="site_hf482_download_preview",
             )
         else:
-            st.caption("Clique em **Preparar / atualizar prévia Thu + Fox HF48.2** para visualizar a identidade aplicada.")
+            st.caption("Clique em **Preparar / atualizar visual aprovado HF48.3** para conferir a versão final antes de publicar.")
 
         st.info(
-            "🔒 **HF44 preservado:** o site oficial continua usando a versão homologada até uma aprovação explícita do novo visual."
+            "✅ **Visual aprovado:** o motor seguro de publicação do HF44 foi preservado. A produção passa a gerar o HF48.3 somente quando você confirmar **Publicar site agora**."
         )
 
     # HF40 — ambiente paralelo/staging: site completo seguro, sem DNS/CNAME.
@@ -25981,7 +25981,7 @@ if pagina_atual == "site":
             )
 
         # HF44 — publicação assistida no Worker; continua sem tocar em DNS/MX/Custom Domains.
-        with st.expander("🚀 Produção oficial — HF44", expanded=True):
+        with st.expander("🚀 Produção oficial — HF48.3 · motor HF44", expanded=True):
             _prod_hf44 = _site_resumo_producao(total_produtos=resumo_vitrine_hf36.get("total", 0))
             p1_hf44, p2_hf44, p3_hf44, p4_hf44 = st.columns(4)
             p1_hf44.metric("Zona Cloudflare", _prod_hf44.get("zona_cloudflare", "—"))
@@ -25990,31 +25990,40 @@ if pagina_atual == "site":
             p4_hf44.metric("www", _prod_hf44.get("www", "301 → raiz"))
             st.success(
                 "✅ O site oficial está estável em `alphafest.com.br` e o `www` redireciona em 301. "
-                "A HF44 automatiza somente o deployment do conteúdo aprovado; DNS, MX, webmail, domínio e Redirect Rules ficam intocados."
+                "O motor HF44 continua cuidando somente do deployment. O conteúdo aprovado agora inclui o visual HF48.3, Galeria e Thu + Fox; DNS, MX, webmail, domínio e Redirect Rules ficam intocados."
             )
             st.info(
-                "📌 **Fluxo novo:** cadastre/edite produtos → marque para a vitrine → confira a prévia → **Publicar site agora**. "
+                "📌 **Fluxo preservado:** cadastre/edite produtos ou selecione trabalhos da Galeria → confira a prévia → **Publicar site agora**. "
                 "Você pode acumular vários produtos e publicar tudo em um único envio."
             )
 
+            # HF48.3 — produção oficial passa a usar o visual aprovado, mantendo o motor seguro HF44.
+            # Catálogo + taxonomia + Galeria autorizada/pré-selecionada + Thu/Fox saem da mesma Fonte Única.
             html_producao_hf44 = _site_gerar_html_completo(
                 catalogo_site_hf35,
                 empresa_vitrine_hf36,
                 logo_src=logo_src_hf36,
                 imagem_resolver=_catalogo_html_src_imagem,
                 modo_preview=False,
+                usar_taxonomia_catalogo=True,
+                galeria_trabalhos=galeria_site_hf471,
+                galeria_imagem_resolver=_galeria_trabalho_imagem_data_uri,
+                incluir_galeria=True,
+                limite_fotos_galeria=48,
+                visual_hf48=True,
+                mascotes_hf48=True,
             )
             pacote_producao_hf44 = _site_gerar_pacote_producao(
                 html_producao_hf44,
                 total_produtos=resumo_vitrine_hf36.get("total", 0),
-                versao_manager="20.4.9-I8.13.5-HF44",
+                versao_manager="20.4.9-I8.13.5-HF48.3",
             )
 
             # Fallback/manual continua disponível para rollback e contingência.
             st.download_button(
                 "⬇️ Baixar ZIP de produção (fallback manual)",
                 data=pacote_producao_hf44,
-                file_name="alphafest-site-producao-hf44.zip",
+                file_name="alphafest-site-producao-hf48-3.zip",
                 mime="application/zip",
                 use_container_width=True,
                 key="site_hf44_download_producao",
@@ -26097,7 +26106,7 @@ if pagina_atual == "site":
                 st.info("✅ Este mesmo conteúdo já foi publicado nesta sessão. Se você alterar ou adicionar produtos, o Manager detectará uma nova versão.")
 
             _cf_confirmar_hf44 = st.checkbox(
-                f"Conferi a prévia e quero publicar agora os {resumo_vitrine_hf36.get('total', 0)} produto(s) marcados/prontos.",
+                f"Conferi o visual HF48.3 e quero publicar agora os {resumo_vitrine_hf36.get('total', 0)} produto(s) marcados/prontos + a Galeria selecionada.",
                 key="site_hf44_confirmar_publicacao",
             )
             _cf_pode_publicar_hf44 = bool(
@@ -26121,14 +26130,14 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf44,
                             api_token=_cf_token_hf44,
                             worker_name=_cf_worker_hf44,
-                            versao_manager="20.4.9-I8.13.5-HF44",
+                            versao_manager="20.4.9-I8.13.5-HF48.3",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(_cf_resultado_hf44.get("fingerprint", "") or _cf_fingerprint_hf44)
                     st.session_state["site_hf44_cf_ok"] = True
                     st.success(
                         f"✅ Site publicado no Worker `{_cf_worker_hf44}`. "
                         f"Versão Cloudflare: `{_cf_resultado_hf44.get('version_id', 'confirmada')}` • "
-                        f"assets enviados agora: {_cf_resultado_hf44.get('assets_enviados', 0)}."
+                        f"assets enviados agora: {_cf_resultado_hf44.get('assets_enviados', 0)}. Visual HF48.3 ativo."
                     )
                     st.link_button("🌐 Abrir alphafest.com.br para conferir", "https://alphafest.com.br", use_container_width=True)
                     st.caption("Se a conferência visual não estiver correta, o ZIP manual e as versões anteriores do Worker permanecem disponíveis para rollback.")
