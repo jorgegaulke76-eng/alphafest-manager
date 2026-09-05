@@ -1083,3 +1083,13 @@ hangelog
 - A nova navegação da prévia fica: Início → Produtos → Galeria → Serviços → Quem Somos → Contato.
 - Para preservar performance, fotos privadas só são carregadas quando Jorge clica em `Preparar / atualizar prévia da Galeria`, com limite visual de 24 fotos na prévia.
 - O bucket continua privado e o HF44 permanece sem `incluir_galeria=True`; portanto, nada desta etapa vai para `alphafest.com.br`.
+
+## 20.4.9-I8.13.5-HF48.1 — Novo visual comercial do site em prévia interna
+- Cria uma nova proposta visual opt-in sem alterar a produção HF44.
+- Reorganiza o topo com busca principal, CTA de WhatsApp e navegação mais comercial.
+- Acrescenta seção visual de categorias com acesso direto aos filtros do Catálogo.
+- Moderniza hero, cards de produtos, espaçamento, grid e hierarquia visual.
+- Acrescenta bloco simples “Como pedir na AlphaFest” sem criar campos ou tarefas novas no Manager.
+- Reaproveita Catálogo, Categoria/Subcategoria, Galeria, preços opcionais e WhatsApp já existentes.
+- A prévia é preparada sob demanda para preservar performance; nada é publicado automaticamente.
+- Thu + Fox ficam reservados para a aplicação visual da etapa seguinte, sem impacto funcional.

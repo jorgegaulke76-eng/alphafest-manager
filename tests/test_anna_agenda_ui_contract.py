@@ -94,7 +94,7 @@ def test_hf24_mantem_bloco_sem_avanco_como_auditoria_e_nao_substitui_a_agenda():
 
 
 def test_hf30_arquivos_de_versao_estao_alinhados():
-    esperado = '20.4.9-I8.13.5-HF47.1-HF1'
+    esperado = '20.4.9-I8.13.5-HF48.1'
     assert Path('VERSAO').read_text(encoding='utf-8').strip() == esperado
     assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == esperado
 

@@ -25769,6 +25769,76 @@ if pagina_atual == "site":
             "A ativação pública será feita somente depois da sua aprovação."
         )
 
+
+    # HF48.1 — nova linguagem visual comercial do site, somente em prévia.
+    # Mantém integralmente Catálogo, Taxonomia, Galeria, WhatsApp e publicação HF44.
+    with st.expander("🎨 Novo visual comercial do Site — HF48.1", expanded=False):
+        st.caption(
+            "Prévia de uma nova apresentação mais comercial e organizada, inspirada na experiência de grandes vitrines online, "
+            "mas mantendo a identidade e a operação da AlphaFest. **Nada desta etapa é publicado automaticamente.**"
+        )
+        hv1_hf481, hv2_hf481, hv3_hf481, hv4_hf481 = st.columns(4)
+        hv1_hf481.metric("Produtos da vitrine", resumo_taxonomia_hf454.get("total", 0))
+        hv2_hf481.metric("Categorias", resumo_taxonomia_hf454.get("total_categorias", 0))
+        hv3_hf481.metric("Fotos da Galeria", resumo_galeria_hf471.get("total_fotos", 0))
+        hv4_hf481.metric("Publicação oficial", "Protegida")
+
+        st.info(
+            "⚡ A nova prévia é montada **sob demanda** para não pesar o Manager. "
+            "Ela reaproveita exatamente os mesmos dados já cadastrados; não cria nenhum novo trabalho para a Anna."
+        )
+        if st.button("🎨 Preparar / atualizar novo visual HF48.1", use_container_width=True, key="site_hf481_prepare"):
+            with st.spinner("Montando o novo visual comercial da AlphaFest…"):
+                st.session_state["site_hf481_html_preview"] = _site_gerar_html_completo(
+                    catalogo_site_hf35,
+                    empresa_vitrine_hf36,
+                    logo_src=logo_src_hf36,
+                    imagem_resolver=_catalogo_html_src_imagem,
+                    modo_preview=True,
+                    usar_taxonomia_catalogo=True,
+                    galeria_trabalhos=galeria_site_hf471,
+                    galeria_imagem_resolver=_galeria_trabalho_imagem_data_uri,
+                    incluir_galeria=True,
+                    limite_fotos_galeria=24,
+                    visual_hf48=True,
+                )
+            st.success("✅ Novo visual preparado. O site oficial não foi alterado.")
+
+        html_hf481 = st.session_state.get("site_hf481_html_preview", "")
+        if html_hf481:
+            modo_hf481 = st.radio(
+                "Visualização do novo site",
+                ["🖥️ Desktop", "📱 Celular"],
+                horizontal=True,
+                key="site_hf481_modo_preview",
+            )
+            if modo_hf481 == "📱 Celular":
+                _he1_hf481, _hcel_hf481, _he2_hf481 = st.columns([1.0, 0.62, 1.0])
+                with _hcel_hf481:
+                    components.html(html_hf481, height=1120, scrolling=True)
+            else:
+                components.html(html_hf481, height=1040, scrolling=True)
+
+            st.download_button(
+                "⬇️ Baixar prévia do novo visual HF48.1",
+                data=html_hf481,
+                file_name="alphafest-preview-novo-visual-hf48-1.html",
+                mime="text/html",
+                use_container_width=True,
+                key="site_hf481_download_preview",
+            )
+        else:
+            st.caption("Clique em **Preparar / atualizar novo visual HF48.1** para abrir a nova proposta.")
+
+        st.info(
+            "🔒 **HF44 preservado:** o botão atual de publicação continua gerando o site oficial homologado. "
+            "O HF48.1 é somente uma prévia visual até você e a Anna aprovarem."
+        )
+        st.caption(
+            "🦊 Identidade Thu + Fox: o HF48.1 organiza a nova base visual. A aplicação dos mascotes entra na sequência, "
+            "sem alterar Catálogo, Galeria ou fluxo de atualização."
+        )
+
     # HF40 — ambiente paralelo/staging: site completo seguro, sem DNS/CNAME.
     with st.expander("🚧 Site paralelo / staging — HF40", expanded=False):
         st.caption(

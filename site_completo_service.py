@@ -16,6 +16,7 @@ from urllib.parse import quote
 
 from site_vitrine_service import gerar_html_vitrine
 from site_galeria_service import gerar_fragmento_galeria
+from site_visual_hf48_service import aplicar_visual_hf48
 
 ImagemResolver = Optional[Callable[[str], str]]
 
@@ -65,16 +66,19 @@ def gerar_html_site_completo(
     galeria_imagem_resolver: ImagemResolver = None,
     incluir_galeria: bool = False,
     limite_fotos_galeria: Optional[int] = 24,
+    visual_hf48: bool = False,
 ) -> str:
     """Gera o site completo sem publicar ou persistir qualquer dado.
 
     HF45.4 permite uma prévia paralela usando Categoria → Subcategoria do
     Catálogo Oficial. HF47.1 acrescenta, somente quando solicitado, a Galeria de
-    Trabalhos já autorizada/pré-selecionada no Manager. Os parâmetros padrão
-    permanecem desligados para preservar integralmente o site público HF44.
+    Trabalhos já autorizada/pré-selecionada no Manager. HF48.1 adiciona uma
+    camada visual comercial opt-in, inicialmente somente em prévia. Os parâmetros
+    padrão permanecem desligados para preservar integralmente o site público HF44.
     """
+    catalogo_lista = list(catalogo or [])
     pagina = gerar_html_vitrine(
-        catalogo,
+        catalogo_lista,
         empresa,
         logo_src=logo_src,
         imagem_resolver=imagem_resolver,
@@ -212,4 +216,14 @@ def gerar_html_site_completo(
 
     # No site completo, o CTA de navegação deixa de falar só em "Ver produtos".
     pagina = pagina.replace('>Ver produtos</a>', '>Produtos</a>', 1)
+
+    # HF48.1 — camada visual isolada. O padrão False preserva a produção HF44
+    # e todas as prévias anteriores exatamente como estavam.
+    if visual_hf48:
+        pagina = aplicar_visual_hf48(
+            pagina,
+            catalogo_lista,
+            empresa,
+            incluir_galeria=incluir_galeria,
+        )
     return pagina
