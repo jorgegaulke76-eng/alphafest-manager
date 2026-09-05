@@ -645,10 +645,14 @@ def upload_private_3d_file(upload: Any, folder: str = "modelos") -> str:
 
 
 GALERIA_TRABALHOS_BUCKET = "galeriatrabalhos"
+_PRIVATE_GALLERY_BUCKET_READY = False
 
 
 def _ensure_private_gallery_bucket() -> bool:
-    """Garante um bucket privado separado para as fotos diárias da Galeria."""
+    """Garante o bucket privado uma vez por processo, evitando uma chamada HTTP por foto."""
+    global _PRIVATE_GALLERY_BUCKET_READY
+    if _PRIVATE_GALLERY_BUCKET_READY:
+        return True
     if not online_configured():
         return False
     url, _ = _config()
@@ -658,6 +662,7 @@ def _ensure_private_gallery_bucket() -> bool:
             headers=_headers(), timeout=TIMEOUT,
         )
         if response.ok:
+            _PRIVATE_GALLERY_BUCKET_READY = True
             return True
         if response.status_code not in (400, 404):
             return False
@@ -667,7 +672,10 @@ def _ensure_private_gallery_bucket() -> bool:
             json={"id": GALERIA_TRABALHOS_BUCKET, "name": GALERIA_TRABALHOS_BUCKET, "public": False},
             timeout=TIMEOUT,
         )
-        return bool(create.ok or create.status_code in (200, 201, 409))
+        pronto = bool(create.ok or create.status_code in (200, 201, 409))
+        if pronto:
+            _PRIVATE_GALLERY_BUCKET_READY = True
+        return pronto
     except requests.RequestException:
         return False
 
@@ -684,9 +692,11 @@ def _gallery_image_content(upload: Any) -> tuple[bytes, str, str]:
         import io
         with Image.open(io.BytesIO(content)) as img:
             img = ImageOps.exif_transpose(img).convert("RGB")
-            img.thumbnail((1800, 1800))
+            # HF46.1-HF2 — 1600 px é suficiente para portfólio/site e deixa
+            # o tratamento das fotos de celular sensivelmente mais rápido.
+            img.thumbnail((1600, 1600))
             saida = io.BytesIO()
-            img.save(saida, format="WEBP", quality=82, method=6)
+            img.save(saida, format="WEBP", quality=80, method=3)
             return saida.getvalue(), "image/webp", ".webp"
     except Exception:
         return content, content_type, extension

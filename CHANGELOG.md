@@ -1064,3 +1064,9 @@ hangelog
 - Corrigida a prévia Categoria → Subcategoria: subcategorias de outras categorias não aparecem mais após a seleção.
 - Ajuste somente na prévia interna; publicação HF44 preservada.
 
+
+## 20.4.9-I8.13.5-HF46.1-HF2 — Galeria mais rápida e múltiplas fotos visíveis
+- Corrige o Acervo interno para mostrar até 4 fotos do mesmo trabalho, incluindo lotes adicionados posteriormente.
+- Evita revalidar o bucket privado a cada foto enviada.
+- Acelera a otimização WebP de fotos de celular sem comprometer a qualidade para portfólio.
+- Nenhuma alteração no site oficial ou no fluxo de publicação HF44.

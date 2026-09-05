@@ -11027,7 +11027,7 @@ def renderizar_galeria_trabalhos(catalogo):
     """HF46.1 — coleta diária de fotos sem qualquer publicação no site."""
     st.markdown("### 📸 Galeria de Trabalhos")
     st.caption(
-        "HF46.1: espaço interno para a Anna guardar as fotos dos trabalhos entregues. "
+        "HF46.1-HF2: espaço interno para a Anna guardar as fotos dos trabalhos entregues. "
         "As imagens ficam em armazenamento privado. **Nada desta aba é publicado no site.**"
     )
     st.info(
@@ -11203,14 +11203,27 @@ def renderizar_galeria_trabalhos(catalogo):
             foto_paths = list(item.get("fotos") or [])
             c_img, c_info, c_acoes = st.columns([1.4, 4.2, 2.2])
             if foto_paths:
-                bruto = _galeria_trabalho_bytes_cache(str(foto_paths[0]))
-                if bruto:
-                    try:
-                        c_img.image(bruto, use_container_width=True)
-                    except Exception:
-                        c_img.write("🖼️")
-                else:
-                    c_img.caption("Foto privada indisponível")
+                # HF46.1-HF2 — mostra um mosaico leve com até 4 fotos do trabalho.
+                # Antes apenas a primeira imagem era exibida, o que fazia as fotos
+                # adicionadas depois parecerem "sumidas". Limitamos a prévia para
+                # não baixar dezenas de arquivos privados em cada rerun do Streamlit.
+                preview_paths = foto_paths[:4]
+                thumb_cols = c_img.columns(2) if len(preview_paths) > 1 else [c_img]
+                indisponiveis = 0
+                for idx_foto, caminho_foto in enumerate(preview_paths):
+                    bruto = _galeria_trabalho_bytes_cache(str(caminho_foto))
+                    alvo_img = thumb_cols[idx_foto % len(thumb_cols)]
+                    if bruto:
+                        try:
+                            alvo_img.image(bruto, use_container_width=True)
+                        except Exception:
+                            indisponiveis += 1
+                    else:
+                        indisponiveis += 1
+                if len(foto_paths) > len(preview_paths):
+                    c_img.caption(f"+ {len(foto_paths) - len(preview_paths)} foto(s) no acervo deste trabalho")
+                if indisponiveis:
+                    c_img.caption(f"⚠️ {indisponiveis} prévia(s) indisponível(is) no momento")
             else:
                 c_img.write("🖼️")
 
