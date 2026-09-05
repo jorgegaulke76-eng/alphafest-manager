@@ -74,11 +74,11 @@ def test_site_completo_hf471_adiciona_galeria_somente_quando_solicitada():
     )
     antigo = gerar_html_site_completo(catalogo, {}, modo_preview=False)
     assert "PRÉVIA INTERNA HF47.1" in novo
-    assert '<a href="#galeria">Galeria</a>' in novo
+    assert '<button type="button" data-site-scroll="galeria">Galeria</button>' in novo
     assert 'id="galeria"' in novo
     assert "Quero algo parecido" in novo
     assert 'id="galeria"' not in antigo
-    assert '<a href="#galeria">Galeria</a>' not in antigo
+    assert 'data-site-scroll="galeria"' not in antigo
     assert "PRÉVIA INTERNA HF47.1" not in antigo
 
 
@@ -92,3 +92,19 @@ def test_manager_prepara_previa_sob_demanda_e_hf44_permanece_sem_flag():
     bloco_prod = app.split('# HF44 — publicação assistida no Worker', 1)[1]
     chamada = bloco_prod.split('pacote_producao_hf44 =', 1)[0]
     assert "incluir_galeria=True" not in chamada
+
+
+def test_navegacao_da_previa_fica_isolada_no_iframe_sem_href_hash():
+    catalogo = [{
+        "Nome": "Caneca", "Categoria": "Canecas", "Subcategoria": "Porcelana",
+        "Descricao": "Caneca personalizada", "Imagens": ["https://example.com/caneca.jpg"], "PublicarSite": True,
+    }]
+    novo = gerar_html_site_completo(
+        catalogo, {"whatsapp_catalogo": "11972949533"}, modo_preview=True,
+        usar_taxonomia_catalogo=True, galeria_trabalhos=[_trabalho()],
+        galeria_imagem_resolver=lambda p: "data:image/webp;base64,AAAA", incluir_galeria=True,
+    )
+    assert 'href="#galeria"' not in novo
+    assert 'data-site-scroll="galeria"' in novo
+    assert "scrollIntoView" in novo
+    assert "ev.preventDefault()" in novo

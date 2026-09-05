@@ -1,3 +1,7 @@
+## 20.4.9-I8.13.5-HF47.1-HF1 — correção de navegação da prévia
+- Corrige o menu interno da prévia HF47.1 para não carregar o Streamlit dentro do iframe ao clicar em `Galeria`.
+- Navegação passa a usar botões com `scrollIntoView`, mantendo a prévia isolada e sem publicação.
+
 
 ## 20.4.9-I8.13.5-HF26 — THU • Plano de amanhã
 

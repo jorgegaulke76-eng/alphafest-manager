@@ -108,7 +108,7 @@ def gerar_html_site_completo(
     css_extra = r'''
 .site-nav{position:sticky;top:79px;z-index:19;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
 .site-nav-in{max-width:1240px;margin:auto;padding:0 22px;display:flex;align-items:center;justify-content:center;gap:6px;overflow-x:auto;scrollbar-width:none}.site-nav-in::-webkit-scrollbar{display:none}
-.site-nav a{color:var(--ink);text-decoration:none;font-size:13px;font-weight:850;padding:11px 13px;border-radius:10px;white-space:nowrap}.site-nav a:hover{background:#eef7ff;color:var(--blue)}
+.site-nav a,.site-nav button{color:var(--ink);text-decoration:none;font-size:13px;font-weight:850;padding:11px 13px;border-radius:10px;white-space:nowrap}.site-nav button{border:0;background:transparent;font-family:inherit;cursor:pointer}.site-nav a:hover,.site-nav button:hover{background:#eef7ff;color:var(--blue)}
 .site-section{padding:72px 22px}.site-section.alt{background:linear-gradient(180deg,#fbfdff,#f6fbff)}.site-section.pink{background:linear-gradient(135deg,#fff,#fff6fb)}
 .site-wrap{max-width:1240px;margin:auto}.section-kicker{color:var(--blue);font-size:12px;font-weight:950;letter-spacing:.08em;text-transform:uppercase}.section-title{font-size:38px;line-height:1.08;margin:8px 0 12px}.section-copy{max-width:780px;color:#5d718b;font-size:16px;line-height:1.7;margin:0}
 .services-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:28px}.service-card{border:1px solid var(--line);border-radius:18px;background:#fff;padding:22px;box-shadow:0 8px 26px rgba(20,37,61,.05)}.service-icon{font-size:26px}.service-card h3{font-size:17px;margin:12px 0 8px}.service-card p{font-size:14px;line-height:1.55;color:#62758e;margin:0}
@@ -116,7 +116,7 @@ def gerar_html_site_completo(
 .contact-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;margin-top:28px}.contact-card{border:1px solid var(--line);background:#fff;border-radius:20px;padding:24px}.contact-list{display:grid;gap:12px;margin-top:18px}.contact-item{display:flex;gap:12px;align-items:flex-start}.contact-item b{display:block}.contact-item span,.contact-item a{font-size:14px;color:#60748e;text-decoration:none}.contact-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.contact-actions .secondary{display:inline-flex}
 .site-footnote{font-size:12px;color:#71849c;margin-top:18px}.legacy-note{margin-top:22px;border:1px dashed #bdd6ea;border-radius:14px;padding:14px;background:#f8fcff;color:#5b7089;font-size:13px}
 @media(max-width:940px){.services-grid{grid-template-columns:repeat(2,1fr)}.about-grid,.contact-grid{grid-template-columns:1fr}.site-nav{top:69px}}
-@media(max-width:620px){.site-nav{top:69px}.site-nav-in{justify-content:flex-start;padding:0 10px}.site-nav a{padding:10px 9px;font-size:12px}.site-section{padding:46px 14px}.section-title{font-size:30px}.services-grid{grid-template-columns:1fr}.service-card{padding:18px}.about-card,.contact-card{padding:20px}.contact-actions>a{width:100%}}
+@media(max-width:620px){.site-nav{top:69px}.site-nav-in{justify-content:flex-start;padding:0 10px}.site-nav a,.site-nav button{padding:10px 9px;font-size:12px}.site-section{padding:46px 14px}.section-title{font-size:30px}.services-grid{grid-template-columns:1fr}.service-card{padding:18px}.about-card,.contact-card{padding:20px}.contact-actions>a{width:100%}}
 '''
     if incluir_galeria:
         css_extra += str(galeria_fragmento.get("css") or "")
@@ -133,10 +133,17 @@ def gerar_html_site_completo(
         pagina = pagina.replace("<body>", "<body>" + preview, 1)
 
     # Navegação única, mantendo o header da vitrine homologada.
-    galeria_nav = '<a href="#galeria">Galeria</a>' if incluir_galeria else ''
-    nav = f'''<nav class="site-nav" aria-label="Navegação principal"><div class="site-nav-in">
-      <a href="#inicio">Início</a><a href="#produtos">Produtos</a>{galeria_nav}<a href="#servicos">Serviços</a><a href="#quem-somos">Quem Somos</a><a href="#contato">Contato</a>
-    </div></nav>'''
+    # HF47.1-HF1: somente a prévia com Galeria usa botões com scrollIntoView,
+    # evitando que links por hash façam o iframe do components.html sair da prévia.
+    if incluir_galeria:
+        galeria_nav = '<button type="button" data-site-scroll="galeria">Galeria</button>'
+        nav = f'''<nav class="site-nav" aria-label="Navegação principal"><div class="site-nav-in">
+          <button type="button" data-site-scroll="inicio">Início</button><button type="button" data-site-scroll="produtos">Produtos</button>{galeria_nav}<button type="button" data-site-scroll="servicos">Serviços</button><button type="button" data-site-scroll="quem-somos">Quem Somos</button><button type="button" data-site-scroll="contato">Contato</button>
+        </div></nav>'''
+    else:
+        nav = '''<nav class="site-nav" aria-label="Navegação principal"><div class="site-nav-in">
+          <a href="#inicio">Início</a><a href="#produtos">Produtos</a><a href="#servicos">Serviços</a><a href="#quem-somos">Quem Somos</a><a href="#contato">Contato</a>
+        </div></nav>'''
     marcador_header = "</header>"
     pagina = pagina.replace(marcador_header, marcador_header + nav, 1)
 
@@ -185,6 +192,20 @@ def gerar_html_site_completo(
         pagina = pagina[:pos] + extras + pagina[pos:]
     else:
         pagina = pagina.replace("<footer class=\"footer\">", extras + '<footer class="footer">', 1)
+
+    if incluir_galeria:
+        nav_scroll_js = r'''
+(function(){
+  document.querySelectorAll('[data-site-scroll]').forEach(function(btn){
+    btn.addEventListener('click', function(ev){
+      ev.preventDefault();
+      var alvo=document.getElementById(btn.getAttribute('data-site-scroll'));
+      if(alvo) alvo.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
+})();
+'''
+        pagina = pagina.replace("</body>", "<script>" + nav_scroll_js + "</script></body>", 1)
 
     if incluir_galeria and galeria_fragmento.get("js"):
         pagina = pagina.replace("</body>", "<script>" + str(galeria_fragmento.get("js") or "") + "</script></body>", 1)
