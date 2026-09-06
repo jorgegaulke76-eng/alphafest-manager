@@ -1,4 +1,4 @@
-# HF50.1-HF7 — Carrossel no ponto exato da Home
+# HF50.1-HF8 — Carrossel no ponto exato da Home
 
 - Mantém integralmente o HF50.1-HF6.
 - Posiciona o carrossel comercial imediatamente após o Hero principal, exatamente antes de “Explore por categoria”.

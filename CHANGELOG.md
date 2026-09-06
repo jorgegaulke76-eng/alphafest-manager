@@ -1,4 +1,9 @@
-## 20.4.9-I8.13.5-HF50.1-HF7 — cabeçalho AlphaFest sem emendas
+## 20.4.9-I8.13.5-HF50.1-HF8 — carrossel desktop maior
+- Mantém 4 cards por vez no desktop, porém maiores e mais valorizados visualmente.
+- Tablet mantém 2 cards por vez; celular mantém 1 card por vez.
+- Aumenta altura, respiro, título e botões dos cards sem alterar a posição do carrossel nem as integrações existentes.
+
+## 20.4.9-I8.13.5-HF50.1-HF8 — cabeçalho AlphaFest sem emendas
 - Marca do cabeçalho passa a usar fundo transparente.
 - Carrossel promocional reposicionado para ocupar exatamente a faixa imediatamente abaixo do Hero e antes de “Explore por categoria”, sem espaço branco extra.
 - Um único azul/gradiente contínuo cobre marca, busca, WhatsApp e menu.
