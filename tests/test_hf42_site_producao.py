@@ -74,9 +74,9 @@ class HF42SiteProducaoTests(unittest.TestCase):
 
     def test_ui_manager_expoe_download_final_hf42(self):
         app = Path("app.py").read_text(encoding="utf-8")
-        self.assertIn('"🚀 Produção oficial — HF50.1-HF1 · motor HF44"', app)
+        self.assertIn('"🚀 Produção oficial — HF50.1-HF2 · motor HF44"', app)
         self.assertIn('alphafest-site-producao-hf50-1-hf1.zip', app)
-        self.assertIn('versao_manager="20.4.9-I8.13.5-HF50.1-HF1"', app)
+        self.assertIn('versao_manager="20.4.9-I8.13.5-HF50.1-HF2"', app)
         self.assertIn('_site_gerar_pacote_producao(', app)
 
     def test_pacote_final_nao_altera_dns(self):

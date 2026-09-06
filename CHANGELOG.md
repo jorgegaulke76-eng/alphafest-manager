@@ -1,3 +1,9 @@
+## 20.4.9-I8.13.5-HF50.1-HF2 — logo completo no cabeçalho
+- Corrige o logo AlphaFest no topo que podia parecer cortado na prévia.
+- Usa o arquivo oficial completo com margem transparente de segurança.
+- Mantém `object-fit: contain`, alinhamento central e container do cabeçalho com espaço vertical suficiente.
+- Preserva cabeçalho azul, carrossel comercial, Thu + Fox, Catálogo, Galeria, HF49.2 e motor HF44.
+
 
 ## 20.4.9-I8.13.5-HF50.1-HF1 — polimento visual sem rótulos extras
 - Remove o rótulo “Thu + Fox · AlphaFest” do hero.
