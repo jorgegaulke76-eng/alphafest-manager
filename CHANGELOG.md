@@ -1,3 +1,10 @@
+## 20.4.9-I8.13.5-HF48.3-HF4 — navegação focada por categoria
+- Ao escolher uma categoria, a lista completa de categorias some da área de produtos.
+- A tela passa a mostrar somente a categoria escolhida, suas subcategorias e os produtos correspondentes.
+- Novo botão **← Voltar às categorias** limpa o filtro e retorna ao bloco inicial **Explore por categoria**.
+- Funciona tanto ao escolher a categoria no bloco superior quanto nos filtros da vitrine.
+- Catálogo, Galeria, WhatsApp, Cloudflare/HF44 e dados do Manager permanecem inalterados.
+
 ## 20.4.9-I8.13.5-HF48.3-HF3 — polimento final mobile
 
 - reduz a faixa interna de PRÉVIA no celular sem remover o aviso de segurança;
