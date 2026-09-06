@@ -1,3 +1,9 @@
+## 20.4.9-I8.13.5-HF50.1-HF10 — Menu mobile final
+- Mobile mostra Início, Categorias, Produtos e Galeria.
+- Serviços, Quem Somos e Contato ficam em “☰ Mais”.
+- Remove rolagem horizontal do menu sem alterar o desktop.
+- Preserva carrossel HF9 em loop contínuo, Catálogo, Galeria, HF49.2 e motor HF44.
+
 
 ## 20.4.9-I8.13.5-HF50.1-HF9 — Carrossel contínuo em um único sentido
 - Autoplay do carrossel comercial agora avança sempre no mesmo sentido.
