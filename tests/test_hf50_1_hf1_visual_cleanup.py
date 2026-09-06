@@ -14,4 +14,4 @@ def test_hf501_hf1_remove_rotulos_circulados_e_preserva_carrossel():
     assert 'hf50-carousel-track' in html
     assert 'hf50-carousel-arrow' in html
     assert 'hf50-carousel-dots' in html
-    assert 'PRÉVIA INTERNA HF50.1-HF8' in html
+    assert 'PRÉVIA INTERNA HF50.1-HF9' in html

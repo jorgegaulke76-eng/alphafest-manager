@@ -1,4 +1,4 @@
-# HF50.1-HF8 — Carrossel desktop maior
+# HF50.1-HF9 — Carrossel desktop maior
 
 - Desktop: 4 cards maiores por vez.
 - Tablet: 2 cards por vez.
