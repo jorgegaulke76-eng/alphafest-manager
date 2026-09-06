@@ -233,5 +233,6 @@ def gerar_html_site_completo(
             empresa,
             incluir_galeria=incluir_galeria,
             usar_mascotes=mascotes_hf48,
+            imagem_resolver=imagem_resolver,
         )
     return pagina

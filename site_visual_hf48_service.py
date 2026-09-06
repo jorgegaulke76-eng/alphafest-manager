@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-from site_vitrine_service import resumir_vitrine
+from site_vitrine_service import ImagemResolver, resumir_vitrine
 
 
 ICONES_CATEGORIA = {
@@ -66,8 +66,85 @@ def _mascotes_hf48() -> Dict[str, str]:
         "galeria": _asset_data_uri("fox_galeria.webp"),
         "cta": _asset_data_uri("thu_fox_cta.webp"),
         "baloes": _asset_data_uri("baloes_hero.webp"),
+        "logo_wordmark": _asset_data_uri("logo_wordmark.webp"),
     }
 
+
+
+def _resolver_imagem_site(valor: str, imagem_resolver: ImagemResolver = None) -> str:
+    img = str(valor or "").strip()
+    if not img:
+        return ""
+    if imagem_resolver is not None:
+        try:
+            resolvida = str(imagem_resolver(img) or "").strip()
+            if resolvida:
+                return resolvida
+        except Exception:
+            pass
+    return img if img.startswith(("http://", "https://", "data:image/")) else ""
+
+
+def _carrossel_html(
+    catalogo: Iterable[Dict[str, Any]],
+    *,
+    imagem_resolver: ImagemResolver = None,
+    mascotes: Dict[str, str] | None = None,
+) -> str:
+    """HF50.1-HF1 — faixa comercial automática, sem novo cadastro paralelo.
+
+    Usa primeiro ``CarrosselSite`` (controle rápido no Catálogo). Enquanto nenhum
+    item for marcado, cai nos produtos já marcados como Destaque, para que a área
+    não fique vazia na primeira homologação.
+    """
+    resumo = resumir_vitrine(catalogo, usar_taxonomia_catalogo=True)
+    produtos = list(resumo.get("produtos") or [])
+    escolhidos = [p for p in produtos if bool(p.get("carrossel_site"))]
+    origem = "selecionados"
+    if not escolhidos:
+        escolhidos = [p for p in produtos if bool(p.get("destaque"))]
+        origem = "destaques"
+    escolhidos = escolhidos[:5]
+    if not escolhidos:
+        return ""
+
+    slides: List[str] = []
+    dots: List[str] = []
+    for i, item in enumerate(escolhidos):
+        nome = str(item.get("nome") or "Produto AlphaFest").strip()
+        cat = str(item.get("categoria_publica") or item.get("categoria") or "AlphaFest").strip()
+        sub = str(item.get("subcategoria_publica") or item.get("subcategoria") or "").strip()
+        descricao = str(item.get("descricao") or "").strip()
+        if len(descricao) > 150:
+            descricao = descricao[:147].rstrip() + "…"
+        img = _resolver_imagem_site(str(item.get("imagem_principal") or ""), imagem_resolver)
+        if img:
+            img_html = f'<img class="hf50-carousel-product-img" src="{html.escape(img, quote=True)}" alt="{html.escape(nome, quote=True)}" loading="lazy">'
+        else:
+            img_html = '<div class="hf50-carousel-placeholder">AlphaFest</div>'
+        etiqueta = "Destaque escolhido" if bool(item.get("carrossel_site")) else "Destaque AlphaFest"
+        tax = " · ".join(x for x in (cat, sub) if x)
+        aria = "false" if i == 0 else "true"
+        slides.append(
+            f'<article class="hf50-carousel-slide" data-hf50-slide="{i}" aria-hidden="{aria}">'
+            f'<div class="hf50-carousel-copy"><span class="hf50-carousel-kicker">✨ {html.escape(etiqueta)}</span><h2>{html.escape(nome)}</h2>'
+            f'<div class="hf50-carousel-tax">{html.escape(tax)}</div><p>{html.escape(descricao or "Uma ideia AlphaFest para personalizar do seu jeito.")}</p>'
+            f'<div class="hf50-carousel-actions"><button type="button" class="hf50-carousel-product" data-hf50-product="{html.escape(nome, quote=True)}">Ver produto</button><button type="button" class="hf50-carousel-whatsapp" data-site-scroll="contato">💬 Pedir orçamento</button></div></div>'
+            f'<div class="hf50-carousel-media">{img_html}</div></article>'
+        )
+        ativo = " active" if i == 0 else ""
+        dots.append(f'<button type="button" class="hf50-carousel-dot{ativo}" data-hf50-dot="{i}" aria-label="Ir para destaque {i+1}"></button>')
+
+    fox = ""
+    if mascotes and mascotes.get("galeria"):
+        fox = f'<img class="hf50-carousel-fox" src="{mascotes["galeria"]}" alt="Fox, mascote AlphaFest">'
+    return (
+        f'<section class="hf50-carousel" id="destaques"><div class="hf50-carousel-shell">{fox}'
+        f'<div class="hf50-carousel-viewport"><div class="hf50-carousel-track">{"".join(slides)}</div></div>'
+        '<button type="button" class="hf50-carousel-arrow prev" aria-label="Destaque anterior">‹</button>'
+        '<button type="button" class="hf50-carousel-arrow next" aria-label="Próximo destaque">›</button>'
+        f'<div class="hf50-carousel-dots">{"".join(dots)}</div></div></section>'
+    )
 
 def _categorias_html(catalogo: Iterable[Dict[str, Any]]) -> str:
     resumo = resumir_vitrine(catalogo, usar_taxonomia_catalogo=True)
@@ -98,6 +175,7 @@ def aplicar_visual_hf48(
     *,
     incluir_galeria: bool = False,
     usar_mascotes: bool = False,
+    imagem_resolver: ImagemResolver = None,
 ) -> str:
     """Retorna uma cópia visualmente reestilizada do site já gerado.
 
@@ -111,7 +189,7 @@ def aplicar_visual_hf48(
     total_categorias = int(resumo.get("total_categorias", 0) or 0)
     nome = str(empresa.get("nome") or "AlphaFest").strip() or "AlphaFest"
     slogan = str(empresa.get("slogan") or "O poder de estar presente em cada presente!").strip()
-    mascotes = _mascotes_hf48() if usar_mascotes else {"hero": "", "galeria": "", "cta": "", "baloes": ""}
+    mascotes = _mascotes_hf48() if usar_mascotes else {"hero": "", "galeria": "", "cta": "", "baloes": "", "logo_wordmark": ""}
 
     css = r'''
 /* HF48.1 — nova linguagem visual comercial (somente opt-in) */
@@ -156,8 +234,31 @@ body{background:var(--hf48-bg)}
 @media(max-width:1050px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-process-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:900px){.hf48-real-balloons{width:110px;left:-28px;top:94px}.hf48-header-search{display:none}.site-nav{top:87px}.hero-in{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.preview-bar{font-size:7px!important;line-height:1.15!important;padding:3px 6px!important;letter-spacing:.035em!important}.hf48-real-balloons{display:none}.hf48-topline{font-size:9px;padding:5px 8px}.header-in{padding:8px 12px}.site-nav{top:69px}.hero-in{padding:32px 14px 38px;row-gap:28px}.hero h1{font-size:38px}.hf48-categories{padding:34px 14px}.hf48-section-heading{align-items:flex-start;flex-direction:column}.hf48-section-heading h2{font-size:28px}.hf48-category-grid{grid-template-columns:1fr 1fr;gap:9px}.hf48-category-card{padding:11px;gap:8px}.hf48-cat-icon{width:38px;height:38px;font-size:19px}.hf48-cat-copy strong{font-size:12px}.hf48-cat-copy small{font-size:10px}.main{padding:34px 12px 52px}.grid{grid-template-columns:1fr}.hf48-process{padding:42px 14px}.hf48-process-grid{grid-template-columns:1fr}.photo{aspect-ratio:4/3}.hero-card.hf48-mascot-hero{min-height:455px;padding:26px 16px 245px;margin-top:4px}.hf48-hero-mascot-img{width:82%;right:7%;bottom:6px;max-height:250px}.hf48-mascot-hero .hf48-mascot-copy{max-width:none}.hf48-gallery-intro{margin:0 14px 18px;padding:12px}.hf48-gallery-intro img{width:80px;height:66px}.hf48-brand-cta{padding:0 14px 42px}.hf48-brand-cta-in{grid-template-columns:1fr;padding:22px}.hf48-brand-cta img{max-height:180px;order:-1}}
+/* HF50.1 — cabeçalho azul + marca oficial maior + carrossel comercial */
+.header{background:linear-gradient(90deg,#0757ad 0%,#0875d4 58%,#0b9fdc 100%);border-bottom:1px solid rgba(255,255,255,.22);box-shadow:0 7px 24px rgba(4,63,122,.18)}
+.header-in{max-width:1320px;padding:10px 24px;gap:18px}.brand{gap:9px}.brand-logo{width:118px;height:72px;object-fit:contain;filter:drop-shadow(0 4px 8px rgba(0,0,0,.12))}.brand-copy strong{display:none}.brand-copy span{color:#e8f7ff;font-size:12px;font-weight:800;letter-spacing:.01em}
+.hf48-header-search{background:#fff;border:1px solid rgba(255,255,255,.8);box-shadow:0 5px 18px rgba(0,44,92,.12);margin-left:8px}.hf48-header-search input{color:#17324e}.header-actions .cta{box-shadow:0 8px 22px rgba(18,86,48,.25)}
+.site-nav{top:92px;background:linear-gradient(90deg,#064f9f,#0767bd 60%,#0879cc);border-bottom:1px solid rgba(255,255,255,.18);box-shadow:0 5px 14px rgba(5,62,117,.12)}.site-nav a,.site-nav button{color:#fff}.site-nav a:hover,.site-nav button:hover{background:rgba(255,255,255,.13);color:#fff}
+.hf50-carousel{background:#fff;padding:20px 24px 42px}.hf50-carousel-shell{max-width:1320px;margin:auto;position:relative;overflow:hidden;border:1px solid #dbe9f6;border-radius:26px;background:linear-gradient(115deg,#e5f7ff 0%,#fff 43%,#fff0f7 76%,#fff9d8 100%);box-shadow:0 14px 38px rgba(18,35,61,.08);min-height:292px}.hf50-carousel-shell:before{content:'';position:absolute;left:-70px;top:-80px;width:210px;height:210px;border-radius:50%;background:rgba(20,185,244,.17)}.hf50-carousel-shell:after{content:'';position:absolute;right:-70px;bottom:-110px;width:250px;height:250px;border-radius:50%;background:rgba(255,47,145,.12)}
+.hf50-carousel-head{position:relative;z-index:4;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:22px 76px 0 30px}.hf50-carousel-head strong{display:block;font-size:19px;color:#10264d;margin-top:4px}.hf50-carousel-source{font-size:10px;color:#688199;background:rgba(255,255,255,.72);border:1px solid #dceaf6;padding:6px 9px;border-radius:999px;white-space:nowrap}
+.hf50-carousel-viewport{overflow:hidden;position:relative;z-index:2;padding-top:10px}.hf50-carousel-track{display:flex;transition:transform .46s cubic-bezier(.2,.75,.25,1)}.hf50-carousel-slide{min-width:100%;display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:center;gap:34px;padding:20px 78px 30px 30px}.hf50-carousel-copy{max-width:680px;padding-right:64px}.hf50-carousel-kicker{display:inline-flex;color:#0875d4;font-size:11px;font-weight:950;text-transform:uppercase;letter-spacing:.08em}.hf50-carousel-copy h2{font-size:clamp(27px,3vw,42px);line-height:1.02;color:#10264d;margin:8px 0 7px}.hf50-carousel-tax{font-size:12px;font-weight:900;color:#ff2f91;text-transform:uppercase;letter-spacing:.05em}.hf50-carousel-copy p{color:#5f758d;font-size:14px;line-height:1.55;max-width:610px;margin:10px 0 15px}.hf50-carousel-actions{display:flex;gap:9px;flex-wrap:wrap}.hf50-carousel-actions button{border:0;border-radius:12px;padding:11px 16px;font-weight:900;cursor:pointer}.hf50-carousel-product{background:linear-gradient(135deg,#0678df,#14b9f4);color:#fff}.hf50-carousel-whatsapp{background:#25d366;color:#fff}
+.hf50-carousel-media{height:208px;border-radius:20px;background:rgba(255,255,255,.88);border:1px solid rgba(219,233,246,.9);display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 10px 26px rgba(18,35,61,.08)}.hf50-carousel-product-img{width:100%;height:100%;object-fit:contain;padding:8px}.hf50-carousel-placeholder{font-size:26px;font-weight:950;color:#6aaee3}.hf50-carousel-fox{position:absolute;right:332px;bottom:-17px;width:145px;height:auto;z-index:3;pointer-events:none;filter:drop-shadow(0 11px 17px rgba(18,35,61,.13))}
+.hf50-carousel-arrow{position:absolute;top:55%;z-index:6;width:38px;height:38px;border-radius:50%;border:1px solid #cfe2f3;background:rgba(255,255,255,.94);color:#0875d4;font-size:27px;line-height:1;cursor:pointer;box-shadow:0 6px 18px rgba(18,35,61,.12)}.hf50-carousel-arrow.prev{left:13px}.hf50-carousel-arrow.next{right:13px}.hf50-carousel-dots{position:absolute;right:34px;top:18px;z-index:7;display:flex;gap:6px}.hf50-carousel-dot{width:8px;height:8px;border:0;border-radius:50%;background:#b8cee0;padding:0;cursor:pointer}.hf50-carousel-dot.active{width:23px;border-radius:999px;background:linear-gradient(90deg,#0875d4,#ff2f91)}
+@media(max-width:1050px){.hf50-carousel-slide{grid-template-columns:minmax(0,1fr) 270px}.hf50-carousel-fox{right:276px;width:118px}.hf50-carousel-copy{padding-right:30px}}
+@media(max-width:900px){.site-nav{top:79px}.brand-logo{width:100px;height:60px}.hf50-carousel-head{padding-right:28px}.hf50-carousel-slide{grid-template-columns:1fr 230px;padding-right:28px}.hf50-carousel-fox{display:none}}
+@media(max-width:620px){.header{background:linear-gradient(90deg,#0657aa,#087bd3)}.header-in{padding:6px 10px}.brand-logo{width:90px;height:56px}.site-nav{top:68px}.site-nav-in{background:transparent}.hf50-carousel{padding:12px 12px 30px}.hf50-carousel-shell{border-radius:19px;min-height:0}.hf50-carousel-head{align-items:flex-start;flex-direction:column;padding:17px 18px 0;gap:6px}.hf50-carousel-head strong{font-size:16px}.hf50-carousel-source{white-space:normal}.hf50-carousel-slide{grid-template-columns:1fr;padding:15px 18px 28px;gap:13px}.hf50-carousel-copy{padding-right:0}.hf50-carousel-copy h2{font-size:27px}.hf50-carousel-copy p{font-size:13px}.hf50-carousel-media{height:185px;order:-1}.hf50-carousel-actions button{width:100%;min-height:44px}.hf50-carousel-arrow{top:48%;width:34px;height:34px}.hf50-carousel-arrow.prev{left:6px}.hf50-carousel-arrow.next{right:6px}.hf50-carousel-dots{right:18px;top:12px}.hf50-carousel-fox{display:none}}
+
 '''
     pagina = pagina.replace("</style>", css + "</style>", 1)
+
+    # HF50.1 — usa o lettering oficial do próprio logo no cabeçalho, evitando
+    # aproximar a tipografia com uma fonte genérica. O subtítulo continua texto.
+    if mascotes.get("logo_wordmark"):
+        pagina = re.sub(
+            r'<img\s+class=[\'\"]brand-logo[\'\"]\s+src=[\'\"][^\'\"]*[\'\"]\s+alt=[\'\"][^\'\"]*[\'\"]>',
+            f'<img class="brand-logo" src="{mascotes["logo_wordmark"]}" alt="AlphaFest">',
+            pagina, count=1, flags=re.S,
+        )
 
     # Faixa comercial discreta no topo.
     pagina = pagina.replace("<body>", '<body><div class="hf48-topline">✨ Personalizados para festas, empresas e presentes · Atendimento direto pelo WhatsApp</div>', 1)
@@ -176,7 +277,7 @@ body{background:var(--hf48-bg)}
           <p>{html.escape(slogan)} Explore produtos, veja trabalhos reais e peça uma personalização do seu jeito — quantidade, cor, material e prazo combinados com a AlphaFest.</p>
           <div class="hero-actions"><a class="cta" href="#contato">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Ver produtos</a></div>
           <div class="hf48-trust"><span>✓ Sem pedido mínimo</span><span>✓ Personalização sob medida</span><span>✓ Atendimento pelo WhatsApp</span></div>
-          </div><aside class="hero-card hf48-mascot-hero"><div class="hf48-mascot-copy"><div class="eyebrow">Thu + Fox · AlphaFest</div><h2>Uma marca feita para ficar na memória.</h2><p>Produtos, ideias e trabalhos reais com o jeito AlphaFest de transformar cada detalhe em presença.</p><div class="hf48-hero-benefits"><div class="hf48-hero-benefit"><b>💗</b><span>Personalização que conta sua história</span></div><div class="hf48-hero-benefit"><b>⭐</b><span>Qualidade em cada detalhe</span></div><div class="hf48-hero-benefit"><b>🎁</b><span>Ideias para todas as ocasiões</span></div></div><div class="hf48-mascot-note">💙 Thu e Fox dão as boas-vindas</div></div><img class="hf48-hero-mascot-img" src="{mascotes['hero']}" alt="Thu e Fox, mascotes da AlphaFest"></aside></div></section>'''
+          </div><aside class="hero-card hf48-mascot-hero"><div class="hf48-mascot-copy"><h2>Uma marca feita para ficar na memória.</h2><p>Produtos, ideias e trabalhos reais com o jeito AlphaFest de transformar cada detalhe em presença.</p><div class="hf48-hero-benefits"><div class="hf48-hero-benefit"><b>💗</b><span>Personalização que conta sua história</span></div><div class="hf48-hero-benefit"><b>⭐</b><span>Qualidade em cada detalhe</span></div><div class="hf48-hero-benefit"><b>🎁</b><span>Ideias para todas as ocasiões</span></div></div><div class="hf48-mascot-note">💙 Thu e Fox dão as boas-vindas</div></div><img class="hf48-hero-mascot-img" src="{mascotes['hero']}" alt="Thu e Fox, mascotes da AlphaFest"></aside></div></section>'''
     else:
         hero_novo = f'''<section class="hero" id="inicio"><div class="hero-in"><div>
           <div class="eyebrow">AlphaFest · Personalizados & Balões</div>
@@ -195,6 +296,16 @@ body{background:var(--hf48-bg)}
         if pos >= 0:
             pos += len('</section>')
             pagina = pagina[:pos] + categorias_html + pagina[pos:]
+
+    # HF50.1 — carrossel comercial no espaço entre Hero e Categorias.
+    # A seleção vem do mesmo Catálogo: CarrosselSite (preferencial) ou Destaque
+    # como fallback visual. Nada é publicado/salvo por esta função.
+    carrossel_html = _carrossel_html(catalogo, imagem_resolver=imagem_resolver, mascotes=mascotes)
+    if carrossel_html:
+        pos = pagina.find('</section>', pagina.find('id="inicio"'))
+        if pos >= 0:
+            pos += len('</section>')
+            pagina = pagina[:pos] + carrossel_html + pagina[pos:]
 
     if incluir_galeria and mascotes.get("galeria"):
         galeria_intro = f'''<div class="hf48-gallery-intro"><img src="{mascotes['galeria']}" alt="Fox, mascote da AlphaFest"><div><strong>A Fox separou inspirações reais para você.</strong><span>Use Categoria, Subcategoria e Tema para encontrar trabalhos já produzidos e pedir algo parecido pelo WhatsApp.</span></div></div>'''
@@ -231,7 +342,7 @@ body{background:var(--hf48-bg)}
     )
 
     # Identifica a prévia corretamente sem alterar a produção.
-    preview_rotulo = 'PRÉVIA INTERNA HF49.1 · PRODUTO + GALERIA · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
+    preview_rotulo = 'PRÉVIA INTERNA HF50.1-HF1 · CABEÇALHO AZUL + CARROSSEL LIMPO · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
     pagina = re.sub(r"<div\s+class=['\"]preview-bar['\"]>.*?</div>", f'<div class="preview-bar">{preview_rotulo}</div>', pagina, count=1, flags=re.S)
 
     js = r'''
@@ -251,6 +362,48 @@ body{background:var(--hf48-bg)}
       const slug=btn.getAttribute('data-hf48-cat');
       const filtro=document.querySelector('.category-filter[data-cat="'+slug+'"]');
       if(filtro) filtro.click();
+      const alvo=document.getElementById('produtos'); if(alvo) alvo.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+  });
+
+  // HF50.1 — carrossel leve: rotação automática, setas, pontos e swipe no celular.
+  const shell=document.querySelector('.hf50-carousel-shell');
+  if(shell){
+    const track=shell.querySelector('.hf50-carousel-track');
+    const slides=[...shell.querySelectorAll('.hf50-carousel-slide')];
+    const dots=[...shell.querySelectorAll('.hf50-carousel-dot')];
+    const prev=shell.querySelector('.hf50-carousel-arrow.prev');
+    const next=shell.querySelector('.hf50-carousel-arrow.next');
+    let idx=0, timer=null, touchStart=null;
+    function go(n){
+      if(!slides.length||!track)return;
+      idx=(n+slides.length)%slides.length;
+      track.style.transform='translateX(-'+(idx*100)+'%)';
+      slides.forEach((s,i)=>s.setAttribute('aria-hidden',i===idx?'false':'true'));
+      dots.forEach((d,i)=>d.classList.toggle('active',i===idx));
+    }
+    function stop(){if(timer){clearInterval(timer);timer=null;}}
+    function start(){stop(); if(slides.length>1) timer=setInterval(()=>go(idx+1),5200);}
+    if(prev)prev.addEventListener('click',()=>{go(idx-1);start();});
+    if(next)next.addEventListener('click',()=>{go(idx+1);start();});
+    dots.forEach((d,i)=>d.addEventListener('click',()=>{go(i);start();}));
+    shell.addEventListener('mouseenter',stop); shell.addEventListener('mouseleave',start);
+    shell.addEventListener('focusin',stop); shell.addEventListener('focusout',start);
+    shell.addEventListener('touchstart',e=>{touchStart=e.changedTouches&&e.changedTouches[0]?e.changedTouches[0].clientX:null;},{passive:true});
+    shell.addEventListener('touchend',e=>{
+      if(touchStart===null)return; const end=e.changedTouches&&e.changedTouches[0]?e.changedTouches[0].clientX:touchStart;
+      const delta=end-touchStart; touchStart=null; if(Math.abs(delta)>42){go(idx+(delta<0?1:-1));start();}
+    },{passive:true});
+    start();
+  }
+
+  document.querySelectorAll('.hf50-carousel-product').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      const nome=btn.getAttribute('data-hf50-product')||'';
+      const back=document.getElementById('taxonomy-back');
+      if(back && back.offsetParent!==null) back.click();
+      if(productInput){productInput.value=nome; productInput.dispatchEvent(new Event('input',{bubbles:true}));}
+      if(topInput) topInput.value=nome;
       const alvo=document.getElementById('produtos'); if(alvo) alvo.scrollIntoView({behavior:'smooth',block:'start'});
     });
   });

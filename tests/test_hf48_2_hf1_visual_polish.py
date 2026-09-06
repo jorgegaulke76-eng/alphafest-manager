@@ -16,7 +16,7 @@ def test_hf48_2_hf1_remove_contadores_do_hero_e_usa_beneficios():
     assert 'Personalização que conta sua história' in html
     assert 'Qualidade em cada detalhe' in html
     assert 'Ideias para todas as ocasiões' in html
-    assert 'PRÉVIA INTERNA HF49.1' in html
+    assert 'PRÉVIA INTERNA HF50.1-HF1' in html
 
 
 def test_assets_mascotes_hf48_2_hf1_tem_transparencia_real():

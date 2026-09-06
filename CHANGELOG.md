@@ -1,3 +1,9 @@
+
+## 20.4.9-I8.13.5-HF50.1-HF1 — polimento visual sem rótulos extras
+- Remove o rótulo “Thu + Fox · AlphaFest” do hero.
+- Remove o título/subtítulo acima do carrossel para deixar o banner mais limpo.
+- Preserva toda a funcionalidade HF50.1, HF49.2 e o motor HF44.
+
 ## 20.4.9-I8.13.5-HF49.2 — Edição rápida do site com auto-save
 
 - Catálogo → Produtos ganha uma grade de edição rápida para PublicarSite, ExibirPrecoSite e Destaque.

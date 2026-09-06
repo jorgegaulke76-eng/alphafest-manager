@@ -151,6 +151,8 @@ def selecionar_produtos_vitrine(
         item["subcategoria"] = str(produto.get("Subcategoria") or "").strip()
         item["material"] = str(produto.get("Material") or "").strip()
         item["processos"] = _lista(produto.get("Processos") or produto.get("Processo") or produto.get("processos"))
+        item["campanhas"] = _lista(produto.get("Campanhas"))
+        item["carrossel_site"] = bool(produto.get("CarrosselSite", False))
         item["categoria_origem"] = str(item.get("categoria") or "").strip()
         item["categoria_comercial"] = categoria_comercial_produto(item)
         if usar_taxonomia_catalogo:
