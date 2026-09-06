@@ -1,3 +1,8 @@
+## 20.4.9-I8.13.5-HF49.1 — Produto + Galeria automática
+
+- Produto com trabalho real selecionado ganha acesso direto à Galeria filtrada, sem cadastro adicional.
+- Mantém HF48.3-HF4 e publicação HF44.
+
 ## 20.4.9-I8.13.5-HF48.3-HF4 — navegação focada por categoria
 - Ao escolher uma categoria, a lista completa de categorias some da área de produtos.
 - A tela passa a mostrar somente a categoria escolhida, suas subcategorias e os produtos correspondentes.

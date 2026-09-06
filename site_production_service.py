@@ -1,4 +1,4 @@
-"""Pacote público de produção do site AlphaFest (motor HF44 · visual aprovado HF48.3-HF1).
+"""Pacote público de produção do site AlphaFest (motor HF44 · HF49.1 · visual HF48.3-HF4).
 
 Gera um snapshot estático pronto para o Worker já homologado. Não altera DNS,
 não cria Custom Domain e não modifica dados operacionais do Manager.
@@ -64,7 +64,7 @@ def gerar_pacote_producao(
     html_site: str,
     *,
     total_produtos: int = 0,
-    versao_manager: str = "20.4.9-I8.13.5-HF48.3-HF1",
+    versao_manager: str = "20.4.9-I8.13.5-HF49.1",
 ) -> bytes:
     """Gera ZIP para New deployment no Worker alphafest-novo.
 
@@ -85,7 +85,7 @@ def gerar_pacote_producao(
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   X-Frame-Options: SAMEORIGIN
 """
-    readme = f"""ALPHAFEST — PACOTE DE PRODUÇÃO HF48.3-HF1
+    readme = f"""ALPHAFEST — PACOTE DE PRODUÇÃO HF49.1
 
 Destino: Worker {PROJETO_WORKER}
 Domínio principal: https://{DOMINIO_FINAL}
@@ -96,8 +96,9 @@ O QUE MUDA NESTE PACOTE
 - Libera indexação pública (robots + meta robots).
 - Inclui canonical e sitemap do domínio oficial.
 - Mantém a mesma Fonte Única do Catálogo e os CTAs/WhatsApp homologados.
-- Publica o visual aprovado HF48.3-HF1 com cores AlphaFest e Thu + Fox.
+- Publica o HF49.1 · visual HF48.3-HF4 com cores AlphaFest e Thu + Fox.
 - Inclui a Galeria autorizada/pré-selecionada, com filtros por Categoria, Subcategoria e Tema.
+- Liga automaticamente cada produto aos trabalhos reais já selecionados na Galeria, sem novo cadastro.
 - Organiza Produtos por Categoria → Subcategoria sem duplicar cadastro.
 - Continua compatível com o motor seguro de publicação assistida HF44 pelo próprio Manager.
 

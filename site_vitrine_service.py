@@ -251,6 +251,7 @@ def gerar_html_vitrine(
     imagem_resolver: ImagemResolver = None,
     modo_preview: bool = True,
     usar_taxonomia_catalogo: bool = False,
+    produtos_com_galeria: Optional[Iterable[str]] = None,
 ) -> str:
     """Gera HTML autônomo da vitrine. Nenhuma publicação é realizada.
 
@@ -261,6 +262,7 @@ def gerar_html_vitrine(
     resumo = resumir_vitrine(catalogo, usar_taxonomia_catalogo=usar_taxonomia_catalogo)
     produtos = resumo["produtos"]
     categorias = resumo["categorias"]
+    produtos_galeria_slugs = {_slug(x) for x in (produtos_com_galeria or []) if str(x or "").strip()}
 
     nome_empresa = str((empresa or {}).get("nome") or "AlphaFest").strip() or "AlphaFest"
     subtitulo = str((empresa or {}).get("subtitulo") or "Personalizados & Balões").strip()
@@ -344,10 +346,15 @@ def gerar_html_vitrine(
         descricao_curta = descricao[:280] + ("…" if len(descricao) > 280 else "")
         preco_html = f'<div class="price">{html.escape(preco)}</div>' if preco else ""
         footer_classe = "card-footer" if preco else "card-footer no-price"
+        produto_slug = _slug(nome)
         sub_data = html.escape(_slug(subcategoria_publica), quote=True) if subcategoria_publica else ""
         subcategoria_html = f'<div class="subcategory">{html.escape(subcategoria_publica)}</div>' if subcategoria_publica else ""
+        galeria_cta = (
+            f'<button type="button" class="gallery-proof-btn" data-gallery-product="{html.escape(produto_slug, quote=True)}" data-gallery-label="{html.escape(nome, quote=True)}">📸 Ver trabalhos realizados</button>'
+            if produto_slug in produtos_galeria_slugs else ""
+        )
         cards.append(
-            f'''<article class="product-card" data-cat="{html.escape(_slug(categoria), quote=True)}" data-sub="{sub_data}" data-search="{html.escape(busca, quote=True)}">
+            f'''<article class="product-card" data-cat="{html.escape(_slug(categoria), quote=True)}" data-sub="{sub_data}" data-product="{html.escape(produto_slug, quote=True)}" data-search="{html.escape(busca, quote=True)}">
                 <div class="photo">{imagem_html}{badge}</div>
                 <div class="card-body">
                     <div class="category">{html.escape(categoria)}</div>
@@ -355,6 +362,7 @@ def gerar_html_vitrine(
                     <h3>{html.escape(nome)}</h3>
                     <p>{html.escape(descricao_curta)}</p>
                     {opcoes_html}
+                    {galeria_cta}
                     <div class="{footer_classe}">{preco_html}<a class="cta small" href="{html.escape(href, quote=True)}" target="_blank" rel="noopener" aria-label="Pedir orçamento de {html.escape(nome, quote=True)} pelo WhatsApp">Pedir orçamento</a></div>
                 </div>
             </article>'''
@@ -476,6 +484,7 @@ def gerar_html_vitrine(
 .section-head{{display:flex;justify-content:space-between;gap:18px;align-items:end;margin:20px 0}} .section-head h2{{font-size:30px;margin:0}} .section-head p{{margin:5px 0 0;color:#667b94}} #result-count{{font-weight:800;color:var(--blue);white-space:nowrap}}
 .grid{{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}} .product-card{{border:1px solid var(--line);border-radius:20px;overflow:hidden;background:#fff;box-shadow:0 10px 30px rgba(20,37,61,.06);display:flex;flex-direction:column;transition:.18s}} .product-card:hover{{transform:translateY(-3px);box-shadow:0 16px 36px rgba(20,37,61,.11)}}
 .photo{{position:relative;background:var(--soft);aspect-ratio:4/3;overflow:hidden}} .photo img{{width:100%;height:100%;object-fit:cover;display:block}} .placeholder{{height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#84a9ca}} .badge{{position:absolute;top:12px;left:12px;background:#fff;color:#a26100;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:900;box-shadow:0 3px 12px rgba(0,0,0,.12)}}
+.gallery-proof-btn{{width:100%;border:1px solid #b9d9f4;background:#f3f9ff;color:#0b68b5;border-radius:10px;min-height:39px;margin:0 0 10px;font-weight:900;cursor:pointer}} .gallery-proof-btn:hover{{background:#e9f5ff;border-color:#80bbe9}}
 .card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .category{{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:900;color:var(--blue)}} .subcategory{{font-size:12px;font-weight:800;color:#6a7f97;margin-top:4px}} .card-body h3{{font-size:20px;line-height:1.15;margin:7px 0 10px}} .card-body p{{font-size:14px;line-height:1.55;color:#60748e;margin:0 0 12px;flex:1}} .options{{font-size:12px;color:#60748e;margin:0 0 12px}} .card-footer{{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid #edf3f8;padding-top:14px}} .card-footer.no-price .cta{{width:100%}} .price{{font-weight:950;font-size:17px}}
 .empty{{padding:50px;text-align:center;border:1px dashed var(--line);border-radius:18px;color:#60748e}} .mobile-whatsapp{{display:none}} .footer{{background:#10243c;color:#d7e8f7}} .footer-in{{max-width:1240px;margin:auto;padding:34px 22px;display:flex;gap:24px;justify-content:space-between;align-items:center}} .footer strong{{color:#fff}} .footer small{{color:#9fb7cb}}
 @media(max-width:900px){{.hero-in{{grid-template-columns:1fr}}.hero-card{{display:none}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}

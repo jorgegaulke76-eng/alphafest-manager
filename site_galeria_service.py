@@ -161,7 +161,7 @@ def gerar_fragmento_galeria(
             )
             tema_slug = _slug(tema) if tema else "sem-tema"
             cards.append(
-                f'''<article class="gallery-card" data-cat="{html.escape(_slug(categoria), quote=True)}" data-sub="{html.escape(_slug(subcategoria), quote=True)}" data-theme="{html.escape(tema_slug, quote=True)}" data-search="{html.escape(busca, quote=True)}">
+                f'''<article class="gallery-card" data-cat="{html.escape(_slug(categoria), quote=True)}" data-sub="{html.escape(_slug(subcategoria), quote=True)}" data-theme="{html.escape(tema_slug, quote=True)}" data-product="{html.escape(_slug(produto), quote=True)}" data-search="{html.escape(busca, quote=True)}">
                 <div class="gallery-photo">{imagem}</div>
                 <div class="gallery-body"><div class="gallery-tax">{html.escape(categoria)} <span>›</span> {html.escape(subcategoria)}</div>
                 <h3>{html.escape(produto)}</h3>{f'<p>{detalhe_html}</p>' if detalhe_html else '<p>Personalizado produzido pela AlphaFest.</p>'}
@@ -180,6 +180,7 @@ def gerar_fragmento_galeria(
     secao = f'''<section class="site-section gallery-section" id="galeria"><div class="site-wrap">
       <div class="section-kicker">Galeria AlphaFest</div><h2 class="section-title">Trabalhos realizados para inspirar sua próxima ideia.</h2>
       <p class="section-copy">Veja projetos reais produzidos pela AlphaFest e use os filtros para encontrar referências por categoria, subcategoria e tema.</p>
+      <div class="gallery-product-focus" id="gallery-product-focus" hidden><div><span>Trabalhos ligados ao produto</span><strong id="gallery-product-focus-label">Produto</strong></div><button type="button" id="gallery-product-focus-clear">Ver toda a Galeria</button></div>
       <div class="gallery-toolbar" aria-label="Filtros da galeria">
         <label><span>Categoria</span><select id="gallery-cat">{''.join(options_categoria)}</select></label>
         <label><span>Subcategoria</span><select id="gallery-sub">{''.join(options_sub)}</select></label>
@@ -191,11 +192,12 @@ def gerar_fragmento_galeria(
 
     css = r'''
 .gallery-section{background:linear-gradient(180deg,#fff8fc,#ffffff)}
+.gallery-product-focus{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:22px 0 -10px;padding:13px 15px;border:1px solid #b9dcf8;border-radius:15px;background:linear-gradient(90deg,#eef8ff,#fff)}.gallery-product-focus[hidden]{display:none}.gallery-product-focus span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.07em;font-weight:900;color:#6c85a0}.gallery-product-focus strong{display:block;margin-top:2px;color:#153a60}.gallery-product-focus button{border:1px solid #b9d8f0;background:#fff;color:#0b68b5;border-radius:10px;padding:9px 12px;font-weight:900;cursor:pointer}
 .gallery-toolbar{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;margin:26px 0 22px;padding:16px;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 8px 26px rgba(20,37,61,.04)}
 .gallery-toolbar label span{display:block;font-size:11px;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:#617791;margin:0 0 6px}.gallery-toolbar select{width:100%;border:1px solid #cfe0ee;border-radius:11px;background:#fff;color:var(--ink);padding:11px 12px;font-size:14px;font-weight:750;outline:none}.gallery-count{min-width:105px;text-align:center;padding:12px 13px;border-radius:11px;background:#eef7ff;color:var(--blue);font-weight:900;font-size:13px}
 .gallery-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.gallery-card{border:1px solid var(--line);border-radius:18px;overflow:hidden;background:#fff;box-shadow:0 10px 28px rgba(20,37,61,.06);display:flex;flex-direction:column}.gallery-photo{aspect-ratio:4/3;background:var(--soft);overflow:hidden}.gallery-photo img{width:100%;height:100%;object-fit:cover;display:block}.gallery-placeholder{height:100%;display:flex;align-items:center;justify-content:center;color:#84a9ca;font-size:24px;font-weight:950}.gallery-body{padding:15px;display:flex;flex-direction:column;flex:1}.gallery-tax{font-size:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:900;color:var(--blue)}.gallery-tax span{color:#92a6b8}.gallery-body h3{font-size:18px;line-height:1.18;margin:7px 0 7px}.gallery-body p{font-size:13px;line-height:1.45;color:#647991;margin:0 0 14px;flex:1}.gallery-cta{display:flex;justify-content:center;align-items:center;min-height:42px;border-radius:10px;background:var(--green);color:#fff;text-decoration:none;font-size:13px;font-weight:900}.gallery-empty{grid-column:1/-1;border:1px dashed #cbddea;border-radius:16px;padding:42px;text-align:center;color:#637993;background:#fff}.gallery-preview-note{margin-top:14px;color:#73869b;font-size:11px;text-align:center}
 @media(max-width:900px){.gallery-toolbar{grid-template-columns:1fr 1fr}.gallery-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.gallery-count{align-self:stretch;display:flex;align-items:center;justify-content:center}}
-@media(max-width:620px){.gallery-toolbar{grid-template-columns:1fr;padding:13px}.gallery-toolbar select{font-size:16px;min-height:46px}.gallery-count{min-height:44px}.gallery-grid{grid-template-columns:1fr;gap:15px}.gallery-card{border-radius:16px}.gallery-body{padding:14px}.gallery-body h3{font-size:18px}.gallery-cta{min-height:46px}}
+@media(max-width:620px){.gallery-product-focus{align-items:stretch;flex-direction:column}.gallery-product-focus button{width:100%;min-height:42px}.gallery-toolbar{grid-template-columns:1fr;padding:13px}.gallery-toolbar select{font-size:16px;min-height:46px}.gallery-count{min-height:44px}.gallery-grid{grid-template-columns:1fr;gap:15px}.gallery-card{border-radius:16px}.gallery-body{padding:14px}.gallery-body h3{font-size:18px}.gallery-cta{min-height:46px}}
 '''
 
     # O JS é isolado por IDs/classes gallery-* para não interferir nos filtros de Produtos.
@@ -204,11 +206,18 @@ def gerar_fragmento_galeria(
  const cat=document.getElementById('gallery-cat'),sub=document.getElementById('gallery-sub'),theme=document.getElementById('gallery-theme'),count=document.getElementById('gallery-count');
  if(!cat||!sub||!theme||!count)return;
  const cards=[...document.querySelectorAll('.gallery-card')], subOptions=[...sub.options], themeOptions=[...theme.options];
+ const focus=document.getElementById('gallery-product-focus'),focusLabel=document.getElementById('gallery-product-focus-label'),focusClear=document.getElementById('gallery-product-focus-clear');
+ let productFocus='';
+ function clearProductFocus(){productFocus='';if(focus)focus.hidden=true;}
  function refreshSub(){const c=cat.value;subOptions.forEach((o,i)=>{if(i===0){o.hidden=false;return;}o.hidden=(c!=='todos'&&o.dataset.parent!==c);});if(sub.selectedOptions[0]&&sub.selectedOptions[0].hidden)sub.value='todos';}
- function refreshTheme(){const c=cat.value,s=sub.value,allowed=new Set();cards.forEach(x=>{if((c==='todos'||x.dataset.cat===c)&&(s==='todos'||x.dataset.sub===s))allowed.add(x.dataset.theme);});themeOptions.forEach((o,i)=>{if(i===0){o.hidden=false;return;}o.hidden=!allowed.has(o.value);});if(theme.selectedOptions[0]&&theme.selectedOptions[0].hidden)theme.value='todos';}
- function apply(){const c=cat.value,s=sub.value,t=theme.value;let n=0;cards.forEach(x=>{const ok=(c==='todos'||x.dataset.cat===c)&&(s==='todos'||x.dataset.sub===s)&&(t==='todos'||x.dataset.theme===t);x.style.display=ok?'flex':'none';if(ok)n++;});count.textContent=n+' foto(s)';}
- cat.addEventListener('change',()=>{sub.value='todos';theme.value='todos';refreshSub();refreshTheme();apply();});
- sub.addEventListener('change',()=>{theme.value='todos';refreshTheme();apply();});theme.addEventListener('change',apply);refreshSub();refreshTheme();apply();
+ function refreshTheme(){const c=cat.value,s=sub.value,allowed=new Set();cards.forEach(x=>{if((c==='todos'||x.dataset.cat===c)&&(s==='todos'||x.dataset.sub===s)&&(!productFocus||x.dataset.product===productFocus))allowed.add(x.dataset.theme);});themeOptions.forEach((o,i)=>{if(i===0){o.hidden=false;return;}o.hidden=!allowed.has(o.value);});if(theme.selectedOptions[0]&&theme.selectedOptions[0].hidden)theme.value='todos';}
+ function apply(){const c=cat.value,s=sub.value,t=theme.value;let n=0;cards.forEach(x=>{const ok=(c==='todos'||x.dataset.cat===c)&&(s==='todos'||x.dataset.sub===s)&&(t==='todos'||x.dataset.theme===t)&&(!productFocus||x.dataset.product===productFocus);x.style.display=ok?'flex':'none';if(ok)n++;});count.textContent=n+' foto(s)';}
+ cat.addEventListener('change',()=>{clearProductFocus();sub.value='todos';theme.value='todos';refreshSub();refreshTheme();apply();});
+ sub.addEventListener('change',()=>{clearProductFocus();theme.value='todos';refreshTheme();apply();});theme.addEventListener('change',()=>{clearProductFocus();apply();});
+ if(focusClear)focusClear.addEventListener('click',()=>{clearProductFocus();cat.value='todos';sub.value='todos';theme.value='todos';refreshSub();refreshTheme();apply();});
+ window.alphaFestGalleryShowProduct=function(slug,label){productFocus=slug||'';cat.value='todos';sub.value='todos';theme.value='todos';refreshSub();refreshTheme();if(focus){focus.hidden=!productFocus;}if(focusLabel)focusLabel.textContent=label||'Produto';apply();const alvo=document.getElementById('galeria');if(alvo)alvo.scrollIntoView({behavior:'smooth',block:'start'});};
+ document.querySelectorAll('.gallery-proof-btn').forEach(btn=>btn.addEventListener('click',()=>window.alphaFestGalleryShowProduct(btn.dataset.galleryProduct||'',btn.dataset.galleryLabel||'Produto')));
+ refreshSub();refreshTheme();apply();
 })();
 '''
     return {"html": secao, "css": css, "js": js, "resumo": resumo, "fotos_renderizadas": total_renderizado}

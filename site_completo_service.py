@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, Iterable, Optional
 from urllib.parse import quote
 
 from site_vitrine_service import gerar_html_vitrine
-from site_galeria_service import gerar_fragmento_galeria
+from site_galeria_service import gerar_fragmento_galeria, selecionar_trabalhos_site
 from site_visual_hf48_service import aplicar_visual_hf48
 
 ImagemResolver = Optional[Callable[[str], str]]
@@ -79,6 +79,10 @@ def gerar_html_site_completo(
     padrão permanecem desligados para preservar integralmente o site público HF44.
     """
     catalogo_lista = list(catalogo or [])
+    galeria_lista = list(galeria_trabalhos or [])
+    produtos_com_galeria = []
+    if incluir_galeria:
+        produtos_com_galeria = [str(x.get("produto") or "").strip() for x in selecionar_trabalhos_site(galeria_lista) if str(x.get("produto") or "").strip()]
     pagina = gerar_html_vitrine(
         catalogo_lista,
         empresa,
@@ -86,6 +90,7 @@ def gerar_html_site_completo(
         imagem_resolver=imagem_resolver,
         modo_preview=False,
         usar_taxonomia_catalogo=usar_taxonomia_catalogo,
+        produtos_com_galeria=produtos_com_galeria,
     )
 
     empresa = dict(empresa or {})
@@ -105,7 +110,7 @@ def gerar_html_site_completo(
     galeria_fragmento = {"html": "", "css": "", "js": "", "resumo": {"total_trabalhos": 0, "total_fotos": 0}}
     if incluir_galeria:
         galeria_fragmento = gerar_fragmento_galeria(
-            list(galeria_trabalhos or []),
+            galeria_lista,
             empresa,
             imagem_resolver=galeria_imagem_resolver,
             limite_fotos=limite_fotos_galeria,
