@@ -33071,6 +33071,150 @@ if pagina_atual == "catalogo":
             formulario_catalogo(None)
 
         with aba_lista:
+            # HF49.2 — edição rápida dos controles do site com auto-save.
+            # Evita abrir o formulário completo produto por produto apenas para
+            # PublicarSite / ExibirPrecoSite / Destaque. Nada é publicado no
+            # domínio aqui: esta grade altera somente o Catálogo Oficial; o HF44
+            # continua sendo a etapa explícita de publicação do site.
+            st.markdown("#### ⚡ Edição rápida do site · auto-save")
+            st.caption(
+                "Marque diretamente na tabela quais produtos entram no site, se o preço aparece e quais ficam em destaque. "
+                "Cada alteração é salva automaticamente no Catálogo Oficial. **O site não é publicado automaticamente** — "
+                "a publicação continua pelo fluxo seguro do HF44."
+            )
+
+            _hf492_f1, _hf492_f2 = st.columns([2, 1])
+            _hf492_busca = _hf492_f1.text_input(
+                "🔎 Filtrar produtos para edição rápida",
+                key="hf492_busca_site_rapida",
+                placeholder="Nome, categoria ou subcategoria…",
+            ).strip().casefold()
+            _hf492_categorias = sorted({
+                str((p or {}).get("Categoria") or "").strip()
+                for p in (catalogo or [])
+                if str((p or {}).get("Categoria") or "").strip()
+            }, key=lambda x: normalizar_identidade_produto(x))
+            _hf492_categoria = _hf492_f2.selectbox(
+                "Categoria",
+                ["Todas"] + _hf492_categorias,
+                key="hf492_categoria_site_rapida",
+            )
+
+            _hf492_indices = []
+            for _idx_hf492, _prod_hf492 in enumerate(catalogo or []):
+                _nome_hf492 = str((_prod_hf492 or {}).get("Nome") or "Produto")
+                _cat_hf492 = str((_prod_hf492 or {}).get("Categoria") or "")
+                _sub_hf492 = str((_prod_hf492 or {}).get("Subcategoria") or "")
+                _hay_hf492 = f"{_nome_hf492} {_cat_hf492} {_sub_hf492}".casefold()
+                if _hf492_busca and _hf492_busca not in _hay_hf492:
+                    continue
+                if _hf492_categoria != "Todas" and _cat_hf492 != _hf492_categoria:
+                    continue
+                _hf492_indices.append(_idx_hf492)
+
+            _hf492_linhas = []
+            for _idx_hf492 in _hf492_indices:
+                _prod_hf492 = catalogo[_idx_hf492] or {}
+                _hf492_linhas.append({
+                    "Produto": str(_prod_hf492.get("Nome") or "Produto"),
+                    "Categoria": str(_prod_hf492.get("Categoria") or ""),
+                    "Subcategoria": str(_prod_hf492.get("Subcategoria") or ""),
+                    "Preço atual": formatar_preco_catalogo(_prod_hf492.get("Preco")),
+                    "🌐 Publicar": bool(_prod_hf492.get("PublicarSite", False)),
+                    "💰 Mostrar preço": bool(_prod_hf492.get("ExibirPrecoSite", False)),
+                    "⭐ Destaque": bool(_prod_hf492.get("Destaque", False)),
+                })
+
+            _hf492_total_site = sum(1 for p in (catalogo or []) if bool((p or {}).get("PublicarSite", False)))
+            _hf492_total_preco = sum(1 for p in (catalogo or []) if bool((p or {}).get("ExibirPrecoSite", False)))
+            _hf492_total_destaque = sum(1 for p in (catalogo or []) if bool((p or {}).get("Destaque", False)))
+            _hf492_m1, _hf492_m2, _hf492_m3, _hf492_m4 = st.columns(4)
+            _hf492_m1.metric("Produtos visíveis", len(_hf492_indices))
+            _hf492_m2.metric("Marcados para o site", _hf492_total_site)
+            _hf492_m3.metric("Preço visível", _hf492_total_preco)
+            _hf492_m4.metric("Destaques", _hf492_total_destaque)
+
+            if _hf492_linhas:
+                _hf492_assinatura_filtro = hashlib.sha256(
+                    ("|".join(str(i) for i in _hf492_indices)).encode("utf-8")
+                ).hexdigest()[:12]
+                _hf492_df = pd.DataFrame(_hf492_linhas)
+                _hf492_editado = st.data_editor(
+                    _hf492_df,
+                    key=f"hf492_editor_site_{_hf492_assinatura_filtro}",
+                    use_container_width=True,
+                    hide_index=True,
+                    num_rows="fixed",
+                    disabled=["Produto", "Categoria", "Subcategoria", "Preço atual"],
+                    column_config={
+                        "Produto": st.column_config.TextColumn("Produto", width="large"),
+                        "Categoria": st.column_config.TextColumn("Categoria", width="medium"),
+                        "Subcategoria": st.column_config.TextColumn("Subcategoria", width="medium"),
+                        "Preço atual": st.column_config.TextColumn("Preço atual", width="small"),
+                        "🌐 Publicar": st.column_config.CheckboxColumn(
+                            "🌐 Publicar",
+                            help="Inclui o produto na próxima publicação do site.",
+                            width="small",
+                        ),
+                        "💰 Mostrar preço": st.column_config.CheckboxColumn(
+                            "💰 Mostrar preço",
+                            help="Quando marcado, o preço é exibido no site. Desmarcado = orçamento pelo WhatsApp.",
+                            width="small",
+                        ),
+                        "⭐ Destaque": st.column_config.CheckboxColumn(
+                            "⭐ Destaque",
+                            help="Dá prioridade visual ao produto na vitrine.",
+                            width="small",
+                        ),
+                    },
+                )
+
+                _hf492_mudancas = []
+                if isinstance(_hf492_editado, pd.DataFrame):
+                    for _pos_hf492, _idx_catalogo_hf492 in enumerate(_hf492_indices):
+                        if _pos_hf492 >= len(_hf492_editado):
+                            break
+                        _linha_hf492 = _hf492_editado.iloc[_pos_hf492]
+                        _produto_hf492 = catalogo[_idx_catalogo_hf492] or {}
+                        _novo_publicar_hf492 = bool(_linha_hf492.get("🌐 Publicar", False))
+                        _novo_preco_hf492 = bool(_linha_hf492.get("💰 Mostrar preço", False))
+                        _novo_destaque_hf492 = bool(_linha_hf492.get("⭐ Destaque", False))
+                        if (
+                            _novo_publicar_hf492 != bool(_produto_hf492.get("PublicarSite", False))
+                            or _novo_preco_hf492 != bool(_produto_hf492.get("ExibirPrecoSite", False))
+                            or _novo_destaque_hf492 != bool(_produto_hf492.get("Destaque", False))
+                        ):
+                            _hf492_mudancas.append((
+                                _idx_catalogo_hf492,
+                                _novo_publicar_hf492,
+                                _novo_preco_hf492,
+                                _novo_destaque_hf492,
+                            ))
+
+                if _hf492_mudancas:
+                    _catalogo_hf492 = [dict(p or {}) for p in (catalogo or [])]
+                    _agora_hf492 = agora_local().isoformat(timespec="seconds")
+                    for _idx_catalogo_hf492, _pub_hf492, _preco_hf492, _dest_hf492 in _hf492_mudancas:
+                        _registro_hf492 = dict(_catalogo_hf492[_idx_catalogo_hf492] or {})
+                        _registro_hf492["PublicarSite"] = bool(_pub_hf492)
+                        _registro_hf492["ExibirPrecoSite"] = bool(_preco_hf492)
+                        _registro_hf492["Destaque"] = bool(_dest_hf492)
+                        _registro_hf492["AtualizadoEm"] = _agora_hf492
+                        _registro_hf492["EdicaoRapidaSiteHF49"] = {
+                            "quando": _agora_hf492,
+                            "origem": "Produtos · edição rápida com auto-save",
+                        }
+                        _catalogo_hf492[_idx_catalogo_hf492] = _registro_hf492
+                    salvar_catalogo(_catalogo_hf492)
+                    catalogo[:] = _catalogo_hf492
+                    st.toast(
+                        f"✅ Auto-save: {len(_hf492_mudancas)} produto(s) atualizado(s). Site ainda não publicado.",
+                        icon="💾",
+                    )
+            else:
+                st.info("Nenhum produto corresponde aos filtros desta edição rápida.")
+
+            st.divider()
             st.markdown("#### 🖨️ Revisão de categorias e subcategorias")
             st.caption(
                 "HF45.1-HF1: prepara sob demanda uma folha A4 simples com todos os produtos do Catálogo Oficial, "

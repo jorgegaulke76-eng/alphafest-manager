@@ -1,3 +1,10 @@
+## 20.4.9-I8.13.5-HF49.2 — Edição rápida do site com auto-save
+
+- Catálogo → Produtos ganha uma grade de edição rápida para PublicarSite, ExibirPrecoSite e Destaque.
+- Alterações são persistidas automaticamente no Catálogo Oficial, sem abrir o formulário completo.
+- Busca/filtro por categoria facilita revisar dezenas de produtos em sequência.
+- O HF44 continua sendo a única etapa que publica alterações no domínio oficial.
+
 ## 20.4.9-I8.13.5-HF49.1 — Produto + Galeria automática
 
 - Produto com trabalho real selecionado ganha acesso direto à Galeria filtrada, sem cadastro adicional.
