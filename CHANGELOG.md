@@ -1,3 +1,9 @@
+## 20.4.9-I8.13.5-HF50.1-HF6 — cabeçalho AlphaFest sem emendas
+- Marca do cabeçalho passa a usar fundo transparente.
+- Um único azul/gradiente contínuo cobre marca, busca, WhatsApp e menu.
+- Logo reposicionado e ampliado sem corte em desktop/tablet/mobile.
+- Mantidos catálogo, galeria, carrossel, HF49.2 e motor HF44.
+
 ## 20.4.9-I8.13.5-HF50.1-HF5 — cabeçalho fiel à prévia aprovada
 
 - Marca horizontal AlphaFest maior e melhor distribuída no topo azul.
