@@ -1,3 +1,10 @@
+## 20.4.9-I8.13.5-HF50.1-HF4 — cabeçalho fiel à prévia aprovada
+
+- Marca horizontal AlphaFest maior e melhor distribuída no topo azul.
+- Símbolo + lettering oficial + subtítulo no mesmo bloco visual.
+- Busca e WhatsApp reposicionados sem perder responsividade.
+- Carrossel e todas as integrações homologadas preservados.
+
 ## 20.4.9-I8.13.5-HF50.1-HF3 — marca completa + carrossel promocional
 
 - Logo/lettering oficial AlphaFest ampliado no cabeçalho azul.

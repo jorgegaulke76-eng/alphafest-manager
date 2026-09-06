@@ -11,6 +11,6 @@ def test_hf50_hf2_logo_asset_has_horizontal_lockup():
 
 def test_hf50_hf2_header_css_prevents_crop():
     src = Path("site_visual_hf48_service.py").read_text(encoding="utf-8")
-    assert "HF50.1-HF3" in src
-    assert ".brand-logo{width:315px;height:96px;object-fit:contain;object-position:left center;display:block;overflow:visible" in src
-    assert "min-height:94px;overflow:visible" in src
+    assert "HF50.1-HF4" in src
+    assert ".brand-logo{width:380px;height:96px;object-fit:contain;object-position:left center;display:block;overflow:visible" in src
+    assert "min-height:96px;overflow:visible" in src
