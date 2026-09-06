@@ -1,4 +1,4 @@
-"""HF48 — camada visual comercial do site AlphaFest (HF48.3-HF2 aprovado).
+"""HF48 — camada visual comercial do site AlphaFest (HF48.3-HF3 aprovado).
 
 Aplica somente apresentação/UX sobre o HTML já gerado pelos serviços HF40-HF47.
 Não altera Catálogo, Galeria, publicação Cloudflare, dados ou Fonte Única.
@@ -155,7 +155,7 @@ body{background:var(--hf48-bg)}
 .hf48-brand-cta{max-width:1320px;margin:0 auto;padding:0 24px 58px}.hf48-brand-cta-in{display:grid;grid-template-columns:1fr 220px;align-items:center;gap:22px;border-radius:28px;padding:28px 30px;background:linear-gradient(120deg,#e5f8ff,#fff 45%,#fff0f7 75%,#fff8d8);border:1px solid #e0e9f3;overflow:hidden}.hf48-brand-cta h2{margin:4px 0 8px;font-size:30px}.hf48-brand-cta p{margin:0 0 16px;color:#61778f}.hf48-brand-cta img{width:100%;max-height:185px;object-fit:contain}.hf48-brand-cta .cta{display:inline-flex}
 @media(max-width:1050px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-process-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:900px){.hf48-real-balloons{width:110px;left:-28px;top:94px}.hf48-header-search{display:none}.site-nav{top:87px}.hero-in{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:620px){.hf48-real-balloons{display:none}.hf48-topline{font-size:10px}.header-in{padding:8px 12px}.site-nav{top:69px}.hero-in{padding:36px 14px 32px}.hero h1{font-size:38px}.hf48-categories{padding:34px 14px}.hf48-section-heading{align-items:flex-start;flex-direction:column}.hf48-section-heading h2{font-size:28px}.hf48-category-grid{grid-template-columns:1fr 1fr;gap:9px}.hf48-category-card{padding:11px;gap:8px}.hf48-cat-icon{width:38px;height:38px;font-size:19px}.hf48-cat-copy strong{font-size:12px}.hf48-cat-copy small{font-size:10px}.main{padding:34px 12px 52px}.grid{grid-template-columns:1fr}.hf48-process{padding:42px 14px}.hf48-process-grid{grid-template-columns:1fr}.photo{aspect-ratio:4/3}.hero-card.hf48-mascot-hero{min-height:520px;padding:24px 18px 300px}.hf48-hero-mascot-img{width:88%;right:4%;bottom:-10px;max-height:290px}.hf48-mascot-hero .hf48-mascot-copy{max-width:none}.hf48-gallery-intro{margin:0 14px 18px;padding:12px}.hf48-gallery-intro img{width:80px;height:66px}.hf48-brand-cta{padding:0 14px 42px}.hf48-brand-cta-in{grid-template-columns:1fr;padding:22px}.hf48-brand-cta img{max-height:180px;order:-1}}
+@media(max-width:620px){.preview-bar{font-size:7px!important;line-height:1.15!important;padding:3px 6px!important;letter-spacing:.035em!important}.hf48-real-balloons{display:none}.hf48-topline{font-size:9px;padding:5px 8px}.header-in{padding:8px 12px}.site-nav{top:69px}.hero-in{padding:32px 14px 38px;row-gap:28px}.hero h1{font-size:38px}.hf48-categories{padding:34px 14px}.hf48-section-heading{align-items:flex-start;flex-direction:column}.hf48-section-heading h2{font-size:28px}.hf48-category-grid{grid-template-columns:1fr 1fr;gap:9px}.hf48-category-card{padding:11px;gap:8px}.hf48-cat-icon{width:38px;height:38px;font-size:19px}.hf48-cat-copy strong{font-size:12px}.hf48-cat-copy small{font-size:10px}.main{padding:34px 12px 52px}.grid{grid-template-columns:1fr}.hf48-process{padding:42px 14px}.hf48-process-grid{grid-template-columns:1fr}.photo{aspect-ratio:4/3}.hero-card.hf48-mascot-hero{min-height:455px;padding:26px 16px 245px;margin-top:4px}.hf48-hero-mascot-img{width:82%;right:7%;bottom:6px;max-height:250px}.hf48-mascot-hero .hf48-mascot-copy{max-width:none}.hf48-gallery-intro{margin:0 14px 18px;padding:12px}.hf48-gallery-intro img{width:80px;height:66px}.hf48-brand-cta{padding:0 14px 42px}.hf48-brand-cta-in{grid-template-columns:1fr;padding:22px}.hf48-brand-cta img{max-height:180px;order:-1}}
 '''
     pagina = pagina.replace("</style>", css + "</style>", 1)
 
@@ -231,7 +231,7 @@ body{background:var(--hf48-bg)}
     )
 
     # Identifica a prévia corretamente sem alterar a produção.
-    preview_rotulo = 'PRÉVIA INTERNA HF48.3-HF2 · VISUAL APROVADO · BALÕES REAIS NO DESKTOP · MOBILE LIMPO · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
+    preview_rotulo = 'PRÉVIA INTERNA HF48.3-HF3 · VISUAL APROVADO · MOBILE POLIDO · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
     pagina = re.sub(r"<div\s+class=['\"]preview-bar['\"]>.*?</div>", f'<div class="preview-bar">{preview_rotulo}</div>', pagina, count=1, flags=re.S)
 
     js = r'''

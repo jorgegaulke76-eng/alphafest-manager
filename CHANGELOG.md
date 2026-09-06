@@ -1,3 +1,10 @@
+## 20.4.9-I8.13.5-HF48.3-HF3 — polimento final mobile
+
+- reduz a faixa interna de PRÉVIA no celular sem remover o aviso de segurança;
+- aumenta o respiro entre o bloco comercial e o bloco Thu + Fox no mobile;
+- reposiciona Thu + Fox para aparecerem mais cedo, sem cobrir texto ou botões;
+- preserva balões apenas no desktop, Catálogo, Galeria, taxonomia, WhatsApp e motor HF44.
+
 ## 20.4.9-I8.13.5-HF48.3-HF2 — balões reais e mobile limpo
 - Substitui formas decorativas artificiais por balões com aparência realista no desktop/tablet.
 - Oculta balões decorativos no celular para não cobrir conteúdo.
