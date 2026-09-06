@@ -1,3 +1,9 @@
+## 20.4.9-I8.13.5-HF50.1-HF3 — marca completa + carrossel promocional
+
+- Logo/lettering oficial AlphaFest ampliado no cabeçalho azul.
+- Carrossel compacto em cards promocionais responsivos, usando os mesmos produtos selecionados no Catálogo.
+- Preserva todo o fluxo homologado até HF50.1-HF2 e o motor HF44.
+
 ## 20.4.9-I8.13.5-HF50.1-HF2 — logo completo no cabeçalho
 - Corrige o logo AlphaFest no topo que podia parecer cortado na prévia.
 - Usa o arquivo oficial completo com margem transparente de segurança.

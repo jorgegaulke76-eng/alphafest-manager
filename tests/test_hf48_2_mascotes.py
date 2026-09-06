@@ -20,7 +20,7 @@ def test_hf482_mascotes_sao_opt_in_e_embutidos_so_na_previa_especifica():
     hf482 = gerar_html_site_completo(_catalogo(), empresa, modo_preview=True, usar_taxonomia_catalogo=True, visual_hf48=True, mascotes_hf48=True)
     assert "PRÉVIA INTERNA HF48.1" in hf481
     assert "Thu + Fox · AlphaFest" not in hf481
-    assert "PRÉVIA INTERNA HF50.1-HF2" in hf482
+    assert "PRÉVIA INTERNA HF50.1-HF3" in hf482
     assert "Thu + Fox · AlphaFest" not in hf482
     assert "data:image/webp;base64," in hf482
     assert "A Fox separou inspirações reais para você." not in hf482  # sem Galeria ligada
@@ -33,8 +33,8 @@ def test_hf482_ativos_existem_e_manager_prepara_sob_demanda():
         assert caminho.exists()
         assert caminho.stat().st_size < 100_000
     app = Path("app.py").read_text(encoding="utf-8")
-    assert '"🎠 Cabeçalho azul + Carrossel comercial — HF50.1-HF2"' in app
-    assert '"🎠 Preparar / atualizar HF50.1-HF2"' in app
+    assert '"🎠 Cabeçalho azul + Carrossel comercial — HF50.1-HF3"' in app
+    assert '"🎠 Preparar / atualizar HF50.1-HF3"' in app
     assert "mascotes_hf48=True" in app
     bloco_prod = app.split('# HF44 — publicação assistida no Worker', 1)[1]
     chamada = bloco_prod.split('pacote_producao_hf44 =', 1)[0]

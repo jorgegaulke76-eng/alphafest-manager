@@ -91,7 +91,7 @@ def _carrossel_html(
     imagem_resolver: ImagemResolver = None,
     mascotes: Dict[str, str] | None = None,
 ) -> str:
-    """HF50.1-HF2 — faixa comercial automática, sem novo cadastro paralelo.
+    """HF50.1-HF3 — carrossel promocional compacto, sem novo cadastro paralelo.
 
     Usa primeiro ``CarrosselSite`` (controle rápido no Catálogo). Enquanto nenhum
     item for marcado, cai nos produtos já marcados como Destaque, para que a área
@@ -234,25 +234,19 @@ body{background:var(--hf48-bg)}
 @media(max-width:1050px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-process-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:900px){.hf48-real-balloons{width:110px;left:-28px;top:94px}.hf48-header-search{display:none}.site-nav{top:87px}.hero-in{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.preview-bar{font-size:7px!important;line-height:1.15!important;padding:3px 6px!important;letter-spacing:.035em!important}.hf48-real-balloons{display:none}.hf48-topline{font-size:9px;padding:5px 8px}.header-in{padding:8px 12px}.site-nav{top:69px}.hero-in{padding:32px 14px 38px;row-gap:28px}.hero h1{font-size:38px}.hf48-categories{padding:34px 14px}.hf48-section-heading{align-items:flex-start;flex-direction:column}.hf48-section-heading h2{font-size:28px}.hf48-category-grid{grid-template-columns:1fr 1fr;gap:9px}.hf48-category-card{padding:11px;gap:8px}.hf48-cat-icon{width:38px;height:38px;font-size:19px}.hf48-cat-copy strong{font-size:12px}.hf48-cat-copy small{font-size:10px}.main{padding:34px 12px 52px}.grid{grid-template-columns:1fr}.hf48-process{padding:42px 14px}.hf48-process-grid{grid-template-columns:1fr}.photo{aspect-ratio:4/3}.hero-card.hf48-mascot-hero{min-height:455px;padding:26px 16px 245px;margin-top:4px}.hf48-hero-mascot-img{width:82%;right:7%;bottom:6px;max-height:250px}.hf48-mascot-hero .hf48-mascot-copy{max-width:none}.hf48-gallery-intro{margin:0 14px 18px;padding:12px}.hf48-gallery-intro img{width:80px;height:66px}.hf48-brand-cta{padding:0 14px 42px}.hf48-brand-cta-in{grid-template-columns:1fr;padding:22px}.hf48-brand-cta img{max-height:180px;order:-1}}
-/* HF50.1 — cabeçalho azul + marca oficial maior + carrossel comercial */
+/* HF50.1-HF3 — cabeçalho azul com marca completa grande + carrossel promocional compacto */
 .header{background:linear-gradient(90deg,#0757ad 0%,#0875d4 58%,#0b9fdc 100%);border-bottom:1px solid rgba(255,255,255,.22);box-shadow:0 7px 24px rgba(4,63,122,.18);overflow:visible}
-.header-in{max-width:1320px;padding:8px 24px;gap:18px;min-height:94px;overflow:visible}.brand{gap:10px;min-height:78px;overflow:visible;flex:0 0 auto}.brand-logo{width:108px;height:78px;object-fit:contain;object-position:center;display:block;overflow:visible;filter:drop-shadow(0 4px 8px rgba(0,0,0,.12))}.brand-copy strong{display:none}.brand-copy span{color:#e8f7ff;font-size:12px;font-weight:800;letter-spacing:.01em}
-.hf48-header-search{background:#fff;border:1px solid rgba(255,255,255,.8);box-shadow:0 5px 18px rgba(0,44,92,.12);margin-left:8px}.hf48-header-search input{color:#17324e}.header-actions .cta{box-shadow:0 8px 22px rgba(18,86,48,.25)}
-.site-nav{top:94px;background:linear-gradient(90deg,#064f9f,#0767bd 60%,#0879cc);border-bottom:1px solid rgba(255,255,255,.18);box-shadow:0 5px 14px rgba(5,62,117,.12)}.site-nav a,.site-nav button{color:#fff}.site-nav a:hover,.site-nav button:hover{background:rgba(255,255,255,.13);color:#fff}
-.hf50-carousel{background:#fff;padding:20px 24px 42px}.hf50-carousel-shell{max-width:1320px;margin:auto;position:relative;overflow:hidden;border:1px solid #dbe9f6;border-radius:26px;background:linear-gradient(115deg,#e5f7ff 0%,#fff 43%,#fff0f7 76%,#fff9d8 100%);box-shadow:0 14px 38px rgba(18,35,61,.08);min-height:292px}.hf50-carousel-shell:before{content:'';position:absolute;left:-70px;top:-80px;width:210px;height:210px;border-radius:50%;background:rgba(20,185,244,.17)}.hf50-carousel-shell:after{content:'';position:absolute;right:-70px;bottom:-110px;width:250px;height:250px;border-radius:50%;background:rgba(255,47,145,.12)}
-.hf50-carousel-head{position:relative;z-index:4;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;padding:22px 76px 0 30px}.hf50-carousel-head strong{display:block;font-size:19px;color:#10264d;margin-top:4px}.hf50-carousel-source{font-size:10px;color:#688199;background:rgba(255,255,255,.72);border:1px solid #dceaf6;padding:6px 9px;border-radius:999px;white-space:nowrap}
-.hf50-carousel-viewport{overflow:hidden;position:relative;z-index:2;padding-top:10px}.hf50-carousel-track{display:flex;transition:transform .46s cubic-bezier(.2,.75,.25,1)}.hf50-carousel-slide{min-width:100%;display:grid;grid-template-columns:minmax(0,1fr) 330px;align-items:center;gap:34px;padding:20px 78px 30px 30px}.hf50-carousel-copy{max-width:680px;padding-right:64px}.hf50-carousel-kicker{display:inline-flex;color:#0875d4;font-size:11px;font-weight:950;text-transform:uppercase;letter-spacing:.08em}.hf50-carousel-copy h2{font-size:clamp(27px,3vw,42px);line-height:1.02;color:#10264d;margin:8px 0 7px}.hf50-carousel-tax{font-size:12px;font-weight:900;color:#ff2f91;text-transform:uppercase;letter-spacing:.05em}.hf50-carousel-copy p{color:#5f758d;font-size:14px;line-height:1.55;max-width:610px;margin:10px 0 15px}.hf50-carousel-actions{display:flex;gap:9px;flex-wrap:wrap}.hf50-carousel-actions button{border:0;border-radius:12px;padding:11px 16px;font-weight:900;cursor:pointer}.hf50-carousel-product{background:linear-gradient(135deg,#0678df,#14b9f4);color:#fff}.hf50-carousel-whatsapp{background:#25d366;color:#fff}
-.hf50-carousel-media{height:208px;border-radius:20px;background:rgba(255,255,255,.88);border:1px solid rgba(219,233,246,.9);display:flex;align-items:center;justify-content:center;overflow:hidden;box-shadow:0 10px 26px rgba(18,35,61,.08)}.hf50-carousel-product-img{width:100%;height:100%;object-fit:contain;padding:8px}.hf50-carousel-placeholder{font-size:26px;font-weight:950;color:#6aaee3}.hf50-carousel-fox{position:absolute;right:332px;bottom:-17px;width:145px;height:auto;z-index:3;pointer-events:none;filter:drop-shadow(0 11px 17px rgba(18,35,61,.13))}
-.hf50-carousel-arrow{position:absolute;top:55%;z-index:6;width:38px;height:38px;border-radius:50%;border:1px solid #cfe2f3;background:rgba(255,255,255,.94);color:#0875d4;font-size:27px;line-height:1;cursor:pointer;box-shadow:0 6px 18px rgba(18,35,61,.12)}.hf50-carousel-arrow.prev{left:13px}.hf50-carousel-arrow.next{right:13px}.hf50-carousel-dots{position:absolute;right:34px;top:18px;z-index:7;display:flex;gap:6px}.hf50-carousel-dot{width:8px;height:8px;border:0;border-radius:50%;background:#b8cee0;padding:0;cursor:pointer}.hf50-carousel-dot.active{width:23px;border-radius:999px;background:linear-gradient(90deg,#0875d4,#ff2f91)}
-@media(max-width:1050px){.hf50-carousel-slide{grid-template-columns:minmax(0,1fr) 270px}.hf50-carousel-fox{right:276px;width:118px}.hf50-carousel-copy{padding-right:30px}}
-@media(max-width:900px){.header-in{min-height:82px}.site-nav{top:82px}.brand-logo{width:88px;height:66px}.hf50-carousel-head{padding-right:28px}.hf50-carousel-slide{grid-template-columns:1fr 230px;padding-right:28px}.hf50-carousel-fox{display:none}}
-@media(max-width:620px){.header{background:linear-gradient(90deg,#0657aa,#087bd3)}.header-in{padding:5px 10px;min-height:68px}.brand-logo{width:72px;height:58px}.site-nav{top:68px}.site-nav-in{background:transparent}.hf50-carousel{padding:12px 12px 30px}.hf50-carousel-shell{border-radius:19px;min-height:0}.hf50-carousel-head{align-items:flex-start;flex-direction:column;padding:17px 18px 0;gap:6px}.hf50-carousel-head strong{font-size:16px}.hf50-carousel-source{white-space:normal}.hf50-carousel-slide{grid-template-columns:1fr;padding:15px 18px 28px;gap:13px}.hf50-carousel-copy{padding-right:0}.hf50-carousel-copy h2{font-size:27px}.hf50-carousel-copy p{font-size:13px}.hf50-carousel-media{height:185px;order:-1}.hf50-carousel-actions button{width:100%;min-height:44px}.hf50-carousel-arrow{top:48%;width:34px;height:34px}.hf50-carousel-arrow.prev{left:6px}.hf50-carousel-arrow.next{right:6px}.hf50-carousel-dots{right:18px;top:12px}.hf50-carousel-fox{display:none}}
+.header-in{max-width:1320px;padding:7px 24px;gap:20px;min-height:108px;overflow:visible}.brand{gap:0;min-height:94px;overflow:visible;flex:0 0 330px;display:flex;align-items:center}.brand-logo{width:315px;height:96px;object-fit:contain;object-position:left center;display:block;overflow:visible;filter:drop-shadow(0 5px 10px rgba(0,0,0,.14))}.brand-copy{display:none!important}
+.hf48-header-search{background:#fff;border:1px solid rgba(255,255,255,.86);box-shadow:0 5px 18px rgba(0,44,92,.12);margin-left:0;max-width:520px}.hf48-header-search input{color:#17324e}.header-actions .cta{box-shadow:0 8px 22px rgba(18,86,48,.25)}
+.site-nav{top:108px;background:linear-gradient(90deg,#064f9f,#0767bd 60%,#0879cc);border-bottom:1px solid rgba(255,255,255,.18);box-shadow:0 5px 14px rgba(5,62,117,.12)}.site-nav a,.site-nav button{color:#fff}.site-nav a:hover,.site-nav button:hover{background:rgba(255,255,255,.13);color:#fff}
+.hf50-carousel{background:#fff;padding:16px 24px 38px}.hf50-carousel-shell{max-width:1320px;margin:auto;position:relative;overflow:hidden;border:1px solid #dbe9f6;border-radius:25px;background:linear-gradient(115deg,#eefaff 0%,#fff 45%,#fff1f8 76%,#fff9df 100%);box-shadow:0 14px 38px rgba(18,35,61,.08);padding:18px 52px 22px}.hf50-carousel-viewport{overflow:hidden;position:relative;z-index:2}.hf50-carousel-track{display:flex;gap:14px;transition:transform .46s cubic-bezier(.2,.75,.25,1);will-change:transform}.hf50-carousel-slide{flex:0 0 calc((100% - 42px)/4);min-width:0;position:relative;border-radius:20px;overflow:hidden;min-height:178px;padding:0;display:flex;flex-direction:column;justify-content:flex-end;background:linear-gradient(135deg,#0875d4,#14b9f4);box-shadow:0 10px 24px rgba(18,35,61,.10);isolation:isolate}.hf50-carousel-slide:nth-child(4n+2){background:linear-gradient(135deg,#6447e8,#ff2f91)}.hf50-carousel-slide:nth-child(4n+3){background:linear-gradient(135deg,#00a9de,#0875d4)}.hf50-carousel-slide:nth-child(4n+4){background:linear-gradient(135deg,#ff2f91,#ff8a33)}.hf50-carousel-media{position:absolute;inset:0;z-index:-2;background:transparent;border:0;border-radius:0;height:auto;box-shadow:none}.hf50-carousel-product-img{width:100%;height:100%;object-fit:cover;padding:0;opacity:.38;filter:saturate(1.08) contrast(1.02)}.hf50-carousel-slide:after{content:'';position:absolute;inset:0;z-index:-1;background:linear-gradient(180deg,rgba(5,25,55,.02) 20%,rgba(5,25,55,.82) 100%)}.hf50-carousel-copy{padding:18px;max-width:none;color:#fff}.hf50-carousel-kicker{display:inline-flex;color:#fff;font-size:10px;font-weight:950;text-transform:uppercase;letter-spacing:.07em;background:rgba(255,255,255,.18);padding:5px 8px;border-radius:999px}.hf50-carousel-copy h2{font-size:21px;line-height:1.05;color:#fff;margin:8px 0 5px;text-shadow:0 2px 8px rgba(0,0,0,.25)}.hf50-carousel-tax{font-size:10px;font-weight:900;color:#fff;text-transform:uppercase;letter-spacing:.04em;opacity:.88}.hf50-carousel-copy p{display:none}.hf50-carousel-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.hf50-carousel-actions button{border:0;border-radius:10px;padding:8px 11px;font-size:11px;font-weight:900;cursor:pointer}.hf50-carousel-product{background:#fff;color:#0875d4}.hf50-carousel-whatsapp{background:#25d366;color:#fff}.hf50-carousel-placeholder{font-size:20px;font-weight:950;color:#fff}.hf50-carousel-fox{display:none}.hf50-carousel-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:6;width:38px;height:38px;border-radius:50%;border:1px solid #cfe2f3;background:rgba(255,255,255,.96);color:#0875d4;font-size:27px;line-height:1;cursor:pointer;box-shadow:0 6px 18px rgba(18,35,61,.12)}.hf50-carousel-arrow.prev{left:8px}.hf50-carousel-arrow.next{right:8px}.hf50-carousel-dots{position:relative;z-index:7;display:flex;justify-content:center;gap:6px;margin-top:14px}.hf50-carousel-dot{width:8px;height:8px;border:0;border-radius:50%;background:#b8cee0;padding:0;cursor:pointer}.hf50-carousel-dot.active{width:23px;border-radius:999px;background:linear-gradient(90deg,#0875d4,#ff2f91)}
+@media(max-width:1100px){.brand{flex-basis:270px}.brand-logo{width:255px;height:86px}.header-in{min-height:98px}.site-nav{top:98px}.hf50-carousel-slide{flex-basis:calc((100% - 28px)/3)}}
+@media(max-width:900px){.brand{flex-basis:220px}.brand-logo{width:210px;height:76px}.header-in{min-height:88px}.site-nav{top:88px}.hf48-header-search{display:none}.hf50-carousel-slide{flex-basis:calc((100% - 14px)/2)}}
+@media(max-width:620px){.header{background:linear-gradient(90deg,#0657aa,#087bd3)}.header-in{padding:5px 10px;min-height:72px;gap:8px}.brand{flex-basis:158px;min-height:62px}.brand-logo{width:154px;height:62px}.site-nav{top:72px}.site-nav-in{background:transparent}.hf50-carousel{padding:10px 10px 28px}.hf50-carousel-shell{border-radius:18px;padding:12px 42px 16px}.hf50-carousel-slide{flex-basis:100%;min-height:185px}.hf50-carousel-copy{padding:16px}.hf50-carousel-copy h2{font-size:22px}.hf50-carousel-arrow{width:34px;height:34px}.hf50-carousel-arrow.prev{left:5px}.hf50-carousel-arrow.next{right:5px}}
 
 '''
     pagina = pagina.replace("</style>", css + "</style>", 1)
 
-    # HF50.1 — usa o lettering oficial do próprio logo no cabeçalho, evitando
-    # aproximar a tipografia com uma fonte genérica. O subtítulo continua texto.
     if mascotes.get("logo_wordmark"):
         pagina = re.sub(
             r'<img\s+class=[\'\"]brand-logo[\'\"]\s+src=[\'\"][^\'\"]*[\'\"]\s+alt=[\'\"][^\'\"]*[\'\"]>',
@@ -342,7 +336,7 @@ body{background:var(--hf48-bg)}
     )
 
     # Identifica a prévia corretamente sem alterar a produção.
-    preview_rotulo = 'PRÉVIA INTERNA HF50.1-HF2 · CABEÇALHO AZUL + CARROSSEL LIMPO · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
+    preview_rotulo = 'PRÉVIA INTERNA HF50.1-HF3 · MARCA MAIOR + CARROSSEL PROMOCIONAL · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
     pagina = re.sub(r"<div\s+class=['\"]preview-bar['\"]>.*?</div>", f'<div class="preview-bar">{preview_rotulo}</div>', pagina, count=1, flags=re.S)
 
     js = r'''
@@ -375,12 +369,23 @@ body{background:var(--hf48-bg)}
     const prev=shell.querySelector('.hf50-carousel-arrow.prev');
     const next=shell.querySelector('.hf50-carousel-arrow.next');
     let idx=0, timer=null, touchStart=null;
+    function visibleCount(){
+      if(!slides.length||!track)return 1;
+      const sw=slides[0].getBoundingClientRect().width;
+      const tw=track.parentElement.getBoundingClientRect().width;
+      return Math.max(1,Math.round(tw/Math.max(1,sw)));
+    }
+    function maxIndex(){return Math.max(0,slides.length-visibleCount());}
     function go(n){
       if(!slides.length||!track)return;
-      idx=(n+slides.length)%slides.length;
-      track.style.transform='translateX(-'+(idx*100)+'%)';
-      slides.forEach((s,i)=>s.setAttribute('aria-hidden',i===idx?'false':'true'));
-      dots.forEach((d,i)=>d.classList.toggle('active',i===idx));
+      const max=maxIndex();
+      if(n>max)n=0; if(n<0)n=max; idx=n;
+      const gap=parseFloat(getComputedStyle(track).gap||'0')||0;
+      const step=slides[0].getBoundingClientRect().width+gap;
+      track.style.transform='translateX(-'+(idx*step)+'px)';
+      const vis=visibleCount();
+      slides.forEach((s,i)=>s.setAttribute('aria-hidden',(i>=idx&&i<idx+vis)?'false':'true'));
+      dots.forEach((d,i)=>{d.style.display=i<=max?'block':'none';d.classList.toggle('active',i===idx);});
     }
     function stop(){if(timer){clearInterval(timer);timer=null;}}
     function start(){stop(); if(slides.length>1) timer=setInterval(()=>go(idx+1),5200);}
@@ -394,7 +399,8 @@ body{background:var(--hf48-bg)}
       if(touchStart===null)return; const end=e.changedTouches&&e.changedTouches[0]?e.changedTouches[0].clientX:touchStart;
       const delta=end-touchStart; touchStart=null; if(Math.abs(delta)>42){go(idx+(delta<0?1:-1));start();}
     },{passive:true});
-    start();
+    window.addEventListener('resize',()=>go(Math.min(idx,maxIndex())));
+    go(0); start();
   }
 
   document.querySelectorAll('.hf50-carousel-product').forEach(function(btn){

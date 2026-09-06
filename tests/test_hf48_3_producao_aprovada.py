@@ -19,4 +19,4 @@ def test_hf483_manager_publica_visual_aprovado_pelo_motor_hf44():
     for flag in ("usar_taxonomia_catalogo=True","incluir_galeria=True","visual_hf48=True","mascotes_hf48=True"):
         assert flag in bloco
     assert "limite_fotos_galeria=48" in bloco
-    assert 'versao_manager="20.4.9-I8.13.5-HF50.1-HF2"' in app
+    assert 'versao_manager="20.4.9-I8.13.5-HF50.1-HF3"' in app
