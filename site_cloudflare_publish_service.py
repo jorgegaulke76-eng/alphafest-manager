@@ -184,7 +184,7 @@ def publicar_pacote(
     account_id: str,
     api_token: str,
     worker_name: str = WORKER_PADRAO,
-    versao_manager: str = "20.4.9-I8.13.5-HF48.3",
+    versao_manager: str = "20.4.9-I8.13.5-HF48.3-HF1",
     timeout: int = 45,
     session: Optional[Any] = None,
 ) -> Dict[str, Any]:

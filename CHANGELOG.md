@@ -1,3 +1,8 @@
+## 20.4.9-I8.13.5-HF48.3-HF1 — polimento visual final
+- Hero alinhado ao mockup aprovado: mascotes maiores e sem fundo próprio.
+- Paleta AlphaFest reforçada no hero e marca.
+- HF44, Catálogo e Galeria preservados.
+
 ## 20.4.9-I8.13.5-HF47.1-HF1 — correção de navegação da prévia
 - Corrige o menu interno da prévia HF47.1 para não carregar o Streamlit dentro do iframe ao clicar em `Galeria`.
 - Navegação passa a usar botões com `scrollIntoView`, mantendo a prévia isolada e sem publicação.

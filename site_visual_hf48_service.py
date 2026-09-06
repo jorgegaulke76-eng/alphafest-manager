@@ -1,4 +1,4 @@
-"""HF48 — camada visual comercial do site AlphaFest (HF48.3 aprovado).
+"""HF48 — camada visual comercial do site AlphaFest (HF48.3-HF1 aprovado).
 
 Aplica somente apresentação/UX sobre o HTML já gerado pelos serviços HF40-HF47.
 Não altera Catálogo, Galeria, publicação Cloudflare, dados ou Fonte Única.
@@ -118,7 +118,7 @@ def aplicar_visual_hf48(
 body{background:var(--hf48-bg)}
 .hf48-topline{background:linear-gradient(90deg,#0459b6,#057de2 45%,#12a9e9);color:#fff;text-align:center;padding:8px 16px;font-size:12px;font-weight:800;letter-spacing:.01em}
 .header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--hf48-border);box-shadow:0 4px 18px rgba(18,35,61,.05)}
-.header-in{max-width:1320px;padding:14px 24px}.brand-logo{width:74px;height:58px}.brand-copy strong{font-size:20px;background:linear-gradient(90deg,#0876d8 0%,#14b9f4 28%,#33cf69 46%,#ffd21f 63%,#ff8b1f 76%,#ff2f91 100%);-webkit-background-clip:text;background-clip:text;color:transparent}.brand-copy span{font-size:12px}
+.header-in{max-width:1320px;padding:14px 24px}.brand-logo{width:74px;height:58px}.brand-copy strong{font-size:28px;font-weight:950;background:linear-gradient(90deg,#0876d8 0%,#14b9f4 28%,#33cf69 46%,#ffd21f 63%,#ff8b1f 76%,#ff2f91 100%);-webkit-background-clip:text;background-clip:text;color:transparent}.brand-copy span{font-size:12px}
 .hf48-header-search{flex:1;max-width:610px;margin-left:22px;display:flex;align-items:center;border:1px solid #d9e3ee;border-radius:15px;background:#f8fbfe;overflow:hidden;min-height:48px}
 .hf48-header-search input{flex:1;border:0;outline:0;background:transparent;padding:0 16px;font-size:14px;color:var(--ink)}.hf48-header-search button{border:0;background:linear-gradient(135deg,var(--hf48-blue),var(--hf48-cyan));color:#fff;font-weight:900;align-self:stretch;padding:0 20px;cursor:pointer}
 .header-actions .ghost{display:none}.header-actions .cta{border-radius:14px;padding:13px 18px}
@@ -133,16 +133,27 @@ body{background:var(--hf48-bg)}
 .gallery-section{background:#fff!important}
 .footer{background:#0d1c31}.footer-in{max-width:1320px;padding:40px 24px}
 /* HF48.2 — Thu + Fox como assinatura visual, sem alterar a operação */
-.hf48-mascot-hero{min-height:360px;display:flex;align-items:center;padding-right:44%;background:linear-gradient(145deg,rgba(255,255,255,.96),rgba(235,249,255,.88) 58%,rgba(255,236,248,.82));}
-.hf48-mascot-hero .hf48-mascot-copy{position:relative;z-index:3}.hf48-mascot-hero .hf48-mascot-copy p{position:relative;z-index:3}
-.hf48-hero-mascot-img{position:absolute;right:2px;bottom:-2px;width:49%;max-height:99%;object-fit:contain;z-index:2;filter:drop-shadow(0 14px 24px rgba(18,35,61,.14))}
+.hero{background:
+  radial-gradient(circle at 3% 28%,rgba(20,185,244,.22) 0 7%,transparent 7.5%),
+  radial-gradient(circle at 6% 45%,rgba(255,47,145,.18) 0 6%,transparent 6.5%),
+  radial-gradient(circle at 8% 60%,rgba(255,210,31,.16) 0 5%,transparent 5.5%),
+  linear-gradient(135deg,#eaf8ff 0%,#fff 45%,#fff0fa 100%)}
+.hero:before{left:-52px;top:100px;width:118px;height:172px;border-radius:55% 55% 50% 50%;background:linear-gradient(145deg,#18b9f4,#0876d8);box-shadow:54px 90px 0 -12px rgba(255,47,145,.72),20px 176px 0 -20px rgba(255,210,31,.76);opacity:.95;transform:rotate(-8deg)}
+.hero:after{right:-65px;bottom:-70px;width:210px;height:210px;background:radial-gradient(circle at 35% 35%,#ff78bd 0 22%,#ff2f91 60%,#ff9bd0 100%);opacity:.34}
+.hero-in{grid-template-columns:1.14fr .86fr;gap:26px;align-items:center}
+.hero-card.hf48-mascot-hero{min-height:430px;display:block;padding:34px 46% 28px 22px;background:transparent;border:0;border-radius:0;box-shadow:none;backdrop-filter:none;overflow:visible}
+.hero-card.hf48-mascot-hero:after{display:none}
+.hf48-mascot-hero .hf48-mascot-copy{position:relative;z-index:4;max-width:360px}.hf48-mascot-hero .hf48-mascot-copy p{position:relative;z-index:4;font-size:16px}
+.hf48-mascot-hero .hf48-mascot-copy h2{font-size:30px;line-height:1.05}
+.hf48-hero-mascot-img{position:absolute;right:-5%;bottom:-18px;width:67%;max-height:455px;object-fit:contain;z-index:3;filter:drop-shadow(0 18px 26px rgba(18,35,61,.16))}
+.hf48-mascot-hero:before{content:'✦  ✦  •  ✦';position:absolute;right:2%;top:4%;font-size:26px;letter-spacing:12px;color:var(--hf48-pink);text-shadow:34px 34px 0 var(--hf48-yellow),-20px 54px 0 var(--hf48-cyan);z-index:1;opacity:.9}
 .hf48-mascot-note{display:inline-flex;align-items:center;gap:7px;margin-top:14px;padding:8px 11px;border-radius:999px;background:linear-gradient(90deg,#e8f8ff,#fff0f7);color:#1769aa;font-size:12px;font-weight:900}
 .hf48-gallery-intro{max-width:1320px;margin:0 auto 22px;display:flex;align-items:center;gap:18px;padding:16px 20px;border:1px solid #e6eef7;border-radius:20px;background:linear-gradient(120deg,#eaf9ff,#fff 48%,#fff0f7)}
 .hf48-gallery-intro img{width:104px;height:76px;object-fit:contain;flex:0 0 auto}.hf48-gallery-intro strong{display:block;font-size:18px;color:var(--hf48-navy)}.hf48-gallery-intro span{display:block;color:#667c93;font-size:13px;line-height:1.45;margin-top:4px}
 .hf48-brand-cta{max-width:1320px;margin:0 auto;padding:0 24px 58px}.hf48-brand-cta-in{display:grid;grid-template-columns:1fr 220px;align-items:center;gap:22px;border-radius:28px;padding:28px 30px;background:linear-gradient(120deg,#e5f8ff,#fff 45%,#fff0f7 75%,#fff8d8);border:1px solid #e0e9f3;overflow:hidden}.hf48-brand-cta h2{margin:4px 0 8px;font-size:30px}.hf48-brand-cta p{margin:0 0 16px;color:#61778f}.hf48-brand-cta img{width:100%;max-height:185px;object-fit:contain}.hf48-brand-cta .cta{display:inline-flex}
 @media(max-width:1050px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-process-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:900px){.hf48-header-search{display:none}.site-nav{top:87px}.hero-in{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:620px){.hf48-topline{font-size:10px}.header-in{padding:8px 12px}.site-nav{top:69px}.hero-in{padding:36px 14px 32px}.hero h1{font-size:38px}.hf48-categories{padding:34px 14px}.hf48-section-heading{align-items:flex-start;flex-direction:column}.hf48-section-heading h2{font-size:28px}.hf48-category-grid{grid-template-columns:1fr 1fr;gap:9px}.hf48-category-card{padding:11px;gap:8px}.hf48-cat-icon{width:38px;height:38px;font-size:19px}.hf48-cat-copy strong{font-size:12px}.hf48-cat-copy small{font-size:10px}.main{padding:34px 12px 52px}.grid{grid-template-columns:1fr}.hf48-process{padding:42px 14px}.hf48-process-grid{grid-template-columns:1fr}.photo{aspect-ratio:4/3}.hf48-mascot-hero{min-height:auto;padding:24px 18px 250px}.hf48-hero-mascot-img{width:78%;right:11%;max-height:240px}.hf48-gallery-intro{margin:0 14px 18px;padding:12px}.hf48-gallery-intro img{width:80px;height:66px}.hf48-brand-cta{padding:0 14px 42px}.hf48-brand-cta-in{grid-template-columns:1fr;padding:22px}.hf48-brand-cta img{max-height:180px;order:-1}}
+@media(max-width:620px){.hf48-topline{font-size:10px}.header-in{padding:8px 12px}.site-nav{top:69px}.hero-in{padding:36px 14px 32px}.hero h1{font-size:38px}.hf48-categories{padding:34px 14px}.hf48-section-heading{align-items:flex-start;flex-direction:column}.hf48-section-heading h2{font-size:28px}.hf48-category-grid{grid-template-columns:1fr 1fr;gap:9px}.hf48-category-card{padding:11px;gap:8px}.hf48-cat-icon{width:38px;height:38px;font-size:19px}.hf48-cat-copy strong{font-size:12px}.hf48-cat-copy small{font-size:10px}.main{padding:34px 12px 52px}.grid{grid-template-columns:1fr}.hf48-process{padding:42px 14px}.hf48-process-grid{grid-template-columns:1fr}.photo{aspect-ratio:4/3}.hero-card.hf48-mascot-hero{min-height:520px;padding:24px 18px 300px}.hf48-hero-mascot-img{width:88%;right:4%;bottom:-10px;max-height:290px}.hf48-mascot-hero .hf48-mascot-copy{max-width:none}.hf48-gallery-intro{margin:0 14px 18px;padding:12px}.hf48-gallery-intro img{width:80px;height:66px}.hf48-brand-cta{padding:0 14px 42px}.hf48-brand-cta-in{grid-template-columns:1fr;padding:22px}.hf48-brand-cta img{max-height:180px;order:-1}}
 '''
     pagina = pagina.replace("</style>", css + "</style>", 1)
 
@@ -218,7 +229,7 @@ body{background:var(--hf48-bg)}
     )
 
     # Identifica a prévia corretamente sem alterar a produção.
-    preview_rotulo = 'PRÉVIA INTERNA HF48.3 · VISUAL APROVADO · THU + FOX · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
+    preview_rotulo = 'PRÉVIA INTERNA HF48.3-HF1 · VISUAL APROVADO · THU + FOX · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
     pagina = re.sub(r"<div\s+class=['\"]preview-bar['\"]>.*?</div>", f'<div class="preview-bar">{preview_rotulo}</div>', pagina, count=1, flags=re.S)
 
     js = r'''
