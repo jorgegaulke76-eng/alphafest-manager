@@ -1,3 +1,8 @@
+## 20.4.9-I8.13.5-HF48.3-HF2 — balões reais e mobile limpo
+- Substitui formas decorativas artificiais por balões com aparência realista no desktop/tablet.
+- Oculta balões decorativos no celular para não cobrir conteúdo.
+- Preserva toda a lógica já homologada.
+
 ## 20.4.9-I8.13.5-HF48.3-HF1 — polimento visual final
 - Hero alinhado ao mockup aprovado: mascotes maiores e sem fundo próprio.
 - Paleta AlphaFest reforçada no hero e marca.
