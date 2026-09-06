@@ -1,5 +1,6 @@
-## 20.4.9-I8.13.5-HF50.1-HF6 — cabeçalho AlphaFest sem emendas
+## 20.4.9-I8.13.5-HF50.1-HF7 — cabeçalho AlphaFest sem emendas
 - Marca do cabeçalho passa a usar fundo transparente.
+- Carrossel promocional reposicionado para ocupar exatamente a faixa imediatamente abaixo do Hero e antes de “Explore por categoria”, sem espaço branco extra.
 - Um único azul/gradiente contínuo cobre marca, busca, WhatsApp e menu.
 - Logo reposicionado e ampliado sem corte em desktop/tablet/mobile.
 - Mantidos catálogo, galeria, carrossel, HF49.2 e motor HF44.
