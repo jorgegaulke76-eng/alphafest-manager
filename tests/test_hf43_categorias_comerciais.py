@@ -98,8 +98,8 @@ class HF43CategoriasComerciaisTests(unittest.TestCase):
         self.assertIn('data-cat="convites-papelaria">Convites &amp; Papelaria</button>', pagina)
         self.assertIn('data-cat="impressao-3d">Impressão 3D</button>', pagina)
         self.assertNotIn('data-cat="adesivo-dtf-uv">ADESIVO DTF UV</button>', pagina)
-        self.assertIn('class="product-card" data-cat="grafica-rapida"', pagina)
-        self.assertIn('class="product-card" data-cat="baloes-decoracao"', pagina)
+        self.assertIn('data-cat="grafica-rapida"', pagina)
+        self.assertIn('class="product-card product-card-compact"', pagina)
         self.assertIn("cat==='todos'||c.dataset.cat===cat", pagina)
         self.assertIn("6</strong><span>categorias comerciais", pagina)
 
@@ -126,9 +126,9 @@ class HF43CategoriasComerciaisTests(unittest.TestCase):
     def test_manager_expoe_hf43_sem_criar_segunda_fonte(self):
         app = Path("app.py").read_text(encoding="utf-8")
         self.assertIn("HF43 · Categorias comerciais", app)
-        self.assertIn('"🚀 Produção oficial — HF50.1-HF10 · motor HF44"', app)
-        self.assertIn("alphafest-site-producao-hf50-1-hf1.zip", app)
-        self.assertIn('versao_manager="20.4.9-I8.13.5-HF50.1-HF10"', app)
+        self.assertIn('"🚀 Produção oficial — HF51.1 · motor HF44"', app)
+        self.assertIn("alphafest-site-producao-hf51-1.zip", app)
+        self.assertIn('versao_manager="20.4.9-I8.13.5-HF51.1"', app)
         self.assertNotIn('save_document("site_categoria', app)
 
 

@@ -265,6 +265,7 @@ def gerar_html_vitrine(
     produtos = resumo["produtos"]
     categorias = resumo["categorias"]
     produtos_galeria_slugs = {_slug(x) for x in (produtos_com_galeria or []) if str(x or "").strip()}
+    tem_algum_produto_com_galeria = bool(produtos_galeria_slugs)
 
     nome_empresa = str((empresa or {}).get("nome") or "AlphaFest").strip() or "AlphaFest"
     subtitulo = str((empresa or {}).get("subtitulo") or "Personalizados & Balões").strip()
@@ -344,29 +345,22 @@ def gerar_html_vitrine(
         href = f"https://wa.me/{numero}?text={msg}" if numero else "#"
         busca = " ".join([nome, descricao, categoria, categoria_origem, subcategoria_publica, item.get("subcategoria") or "", item.get("material") or "", " ".join(item.get("processos") or [])])
         busca = unicodedata.normalize("NFKD", busca).encode("ascii", "ignore").decode("ascii").casefold()
-        badge = '<span class="badge">⭐ Destaque</span>' if item.get("destaque") else ""
-        descricao_curta = descricao[:280] + ("…" if len(descricao) > 280 else "")
-        preco_html = f'<div class="price">{html.escape(preco)}</div>' if preco else ""
-        footer_classe = "card-footer" if preco else "card-footer no-price"
         produto_slug = _slug(nome)
         sub_data = html.escape(_slug(subcategoria_publica), quote=True) if subcategoria_publica else ""
-        subcategoria_html = f'<div class="subcategory">{html.escape(subcategoria_publica)}</div>' if subcategoria_publica else ""
-        galeria_cta = (
-            f'<button type="button" class="gallery-proof-btn" data-gallery-product="{html.escape(produto_slug, quote=True)}" data-gallery-label="{html.escape(nome, quote=True)}">📸 Ver trabalhos realizados</button>'
-            if produto_slug in produtos_galeria_slugs else ""
-        )
+        tem_galeria = produto_slug in produtos_galeria_slugs
+        # HF51.1 — vitrine limpa: na listagem pública aparece somente a foto +
+        # nome. Destaque, descrição, preço, opções e CTA ficam exclusivamente
+        # na ficha aberta pelo cliente.
         cards.append(
-            f'''<article class="product-card" data-cat="{html.escape(_slug(categoria), quote=True)}" data-sub="{sub_data}" data-product="{html.escape(produto_slug, quote=True)}" data-search="{html.escape(busca, quote=True)}">
-                <div class="photo">{imagem_html}{badge}</div>
-                <div class="card-body">
-                    <div class="category">{html.escape(categoria)}</div>
-                    {subcategoria_html}
-                    <h3>{html.escape(nome)}</h3>
-                    <p>{html.escape(descricao_curta)}</p>
-                    {opcoes_html}
-                    {galeria_cta}
-                    <div class="{footer_classe}">{preco_html}<a class="cta small" href="{html.escape(href, quote=True)}" target="_blank" rel="noopener" aria-label="Pedir orçamento de {html.escape(nome, quote=True)} pelo WhatsApp">Pedir orçamento</a></div>
-                </div>
+            f'''<article class="product-card product-card-compact" role="button" tabindex="0" aria-label="Ver detalhes de {html.escape(nome, quote=True)}"
+                data-cat="{html.escape(_slug(categoria), quote=True)}" data-sub="{sub_data}" data-product="{html.escape(produto_slug, quote=True)}" data-search="{html.escape(busca, quote=True)}"
+                data-detail-name="{html.escape(nome, quote=True)}" data-detail-description="{html.escape(descricao, quote=True)}"
+                data-detail-category="{html.escape(categoria, quote=True)}" data-detail-subcategory="{html.escape(subcategoria_publica, quote=True)}"
+                data-detail-price="{html.escape(preco, quote=True)}" data-detail-image="{html.escape(img, quote=True)}"
+                data-detail-whatsapp="{html.escape(href, quote=True)}" data-detail-gallery="{'1' if tem_galeria else '0'}"
+                {f'data-gallery-product="{html.escape(produto_slug, quote=True)}" data-gallery-label="{html.escape(nome, quote=True)}"' if tem_galeria else ''}>
+                <div class="photo">{imagem_html}</div>
+                <div class="card-body compact-body"><h3>{html.escape(nome)}</h3></div>
             </article>'''
         )
 
@@ -462,6 +456,64 @@ def gerar_html_vitrine(
 (function(){let cat='todos';const cards=[...document.querySelectorAll('.product-card')];const input=document.getElementById('search');const count=document.getElementById('result-count');function norm(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}function apply(){const q=norm(input.value);let n=0;cards.forEach(c=>{const okCat=cat==='todos'||c.dataset.cat===cat;const okQ=!q||norm(c.dataset.search).includes(q);const ok=okCat&&okQ;c.style.display=ok?'flex':'none';if(ok)n++;});count.textContent=n+' produto(s)';}document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');cat=b.dataset.cat;apply();}));input.addEventListener('input',apply);apply();})();
 """
 
+    product_detail_script = r'''<script>
+(function(){
+  const modal=document.getElementById('product-detail-modal');
+  if(!modal)return;
+  const cards=[...document.querySelectorAll('.product-card[data-detail-name]')];
+  const nameEl=document.getElementById('product-detail-name');
+  const descEl=document.getElementById('product-detail-description');
+  const taxEl=document.getElementById('product-detail-tax');
+  const priceEl=document.getElementById('product-detail-price');
+  const imgEl=document.getElementById('product-detail-image');
+  const placeholder=document.getElementById('product-detail-placeholder');
+  const waEl=document.getElementById('product-detail-whatsapp');
+  const galEl=document.getElementById('product-detail-gallery');
+  const related=document.getElementById('product-related');
+  const relatedGrid=document.getElementById('product-related-grid');
+  let current=null;
+  function esc(s){return (s||'').replace(/[&<>"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch];});}
+  function relatedFor(card){
+    const sameSub=cards.filter(c=>c!==card && card.dataset.sub && c.dataset.sub===card.dataset.sub && c.dataset.cat===card.dataset.cat);
+    const sameCat=cards.filter(c=>c!==card && c.dataset.cat===card.dataset.cat && !sameSub.includes(c));
+    return [...sameSub,...sameCat].slice(0,4);
+  }
+  function open(card){
+    current=card;
+    const d=card.dataset;
+    nameEl.textContent=d.detailName||'Produto';
+    descEl.textContent=d.detailDescription||'';
+    taxEl.textContent=[d.detailCategory,d.detailSubcategory].filter(Boolean).join(' · ');
+    if(d.detailPrice){priceEl.textContent=d.detailPrice;priceEl.hidden=false;}else{priceEl.textContent='';priceEl.hidden=true;}
+    if(d.detailImage){imgEl.src=d.detailImage;imgEl.alt=d.detailName||'Produto';imgEl.hidden=false;placeholder.hidden=true;}else{imgEl.removeAttribute('src');imgEl.hidden=true;placeholder.hidden=false;}
+    waEl.href=d.detailWhatsapp||'#';
+    if(galEl){galEl.hidden=d.detailGallery!=='1'; galEl.dataset.galleryProduct=d.product||''; galEl.dataset.galleryLabel=d.detailName||'Produto';}
+    const rel=relatedFor(card); relatedGrid.innerHTML='';
+    rel.forEach(function(r){
+      const b=document.createElement('button'); b.type='button'; b.className='product-related-card';
+      const src=r.dataset.detailImage||'';
+      b.innerHTML=(src?'<img src="'+esc(src)+'" alt="">':'')+'<span>'+esc(r.dataset.detailName||'Produto')+'</span>';
+      b.addEventListener('click',function(){open(r);}); relatedGrid.appendChild(b);
+    });
+    related.hidden=!rel.length;
+    modal.hidden=false; modal.setAttribute('aria-hidden','false'); document.body.classList.add('product-modal-open');
+    const closeBtn=modal.querySelector('.product-detail-close'); if(closeBtn)closeBtn.focus();
+  }
+  function close(){modal.hidden=true;modal.setAttribute('aria-hidden','true');document.body.classList.remove('product-modal-open');if(current)current.focus();}
+  cards.forEach(function(card){
+    card.addEventListener('click',function(){open(card);});
+    card.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();open(card);}});
+  });
+  modal.querySelectorAll('[data-product-close]').forEach(function(el){el.addEventListener('click',close);});
+  document.addEventListener('keydown',function(e){if(e.key==='Escape'&&!modal.hidden)close();});
+  if(galEl)galEl.addEventListener('click',function(){
+    const slug=galEl.dataset.galleryProduct||'', label=galEl.dataset.galleryLabel||'Produto'; close();
+    if(typeof window.alphaFestGalleryShowProduct==='function'){window.alphaFestGalleryShowProduct(slug,label);}
+    else{const g=document.getElementById('galeria');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});}
+  });
+})();
+</script>'''
+
     return f'''<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(nome_empresa)} · {html.escape(subtitulo)}</title>
@@ -488,14 +540,36 @@ def gerar_html_vitrine(
 .photo{{position:relative;background:var(--soft);aspect-ratio:4/3;overflow:hidden}} .photo img{{width:100%;height:100%;object-fit:cover;display:block}} .placeholder{{height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#84a9ca}} .badge{{position:absolute;top:12px;left:12px;background:#fff;color:#a26100;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:900;box-shadow:0 3px 12px rgba(0,0,0,.12)}}
 .gallery-proof-btn{{width:100%;border:1px solid #b9d9f4;background:#f3f9ff;color:#0b68b5;border-radius:10px;min-height:39px;margin:0 0 10px;font-weight:900;cursor:pointer}} .gallery-proof-btn:hover{{background:#e9f5ff;border-color:#80bbe9}}
 .card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .category{{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:900;color:var(--blue)}} .subcategory{{font-size:12px;font-weight:800;color:#6a7f97;margin-top:4px}} .card-body h3{{font-size:20px;line-height:1.15;margin:7px 0 10px}} .card-body p{{font-size:14px;line-height:1.55;color:#60748e;margin:0 0 12px;flex:1}} .options{{font-size:12px;color:#60748e;margin:0 0 12px}} .card-footer{{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid #edf3f8;padding-top:14px}} .card-footer.no-price .cta{{width:100%}} .price{{font-weight:950;font-size:17px}}
+.product-card-compact{{cursor:pointer}} .product-card-compact .photo{{aspect-ratio:1/1}} .compact-body{{padding:14px 15px 16px;min-height:70px;justify-content:center}} .compact-body h3{{font-size:18px;line-height:1.18;margin:0;color:var(--ink)}}
+.product-detail-modal[hidden]{{display:none!important}} .product-detail-modal{{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;padding:24px}} .product-detail-backdrop{{position:absolute;inset:0;background:rgba(7,24,45,.68);backdrop-filter:blur(5px)}} .product-detail-panel{{position:relative;z-index:2;width:min(1040px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:26px;box-shadow:0 30px 90px rgba(4,24,48,.30);padding:26px}} .product-detail-close{{position:absolute;right:15px;top:13px;z-index:5;width:42px;height:42px;border:0;border-radius:50%;background:#edf6fd;color:#153b61;font-size:30px;line-height:1;cursor:pointer}} .product-detail-layout{{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr);gap:30px;align-items:start}} .product-detail-media{{background:#f4f9fd;border-radius:20px;overflow:hidden;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center}} .product-detail-media img{{width:100%;height:100%;object-fit:contain;display:block}} .product-detail-placeholder{{font-size:34px;font-weight:950;color:#83a8c8}} .product-detail-copy{{padding:12px 4px 4px}} .product-detail-tax{{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;color:var(--blue);margin-bottom:8px}} .product-detail-copy h2{{font-size:34px;line-height:1.06;margin:0 0 14px;color:var(--ink)}} .product-detail-price{{font-size:24px;font-weight:950;color:#0d7a3c;margin:0 0 14px}} .product-detail-copy p{{font-size:16px;line-height:1.65;color:#566f89;white-space:pre-line;margin:0 0 18px}} .product-detail-actions{{display:grid;gap:9px;margin-top:18px}} .product-detail-gallery{{margin:0;min-height:46px}} .product-detail-whatsapp{{min-height:50px}} .product-related{{border-top:1px solid #e7eef5;margin-top:24px;padding-top:20px}} .product-related-head{{display:flex;justify-content:space-between;gap:14px;align-items:end;margin-bottom:12px}} .product-related-head strong{{font-size:19px}} .product-related-head span{{font-size:12px;color:#71849b}} .product-related-grid{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}} .product-related-card{{border:1px solid #dce8f3;background:#fff;border-radius:14px;overflow:hidden;cursor:pointer;text-align:left;padding:0;color:var(--ink)}} .product-related-card img{{width:100%;aspect-ratio:1/1;object-fit:cover;display:block;background:#f4f9fd}} .product-related-card span{{display:block;padding:9px 10px;font-size:12px;font-weight:850;line-height:1.25}} body.product-modal-open{{overflow:hidden}}
 .empty{{padding:50px;text-align:center;border:1px dashed var(--line);border-radius:18px;color:#60748e}} .mobile-whatsapp{{display:none}} .footer{{background:#10243c;color:#d7e8f7}} .footer-in{{max-width:1240px;margin:auto;padding:34px 22px;display:flex;gap:24px;justify-content:space-between;align-items:center}} .footer strong{{color:#fff}} .footer small{{color:#9fb7cb}}
 @media(max-width:900px){{.hero-in{{grid-template-columns:1fr}}.hero-card{{display:none}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
-@media(max-width:620px){{body{{padding-bottom:76px}}.preview-bar{{font-size:9px;padding:6px 10px}}.brand-copy{{display:none}}.ghost{{display:none}}.header-in{{padding:8px 12px;gap:8px}}.brand-logo{{width:54px;height:44px}}.header-actions .cta{{padding:10px 12px;font-size:13px;box-shadow:none}}.hero-in{{padding:30px 14px 26px}}.eyebrow{{font-size:11px}}.hero h1{{font-size:36px;line-height:1.02;margin:9px 0 14px}}.hero p{{font-size:15px;line-height:1.5}}.hero-actions{{gap:8px;margin-top:18px}}.hero-actions>a{{width:100%;min-height:46px}}.main{{padding:22px 12px 38px}}.section-head{{align-items:flex-start;flex-direction:column;gap:6px;margin:14px 0}}.section-head h2{{font-size:25px}}.search{{min-width:100%}}.search input{{font-size:16px;padding-top:13px;padding-bottom:13px}}.filters{{gap:7px;padding-bottom:9px}}.filter{{padding:10px 13px;min-height:42px}}.taxonomy-step{{padding:13px;border-radius:15px}}.taxonomy-focus{{align-items:stretch;flex-direction:column;padding:11px;border-radius:15px;gap:8px}}.taxonomy-back{{width:100%;min-height:42px}}.taxonomy-focus-copy{{padding:0 4px 3px}}.taxonomy-heading{{align-items:flex-start;flex-direction:column;gap:5px}}.taxonomy-heading small{{font-size:11px}}.subfilters{{gap:7px;padding-bottom:2px}}.subfilter{{padding:9px 12px;min-height:40px}}.taxonomy-current{{align-items:flex-start;flex-direction:column;gap:3px}}.taxonomy-current span:before{{display:none}}.grid{{grid-template-columns:1fr;gap:16px}}.product-card{{border-radius:16px;box-shadow:0 7px 22px rgba(20,37,61,.07)}}.product-card:hover{{transform:none}}.photo{{aspect-ratio:4/3}}.card-body{{padding:15px}}.card-body h3{{font-size:19px}}.card-body p{{font-size:14px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}}.card-footer{{padding-top:12px}}.card-footer .cta{{min-height:46px}}.footer-in{{flex-direction:column;align-items:flex-start;padding-bottom:28px}}.mobile-whatsapp{{display:flex;position:fixed;left:12px;right:12px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50;align-items:center;justify-content:center;background:var(--green);color:#fff;text-decoration:none;font-weight:950;border-radius:14px;min-height:52px;box-shadow:0 10px 28px rgba(20,37,61,.25);border:2px solid rgba(255,255,255,.9)}}}}
+@media(max-width:620px){{body{{padding-bottom:76px}}.preview-bar{{font-size:9px;padding:6px 10px}}.brand-copy{{display:none}}.ghost{{display:none}}.header-in{{padding:8px 12px;gap:8px}}.brand-logo{{width:54px;height:44px}}.header-actions .cta{{padding:10px 12px;font-size:13px;box-shadow:none}}.hero-in{{padding:30px 14px 26px}}.eyebrow{{font-size:11px}}.hero h1{{font-size:36px;line-height:1.02;margin:9px 0 14px}}.hero p{{font-size:15px;line-height:1.5}}.hero-actions{{gap:8px;margin-top:18px}}.hero-actions>a{{width:100%;min-height:46px}}.main{{padding:22px 12px 38px}}.section-head{{align-items:flex-start;flex-direction:column;gap:6px;margin:14px 0}}.section-head h2{{font-size:25px}}.search{{min-width:100%}}.search input{{font-size:16px;padding-top:13px;padding-bottom:13px}}.filters{{gap:7px;padding-bottom:9px}}.filter{{padding:10px 13px;min-height:42px}}.taxonomy-step{{padding:13px;border-radius:15px}}.taxonomy-focus{{align-items:stretch;flex-direction:column;padding:11px;border-radius:15px;gap:8px}}.taxonomy-back{{width:100%;min-height:42px}}.taxonomy-focus-copy{{padding:0 4px 3px}}.taxonomy-heading{{align-items:flex-start;flex-direction:column;gap:5px}}.taxonomy-heading small{{font-size:11px}}.subfilters{{gap:7px;padding-bottom:2px}}.subfilter{{padding:9px 12px;min-height:40px}}.taxonomy-current{{align-items:flex-start;flex-direction:column;gap:3px}}.taxonomy-current span:before{{display:none}}.grid{{grid-template-columns:1fr 1fr;gap:10px}}.product-card{{border-radius:14px;box-shadow:0 7px 22px rgba(20,37,61,.07)}}.product-card:hover{{transform:none}}.product-card-compact .photo{{aspect-ratio:1/1}}.compact-body{{padding:10px 10px 12px;min-height:58px}}.compact-body h3{{font-size:14px;line-height:1.2}}.product-detail-modal{{padding:8px;align-items:flex-end}}.product-detail-panel{{width:100%;max-height:94vh;border-radius:22px 22px 12px 12px;padding:18px 14px 16px}}.product-detail-close{{right:10px;top:9px;width:38px;height:38px}}.product-detail-layout{{grid-template-columns:1fr;gap:15px}}.product-detail-media{{aspect-ratio:4/3}}.product-detail-copy{{padding:0 2px}}.product-detail-copy h2{{font-size:25px;padding-right:36px}}.product-detail-copy p{{font-size:14px;line-height:1.55}}.product-detail-price{{font-size:21px}}.product-related-head{{align-items:flex-start;flex-direction:column;gap:3px}}.product-related-grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}.product-related-card span{{font-size:11px}}.footer-in{{flex-direction:column;align-items:flex-start;padding-bottom:28px}}.mobile-whatsapp{{display:flex;position:fixed;left:12px;right:12px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50;align-items:center;justify-content:center;background:var(--green);color:#fff;text-decoration:none;font-weight:950;border-radius:14px;min-height:52px;box-shadow:0 10px 28px rgba(20,37,61,.25);border:2px solid rgba(255,255,255,.9)}}}}
 </style></head>
 <body>{preview_bar}
 <header class="header"><div class="header-in"><a class="brand" href="#inicio">{logo}<div class="brand-copy"><strong>{html.escape(nome_empresa)}</strong><span>{html.escape(subtitulo)}</span></div></a><div class="header-actions"><a class="ghost" href="#produtos">Ver produtos</a><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Falar no WhatsApp</a></div></div></header>
 <section class="hero" id="inicio"><div class="hero-in"><div><div class="eyebrow">Personalização que vira presença</div><h1>Seu evento, sua marca, <span>do seu jeito.</span></h1><p>{html.escape(slogan)} Escolha uma ideia na vitrine e fale com a AlphaFest para personalizar detalhes, quantidade e prazo.</p><div class="hero-actions"><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Explorar produtos ↓</a></div></div><aside class="hero-card"><div class="eyebrow">Vitrine AlphaFest</div><h2>Personalizados & Balões</h2><p>Ideias selecionadas para você encontrar uma referência e pedir seu orçamento.</p><div class="hero-stat"><div class="stat"><strong>{resumo['total']}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{resumo['total_categorias']}</strong><span>{html.escape(rotulo_categorias)}</span></div></div></aside></div></section>
 <main class="main" id="produtos"><div class="section-head"><div><h2>Encontre seu personalizado</h2><p>{html.escape(texto_escolha)}</p></div><div id="result-count">{resumo['total']} produto(s)</div></div><div class="toolbar"><label class="search"><input id="search" type="search" placeholder="Buscar produto, categoria, subcategoria ou descrição..."></label></div>{('<div class="taxonomy-nav"><section class="taxonomy-focus" id="taxonomy-focus" hidden><button type="button" class="taxonomy-back" id="taxonomy-back">← Voltar às categorias</button><div class="taxonomy-focus-copy"><small>Categoria escolhida</small><strong id="taxonomy-focus-label">Categoria</strong></div></section><section class="taxonomy-step taxonomy-cats" id="taxonomy-cats"><div class="taxonomy-heading"><div><span class="step-number">1</span><strong>Escolha uma categoria</strong></div><small>Selecione uma categoria para ver somente os produtos e subcategorias dela.</small></div><div class="filters">' + ''.join(chips) + '</div></section>' + subfilters_html + '<div class="taxonomy-current" id="taxonomy-current"><strong>Todos os produtos</strong><span>Escolha uma categoria para ver as subcategorias.</span></div></div>') if usar_taxonomia_catalogo else ('<div class="filters">' + ''.join(chips) + '</div>')}<div class="grid" id="grid">{''.join(cards)}</div>{vazio}</main>
+<div class="product-detail-modal" id="product-detail-modal" hidden aria-hidden="true">
+  <div class="product-detail-backdrop" data-product-close></div>
+  <section class="product-detail-panel" role="dialog" aria-modal="true" aria-labelledby="product-detail-name">
+    <button type="button" class="product-detail-close" data-product-close aria-label="Fechar detalhes">×</button>
+    <div class="product-detail-layout">
+      <div class="product-detail-media"><img id="product-detail-image" alt="" loading="eager"><div id="product-detail-placeholder" class="product-detail-placeholder" hidden>AlphaFest</div></div>
+      <div class="product-detail-copy">
+        <div class="product-detail-tax" id="product-detail-tax"></div>
+        <h2 id="product-detail-name"></h2>
+        <div class="product-detail-price" id="product-detail-price" hidden></div>
+        <p id="product-detail-description"></p>
+        <div class="product-detail-actions">
+          {'<button type="button" class="gallery-proof-btn product-detail-gallery" id="product-detail-gallery" hidden>📸 Ver trabalhos realizados</button>' if tem_algum_produto_com_galeria else ''}
+          <a class="cta product-detail-whatsapp" id="product-detail-whatsapp" href="#" target="_blank" rel="noopener">💬 Pedir orçamento</a>
+        </div>
+      </div>
+    </div>
+    <div class="product-related" id="product-related" hidden><div class="product-related-head"><strong>Você também pode gostar</strong><span>Outros itens da mesma categoria</span></div><div class="product-related-grid" id="product-related-grid"></div></div>
+  </section>
+</div>
 <a class="mobile-whatsapp" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Pedir orçamento</a>
 <footer class="footer"><div class="footer-in"><div><strong>{html.escape(nome_empresa)}</strong><br><small>{html.escape(subtitulo)}{(' · ' + html.escape(local)) if local else ''}</small></div><div>{html.escape(slogan)}</div></div></footer>
-<script>{script_filtros}</script></body></html>'''
+<script>{script_filtros}</script>{product_detail_script}</body></html>'''

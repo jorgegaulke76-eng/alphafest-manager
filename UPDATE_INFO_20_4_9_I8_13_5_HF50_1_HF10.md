@@ -1,4 +1,4 @@
-# HF50.1-HF10 — Menu mobile final
+# HF51.1 — Menu mobile final
 
 - Menu mobile enxuto: Início, Categorias, Produtos, Galeria e ☰ Mais.
 - Mais reúne Serviços, Quem Somos e Contato.

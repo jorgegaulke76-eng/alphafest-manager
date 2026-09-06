@@ -28,14 +28,16 @@ class HF38MobileWhatsappTests(unittest.TestCase):
         decodificada = unquote(pagina)
         self.assertIn("orçamento para: Topo Personalizado", decodificada)
         self.assertIn("tamanho/personalização, cor, quantidade, material e prazo", decodificada)
-        self.assertIn('aria-label="Pedir orçamento de Topo Personalizado pelo WhatsApp"', pagina)
+        self.assertIn('data-detail-whatsapp="https://wa.me/', pagina)
+        self.assertIn('id="product-detail-whatsapp"', pagina)
 
     def test_mobile_tem_cta_fixo_e_layout_touch(self):
         pagina = gerar_html_vitrine(self._catalogo(), self._empresa())
         self.assertIn('class="mobile-whatsapp"', pagina)
         self.assertIn("position:fixed", pagina)
         self.assertIn("min-height:52px", pagina)
-        self.assertIn("-webkit-line-clamp:4", pagina)
+        self.assertIn("product-card-compact", pagina)
+        self.assertIn("product-detail-modal", pagina)
         self.assertIn("body{padding-bottom:76px}", pagina)
 
     def test_hf38_preserva_preco_opcional(self):
