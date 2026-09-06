@@ -1,4 +1,4 @@
-## 20.4.9-I8.13.5-HF50.1-HF4 — cabeçalho fiel à prévia aprovada
+## 20.4.9-I8.13.5-HF50.1-HF5 — cabeçalho fiel à prévia aprovada
 
 - Marca horizontal AlphaFest maior e melhor distribuída no topo azul.
 - Símbolo + lettering oficial + subtítulo no mesmo bloco visual.

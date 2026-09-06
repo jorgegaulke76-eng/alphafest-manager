@@ -11,4 +11,4 @@ def test_hf483_hf3_mobile_reduz_faixa_e_antecipa_mascotes():
     assert '.hero-in{padding:32px 14px 38px;row-gap:28px}' in html
     assert '.hero-card.hf48-mascot-hero{min-height:455px;padding:26px 16px 245px;margin-top:4px}' in html
     assert '.hf48-hero-mascot-img{width:82%;right:7%;bottom:6px;max-height:250px}' in html
-    assert 'PRÉVIA INTERNA HF50.1-HF4' in html
+    assert 'PRÉVIA INTERNA HF50.1-HF5' in html

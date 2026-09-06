@@ -1,4 +1,4 @@
-# 20.4.9-I8.13.5-HF50.1-HF4
+# 20.4.9-I8.13.5-HF50.1-HF5
 
 ## Ajuste homologado do cabeçalho
 - Aplica no Manager a composição horizontal aprovada da marca AlphaFest no cabeçalho azul.
