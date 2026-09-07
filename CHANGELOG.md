@@ -1224,3 +1224,10 @@ hangelog
 - Hero sem contadores 24/17; benefícios comerciais no lugar.
 - Galeria + Categoria/Subcategoria integradas ao mesmo pacote do site.
 - Motor HF44 preservado para publicação Cloudflare assistida e rollback.
+
+## 20.4.9-I8.13.5-HF51.4
+- Adicionado **Carrossel sazonal rápido** na edição rápida do site.
+- Campanhas reaproveitam `CampanhasPermitidas` do Catálogo Oficial.
+- Um clique preenche até 5 itens publicados elegíveis, priorizando Destaques.
+- Um clique limpa o carrossel.
+- Nenhuma publicação automática foi adicionada; HF44 permanece como única etapa de deploy.

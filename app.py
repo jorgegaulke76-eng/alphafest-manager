@@ -25841,16 +25841,16 @@ if pagina_atual == "site":
 
     # HF48.2 — identidade visual Thu + Fox sobre a base comercial HF48.1.
     # Continua somente em prévia; publicação HF44 permanece intocada.
-    with st.expander("🛍️ Vitrine limpa + Ficha comercial do produto — HF51.3-HF1", expanded=False):
+    with st.expander("🛍️ Vitrine limpa + Ficha comercial do produto — HF51.4", expanded=False):
         st.caption(
             "Mantém o visual aprovado e transforma a listagem de produtos em uma vitrine mais limpa: foto + nome. "
             "Descrição, preço opcional, WhatsApp, trabalhos realizados e relacionados aparecem ao abrir o produto. **Nada desta etapa é publicado automaticamente.**"
         )
         st.info(
-            "🎯 HF51.3-HF1 mantém cabeçalho, Thu + Fox, carrossel, Categoria → Subcategoria e edição rápida já aprovados. "
+            "🎯 HF51.4 mantém cabeçalho, Thu + Fox, carrossel, Categoria → Subcategoria e edição rápida já aprovados. "
             "Na grade pública o selo de Destaque, descrição, preço e CTA saem do card; ao clicar, abre a ficha comercial completa. O preço só aparece se **Mostrar preço** estiver marcado no Manager."
         )
-        if st.button("🛍️ Preparar / atualizar HF51.3-HF1", use_container_width=True, key="site_hf482_prepare"):
+        if st.button("🛍️ Preparar / atualizar HF51.4", use_container_width=True, key="site_hf482_prepare"):
             with st.spinner("Montando o visual aprovado da AlphaFest…"):
                 st.session_state["site_hf482_html_preview"] = _site_gerar_html_completo(
                     catalogo_site_hf35,
@@ -25871,7 +25871,7 @@ if pagina_atual == "site":
         html_hf482 = st.session_state.get("site_hf482_html_preview", "")
         if html_hf482:
             modo_hf482 = st.radio(
-                "Visualização HF51.3-HF1",
+                "Visualização HF51.4",
                 ["🖥️ Desktop", "📱 Celular"],
                 horizontal=True,
                 key="site_hf482_modo_preview",
@@ -25884,7 +25884,7 @@ if pagina_atual == "site":
                 components.html(html_hf482, height=1080, scrolling=True)
 
             st.download_button(
-                "⬇️ Baixar prévia HF51.3-HF1",
+                "⬇️ Baixar prévia HF51.4",
                 data=html_hf482,
                 file_name="alphafest-preview-hf51-1.html",
                 mime="text/html",
@@ -25892,10 +25892,10 @@ if pagina_atual == "site":
                 key="site_hf482_download_preview",
             )
         else:
-            st.caption("Clique em **Preparar / atualizar HF51.3-HF1** para conferir o novo cabeçalho e o carrossel antes de publicar.")
+            st.caption("Clique em **Preparar / atualizar HF51.4** para conferir o novo cabeçalho e o carrossel antes de publicar.")
 
         st.info(
-            "✅ **Prévia protegida:** o motor seguro de publicação do HF44 foi preservado. A produção passa a gerar o HF51.3-HF1 somente quando você confirmar **Publicar site agora**."
+            "✅ **Prévia protegida:** o motor seguro de publicação do HF44 foi preservado. A produção passa a gerar o HF51.4 somente quando você confirmar **Publicar site agora**."
         )
 
     # HF40 — ambiente paralelo/staging: site completo seguro, sem DNS/CNAME.
@@ -25981,7 +25981,7 @@ if pagina_atual == "site":
             )
 
         # HF44 — publicação assistida no Worker; continua sem tocar em DNS/MX/Custom Domains.
-        with st.expander("🚀 Produção oficial — HF51.3-HF1 · motor HF44", expanded=True):
+        with st.expander("🚀 Produção oficial — HF51.4 · motor HF44", expanded=True):
             _prod_hf44 = _site_resumo_producao(total_produtos=resumo_vitrine_hf36.get("total", 0))
             p1_hf44, p2_hf44, p3_hf44, p4_hf44 = st.columns(4)
             p1_hf44.metric("Zona Cloudflare", _prod_hf44.get("zona_cloudflare", "—"))
@@ -25990,7 +25990,7 @@ if pagina_atual == "site":
             p4_hf44.metric("www", _prod_hf44.get("www", "301 → raiz"))
             st.success(
                 "✅ O site oficial está estável em `alphafest.com.br` e o `www` redireciona em 301. "
-                "O motor HF44 continua cuidando somente do deployment. O conteúdo aprovado agora inclui HF51.3-HF1: vitrine limpa com foto + nome, ficha comercial ao clicar, preço opcional, relacionados, Produto → Galeria, cabeçalho azul, carrossel, Thu + Fox e visual HF48.3-HF4; DNS, MX, webmail, domínio e Redirect Rules ficam intocados."
+                "O motor HF44 continua cuidando somente do deployment. O conteúdo aprovado agora inclui HF51.4: vitrine limpa com foto + nome, ficha comercial ao clicar, preço opcional, relacionados, Produto → Galeria, cabeçalho azul, carrossel, Thu + Fox e visual HF48.3-HF4; DNS, MX, webmail, domínio e Redirect Rules ficam intocados."
             )
             st.info(
                 "📌 **Fluxo preservado:** cadastre/edite produtos ou selecione trabalhos da Galeria → confira a prévia → **Publicar site agora**. "
@@ -26016,7 +26016,7 @@ if pagina_atual == "site":
             pacote_producao_hf44 = _site_gerar_pacote_producao(
                 html_producao_hf44,
                 total_produtos=resumo_vitrine_hf36.get("total", 0),
-                versao_manager="20.4.9-I8.13.5-HF51.3-HF1",
+                versao_manager="20.4.9-I8.13.5-HF51.4",
             )
 
             # Fallback/manual continua disponível para rollback e contingência.
@@ -26106,7 +26106,7 @@ if pagina_atual == "site":
                 st.info("✅ Este mesmo conteúdo já foi publicado nesta sessão. Se você alterar ou adicionar produtos, o Manager detectará uma nova versão.")
 
             _cf_confirmar_hf44 = st.checkbox(
-                f"Conferi o HF51.3-HF1 e quero publicar agora os {resumo_vitrine_hf36.get('total', 0)} produto(s) marcados/prontos + a Galeria selecionada + carrossel.",
+                f"Conferi o HF51.4 e quero publicar agora os {resumo_vitrine_hf36.get('total', 0)} produto(s) marcados/prontos + a Galeria selecionada + carrossel.",
                 key="site_hf44_confirmar_publicacao",
             )
             _cf_pode_publicar_hf44 = bool(
@@ -26130,14 +26130,14 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf44,
                             api_token=_cf_token_hf44,
                             worker_name=_cf_worker_hf44,
-                            versao_manager="20.4.9-I8.13.5-HF51.3-HF1",
+                            versao_manager="20.4.9-I8.13.5-HF51.4",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(_cf_resultado_hf44.get("fingerprint", "") or _cf_fingerprint_hf44)
                     st.session_state["site_hf44_cf_ok"] = True
                     st.success(
                         f"✅ Site publicado no Worker `{_cf_worker_hf44}`. "
                         f"Versão Cloudflare: `{_cf_resultado_hf44.get('version_id', 'confirmada')}` • "
-                        f"assets enviados agora: {_cf_resultado_hf44.get('assets_enviados', 0)}. HF51.3-HF1 ativo."
+                        f"assets enviados agora: {_cf_resultado_hf44.get('assets_enviados', 0)}. HF51.4 ativo."
                     )
                     st.link_button("🌐 Abrir alphafest.com.br para conferir", "https://alphafest.com.br", use_container_width=True)
                     st.caption("Se a conferência visual não estiver correta, o ZIP manual e as versões anteriores do Worker permanecem disponíveis para rollback.")
@@ -33071,7 +33071,7 @@ if pagina_atual == "catalogo":
             formulario_catalogo(None)
 
         with aba_lista:
-            # HF51.3-HF1 — edição rápida preservada e ampliada com controle do Carrossel.
+            # HF51.4 — edição rápida preservada + carrossel sazonal rápido.
             # Evita abrir o formulário completo produto por produto apenas para
             # PublicarSite / ExibirPrecoSite / Destaque. Nada é publicado no
             # domínio aqui: esta grade altera somente o Catálogo Oficial; o HF44
@@ -33125,6 +33125,87 @@ if pagina_atual == "catalogo":
                     "⭐ Destaque": bool(_prod_hf492.get("Destaque", False)),
                     "🎠 Carrossel": bool(_prod_hf492.get("CarrosselSite", False)),
                 })
+
+            # HF51.4 — atalhos de carrossel sazonal sem criar cadastro paralelo.
+            # Reaproveita CampanhasPermitidas do Catálogo Oficial e apenas marca/desmarca
+            # CarrosselSite. Nada é publicado automaticamente.
+            _hf514_campanhas = sorted({
+                str(camp).strip()
+                for _prod_hf514 in (catalogo or [])
+                for camp in ((_prod_hf514 or {}).get("CampanhasPermitidas") or [])
+                if str(camp or "").strip()
+                and str(camp or "").strip().casefold() not in {"permanente / todas as épocas", "permanente", "todas as épocas"}
+            }, key=lambda x: normalizar_identidade_produto(x))
+            if _hf514_campanhas:
+                st.markdown("##### 🎯 Carrossel sazonal rápido")
+                st.caption(
+                    "Escolha uma campanha já cadastrada nos produtos e preencha o carrossel com até 5 itens elegíveis em um clique. "
+                    "O auto-save altera somente o Catálogo Oficial; **não publica o site**."
+                )
+                _hf514_c1, _hf514_c2, _hf514_c3 = st.columns([2, 1, 1])
+                _hf514_campanha = _hf514_c1.selectbox(
+                    "Campanha/data",
+                    _hf514_campanhas,
+                    key="hf514_campanha_carrossel",
+                )
+                _hf514_aplicar = _hf514_c2.button(
+                    "🎠 Preencher carrossel",
+                    key="hf514_aplicar_carrossel",
+                    use_container_width=True,
+                )
+                _hf514_limpar = _hf514_c3.button(
+                    "🧹 Limpar carrossel",
+                    key="hf514_limpar_carrossel",
+                    use_container_width=True,
+                )
+                if _hf514_aplicar:
+                    _candidatos_hf514 = []
+                    _alvo_hf514 = normalizar_identidade_produto(_hf514_campanha)
+                    for _idx_hf514, _prod_hf514 in enumerate(catalogo or []):
+                        _permitidas_hf514 = [normalizar_identidade_produto(c) for c in ((_prod_hf514 or {}).get("CampanhasPermitidas") or [])]
+                        if _alvo_hf514 not in _permitidas_hf514:
+                            continue
+                        if not bool((_prod_hf514 or {}).get("PublicarSite", False)):
+                            continue
+                        _candidatos_hf514.append((
+                            0 if bool((_prod_hf514 or {}).get("Destaque", False)) else 1,
+                            normalizar_identidade_produto((_prod_hf514 or {}).get("Nome") or ""),
+                            _idx_hf514,
+                        ))
+                    _candidatos_hf514.sort()
+                    _selecionados_hf514 = {idx for _, _, idx in _candidatos_hf514[:5]}
+                    if not _selecionados_hf514:
+                        st.warning("Nenhum produto marcado para o site está elegível para esta campanha.")
+                    else:
+                        _catalogo_hf514 = [dict(p or {}) for p in (catalogo or [])]
+                        _agora_hf514 = agora_local().isoformat(timespec="seconds")
+                        for _idx_hf514, _registro_hf514 in enumerate(_catalogo_hf514):
+                            _registro_hf514["CarrosselSite"] = _idx_hf514 in _selecionados_hf514
+                            if _idx_hf514 in _selecionados_hf514:
+                                _registro_hf514["AtualizadoEm"] = _agora_hf514
+                                _registro_hf514["CarrosselSazonalHF51_4"] = {
+                                    "campanha": _hf514_campanha,
+                                    "quando": _agora_hf514,
+                                    "origem": "Produtos · carrossel sazonal rápido",
+                                }
+                        salvar_catalogo(_catalogo_hf514)
+                        catalogo[:] = _catalogo_hf514
+                        st.success(f"🎠 Carrossel preenchido com {len(_selecionados_hf514)} produto(s) de {_hf514_campanha}. Site ainda não publicado.")
+                        st.rerun()
+                elif _hf514_limpar:
+                    _catalogo_hf514 = [dict(p or {}) for p in (catalogo or [])]
+                    _mudou_hf514 = False
+                    for _registro_hf514 in _catalogo_hf514:
+                        if bool(_registro_hf514.get("CarrosselSite", False)):
+                            _registro_hf514["CarrosselSite"] = False
+                            _mudou_hf514 = True
+                    if _mudou_hf514:
+                        salvar_catalogo(_catalogo_hf514)
+                        catalogo[:] = _catalogo_hf514
+                        st.success("🧹 Carrossel limpo. O site continua inalterado até a publicação pelo HF44.")
+                        st.rerun()
+                    else:
+                        st.info("O carrossel já está sem marcações manuais.")
 
             _hf492_total_site = sum(1 for p in (catalogo or []) if bool((p or {}).get("PublicarSite", False)))
             _hf492_total_preco = sum(1 for p in (catalogo or []) if bool((p or {}).get("ExibirPrecoSite", False)))
