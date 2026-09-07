@@ -1236,3 +1236,10 @@ hangelog
 - Remove do carrossel público os selos “DESTAQUE ESCOLHIDO” e “Destaque AlphaFest”.
 - Mantém o controle de destaque/carrossel somente no Manager, sem expor informação técnica ao cliente.
 - Preserva seleção sazonal, loop, CTAs, visual aprovado e motor HF44.
+
+## 20.4.9-I8.13.5-HF51.4-HF2
+- Cabeçalho: incorpora o novo símbolo AlphaFest enviado pelo usuário, mantendo o escrito AlphaFest e o subtítulo no wordmark.
+- Hero: remove a linha redundante “AlphaFest · Personalizados & Balões”.
+- Hero Thu + Fox: caixas de benefícios reposicionadas/reduzidas para não sobrepor os mascotes.
+- Carrossel público: remove botão WhatsApp, categoria/subcategoria, descrição e qualquer sombreado/overlay; mantém somente imagem original, nome do produto e botão “Ver produto”.
+- Preserva HF44, busca inteligente, ficha comercial, Galeria, categorias, SEO/performance e loop contínuo.
