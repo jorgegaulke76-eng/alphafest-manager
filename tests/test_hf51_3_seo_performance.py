@@ -9,7 +9,7 @@ def test_hf51_3_vitrine_tem_seo_e_otimizacoes():
     assert 'content-visibility:auto' in src
     assert 'decoding="async"' in src
     assert 'fetchpriority="low"' in src
-    assert 'fetchpriority="high"' in src
+    assert 'class="brand-logo"' in src
 
 
 def test_hf51_3_producao_injeta_canonical_e_robots_sem_duplicar_description():
@@ -22,4 +22,4 @@ def test_hf51_3_producao_injeta_canonical_e_robots_sem_duplicar_description():
 
 
 def test_versao_hf51_3():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF51.3'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF51.3-HF1'

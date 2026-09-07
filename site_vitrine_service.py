@@ -379,7 +379,7 @@ def gerar_html_vitrine(
             </article>'''
         )
 
-    logo = f'<img class="brand-logo" src="{html.escape(str(logo_src), quote=True)}" alt="AlphaFest Personalizados e Balões" decoding="async" fetchpriority="high">' if logo_src else '<div class="brand-word">AlphaFest</div>'
+    logo = f'<img class="brand-logo" src="{html.escape(str(logo_src), quote=True)}" alt="AlphaFest">' if logo_src else '<div class="brand-word">AlphaFest</div>'
     if modo_preview:
         preview_bar = (
             '<div class="preview-bar">PRÉVIA INTERNA HF45.4-HF1 · CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'

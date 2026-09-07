@@ -33,8 +33,8 @@ def test_hf482_ativos_existem_e_manager_prepara_sob_demanda():
         assert caminho.exists()
         assert caminho.stat().st_size < 100_000
     app = Path("app.py").read_text(encoding="utf-8")
-    assert '"🛍️ Vitrine limpa + Ficha comercial do produto — HF51.3"' in app
-    assert '"🛍️ Preparar / atualizar HF51.3"' in app
+    assert '"🛍️ Vitrine limpa + Ficha comercial do produto — HF51.3-HF1"' in app
+    assert '"🛍️ Preparar / atualizar HF51.3-HF1"' in app
     assert "mascotes_hf48=True" in app
     bloco_prod = app.split('# HF44 — publicação assistida no Worker', 1)[1]
     chamada = bloco_prod.split('pacote_producao_hf44 =', 1)[0]

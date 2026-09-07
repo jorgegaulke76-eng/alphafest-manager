@@ -206,7 +206,7 @@ body{background:var(--hf48-bg)}
 .hf48-trust{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}.hf48-trust span{background:rgba(255,255,255,.82);border:1px solid #dce8f3;border-radius:999px;padding:8px 11px;font-size:12px;font-weight:800;color:#526a83}
 .hf48-wrap{max-width:1320px;margin:auto}.hf48-categories{background:#fff;padding:48px 24px}.hf48-section-heading{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:22px}.hf48-section-heading h2{font-size:34px;margin:4px 0 6px}.hf48-section-heading p{margin:0;color:#657a92}.hf48-kicker{color:var(--hf48-blue);font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:.09em}.hf48-text-link{border:0;background:transparent;color:var(--hf48-blue);font-weight:900;cursor:pointer;white-space:nowrap}.hf48-category-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.hf48-category-card{border:1px solid var(--hf48-border);background:#fff;border-radius:18px;padding:16px;display:flex;align-items:center;gap:12px;text-align:left;cursor:pointer;transition:.18s;box-shadow:0 6px 20px rgba(18,35,61,.035)}.hf48-category-card:hover{transform:translateY(-2px);border-color:#afd7f8;box-shadow:0 12px 28px rgba(18,35,61,.08)}.hf48-cat-icon{width:46px;height:46px;border-radius:14px;background:#edf8ff;display:flex;align-items:center;justify-content:center;font-size:23px}.hf48-category-card:nth-child(4n+1) .hf48-cat-icon{background:#e5f7ff}.hf48-category-card:nth-child(4n+2) .hf48-cat-icon{background:#ffe8f3}.hf48-category-card:nth-child(4n+3) .hf48-cat-icon{background:#fff6cc}.hf48-category-card:nth-child(4n) .hf48-cat-icon{background:#e8fff1}.hf48-hero-benefits{position:relative;z-index:3;display:grid;gap:8px;margin-top:14px;max-width:330px}.hf48-hero-benefit{display:flex;align-items:center;gap:10px;border:1px solid #e2ecf6;border-radius:999px;background:rgba(255,255,255,.90);padding:9px 12px;font-size:12px;font-weight:850;color:#173d66}.hf48-hero-benefit b{display:flex;width:28px;height:28px;border-radius:50%;align-items:center;justify-content:center;font-size:15px}.hf48-hero-benefit:nth-child(1) b{background:#ffe7f2}.hf48-hero-benefit:nth-child(2) b{background:#fff5c7}.hf48-hero-benefit:nth-child(3) b{background:#e4f7ff}.hf48-cat-copy{min-width:0;flex:1}.hf48-cat-copy strong{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hf48-cat-copy small{display:block;margin-top:4px;color:#75889e}.hf48-cat-arrow{font-size:24px;color:#9db1c5}
 .main{max-width:1320px;padding:48px 24px 76px}.section-head{margin-top:0}.section-head h2{font-size:34px}.toolbar{background:#fff;border:1px solid var(--hf48-border);padding:10px;border-radius:18px;box-shadow:0 8px 26px rgba(18,35,61,.04)}.search input{border:0;background:#f8fbfd;border-radius:12px}.taxonomy-step{border-color:var(--hf48-border);box-shadow:0 6px 20px rgba(18,35,61,.025)}
-/* HF51.3 — categorias já ficam na seção superior; evita repetição e overflow na vitrine. */
+/* HF51.3-HF1 — categorias já ficam na seção superior; evita repetição e overflow na vitrine. */
 .taxonomy-cats{display:none!important}
 .grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}.product-card{border-color:var(--hf48-border);border-radius:18px;box-shadow:0 8px 24px rgba(18,35,61,.055)}.product-card:hover{box-shadow:0 16px 32px rgba(18,35,61,.105)}.photo{aspect-ratio:1/1}.card-body{padding:15px}.card-body h3{font-size:17px}.card-body p{font-size:13px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}.cta.small{border-radius:11px}
 .site-section{padding-top:64px;padding-bottom:64px}.site-section.alt,.site-section.pink{background:#fff}.services-grid{gap:12px}.service-card{box-shadow:0 7px 22px rgba(18,35,61,.045);border-color:var(--hf48-border)}
@@ -236,7 +236,7 @@ body{background:var(--hf48-bg)}
 @media(max-width:1050px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-process-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:900px){.hf48-real-balloons{width:110px;left:-28px;top:94px}.hf48-header-search{display:none}.site-nav{top:87px}.hero-in{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.preview-bar{font-size:7px!important;line-height:1.15!important;padding:3px 6px!important;letter-spacing:.035em!important}.hf48-real-balloons{display:none}.hf48-topline{font-size:9px;padding:5px 8px}.header-in{padding:8px 12px}.site-nav{top:69px}.hero-in{padding:32px 14px 38px;row-gap:28px}.hero h1{font-size:38px}.hf48-categories{padding:34px 14px}.hf48-section-heading{align-items:flex-start;flex-direction:column}.hf48-section-heading h2{font-size:28px}.hf48-category-grid{grid-template-columns:1fr 1fr;gap:9px}.hf48-category-card{padding:11px;gap:8px}.hf48-cat-icon{width:38px;height:38px;font-size:19px}.hf48-cat-copy strong{font-size:12px}.hf48-cat-copy small{font-size:10px}.main{padding:34px 12px 52px}.grid{grid-template-columns:1fr}.hf48-process{padding:42px 14px}.hf48-process-grid{grid-template-columns:1fr}.photo{aspect-ratio:4/3}.hero-card.hf48-mascot-hero{min-height:455px;padding:26px 16px 245px;margin-top:4px}.hf48-hero-mascot-img{width:82%;right:7%;bottom:6px;max-height:250px}.hf48-mascot-hero .hf48-mascot-copy{max-width:none}.hf48-gallery-intro{margin:0 14px 18px;padding:12px}.hf48-gallery-intro img{width:80px;height:66px}.hf48-brand-cta{padding:0 14px 42px}.hf48-brand-cta-in{grid-template-columns:1fr;padding:22px}.hf48-brand-cta img{max-height:180px;order:-1}}
-/* HF51.3 — acabamento profissional: um único cabeçalho azul, sem efeito de banner empilhado */
+/* HF51.3-HF1 — acabamento profissional: um único cabeçalho azul, sem efeito de banner empilhado */
 .header{background:#0b8fdf;border:0;box-shadow:none;overflow:visible}
 .header-in{max-width:1320px;padding:8px 24px 6px;gap:24px;min-height:100px;overflow:visible}.brand{gap:0;min-height:84px;overflow:visible;flex:0 0 420px;display:flex;align-items:center}.brand-logo{width:410px;height:84px;object-fit:contain;object-position:left center;display:block;overflow:visible;filter:drop-shadow(0 3px 7px rgba(0,0,0,.12));border-radius:0}.brand-copy{display:none!important}
 .hf48-header-search{background:#fff;border:1px solid rgba(255,255,255,.88);box-shadow:0 3px 12px rgba(0,44,92,.10);margin-left:0;max-width:520px}.hf48-header-search input{color:#17324e}.header-actions .cta{box-shadow:0 6px 16px rgba(18,86,48,.20)}
@@ -246,10 +246,10 @@ body{background:var(--hf48-bg)}
 @media(max-width:1100px){.brand{flex-basis:340px}.brand-logo{width:332px;height:76px}.header-in{min-height:92px}.site-nav{top:92px}.hf50-carousel-slide{flex-basis:calc((100% - 14px)/2);min-height:220px}}
 @media(max-width:900px){.brand{flex-basis:260px}.brand-logo{width:252px;height:64px}.header-in{min-height:78px}.site-nav{top:78px}.hf48-header-search{display:none}.hf50-carousel-slide{flex-basis:calc((100% - 14px)/2);min-height:220px}}
 @media(max-width:620px){.hf48-topline{display:none!important}.header{background:#0b8fdf}.header-in{padding:5px 8px 4px;min-height:66px;gap:6px}.brand{flex:1 1 auto;min-width:0;min-height:56px}.brand-logo{width:min(190px,58vw);height:56px;object-fit:contain;object-position:left center}.header-actions{flex:0 0 auto}.header-actions .cta{padding:10px 11px;font-size:11px;white-space:nowrap}.site-nav{top:66px;background:#0b8fdf;border-top:1px solid rgba(255,255,255,.12);box-shadow:0 5px 12px rgba(5,62,117,.10)}.site-nav-in{background:transparent;overflow-x:auto;justify-content:flex-start;padding:0 6px;gap:0}.site-nav a,.site-nav button{font-size:11px;padding:10px 11px;white-space:nowrap}.hf50-carousel{padding:0 10px 20px;margin:0}.hf50-carousel-shell{border-radius:18px;padding:12px 42px 16px}.hf50-carousel-slide{flex-basis:100%;min-height:185px}.hf50-carousel-copy{padding:16px}.hf50-carousel-copy h2{font-size:22px}.hf50-carousel-arrow{width:34px;height:34px}.hf50-carousel-arrow.prev{left:5px}.hf50-carousel-arrow.next{right:5px}}
-/* HF51.3 — carrossel fixado exatamente entre o Hero e “Explore por categoria”. */
+/* HF51.3-HF1 — carrossel fixado exatamente entre o Hero e “Explore por categoria”. */
 .hf48-hero-branded + .hf50-carousel{margin-top:0!important;padding-top:0!important}
 .hf50-carousel + .hf48-categories{margin-top:0!important}
-/* HF51.3 — cabeçalho final aprovado: marca transparente sobre um único azul, sem emendas */
+/* HF51.3-HF1 — cabeçalho final aprovado: marca transparente sobre um único azul, sem emendas */
 .hf48-topline{display:none!important}
 .header{background:linear-gradient(90deg,#0878d7 0%,#079de5 58%,#10b4e8 100%)!important;border:0!important;box-shadow:none!important}
 .header-in{max-width:1400px!important;min-height:116px!important;padding:8px 28px!important;gap:28px!important;overflow:visible!important}
@@ -356,7 +356,7 @@ body{background:var(--hf48-bg)}
     )
 
     # Identifica a prévia corretamente sem alterar a produção.
-    preview_rotulo = 'PRÉVIA INTERNA HF51.3 · CABEÇALHO FINAL TRANSPARENTE + CARROSSEL PROMOCIONAL · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
+    preview_rotulo = 'PRÉVIA INTERNA HF51.3-HF1 · CABEÇALHO FINAL TRANSPARENTE + CARROSSEL PROMOCIONAL · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
     pagina = re.sub(r"<div\s+class=['\"]preview-bar['\"]>.*?</div>", f'<div class="preview-bar">{preview_rotulo}</div>', pagina, count=1, flags=re.S)
 
     js = r'''
@@ -380,7 +380,7 @@ body{background:var(--hf48-bg)}
     });
   });
 
-  // HF51.3 — carrossel em loop infinito real: autoplay sempre avança no mesmo sentido.
+  // HF51.3-HF1 — carrossel em loop infinito real: autoplay sempre avança no mesmo sentido.
   const shell=document.querySelector('.hf50-carousel-shell');
   if(shell){
     const track=shell.querySelector('.hf50-carousel-track');
@@ -457,7 +457,7 @@ body{background:var(--hf48-bg)}
     paint(false); start();
   }
 
-  // HF51.3 — menu mobile enxuto: 4 destinos principais + “Mais”.
+  // HF51.3-HF1 — menu mobile enxuto: 4 destinos principais + “Mais”.
   const mobileNav=document.querySelector('.site-nav-in');
   if(mobileNav && !mobileNav.querySelector('.hf50-mobile-more')){
     const hiddenLabels=new Set(['Serviços','Quem Somos','Contato']);
