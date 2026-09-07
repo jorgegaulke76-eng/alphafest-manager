@@ -17,6 +17,7 @@ from urllib.parse import quote
 from site_vitrine_service import gerar_html_vitrine
 from site_galeria_service import gerar_fragmento_galeria, selecionar_trabalhos_site
 from site_visual_hf48_service import aplicar_visual_hf48
+from site_metrics_service import inject_tracking
 
 ImagemResolver = Optional[Callable[[str], str]]
 
@@ -235,4 +236,6 @@ def gerar_html_site_completo(
             usar_mascotes=mascotes_hf48,
             imagem_resolver=imagem_resolver,
         )
+    # HF52.1: somente a versão pública coleta métricas. Prévia interna não conta acesso.
+    pagina = inject_tracking(pagina, enabled=not modo_preview)
     return pagina

@@ -1243,3 +1243,18 @@ hangelog
 - Hero Thu + Fox: caixas de benefícios reposicionadas/reduzidas para não sobrepor os mascotes.
 - Carrossel público: remove botão WhatsApp, categoria/subcategoria, descrição e qualquer sombreado/overlay; mantém somente imagem original, nome do produto e botão “Ver produto”.
 - Preserva HF44, busca inteligente, ficha comercial, Galeria, categorias, SEO/performance e loop contínuo.
+
+## 20.4.9-I8.13.5-HF51.5 — acabamento técnico final
+- Acrescenta dados estruturados JSON-LD de Organization + WebSite no pacote público.
+- Acrescenta meta theme-color, application-name e author sem impacto visual.
+- Enriquece sitemap com lastmod/changefreq/priority.
+- Preserva integralmente o visual HF51.4-HF3 e o motor seguro de publicação HF44.
+
+
+## 20.4.9-I8.13.5-HF52.1 — métricas privadas do site
+- painel privado na Central do Site para acessos, produtos abertos e cliques no WhatsApp;
+- rankings comerciais de 30 dias;
+- coleta pública mínima e anônima em tabela dedicada do Supabase;
+- SELECT público bloqueado; leitura somente via credencial de servidor do Manager;
+- prévias internas não entram nas métricas;
+- nenhuma publicação automática: HF44 preservado.

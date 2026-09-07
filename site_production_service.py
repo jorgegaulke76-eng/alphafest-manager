@@ -37,6 +37,40 @@ def preparar_html_producao(html_site: str) -> str:
         metas.append('<meta name="format-detection" content="telephone=no">')
     if 'rel="dns-prefetch" href="https://wa.me"' not in pagina:
         metas.append('<link rel="dns-prefetch" href="https://wa.me">')
+    if 'name="theme-color"' not in pagina:
+        metas.append('<meta name="theme-color" content="#0796e8">')
+    if 'name="application-name"' not in pagina:
+        metas.append('<meta name="application-name" content="AlphaFest">')
+    if 'name="author"' not in pagina:
+        metas.append('<meta name="author" content="AlphaFest Itatiba">')
+
+    # HF51.5 — dados estruturados sem impacto visual. Ajuda buscadores a entenderem
+    # a marca e o site oficial sem inventar endereço, telefone ou horário comercial.
+    schema = {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "Organization",
+                "@id": f"https://{DOMINIO_FINAL}/#organization",
+                "name": "AlphaFest",
+                "alternateName": "AlphaFest Itatiba",
+                "url": f"https://{DOMINIO_FINAL}/",
+                "description": "Personalizados, balões, gráfica rápida, brindes, impressão 3D, gravação a laser e soluções sob medida para festas, presentes e marcas.",
+            },
+            {
+                "@type": "WebSite",
+                "@id": f"https://{DOMINIO_FINAL}/#website",
+                "url": f"https://{DOMINIO_FINAL}/",
+                "name": "AlphaFest",
+                "inLanguage": "pt-BR",
+                "publisher": {"@id": f"https://{DOMINIO_FINAL}/#organization"},
+            },
+        ],
+    }
+    schema_tag = '<script type="application/ld+json">' + json.dumps(schema, ensure_ascii=False, separators=(",", ":")) + '</script>'
+    if 'id="alphafest-structured-data"' not in pagina and '"@id":"https://alphafest.com.br/#organization"' not in pagina:
+        schema_tag = schema_tag.replace('<script ', '<script id="alphafest-structured-data" ', 1)
+        metas.append(schema_tag)
 
     bloco = ''.join(metas)
     if bloco:
@@ -98,14 +132,15 @@ def gerar_pacote_producao(
     })
 
     robots = f"User-agent: *\nAllow: /\nSitemap: https://{DOMINIO_FINAL}/sitemap.xml\n"
-    sitemap = f'''<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url><loc>https://{DOMINIO_FINAL}/</loc></url>\n</urlset>\n'''
+    hoje = datetime.now(timezone.utc).date().isoformat()
+    sitemap = f'''<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://{DOMINIO_FINAL}/</loc>\n    <lastmod>{hoje}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>\n'''
     headers = """/*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   X-Frame-Options: SAMEORIGIN
 """
-    readme = f"""ALPHAFEST — PACOTE DE PRODUÇÃO HF51.4
+    readme = f"""ALPHAFEST — PACOTE DE PRODUÇÃO HF51.5
 
 Destino: Worker {PROJETO_WORKER}
 Domínio principal: https://{DOMINIO_FINAL}
@@ -116,7 +151,7 @@ O QUE MUDA NESTE PACOTE
 - Libera indexação pública (robots + meta robots).
 - Inclui canonical e sitemap do domínio oficial.
 - Mantém a mesma Fonte Única do Catálogo e os CTAs/WhatsApp homologados.
-- Publica o HF51.4 · SEO + velocidade sem alterar o visual aprovado: metadados sociais, canonical, indexação, lazy loading/decodificação assíncrona e renderização eficiente dos cards.
+- Publica o HF51.5 · acabamento técnico final sem alterar o visual aprovado: metadados sociais, canonical, indexação, lazy loading/decodificação assíncrona e renderização eficiente dos cards.
 - Inclui a Galeria autorizada/pré-selecionada, com filtros por Categoria, Subcategoria e Tema.
 - Liga automaticamente cada produto aos trabalhos reais já selecionados na Galeria, sem novo cadastro.
 - O carrossel usa o controle CarrosselSite do mesmo Catálogo; sem seleção, usa Destaques apenas como fallback visual.

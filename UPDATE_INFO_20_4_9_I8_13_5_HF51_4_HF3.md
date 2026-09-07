@@ -1,4 +1,4 @@
-# 20.4.9-I8.13.5-HF51.4-HF3 — correção definitiva do logo do cabeçalho
+# 20.4.9-I8.13.5-HF51.5 — correção definitiva do logo do cabeçalho
 
 ## Correção
 - recompõe o cabeçalho com o símbolo novo AlphaFest enviado pela equipe + wordmark “AlphaFest” limpo;

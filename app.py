@@ -34,6 +34,7 @@ from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_T
 from site_manager_service import resumir_catalogo_site as _site_resumir_catalogo, ordenar_produtos_site as _site_ordenar_produtos
 from site_vitrine_service import resumir_vitrine as _site_resumir_vitrine
 from site_completo_service import gerar_html_site_completo as _site_gerar_html_completo
+from site_metrics_service import dashboard_summary as _site_metrics_summary, tracking_available as _site_metrics_tracking_available, server_config as _site_metrics_server_config
 from site_galeria_service import resumir_galeria_site as _site_resumir_galeria
 from site_staging_service import gerar_pacote_staging as _site_gerar_pacote_staging, resumo_staging as _site_resumo_staging
 from site_cutover_service import gerar_kit_pre_virada as _site_gerar_kit_pre_virada, resumo_pre_virada as _site_resumo_pre_virada
@@ -25569,6 +25570,45 @@ if pagina_atual == "site":
         "Por padrão o preço fica oculto no site; cada produto decide no Catálogo se o valor deve aparecer na vitrine."
     )
 
+
+    # HF52.1 — métricas privadas, visíveis somente para perfil técnico/administrador.
+    if pode_executar_acoes_tecnicas(obter_usuario_atual()):
+        with st.expander("📊 Métricas privadas do Site · HF52.1", expanded=False):
+            st.caption("Somente usuários autorizados do Manager veem este painel. A prévia interna não é contabilizada.")
+            _metrics_server = _site_metrics_server_config()
+            if not _site_metrics_tracking_available():
+                st.warning("Rastreamento ainda não ativo: configure SUPABASE_KEY (publishable/anon) nos Secrets do Manager.")
+            elif not (_metrics_server.get("url") and _metrics_server.get("key")):
+                st.warning("Leitura privada requer SUPABASE_SERVICE_KEY no servidor do Manager.")
+            else:
+                try:
+                    _m = _site_metrics_summary()
+                    _mc1, _mc2, _mc3 = st.columns(3)
+                    _mc1.metric("Acessos · 30 dias", _m.get("pageviews_30d", 0), help=f"Últimas 24h: {_m.get('pageviews_24h',0)} · 7 dias: {_m.get('pageviews_7d',0)}")
+                    _mc2.metric("Produtos abertos · 30 dias", _m.get("product_30d", 0))
+                    _mc3.metric("Cliques no WhatsApp · 30 dias", _m.get("whatsapp_30d", 0))
+                    st.caption(f"Sessões estimadas: {_m.get('sessions_30d',0)} • Visitantes estimados: {_m.get('visitors_30d',0)}")
+                    _ta, _tb = st.columns(2)
+                    with _ta:
+                        st.markdown("**Produtos mais abertos · 30 dias**")
+                        if _m.get("top_products"):
+                            for _nome, _qtd in _m["top_products"]:
+                                st.write(f"{_nome} — **{_qtd}**")
+                        else:
+                            st.caption("Ainda sem cliques registrados.")
+                    with _tb:
+                        st.markdown("**Produtos que mais levaram ao WhatsApp · 30 dias**")
+                        if _m.get("top_whatsapp_products"):
+                            for _nome, _qtd in _m["top_whatsapp_products"]:
+                                st.write(f"{_nome} — **{_qtd}**")
+                        else:
+                            st.caption("Ainda sem cliques registrados.")
+                except LookupError:
+                    st.info("A estrutura de métricas ainda precisa ser criada uma única vez no Supabase. Use o arquivo SUPABASE_SITE_METRICS_HF52_1.sql incluído na atualização.")
+                except Exception as _metrics_exc:
+                    st.warning("Não foi possível carregar as métricas agora. O restante do Manager continua normal.")
+                    st.caption(str(_metrics_exc)[:220])
+
     st.success(
         "✨ **HF40 · Site completo:** Início · Produtos · Serviços · Quem Somos · Contato. "
         "A essência institucional e os tipos de serviço do site antigo foram reorganizados no novo padrão visual; "
@@ -26016,7 +26056,7 @@ if pagina_atual == "site":
             pacote_producao_hf44 = _site_gerar_pacote_producao(
                 html_producao_hf44,
                 total_produtos=resumo_vitrine_hf36.get("total", 0),
-                versao_manager="20.4.9-I8.13.5-HF51.4-HF3",
+                versao_manager="20.4.9-I8.13.5-HF52.1",
             )
 
             # Fallback/manual continua disponível para rollback e contingência.
@@ -26130,7 +26170,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf44,
                             api_token=_cf_token_hf44,
                             worker_name=_cf_worker_hf44,
-                            versao_manager="20.4.9-I8.13.5-HF51.4-HF3",
+                            versao_manager="20.4.9-I8.13.5-HF52.1",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(_cf_resultado_hf44.get("fingerprint", "") or _cf_fingerprint_hf44)
                     st.session_state["site_hf44_cf_ok"] = True

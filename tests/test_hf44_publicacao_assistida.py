@@ -129,7 +129,7 @@ class HF44PublicacaoAssistidaTests(unittest.TestCase):
         self.assertIn('"🚀 Publicar site agora"', app)
         self.assertIn('"🔎 Testar conexão sem publicar"', app)
         self.assertIn("alphafest-site-producao-hf51-1.zip", app)
-        self.assertIn('versao_manager="20.4.9-I8.13.5-HF51.4-HF3"', app)
+        self.assertIn('versao_manager="20.4.9-I8.13.5-HF51.5"', app)
         self.assertIn("não é gravado em JSON", app)
 
 
