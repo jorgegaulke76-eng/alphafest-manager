@@ -1,4 +1,4 @@
-# HF51.1-HF2 — Ficha comercial refinada
+# HF51.2 — Ficha comercial refinada
 
 - Mantém a vitrine pública limpa: foto + nome do produto.
 - Na ficha aberta, o preço aparece em bloco destacado somente quando “Mostrar preço” estiver ativo no Manager.

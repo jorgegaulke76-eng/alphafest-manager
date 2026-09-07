@@ -1,10 +1,15 @@
-## 20.4.9-I8.13.5-HF51.1-HF2 — Categorias sem repetição na vitrine
+## 20.4.9-I8.13.5-HF51.2 — Busca inteligente da vitrine
+- Busca por nome, categoria, subcategoria, descrição, material, processos, aliases, variações, campanhas, tema, ocasião e tags.
+- Pequenos erros de digitação passam a ser tolerados no navegador, sem serviço externo.
+- Cabeçalho, vitrine limpa, ficha comercial, Galeria, carrossel e publicação HF44 preservados.
+
+## 20.4.9-I8.13.5-HF51.2 — Categorias sem repetição na vitrine
 - Remove visualmente o segundo bloco “Escolha uma categoria” da área de produtos no visual HF51, mantendo as categorias somente em “Explore por categoria”.
 - Ao selecionar uma categoria no bloco superior, a vitrine continua exibindo categoria escolhida, subcategorias e produtos filtrados, com “← Voltar às categorias”.
 - Elimina a largura excedente/rolagem horizontal causada pela repetição dos chips de categoria.
 - Preserva ficha comercial HF51.1-HF1, carrossel, Galeria, Produto → Galeria, edição rápida e motor HF44.
 
-## 20.4.9-I8.13.5-HF51.1-HF2 — Vitrine limpa + ficha comercial do produto
+## 20.4.9-I8.13.5-HF51.2 — Vitrine limpa + ficha comercial do produto
 - Cards públicos agora mostram somente foto e nome do produto.
 - Selo “Destaque” não aparece mais nos cards do site; continua sendo controle interno/Carrossel do Manager.
 - Descrição, preço e CTA saem da grade e aparecem somente ao abrir o produto.
@@ -12,7 +17,7 @@
 - Clique no produto abre foto ampliada, descrição completa, WhatsApp, trabalhos realizados quando houver e relacionados da mesma categoria/subcategoria.
 - HF50.1-HF9/HF10, carrossel, cabeçalho, Galeria, Produto → Galeria, edição rápida e motor HF44 preservados.
 
-## 20.4.9-I8.13.5-HF51.1-HF2 — Menu mobile final
+## 20.4.9-I8.13.5-HF51.2 — Menu mobile final
 - Mobile mostra Início, Categorias, Produtos e Galeria.
 - Serviços, Quem Somos e Contato ficam em “☰ Mais”.
 - Remove rolagem horizontal do menu sem alterar o desktop.

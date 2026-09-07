@@ -1,4 +1,4 @@
-# HF51.1-HF2 — Categorias sem repetição na vitrine
+# HF51.2 — Categorias sem repetição na vitrine
 
 ## O que muda
 - A seleção de categorias fica somente no bloco superior **Explore por categoria**.

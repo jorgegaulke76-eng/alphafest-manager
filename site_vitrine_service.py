@@ -14,6 +14,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional
 from urllib.parse import quote
 
 from site_manager_service import avaliar_produto_site
+from catalogo_orcamento_service import aliases_catalogo_atomicos
 
 
 ImagemResolver = Optional[Callable[[str], str]]
@@ -152,6 +153,10 @@ def selecionar_produtos_vitrine(
         item["material"] = str(produto.get("Material") or "").strip()
         item["processos"] = _lista(produto.get("Processos") or produto.get("Processo") or produto.get("processos"))
         item["campanhas"] = _lista(produto.get("Campanhas"))
+        item["aliases"] = aliases_catalogo_atomicos(produto)
+        item["temas_busca"] = _lista(produto.get("Temas") or produto.get("Tema"))
+        item["ocasioes_busca"] = _lista(produto.get("Ocasioes") or produto.get("Ocasiões") or produto.get("Ocasiao") or produto.get("Ocasião"))
+        item["tags_busca"] = _lista(produto.get("Tags") or produto.get("PalavrasChave") or produto.get("Palavras-chave"))
         item["carrossel_site"] = bool(produto.get("CarrosselSite", False))
         item["categoria_origem"] = str(item.get("categoria") or "").strip()
         item["categoria_comercial"] = categoria_comercial_produto(item)
@@ -343,12 +348,22 @@ def gerar_html_vitrine(
             opcoes_html = f'<div class="options"><strong>Opções:</strong> {html.escape(texto_opcoes)}</div>'
         msg = quote(f"Olá! Vim pelo site da AlphaFest e gostaria de um orçamento para: {nome}. Quero definir tamanho/personalização, cor, quantidade, material e prazo.")
         href = f"https://wa.me/{numero}?text={msg}" if numero else "#"
-        busca = " ".join([nome, descricao, categoria, categoria_origem, subcategoria_publica, item.get("subcategoria") or "", item.get("material") or "", " ".join(item.get("processos") or [])])
+        busca = " ".join([
+            nome, descricao, categoria, categoria_origem, subcategoria_publica,
+            item.get("subcategoria") or "", item.get("material") or "",
+            " ".join(item.get("processos") or []),
+            " ".join(item.get("variacoes") or []),
+            " ".join(item.get("campanhas") or []),
+            " ".join(item.get("aliases") or []),
+            " ".join(item.get("temas_busca") or []),
+            " ".join(item.get("ocasioes_busca") or []),
+            " ".join(item.get("tags_busca") or []),
+        ])
         busca = unicodedata.normalize("NFKD", busca).encode("ascii", "ignore").decode("ascii").casefold()
         produto_slug = _slug(nome)
         sub_data = html.escape(_slug(subcategoria_publica), quote=True) if subcategoria_publica else ""
         tem_galeria = produto_slug in produtos_galeria_slugs
-        # HF51.1-HF2 — vitrine limpa: na listagem pública aparece somente a foto +
+        # HF51.2 — vitrine limpa: na listagem pública aparece somente a foto +
         # nome. Destaque, descrição, preço, opções e CTA ficam exclusivamente
         # na ficha aberta pelo cliente.
         cards.append(
@@ -375,7 +390,7 @@ def gerar_html_vitrine(
         preview_bar = ""
     vazio = '<div class="empty">Nenhum produto pronto está marcado para o site.</div>' if not cards else ""
     rotulo_categorias = "categorias do Catálogo" if usar_taxonomia_catalogo else "categorias comerciais"
-    texto_escolha = "Pesquise ou escolha uma categoria e depois uma subcategoria." if usar_taxonomia_catalogo else "Pesquise ou escolha uma categoria."
+    texto_escolha = "Pesquise por nome, tema, material ou ocasião — ou escolha uma categoria e depois uma subcategoria." if usar_taxonomia_catalogo else "Pesquise ou escolha uma categoria."
 
     if usar_taxonomia_catalogo:
         script_filtros = r"""
@@ -393,7 +408,31 @@ def gerar_html_vitrine(
   const backButton=document.getElementById('taxonomy-back');
   const subbuttons=[...document.querySelectorAll('.subfilter')];
   const catbuttons=[...document.querySelectorAll('.filter')];
-  function norm(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}
+  function norm(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}
+  function editDistance(a,b,maxDist){
+    if(Math.abs(a.length-b.length)>maxDist)return maxDist+1;
+    let prev=Array.from({length:b.length+1},(_,i)=>i);
+    for(let i=1;i<=a.length;i++){
+      const cur=[i]; let rowMin=cur[0];
+      for(let j=1;j<=b.length;j++){
+        const cost=a[i-1]===b[j-1]?0:1;
+        cur[j]=Math.min(cur[j-1]+1,prev[j]+1,prev[j-1]+cost);
+        rowMin=Math.min(rowMin,cur[j]);
+      }
+      if(rowMin>maxDist)return maxDist+1; prev=cur;
+    }
+    return prev[b.length];
+  }
+  function smartMatch(haystack,query){
+    const h=norm(haystack), q=norm(query); if(!q)return true; if(h.includes(q))return true;
+    const hw=h.split(' ').filter(Boolean), qw=q.split(' ').filter(Boolean);
+    return qw.every(token=>hw.some(word=>{
+      if(word.includes(token)||token.includes(word))return true;
+      if(token.length>=3 && word.startsWith(token.slice(0,Math.min(3,token.length))))return true;
+      const lim=token.length>=7?2:(token.length>=4?1:0);
+      return lim>0 && editDistance(word,token,lim)<=lim;
+    }));
+  }
   function updateCurrent(){
     if(!current)return;
     if(cat==='todos') current.innerHTML='<strong>Todos os produtos</strong><span>Escolha uma categoria para ver as subcategorias.</span>';
@@ -422,7 +461,7 @@ def gerar_html_vitrine(
     cards.forEach(c=>{
       const okCat=cat==='todos'||c.dataset.cat===cat;
       const okSub=sub==='todos'||c.dataset.sub===sub;
-      const okQ=!q||norm(c.dataset.search).includes(q);
+      const okQ=smartMatch(c.dataset.search,q);
       const ok=okCat&&okSub&&okQ;
       c.style.display=ok?'flex':'none'; if(ok)n++;
     });
@@ -453,10 +492,10 @@ def gerar_html_vitrine(
 """
     else:
         script_filtros = r"""
-(function(){let cat='todos';const cards=[...document.querySelectorAll('.product-card')];const input=document.getElementById('search');const count=document.getElementById('result-count');function norm(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}function apply(){const q=norm(input.value);let n=0;cards.forEach(c=>{const okCat=cat==='todos'||c.dataset.cat===cat;const okQ=!q||norm(c.dataset.search).includes(q);const ok=okCat&&okQ;c.style.display=ok?'flex':'none';if(ok)n++;});count.textContent=n+' produto(s)';}document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');cat=b.dataset.cat;apply();}));input.addEventListener('input',apply);apply();})();
+(function(){let cat='todos';const cards=[...document.querySelectorAll('.product-card')];const input=document.getElementById('search');const count=document.getElementById('result-count');function norm(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}function dist(a,b,m){if(Math.abs(a.length-b.length)>m)return m+1;let p=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){let c=[i],r=i;for(let j=1;j<=b.length;j++){const z=a[i-1]===b[j-1]?0:1;c[j]=Math.min(c[j-1]+1,p[j]+1,p[j-1]+z);r=Math.min(r,c[j]);}if(r>m)return m+1;p=c;}return p[b.length];}function match(h,q){h=norm(h);q=norm(q);if(!q||h.includes(q))return true;const hw=h.split(' '),qw=q.split(' ');return qw.every(t=>hw.some(w=>w.includes(t)||t.includes(w)||(t.length>=3&&w.startsWith(t.slice(0,3)))||(t.length>=4&&dist(w,t,t.length>=7?2:1)<=(t.length>=7?2:1))));}function apply(){const q=input.value;let n=0;cards.forEach(c=>{const okCat=cat==='todos'||c.dataset.cat===cat;const okQ=match(c.dataset.search,q);const ok=okCat&&okQ;c.style.display=ok?'flex':'none';if(ok)n++;});count.textContent=n+' produto(s)';}document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');cat=b.dataset.cat;apply();}));input.addEventListener('input',apply);apply();})();
 """
 
-    # HF51.1-HF2 — ficha comercial: preço em destaque quando autorizado, CTAs antes da descrição e relacionados preservados.
+    # HF51.2 — ficha comercial: preço em destaque quando autorizado, CTAs antes da descrição e relacionados preservados.
     product_detail_script = r'''<script>
 (function(){
   const modal=document.getElementById('product-detail-modal');
@@ -550,7 +589,7 @@ def gerar_html_vitrine(
 <body>{preview_bar}
 <header class="header"><div class="header-in"><a class="brand" href="#inicio">{logo}<div class="brand-copy"><strong>{html.escape(nome_empresa)}</strong><span>{html.escape(subtitulo)}</span></div></a><div class="header-actions"><a class="ghost" href="#produtos">Ver produtos</a><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Falar no WhatsApp</a></div></div></header>
 <section class="hero" id="inicio"><div class="hero-in"><div><div class="eyebrow">Personalização que vira presença</div><h1>Seu evento, sua marca, <span>do seu jeito.</span></h1><p>{html.escape(slogan)} Escolha uma ideia na vitrine e fale com a AlphaFest para personalizar detalhes, quantidade e prazo.</p><div class="hero-actions"><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Explorar produtos ↓</a></div></div><aside class="hero-card"><div class="eyebrow">Vitrine AlphaFest</div><h2>Personalizados & Balões</h2><p>Ideias selecionadas para você encontrar uma referência e pedir seu orçamento.</p><div class="hero-stat"><div class="stat"><strong>{resumo['total']}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{resumo['total_categorias']}</strong><span>{html.escape(rotulo_categorias)}</span></div></div></aside></div></section>
-<main class="main" id="produtos"><div class="section-head"><div><h2>Encontre seu personalizado</h2><p>{html.escape(texto_escolha)}</p></div><div id="result-count">{resumo['total']} produto(s)</div></div><div class="toolbar"><label class="search"><input id="search" type="search" placeholder="Buscar produto, categoria, subcategoria ou descrição..."></label></div>{('<div class="taxonomy-nav"><section class="taxonomy-focus" id="taxonomy-focus" hidden><button type="button" class="taxonomy-back" id="taxonomy-back">← Voltar às categorias</button><div class="taxonomy-focus-copy"><small>Categoria escolhida</small><strong id="taxonomy-focus-label">Categoria</strong></div></section><section class="taxonomy-step taxonomy-cats" id="taxonomy-cats"><div class="taxonomy-heading"><div><span class="step-number">1</span><strong>Escolha uma categoria</strong></div><small>Selecione uma categoria para ver somente os produtos e subcategorias dela.</small></div><div class="filters">' + ''.join(chips) + '</div></section>' + subfilters_html + '<div class="taxonomy-current" id="taxonomy-current"><strong>Todos os produtos</strong><span>Escolha uma categoria para ver as subcategorias.</span></div></div>') if usar_taxonomia_catalogo else ('<div class="filters">' + ''.join(chips) + '</div>')}<div class="grid" id="grid">{''.join(cards)}</div>{vazio}</main>
+<main class="main" id="produtos"><div class="section-head"><div><h2>Encontre seu personalizado</h2><p>{html.escape(texto_escolha)}</p></div><div id="result-count">{resumo['total']} produto(s)</div></div><div class="toolbar"><label class="search"><input id="search" type="search" placeholder="Buscar produto, tema, material, ocasião, categoria..."></label></div>{('<div class="taxonomy-nav"><section class="taxonomy-focus" id="taxonomy-focus" hidden><button type="button" class="taxonomy-back" id="taxonomy-back">← Voltar às categorias</button><div class="taxonomy-focus-copy"><small>Categoria escolhida</small><strong id="taxonomy-focus-label">Categoria</strong></div></section><section class="taxonomy-step taxonomy-cats" id="taxonomy-cats"><div class="taxonomy-heading"><div><span class="step-number">1</span><strong>Escolha uma categoria</strong></div><small>Selecione uma categoria para ver somente os produtos e subcategorias dela.</small></div><div class="filters">' + ''.join(chips) + '</div></section>' + subfilters_html + '<div class="taxonomy-current" id="taxonomy-current"><strong>Todos os produtos</strong><span>Escolha uma categoria para ver as subcategorias.</span></div></div>') if usar_taxonomia_catalogo else ('<div class="filters">' + ''.join(chips) + '</div>')}<div class="grid" id="grid">{''.join(cards)}</div>{vazio}</main>
 <div class="product-detail-modal" id="product-detail-modal" hidden aria-hidden="true">
   <div class="product-detail-backdrop" data-product-close></div>
   <section class="product-detail-panel" role="dialog" aria-modal="true" aria-labelledby="product-detail-name">
