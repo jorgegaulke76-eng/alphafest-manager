@@ -126,9 +126,9 @@ class HF43CategoriasComerciaisTests(unittest.TestCase):
     def test_manager_expoe_hf43_sem_criar_segunda_fonte(self):
         app = Path("app.py").read_text(encoding="utf-8")
         self.assertIn("HF43 · Categorias comerciais", app)
-        self.assertIn('"🚀 Produção oficial — HF51.4-HF2 · motor HF44"', app)
+        self.assertIn('"🚀 Produção oficial — HF51.4-HF3 · motor HF44"', app)
         self.assertIn("alphafest-site-producao-hf51-1.zip", app)
-        self.assertIn('versao_manager="20.4.9-I8.13.5-HF51.4-HF2"', app)
+        self.assertIn('versao_manager="20.4.9-I8.13.5-HF51.4-HF3"', app)
         self.assertNotIn('save_document("site_categoria', app)
 
 

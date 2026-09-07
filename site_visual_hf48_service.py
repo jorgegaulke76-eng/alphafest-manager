@@ -1,4 +1,4 @@
-"""HF48 — camada visual comercial do site AlphaFest (HF51.4-HF2 · base visual HF48.3-HF4).
+"""HF48 — camada visual comercial do site AlphaFest (HF51.4-HF3 · base visual HF48.3-HF4).
 
 Aplica somente apresentação/UX sobre o HTML já gerado pelos serviços HF40-HF47.
 Não altera Catálogo, Galeria, publicação Cloudflare, dados ou Fonte Única.
@@ -350,7 +350,7 @@ body{background:var(--hf48-bg)}
     )
 
     # Identifica a prévia corretamente sem alterar a produção.
-    preview_rotulo = 'PRÉVIA INTERNA HF51.4-HF2 · CABEÇALHO FINAL TRANSPARENTE + CARROSSEL PROMOCIONAL · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
+    preview_rotulo = 'PRÉVIA INTERNA HF51.4-HF3 · CABEÇALHO FINAL TRANSPARENTE + CARROSSEL PROMOCIONAL · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
     pagina = re.sub(r"<div\s+class=['\"]preview-bar['\"]>.*?</div>", f'<div class="preview-bar">{preview_rotulo}</div>', pagina, count=1, flags=re.S)
 
     js = r'''
