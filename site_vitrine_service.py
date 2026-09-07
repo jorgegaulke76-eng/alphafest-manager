@@ -338,7 +338,7 @@ def gerar_html_vitrine(
                 if not img.startswith(("http://", "https://", "data:image/")):
                     img = ""
         imagem_html = (
-            f'<img src="{html.escape(img, quote=True)}" alt="{html.escape(nome, quote=True)}" loading="lazy">'
+            f'<img src="{html.escape(img, quote=True)}" alt="{html.escape(nome, quote=True)}" loading="lazy" decoding="async" fetchpriority="low">'
             if img else '<div class="placeholder">AlphaFest</div>'
         )
         opcoes = item.get("variacoes") or []
@@ -379,7 +379,7 @@ def gerar_html_vitrine(
             </article>'''
         )
 
-    logo = f'<img class="brand-logo" src="{html.escape(str(logo_src), quote=True)}" alt="AlphaFest">' if logo_src else '<div class="brand-word">AlphaFest</div>'
+    logo = f'<img class="brand-logo" src="{html.escape(str(logo_src), quote=True)}" alt="AlphaFest Personalizados e Balões" decoding="async" fetchpriority="high">' if logo_src else '<div class="brand-word">AlphaFest</div>'
     if modo_preview:
         preview_bar = (
             '<div class="preview-bar">PRÉVIA INTERNA HF45.4-HF1 · CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
@@ -532,7 +532,7 @@ def gerar_html_vitrine(
     rel.forEach(function(r){
       const b=document.createElement('button'); b.type='button'; b.className='product-related-card';
       const src=r.dataset.detailImage||'';
-      b.innerHTML=(src?'<img src="'+esc(src)+'" alt="">':'')+'<span>'+esc(r.dataset.detailName||'Produto')+'</span>';
+      b.innerHTML=(src?'<img src="'+esc(src)+'" alt="" loading="lazy" decoding="async" fetchpriority="low">':'')+'<span>'+esc(r.dataset.detailName||'Produto')+'</span>';
       b.addEventListener('click',function(){open(r);}); relatedGrid.appendChild(b);
     });
     related.hidden=!rel.length;
@@ -557,6 +557,13 @@ def gerar_html_vitrine(
     return f'''<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(nome_empresa)} · {html.escape(subtitulo)}</title>
+<meta name="description" content="AlphaFest Itatiba: personalizados, balões, gráfica rápida, brindes, impressão 3D, gravação a laser e soluções sob medida para festas, presentes e marcas.">
+<meta name="theme-color" content="#079de0">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AlphaFest">
+<meta property="og:title" content="AlphaFest · Personalizados &amp; Balões">
+<meta property="og:description" content="Personalizados, balões, gráfica rápida, brindes e soluções sob medida para festas, presentes e marcas.">
+<meta name="twitter:card" content="summary_large_image">
 <style>
 :root{{--blue:#0b67c6;--cyan:#2db7e5;--pink:#f44f8d;--ink:#14253d;--soft:#f4faff;--line:#dbe9f5;--green:#25d366}}
 *{{box-sizing:border-box}} html{{scroll-behavior:smooth}} body{{margin:0;font-family:Inter,Arial,Helvetica,sans-serif;color:var(--ink);background:#fff}}
@@ -580,7 +587,7 @@ def gerar_html_vitrine(
 .photo{{position:relative;background:var(--soft);aspect-ratio:4/3;overflow:hidden}} .photo img{{width:100%;height:100%;object-fit:cover;display:block}} .placeholder{{height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:900;color:#84a9ca}} .badge{{position:absolute;top:12px;left:12px;background:#fff;color:#a26100;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:900;box-shadow:0 3px 12px rgba(0,0,0,.12)}}
 .gallery-proof-btn{{width:100%;border:1px solid #b9d9f4;background:#f3f9ff;color:#0b68b5;border-radius:10px;min-height:39px;margin:0 0 10px;font-weight:900;cursor:pointer}} .gallery-proof-btn:hover{{background:#e9f5ff;border-color:#80bbe9}}
 .card-body{{padding:18px;display:flex;flex-direction:column;flex:1}} .category{{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:900;color:var(--blue)}} .subcategory{{font-size:12px;font-weight:800;color:#6a7f97;margin-top:4px}} .card-body h3{{font-size:20px;line-height:1.15;margin:7px 0 10px}} .card-body p{{font-size:14px;line-height:1.55;color:#60748e;margin:0 0 12px;flex:1}} .options{{font-size:12px;color:#60748e;margin:0 0 12px}} .card-footer{{display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid #edf3f8;padding-top:14px}} .card-footer.no-price .cta{{width:100%}} .price{{font-weight:950;font-size:17px}}
-.product-card-compact{{cursor:pointer}} .product-card-compact .photo{{aspect-ratio:1/1}} .compact-body{{padding:14px 15px 16px;min-height:70px;justify-content:center}} .compact-body h3{{font-size:18px;line-height:1.18;margin:0;color:var(--ink)}}
+.product-card-compact{{cursor:pointer;content-visibility:auto;contain-intrinsic-size:340px 420px}} .product-card-compact .photo{{aspect-ratio:1/1}} .compact-body{{padding:14px 15px 16px;min-height:70px;justify-content:center}} .compact-body h3{{font-size:18px;line-height:1.18;margin:0;color:var(--ink)}}
 .product-detail-modal[hidden]{{display:none!important}} .product-detail-modal{{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;padding:24px}} .product-detail-backdrop{{position:absolute;inset:0;background:rgba(7,24,45,.68);backdrop-filter:blur(5px)}} .product-detail-panel{{position:relative;z-index:2;width:min(1040px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:26px;box-shadow:0 30px 90px rgba(4,24,48,.30);padding:26px}} .product-detail-close{{position:absolute;right:15px;top:13px;z-index:5;width:42px;height:42px;border:0;border-radius:50%;background:#edf6fd;color:#153b61;font-size:30px;line-height:1;cursor:pointer}} .product-detail-layout{{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr);gap:30px;align-items:start}} .product-detail-media{{background:#f4f9fd;border-radius:20px;overflow:hidden;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center}} .product-detail-media img{{width:100%;height:100%;object-fit:contain;display:block}} .product-detail-placeholder{{font-size:34px;font-weight:950;color:#83a8c8}} .product-detail-copy{{padding:12px 4px 4px}} .product-detail-tax{{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;color:var(--blue);margin-bottom:8px}} .product-detail-copy h2{{font-size:34px;line-height:1.06;margin:0 0 14px;color:var(--ink)}} .product-detail-price{{display:flex;align-items:center;justify-content:space-between;gap:16px;border:1px solid #bfe9cf;background:#effcf4;border-radius:15px;padding:13px 15px;font-size:25px;font-weight:950;color:#08773a;margin:0 0 14px}} .product-detail-price:before{{content:'Preço';font-size:12px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#43825e}} .product-detail-price[hidden]{{display:none!important}} .product-detail-copy p{{font-size:16px;line-height:1.65;color:#566f89;white-space:pre-line;margin:0 0 18px}} .product-detail-actions{{display:grid;grid-template-columns:1fr;gap:9px;margin:4px 0 18px}} .product-detail-gallery{{margin:0;min-height:46px;border:1px solid #9bc9ee;background:#f3f9ff;color:#075fae;border-radius:12px;font-weight:900;cursor:pointer}} .product-detail-whatsapp{{min-height:52px;font-size:16px}} .product-related{{border-top:1px solid #e7eef5;margin-top:24px;padding-top:20px}} .product-related-head{{display:flex;justify-content:space-between;gap:14px;align-items:end;margin-bottom:12px}} .product-related-head strong{{font-size:19px}} .product-related-head span{{font-size:12px;color:#71849b}} .product-related-grid{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}} .product-related-card{{border:1px solid #dce8f3;background:#fff;border-radius:14px;overflow:hidden;cursor:pointer;text-align:left;padding:0;color:var(--ink)}} .product-related-card img{{width:100%;aspect-ratio:1/1;object-fit:cover;display:block;background:#f4f9fd}} .product-related-card span{{display:block;padding:9px 10px;font-size:12px;font-weight:850;line-height:1.25}} body.product-modal-open{{overflow:hidden}}
 .empty{{padding:50px;text-align:center;border:1px dashed var(--line);border-radius:18px;color:#60748e}} .mobile-whatsapp{{display:none}} .footer{{background:#10243c;color:#d7e8f7}} .footer-in{{max-width:1240px;margin:auto;padding:34px 22px;display:flex;gap:24px;justify-content:space-between;align-items:center}} .footer strong{{color:#fff}} .footer small{{color:#9fb7cb}}
 @media(max-width:900px){{.hero-in{{grid-template-columns:1fr}}.hero-card{{display:none}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}

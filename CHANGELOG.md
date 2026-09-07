@@ -1,3 +1,9 @@
+## 20.4.9-I8.13.5-HF51.3 — SEO + velocidade sem mudança visual
+
+- Reforça title/description, Open Graph, Twitter Card, canonical, robots e locale para indexação e compartilhamento.
+- Melhora renderização dos cards com `content-visibility`, `loading=lazy`, `decoding=async` e prioridade baixa para imagens abaixo da dobra.
+- Mantém logo/cabeçalho como recurso visual prioritário e preserva integralmente Catálogo, Galeria, busca inteligente, ficha comercial, carrossel e motor HF44.
+
 ## 20.4.9-I8.13.5-HF51.2 — Busca inteligente da vitrine
 - Busca por nome, categoria, subcategoria, descrição, material, processos, aliases, variações, campanhas, tema, ocasião e tags.
 - Pequenos erros de digitação passam a ser tolerados no navegador, sem serviço externo.

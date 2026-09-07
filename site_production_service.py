@@ -1,4 +1,4 @@
-"""Pacote público de produção do site AlphaFest (motor HF44 · HF51.2 · visual HF48.3-HF4).
+"""Pacote público de produção do site AlphaFest (motor HF44 · HF51.3 · visual HF48.3-HF4).
 
 Gera um snapshot estático pronto para o Worker já homologado. Não altera DNS,
 não cria Custom Domain e não modifica dados operacionais do Manager.
@@ -17,20 +17,40 @@ HOSPEDAGEM = "Cloudflare Workers · Static Assets"
 
 
 def preparar_html_producao(html_site: str) -> str:
-    """Acrescenta metadados públicos sem inserir qualquer marca de homologação."""
+    """Acrescenta metadados públicos, SEO social e dicas de performance sem alterar o visual."""
     pagina = str(html_site or "")
-    metas = (
-        '<meta name="robots" content="index,follow,max-image-preview:large">'
-        '<meta name="googlebot" content="index,follow,max-image-preview:large">'
-        f'<link rel="canonical" href="https://{DOMINIO_FINAL}/">'
-        '<meta name="description" content="AlphaFest Itatiba: personalizados, balões, gráfica rápida, brindes, impressão 3D, gravação a laser e soluções sob medida para festas, presentes e marcas.">' 
-    )
-    if "<head>" in pagina:
-        pagina = pagina.replace("<head>", "<head>" + metas, 1)
-    elif "<head " in pagina:
-        pos = pagina.find(">", pagina.find("<head "))
-        if pos >= 0:
-            pagina = pagina[: pos + 1] + metas + pagina[pos + 1 :]
+
+    metas = []
+    if 'name="robots"' not in pagina:
+        metas.append('<meta name="robots" content="index,follow,max-image-preview:large">')
+    if 'name="googlebot"' not in pagina:
+        metas.append('<meta name="googlebot" content="index,follow,max-image-preview:large">')
+    if 'rel="canonical"' not in pagina:
+        metas.append(f'<link rel="canonical" href="https://{DOMINIO_FINAL}/">')
+    if 'name="description"' not in pagina:
+        metas.append('<meta name="description" content="AlphaFest Itatiba: personalizados, balões, gráfica rápida, brindes, impressão 3D, gravação a laser e soluções sob medida para festas, presentes e marcas.">')
+    if 'property="og:url"' not in pagina:
+        metas.append(f'<meta property="og:url" content="https://{DOMINIO_FINAL}/">')
+    if 'property="og:locale"' not in pagina:
+        metas.append('<meta property="og:locale" content="pt_BR">')
+    if 'name="format-detection"' not in pagina:
+        metas.append('<meta name="format-detection" content="telephone=no">')
+    if 'rel="dns-prefetch" href="https://wa.me"' not in pagina:
+        metas.append('<link rel="dns-prefetch" href="https://wa.me">')
+
+    bloco = ''.join(metas)
+    if bloco:
+        if "<head>" in pagina:
+            pagina = pagina.replace("<head>", "<head>" + bloco, 1)
+        elif "<head " in pagina:
+            pos = pagina.find(">", pagina.find("<head "))
+            if pos >= 0:
+                pagina = pagina[: pos + 1] + bloco + pagina[pos + 1 :]
+
+    # Imagens abaixo da dobra: decodificação assíncrona reduz bloqueio de renderização.
+    # Não altera o visual e preserva imagens críticas que já usam loading=eager.
+    pagina = pagina.replace('loading="lazy"', 'loading="lazy" decoding="async"')
+    pagina = pagina.replace('decoding="async" decoding="async"', 'decoding="async"')
 
     # Blindagem: um pacote de produção nunca deve carregar marcas do staging.
     proibidos = (
@@ -64,7 +84,7 @@ def gerar_pacote_producao(
     html_site: str,
     *,
     total_produtos: int = 0,
-    versao_manager: str = "20.4.9-I8.13.5-HF51.2",
+    versao_manager: str = "20.4.9-I8.13.5-HF51.3",
 ) -> bytes:
     """Gera ZIP para New deployment no Worker alphafest-novo.
 
@@ -85,7 +105,7 @@ def gerar_pacote_producao(
   Permissions-Policy: camera=(), microphone=(), geolocation=()
   X-Frame-Options: SAMEORIGIN
 """
-    readme = f"""ALPHAFEST — PACOTE DE PRODUÇÃO HF51.2
+    readme = f"""ALPHAFEST — PACOTE DE PRODUÇÃO HF51.3
 
 Destino: Worker {PROJETO_WORKER}
 Domínio principal: https://{DOMINIO_FINAL}
@@ -96,7 +116,7 @@ O QUE MUDA NESTE PACOTE
 - Libera indexação pública (robots + meta robots).
 - Inclui canonical e sitemap do domínio oficial.
 - Mantém a mesma Fonte Única do Catálogo e os CTAs/WhatsApp homologados.
-- Publica o HF51.2 · cabeçalho azul com marca oficial maior + carrossel comercial, preservando o visual HF48.3-HF4 com Thu + Fox.
+- Publica o HF51.3 · SEO + velocidade sem alterar o visual aprovado: metadados sociais, canonical, indexação, lazy loading/decodificação assíncrona e renderização eficiente dos cards.
 - Inclui a Galeria autorizada/pré-selecionada, com filtros por Categoria, Subcategoria e Tema.
 - Liga automaticamente cada produto aos trabalhos reais já selecionados na Galeria, sem novo cadastro.
 - O carrossel usa o controle CarrosselSite do mesmo Catálogo; sem seleção, usa Destaques apenas como fallback visual.
