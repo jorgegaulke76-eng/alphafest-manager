@@ -1231,3 +1231,8 @@ hangelog
 - Um clique preenche até 5 itens publicados elegíveis, priorizando Destaques.
 - Um clique limpa o carrossel.
 - Nenhuma publicação automática foi adicionada; HF44 permanece como única etapa de deploy.
+
+## 20.4.9-I8.13.5-HF51.4-HF1
+- Remove do carrossel público os selos “DESTAQUE ESCOLHIDO” e “Destaque AlphaFest”.
+- Mantém o controle de destaque/carrossel somente no Manager, sem expor informação técnica ao cliente.
+- Preserva seleção sazonal, loop, CTAs, visual aprovado e motor HF44.

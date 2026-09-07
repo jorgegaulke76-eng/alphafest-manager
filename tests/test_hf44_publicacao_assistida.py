@@ -125,11 +125,11 @@ class HF44PublicacaoAssistidaTests(unittest.TestCase):
     def test_ui_expoe_publicacao_assistida_e_fallback(self):
         app = Path("app.py").read_text(encoding="utf-8")
         self.assertIn("HF44 · Publicação assistida", app)
-        self.assertIn('"🚀 Produção oficial — HF51.4 · motor HF44"', app)
+        self.assertIn('"🚀 Produção oficial — HF51.4-HF1 · motor HF44"', app)
         self.assertIn('"🚀 Publicar site agora"', app)
         self.assertIn('"🔎 Testar conexão sem publicar"', app)
         self.assertIn("alphafest-site-producao-hf51-1.zip", app)
-        self.assertIn('versao_manager="20.4.9-I8.13.5-HF51.4"', app)
+        self.assertIn('versao_manager="20.4.9-I8.13.5-HF51.4-HF1"', app)
         self.assertIn("não é gravado em JSON", app)
 
 
