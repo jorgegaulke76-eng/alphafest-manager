@@ -348,7 +348,7 @@ def gerar_html_vitrine(
         produto_slug = _slug(nome)
         sub_data = html.escape(_slug(subcategoria_publica), quote=True) if subcategoria_publica else ""
         tem_galeria = produto_slug in produtos_galeria_slugs
-        # HF51.1-HF1 — vitrine limpa: na listagem pública aparece somente a foto +
+        # HF51.1-HF2 — vitrine limpa: na listagem pública aparece somente a foto +
         # nome. Destaque, descrição, preço, opções e CTA ficam exclusivamente
         # na ficha aberta pelo cliente.
         cards.append(
@@ -456,7 +456,7 @@ def gerar_html_vitrine(
 (function(){let cat='todos';const cards=[...document.querySelectorAll('.product-card')];const input=document.getElementById('search');const count=document.getElementById('result-count');function norm(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();}function apply(){const q=norm(input.value);let n=0;cards.forEach(c=>{const okCat=cat==='todos'||c.dataset.cat===cat;const okQ=!q||norm(c.dataset.search).includes(q);const ok=okCat&&okQ;c.style.display=ok?'flex':'none';if(ok)n++;});count.textContent=n+' produto(s)';}document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');cat=b.dataset.cat;apply();}));input.addEventListener('input',apply);apply();})();
 """
 
-    # HF51.1-HF1 — ficha comercial: preço em destaque quando autorizado, CTAs antes da descrição e relacionados preservados.
+    # HF51.1-HF2 — ficha comercial: preço em destaque quando autorizado, CTAs antes da descrição e relacionados preservados.
     product_detail_script = r'''<script>
 (function(){
   const modal=document.getElementById('product-detail-modal');

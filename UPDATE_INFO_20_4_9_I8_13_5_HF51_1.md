@@ -1,4 +1,4 @@
-# HF51.1-HF1 — Vitrine limpa + ficha comercial do produto
+# HF51.1-HF2 — Vitrine limpa + ficha comercial do produto
 
 Objetivo: deixar a listagem pública mais visual e rápida, com apenas **foto + nome**, e concentrar informações comerciais na ficha aberta ao clicar no produto.
 

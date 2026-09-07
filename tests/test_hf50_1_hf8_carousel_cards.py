@@ -7,4 +7,4 @@ def test_hf501_hf8_carrossel_cards_maiores_responsivos():
     assert 'calc((100% - 42px)/4)' in src
     assert 'calc((100% - 14px)/2)' in src
     assert 'flex-basis:100%' in src
-    assert 'PRÉVIA INTERNA HF51.1-HF1' in src
+    assert 'PRÉVIA INTERNA HF51.1-HF2' in src
