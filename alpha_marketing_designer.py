@@ -1,4 +1,4 @@
-"""HF53.2-HF1 — Designer Comercial Base AlphaFest.
+"""HF53.2-HF2 — Designer Comercial Base AlphaFest.
 
 Camada determinística de direção de arte e copy para o Piloto Automático.
 Não publica nada e não depende de serviço externo. Seu papel é preparar textos
@@ -168,7 +168,7 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
         "objective": objective,
         "campaign": campaign or "Permanente",
         "channels": per_channel,
-        "rules_version": "HF53.2-HF1",
+        "rules_version": "HF53.2-HF2",
     }
 
 

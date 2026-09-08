@@ -26448,10 +26448,10 @@ if pagina_atual == "crescimento":
         st.caption("O Studio gera os arquivos nos formatos corretos. A postagem e a música continuam manuais.")
 
 
-    # HF53.2-HF1 — Designer Comercial Base sobre o Alpha Marketing Autopilot.
+    # HF53.2-HF2 — Designer Comercial: paleta por campanha + formatos por canal.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.2-HF1: direção de arte comercial ativa. O sistema limita texto, evita repetições e valida os formatos antes de salvar. Nada é publicado sem sua aprovação.")
+        st.caption("HF53.2-HF2: direção de arte comercial + paleta por campanha. Escolha as cores da ação; o sistema preserva contraste, layout e revisão por canal. Nada é publicado sem sua aprovação.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26483,6 +26483,60 @@ if pagina_atual == "crescimento":
                     "Objetivo",
                     ["Vender", "Apresentar produto", "Novidade", "Data comemorativa", "Corporativo"],
                     key="mkt_autopilot_objetivo_hf53_1",
+                )
+
+                st.markdown("**Cores da campanha**")
+                _mkt_palette_options = [
+                    "Automático AlphaFest",
+                    "Azul Clássico",
+                    "Rosa Moderno",
+                    "Colorido Infantil",
+                    "Dourado Luxo",
+                    "Verde Elegante",
+                    "Vermelho Promocional",
+                    "Preto Premium",
+                    "Roxo Premium",
+                    "Personalizada",
+                ]
+                _mkt_palette_name = st.selectbox(
+                    "Paleta visual",
+                    _mkt_palette_options,
+                    key="mkt_autopilot_paleta_hf53_2_hf2",
+                    help="A estrutura comercial permanece fixa; somente a linguagem de cor muda conforme a campanha.",
+                )
+                _mkt_custom_palette = None
+                if _mkt_palette_name == "Personalizada":
+                    _pc1, _pc2, _pc3, _pc4 = st.columns(4)
+                    with _pc1:
+                        _cp_primary = st.color_picker("Principal", "#0B63CE", key="mkt_auto_cp_primary_hf53_2_hf2")
+                    with _pc2:
+                        _cp_secondary = st.color_picker("Secundária", "#32B8F3", key="mkt_auto_cp_secondary_hf53_2_hf2")
+                    with _pc3:
+                        _cp_accent = st.color_picker("Destaque", "#F0208B", key="mkt_auto_cp_accent_hf53_2_hf2")
+                    with _pc4:
+                        _cp_background = st.color_picker("Fundo", "#FFFFFF", key="mkt_auto_cp_background_hf53_2_hf2")
+                    _mkt_custom_palette = {
+                        "primary": _cp_primary, "secondary": _cp_secondary, "accent": _cp_accent,
+                        "background": _cp_background, "text": "#102D50", "metallic": _cp_accent,
+                    }
+
+                _mkt_palette_presets = {
+                    "Automático AlphaFest": {"primary":"#0B63CE","secondary":"#32B8F3","accent":"#F0208B","background":"#FFFFFF","text":"#102D50","metallic":"#FFD54F"},
+                    "Azul Clássico": {"primary":"#123A9B","secondary":"#087CE8","accent":"#24C8F4","background":"#FFFFFF","text":"#102D50","metallic":"#D7E7F5"},
+                    "Rosa Moderno": {"primary":"#B01972","secondary":"#EF2A92","accent":"#FF8FC7","background":"#FFF7FB","text":"#6D1648","metallic":"#F8C5DE"},
+                    "Colorido Infantil": {"primary":"#087CE8","secondary":"#32C7F3","accent":"#F0208B","background":"#FFFDF8","text":"#123A78","metallic":"#FFD54F"},
+                    "Dourado Luxo": {"primary":"#113B78","secondary":"#235FA8","accent":"#D4AF37","background":"#FFFDF7","text":"#102D50","metallic":"#D4AF37"},
+                    "Verde Elegante": {"primary":"#0B6E4F","secondary":"#20A873","accent":"#9ADCBF","background":"#F6FFFB","text":"#164C3C","metallic":"#B8D8C8"},
+                    "Vermelho Promocional": {"primary":"#B71C1C","secondary":"#E53935","accent":"#FFD54F","background":"#FFF8F6","text":"#761414","metallic":"#FFD54F"},
+                    "Preto Premium": {"primary":"#111111","secondary":"#2C2C2C","accent":"#D4AF37","background":"#F7F7F7","text":"#111111","metallic":"#D4AF37"},
+                    "Roxo Premium": {"primary":"#4C2A92","secondary":"#7654D6","accent":"#C49BFF","background":"#FBF8FF","text":"#36206D","metallic":"#D8C6F5"},
+                }
+                _mkt_palette = _mkt_custom_palette or _mkt_palette_presets.get(_mkt_palette_name) or _mkt_palette_presets["Automático AlphaFest"]
+                st.markdown(
+                    "<div style='display:flex;gap:7px;align-items:center;margin:2px 0 8px'>"
+                    + "".join(f"<span title='{k}' style='width:26px;height:18px;border-radius:6px;border:1px solid #ffffff44;background:{v};display:inline-block'></span>" for k,v in _mkt_palette.items() if k in {"primary","secondary","accent","background"})
+                    + "<span style='font-size:12px;opacity:.75'>prévia da paleta escolhida</span></div>",
+                    unsafe_allow_html=True,
                 )
             with _ap2:
                 try:
@@ -26530,6 +26584,7 @@ if pagina_atual == "crescimento":
                                 cta=_mkt_channel_plan.get("cta") or _mkt_plan.get("cta") or "FAÇA SEU PEDIDO",
                                 descricao=_mkt_channel_plan.get("description") or _mkt_plan.get("description") or "",
                                 template_id=MARKETING_DEFAULT_TEMPLATE,
+                                palette_override=_mkt_palette,
                             )
                             _mkt_review = _alpha_validate_art_bytes(_mkt_art_bytes, CANAL_MIDIA_CONFIG[_mkt_channel]["size"])
                             if not _mkt_review.get("ok"):
@@ -26545,7 +26600,7 @@ if pagina_atual == "crescimento":
                             "categoria": str(_mkt_product.get("Categoria") or ""),
                             "campanha": _mkt_campaign.strip() or "Permanente",
                             "objetivo": _mkt_objective,
-                            "origem_criativa": "Designer Comercial AlphaFest HF53.2-HF1",
+                            "origem_criativa": "Designer Comercial AlphaFest HF53.2-HF2",
                             "tipo_registro": "campanha_automatica",
                             "canais": list(_mkt_channels),
                             "artes_png": _mkt_arts,
@@ -26560,6 +26615,9 @@ if pagina_atual == "crescimento":
                             "revisao_design": _mkt_plan_review,
                             "revisao_formatos": _mkt_art_reviews,
                             "quality_gate": "APROVADO AUTOMATICAMENTE",
+                            "paleta_nome": _mkt_palette_name,
+                            "paleta_visual": dict(_mkt_palette),
+                            "designer_rules_version": "HF53.2-HF2",
                         }
                         conteudos.insert(0, _mkt_record)
                         marketing["conteudos"] = conteudos

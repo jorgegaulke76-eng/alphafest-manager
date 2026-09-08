@@ -32,4 +32,4 @@ def test_hf53_2_hf1_ui_contract_and_version():
     app=Path("app.py").read_text(encoding="utf-8")
     assert "Designer Comercial AlphaFest" in app
     assert "quality_gate" in app
-    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip()=="20.4.9-I8.13.5-HF53.2-HF1"
+    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip()=="20.4.9-I8.13.5-HF53.2-HF2"
