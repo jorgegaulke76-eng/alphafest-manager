@@ -48,4 +48,4 @@ def test_hf52_2_gallery_is_last_main_nav_item_when_enabled():
 
 
 def test_current_version_hf52_2():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.2-HF3'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.2-HF4'

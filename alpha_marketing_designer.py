@@ -1,4 +1,4 @@
-"""HF53.2-HF3 — Designer Comercial Base AlphaFest.
+"""HF53.2-HF4 — Designer Comercial Mestre AlphaFest.
 
 Camada determinística de direção de arte e copy para o Piloto Automático.
 Não publica nada e não depende de serviço externo. Seu papel é preparar textos
@@ -134,12 +134,12 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
     if campaign and _norm(campaign) not in {"permanente", "campanha permanente"}:
         subtitle = f"{campaign}: {subtitle}"
 
-    benefits = _dedupe_phrases(list(profile["benefits"]))[:3]
+    benefits = _dedupe_phrases(list(profile["benefits"]))[:4]
     if desc:
         first = re.split(r"(?<=[.!?])\s+", desc)[0]
         first = _clip(first, 88)
         if first and not any(_norm(first) == _norm(x) for x in benefits):
-            benefits = _dedupe_phrases([first] + benefits)[:3]
+            benefits = _dedupe_phrases([first] + benefits)[:4]
 
     description = " • ".join(benefits)
     cta = profile["cta"]
@@ -168,7 +168,7 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
         "objective": objective,
         "campaign": campaign or "Permanente",
         "channels": per_channel,
-        "rules_version": "HF53.2-HF3",
+        "rules_version": "HF53.2-HF4",
     }
 
 
@@ -204,7 +204,7 @@ def validate_design_plan(plan: dict[str, Any]) -> dict[str, Any]:
     checks.append({"id": "title", "ok": bool(_clean(plan.get("title"))), "label": "Título presente"})
     checks.append({"id": "subtitle", "ok": bool(_clean(plan.get("subtitle"))), "label": "Subtítulo coerente"})
     benefits = list(plan.get("benefits") or [])
-    checks.append({"id": "benefits", "ok": 2 <= len(benefits) <= 3, "label": "2 a 3 benefícios sem excesso"})
+    checks.append({"id": "benefits", "ok": 2 <= len(benefits) <= 4, "label": "2 a 4 benefícios sem excesso"})
     checks.append({"id": "cta", "ok": bool(_clean(plan.get("cta"))), "label": "CTA presente"})
     checks.append({"id": "channels", "ok": bool(plan.get("channels")), "label": "Formatos definidos"})
     score = round(100 * sum(1 for x in checks if x["ok"]) / max(1, len(checks)))

@@ -542,11 +542,12 @@ def _default_applications(profile: dict[str, Any], title: str) -> list[str]:
 
 
 def _render_splash_premium_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto") -> Image.Image:
-    """HF53.2-HF3 — Template Comercial Profissional AlphaFest.
+    """HF53.2-HF4 — Template Mestre Comercial AlphaFest.
 
-    Estrutura determinística inspirada nas peças comerciais já usadas pela empresa:
-    título forte, produto protagonista, benefícios organizados, CTA grande e paleta
-    aplicada ao template inteiro. O logo oficial permanece intacto.
+    Estrutura rígida e previsível para automação: marca forte, título unificado,
+    produto protagonista, até quatro benefícios legíveis, campanha em faixa própria,
+    CTA dominante e rodapé enxuto. A paleta selecionada pinta todo o template sem
+    alterar o logo oficial.
     """
     p = _template_palette_from_override(cfg, palette_override)
     primary = _hex(p["azul_escuro"])
@@ -558,140 +559,126 @@ def _render_splash_premium_square(image_bytes: bytes, *, title: str, subtitle: s
     bg = _hex(p["fundo"])
     white = (255,255,255,255)
     profile = _product_profile(title, description, subtitle)
+    source = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
 
     canvas = Image.new("RGBA", (1080,1080), bg)
     draw = ImageDraw.Draw(canvas, "RGBA")
 
-    # Moldura temática completa — acompanha a paleta da campanha.
-    draw.rounded_rectangle((10,10,1070,1070), radius=42, fill=bg, outline=primary, width=10)
-    draw.pieslice((-170,-150,470,280), 190, 355, fill=secondary)
-    draw.pieslice((760,-150,1250,265), 185, 350, fill=accent)
-    draw.pieslice((-220,840,480,1240), 10, 170, fill=accent)
-    draw.pieslice((700,840,1290,1240), 5, 175, fill=primary)
-    # pontos/confetes discretos e previsíveis
-    for cx,cy,r,c in [(65,155,7,accent),(150,112,6,metallic),(235,145,5,secondary),(875,132,6,accent),(980,100,6,metallic),(1018,165,5,secondary),(540,105,5,accent)]:
+    # Fundo temático: curvas largas e discretas, sempre dependentes da paleta.
+    draw.rounded_rectangle((10,10,1070,1070), radius=42, fill=bg, outline=primary, width=8)
+    draw.pieslice((-250,-260,560,350), 178, 350, fill=_hex(_shade(p["rosa"], 1.18), 180))
+    draw.pieslice((720,-210,1320,330), 175, 355, fill=_hex(_shade(p["azul"], 1.14), 150))
+    draw.pieslice((-260,870,530,1280), 5, 175, fill=_hex(_shade(p["rosa"], 1.03), 185))
+    draw.pieslice((690,880,1320,1260), 5, 175, fill=_hex(_shade(p["azul_escuro"], 1.05), 170))
+    for cx,cy,r,c in [(58,190,7,accent),(130,145,5,metallic),(214,176,5,secondary),(850,150,6,accent),(1000,180,5,metallic),(530,128,5,secondary)]:
         draw.ellipse((cx-r,cy-r,cx+r,cy+r), fill=c)
 
-    logo = _load_logo(logo_path, (390,285))
+    # Marca: maior e com área própria; nunca recebe recoloração da campanha.
+    logo = _load_logo(logo_path, (470,220))
     if logo:
-        canvas.alpha_composite(logo, ((1080-logo.width)//2, -10))
+        canvas.alpha_composite(logo, (46,18))
 
-    # selo superior opcional, sempre na paleta da campanha
-    sx,sy,sr = 935,150,68
-    draw.ellipse((sx-sr,sy-sr,sx+sr,sy+sr), fill=primary, outline=white, width=5)
+    # Selo discreto no topo direito; não compete com o título.
+    sx,sy,sr = 944,116,58
+    draw.ellipse((sx-sr,sy-sr,sx+sr,sy+sr), fill=primary, outline=white, width=4)
     badge = (profile.get("badge") or "ARTE\nAPROVADA").split("\n")[:2]
-    bf = _fit_font(draw, max(badge,key=len), 105, 22, 15, bold=True)
-    yy = sy - 20*len(badge)//2
+    bf = _fit_font(draw, max(badge,key=len), 88, 18, 14, bold=True)
+    yy = sy - (18*len(badge))//2
     for line in badge:
-        bb=draw.textbbox((0,0),line,font=bf)
-        draw.text((sx-(bb[2]-bb[0])//2,yy), line, font=bf, fill=white)
-        yy += 22
+        bb=draw.textbbox((0,0), line, font=bf)
+        draw.text((sx-(bb[2]-bb[0])//2, yy), line, font=bf, fill=white)
+        yy += 18
 
-    # título comercial forte — sem fontes ornamentais excessivas
-    t1,t2 = profile["title1"], profile["title2"]
-    f1 = _fit_font(draw, t1, 535, 100, 56, bold=True)
-    draw.text((42,176), t1, font=f1, fill=primary, stroke_width=2, stroke_fill=white)
-    title_y = 285
-    if t2:
-        f2 = _fit_font(draw, t2, 545, 83, 46, bold=True)
-        lines = _wrap(draw,t2,f2,545,2)
-        for i,line in enumerate(lines):
-            draw.text((42,title_y+i*58),line,font=f2,fill=accent,stroke_width=1,stroke_fill=white)
-        title_y += 58*len(lines)
+    # Título unificado: no máximo 2 linhas, grande e com leitura imediata.
+    raw_title = re.sub(r"\s+", " ", str(title or profile.get("title1") or "PRODUTO ALPHAFEST")).strip().upper()
+    title_font = _fit_font(draw, raw_title, 610, 82, 48, bold=True)
+    title_lines = _wrap(draw, raw_title, title_font, 610, 2)
+    ty = 222
+    for line in title_lines:
+        draw.text((42,ty), line, font=title_font, fill=primary, stroke_width=2, stroke_fill=white)
+        ty += 78
 
-    # faixa de campanha/subtítulo
-    banner_y = max(360, title_y+8)
+    # Campanha/subtítulo em faixa separada, sem misturar com o título.
+    banner_y = 386 if len(title_lines)==2 else 322
     banner_text = profile.get("subtitle") or subtitle or "Personalizado do seu jeito"
-    bfnt = _fit_font(draw,banner_text,510,26,18,bold=True)
-    lines = _wrap(draw,banner_text,bfnt,500,2)
-    bh = 54 if len(lines)==1 else 78
-    draw.rounded_rectangle((35,banner_y,575,banner_y+bh),radius=24,fill=accent)
-    yy=banner_y+(bh-25*len(lines))//2
+    bfnt = _fit_font(draw,banner_text,570,24,17,bold=True)
+    lines = _wrap(draw,banner_text,bfnt,560,2)
+    bh = 54 if len(lines)==1 else 74
+    draw.rounded_rectangle((38,banner_y,626,banner_y+bh), radius=25, fill=accent)
+    yy=banner_y+(bh-23*len(lines))//2
     for line in lines:
-        bb=draw.textbbox((0,0),line,font=bfnt)
-        draw.text((305-(bb[2]-bb[0])//2,yy),line,font=bfnt,fill=white)
-        yy+=25
+        draw.text((62,yy), line, font=bfnt, fill=white)
+        yy += 23
 
-    # foto protagonista: maior e em bloco limpo.
-    source=Image.open(io.BytesIO(image_bytes)).convert("RGBA")
-    photo_box=(585,270,1042,720)
-    draw.rounded_rectangle((photo_box[0]-10,photo_box[1]-10,photo_box[2]+10,photo_box[3]+10), radius=32, fill=_hex(_shade(p["rosa"],1.60)), outline=accent, width=4)
-    _paste_photo(canvas,source,photo_box,25,mode=photo_mode,product_title=title)
+    # Produto protagonista: 40%+ da peça, com pedestal e respiro real.
+    photo_box=(585,285,1036,790)
+    pedestal = (610,710,1010,815)
+    draw.ellipse(pedestal, fill=_hex(_shade(p["rosa"],1.20),220), outline=accent, width=3)
+    draw.rounded_rectangle((photo_box[0]-7,photo_box[1]-7,photo_box[2]+7,photo_box[3]+7), radius=34, fill=(255,255,255,80), outline=_hex(_shade(p["rosa"],1.32)), width=3)
+    _paste_photo(canvas, source, photo_box, 26, mode=photo_mode, product_title=title)
 
-    # benefícios em coluna, até cinco, sempre curtos e organizados.
-    benefits=profile["benefits"][:5]
-    by = banner_y+bh+28
-    available = 820-by
-    item_h=max(58,min(72,available//max(1,len(benefits))))
+    # Benefícios: até 4 itens, fonte mínima maior e espaçamento generoso.
+    benefits = list(profile.get("benefits") or [])[:4]
+    if not benefits:
+        benefits = [("PERSONALIZADO", "Produzido conforme o seu pedido", "check")]
+    by = banner_y + bh + 34
+    bottom_limit = 825
+    item_h = max(72, min(88, (bottom_limit-by)//max(1,len(benefits))))
     for i,(head,desc,icon) in enumerate(benefits):
-        cy=by+i*item_h
-        _draw_check(draw,65,cy+20,22,primary,icon=icon)
-        hf=_fit_font(draw,head,330,23,17,bold=True)
-        draw.text((102,cy-3),head,font=hf,fill=primary)
-        df=_fit_font(draw,desc,345,15,12,bold=False)
-        for j,line in enumerate(_wrap(draw,desc,df,345,2)):
-            draw.text((102,cy+22+j*16),line,font=df,fill=textc)
-        draw.line((102,cy+item_h-5,452,cy+item_h-5),fill=_hex(_shade(p["rosa"],1.35)),width=2)
+        cy = by+i*item_h
+        _draw_check(draw,68,cy+23,23,accent,icon=icon)
+        hf = _fit_font(draw,head,365,25,18,bold=True)
+        draw.text((108,cy),head,font=hf,fill=primary)
+        df = _fit_font(draw,desc,370,17,13,bold=False)
+        desc_lines = _wrap(draw,desc,df,370,2)
+        for j,line in enumerate(desc_lines):
+            draw.text((108,cy+29+j*18),line,font=df,fill=textc)
+        draw.line((108,cy+item_h-8,465,cy+item_h-8),fill=_hex(_shade(p["rosa"],1.35)),width=2)
 
-    # pequena faixa de aplicações usando a própria foto, sem excesso de miniaturas.
-    apps=_default_applications(profile,title)[:4]
-    thumb_y=830
-    thumb_w=110
+    # Aplicações visuais: só 3 miniaturas e somente se houver espaço.
+    apps = _default_applications(profile,title)[:3]
+    thumb_y=850
     for i,label in enumerate(apps):
-        x=35+i*125
-        thumb=ImageOps.fit(source,(thumb_w,90),method=Image.Resampling.LANCZOS)
-        mask=Image.new("L",thumb.size,0); ImageDraw.Draw(mask).rounded_rectangle((0,0,thumb_w,90),radius=20,fill=255)
+        x=38+i*150
+        thumb=ImageOps.fit(source,(116,82),method=Image.Resampling.LANCZOS)
+        mask=Image.new("L",thumb.size,0); ImageDraw.Draw(mask).rounded_rectangle((0,0,116,82),radius=18,fill=255)
         thumb.putalpha(mask); canvas.alpha_composite(thumb,(x,thumb_y))
-        draw.rounded_rectangle((x,thumb_y,x+thumb_w,thumb_y+90),radius=20,outline=accent,width=3)
-        lf=_fit_font(draw,label,thumb_w,12,9,bold=True)
-        lbl=_wrap(draw,label,lf,thumb_w,2)
-        yy=927
-        for line in lbl:
-            bb=draw.textbbox((0,0),line,font=lf)
-            draw.text((x+thumb_w//2-(bb[2]-bb[0])//2,yy),line,font=lf,fill=primary)
-            yy+=12
+        draw.rounded_rectangle((x,thumb_y,x+116,thumb_y+82),radius=18,outline=accent,width=3)
+        lf=_fit_font(draw,label,116,13,10,bold=True)
+        lbl=_wrap(draw,label,lf,116,1)
+        if lbl:
+            bb=draw.textbbox((0,0),lbl[0],font=lf)
+            draw.text((x+58-(bb[2]-bb[0])//2,938),lbl[0],font=lf,fill=primary)
 
-    # CTA profissional em bloco único, grande e legível.
+    # CTA dominante: bloco único e inequívoco.
     cta_text=(cta or "FALE COM A ALPHAFEST").upper()
-    ctf=_fit_font(draw,cta_text,440,32,22,bold=True)
+    ctf=_fit_font(draw,cta_text,455,30,21,bold=True)
     bb=draw.textbbox((0,0),cta_text,font=ctf)
-    draw.text((815-(bb[2]-bb[0])//2,760),cta_text,font=ctf,fill=primary)
-    phone_box=(555,805,1040,915)
-    draw.rounded_rectangle(phone_box,radius=34,fill=primary)
-    _draw_whatsapp(draw,615,860,35,green)
+    draw.text((810-(bb[2]-bb[0])//2,828),cta_text,font=ctf,fill=primary)
+    draw.rounded_rectangle((530,870,1040,980),radius=38,fill=primary)
+    _draw_whatsapp(draw,592,925,38,green)
     phone_text=phone or "11 97294-9533"
-    phf=_fit_font(draw,phone_text,355,47,32,bold=True)
+    phf=_fit_font(draw,phone_text,375,49,33,bold=True)
     pbb=draw.textbbox((0,0),phone_text,font=phf)
-    tx=675+(1020-675-(pbb[2]-pbb[0]))//2
-    ty=860-(pbb[3]-pbb[1])//2-pbb[1]
+    tx=654+(1018-654-(pbb[2]-pbb[0]))//2
+    ty=925-(pbb[3]-pbb[1])//2-pbb[1]
     draw.text((tx,ty),phone_text,font=phf,fill=white)
 
-    # Mensagem curta de reforço, limitada a duas linhas.
-    pink_text=profile.get("pink") or "Detalhes que encantam e fazem a diferença!"
-    draw.rounded_rectangle((565,930,1038,985),radius=18,fill=accent)
-    pf=_fit_font(draw,pink_text,430,18,13,bold=True)
-    pl=_wrap(draw,pink_text,pf,430,2)
-    yy=940 if len(pl)==2 else 949
-    for line in pl:
-        bb=draw.textbbox((0,0),line,font=pf)
-        draw.text((802-(bb[2]-bb[0])//2,yy),line,font=pf,fill=white)
-        yy+=20
-
-    # Rodapé comercial em quatro células — paleta completa da campanha.
-    footer_y=1000
+    # Rodapé enxuto: 3 diferenciais legíveis em vez de 4 células apertadas.
+    footer_y=1002
     draw.rectangle((0,footer_y,1080,1080),fill=primary)
-    labels=profile["footer"][:4]
-    cell_w=270
+    labels=(profile.get("footer") or ["PRÁTICO","CRIATIVO","FEITO PARA VOCÊ"])[:3]
+    cell_w=360
     for i,label in enumerate(labels):
         left=i*cell_w
-        _draw_check(draw,left+28,1040,14,white)
-        ff=_fit_font(draw,label,205,16,11,bold=True)
-        lines=_wrap(draw,label,ff,205,2)
+        _draw_check(draw,left+36,1040,15,white)
+        ff=_fit_font(draw,label,265,18,13,bold=True)
+        lines=_wrap(draw,label,ff,265,2)
         yy=1031 if len(lines)==2 else 1038
         for line in lines:
-            draw.text((left+52,yy),line,font=ff,fill=white); yy+=15
+            draw.text((left+64,yy),line,font=ff,fill=white); yy+=16
         if i:
-            draw.line((left,1016,left,1065),fill=(255,255,255,70),width=1)
+            draw.line((left,1019,left,1064),fill=(255,255,255,75),width=2)
     return canvas
 
 def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto") -> Image.Image:
