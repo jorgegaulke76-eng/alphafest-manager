@@ -53,6 +53,7 @@ except Exception as _site_cf_import_exc:
     _site_cf_worker_padrao = "alphafest-novo"
     SITE_CF_IMPORT_ERROR = str(_site_cf_import_exc)
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
+from alpha_marketing_autopilot import rank_products as _alpha_marketing_rank_products
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
 # padrão é estável e preserva campanhas existentes sem importar a engine no boot.
@@ -26444,6 +26445,117 @@ if pagina_atual == "crescimento":
             marketing["config"] = config_marketing
             salvar_marketing(marketing)
         st.caption("O Studio gera os arquivos nos formatos corretos. A postagem e a música continuam manuais.")
+
+
+    # HF53.1 — Alpha Marketing Autopilot: criação automática com aprovação humana.
+    with st.container(border=True):
+        af_section_title("⚡ Piloto Automático de Conteúdo", "O Manager escolhe um produto, prepara a arte e a copy. Nada é publicado sem sua aprovação.")
+        st.caption("Fase 1 da automação: criação automática. Agendamento/publicação nas redes será conectado na etapa seguinte.")
+        try:
+            _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
+        except Exception:
+            _mkt_metrics = {}
+        _mkt_catalog = carregar_catalogo()
+        _mkt_ranked = _alpha_marketing_rank_products(_mkt_catalog, _mkt_metrics, limit=10)
+        if not _mkt_ranked:
+            st.info("Ainda não há produtos com foto suficientes para o Piloto Automático.")
+        else:
+            _mkt_options = [item["name"] for item in _mkt_ranked]
+            _mkt_selected_name = st.selectbox(
+                "Produto sugerido",
+                _mkt_options,
+                key="mkt_autopilot_produto_hf53_1",
+                help="A ordem considera prontidão do cadastro e, quando disponíveis, sinais reais de abertura de produto e clique no WhatsApp.",
+            )
+            _mkt_choice = next(item for item in _mkt_ranked if item["name"] == _mkt_selected_name)
+            _mkt_product = _mkt_choice["product"]
+            _ap1, _ap2 = st.columns([1.2, 1])
+            with _ap1:
+                st.markdown(f"**{_mkt_selected_name}**")
+                st.caption("Prioridade: " + " • ".join(_mkt_choice.get("reasons") or []))
+                _mkt_campaign = st.text_input(
+                    "Campanha / ocasião (opcional)",
+                    placeholder="Ex.: Dia das Crianças, Corporativo, Permanente",
+                    key="mkt_autopilot_campanha_hf53_1",
+                )
+                _mkt_objective = st.selectbox(
+                    "Objetivo",
+                    ["Vender", "Apresentar produto", "Novidade", "Data comemorativa", "Corporativo"],
+                    key="mkt_autopilot_objetivo_hf53_1",
+                )
+            with _ap2:
+                try:
+                    st.image(_mkt_choice["image"], caption="Foto usada como base", use_container_width=True)
+                except Exception:
+                    st.caption("Foto cadastrada no produto.")
+
+            _mkt_channels_default = ["Instagram Feed", "Instagram Story", "Facebook", "Status WhatsApp"]
+            _mkt_channels = st.multiselect(
+                "Criar versões para",
+                _mkt_channels_default,
+                default=_mkt_channels_default,
+                key="mkt_autopilot_canais_hf53_1",
+            )
+            if st.button(
+                "⚡ Gerar campanha automaticamente",
+                type="primary",
+                use_container_width=True,
+                disabled=not bool(_mkt_channels),
+                key="mkt_autopilot_gerar_hf53_1",
+            ):
+                try:
+                    with st.spinner("Alpha Marketing criando artes e textos..."):
+                        _mkt_img_png = converter_imagem_para_png(_mkt_choice["image"])
+                        _mkt_copies, _mkt_copy_engine = gerar_conteudo_marketing(
+                            _mkt_product, _mkt_objective, _mkt_campaign, _mkt_channels, "", "Venda direta", _mkt_img_png
+                        )
+                        _mkt_arts = {}
+                        _mkt_title = str(_mkt_product.get("Nome") or "Produto AlphaFest")
+                        _mkt_desc = str(_mkt_product.get("Descricao") or "")
+                        for _mkt_channel in _mkt_channels:
+                            if CANAL_MIDIA_CONFIG.get(_mkt_channel, {}).get("tipo") != "imagem":
+                                continue
+                            _mkt_arts[_mkt_channel] = base64.b64encode(
+                                gerar_arte_png(
+                                    _mkt_img_png,
+                                    _mkt_channel,
+                                    _mkt_title,
+                                    subtitulo="Personalizado do seu jeito",
+                                    cta="FAÇA SEU PEDIDO",
+                                    descricao=_mkt_desc,
+                                    template_id=MARKETING_DEFAULT_TEMPLATE,
+                                )
+                            ).decode("ascii")
+
+                        _mkt_id = f"MKT-AUTO-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
+                        _mkt_record = {
+                            "id": _mkt_id,
+                            "criado_em": agora_local().isoformat(),
+                            "produto": _mkt_title,
+                            "categoria": str(_mkt_product.get("Categoria") or ""),
+                            "campanha": _mkt_campaign.strip() or "Permanente",
+                            "objetivo": _mkt_objective,
+                            "origem_criativa": "Alpha Marketing Autopilot HF53.1",
+                            "tipo_registro": "campanha_automatica",
+                            "canais": list(_mkt_channels),
+                            "artes_png": _mkt_arts,
+                            "conteudos": _mkt_copies,
+                            "aprovacoes": {canal: False for canal in _mkt_channels},
+                            "fila_publicacao": {},
+                            "status": "Aguardando aprovação",
+                            "template_id": MARKETING_DEFAULT_TEMPLATE,
+                            "template_nome": "AlphaFest automático",
+                            "motor_copy": _mkt_copy_engine,
+                        }
+                        conteudos.insert(0, _mkt_record)
+                        marketing["conteudos"] = conteudos
+                        salvar_marketing(marketing)
+                        registrar_auditoria("Gerar campanha automática", "Marketing", _mkt_id, {"produto": _mkt_title, "canais": _mkt_channels})
+                        st.session_state["_mkt_autopilot_last_hf53_1"] = _mkt_id
+                    st.success("Campanha criada e salva na Central de Campanhas. Revise e aprove antes de qualquer publicação.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Não foi possível gerar esta campanha automaticamente: {exc}")
 
     st.markdown("### Área de trabalho")
     modo_marketing_principal = st.radio(

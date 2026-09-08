@@ -1,3 +1,10 @@
+## 20.4.9-I8.13.5-HF53.1
+- Alpha Marketing: novo Piloto Automático de Conteúdo.
+- Prioriza produtos do catálogo usando prontidão + sinais das métricas do site quando disponíveis.
+- Gera automaticamente copy e artes para Instagram Feed, Instagram Story, Facebook e Status WhatsApp.
+- Salva tudo na Central de Campanhas como “Aguardando aprovação”; nenhuma rede é publicada automaticamente nesta fase.
+- Preserva HF52.2-HF1-HF3 como base visual homologada do site.
+
 ## 20.4.9-I8.13.5-HF52.2-HF1-HF3
 
 - Rodapé passa a reutilizar o mesmo logo/wordmark transparente aprovado no cabeçalho.
