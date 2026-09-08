@@ -26448,10 +26448,10 @@ if pagina_atual == "crescimento":
         st.caption("O Studio gera os arquivos nos formatos corretos. A postagem e a música continuam manuais.")
 
 
-    # HF53.2-HF2 — Designer Comercial: paleta por campanha + formatos por canal.
+    # HF53.2-HF3 — Designer Comercial: paleta por campanha + formatos por canal.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.2-HF2: direção de arte comercial + paleta por campanha. Escolha as cores da ação; o sistema preserva contraste, layout e revisão por canal. Nada é publicado sem sua aprovação.")
+        st.caption("HF53.2-HF3: direção de arte comercial + paleta por campanha. Escolha as cores da ação; o sistema preserva contraste, layout e revisão por canal. Nada é publicado sem sua aprovação.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26583,7 +26583,7 @@ if pagina_atual == "crescimento":
                                 subtitulo=_mkt_channel_plan.get("subtitle") or _mkt_plan.get("subtitle") or "",
                                 cta=_mkt_channel_plan.get("cta") or _mkt_plan.get("cta") or "FAÇA SEU PEDIDO",
                                 descricao=_mkt_channel_plan.get("description") or _mkt_plan.get("description") or "",
-                                template_id=MARKETING_DEFAULT_TEMPLATE,
+                                template_id="splash_premium_anna",
                                 palette_override=_mkt_palette,
                             )
                             _mkt_review = _alpha_validate_art_bytes(_mkt_art_bytes, CANAL_MIDIA_CONFIG[_mkt_channel]["size"])
@@ -26600,7 +26600,7 @@ if pagina_atual == "crescimento":
                             "categoria": str(_mkt_product.get("Categoria") or ""),
                             "campanha": _mkt_campaign.strip() or "Permanente",
                             "objetivo": _mkt_objective,
-                            "origem_criativa": "Designer Comercial AlphaFest HF53.2-HF2",
+                            "origem_criativa": "Designer Comercial AlphaFest HF53.2-HF3",
                             "tipo_registro": "campanha_automatica",
                             "canais": list(_mkt_channels),
                             "artes_png": _mkt_arts,
@@ -26608,8 +26608,8 @@ if pagina_atual == "crescimento":
                             "aprovacoes": {canal: False for canal in _mkt_channels},
                             "fila_publicacao": {},
                             "status": "Aguardando aprovação",
-                            "template_id": MARKETING_DEFAULT_TEMPLATE,
-                            "template_nome": "AlphaFest automático",
+                            "template_id": "splash_premium_anna",
+                            "template_nome": "Comercial Profissional AlphaFest",
                             "motor_copy": _mkt_copy_engine,
                             "direcao_arte": _mkt_plan,
                             "revisao_design": _mkt_plan_review,
@@ -26617,7 +26617,7 @@ if pagina_atual == "crescimento":
                             "quality_gate": "APROVADO AUTOMATICAMENTE",
                             "paleta_nome": _mkt_palette_name,
                             "paleta_visual": dict(_mkt_palette),
-                            "designer_rules_version": "HF53.2-HF2",
+                            "designer_rules_version": "HF53.2-HF3",
                         }
                         conteudos.insert(0, _mkt_record)
                         marketing["conteudos"] = conteudos

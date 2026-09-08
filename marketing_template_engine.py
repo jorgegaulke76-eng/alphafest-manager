@@ -542,143 +542,156 @@ def _default_applications(profile: dict[str, Any], title: str) -> list[str]:
 
 
 def _render_splash_premium_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto") -> Image.Image:
-    """Renderizador próprio do Splash Premium — não reutiliza o layout legado."""
+    """HF53.2-HF3 — Template Comercial Profissional AlphaFest.
+
+    Estrutura determinística inspirada nas peças comerciais já usadas pela empresa:
+    título forte, produto protagonista, benefícios organizados, CTA grande e paleta
+    aplicada ao template inteiro. O logo oficial permanece intacto.
+    """
     p = _template_palette_from_override(cfg, palette_override)
-    blue,dark,pink,yellow,textc,green = (_hex(p[k]) for k in ("azul","azul_escuro","rosa","amarelo","texto","verde"))
-    title_color=_hex(p.get("cor_titulo", p["azul_escuro"]))
-    title2_color=_hex(p.get("cor_titulo_secundario", p["azul"]))
-    banner_color=_hex(p.get("cor_banner", p["azul_escuro"]))
-    benefits_color=_hex(p.get("cor_beneficios", p["azul_escuro"]))
-    seal_color=_hex(p.get("cor_selo", p["azul"]))
-    cta_color=_hex(p.get("cor_cta", p["azul_escuro"]))
-    cta_text_color=_hex(p.get("cor_cta_texto", "#FFFFFF"))
-    footer_color=_hex(p.get("cor_rodape", p["azul_escuro"]))
-    footer_text_color=_hex(p.get("cor_rodape_texto", "#FFFFFF"))
-    white=(255,255,255,255)
-    profile=_product_profile(title, description, subtitle)
-    canvas=Image.new("RGBA",(1080,1080),_hex(p["fundo"]))
-    draw=ImageDraw.Draw(canvas,"RGBA")
+    primary = _hex(p["azul_escuro"])
+    secondary = _hex(p["azul"])
+    accent = _hex(p["rosa"])
+    metallic = _hex(p["amarelo"])
+    textc = _hex(p["texto"])
+    green = _hex(p["verde"])
+    bg = _hex(p["fundo"])
+    white = (255,255,255,255)
+    profile = _product_profile(title, description, subtitle)
 
-    # Moldura splash mais próxima da referência: ondas largas, brilhos e confetes.
-    draw.pieslice((-170,-220,470,245),0,180,fill=blue)
-    draw.pieslice((760,-210,1250,235),0,180,fill=dark)
-    draw.arc((-130,-80,1200,330),8,172,fill=_hex("#57D9FF"),width=12)
-    for cx,cy,r,c in [(76,142,9,pink),(144,102,7,yellow),(226,150,5,blue),(845,135,7,pink),(968,98,7,yellow),(1025,157,6,blue),(520,105,5,pink),(575,132,4,yellow)]:
-        draw.ellipse((cx-r,cy-r,cx+r,cy+r),fill=c)
+    canvas = Image.new("RGBA", (1080,1080), bg)
+    draw = ImageDraw.Draw(canvas, "RGBA")
 
-    logo=_load_logo(logo_path,(390,285))
+    # Moldura temática completa — acompanha a paleta da campanha.
+    draw.rounded_rectangle((10,10,1070,1070), radius=42, fill=bg, outline=primary, width=10)
+    draw.pieslice((-170,-150,470,280), 190, 355, fill=secondary)
+    draw.pieslice((760,-150,1250,265), 185, 350, fill=accent)
+    draw.pieslice((-220,840,480,1240), 10, 170, fill=accent)
+    draw.pieslice((700,840,1290,1240), 5, 175, fill=primary)
+    # pontos/confetes discretos e previsíveis
+    for cx,cy,r,c in [(65,155,7,accent),(150,112,6,metallic),(235,145,5,secondary),(875,132,6,accent),(980,100,6,metallic),(1018,165,5,secondary),(540,105,5,accent)]:
+        draw.ellipse((cx-r,cy-r,cx+r,cy+r), fill=c)
+
+    logo = _load_logo(logo_path, (390,285))
     if logo:
-        canvas.alpha_composite(logo,((1080-logo.width)//2,-18))
+        canvas.alpha_composite(logo, ((1080-logo.width)//2, -10))
 
-    # Selo superior.
-    sx,sy,sr=935,145,79
-    draw.ellipse((sx-sr,sy-sr,sx+sr,sy+sr),fill=seal_color,outline=white,width=6)
-    draw.ellipse((sx-sr+10,sy-sr+10,sx+sr-10,sy+sr-10),outline=(255,255,255,150),width=2)
-    badge_lines=profile["badge"].split("\n")
-    sf=_fit_font(draw,max(badge_lines,key=len),116,24,17,bold=True)
-    yy=sy-(25*len(badge_lines))//2
-    for line in badge_lines:
-        bb=draw.textbbox((0,0),line,font=sf); draw.text((sx-(bb[2]-bb[0])//2,yy),line,font=sf,fill=white); yy+=25
+    # selo superior opcional, sempre na paleta da campanha
+    sx,sy,sr = 935,150,68
+    draw.ellipse((sx-sr,sy-sr,sx+sr,sy+sr), fill=primary, outline=white, width=5)
+    badge = (profile.get("badge") or "ARTE\nAPROVADA").split("\n")[:2]
+    bf = _fit_font(draw, max(badge,key=len), 105, 22, 15, bold=True)
+    yy = sy - 20*len(badge)//2
+    for line in badge:
+        bb=draw.textbbox((0,0),line,font=bf)
+        draw.text((sx-(bb[2]-bb[0])//2,yy), line, font=bf, fill=white)
+        yy += 22
 
-    # Título gigante, principal característica do modelo Anna.
-    t1,t2=profile["title1"],profile["title2"]
-    f1=_fit_font(draw,t1,520,132,72,bold=True,serif=True,italic=True)
-    draw.text((35,155),t1,font=f1,fill=title_color,stroke_width=2,stroke_fill=white)
+    # título comercial forte — sem fontes ornamentais excessivas
+    t1,t2 = profile["title1"], profile["title2"]
+    f1 = _fit_font(draw, t1, 535, 100, 56, bold=True)
+    draw.text((42,176), t1, font=f1, fill=primary, stroke_width=2, stroke_fill=white)
+    title_y = 285
     if t2:
-        f2=_fit_font(draw,t2,520,84,48,bold=True,serif=True,italic=True)
-        lines=_wrap(draw,t2,f2,520,2)
+        f2 = _fit_font(draw, t2, 545, 83, 46, bold=True)
+        lines = _wrap(draw,t2,f2,545,2)
         for i,line in enumerate(lines):
-            draw.text((58,292+i*62),line,font=f2,fill=title2_color,stroke_width=1,stroke_fill=white)
+            draw.text((42,title_y+i*58),line,font=f2,fill=accent,stroke_width=1,stroke_fill=white)
+        title_y += 58*len(lines)
 
-    # Faixa azul grande.
-    banner_y=405
-    banner_lines=_wrap(draw,profile["subtitle"],_font(28,bold=True),510,2)
-    bh=58 if len(banner_lines)==1 else 82
-    draw.polygon([(42,banner_y+10),(12,banner_y+bh//2),(42,banner_y+bh-10)],fill=banner_color)
-    draw.polygon([(570,banner_y+10),(604,banner_y+bh//2),(570,banner_y+bh-10)],fill=banner_color)
-    draw.rounded_rectangle((42,banner_y,570,banner_y+bh),radius=14,fill=banner_color)
-    bf=_fit_font(draw,max(banner_lines,key=len),490,30,21,bold=True)
-    yy=banner_y+(bh-30*len(banner_lines))//2
-    for line in banner_lines:
-        bb=draw.textbbox((0,0),line,font=bf); draw.text((306-(bb[2]-bb[0])//2,yy),line,font=bf,fill=white); yy+=30
+    # faixa de campanha/subtítulo
+    banner_y = max(360, title_y+8)
+    banner_text = profile.get("subtitle") or subtitle or "Personalizado do seu jeito"
+    bfnt = _fit_font(draw,banner_text,510,26,18,bold=True)
+    lines = _wrap(draw,banner_text,bfnt,500,2)
+    bh = 54 if len(lines)==1 else 78
+    draw.rounded_rectangle((35,banner_y,575,banner_y+bh),radius=24,fill=accent)
+    yy=banner_y+(bh-25*len(lines))//2
+    for line in lines:
+        bb=draw.textbbox((0,0),line,font=bfnt)
+        draw.text((305-(bb[2]-bb[0])//2,yy),line,font=bfnt,fill=white)
+        yy+=25
 
+    # foto protagonista: maior e em bloco limpo.
     source=Image.open(io.BytesIO(image_bytes)).convert("RGBA")
-    # Foto protagonista maior, mantendo proporção.
-    _paste_photo(canvas,source,(635,205,1060,705),28,mode=photo_mode,product_title=title)
+    photo_box=(585,270,1042,720)
+    draw.rounded_rectangle((photo_box[0]-10,photo_box[1]-10,photo_box[2]+10,photo_box[3]+10), radius=32, fill=_hex(_shade(p["rosa"],1.60)), outline=accent, width=4)
+    _paste_photo(canvas,source,photo_box,25,mode=photo_mode,product_title=title)
 
-    # Benefícios em coluna, com mais respiro.
+    # benefícios em coluna, até cinco, sempre curtos e organizados.
     benefits=profile["benefits"][:5]
-    by=500; item_h=64
+    by = banner_y+bh+28
+    available = 820-by
+    item_h=max(58,min(72,available//max(1,len(benefits))))
     for i,(head,desc,icon) in enumerate(benefits):
         cy=by+i*item_h
-        _draw_check(draw,68,cy+20,23,benefits_color,icon=icon)
-        hf=_fit_font(draw,head,325,24,18,bold=True)
-        draw.text((105,cy-4),head,font=hf,fill=benefits_color)
-        df=_fit_font(draw,desc,338,16,13,bold=False)
-        for j,line in enumerate(_wrap(draw,desc,df,338,2)):
-            draw.text((105,cy+24+j*17),line,font=df,fill=textc)
-        draw.line((105,cy+item_h-5,438,cy+item_h-5),fill=_hex(_shade(p["azul"],1.12)),width=2)
+        _draw_check(draw,65,cy+20,22,primary,icon=icon)
+        hf=_fit_font(draw,head,330,23,17,bold=True)
+        draw.text((102,cy-3),head,font=hf,fill=primary)
+        df=_fit_font(draw,desc,345,15,12,bold=False)
+        for j,line in enumerate(_wrap(draw,desc,df,345,2)):
+            draw.text((102,cy+22+j*16),line,font=df,fill=textc)
+        draw.line((102,cy+item_h-5,452,cy+item_h-5),fill=_hex(_shade(p["rosa"],1.35)),width=2)
 
-    # Selo central.
-    cx,cy,cr=510,675,72
-    draw.ellipse((cx-cr,cy-cr,cx+cr,cy+cr),fill=white,outline=seal_color,width=4)
-    center_lines=profile["center"].split("\n")
-    cf=_fit_font(draw,max(center_lines,key=len),128,18,13,bold=True)
-    yy=cy-(21*len(center_lines))//2
-    for line in center_lines:
-        bb=draw.textbbox((0,0),line,font=cf); draw.text((cx-(bb[2]-bb[0])//2,yy),line,font=cf,fill=title_color); yy+=21
-    draw.ellipse((486,760,502,776),fill=blue); draw.ellipse((512,752,530,780),fill=pink); draw.ellipse((540,760,556,776),fill=blue)
+    # pequena faixa de aplicações usando a própria foto, sem excesso de miniaturas.
+    apps=_default_applications(profile,title)[:4]
+    thumb_y=830
+    thumb_w=110
+    for i,label in enumerate(apps):
+        x=35+i*125
+        thumb=ImageOps.fit(source,(thumb_w,90),method=Image.Resampling.LANCZOS)
+        mask=Image.new("L",thumb.size,0); ImageDraw.Draw(mask).rounded_rectangle((0,0,thumb_w,90),radius=20,fill=255)
+        thumb.putalpha(mask); canvas.alpha_composite(thumb,(x,thumb_y))
+        draw.rounded_rectangle((x,thumb_y,x+thumb_w,thumb_y+90),radius=20,outline=accent,width=3)
+        lf=_fit_font(draw,label,thumb_w,12,9,bold=True)
+        lbl=_wrap(draw,label,lf,thumb_w,2)
+        yy=927
+        for line in lbl:
+            bb=draw.textbbox((0,0),line,font=lf)
+            draw.text((x+thumb_w//2-(bb[2]-bb[0])//2,yy),line,font=lf,fill=primary)
+            yy+=12
 
-    # Aplicações sempre presentes no Splash Premium.
-    apps=_default_applications(profile,title)
-    _draw_application_strip(canvas,source,apps,y=825,blue=blue,dark=title_color,white=white)
-
-    # CTA grande à direita.
-    cta_text=(cta or "FAÇA SEU PEDIDO!").upper()
-    ctaf=_fit_font(draw,cta_text,455,43,29,bold=True)
-    bb=draw.textbbox((0,0),cta_text,font=ctaf); draw.text((825-(bb[2]-bb[0])//2,716),cta_text,font=ctaf,fill=title_color)
-    phone_box=(610,760,1048,850)
-    draw.rounded_rectangle(phone_box,radius=34,fill=cta_color)
-    _draw_whatsapp(draw,660,805,31,green)
+    # CTA profissional em bloco único, grande e legível.
+    cta_text=(cta or "FALE COM A ALPHAFEST").upper()
+    ctf=_fit_font(draw,cta_text,440,32,22,bold=True)
+    bb=draw.textbbox((0,0),cta_text,font=ctf)
+    draw.text((815-(bb[2]-bb[0])//2,760),cta_text,font=ctf,fill=primary)
+    phone_box=(555,805,1040,915)
+    draw.rounded_rectangle(phone_box,radius=34,fill=primary)
+    _draw_whatsapp(draw,615,860,35,green)
     phone_text=phone or "11 97294-9533"
-    phf=_fit_font(draw,phone_text,335,47,32,bold=True)
+    phf=_fit_font(draw,phone_text,355,47,32,bold=True)
     pbb=draw.textbbox((0,0),phone_text,font=phf)
-    tx=710+(1035-710-(pbb[2]-pbb[0]))//2; ty=805-(pbb[3]-pbb[1])//2-pbb[1]
-    draw.text((tx,ty),phone_text,font=phf,fill=cta_text_color)
+    tx=675+(1020-675-(pbb[2]-pbb[0]))//2
+    ty=860-(pbb[3]-pbb[1])//2-pbb[1]
+    draw.text((tx,ty),phone_text,font=phf,fill=white)
 
-    # Preço opcional em selo pequeno, sem substituir a faixa de aplicações.
-    if str(price or "").strip():
-        pcx,pcy,pr=565,900,44
-        draw.ellipse((pcx-pr,pcy-pr,pcx+pr,pcy+pr),fill=dark,outline=yellow,width=5)
-        small=_font(11,bold=True)
-        label="APENAS"
-        lbb=draw.textbbox((0,0),label,font=small)
-        draw.text((pcx-(lbb[2]-lbb[0])//2,pcy-30),label,font=small,fill=white)
-        pf=_fit_font(draw,str(price),72,22,15,bold=True)
-        pbb=draw.textbbox((0,0),str(price),font=pf)
-        draw.text((pcx-(pbb[2]-pbb[0])//2,pcy-8),str(price),font=pf,fill=yellow)
-        vista="à vista"
-        vbb=draw.textbbox((0,0),vista,font=small)
-        draw.text((pcx-(vbb[2]-vbb[0])//2,pcy+18),vista,font=small,fill=white)
+    # Mensagem curta de reforço, limitada a duas linhas.
+    pink_text=profile.get("pink") or "Detalhes que encantam e fazem a diferença!"
+    draw.rounded_rectangle((565,930,1038,985),radius=18,fill=accent)
+    pf=_fit_font(draw,pink_text,430,18,13,bold=True)
+    pl=_wrap(draw,pink_text,pf,430,2)
+    yy=940 if len(pl)==2 else 949
+    for line in pl:
+        bb=draw.textbbox((0,0),line,font=pf)
+        draw.text((802-(bb[2]-bb[0])//2,yy),line,font=pf,fill=white)
+        yy+=20
 
-    pink_box=(625,875,1045,950)
-    draw.rounded_rectangle(pink_box,radius=15,fill=pink)
-    pf=_fit_font(draw,profile["pink"],385,23,16,bold=True,serif=True,italic=True)
-    plines=_wrap(draw,profile["pink"],pf,385,2); yy=903
-    for line in plines:
-        bb=draw.textbbox((0,0),line,font=pf); draw.text((832-(bb[2]-bb[0])//2,yy),line,font=pf,fill=white); yy+=25
-
-    footer_y=970
-    draw.rectangle((0,footer_y,1080,1080),fill=footer_color)
-    labels=profile["footer"][:4]; cell_w=270
+    # Rodapé comercial em quatro células — paleta completa da campanha.
+    footer_y=1000
+    draw.rectangle((0,footer_y,1080,1080),fill=primary)
+    labels=profile["footer"][:4]
+    cell_w=270
     for i,label in enumerate(labels):
         left=i*cell_w
-        _draw_check(draw,left+28,1027,14,white)
-        ff=_fit_font(draw,label,205,17,11,bold=True)
-        lines=_wrap(draw,label,ff,205,2); yy=1015 if len(lines)==2 else 1023
+        _draw_check(draw,left+28,1040,14,white)
+        ff=_fit_font(draw,label,205,16,11,bold=True)
+        lines=_wrap(draw,label,ff,205,2)
+        yy=1031 if len(lines)==2 else 1038
         for line in lines:
-            draw.text((left+52,yy),line,font=ff,fill=footer_text_color); yy+=16
-        if i: draw.line((left,992,left,1060),fill=(255,255,255,80),width=1)
+            draw.text((left+52,yy),line,font=ff,fill=white); yy+=15
+        if i:
+            draw.line((left,1016,left,1065),fill=(255,255,255,70),width=1)
     return canvas
 
 def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto") -> Image.Image:
