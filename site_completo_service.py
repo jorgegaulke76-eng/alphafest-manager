@@ -133,7 +133,7 @@ def gerar_html_site_completo(
 .contact-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;margin-top:28px}.contact-card{border:1px solid var(--line);background:#fff;border-radius:20px;padding:24px}.contact-list{display:grid;gap:12px;margin-top:18px}.contact-item{display:flex;gap:12px;align-items:flex-start}.contact-item b{display:block}.contact-item span,.contact-item a{font-size:14px;color:#60748e;text-decoration:none}.contact-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.contact-actions .secondary{display:inline-flex}
 .hf522-social{background:linear-gradient(135deg,#eef9ff 0%,#fff 48%,#fff1f8 100%)}.hf522-social-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;align-items:center;margin-top:24px}.hf522-social-card{border:1px solid var(--line);background:#fff;border-radius:22px;padding:24px;box-shadow:0 10px 30px rgba(20,37,61,.06)}.hf522-social-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.hf522-social-link{display:flex;align-items:center;gap:11px;border:1px solid #dfeaf5;border-radius:15px;padding:13px 14px;background:#fff;color:#173d66;text-decoration:none;font-weight:900;transition:.18s}.hf522-social-link:hover{transform:translateY(-2px);border-color:#a9d8f8;box-shadow:0 8px 20px rgba(18,35,61,.08)}.hf522-social-link span{font-size:21px}.hf522-social-note{font-size:13px;color:#667b92;line-height:1.55;margin-top:10px}.hf522-social-cta{display:inline-flex;margin-top:18px}
 .site-footnote{font-size:12px;color:#71849c;margin-top:18px}.legacy-note{margin-top:22px;border:1px dashed #bdd6ea;border-radius:14px;padding:14px;background:#f8fcff;color:#5b7089;font-size:13px}
-.hf52-footer-in{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;text-align:center!important;gap:18px!important;padding-top:38px!important;padding-bottom:38px!important}.hf52-footer-brand{display:grid;gap:5px}.hf52-footer-brand strong{font-size:20px}.hf52-footer-brand small{color:#bcd0e2!important}.hf52-footer-verse{max-width:780px;margin:0;padding:0 18px;font-size:16px;line-height:1.65;font-style:italic;color:#eef7ff}.hf52-footer-verse cite{display:block;margin-top:7px;font-size:13px;font-style:normal;font-weight:900;color:#8ed7ff}.hf52-footer-dev{padding-top:14px;border-top:1px solid rgba(255,255,255,.12);width:min(720px,100%);font-size:12px;color:#9fb7cb}.hf52-footer-dev strong{color:#fff}
+.hf52-footer-in{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;text-align:center!important;gap:18px!important;padding-top:38px!important;padding-bottom:38px!important}.hf52-footer-brand{display:grid;gap:8px;justify-items:center}.hf52-footer-brand-logo{width:min(300px,72vw);height:72px;object-fit:contain;object-position:center;background:transparent;border:0;box-shadow:none;filter:drop-shadow(0 3px 6px rgba(0,0,0,.18))}.hf52-footer-brand strong{font-size:20px}.hf52-footer-brand small{color:#bcd0e2!important}.hf52-footer-verse{max-width:780px;margin:0;padding:0 18px;font-size:16px;line-height:1.65;font-style:italic;color:#eef7ff}.hf52-footer-verse cite{display:block;margin-top:7px;font-size:13px;font-style:normal;font-weight:900;color:#8ed7ff}.hf52-footer-dev{padding-top:14px;border-top:1px solid rgba(255,255,255,.12);width:min(720px,100%);font-size:12px;color:#9fb7cb}.hf52-footer-dev strong{color:#fff}
 @media(max-width:940px){.services-grid{grid-template-columns:repeat(2,1fr)}.about-grid,.contact-grid{grid-template-columns:1fr}.site-nav{top:69px}}
 @media(max-width:620px){.site-nav{top:69px}.site-nav-in{justify-content:flex-start;padding:0 10px}.site-nav a,.site-nav button{padding:10px 9px;font-size:12px}.site-section{padding:46px 14px}.section-title{font-size:30px}.services-grid{grid-template-columns:1fr}.service-card{padding:18px}.about-card,.contact-card{padding:20px}.contact-actions>a{width:100%}.hf522-social-grid{grid-template-columns:1fr}.hf522-social-links{grid-template-columns:1fr}}
 '''
@@ -282,8 +282,17 @@ def gerar_html_site_completo(
     # HF52.2 — rodapé institucional: recupera o versículo do site anterior e
     # identifica o desenvolvimento do site, usando sempre o ano vigente.
     ano_vigente = datetime.now().year
+    # HF52.2-HF1-HF3 — o rodapé reutiliza exatamente o mesmo wordmark do cabeçalho
+    # aprovado, evitando uma segunda representação tipográfica da marca.
+    logo_rodape_match = re.search(r'<img class="brand-logo" src="([^"]+)" alt="AlphaFest"\>', pagina)
+    logo_rodape_src = logo_rodape_match.group(1) if logo_rodape_match else ""
+    marca_rodape = (
+        f'<img class="hf52-footer-brand-logo" src="{html.escape(logo_rodape_src, quote=True)}" alt="AlphaFest">'
+        if logo_rodape_src
+        else f'<strong>{html.escape(nome)}</strong>'
+    )
     footer_hf52 = f'''<footer class="footer"><div class="footer-in hf52-footer-in">
-      <div class="hf52-footer-brand"><strong>{html.escape(nome)}</strong><small>{html.escape(slogan)}</small></div>
+      <div class="hf52-footer-brand">{marca_rodape}<small>{html.escape(slogan)}</small></div>
       <blockquote class="hf52-footer-verse">“Consagre ao Senhor tudo o que você faz, e os seus planos serão bem-sucedidos.”<cite>Provérbios 16:3</cite></blockquote>
       <div class="hf52-footer-dev">© {ano_vigente} AlphaFest · Desenvolvido por <strong>Jorge Gauke</strong></div>
     </div></footer>'''

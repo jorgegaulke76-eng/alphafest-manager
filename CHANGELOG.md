@@ -1,3 +1,9 @@
+## 20.4.9-I8.13.5-HF52.2-HF1-HF3
+
+- Rodapé passa a reutilizar o mesmo logo/wordmark transparente aprovado no cabeçalho.
+- Remove a representação textual simples da marca no rodapé quando o logo oficial está disponível.
+- Preserva slogan, Provérbios 16:3, crédito do desenvolvedor, estrutura comercial, busca, métricas e publicação HF44.
+
 ## 20.4.9-I8.13.5-HF52.2-HF1-HF2
 - Categorias com cores AlphaFest mais fortes e gradientes suaves.
 - Cabeçalho/logo AlphaFest preservado no padrão homologado.
