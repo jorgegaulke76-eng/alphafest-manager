@@ -38,7 +38,7 @@ def test_hf52_2_hero_about_footer_and_gallery_order():
     pos_contato = html.index('id="contato"')
     pos_galeria = html.index('id="galeria"')
     pos_footer = html.index('<footer class="footer">')
-    assert pos_produtos < pos_servicos < pos_quem < pos_contato < pos_galeria < pos_footer
+    assert pos_servicos < pos_quem < pos_contato < pos_produtos < pos_galeria < pos_footer
 
 
 def test_hf52_2_gallery_is_last_main_nav_item_when_enabled():
@@ -48,4 +48,4 @@ def test_hf52_2_gallery_is_last_main_nav_item_when_enabled():
 
 
 def test_current_version_hf52_2():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF52.2'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF52.2-HF1'

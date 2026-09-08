@@ -35,7 +35,7 @@ def test_hf481_visual_e_opt_in_e_preserva_padrao():
     assert "O que você está procurando?" in novo
     assert 'id="categorias"' in novo
     assert "Explore por categoria" in novo
-    assert "Como pedir na AlphaFest" in novo
+    assert "Como pedir na AlphaFest" not in novo  # HF52.2-HF1: fluxo principal simplificado
 
 
 def test_hf481_categoria_visual_dispara_filtro_existente():

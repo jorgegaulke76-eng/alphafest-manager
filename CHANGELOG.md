@@ -1291,3 +1291,6 @@ hangelog
 - Quem Somos incorpora o texto institucional do Wix.
 - Rodapé recupera Provérbios 16:3, ano vigente e crédito “Desenvolvido por Jorge Gauke”.
 - Preserva busca, métricas, Catálogo e publicação HF44; sem novo SQL.
+
+## 20.4.9-I8.13.5-HF52.2-HF1
+- Reordena jornada comercial do site e adiciona seção Fale com a AlphaFest com redes sociais configuráveis.

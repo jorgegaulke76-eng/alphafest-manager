@@ -819,6 +819,10 @@ CONFIG_EMPRESA_PADRAO = {
     "email": "alphafesti@gmail.com",
     "celular": "(11) 97294-9533",
     "whatsapp_catalogo": "11972949533",
+    "instagram_url": "https://www.instagram.com/alphafest10/",
+    "facebook_url": "https://www.facebook.com/alphafest10",
+    "tiktok_url": "",
+    "youtube_url": "",
     "cidade": "Itatiba",
     "uf": "SP",
     "pix_link": "https://linkspix.app/alphafestitatiba",
@@ -36479,6 +36483,15 @@ if pagina_atual == "configuracoes":
             celular_empresa = c2.text_input("Celular", value=str(config_atual.get("celular", "")))
             whatsapp_catalogo = st.text_input("WhatsApp do catálogo (somente números)", value=str(config_atual.get("whatsapp_catalogo", "")))
 
+            st.subheader("Redes sociais do site")
+            st.caption("Os links preenchidos aqui aparecem em ‘Fale com a AlphaFest’ no site público.")
+            c1, c2 = st.columns(2)
+            instagram_url = c1.text_input("Instagram", value=str(config_atual.get("instagram_url", "https://www.instagram.com/alphafest10/")), placeholder="https://www.instagram.com/...")
+            facebook_url = c2.text_input("Facebook", value=str(config_atual.get("facebook_url", "https://www.facebook.com/alphafest10")), placeholder="https://www.facebook.com/...")
+            c1, c2 = st.columns(2)
+            tiktok_url = c1.text_input("TikTok", value=str(config_atual.get("tiktok_url", "")), placeholder="https://www.tiktok.com/@...")
+            youtube_url = c2.text_input("YouTube", value=str(config_atual.get("youtube_url", "")), placeholder="https://www.youtube.com/@...")
+
             st.subheader("Pagamento PIX")
             pix_link = st.text_input("Link de pagamento PIX", value=str(config_atual.get("pix_link", "")))
             c1, c2 = st.columns(2)
@@ -36517,6 +36530,10 @@ if pagina_atual == "configuracoes":
                 "email": email_empresa.strip(),
                 "celular": celular_empresa.strip(),
                 "whatsapp_catalogo": re.sub(r"\D", "", whatsapp_catalogo),
+                "instagram_url": instagram_url.strip(),
+                "facebook_url": facebook_url.strip(),
+                "tiktok_url": tiktok_url.strip(),
+                "youtube_url": youtube_url.strip(),
                 "pix_link": pix_link.strip(),
                 "pix_titular": pix_titular.strip(),
                 "pix_banco": pix_banco.strip(),
