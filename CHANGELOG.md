@@ -1271,3 +1271,11 @@ hangelog
 - adiciona conversões por sessão Acesso → Produto, Acesso → WhatsApp e Produto → WhatsApp;
 - mantém atualização automática de 30s, botão manual, rankings e privacidade;
 - não altera o site público e não exige novo SQL.
+
+## 20.4.9-I8.13.5-HF52.1-HF3 — origem dos acessos e termos buscados
+- adiciona ranking privado de origem dos acessos dos últimos 30 dias, classificando Direto, Google, Instagram, Facebook, TikTok, Pinterest, YouTube, WhatsApp e outros domínios;
+- adiciona ranking dos termos pesquisados dentro da vitrine;
+- registra a busca somente após 900 ms sem digitação e a partir de 2 caracteres para não gravar cada tecla;
+- preserva Hoje / 7 dias / 30 dias, funil comercial, atualização automática de 30s e botão manual;
+- exige uma migração SQL simples, apenas para permitir o novo evento `search`;
+- não altera visual, Catálogo, Galeria, preços, WhatsApp ou motor HF44.

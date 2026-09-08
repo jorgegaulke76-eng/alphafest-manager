@@ -12,6 +12,7 @@ import os
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+from urllib.parse import urlparse
 from typing import Any, Dict, Iterable
 
 import requests
@@ -77,6 +78,22 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
     try{fetch(endpoint,{method:'POST',headers:headers,body:JSON.stringify(payload),keepalive:true,mode:'cors'}).catch(function(){});}catch(e){}
   }
   send('page_view','');
+  let searchTimer=null, lastSearch='';
+  function scheduleSearch(value){
+    clearTimeout(searchTimer);
+    const term=(value||'').replace(/\s+/g,' ').trim().slice(0,180);
+    if(term.length<2) return;
+    searchTimer=setTimeout(function(){
+      const key=term.toLocaleLowerCase('pt-BR');
+      if(key===lastSearch) return;
+      lastSearch=key;
+      send('search',term);
+    },900);
+  }
+  document.addEventListener('input',function(ev){
+    const el=ev.target;
+    if(el && (el.id==='search' || el.id==='hf48-header-search-input')) scheduleSearch(el.value);
+  },true);
   document.addEventListener('click',function(ev){
     const t=ev.target.closest ? ev.target.closest('a,button,.product-card,.product-related-card') : null;
     if(!t) return;
@@ -175,6 +192,33 @@ def _pct(num: int, den: int) -> float:
     return round((num / den) * 100, 1) if den else 0.0
 
 
+def _traffic_source(referrer: str) -> str:
+    raw = str(referrer or "").strip()
+    if not raw:
+        return "Direto"
+    try:
+        host = (urlparse(raw).hostname or "").lower().removeprefix("www.")
+    except Exception:
+        host = raw.lower()
+    if "google." in host:
+        return "Google"
+    if host.endswith("instagram.com"):
+        return "Instagram"
+    if host.endswith("facebook.com") or host.endswith("fb.com"):
+        return "Facebook"
+    if host.endswith("tiktok.com"):
+        return "TikTok"
+    if host.endswith("pinterest.com"):
+        return "Pinterest"
+    if host.endswith("youtube.com") or host.endswith("youtu.be"):
+        return "YouTube"
+    if "whatsapp" in host or host == "wa.me":
+        return "WhatsApp"
+    if host.endswith("alphafest.com.br"):
+        return "Navegação interna"
+    return host or "Outros"
+
+
 def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None:
@@ -191,9 +235,16 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
     page_rows = _rows("page_view", d30)
     product_rows = _rows("product_open", d30)
     wa_rows = _rows("whatsapp_click", d30)
+    try:
+        search_rows = _rows("search", d30)
+    except (KeyError, LookupError):
+        # Compatibilidade com a tabela anterior ao HF52.1-HF3 / testes legados.
+        search_rows = []
 
     products = Counter(str(x.get("product_name") or "").strip() for x in product_rows if str(x.get("product_name") or "").strip())
     wa_products = Counter(str(x.get("product_name") or "").strip() for x in wa_rows if str(x.get("product_name") or "").strip())
+    search_terms = Counter(str(x.get("product_name") or "").strip() for x in search_rows if str(x.get("product_name") or "").strip())
+    traffic_sources = Counter(_traffic_source(str(x.get("referrer") or "")) for x in page_rows)
     sessions = {str(x.get("session_id") or "") for x in page_rows if str(x.get("session_id") or "")}
     visitors = {str(x.get("client_id") or "") for x in page_rows if str(x.get("client_id") or "")}
 
@@ -229,4 +280,7 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
         "periods": periods,
         "top_products": products.most_common(8),
         "top_whatsapp_products": wa_products.most_common(8),
+        "top_search_terms": search_terms.most_common(10),
+        "traffic_sources": traffic_sources.most_common(10),
+        "searches_30d": len(search_rows),
     }

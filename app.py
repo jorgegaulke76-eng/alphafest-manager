@@ -25571,12 +25571,13 @@ if pagina_atual == "site":
     )
 
 
-    # HF52.1-HF2 — métricas privadas por período + funil comercial, com atualização automática leve a cada 30s.
+    # HF52.1-HF3 — métricas privadas por período + funil + origem dos acessos + termos buscados.
+    # Compatibilidade visual HF52.1-HF2: "Métricas privadas do Site · HF52.1-HF2".
     if pode_executar_acoes_tecnicas(obter_usuario_atual()):
-        with st.expander("📊 Métricas privadas do Site · HF52.1-HF2", expanded=False):
+        with st.expander("📊 Métricas privadas do Site · HF52.1-HF3", expanded=False):
             st.caption("Somente usuários autorizados do Manager veem este painel. A prévia interna não é contabilizada.")
 
-            def _renderizar_metricas_site_hf52_1_hf2():
+            def _renderizar_metricas_site_hf52_1_hf3():
                 _metrics_server = _site_metrics_server_config()
                 if not _site_metrics_tracking_available():
                     st.warning("Rastreamento ainda não ativo: configure SUPABASE_KEY (publishable/anon) nos Secrets do Manager.")
@@ -25656,14 +25657,32 @@ if pagina_atual == "site":
                                 st.write(f"{_nome} — **{_qtd}**")
                         else:
                             st.caption("Ainda sem cliques registrados.")
+
+                    st.divider()
+                    _src_col, _search_col = st.columns(2)
+                    with _src_col:
+                        st.markdown("**Origem dos acessos · 30 dias**")
+                        if _m.get("traffic_sources"):
+                            for _origem, _qtd in _m["traffic_sources"]:
+                                st.write(f"{_origem} — **{_qtd}**")
+                        else:
+                            st.caption("Ainda sem acessos registrados.")
+                    with _search_col:
+                        st.markdown("**Termos mais buscados no site · 30 dias**")
+                        if _m.get("top_search_terms"):
+                            for _termo, _qtd in _m["top_search_terms"]:
+                                st.write(f"{_termo} — **{_qtd}**")
+                            st.caption(f"Buscas registradas · 30 dias: {_m.get('searches_30d', 0)}")
+                        else:
+                            st.caption("As buscas aparecerão aqui após a publicação desta versão do site.")
                 except LookupError:
                     st.info("A estrutura de métricas ainda precisa ser criada uma única vez no Supabase. Use o arquivo SUPABASE_SITE_METRICS_HF52_1.sql incluído na atualização.")
                 except Exception as _metrics_exc:
                     st.warning("Não foi possível carregar as métricas agora. O restante do Manager continua normal.")
                     st.caption(str(_metrics_exc)[:220])
 
-            _renderizar_metricas_site_hf52_1_hf2_auto = st.fragment(run_every="30s")(_renderizar_metricas_site_hf52_1_hf2)
-            _renderizar_metricas_site_hf52_1_hf2_auto()
+            _renderizar_metricas_site_hf52_1_hf3_auto = st.fragment(run_every="30s")(_renderizar_metricas_site_hf52_1_hf3)
+            _renderizar_metricas_site_hf52_1_hf3_auto()
 
     st.success(
         "✨ **HF40 · Site completo:** Início · Produtos · Serviços · Quem Somos · Contato. "
