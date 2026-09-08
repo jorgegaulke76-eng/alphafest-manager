@@ -360,7 +360,10 @@ body{background:var(--hf48-bg)}
   const productInput=document.getElementById('search');
   if(form && topInput && productInput){
     form.addEventListener('submit',function(ev){
-      ev.preventDefault(); productInput.value=topInput.value || '';
+      ev.preventDefault();
+      productInput.value=topInput.value || '';
+      const todos=document.querySelector('.filter[data-cat="todos"]');
+      if(todos) todos.click();
       productInput.dispatchEvent(new Event('input',{bubbles:true}));
       const alvo=document.getElementById('produtos'); if(alvo) alvo.scrollIntoView({behavior:'smooth',block:'start'});
     });

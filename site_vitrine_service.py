@@ -427,8 +427,8 @@ def gerar_html_vitrine(
     const h=norm(haystack), q=norm(query); if(!q)return true; if(h.includes(q))return true;
     const hw=h.split(' ').filter(Boolean), qw=q.split(' ').filter(Boolean);
     return qw.every(token=>hw.some(word=>{
-      if(word.includes(token)||token.includes(word))return true;
-      if(token.length>=3 && word.startsWith(token.slice(0,Math.min(3,token.length))))return true;
+      if(word.includes(token))return true;
+      if(word.length>=3 && token.includes(word))return true;
       const lim=token.length>=7?2:(token.length>=4?1:0);
       return lim>0 && editDistance(word,token,lim)<=lim;
     }));
@@ -492,7 +492,7 @@ def gerar_html_vitrine(
 """
     else:
         script_filtros = r"""
-(function(){let cat='todos';const cards=[...document.querySelectorAll('.product-card')];const input=document.getElementById('search');const count=document.getElementById('result-count');function norm(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}function dist(a,b,m){if(Math.abs(a.length-b.length)>m)return m+1;let p=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){let c=[i],r=i;for(let j=1;j<=b.length;j++){const z=a[i-1]===b[j-1]?0:1;c[j]=Math.min(c[j-1]+1,p[j]+1,p[j-1]+z);r=Math.min(r,c[j]);}if(r>m)return m+1;p=c;}return p[b.length];}function match(h,q){h=norm(h);q=norm(q);if(!q||h.includes(q))return true;const hw=h.split(' '),qw=q.split(' ');return qw.every(t=>hw.some(w=>w.includes(t)||t.includes(w)||(t.length>=3&&w.startsWith(t.slice(0,3)))||(t.length>=4&&dist(w,t,t.length>=7?2:1)<=(t.length>=7?2:1))));}function apply(){const q=input.value;let n=0;cards.forEach(c=>{const okCat=cat==='todos'||c.dataset.cat===cat;const okQ=match(c.dataset.search,q);const ok=okCat&&okQ;c.style.display=ok?'flex':'none';if(ok)n++;});count.textContent=n+' produto(s)';}document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');cat=b.dataset.cat;apply();}));input.addEventListener('input',apply);apply();})();
+(function(){let cat='todos';const cards=[...document.querySelectorAll('.product-card')];const input=document.getElementById('search');const count=document.getElementById('result-count');function norm(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}function dist(a,b,m){if(Math.abs(a.length-b.length)>m)return m+1;let p=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){let c=[i],r=i;for(let j=1;j<=b.length;j++){const z=a[i-1]===b[j-1]?0:1;c[j]=Math.min(c[j-1]+1,p[j]+1,p[j-1]+z);r=Math.min(r,c[j]);}if(r>m)return m+1;p=c;}return p[b.length];}function match(h,q){h=norm(h);q=norm(q);if(!q||h.includes(q))return true;const hw=h.split(' '),qw=q.split(' ');return qw.every(t=>hw.some(w=>w.includes(t)||(w.length>=3&&t.includes(w))||(t.length>=4&&dist(w,t,t.length>=7?2:1)<=(t.length>=7?2:1))));}function apply(){const q=input.value;let n=0;cards.forEach(c=>{const okCat=cat==='todos'||c.dataset.cat===cat;const okQ=match(c.dataset.search,q);const ok=okCat&&okQ;c.style.display=ok?'flex':'none';if(ok)n++;});count.textContent=n+' produto(s)';}document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');cat=b.dataset.cat;apply();}));input.addEventListener('input',apply);apply();})();
 """
 
     # HF51.2 — ficha comercial: preço em destaque quando autorizado, CTAs antes da descrição e relacionados preservados.

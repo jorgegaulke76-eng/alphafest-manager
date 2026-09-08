@@ -1279,3 +1279,8 @@ hangelog
 - preserva Hoje / 7 dias / 30 dias, funil comercial, atualização automática de 30s e botão manual;
 - exige uma migração SQL simples, apenas para permitir o novo evento `search`;
 - não altera visual, Catálogo, Galeria, preços, WhatsApp ou motor HF44.
+
+## 20.4.9-I8.13.5-HF52.1-HF3-HF1 — correção da busca pública
+- Busca deixa de aceitar falsos positivos por palavras curtas / prefixo de 3 caracteres.
+- Busca do cabeçalho passa a resetar categoria/subcategoria e pesquisar globalmente.
+- Sem alteração de banco ou do visual homologado.
