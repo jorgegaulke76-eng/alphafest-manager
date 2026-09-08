@@ -1,5 +1,9 @@
+## 20.4.9-I8.13.5-HF52.2-HF1-HF2
+- Categorias com cores AlphaFest mais fortes e gradientes suaves.
+- Cabeçalho/logo AlphaFest preservado no padrão homologado.
 
-## 20.4.9-I8.13.5-HF52.2-HF1-HF1
+
+## 20.4.9-I8.13.5-HF52.2-HF1-HF2
 - Categorias do site agora usam cores suaves diferentes dentro da paleta AlphaFest.
 - Mantida legibilidade, responsividade e comportamento dos filtros.
 
