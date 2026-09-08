@@ -12,4 +12,4 @@ def test_autopilot_has_campaign_palette_selector():
 
 
 def test_version_hf53_2_hf2():
-    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip()=="20.4.9-I8.13.5-HF53.2-HF5-HF3"
+    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip()=="20.4.9-I8.13.5-HF53.2-HF5-HF4"

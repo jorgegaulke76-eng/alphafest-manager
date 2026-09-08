@@ -1,4 +1,4 @@
-"""HF53.2-HF5-HF3 — Designer Comercial Mestre AlphaFest.
+"""HF53.2-HF5-HF4 — Designer Comercial Mestre AlphaFest.
 
 Camada determinística de direção de arte e copy para o Piloto Automático.
 Não publica nada e não depende de serviço externo. Seu papel é preparar textos
@@ -131,10 +131,12 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
     campaign = _clean(campaign)
     objective = _clean(objective) or "Vender"
 
-    # HF53.2-HF5-HF3: a direção já nasce dentro das áreas seguras.
+    # HF53.2-HF5-HF4: título inteligente preserva o nome integral; demais áreas seguras permanecem iguais.
     # Antes o plano podia criar um benefício com 88 caracteres e a própria
     # revisão recusava qualquer benefício acima de 72.
-    title = _clip(name.upper(), 52)
+    # O título da arte nunca recebe reticências. O renderer ajusta fonte e quebra
+    # em até 3 linhas para preservar o nome comercial integral.
+    title = _clean(name.upper())
     subtitle = profile["subtitle"]
     if campaign and _norm(campaign) not in {"permanente", "campanha permanente"}:
         subtitle = f"{campaign}: {subtitle}"
@@ -159,7 +161,7 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
     for channel in channels:
         limits = _CHANNEL_LIMITS.get(channel, _CHANNEL_LIMITS["Instagram Feed"])
         per_channel[channel] = {
-            "title": _clip(title, limits["title"]),
+            "title": title,
             "subtitle": _clip(subtitle, limits["subtitle"]),
             "description": _clip(description, limits["description"]),
             "cta": _clip(cta, 28).upper(),
@@ -174,7 +176,7 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
         "objective": objective,
         "campaign": campaign or "Permanente",
         "channels": per_channel,
-        "rules_version": "HF53.2-HF5-HF3",
+        "rules_version": "HF53.2-HF5-HF4",
     }
 
 
@@ -213,7 +215,8 @@ def validate_design_plan(plan: dict[str, Any]) -> dict[str, Any]:
     checks.append({"id": "benefits", "ok": 3 <= len(benefits) <= 5, "label": "3 a 5 benefícios sem excesso"})
     checks.append({"id": "cta", "ok": bool(_clean(plan.get("cta"))), "label": "CTA presente"})
     checks.append({"id": "channels", "ok": bool(plan.get("channels")), "label": "Formatos definidos"})
-    checks.append({"id": "title_length", "ok": len(_clean(plan.get("title"))) <= 52, "label": "Título dentro da área segura"})
+    title_clean = _clean(plan.get("title"))
+    checks.append({"id": "title_length", "ok": len(title_clean) <= 96 and "…" not in title_clean and "..." not in title_clean, "label": "Título integral, sem reticências"})
     checks.append({"id": "subtitle_length", "ok": len(_clean(plan.get("subtitle"))) <= 120, "label": "Faixa de campanha sem excesso"})
     checks.append({"id": "benefit_length", "ok": all(len(_clean(x)) <= 72 for x in benefits), "label": "Benefícios compatíveis com o layout"})
     checks.append({"id": "cta_length", "ok": len(_clean(plan.get("cta"))) <= 28, "label": "CTA curto e dominante"})

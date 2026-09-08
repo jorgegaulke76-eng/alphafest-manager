@@ -587,21 +587,49 @@ def _default_applications(profile: dict[str, Any], title: str) -> list[str]:
     return ["Festas", "Presentes", "Decoração", "Momentos"]
 
 
+def _wrap_complete(draw: ImageDraw.ImageDraw, text: str, font, max_width: int) -> list[str]:
+    """Quebra todas as palavras sem truncar nem acrescentar reticências."""
+    words = re.sub(r"\s+", " ", str(text or "")).strip().split()
+    lines: list[str] = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if not current or draw.textbbox((0, 0), candidate, font=font)[2] <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
 def _fit_wrapped_font(draw: ImageDraw.ImageDraw, text: str, max_width: int, max_height: int, start: int, minimum: int, max_lines: int, *, bold: bool = True, serif: bool = False, italic: bool = False):
-    """Ajusta fonte considerando largura E altura do bloco antes de desenhar."""
+    """HF53.2-HF5-HF4: reduz a fonte até TODO o título caber, sem ``...``."""
     clean = re.sub(r"\s+", " ", str(text or "")).strip()
     for size in range(int(start), int(minimum) - 1, -2):
         font = _font(size, bold=bold, serif=serif, italic=italic)
-        lines = _wrap(draw, clean, font, max_width, max_lines)
+        lines = _wrap_complete(draw, clean, font, max_width)
+        if len(lines) > max_lines:
+            continue
         line_h = max(1, draw.textbbox((0, 0), "Ag", font=font)[3] - draw.textbbox((0, 0), "Ag", font=font)[1])
-        total_h = line_h * len(lines) + max(0, len(lines)-1) * max(2, int(size*.08))
+        total_h = line_h * len(lines) + max(0, len(lines)-1) * max(2, int(size*.05))
         widest = max((draw.textbbox((0,0), line, font=font)[2] for line in lines), default=0)
         if widest <= max_width and total_h <= max_height:
             return font, lines, line_h
-    font = _font(minimum, bold=bold, serif=serif, italic=italic)
-    lines = _wrap(draw, clean, font, max_width, max_lines)
-    line_h = max(1, draw.textbbox((0, 0), "Ag", font=font)[3] - draw.textbbox((0, 0), "Ag", font=font)[1])
-    return font, lines, line_h
+    # Salvaguarda extrema: continua reduzindo abaixo do mínimo nominal em vez
+    # de cortar o nome. Produtos cadastrados normalmente não chegam aqui.
+    for size in range(int(minimum) - 2, 31, -2):
+        font = _font(size, bold=bold, serif=serif, italic=italic)
+        lines = _wrap_complete(draw, clean, font, max_width)
+        if len(lines) <= max_lines:
+            line_h = max(1, draw.textbbox((0, 0), "Ag", font=font)[3] - draw.textbbox((0, 0), "Ag", font=font)[1])
+            total_h = line_h * len(lines) + max(0, len(lines)-1) * max(2, int(size*.05))
+            if total_h <= max_height:
+                return font, lines, line_h
+    font = _font(32, bold=bold, serif=serif, italic=italic)
+    lines = _wrap_complete(draw, clean, font, max_width)
+    return font, lines[:max_lines], max(1, draw.textbbox((0, 0), "Ag", font=font)[3] - draw.textbbox((0, 0), "Ag", font=font)[1])
 
 
 def _draw_heart(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, fill, outline=None, width: int = 2):
@@ -709,9 +737,9 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
     if logo:
         canvas.alpha_composite(logo,((W-logo.width)//2,16))
 
-    # Título com sombra e contorno: leitura forte, duas linhas no máximo.
+    # Título inteligente: preserva o nome integral e usa até três linhas sem reticências.
     raw_title=re.sub(r"\s+"," ",str(title or profile.get("title1") or "PRODUTO ALPHAFEST")).strip().upper()
-    tf,title_lines,line_h=_fit_wrapped_font(draw,raw_title,690,218,124,68,2,bold=True)
+    tf,title_lines,line_h=_fit_wrapped_font(draw,raw_title,690,218,124,44,3,bold=True)
     ty=180
     spacing=max(2,int(tf.size*.02)) if hasattr(tf,"size") else 3
     for line in title_lines:
