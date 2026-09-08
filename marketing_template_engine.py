@@ -361,46 +361,66 @@ def _trim_transparent(image: Image.Image) -> Image.Image:
 def _paste_photo(canvas: Image.Image, source: Image.Image, box: tuple[int,int,int,int], radius: int = 28, *, mode: str = "auto", product_title: str = "", upscale: bool = False):
     """Posiciona a foto sem deformar e escolhe o tratamento adequado.
 
+    HF53.2-HF5-HF2: a foto é renderizada primeiro em uma camada do tamanho
+    exato da área protegida. Assim, produto e sombra jamais podem invadir título,
+    benefícios, miniaturas ou CTA, mesmo quando a imagem original é muito maior
+    que a caixa. ``upscale`` permite ampliar imagens pequenas, mas nunca impede
+    o downscale obrigatório de imagens grandes.
+
     ``auto`` preserva fotos de balões e produtos com cenário; nos demais casos,
     tenta remover o fundo. ``preservar`` mantém a foto inteira e ``recortar``
     força o recorte do produto.
     """
     x1, y1, x2, y2 = box
-    w, h = x2 - x1, y2 - y1
+    w, h = max(1, x2 - x1), max(1, y2 - y1)
     original = ImageOps.exif_transpose(source).convert("RGBA")
     title_low = str(product_title or "").casefold()
     preserve_auto = any(k in title_low for k in ("balão", "balao", "painel", "cenário", "cenario", "decoração completa"))
     preserve = mode == "preservar" or (mode == "auto" and preserve_auto)
 
+    # Toda a composição da foto nasce nesta camada. Qualquer pixel fora dela é
+    # fisicamente descartado antes de chegar ao canvas mestre.
+    zone = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+
     if preserve:
         # Foto inteira, sem esticar. Fundo suavemente arredondado para fotos de ambiente.
         photo = ImageOps.contain(original, (w, h), Image.Resampling.LANCZOS)
-        px = x1 + (w - photo.width) // 2
-        py = y1 + (h - photo.height) // 2
+        px = (w - photo.width) // 2
+        py = (h - photo.height) // 2
         mask = Image.new("L", photo.size, 0)
         ImageDraw.Draw(mask).rounded_rectangle((0, 0, photo.width, photo.height), radius=min(radius, max(8, min(photo.size)//8)), fill=255)
         shadow_mask = mask.filter(ImageFilter.GaussianBlur(16))
         shadow = Image.new("RGBA", photo.size, (0, 35, 80, 0)); shadow.putalpha(shadow_mask.point(lambda v: int(v*.32)))
-        canvas.alpha_composite(shadow, (px+10, py+14))
-        canvas.paste(photo, (px, py), mask)
+        zone.alpha_composite(shadow, (px+10, py+14))
+        zone.paste(photo, (px, py), mask)
+        canvas.alpha_composite(zone, (x1, y1))
         return
 
     product = _trim_transparent(_remove_background(original) if mode in {"auto", "recortar"} else original)
     if not product.getbbox():
         product = original
-    if upscale and product.width > 0 and product.height > 0:
-        scale=min(w/product.width,h/product.height)
-        # O mestre comercial pode ampliar foto cadastrada para garantir protagonismo.
-        scale=max(1.0,min(scale,3.0))
-        product=product.resize((max(1,int(product.width*scale)),max(1,int(product.height*scale))),Image.Resampling.LANCZOS)
-    else:
-        product.thumbnail((w, h), Image.Resampling.LANCZOS)
-    px = x1 + (w - product.width) // 2
-    py = y1 + (h - product.height) // 2
+
+    if product.width > 0 and product.height > 0:
+        fit_scale = min(w / product.width, h / product.height)
+        if upscale:
+            # Imagem pequena pode crescer até 3x; imagem grande SEMPRE diminui
+            # até caber integralmente na área segura.
+            scale = min(fit_scale, 3.0)
+        else:
+            scale = min(1.0, fit_scale)
+        if abs(scale - 1.0) > 0.001:
+            product = product.resize(
+                (max(1, int(product.width * scale)), max(1, int(product.height * scale))),
+                Image.Resampling.LANCZOS,
+            )
+
+    px = (w - product.width) // 2
+    py = (h - product.height) // 2
     alpha = product.getchannel("A")
     shadow = _soft_shadow(alpha, blur=max(12, int(min(product.size) * 0.045)), opacity=95)
-    canvas.alpha_composite(shadow, (px + 16, py + 20))
-    canvas.alpha_composite(product, (px, py))
+    zone.alpha_composite(shadow, (px + 16, py + 20))
+    zone.alpha_composite(product, (px, py))
+    canvas.alpha_composite(zone, (x1, y1))
 
 def _product_profile(title: str, description: str, subtitle: str) -> dict[str, Any]:
     raw = re.sub(r"\([^)]*\)", " ", str(title or "Produto AlphaFest"))
