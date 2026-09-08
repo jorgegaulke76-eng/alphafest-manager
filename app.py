@@ -26451,7 +26451,7 @@ if pagina_atual == "crescimento":
     # HF53.2-HF3 — Designer Comercial: paleta por campanha + formatos por canal.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.2-HF5: Template Mestre Comercial profissional — referência aprovada, Feed 1080×1350 nativo, 5 benefícios, produto protagonista, CTA WhatsApp forte, 4 aplicações e revisão automática. Nada é publicado sem sua aprovação.")
+        st.caption("HF53.2-HF5-HF1: Template Mestre Comercial profissional — referência aprovada, Feed 1080×1350 nativo, 5 benefícios, produto protagonista, CTA WhatsApp forte, 4 aplicações e revisão automática. Nada é publicado sem sua aprovação.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26575,7 +26575,7 @@ if pagina_atual == "crescimento":
                         _mkt_plan = _alpha_build_design_plan(_mkt_product, _mkt_objective, _mkt_campaign, _mkt_channels)
                         _mkt_plan_review = _alpha_validate_design_plan(_mkt_plan)
                         if not _mkt_plan_review.get("ok"):
-                            raise ValueError("Direção comercial não passou na revisão automática.")
+                            raise ValueError("Direção comercial não passou na revisão automática: " + "; ".join(_mkt_plan_review.get("failed") or ["regra não identificada"]))
                         _mkt_copies, _mkt_copy_engine = gerar_conteudo_marketing(
                             _mkt_product, _mkt_objective, _mkt_campaign, _mkt_channels, "", "Venda direta", _mkt_img_png
                         )
@@ -26611,7 +26611,7 @@ if pagina_atual == "crescimento":
                             "categoria": str(_mkt_product.get("Categoria") or ""),
                             "campanha": _mkt_campaign.strip() or "Permanente",
                             "objetivo": _mkt_objective,
-                            "origem_criativa": "Designer Comercial AlphaFest HF53.2-HF5",
+                            "origem_criativa": "Designer Comercial AlphaFest HF53.2-HF5-HF1",
                             "tipo_registro": "campanha_automatica",
                             "canais": list(_mkt_channels),
                             "artes_png": _mkt_arts,
@@ -26628,7 +26628,7 @@ if pagina_atual == "crescimento":
                             "quality_gate": "APROVADO AUTOMATICAMENTE",
                             "paleta_nome": _mkt_palette_name,
                             "paleta_visual": dict(_mkt_palette),
-                            "designer_rules_version": "HF53.2-HF5",
+                            "designer_rules_version": "HF53.2-HF5-HF1",
                         }
                         conteudos.insert(0, _mkt_record)
                         marketing["conteudos"] = conteudos

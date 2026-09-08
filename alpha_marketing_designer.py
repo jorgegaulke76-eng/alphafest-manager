@@ -1,4 +1,4 @@
-"""HF53.2-HF5 — Designer Comercial Mestre AlphaFest.
+"""HF53.2-HF5-HF1 — Designer Comercial Mestre AlphaFest.
 
 Camada determinística de direção de arte e copy para o Piloto Automático.
 Não publica nada e não depende de serviço externo. Seu papel é preparar textos
@@ -131,25 +131,29 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
     campaign = _clean(campaign)
     objective = _clean(objective) or "Vender"
 
-    title = name.upper()
+    # HF53.2-HF5-HF1: a direção já nasce dentro das áreas seguras.
+    # Antes o plano podia criar um benefício com 88 caracteres e a própria
+    # revisão recusava qualquer benefício acima de 72.
+    title = _clip(name.upper(), 52)
     subtitle = profile["subtitle"]
     if campaign and _norm(campaign) not in {"permanente", "campanha permanente"}:
         subtitle = f"{campaign}: {subtitle}"
 
-    benefits = _dedupe_phrases(list(profile["benefits"]))[:5]
+    benefits = [_clip(x, 68) for x in _dedupe_phrases(list(profile["benefits"]))[:5]]
     if desc:
         first = re.split(r"(?<=[.!?])\s+", desc)[0]
-        first = _clip(first, 88)
+        first = _clip(first, 68)
         if first and not any(_norm(first) == _norm(x) for x in benefits):
-            benefits = _dedupe_phrases([first] + benefits)[:5]
+            benefits = [_clip(x, 68) for x in _dedupe_phrases([first] + benefits)[:5]]
 
+    subtitle = _clip(subtitle, 120)
     description = " • ".join(benefits)
-    cta = profile["cta"]
+    cta = _clip(profile["cta"], 28)
     if _norm(objective) == "corporativo":
-        subtitle = "Sua marca em destaque com personalização sob medida"
-        cta = "SOLICITE SEU ORÇAMENTO"
+        subtitle = _clip("Sua marca em destaque com personalização sob medida", 120)
+        cta = _clip("SOLICITE SEU ORÇAMENTO", 28)
     elif _norm(objective) in {"novidade", "apresentar produto"}:
-        cta = "CONHEÇA ESTE PRODUTO"
+        cta = _clip("CONHEÇA ESTE PRODUTO", 28)
 
     per_channel: dict[str, dict[str, str]] = {}
     for channel in channels:
@@ -170,7 +174,7 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
         "objective": objective,
         "campaign": campaign or "Permanente",
         "channels": per_channel,
-        "rules_version": "HF53.2-HF5",
+        "rules_version": "HF53.2-HF5-HF1",
     }
 
 
@@ -214,7 +218,8 @@ def validate_design_plan(plan: dict[str, Any]) -> dict[str, Any]:
     checks.append({"id": "benefit_length", "ok": all(len(_clean(x)) <= 72 for x in benefits), "label": "Benefícios compatíveis com o layout"})
     checks.append({"id": "cta_length", "ok": len(_clean(plan.get("cta"))) <= 28, "label": "CTA curto e dominante"})
     score = round(100 * sum(1 for x in checks if x["ok"]) / max(1, len(checks)))
-    return {"ok": all(x["ok"] for x in checks), "score": score, "checks": checks}
+    failed = [x["label"] for x in checks if not x["ok"]]
+    return {"ok": not failed, "score": score, "checks": checks, "failed": failed}
 
 
 def validate_art_bytes(data: bytes, expected_size: tuple[int, int]) -> dict[str, Any]:
