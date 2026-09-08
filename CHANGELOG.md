@@ -1284,3 +1284,10 @@ hangelog
 - Busca deixa de aceitar falsos positivos por palavras curtas / prefixo de 3 caracteres.
 - Busca do cabeçalho passa a resetar categoria/subcategoria e pesquisar globalmente.
 - Sem alteração de banco ou do visual homologado.
+
+## 20.4.9-I8.13.5-HF52.2 — institucional, rodapé e jornada da Galeria
+- Galeria/fotos reposicionada para perto do rodapé, após Contato.
+- Hero atualizado para “Ideias presentes em suas festas e em sua empresa, destacando sua MARCA!”.
+- Quem Somos incorpora o texto institucional do Wix.
+- Rodapé recupera Provérbios 16:3, ano vigente e crédito “Desenvolvido por Jorge Gauke”.
+- Preserva busca, métricas, Catálogo e publicação HF44; sem novo SQL.

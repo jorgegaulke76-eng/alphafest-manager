@@ -9,6 +9,7 @@ Este módulo é somente leitura: não persiste dados, não publica e não altera
 """
 from __future__ import annotations
 
+from datetime import datetime
 import html
 import re
 from typing import Any, Callable, Dict, Iterable, Optional
@@ -127,6 +128,7 @@ def gerar_html_site_completo(
 .about-grid{display:grid;grid-template-columns:1.12fr .88fr;gap:28px;align-items:stretch}.about-card{border:1px solid var(--line);background:#fff;border-radius:22px;padding:28px;box-shadow:0 12px 34px rgba(20,37,61,.06)}.about-card h3{margin:0 0 14px;font-size:23px}.about-card p{color:#5d718b;line-height:1.75}.about-points{display:grid;gap:12px;margin-top:20px}.about-point{display:flex;gap:10px;align-items:flex-start;background:#f7fbff;border-radius:13px;padding:13px}.about-point strong{display:block;font-size:14px}.about-point span{font-size:13px;color:#647991}
 .contact-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;margin-top:28px}.contact-card{border:1px solid var(--line);background:#fff;border-radius:20px;padding:24px}.contact-list{display:grid;gap:12px;margin-top:18px}.contact-item{display:flex;gap:12px;align-items:flex-start}.contact-item b{display:block}.contact-item span,.contact-item a{font-size:14px;color:#60748e;text-decoration:none}.contact-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.contact-actions .secondary{display:inline-flex}
 .site-footnote{font-size:12px;color:#71849c;margin-top:18px}.legacy-note{margin-top:22px;border:1px dashed #bdd6ea;border-radius:14px;padding:14px;background:#f8fcff;color:#5b7089;font-size:13px}
+.hf52-footer-in{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;text-align:center!important;gap:18px!important;padding-top:38px!important;padding-bottom:38px!important}.hf52-footer-brand{display:grid;gap:5px}.hf52-footer-brand strong{font-size:20px}.hf52-footer-brand small{color:#bcd0e2!important}.hf52-footer-verse{max-width:780px;margin:0;padding:0 18px;font-size:16px;line-height:1.65;font-style:italic;color:#eef7ff}.hf52-footer-verse cite{display:block;margin-top:7px;font-size:13px;font-style:normal;font-weight:900;color:#8ed7ff}.hf52-footer-dev{padding-top:14px;border-top:1px solid rgba(255,255,255,.12);width:min(720px,100%);font-size:12px;color:#9fb7cb}.hf52-footer-dev strong{color:#fff}
 @media(max-width:940px){.services-grid{grid-template-columns:repeat(2,1fr)}.about-grid,.contact-grid{grid-template-columns:1fr}.site-nav{top:69px}}
 @media(max-width:620px){.site-nav{top:69px}.site-nav-in{justify-content:flex-start;padding:0 10px}.site-nav a,.site-nav button{padding:10px 9px;font-size:12px}.site-section{padding:46px 14px}.section-title{font-size:30px}.services-grid{grid-template-columns:1fr}.service-card{padding:18px}.about-card,.contact-card{padding:20px}.contact-actions>a{width:100%}}
 '''
@@ -150,7 +152,7 @@ def gerar_html_site_completo(
     if incluir_galeria:
         galeria_nav = '<button type="button" data-site-scroll="galeria">Galeria</button>'
         nav = f'''<nav class="site-nav" aria-label="Navegação principal"><div class="site-nav-in">
-          <button type="button" data-site-scroll="inicio">Início</button><button type="button" data-site-scroll="produtos">Produtos</button>{galeria_nav}<button type="button" data-site-scroll="servicos">Serviços</button><button type="button" data-site-scroll="quem-somos">Quem Somos</button><button type="button" data-site-scroll="contato">Contato</button>
+          <button type="button" data-site-scroll="inicio">Início</button><button type="button" data-site-scroll="produtos">Produtos</button><button type="button" data-site-scroll="servicos">Serviços</button><button type="button" data-site-scroll="quem-somos">Quem Somos</button><button type="button" data-site-scroll="contato">Contato</button>{galeria_nav}
         </div></nav>'''
     else:
         nav = '''<nav class="site-nav" aria-label="Navegação principal"><div class="site-nav-in">
@@ -162,8 +164,7 @@ def gerar_html_site_completo(
     local_txt = " · ".join([x for x in [cidade, uf] if x])
     sobre = f'''<section class="site-section alt" id="quem-somos"><div class="site-wrap"><div class="about-grid">
       <div><div class="section-kicker">Quem Somos</div><h2 class="section-title">Personalização com cuidado em cada detalhe.</h2>
-      <p class="section-copy">A {html.escape(nome)} é especializada em personalizados para festas, eventos, marcas e presentes. Cada projeto nasce a partir do que o cliente precisa — tema, medida, cor, material, quantidade e prazo — para transformar uma ideia em algo realmente único.</p>
-      {('<div class="legacy-note">Esta apresentação reaproveita a essência institucional do site anterior, mas foi reescrita para o novo site. Produtos e dados de contato continuam vindo do Manager.</div>' if modo_preview else '')}</div>
+      <p class="section-copy"><strong>Sou feliz e grata por ter o melhor time para oferecer o melhor a você!</strong><br><br>A {html.escape(nome)} é uma empresa especializada em tudo o que há de personalizado para sua festa ou evento.<br><br>Estamos sempre de olho nas tendências do mercado e nas novidades do universo infantil, criando lembranças criativas com muita dedicação e profissionalismo.<br><br>Nossas peças são personalizadas de acordo com os desejos de cada cliente, transformando sonhos em realidade.</p></div>
       <aside class="about-card"><h3>Por que falar com a AlphaFest?</h3><div class="about-points">
         <div class="about-point"><div>🎨</div><div><strong>Personalização de verdade</strong><span>Cada pedido pode ser ajustado à ocasião e à identidade do cliente.</span></div></div>
         <div class="about-point"><div>🧩</div><div><strong>Várias soluções no mesmo lugar</strong><span>Personalizados, gráfica, brindes, balões, impressão 3D e gravação a laser.</span></div></div>
@@ -195,9 +196,10 @@ def gerar_html_site_completo(
         <div class="about-point"><div>3️⃣</div><div><strong>Receba a orientação</strong><span>A AlphaFest confirma possibilidades, valor e próximos passos.</span></div></div>
       </div></div></div>{('<div class="site-footnote">Dados de contato exibidos nesta página são lidos da configuração oficial da empresa no AlphaFest Manager.</div>' if modo_preview else '')}</div></section>'''
 
-    # HF47.1: Início -> Produtos -> Galeria -> Serviços -> Quem Somos -> Contato.
+    # HF52.2: jornada comercial primeiro; Galeria/fotos fica próxima ao rodapé.
+    # Ordem: Início -> Produtos -> Serviços -> Quem Somos -> Contato -> Galeria.
     galeria_html = str(galeria_fragmento.get("html") or "") if incluir_galeria else ""
-    extras = galeria_html + servicos + sobre + contato
+    extras = servicos + sobre + contato + galeria_html
     marcador_mobile = '<a class="mobile-whatsapp"'
     pos = pagina.find(marcador_mobile)
     if pos >= 0:
@@ -236,6 +238,17 @@ def gerar_html_site_completo(
             usar_mascotes=mascotes_hf48,
             imagem_resolver=imagem_resolver,
         )
+
+    # HF52.2 — rodapé institucional: recupera o versículo do site anterior e
+    # identifica o desenvolvimento do site, usando sempre o ano vigente.
+    ano_vigente = datetime.now().year
+    footer_hf52 = f'''<footer class="footer"><div class="footer-in hf52-footer-in">
+      <div class="hf52-footer-brand"><strong>{html.escape(nome)}</strong><small>{html.escape(slogan)}</small></div>
+      <blockquote class="hf52-footer-verse">“Consagre ao Senhor tudo o que você faz, e os seus planos serão bem-sucedidos.”<cite>Provérbios 16:3</cite></blockquote>
+      <div class="hf52-footer-dev">© {ano_vigente} AlphaFest · Desenvolvido por <strong>Jorge Gauke</strong></div>
+    </div></footer>'''
+    pagina = re.sub(r'<footer class="footer">.*?</footer>', footer_hf52, pagina, count=1, flags=re.S)
+
     # HF52.1: somente a versão pública coleta métricas. Prévia interna não conta acesso.
     pagina = inject_tracking(pagina, enabled=not modo_preview)
     return pagina

@@ -281,7 +281,7 @@ body{background:var(--hf48-bg)}
     # Hero mais comercial: preserva estatísticas e CTAs, só reorganiza a linguagem.
     if mascotes.get("hero"):
         hero_novo = f'''<section class="hero hf48-hero-branded" id="inicio">{f'<img class="hf48-real-balloons" src="{mascotes.get("baloes", "")}" alt="Balões decorativos AlphaFest">' if mascotes.get("baloes") else ""}<div class="hero-in"><div>
-          <h1>Ideias que viram <span>presentes, festas e marcas.</span></h1>
+          <h1>Ideias presentes em suas festas e em sua empresa, <span>destacando sua MARCA!</span></h1>
           <p>{html.escape(slogan)} Explore produtos, veja trabalhos reais e peça uma personalização do seu jeito — quantidade, cor, material e prazo combinados com a AlphaFest.</p>
           <div class="hero-actions"><a class="cta" href="#contato">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Ver produtos</a></div>
           <div class="hf48-trust"><span>✓ Sem pedido mínimo</span><span>✓ Personalização sob medida</span><span>✓ Atendimento pelo WhatsApp</span></div>
@@ -289,7 +289,7 @@ body{background:var(--hf48-bg)}
     else:
         hero_novo = f'''<section class="hero" id="inicio"><div class="hero-in"><div>
           <div class="eyebrow">AlphaFest · Personalizados & Balões</div>
-          <h1>Ideias que viram <span>presentes, festas e marcas.</span></h1>
+          <h1>Ideias presentes em suas festas e em sua empresa, <span>destacando sua MARCA!</span></h1>
           <p>{html.escape(slogan)} Explore produtos, veja trabalhos reais e peça uma personalização do seu jeito — quantidade, cor, material e prazo combinados com a AlphaFest.</p>
           <div class="hero-actions"><a class="cta" href="#contato">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Ver produtos</a></div>
           <div class="hf48-trust"><span>✓ Sem pedido mínimo</span><span>✓ Personalização sob medida</span><span>✓ Atendimento pelo WhatsApp</span></div>
@@ -457,7 +457,7 @@ body{background:var(--hf48-bg)}
   // HF51.4-HF1 — menu mobile enxuto: 4 destinos principais + “Mais”.
   const mobileNav=document.querySelector('.site-nav-in');
   if(mobileNav && !mobileNav.querySelector('.hf50-mobile-more')){
-    const hiddenLabels=new Set(['Serviços','Quem Somos','Contato']);
+    const hiddenLabels=new Set(['Serviços','Quem Somos','Contato','Galeria']);
     const originals=[...mobileNav.children].filter(function(el){return el.matches && el.matches('a,button');});
     const moreWrap=document.createElement('div'); moreWrap.className='hf50-mobile-more';
     const moreBtn=document.createElement('button'); moreBtn.type='button'; moreBtn.setAttribute('aria-expanded','false'); moreBtn.innerHTML='☰ <span>Mais</span>';
