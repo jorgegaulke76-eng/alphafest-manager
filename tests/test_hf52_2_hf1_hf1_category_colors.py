@@ -16,4 +16,4 @@ def test_category_cards_use_alphafest_palette():
 
 
 def test_version():
-    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.2-HF4"
+    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.2-HF5"

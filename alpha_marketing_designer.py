@@ -1,4 +1,4 @@
-"""HF53.2-HF4 — Designer Comercial Mestre AlphaFest.
+"""HF53.2-HF5 — Designer Comercial Mestre AlphaFest.
 
 Camada determinística de direção de arte e copy para o Piloto Automático.
 Não publica nada e não depende de serviço externo. Seu papel é preparar textos
@@ -30,11 +30,13 @@ _PROFILES = [
         {
             "subtitle": "Personalização durável para presentes, brindes e empresas",
             "benefits": [
-                "Acabamento marcante e sofisticado",
-                "Ideal para brindes e presentes",
-                "Personalização sob medida",
+                "Design exclusivo",
+                "Fácil de usar",
+                "Material de qualidade",
+                "Personalizado sob medida",
+                "Múltiplos usos",
             ],
-            "cta": "PEÇA SEU ORÇAMENTO",
+            "cta": "CONHEÇA ESTE PRODUTO",
         },
     ),
     (
@@ -134,12 +136,12 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
     if campaign and _norm(campaign) not in {"permanente", "campanha permanente"}:
         subtitle = f"{campaign}: {subtitle}"
 
-    benefits = _dedupe_phrases(list(profile["benefits"]))[:4]
+    benefits = _dedupe_phrases(list(profile["benefits"]))[:5]
     if desc:
         first = re.split(r"(?<=[.!?])\s+", desc)[0]
         first = _clip(first, 88)
         if first and not any(_norm(first) == _norm(x) for x in benefits):
-            benefits = _dedupe_phrases([first] + benefits)[:4]
+            benefits = _dedupe_phrases([first] + benefits)[:5]
 
     description = " • ".join(benefits)
     cta = profile["cta"]
@@ -168,7 +170,7 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
         "objective": objective,
         "campaign": campaign or "Permanente",
         "channels": per_channel,
-        "rules_version": "HF53.2-HF4",
+        "rules_version": "HF53.2-HF5",
     }
 
 
@@ -204,9 +206,13 @@ def validate_design_plan(plan: dict[str, Any]) -> dict[str, Any]:
     checks.append({"id": "title", "ok": bool(_clean(plan.get("title"))), "label": "Título presente"})
     checks.append({"id": "subtitle", "ok": bool(_clean(plan.get("subtitle"))), "label": "Subtítulo coerente"})
     benefits = list(plan.get("benefits") or [])
-    checks.append({"id": "benefits", "ok": 2 <= len(benefits) <= 4, "label": "2 a 4 benefícios sem excesso"})
+    checks.append({"id": "benefits", "ok": 3 <= len(benefits) <= 5, "label": "3 a 5 benefícios sem excesso"})
     checks.append({"id": "cta", "ok": bool(_clean(plan.get("cta"))), "label": "CTA presente"})
     checks.append({"id": "channels", "ok": bool(plan.get("channels")), "label": "Formatos definidos"})
+    checks.append({"id": "title_length", "ok": len(_clean(plan.get("title"))) <= 52, "label": "Título dentro da área segura"})
+    checks.append({"id": "subtitle_length", "ok": len(_clean(plan.get("subtitle"))) <= 120, "label": "Faixa de campanha sem excesso"})
+    checks.append({"id": "benefit_length", "ok": all(len(_clean(x)) <= 72 for x in benefits), "label": "Benefícios compatíveis com o layout"})
+    checks.append({"id": "cta_length", "ok": len(_clean(plan.get("cta"))) <= 28, "label": "CTA curto e dominante"})
     score = round(100 * sum(1 for x in checks if x["ok"]) / max(1, len(checks)))
     return {"ok": all(x["ok"] for x in checks), "score": score, "checks": checks}
 
@@ -217,7 +223,15 @@ def validate_art_bytes(data: bytes, expected_size: tuple[int, int]) -> dict[str,
     try:
         with Image.open(io.BytesIO(data)) as img:
             size = tuple(img.size)
-            ok = size == tuple(expected_size) and img.width >= 1000 and img.height >= 1000
-            return {"ok": ok, "size": size, "expected_size": tuple(expected_size), "reason": "ok" if ok else "dimensão divergente"}
+            rgb = img.convert("RGB")
+            extrema = rgb.getextrema()
+            contrast = max((hi-lo) for lo,hi in extrema) if extrema else 0
+            # Amostra simples para impedir arquivo vazio/quase uniforme.
+            sample = rgb.resize((24,24))
+            colors = sample.getcolors(maxcolors=24*24) or []
+            diversity = len(colors)
+            ok = size == tuple(expected_size) and img.width >= 1000 and img.height >= 1000 and contrast >= 35 and diversity >= 12
+            reason = "ok" if ok else ("dimensão divergente" if size != tuple(expected_size) else "arte visualmente vazia ou sem contraste suficiente")
+            return {"ok": ok, "size": size, "expected_size": tuple(expected_size), "contrast": contrast, "diversity": diversity, "reason": reason}
     except Exception:
         return {"ok": False, "reason": "PNG não pôde ser validado"}

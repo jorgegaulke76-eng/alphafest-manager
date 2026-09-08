@@ -26451,7 +26451,7 @@ if pagina_atual == "crescimento":
     # HF53.2-HF3 — Designer Comercial: paleta por campanha + formatos por canal.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.2-HF4: Template Mestre Comercial — título unificado, produto protagonista, benefícios legíveis, CTA dominante e paleta aplicada à peça inteira. Nada é publicado sem sua aprovação.")
+        st.caption("HF53.2-HF5: Template Mestre Comercial profissional — referência aprovada, Feed 1080×1350 nativo, 5 benefícios, produto protagonista, CTA WhatsApp forte, 4 aplicações e revisão automática. Nada é publicado sem sua aprovação.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26531,7 +26531,18 @@ if pagina_atual == "crescimento":
                     "Preto Premium": {"primary":"#111111","secondary":"#2C2C2C","accent":"#D4AF37","background":"#F7F7F7","text":"#111111","metallic":"#D4AF37"},
                     "Roxo Premium": {"primary":"#4C2A92","secondary":"#7654D6","accent":"#C49BFF","background":"#FBF8FF","text":"#36206D","metallic":"#D8C6F5"},
                 }
-                _mkt_palette = _mkt_custom_palette or _mkt_palette_presets.get(_mkt_palette_name) or _mkt_palette_presets["Automático AlphaFest"]
+                if _mkt_custom_palette:
+                    _mkt_palette = _mkt_custom_palette
+                    _mkt_theme_label = "Personalizada"
+                elif _mkt_palette_name == "Automático AlphaFest":
+                    _mkt_theme_id = detect_theme(_mkt_campaign, _mkt_selected_name)
+                    _mkt_theme = get_theme(_mkt_theme_id)
+                    _mkt_palette = dict(_mkt_theme.get("palette") or _mkt_palette_presets["Automático AlphaFest"])
+                    _mkt_theme_label = str(_mkt_theme.get("label") or "AlphaFest Clássico")
+                else:
+                    _mkt_palette = _mkt_palette_presets.get(_mkt_palette_name) or _mkt_palette_presets["Automático AlphaFest"]
+                    _mkt_theme_label = _mkt_palette_name
+                st.caption(f"Tema aplicado ao Template Mestre: {_mkt_theme_label}")
                 st.markdown(
                     "<div style='display:flex;gap:7px;align-items:center;margin:2px 0 8px'>"
                     + "".join(f"<span title='{k}' style='width:26px;height:18px;border-radius:6px;border:1px solid #ffffff44;background:{v};display:inline-block'></span>" for k,v in _mkt_palette.items() if k in {"primary","secondary","accent","background"})
@@ -26600,7 +26611,7 @@ if pagina_atual == "crescimento":
                             "categoria": str(_mkt_product.get("Categoria") or ""),
                             "campanha": _mkt_campaign.strip() or "Permanente",
                             "objetivo": _mkt_objective,
-                            "origem_criativa": "Designer Comercial AlphaFest HF53.2-HF4",
+                            "origem_criativa": "Designer Comercial AlphaFest HF53.2-HF5",
                             "tipo_registro": "campanha_automatica",
                             "canais": list(_mkt_channels),
                             "artes_png": _mkt_arts,
@@ -26617,7 +26628,7 @@ if pagina_atual == "crescimento":
                             "quality_gate": "APROVADO AUTOMATICAMENTE",
                             "paleta_nome": _mkt_palette_name,
                             "paleta_visual": dict(_mkt_palette),
-                            "designer_rules_version": "HF53.2-HF4",
+                            "designer_rules_version": "HF53.2-HF5",
                         }
                         conteudos.insert(0, _mkt_record)
                         marketing["conteudos"] = conteudos
