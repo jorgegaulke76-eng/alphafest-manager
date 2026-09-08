@@ -1265,3 +1265,9 @@ hangelog
 - adiciona botão `↻ Atualizar agora`;
 - adiciona indicador dinâmico `Atualizado há Xs` sem consultar o banco a cada segundo;
 - rerun isolado no fragmento das métricas; site público e HF44 preservados.
+
+## 20.4.9-I8.13.5-HF52.1-HF2 — períodos e funil comercial
+- adiciona visão lado a lado de Hoje, 7 dias e 30 dias para acessos, produtos abertos e cliques no WhatsApp;
+- adiciona conversões por sessão Acesso → Produto, Acesso → WhatsApp e Produto → WhatsApp;
+- mantém atualização automática de 30s, botão manual, rankings e privacidade;
+- não altera o site público e não exige novo SQL.

@@ -11,6 +11,7 @@ import json
 import os
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, Iterable
 
 import requests
@@ -149,26 +150,83 @@ def _rows(event_type: str, since: datetime, limit: int = 5000) -> list[dict[str,
     return data if isinstance(data, list) else []
 
 
+def _row_at_or_after(row: dict[str, Any], since: datetime) -> bool:
+    raw = str(row.get("created_at") or "").strip()
+    if not raw:
+        return False
+    try:
+        dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc) >= since.astimezone(timezone.utc)
+    except Exception:
+        return False
+
+
+def _session_ids(rows: Iterable[dict[str, Any]], since: datetime) -> set[str]:
+    return {
+        str(x.get("session_id") or "").strip()
+        for x in rows
+        if _row_at_or_after(x, since) and str(x.get("session_id") or "").strip()
+    }
+
+
+def _pct(num: int, den: int) -> float:
+    return round((num / den) * 100, 1) if den else 0.0
+
+
 def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
     now = now or datetime.now(timezone.utc)
-    d1 = now - timedelta(days=1)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    now = now.astimezone(timezone.utc)
+
+    # "Hoje" segue o dia civil da operação AlphaFest (America/Sao_Paulo).
+    local_now = now.astimezone(ZoneInfo("America/Sao_Paulo"))
+    today_local = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    dtoday = today_local.astimezone(timezone.utc)
     d7 = now - timedelta(days=7)
     d30 = now - timedelta(days=30)
+
     page_rows = _rows("page_view", d30)
     product_rows = _rows("product_open", d30)
     wa_rows = _rows("whatsapp_click", d30)
+
     products = Counter(str(x.get("product_name") or "").strip() for x in product_rows if str(x.get("product_name") or "").strip())
     wa_products = Counter(str(x.get("product_name") or "").strip() for x in wa_rows if str(x.get("product_name") or "").strip())
     sessions = {str(x.get("session_id") or "") for x in page_rows if str(x.get("session_id") or "")}
     visitors = {str(x.get("client_id") or "") for x in page_rows if str(x.get("client_id") or "")}
+
+    periods = {}
+    for key, since in (("today", dtoday), ("7d", d7), ("30d", d30)):
+        page_sessions = _session_ids(page_rows, since)
+        product_sessions = _session_ids(product_rows, since)
+        wa_sessions = _session_ids(wa_rows, since)
+        periods[key] = {
+            "pageviews": _count("page_view", since),
+            "products": _count("product_open", since),
+            "whatsapp": _count("whatsapp_click", since),
+            "sessions": len(page_sessions),
+            "product_sessions": len(product_sessions),
+            "whatsapp_sessions": len(wa_sessions),
+            "conv_product": _pct(len(product_sessions), len(page_sessions)),
+            "conv_whatsapp": _pct(len(wa_sessions), len(page_sessions)),
+            "conv_product_to_whatsapp": _pct(len(wa_sessions), len(product_sessions)),
+        }
+
     return {
-        "pageviews_24h": _count("page_view", d1),
-        "pageviews_7d": _count("page_view", d7),
-        "pageviews_30d": _count("page_view", d30),
-        "product_30d": _count("product_open", d30),
-        "whatsapp_30d": _count("whatsapp_click", d30),
+        "pageviews_today": periods["today"]["pageviews"],
+        "pageviews_7d": periods["7d"]["pageviews"],
+        "pageviews_30d": periods["30d"]["pageviews"],
+        "product_today": periods["today"]["products"],
+        "product_7d": periods["7d"]["products"],
+        "product_30d": periods["30d"]["products"],
+        "whatsapp_today": periods["today"]["whatsapp"],
+        "whatsapp_7d": periods["7d"]["whatsapp"],
+        "whatsapp_30d": periods["30d"]["whatsapp"],
         "sessions_30d": len(sessions),
         "visitors_30d": len(visitors),
+        "periods": periods,
         "top_products": products.most_common(8),
         "top_whatsapp_products": wa_products.most_common(8),
     }

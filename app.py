@@ -25571,12 +25571,12 @@ if pagina_atual == "site":
     )
 
 
-    # HF52.1-HF1 — métricas privadas com atualização automática leve a cada 30s.
+    # HF52.1-HF2 — métricas privadas por período + funil comercial, com atualização automática leve a cada 30s.
     if pode_executar_acoes_tecnicas(obter_usuario_atual()):
-        with st.expander("📊 Métricas privadas do Site · HF52.1-HF1", expanded=False):
+        with st.expander("📊 Métricas privadas do Site · HF52.1-HF2", expanded=False):
             st.caption("Somente usuários autorizados do Manager veem este painel. A prévia interna não é contabilizada.")
 
-            def _renderizar_metricas_site_hf52_1_hf1():
+            def _renderizar_metricas_site_hf52_1_hf2():
                 _metrics_server = _site_metrics_server_config()
                 if not _site_metrics_tracking_available():
                     st.warning("Rastreamento ainda não ativo: configure SUPABASE_KEY (publishable/anon) nos Secrets do Manager.")
@@ -25587,7 +25587,6 @@ if pagina_atual == "site":
 
                 _refresh_col, _status_col = st.columns([1, 3])
                 with _refresh_col:
-                    # Dentro de um fragmento, o clique reroda somente este bloco.
                     st.button("↻ Atualizar agora", key="site_metrics_refresh_hf52_1_hf1", use_container_width=True)
 
                 try:
@@ -25612,11 +25611,36 @@ if pagina_atual == "site":
                             height=32,
                         )
 
-                    _mc1, _mc2, _mc3 = st.columns(3)
-                    _mc1.metric("Acessos · 30 dias", _m.get("pageviews_30d", 0), help=f"Últimas 24h: {_m.get('pageviews_24h',0)} · 7 dias: {_m.get('pageviews_7d',0)}")
-                    _mc2.metric("Produtos abertos · 30 dias", _m.get("product_30d", 0))
-                    _mc3.metric("Cliques no WhatsApp · 30 dias", _m.get("whatsapp_30d", 0))
-                    st.caption(f"Sessões estimadas: {_m.get('sessions_30d',0)} • Visitantes estimados: {_m.get('visitors_30d',0)}")
+                    st.markdown("**Resumo por período**")
+                    _today = (_m.get("periods") or {}).get("today", {})
+                    _d7 = (_m.get("periods") or {}).get("7d", {})
+                    _d30 = (_m.get("periods") or {}).get("30d", {})
+                    _pc1, _pc2, _pc3 = st.columns(3)
+                    for _col, _titulo, _p in [
+                        (_pc1, "Hoje", _today),
+                        (_pc2, "Últimos 7 dias", _d7),
+                        (_pc3, "Últimos 30 dias", _d30),
+                    ]:
+                        with _col:
+                            st.markdown(f"### {_titulo}")
+                            st.metric("Acessos", _p.get("pageviews", 0))
+                            st.metric("Produtos abertos", _p.get("products", 0))
+                            st.metric("Cliques no WhatsApp", _p.get("whatsapp", 0))
+
+                    st.markdown("**Funil comercial por sessão**")
+                    _fc1, _fc2, _fc3 = st.columns(3)
+                    with _fc1:
+                        st.metric("Acesso → Produto", f"{_d30.get('conv_product', 0):.1f}%", help="Percentual de sessões dos últimos 30 dias em que pelo menos um produto foi aberto.")
+                    with _fc2:
+                        st.metric("Acesso → WhatsApp", f"{_d30.get('conv_whatsapp', 0):.1f}%", help="Percentual de sessões dos últimos 30 dias que chegaram a um clique no WhatsApp.")
+                    with _fc3:
+                        st.metric("Produto → WhatsApp", f"{_d30.get('conv_product_to_whatsapp', 0):.1f}%", help="Entre as sessões que abriram produto, quantas também chegaram ao WhatsApp.")
+                    st.caption(
+                        f"Sessões estimadas · 30 dias: {_m.get('sessions_30d',0)} • "
+                        f"Visitantes estimados · 30 dias: {_m.get('visitors_30d',0)} • "
+                        "Conversões calculadas por sessão para evitar distorção por vários cliques da mesma pessoa."
+                    )
+
                     _ta, _tb = st.columns(2)
                     with _ta:
                         st.markdown("**Produtos mais abertos · 30 dias**")
@@ -25638,8 +25662,8 @@ if pagina_atual == "site":
                     st.warning("Não foi possível carregar as métricas agora. O restante do Manager continua normal.")
                     st.caption(str(_metrics_exc)[:220])
 
-            _renderizar_metricas_site_hf52_1_hf1_auto = st.fragment(run_every="30s")(_renderizar_metricas_site_hf52_1_hf1)
-            _renderizar_metricas_site_hf52_1_hf1_auto()
+            _renderizar_metricas_site_hf52_1_hf2_auto = st.fragment(run_every="30s")(_renderizar_metricas_site_hf52_1_hf2)
+            _renderizar_metricas_site_hf52_1_hf2_auto()
 
     st.success(
         "✨ **HF40 · Site completo:** Início · Produtos · Serviços · Quem Somos · Contato. "
