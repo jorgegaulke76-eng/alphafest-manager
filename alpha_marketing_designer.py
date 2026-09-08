@@ -1,4 +1,4 @@
-"""HF53.2-HF5-HF2 — Designer Comercial Mestre AlphaFest.
+"""HF53.2-HF5-HF3 — Designer Comercial Mestre AlphaFest.
 
 Camada determinística de direção de arte e copy para o Piloto Automático.
 Não publica nada e não depende de serviço externo. Seu papel é preparar textos
@@ -131,7 +131,7 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
     campaign = _clean(campaign)
     objective = _clean(objective) or "Vender"
 
-    # HF53.2-HF5-HF2: a direção já nasce dentro das áreas seguras.
+    # HF53.2-HF5-HF3: a direção já nasce dentro das áreas seguras.
     # Antes o plano podia criar um benefício com 88 caracteres e a própria
     # revisão recusava qualquer benefício acima de 72.
     title = _clip(name.upper(), 52)
@@ -174,7 +174,7 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
         "objective": objective,
         "campaign": campaign or "Permanente",
         "channels": per_channel,
-        "rules_version": "HF53.2-HF5-HF2",
+        "rules_version": "HF53.2-HF5-HF3",
     }
 
 

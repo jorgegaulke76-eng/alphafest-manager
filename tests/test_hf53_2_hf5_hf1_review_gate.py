@@ -17,7 +17,7 @@ def test_hf5_hf1_long_product_description_is_normalized_before_review():
     review = validate_design_plan(plan)
     assert review["ok"], review
     assert review["failed"] == []
-    assert plan["rules_version"] == "HF53.2-HF5-HF2"
+    assert plan["rules_version"] == "HF53.2-HF5-HF3"
 
 
 def test_hf5_hf1_review_reports_failed_rule_names():

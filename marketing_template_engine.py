@@ -361,7 +361,7 @@ def _trim_transparent(image: Image.Image) -> Image.Image:
 def _paste_photo(canvas: Image.Image, source: Image.Image, box: tuple[int,int,int,int], radius: int = 28, *, mode: str = "auto", product_title: str = "", upscale: bool = False):
     """Posiciona a foto sem deformar e escolhe o tratamento adequado.
 
-    HF53.2-HF5-HF2: a foto é renderizada primeiro em uma camada do tamanho
+    HF53.2-HF5-HF3: a foto é renderizada primeiro em uma camada do tamanho
     exato da área protegida. Assim, produto e sombra jamais podem invadir título,
     benefícios, miniaturas ou CTA, mesmo quando a imagem original é muito maior
     que a caixa. ``upscale`` permite ampliar imagens pequenas, mas nunca impede
@@ -705,18 +705,18 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
     draw.multiline_text((1045-(rbb[2]-rbb[0]),62),right_phrase,font=script,fill=dark_accent,spacing=1,align="right")
 
     # Marca oficial em wordmark horizontal.
-    logo=_brand_wordmark((590,155),logo_path)
+    logo=_brand_wordmark((640,168),logo_path)
     if logo:
-        canvas.alpha_composite(logo,((W-logo.width)//2,20))
+        canvas.alpha_composite(logo,((W-logo.width)//2,16))
 
     # Título com sombra e contorno: leitura forte, duas linhas no máximo.
     raw_title=re.sub(r"\s+"," ",str(title or profile.get("title1") or "PRODUTO ALPHAFEST")).strip().upper()
-    tf,title_lines,line_h=_fit_wrapped_font(draw,raw_title,640,205,112,62,2,bold=True)
-    ty=188
+    tf,title_lines,line_h=_fit_wrapped_font(draw,raw_title,690,218,124,68,2,bold=True)
+    ty=180
     spacing=max(2,int(tf.size*.02)) if hasattr(tf,"size") else 3
     for line in title_lines:
-        draw.text((47,ty+7),line,font=tf,fill=dark_accent,stroke_width=3,stroke_fill=white)
-        draw.text((40,ty),line,font=tf,fill=primary,stroke_width=2,stroke_fill=white)
+        draw.text((49,ty+8),line,font=tf,fill=dark_accent,stroke_width=4,stroke_fill=white)
+        draw.text((40,ty),line,font=tf,fill=primary,stroke_width=3,stroke_fill=white)
         ty += line_h + spacing
 
     # Selo de aprovação no alto direito.
@@ -731,8 +731,8 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
         bb=draw.textbbox((0,0),line,font=badgef); draw.text((sx-(bb[2]-bb[0])//2,sy+4+j*22),line,font=badgef,fill=white)
 
     # Faixa de campanha em duas hierarquias.
-    banner_y=405
-    draw.rounded_rectangle((30,banner_y,625,banner_y+100),radius=28,fill=accent)
+    banner_y=408
+    draw.rounded_rectangle((30,banner_y,635,banner_y+108),radius=30,fill=_hex(_shade(p["rosa"],.92)),outline=_hex(_shade(p["rosa"],1.22)),width=3)
     if awareness:
         _draw_campaign_ribbon(draw,43,banner_y+11,.27,white)
     label=(campaign_label or "ALPHAFEST").upper()
@@ -744,15 +744,15 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
         band_title=f"{label} • {compact_body}" if campaign_label else compact_body
         band_sub=campaign_body if campaign_body and campaign_body != compact_body else (profile.get("subtitle") or "Personalização sob medida para você")
     btf=_fit_font(draw,band_title,500,27,19,bold=True)
-    draw.text((82,banner_y+18),band_title,font=btf,fill=white)
+    draw.text((82,banner_y+16),band_title,font=btf,fill=white)
     bsf=_fit_font(draw,band_sub,510,18,14,bold=False)
     b_lines=_wrap(draw,band_sub,bsf,510,2)
-    for j,line in enumerate(b_lines): draw.text((82,banner_y+54+j*19),line,font=bsf,fill=white)
+    for j,line in enumerate(b_lines): draw.text((82,banner_y+55+j*19),line,font=bsf,fill=white)
 
     # Produto protagonista com pedestal e halo, sem moldura pesada.
-    photo_box=(520,438,1038,945)
-    draw.ellipse((555,845,1018,980),fill=_hex(_shade(p["rosa"],1.17),220),outline=accent,width=3)
-    draw.ellipse((590,460,1028,925),fill=(255,255,255,105))
+    photo_box=(510,448,1045,965)
+    draw.ellipse((540,852,1028,990),fill=_hex(_shade(p["rosa"],1.12),235),outline=_hex(_shade(p["rosa"],.88)),width=4)
+    draw.ellipse((565,458,1035,946),fill=(255,255,255,125))
     _paste_photo(canvas,source,photo_box,28,mode=photo_mode,product_title=title,upscale=True)
 
     # Benefícios: exatamente cinco posições fixas, sem deixar o conteúdo “andar”.
@@ -779,7 +779,7 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
 
     # Destaque de mensagem circular próximo ao produto.
     center_text="Detalhes\nque fazem\na diferença!"
-    cx,cy,cr=946,894,80
+    cx,cy,cr=945,905,82
     draw.ellipse((cx-cr,cy-cr,cx+cr,cy+cr),fill=accent,outline=white,width=5)
     cf=_font(20,bold=True,serif=True,italic=True)
     cbb=draw.multiline_textbbox((0,0),center_text,font=cf,spacing=0,align="center")
@@ -787,7 +787,7 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
 
     # Quatro aplicações visuais em círculos, como a referência.
     apps=_default_applications(profile,title)[:4]
-    thumb_y=966
+    thumb_y=972
     for i,label in enumerate(apps):
         cx=70+i*126
         thumb=ImageOps.fit(source,(94,94),method=Image.Resampling.LANCZOS,centering=(.5,.5))
@@ -800,31 +800,31 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
 
     # CTA WhatsApp: rótulo + telefone grande em um único bloco de alta conversão.
     cta_label=(cta or "CONHEÇA ESTE PRODUTO").upper()
-    cta_box=(560,980,1044,1110)
+    cta_box=(555,988,1048,1120)
     draw.rounded_rectangle(cta_box,radius=48,fill=dark_accent,outline=_hex(_shade(p["rosa"],1.26)),width=4)
-    _draw_whatsapp(draw,620,1047,42,green)
+    _draw_whatsapp(draw,618,1054,44,green)
     ctf=_fit_font(draw,cta_label,350,25,18,bold=True)
-    bb=draw.textbbox((0,0),cta_label,font=ctf); draw.text((822-(bb[2]-bb[0])//2,995),cta_label,font=ctf,fill=white)
+    bb=draw.textbbox((0,0),cta_label,font=ctf); draw.text((824-(bb[2]-bb[0])//2,1001),cta_label,font=ctf,fill=white)
     phone_text=phone or "(11) 97294-9533"
     phf=_fit_font(draw,phone_text,360,43,30,bold=True)
-    pbb=draw.textbbox((0,0),phone_text,font=phf); draw.text((822-(pbb[2]-pbb[0])//2,1034),phone_text,font=phf,fill=white)
+    pbb=draw.textbbox((0,0),phone_text,font=phf); draw.text((824-(pbb[2]-pbb[0])//2,1042),phone_text,font=phf,fill=white)
 
     # Faixa inferior com quatro diferenciais fixos.
     footer_labels=(profile.get("footer") or ["PRÁTICO","CRIATIVO","VALORIZE SEU PRODUTO","AUMENTA SUAS VENDAS"])[:4]
     while len(footer_labels)<4: footer_labels.append(["PRÁTICO","CRIATIVO","VALORIZE SEU PRODUTO","AUMENTA SUAS VENDAS"][len(footer_labels)])
-    strip_y=1140
-    draw.rounded_rectangle((-20,strip_y,1100,1250),radius=42,fill=dark_accent)
+    strip_y=1142
+    draw.rounded_rectangle((-20,strip_y,1100,1258),radius=44,fill=dark_accent)
     cell=270
     footer_icons=("check","star","diamond","check")
     for i,label in enumerate(footer_labels):
         left=i*cell
-        _draw_check(draw,left+47,1195,24,white,icon=footer_icons[i],icon_color=dark_accent)
+        _draw_check(draw,left+47,1200,26,white,icon=footer_icons[i],icon_color=dark_accent)
         ff=_fit_font(draw,str(label).upper(),180,19,13,bold=True)
         lines=_wrap(draw,str(label).upper(),ff,180,2)
-        yy=1185 if len(lines)>1 else 1193
+        yy=1190 if len(lines)>1 else 1198
         for line in lines:
             draw.text((left+82,yy),line,font=ff,fill=white); yy+=19
-        if i: draw.line((left,1160,left,1230),fill=(255,255,255,85),width=2)
+        if i: draw.line((left,1164,left,1238),fill=(255,255,255,105),width=2)
 
     # Rodapé em ondas, com assinatura emocional curta.
     draw.polygon([(0,1250),(180,1270),(380,1255),(600,1280),(820,1258),(1080,1278),(1080,1350),(0,1350)],fill=_hex(_shade(p["rosa"],1.28),205))
