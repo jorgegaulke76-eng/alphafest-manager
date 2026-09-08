@@ -7255,12 +7255,20 @@ def _desenhar_texto_centralizado(draw, texto, fonte, caixa, cor):
     draw.text((x1 + (x2 - x1 - tw) // 2, y1 + (y2 - y1 - th) // 2 - bbox[1]), texto, font=fonte, fill=cor)
 
 
-def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no WhatsApp", descricao="", template_id=MARKETING_DEFAULT_TEMPLATE, palette_override=None, photo_mode="auto"):
+def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no WhatsApp", descricao="", template_id=MARKETING_DEFAULT_TEMPLATE, palette_override=None, photo_mode="auto", application_origins=None):
     """Renderiza uma peça usando a Engine de Templates AlphaFest."""
     config = CANAL_MIDIA_CONFIG.get(canal, CANAL_MIDIA_CONFIG["Instagram Feed"])
     bruto = _ler_bytes_midia(origem)
     if not bruto:
         raise ValueError("Selecione uma imagem válida.")
+    app_images = []
+    for item in list(application_origins or []):
+        try:
+            dados = _ler_bytes_midia(item)
+            if dados:
+                app_images.append(dados)
+        except Exception:
+            continue
     return renderizar_template_marketing(
         bruto,
         config["size"],
@@ -7273,6 +7281,7 @@ def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no 
         logo_path=Path("logo.png"),
         palette_override=palette_override,
         photo_mode=photo_mode,
+        application_images=app_images,
     )
 
 def _openai_api_key():
@@ -26451,7 +26460,7 @@ if pagina_atual == "crescimento":
     # HF53.2-HF3 — Designer Comercial: paleta por campanha + formatos por canal.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.2-HF5-HF4: Template Mestre Comercial profissional — referência aprovada, Feed 1080×1350 nativo, 5 benefícios, produto protagonista, CTA WhatsApp forte, 4 aplicações e revisão automática. Nada é publicado sem sua aprovação.")
+        st.caption("HF53.2-HF5-HF5: Aprovação Final Comercial — textos pequenos reforçados, selo equilibrado, WhatsApp refinado, miniaturas sem repetição e rodapé ampliado. Nada é publicado sem sua aprovação.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26583,6 +26592,19 @@ if pagina_atual == "crescimento":
                         _mkt_arts = {}
                         _mkt_art_reviews = {}
                         _mkt_title = str(_mkt_product.get("Nome") or "Produto AlphaFest")
+                        # HF53.2-HF5-HF5: usar mídias distintas do cadastro nas miniaturas.
+                        # Se só houver uma foto, o template completa com cards de aplicação, sem cloná-la.
+                        _mkt_product_images = _mkt_product.get("Imagens") or []
+                        if isinstance(_mkt_product_images, str):
+                            _mkt_product_images = [_mkt_product_images] if _mkt_product_images.strip() else []
+                        _mkt_application_images = []
+                        for _mkt_media in _mkt_product_images[:8]:
+                            try:
+                                _mkt_media_png = converter_imagem_para_png(_mkt_media)
+                                if _mkt_media_png:
+                                    _mkt_application_images.append(_mkt_media_png)
+                            except Exception:
+                                continue
                         for _mkt_channel in _mkt_channels:
                             if CANAL_MIDIA_CONFIG.get(_mkt_channel, {}).get("tipo") != "imagem":
                                 continue
@@ -26596,6 +26618,7 @@ if pagina_atual == "crescimento":
                                 descricao=_mkt_channel_plan.get("description") or _mkt_plan.get("description") or "",
                                 template_id="splash_premium_anna",
                                 palette_override=_mkt_palette,
+                                application_origins=_mkt_application_images,
                             )
                             _mkt_review = _alpha_validate_art_bytes(_mkt_art_bytes, CANAL_MIDIA_CONFIG[_mkt_channel]["size"])
                             if not _mkt_review.get("ok"):
@@ -26611,7 +26634,7 @@ if pagina_atual == "crescimento":
                             "categoria": str(_mkt_product.get("Categoria") or ""),
                             "campanha": _mkt_campaign.strip() or "Permanente",
                             "objetivo": _mkt_objective,
-                            "origem_criativa": "Designer Comercial AlphaFest HF53.2-HF5-HF4",
+                            "origem_criativa": "Designer Comercial AlphaFest HF53.2-HF5-HF5",
                             "tipo_registro": "campanha_automatica",
                             "canais": list(_mkt_channels),
                             "artes_png": _mkt_arts,
@@ -26628,7 +26651,7 @@ if pagina_atual == "crescimento":
                             "quality_gate": "APROVADO AUTOMATICAMENTE",
                             "paleta_nome": _mkt_palette_name,
                             "paleta_visual": dict(_mkt_palette),
-                            "designer_rules_version": "HF53.2-HF5-HF4",
+                            "designer_rules_version": "HF53.2-HF5-HF5",
                         }
                         conteudos.insert(0, _mkt_record)
                         marketing["conteudos"] = conteudos

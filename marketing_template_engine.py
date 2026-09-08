@@ -1,6 +1,6 @@
 """AlphaFest Marketing Template Engine.
 
-HF53.2-HF5 — Template Mestre Comercial profissional.
+HF53.2-HF5-HF5 — Template Mestre Comercial • Aprovação Final Comercial.
 O template oficial nasce em 1080x1350 (4:5), baseado na composição comercial
 aprovada pela AlphaFest. Story, Status e Facebook são derivados do mestre sem
 recortar o conteúdo principal; templates legados continuam usando a engine quadrada.
@@ -26,7 +26,7 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "splash_premium_anna": {
         "id": "splash_premium_anna",
         "nome": "Template Mestre Comercial AlphaFest ⭐",
-        "descricao": "Modelo oficial HF53.2-HF5 em 1080×1350: referência aprovada, 5 benefícios, produto protagonista, 4 aplicações e CTA WhatsApp forte.",
+        "descricao": "Modelo oficial HF53.2-HF5-HF5 em 1080×1350: QA visual final, textos legíveis, miniaturas sem repetição, CTA WhatsApp refinado e rodapé ampliado.",
         "paleta": {
             "fundo": "#FFFFFF",
             "azul": "#087CE8",
@@ -219,15 +219,29 @@ def _draw_check(draw: ImageDraw.ImageDraw, cx: int, cy: int, radius: int, fill, 
 
 
 def _draw_whatsapp(draw: ImageDraw.ImageDraw, cx: int, cy: int, radius: int, fill):
-    """Desenha um ícone inspirado no WhatsApp: balão branco + telefone."""
+    """HF53.2-HF5-HF5: ícone vetorial limpo, reconhecível e proporcional ao CTA."""
     white = (255, 255, 255, 255)
-    draw.ellipse((cx-radius, cy-radius, cx+radius, cy+radius), fill=fill)
-    bubble_r = int(radius * .66)
-    draw.ellipse((cx-bubble_r, cy-bubble_r, cx+bubble_r, cy+bubble_r), outline=white, width=max(3, radius//7))
-    draw.polygon([(cx-int(radius*.45), cy+int(radius*.42)), (cx-int(radius*.62), cy+int(radius*.67)), (cx-int(radius*.20), cy+int(radius*.55))], fill=white)
-    draw.arc((cx-int(radius*.38), cy-int(radius*.38), cx+int(radius*.38), cy+int(radius*.38)), 125, 315, fill=white, width=max(4, radius//6))
-    draw.line((cx-int(radius*.27), cy-int(radius*.27), cx-int(radius*.39), cy-int(radius*.39)), fill=white, width=max(4, radius//6))
-    draw.line((cx+int(radius*.27), cy+int(radius*.27), cx+int(radius*.39), cy+int(radius*.39)), fill=white, width=max(4, radius//6))
+    # disco verde com aro branco: melhora leitura mesmo sobre CTA escuro/dourado
+    draw.ellipse((cx-radius, cy-radius, cx+radius, cy+radius), fill=fill, outline=white, width=max(3, radius//10))
+    bubble_r = int(radius * .64)
+    bw = max(4, radius//8)
+    draw.ellipse((cx-bubble_r, cy-bubble_r, cx+bubble_r, cy+bubble_r), outline=white, width=bw)
+    # cauda do balão
+    draw.polygon([
+        (cx-int(radius*.45), cy+int(radius*.36)),
+        (cx-int(radius*.62), cy+int(radius*.62)),
+        (cx-int(radius*.20), cy+int(radius*.50)),
+    ], fill=white)
+    # handset mais espesso e com terminais arredondados
+    hw = max(5, radius//6)
+    box=(cx-int(radius*.38), cy-int(radius*.38), cx+int(radius*.38), cy+int(radius*.38))
+    draw.arc(box, 132, 308, fill=white, width=hw)
+    for px,py in [
+        (cx-int(radius*.27), cy-int(radius*.29)),
+        (cx+int(radius*.28), cy+int(radius*.25)),
+    ]:
+        rr=max(4,hw//2)
+        draw.ellipse((px-rr,py-rr,px+rr,py+rr),fill=white)
 
 
 def _soft_shadow(alpha: Image.Image, blur: int = 22, opacity: int = 105) -> Image.Image:
@@ -677,7 +691,29 @@ def _brand_wordmark(max_size=(600,160), fallback: Path | None = None) -> Image.I
     return None
 
 
-def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto") -> Image.Image:
+def _unique_application_sources(primary: Image.Image, application_images: list[bytes] | None) -> list[Image.Image]:
+    """Retorna até 4 imagens visualmente distintas; nunca repete a mesma foto."""
+    candidates=[primary]
+    for raw in list(application_images or []):
+        if not raw:
+            continue
+        try:
+            candidates.append(ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGBA"))
+        except Exception:
+            continue
+    unique=[]; seen=set()
+    for img in candidates:
+        # fingerprint visual simples, independente do nome/URL do arquivo
+        fp=img.convert("RGB").resize((16,16),Image.Resampling.BILINEAR).tobytes()
+        if fp in seen:
+            continue
+        seen.add(fp); unique.append(img)
+        if len(unique)>=4:
+            break
+    return unique
+
+
+def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto", application_images: list[bytes] | None = None) -> Image.Image:
     """HF53.2-HF5 — Template Mestre Comercial profissional (1080x1350 nativo).
 
     A hierarquia segue a referência aprovada pela AlphaFest: marca no topo,
@@ -725,12 +761,13 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
         _draw_flower(draw,1005,835,15,_hex(_shade(p["rosa"],1.35),150),metallic)
 
     # Frases de apoio no topo, como na referência, mas mantidas fora do título.
-    script=_font(23,bold=True,serif=True,italic=True)
-    left_phrase="Pequenos detalhes,\ngrandes histórias!"
-    right_phrase="Juntos por mais\nsorrisos!" if awareness else "Feito para marcar\nmomentos especiais!"
-    draw.multiline_text((24,62),left_phrase,font=script,fill=dark_accent,spacing=1,align="left")
-    rbb=draw.multiline_textbbox((0,0),right_phrase,font=script,spacing=1,align="right")
-    draw.multiline_text((1045-(rbb[2]-rbb[0]),62),right_phrase,font=script,fill=dark_accent,spacing=1,align="right")
+    # QA final: frases do topo legíveis, mas confinadas aos cantos para não tocar a marca.
+    script=_font(25,bold=True,serif=True,italic=True)
+    left_phrase="Pequenos detalhes,\ngrandes\nhistórias!"
+    right_phrase="Juntos por mais\nsorrisos!" if awareness else "Feito para marcar\nmomentos\nespeciais!"
+    draw.multiline_text((24,50),left_phrase,font=script,fill=white,spacing=0,align="left",stroke_width=2,stroke_fill=dark_accent)
+    rbb=draw.multiline_textbbox((0,0),right_phrase,font=script,spacing=0,align="right",stroke_width=2)
+    draw.multiline_text((1052-(rbb[2]-rbb[0]),50),right_phrase,font=script,fill=white,spacing=0,align="right",stroke_width=2,stroke_fill=dark_accent)
 
     # Marca oficial em wordmark horizontal.
     logo=_brand_wordmark((640,168),logo_path)
@@ -748,15 +785,17 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
         ty += line_h + spacing
 
     # Selo de aprovação no alto direito.
-    sx,sy,sr=934,280,67
+    sx,sy,sr=934,280,78
     draw.ellipse((sx-sr-5,sy-sr-5,sx+sr+5,sy+sr+5),fill=_hex(_shade(p["rosa"],1.30),155))
     draw.ellipse((sx-sr,sy-sr,sx+sr,sy+sr),fill=dark_accent,outline=white,width=5)
-    draw.ellipse((sx-19,sy-42,sx+19,sy-4),fill=white)
-    draw.line((sx-9,sy-23,sx-2,sy-15),fill=dark_accent,width=5)
-    draw.line((sx-2,sy-15,sx+12,sy-31),fill=dark_accent,width=5)
-    badgef=_font(20,bold=True)
+    # Ícone de aprovação maior que no HF4 para equilibrar texto x símbolo.
+    ir=28; icy=sy-30
+    draw.ellipse((sx-ir,icy-ir,sx+ir,icy+ir),fill=white)
+    draw.line((sx-13,icy,sx-4,icy+9),fill=dark_accent,width=7)
+    draw.line((sx-4,icy+9,sx+15,icy-13),fill=dark_accent,width=7)
     for j,line in enumerate(["ARTE","APROVADA"]):
-        bb=draw.textbbox((0,0),line,font=badgef); draw.text((sx-(bb[2]-bb[0])//2,sy+4+j*22),line,font=badgef,fill=white)
+        badgef=_fit_font(draw,line,122,18,15,bold=True)
+        bb=draw.textbbox((0,0),line,font=badgef); draw.text((sx-(bb[2]-bb[0])//2,sy+11+j*21),line,font=badgef,fill=white)
 
     # Faixa de campanha em duas hierarquias.
     banner_y=408
@@ -813,16 +852,23 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
     cbb=draw.multiline_textbbox((0,0),center_text,font=cf,spacing=0,align="center")
     draw.multiline_text((cx-(cbb[2]-cbb[0])//2,cy-(cbb[3]-cbb[1])//2-3),center_text,font=cf,fill=white,spacing=0,align="center")
 
-    # Quatro aplicações visuais em círculos, como a referência.
+    # Quatro aplicações visuais. Fotos reais são deduplicadas; quando o produto
+    # só possui uma foto, os demais espaços viram cards de aplicação — nunca clones.
     apps=_default_applications(profile,title)[:4]
+    thumb_sources=_unique_application_sources(source, application_images)
     thumb_y=972
+    fallback_icons=("star","heart","diamond","check")
     for i,label in enumerate(apps):
         cx=70+i*126
-        thumb=ImageOps.fit(source,(94,94),method=Image.Resampling.LANCZOS,centering=(.5,.5))
-        mask=Image.new("L",(94,94),0); ImageDraw.Draw(mask).ellipse((0,0,93,93),fill=255)
-        layer=thumb.copy(); layer.putalpha(mask); canvas.alpha_composite(layer,(cx-47,thumb_y))
+        if i < len(thumb_sources):
+            thumb=ImageOps.fit(thumb_sources[i],(94,94),method=Image.Resampling.LANCZOS,centering=(.5,.5))
+            mask=Image.new("L",(94,94),0); ImageDraw.Draw(mask).ellipse((0,0,93,93),fill=255)
+            layer=thumb.copy(); layer.putalpha(mask); canvas.alpha_composite(layer,(cx-47,thumb_y))
+        else:
+            draw.ellipse((cx-47,thumb_y,cx+47,thumb_y+94),fill=_hex(_shade(p["rosa"],1.32),235))
+            _draw_check(draw,cx,thumb_y+47,28,accent,icon=fallback_icons[i],icon_color=white)
         draw.ellipse((cx-50,thumb_y-3,cx+50,thumb_y+97),outline=accent,width=3)
-        lf=_fit_font(draw,label,105,13,10,bold=True); lns=_wrap(draw,label,lf,105,1)
+        lf=_fit_font(draw,label,105,14,11,bold=True); lns=_wrap(draw,label,lf,105,1)
         if lns:
             bb=draw.textbbox((0,0),lns[0],font=lf); draw.text((cx-(bb[2]-bb[0])//2,thumb_y+102),lns[0],font=lf,fill=dark_accent)
 
@@ -830,12 +876,12 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
     cta_label=(cta or "CONHEÇA ESTE PRODUTO").upper()
     cta_box=(555,988,1048,1120)
     draw.rounded_rectangle(cta_box,radius=48,fill=dark_accent,outline=_hex(_shade(p["rosa"],1.26)),width=4)
-    _draw_whatsapp(draw,618,1054,44,green)
-    ctf=_fit_font(draw,cta_label,350,25,18,bold=True)
-    bb=draw.textbbox((0,0),cta_label,font=ctf); draw.text((824-(bb[2]-bb[0])//2,1001),cta_label,font=ctf,fill=white)
+    _draw_whatsapp(draw,618,1054,48,green)
+    ctf=_fit_font(draw,cta_label,340,25,18,bold=True)
+    bb=draw.textbbox((0,0),cta_label,font=ctf); draw.text((855-(bb[2]-bb[0])//2,1001),cta_label,font=ctf,fill=white)
     phone_text=phone or "(11) 97294-9533"
-    phf=_fit_font(draw,phone_text,360,43,30,bold=True)
-    pbb=draw.textbbox((0,0),phone_text,font=phf); draw.text((824-(pbb[2]-pbb[0])//2,1042),phone_text,font=phf,fill=white)
+    phf=_fit_font(draw,phone_text,350,43,30,bold=True)
+    pbb=draw.textbbox((0,0),phone_text,font=phf); draw.text((855-(pbb[2]-pbb[0])//2,1042),phone_text,font=phf,fill=white)
 
     # Faixa inferior com quatro diferenciais fixos.
     footer_labels=(profile.get("footer") or ["PRÁTICO","CRIATIVO","VALORIZE SEU PRODUTO","AUMENTA SUAS VENDAS"])[:4]
@@ -847,11 +893,13 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
     for i,label in enumerate(footer_labels):
         left=i*cell
         _draw_check(draw,left+47,1200,26,white,icon=footer_icons[i],icon_color=dark_accent)
-        ff=_fit_font(draw,str(label).upper(),180,19,13,bold=True)
+        # QA final: usar melhor o espaço disponível e manter leitura em tela pequena.
+        ff=_fit_font(draw,str(label).upper(),180,23,16,bold=True)
         lines=_wrap(draw,str(label).upper(),ff,180,2)
-        yy=1190 if len(lines)>1 else 1198
+        yy=1186 if len(lines)>1 else 1195
+        step=max(21,int(getattr(ff,"size",18)*1.05))
         for line in lines:
-            draw.text((left+82,yy),line,font=ff,fill=white); yy+=19
+            draw.text((left+82,yy),line,font=ff,fill=white); yy+=step
         if i: draw.line((left,1164,left,1238),fill=(255,255,255,105),width=2)
 
     # Rodapé em ondas, com assinatura emocional curta.
@@ -890,9 +938,9 @@ def _adapt_master_portrait_to_channel(portrait: Image.Image, size: tuple[int,int
     return canvas
 
 
-def _render_splash_premium_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto") -> Image.Image:
+def _render_splash_premium_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto", application_images: list[bytes] | None = None) -> Image.Image:
     """Compatibilidade: deriva o quadrado a partir do novo mestre 4:5 HF53.2-HF5."""
-    portrait=_render_splash_premium_portrait(image_bytes,title=title,subtitle=subtitle,description=description,price=price,cta=cta,phone=phone,logo_path=logo_path,cfg=cfg,palette_override=palette_override,photo_mode=photo_mode)
+    portrait=_render_splash_premium_portrait(image_bytes,title=title,subtitle=subtitle,description=description,price=price,cta=cta,phone=phone,logo_path=logo_path,cfg=cfg,palette_override=palette_override,photo_mode=photo_mode,application_images=application_images)
     return _adapt_master_portrait_to_channel(portrait,(1080,1080),cfg,palette_override)
 
 def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto") -> Image.Image:
@@ -1107,6 +1155,7 @@ def render_template(
     logo_path: str|Path|None=None,
     palette_override: dict[str,str] | None=None,
     photo_mode: str="auto",
+    application_images: list[bytes] | None=None,
 ) -> bytes:
     cfg=carregar_template(template_id)
     _logo=Path(logo_path or BASE_DIR/"logo.png")
@@ -1114,7 +1163,7 @@ def render_template(
         portrait=_render_splash_premium_portrait(
             image_bytes, title=title, subtitle=subtitle, description=description, price=price,
             cta=cta, phone=phone, logo_path=_logo, cfg=cfg,
-            palette_override=palette_override, photo_mode=photo_mode,
+            palette_override=palette_override, photo_mode=photo_mode, application_images=application_images,
         )
         final=_adapt_master_portrait_to_channel(portrait,size,cfg,palette_override)
     else:

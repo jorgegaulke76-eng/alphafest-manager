@@ -1,4 +1,4 @@
-"""HF53.2-HF5-HF4 — Designer Comercial Mestre AlphaFest.
+"""HF53.2-HF5-HF5 — Designer Comercial Mestre AlphaFest • Aprovação Final Comercial.
 
 Camada determinística de direção de arte e copy para o Piloto Automático.
 Não publica nada e não depende de serviço externo. Seu papel é preparar textos
@@ -131,7 +131,7 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
     campaign = _clean(campaign)
     objective = _clean(objective) or "Vender"
 
-    # HF53.2-HF5-HF4: título inteligente preserva o nome integral; demais áreas seguras permanecem iguais.
+    # HF53.2-HF5-HF5: mantém o título inteligente e adiciona QA visual final sem mudar a lógica comercial.
     # Antes o plano podia criar um benefício com 88 caracteres e a própria
     # revisão recusava qualquer benefício acima de 72.
     # O título da arte nunca recebe reticências. O renderer ajusta fonte e quebra
@@ -176,7 +176,7 @@ def build_design_plan(product: dict[str, Any], objective: str = "Vender", campai
         "objective": objective,
         "campaign": campaign or "Permanente",
         "channels": per_channel,
-        "rules_version": "HF53.2-HF5-HF4",
+        "rules_version": "HF53.2-HF5-HF5",
     }
 
 
