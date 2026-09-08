@@ -1258,3 +1258,10 @@ hangelog
 - SELECT público bloqueado; leitura somente via credencial de servidor do Manager;
 - prévias internas não entram nas métricas;
 - nenhuma publicação automática: HF44 preservado.
+
+
+## 20.4.9-I8.13.5-HF52.1-HF1 — atualização automática das métricas
+- painel privado passa a atualizar automaticamente a cada 30 segundos;
+- adiciona botão `↻ Atualizar agora`;
+- adiciona indicador dinâmico `Atualizado há Xs` sem consultar o banco a cada segundo;
+- rerun isolado no fragmento das métricas; site público e HF44 preservados.

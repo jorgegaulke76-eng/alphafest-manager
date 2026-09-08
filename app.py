@@ -25571,18 +25571,47 @@ if pagina_atual == "site":
     )
 
 
-    # HF52.1 — métricas privadas, visíveis somente para perfil técnico/administrador.
+    # HF52.1-HF1 — métricas privadas com atualização automática leve a cada 30s.
     if pode_executar_acoes_tecnicas(obter_usuario_atual()):
-        with st.expander("📊 Métricas privadas do Site · HF52.1", expanded=False):
+        with st.expander("📊 Métricas privadas do Site · HF52.1-HF1", expanded=False):
             st.caption("Somente usuários autorizados do Manager veem este painel. A prévia interna não é contabilizada.")
-            _metrics_server = _site_metrics_server_config()
-            if not _site_metrics_tracking_available():
-                st.warning("Rastreamento ainda não ativo: configure SUPABASE_KEY (publishable/anon) nos Secrets do Manager.")
-            elif not (_metrics_server.get("url") and _metrics_server.get("key")):
-                st.warning("Leitura privada requer SUPABASE_SERVICE_KEY no servidor do Manager.")
-            else:
+
+            def _renderizar_metricas_site_hf52_1_hf1():
+                _metrics_server = _site_metrics_server_config()
+                if not _site_metrics_tracking_available():
+                    st.warning("Rastreamento ainda não ativo: configure SUPABASE_KEY (publishable/anon) nos Secrets do Manager.")
+                    return
+                if not (_metrics_server.get("url") and _metrics_server.get("key")):
+                    st.warning("Leitura privada requer SUPABASE_SERVICE_KEY no servidor do Manager.")
+                    return
+
+                _refresh_col, _status_col = st.columns([1, 3])
+                with _refresh_col:
+                    # Dentro de um fragmento, o clique reroda somente este bloco.
+                    st.button("↻ Atualizar agora", key="site_metrics_refresh_hf52_1_hf1", use_container_width=True)
+
                 try:
                     _m = _site_metrics_summary()
+                    _updated_ms = int(time.time() * 1000)
+                    with _status_col:
+                        components.html(
+                            f"""
+                            <div id='af-metrics-age' style='font-family:Arial,sans-serif;font-size:13px;color:#9aa4b2;padding-top:8px;'>Atualizado agora • atualização automática a cada 30s</div>
+                            <script>
+                            (function(){{
+                              const started={_updated_ms};
+                              const el=document.getElementById('af-metrics-age');
+                              function tick(){{
+                                const s=Math.max(0,Math.floor((Date.now()-started)/1000));
+                                el.textContent='Atualizado há '+s+'s • atualização automática a cada 30s';
+                              }}
+                              tick(); setInterval(tick,1000);
+                            }})();
+                            </script>
+                            """,
+                            height=32,
+                        )
+
                     _mc1, _mc2, _mc3 = st.columns(3)
                     _mc1.metric("Acessos · 30 dias", _m.get("pageviews_30d", 0), help=f"Últimas 24h: {_m.get('pageviews_24h',0)} · 7 dias: {_m.get('pageviews_7d',0)}")
                     _mc2.metric("Produtos abertos · 30 dias", _m.get("product_30d", 0))
@@ -25608,6 +25637,9 @@ if pagina_atual == "site":
                 except Exception as _metrics_exc:
                     st.warning("Não foi possível carregar as métricas agora. O restante do Manager continua normal.")
                     st.caption(str(_metrics_exc)[:220])
+
+            _renderizar_metricas_site_hf52_1_hf1_auto = st.fragment(run_every="30s")(_renderizar_metricas_site_hf52_1_hf1)
+            _renderizar_metricas_site_hf52_1_hf1_auto()
 
     st.success(
         "✨ **HF40 · Site completo:** Início · Produtos · Serviços · Quem Somos · Contato. "

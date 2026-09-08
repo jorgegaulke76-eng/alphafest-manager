@@ -76,7 +76,7 @@ class HF42SiteProducaoTests(unittest.TestCase):
         app = Path("app.py").read_text(encoding="utf-8")
         self.assertIn('"🚀 Produção oficial — HF51.4-HF3 · motor HF44"', app)
         self.assertIn('alphafest-site-producao-hf51-1.zip', app)
-        self.assertIn('versao_manager="20.4.9-I8.13.5-HF51.5"', app)
+        self.assertIn('versao_manager="20.4.9-I8.13.5-HF52.1"', app)
         self.assertIn('_site_gerar_pacote_producao(', app)
 
     def test_pacote_final_nao_altera_dns(self):

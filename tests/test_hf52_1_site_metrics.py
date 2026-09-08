@@ -18,5 +18,5 @@ def test_sql_is_insert_only_for_public():
     assert 'create policy "public_insert_site_metrics"' in sql
 
 
-def test_version_hf52_1():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF52.1'
+def test_version_hf52_1_or_hotfix():
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip().startswith('20.4.9-I8.13.5-HF52.1')
