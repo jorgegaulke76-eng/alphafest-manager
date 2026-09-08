@@ -1,3 +1,8 @@
+
+## 20.4.9-I8.13.5-HF52.2-HF1-HF1
+- Categorias do site agora usam cores suaves diferentes dentro da paleta AlphaFest.
+- Mantida legibilidade, responsividade e comportamento dos filtros.
+
 ## 20.4.9-I8.13.5-HF51.3 — SEO + velocidade sem mudança visual
 
 - Reforça title/description, Open Graph, Twitter Card, canonical, robots e locale para indexação e compartilhamento.
