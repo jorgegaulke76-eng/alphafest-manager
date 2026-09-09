@@ -26460,7 +26460,7 @@ if pagina_atual == "crescimento":
     # HF53.2-HF3 — Designer Comercial: paleta por campanha + formatos por canal.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.2-HF5-HF6: QA Tipográfico e CTA Final — WhatsApp legível, selo ampliado, faixa de campanha coerente, rodapé padronizado e assinatura centralizada. Nada é publicado sem sua aprovação.")
+        st.caption("HF53.2-HF5-HF7: hotfix final do CTA — ícone clássico do WhatsApp fornecido pela AlphaFest, sem alterar layout, tipografia, foto, paleta ou demais blocos. Nada é publicado sem sua aprovação.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26592,7 +26592,7 @@ if pagina_atual == "crescimento":
                         _mkt_arts = {}
                         _mkt_art_reviews = {}
                         _mkt_title = str(_mkt_product.get("Nome") or "Produto AlphaFest")
-                        # HF53.2-HF5-HF6: mantém mídias distintas do cadastro nas miniaturas.
+                        # HF53.2-HF5-HF7: mantém mídias distintas do cadastro nas miniaturas.
                         # Se só houver uma foto, o template completa com cards de aplicação, sem cloná-la.
                         _mkt_product_images = _mkt_product.get("Imagens") or []
                         if isinstance(_mkt_product_images, str):
@@ -26634,7 +26634,7 @@ if pagina_atual == "crescimento":
                             "categoria": str(_mkt_product.get("Categoria") or ""),
                             "campanha": _mkt_campaign.strip() or "Permanente",
                             "objetivo": _mkt_objective,
-                            "origem_criativa": "Designer Comercial AlphaFest HF53.2-HF5-HF6",
+                            "origem_criativa": "Designer Comercial AlphaFest HF53.2-HF5-HF7",
                             "tipo_registro": "campanha_automatica",
                             "canais": list(_mkt_channels),
                             "artes_png": _mkt_arts,
@@ -26651,7 +26651,7 @@ if pagina_atual == "crescimento":
                             "quality_gate": "APROVADO AUTOMATICAMENTE",
                             "paleta_nome": _mkt_palette_name,
                             "paleta_visual": dict(_mkt_palette),
-                            "designer_rules_version": "HF53.2-HF5-HF6",
+                            "designer_rules_version": "HF53.2-HF5-HF7",
                         }
                         conteudos.insert(0, _mkt_record)
                         marketing["conteudos"] = conteudos

@@ -1,6 +1,6 @@
 """AlphaFest Marketing Template Engine.
 
-HF53.2-HF5-HF6 — Template Mestre Comercial • QA Tipográfico e CTA Final.
+HF53.2-HF5-HF7 — Template Mestre Comercial • CTA WhatsApp Oficial.
 O template oficial nasce em 1080x1350 (4:5), baseado na composição comercial
 aprovada pela AlphaFest. Story, Status e Facebook são derivados do mestre sem
 recortar o conteúdo principal; templates legados continuam usando a engine quadrada.
@@ -26,7 +26,7 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "splash_premium_anna": {
         "id": "splash_premium_anna",
         "nome": "Template Mestre Comercial AlphaFest ⭐",
-        "descricao": "Modelo oficial HF53.2-HF5-HF6 em 1080×1350: QA tipográfico final, selo ampliado, faixa de campanha coerente, WhatsApp legível e rodapé padronizado.",
+        "descricao": "Modelo oficial HF53.2-HF5-HF7 em 1080×1350: acabamento final preservado e ícone clássico do WhatsApp em alta legibilidade no CTA.",
         "paleta": {
             "fundo": "#FFFFFF",
             "azul": "#087CE8",
@@ -218,20 +218,41 @@ def _draw_check(draw: ImageDraw.ImageDraw, cx: int, cy: int, radius: int, fill, 
         draw.line((cx-radius//8, cy+radius//3, cx+radius//2, cy-radius//3), fill=ink, width=5)
 
 
-def _draw_whatsapp(draw: ImageDraw.ImageDraw, cx: int, cy: int, radius: int, fill):
-    """HF53.2-HF5-HF6: ícone de contato legível mesmo na miniatura do Feed.
+WHATSAPP_ICON_PATH = BASE_DIR / "assets" / "marketing" / "whatsapp_classic.png"
 
-    Usa disco verde com aro branco e um handset vetorial da fonte portátil.
-    O glifo ✆ permanece nítido em escalas pequenas, ao contrário do arco manual
-    que podia parecer apenas a letra C.
+
+@lru_cache(maxsize=8)
+def _whatsapp_icon(size: int) -> Image.Image | None:
+    """Carrega o ícone clássico fornecido pela AlphaFest e preserva sua leitura."""
+    try:
+        if not WHATSAPP_ICON_PATH.exists():
+            return None
+        icon = Image.open(WHATSAPP_ICON_PATH).convert("RGBA")
+        icon = ImageOps.fit(icon, (size, size), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+        return icon
+    except Exception:
+        return None
+
+
+def _draw_whatsapp(draw: ImageDraw.ImageDraw, cx: int, cy: int, radius: int, fill):
+    """HF53.2-HF5-HF7: usa o símbolo clássico real do WhatsApp no CTA.
+
+    O hotfix remove o glifo genérico que podia parecer um telefone incompleto e
+    aplica o ícone fornecido pela AlphaFest, com balão + handset reconhecíveis
+    mesmo na miniatura do Feed. Mantém fallback vetorial somente se o asset faltar.
     """
+    size = max(36, radius * 2)
+    icon = _whatsapp_icon(size)
+    surface = getattr(draw, "_image", None)
+    if icon is not None and isinstance(surface, Image.Image):
+        surface.alpha_composite(icon, (cx - icon.width // 2, cy - icon.height // 2))
+        return
+
+    # Fallback: símbolo simples, apenas para instalações onde o asset foi removido.
     white=(255,255,255,255)
     draw.ellipse((cx-radius,cy-radius,cx+radius,cy+radius),fill=fill,outline=white,width=max(4,radius//9))
-    glyph="✆"
-    gf=_font(max(24,int(radius*1.12)),bold=True)
-    bb=draw.textbbox((0,0),glyph,font=gf)
-    tw,th=bb[2]-bb[0],bb[3]-bb[1]
-    draw.text((cx-tw//2-bb[0],cy-th//2-bb[1]-1),glyph,font=gf,fill=white)
+    draw.arc((cx-radius//2,cy-radius//2,cx+radius//2,cy+radius//2),35,315,fill=white,width=max(5,radius//6))
+    draw.line((cx-radius//5,cy+radius//5,cx-radius//2,cy+radius//2),fill=white,width=max(5,radius//7))
 
 
 def _soft_shadow(alpha: Image.Image, blur: int = 22, opacity: int = 105) -> Image.Image:
