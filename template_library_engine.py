@@ -31,6 +31,11 @@ RUNTIME_TEMPLATES_DIR = Path(tempfile.gettempdir()) / "alphafest_template_librar
 
 REQUIRED_FILES = ("fundo.png", "layout.json", "config.json")
 
+# HF53.3 — IDs do núcleo não podem ser ocupados por pacotes importados.
+# Isto impede que um ZIP externo substitua silenciosamente o Template Mestre
+# Comercial homologado ou seus aliases de compatibilidade.
+RESERVED_TEMPLATE_IDS = {"splash_premium_anna", "alphafest_agencia_anna", "alphafest_agencia"}
+
 LAYOUT_OVERRIDES: dict[str, dict[str, Any]] = {}
 
 def set_layout_overrides(overrides: dict[str, dict[str, Any]] | None) -> None:
@@ -75,7 +80,7 @@ def list_library_templates() -> list[dict[str, Any]]:
                 continue
             cfg = _read_json(folder / "config.json")
             tid = _safe_id(cfg.get("id") or folder.name)
-            if not tid or tid in seen:
+            if not tid or tid in seen or tid in RESERVED_TEMPLATE_IDS:
                 continue
             seen.add(tid)
             found.append({
@@ -91,6 +96,8 @@ def list_library_templates() -> list[dict[str, Any]]:
 
 def load_library_template(template_id: str) -> dict[str, Any] | None:
     safe = _safe_id(template_id)
+    if safe in RESERVED_TEMPLATE_IDS:
+        return None
     for item in list_library_templates():
         if item["id"] != safe:
             continue
@@ -142,6 +149,8 @@ def install_template_zip(zip_bytes: bytes, *, replace: bool = False, persistent_
         tid = _safe_id(cfg.get("id") or cfg.get("nome"))
         if not tid:
             raise ValueError("config.json precisa definir id ou nome do template.")
+        if tid in RESERVED_TEMPLATE_IDS:
+            raise ValueError("Este ID pertence a um template oficial protegido da AlphaFest.")
         target = (TEMPLATES_DIR if persistent_source else RUNTIME_TEMPLATES_DIR) / tid
         if target.exists():
             if not replace:

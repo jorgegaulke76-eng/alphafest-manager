@@ -1,9 +1,9 @@
 """AlphaFest Marketing Template Engine.
 
-HF53.2-HF5-HF7 — Template Mestre Comercial • CTA WhatsApp Oficial.
-O template oficial nasce em 1080x1350 (4:5), baseado na composição comercial
-aprovada pela AlphaFest. Story, Status e Facebook são derivados do mestre sem
-recortar o conteúdo principal; templates legados continuam usando a engine quadrada.
+HF53.3 — Biblioteca de Templates do Alpha Marketing.
+O Template Mestre Comercial HF53.2-HF5-HF7 permanece congelado e homologado.
+Esta etapa adiciona metadados de catálogo, proteção do template oficial e seleção
+segura pelo Piloto Automático sem alterar seu render, layout ou identidade visual.
 """
 from __future__ import annotations
 
@@ -27,6 +27,13 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
         "id": "splash_premium_anna",
         "nome": "Template Mestre Comercial AlphaFest ⭐",
         "descricao": "Modelo oficial HF53.2-HF5-HF7 em 1080×1350: acabamento final preservado e ícone clássico do WhatsApp em alta legibilidade no CTA.",
+        "categoria_template": "Comercial",
+        "status_template": "Homologado",
+        "versao_template": "HF53.2-HF5-HF7",
+        "oficial": True,
+        "protegido": True,
+        "autopilot_aprovado": True,
+        "preview": "assets/marketing/template_mestre_hf7_preview.png",
         "paleta": {
             "fundo": "#FFFFFF",
             "azul": "#087CE8",
@@ -40,8 +47,14 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     },
     "alphafest_agencia_anna": {
         "id": "alphafest_agencia_anna",
-        "nome": "AlphaFest Agência — Padrão Anna ⭐",
-        "descricao": "Template oficial inspirado na composição aprovada: título grande, benefícios à esquerda, produto protagonista, CTA forte e rodapé equilibrado.",
+        "nome": "AlphaFest Agência — Legado",
+        "descricao": "Compatibilidade com campanhas antigas. O Piloto Automático não usa este registro como template de produção.",
+        "categoria_template": "Legado",
+        "status_template": "Compatibilidade",
+        "versao_template": "Legado",
+        "oficial": False,
+        "protegido": True,
+        "autopilot_aprovado": False,
         "paleta": {
             "fundo": "#FFFFFF",
             "azul": "#087CE8",
@@ -56,14 +69,52 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
 }
 
 
-def listar_templates() -> list[dict[str, str]]:
-    embedded = [
-        {"id": key, "nome": str(value.get("nome") or key), "descricao": str(value.get("descricao") or ""), "source": "embedded"}
-        for key, value in EMBEDDED_TEMPLATES.items()
-    ]
-    installed = list_library_templates()
-    # Biblioteca primeiro: templates cadastrados pela equipe aparecem em destaque.
-    return installed + embedded
+def listar_templates() -> list[dict[str, Any]]:
+    """Catálogo único de templates do Alpha Marketing.
+
+    O mestre oficial é sempre o primeiro item e permanece protegido. Templates
+    importados continuam disponíveis no Studio, mas só entram no Piloto Automático
+    depois de uma homologação explícita futura.
+    """
+    embedded: list[dict[str, Any]] = []
+    for key, value in EMBEDDED_TEMPLATES.items():
+        item = {
+            "id": key,
+            "nome": str(value.get("nome") or key),
+            "descricao": str(value.get("descricao") or ""),
+            "source": "embedded",
+            "categoria_template": str(value.get("categoria_template") or "Geral"),
+            "status_template": str(value.get("status_template") or "Disponível"),
+            "versao_template": str(value.get("versao_template") or ""),
+            "oficial": bool(value.get("oficial")),
+            "protegido": bool(value.get("protegido")),
+            "autopilot_aprovado": bool(value.get("autopilot_aprovado")),
+        }
+        preview = str(value.get("preview") or "").strip()
+        if preview:
+            item["preview"] = str(BASE_DIR / preview)
+        embedded.append(item)
+
+    installed: list[dict[str, Any]] = []
+    for raw in list_library_templates():
+        item = dict(raw)
+        item.setdefault("categoria_template", "Biblioteca")
+        item.setdefault("status_template", "Em teste")
+        item.setdefault("versao_template", "Importado")
+        # HF53.3: metadados de confiança nunca vêm de um ZIP importado.
+        item["oficial"] = False
+        item["protegido"] = False
+        item["autopilot_aprovado"] = False
+        installed.append(item)
+
+    official = [x for x in embedded if x.get("oficial")]
+    others = [x for x in embedded if not x.get("oficial")]
+    return official + installed + others
+
+
+def listar_templates_autopilot() -> list[dict[str, Any]]:
+    """Retorna apenas templates liberados para produção automática."""
+    return [item for item in listar_templates() if bool(item.get("autopilot_aprovado"))]
 
 
 def carregar_template(template_id: str = DEFAULT_TEMPLATE) -> dict[str, Any]:

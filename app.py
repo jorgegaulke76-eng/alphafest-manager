@@ -26457,10 +26457,10 @@ if pagina_atual == "crescimento":
         st.caption("O Studio gera os arquivos nos formatos corretos. A postagem e a música continuam manuais.")
 
 
-    # HF53.2-HF3 — Designer Comercial: paleta por campanha + formatos por canal.
+    # HF53.3 — Biblioteca de Templates: mestre HF7 congelado + seleção segura no Piloto Automático.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.2-HF5-HF7: hotfix final do CTA — ícone clássico do WhatsApp fornecido pela AlphaFest, sem alterar layout, tipografia, foto, paleta ou demais blocos. Nada é publicado sem sua aprovação.")
+        st.caption("HF53.3: Biblioteca de Templates ativa. O Template Mestre Comercial HF53.2-HF5-HF7 permanece homologado, protegido e é o padrão do Piloto Automático. Nada é publicado sem sua aprovação.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26493,6 +26493,54 @@ if pagina_atual == "crescimento":
                     ["Vender", "Apresentar produto", "Novidade", "Data comemorativa", "Corporativo"],
                     key="mkt_autopilot_objetivo_hf53_1",
                 )
+
+                # HF53.3 — a Biblioteca vira a fonte única de templates do Piloto Automático.
+                # Contrato homologado preservado para rollback: template_id="splash_premium_anna"; "template_nome": "Template Mestre Comercial AlphaFest".
+                # O mestre HF7 continua congelado; templates importados permanecem em teste
+                # até uma homologação explícita liberar autopilot_aprovado.
+                _mkt_templates_catalog = listar_templates_marketing()
+                _mkt_templates_aprovados = [
+                    item for item in _mkt_templates_catalog
+                    if bool(item.get("autopilot_aprovado"))
+                ]
+                if not _mkt_templates_aprovados:
+                    _mkt_templates_aprovados = [{
+                        "id": "splash_premium_anna",
+                        "nome": "Template Mestre Comercial AlphaFest ⭐",
+                        "descricao": "Template oficial homologado.",
+                        "status_template": "Homologado",
+                        "versao_template": "HF53.2-HF5-HF7",
+                        "oficial": True,
+                        "protegido": True,
+                    }]
+                _mkt_template_labels = {
+                    f"{item.get('nome', item.get('id'))} • {item.get('status_template', 'Disponível')}": item
+                    for item in _mkt_templates_aprovados
+                }
+                _mkt_template_label = st.selectbox(
+                    "Template comercial",
+                    list(_mkt_template_labels.keys()),
+                    index=0,
+                    key="mkt_autopilot_template_hf53_3",
+                    help="Somente templates homologados aparecem aqui. Instalar um template no Studio não altera o padrão oficial.",
+                )
+                _mkt_template = _mkt_template_labels[_mkt_template_label]
+                _mkt_template_id = str(_mkt_template.get("id") or "splash_premium_anna")
+                _mkt_template_name = str(_mkt_template.get("nome") or "Template Mestre Comercial AlphaFest")
+                _mkt_template_version = str(_mkt_template.get("versao_template") or "")
+                _mkt_template_status = str(_mkt_template.get("status_template") or "Homologado")
+                _mkt_template_badges = [
+                    "⭐ OFICIAL" if _mkt_template.get("oficial") else "🧩 BIBLIOTECA",
+                    f"✅ {_mkt_template_status.upper()}",
+                ]
+                if _mkt_template.get("protegido"):
+                    _mkt_template_badges.append("🔒 PROTEGIDO")
+                if _mkt_template_version:
+                    _mkt_template_badges.append(_mkt_template_version)
+                st.caption(" • ".join(_mkt_template_badges))
+                _mkt_waiting_templates = sum(1 for item in _mkt_templates_catalog if item.get("source") == "library" and not item.get("autopilot_aprovado"))
+                if _mkt_waiting_templates:
+                    st.caption(f"🧪 {_mkt_waiting_templates} template(s) instalado(s) em teste no Template Studio; nenhum substitui o mestre homologado.")
 
                 st.markdown("**Cores da campanha**")
                 _mkt_palette_options = [
@@ -26616,7 +26664,7 @@ if pagina_atual == "crescimento":
                                 subtitulo=_mkt_channel_plan.get("subtitle") or _mkt_plan.get("subtitle") or "",
                                 cta=_mkt_channel_plan.get("cta") or _mkt_plan.get("cta") or "FAÇA SEU PEDIDO",
                                 descricao=_mkt_channel_plan.get("description") or _mkt_plan.get("description") or "",
-                                template_id="splash_premium_anna",
+                                template_id=_mkt_template_id,
                                 palette_override=_mkt_palette,
                                 application_origins=_mkt_application_images,
                             )
@@ -26634,7 +26682,7 @@ if pagina_atual == "crescimento":
                             "categoria": str(_mkt_product.get("Categoria") or ""),
                             "campanha": _mkt_campaign.strip() or "Permanente",
                             "objetivo": _mkt_objective,
-                            "origem_criativa": "Designer Comercial AlphaFest HF53.2-HF5-HF7",
+                            "origem_criativa": "Designer Comercial AlphaFest HF53.3",
                             "tipo_registro": "campanha_automatica",
                             "canais": list(_mkt_channels),
                             "artes_png": _mkt_arts,
@@ -26642,8 +26690,11 @@ if pagina_atual == "crescimento":
                             "aprovacoes": {canal: False for canal in _mkt_channels},
                             "fila_publicacao": {},
                             "status": "Aguardando aprovação",
-                            "template_id": "splash_premium_anna",
-                            "template_nome": "Template Mestre Comercial AlphaFest",
+                            "template_id": _mkt_template_id,
+                            "template_nome": _mkt_template_name,
+                            "template_status": _mkt_template_status,
+                            "template_versao": _mkt_template_version,
+                            "template_oficial": bool(_mkt_template.get("oficial")),
                             "motor_copy": _mkt_copy_engine,
                             "direcao_arte": _mkt_plan,
                             "revisao_design": _mkt_plan_review,
@@ -26651,7 +26702,7 @@ if pagina_atual == "crescimento":
                             "quality_gate": "APROVADO AUTOMATICAMENTE",
                             "paleta_nome": _mkt_palette_name,
                             "paleta_visual": dict(_mkt_palette),
-                            "designer_rules_version": "HF53.2-HF5-HF7",
+                            "designer_rules_version": "HF53.3",
                         }
                         conteudos.insert(0, _mkt_record)
                         marketing["conteudos"] = conteudos
@@ -28213,19 +28264,62 @@ if pagina_atual == "crescimento":
 
 
     else:
-        st.caption("Área técnica: instale, exporte e mantenha templates sem alterar o fluxo de produção.")
+        st.caption("HF53.3: biblioteca central de templates. O mestre homologado fica protegido; novos layouts entram primeiro como teste.")
         with st.container(border=True):
-            st.subheader("🧩 Biblioteca de Templates")
-            st.caption("Templates instalados aqui entram no seletor do Marketing Studio sem alterar Python, GitHub ou deploy.")
-            templates_biblioteca = list_library_templates()
+            st.subheader("🧩 Biblioteca de Templates Comerciais")
+            st.caption("Fonte única de templates do Alpha Marketing. Instalar um pacote não altera nem substitui o Template Mestre oficial.")
+            _templates_catalogo = [
+                item for item in listar_templates_marketing()
+                if str(item.get("categoria_template") or "") != "Legado"
+            ]
+            templates_biblioteca = [item for item in _templates_catalogo if item.get("source") == "library"]
+            _templates_homologados = [item for item in _templates_catalogo if item.get("autopilot_aprovado")]
+            _templates_em_teste = [item for item in templates_biblioteca if not item.get("autopilot_aprovado")]
             mid1, mid2, mid3 = st.columns(3)
-            mid1.metric("Templates instalados", len(templates_biblioteca))
-            mid2.metric("Fotos nas campanhas", sum(1 for x in conteudos if x.get("imagem_original") or x.get("imagem_png_base64")))
-            mid3.metric("Vídeos vinculados", sum(1 for x in conteudos if x.get("video_original")))
+            mid1.metric("Templates disponíveis", len(_templates_catalogo))
+            mid2.metric("Homologados no Piloto", len(_templates_homologados))
+            mid3.metric("Em teste", len(_templates_em_teste))
+
+            st.markdown("#### Catálogo atual")
+            for tpl in _templates_catalogo:
+                with st.container(border=True):
+                    cprev, cinfo = st.columns([1, 2])
+                    with cprev:
+                        preview_path = Path(tpl.get("preview") or "")
+                        if preview_path.exists():
+                            st.image(str(preview_path), use_container_width=True)
+                        elif tpl.get("oficial"):
+                            st.caption("Prévia oficial preservada no pacote HF53.3.")
+                        else:
+                            st.caption("Sem preview cadastrado.")
+                    with cinfo:
+                        st.markdown(f"#### {tpl.get('nome', tpl.get('id'))}")
+                        _tpl_badges = []
+                        if tpl.get("oficial"):
+                            _tpl_badges.append("⭐ OFICIAL")
+                        else:
+                            _tpl_badges.append("🧩 BIBLIOTECA")
+                        _tpl_badges.append(f"{'✅' if tpl.get('autopilot_aprovado') else '🧪'} {tpl.get('status_template', 'Em teste')}")
+                        if tpl.get("protegido"):
+                            _tpl_badges.append("🔒 PROTEGIDO")
+                        if tpl.get("versao_template"):
+                            _tpl_badges.append(str(tpl.get("versao_template")))
+                        st.caption(" • ".join(_tpl_badges))
+                        st.write(tpl.get("descricao") or "Template da biblioteca AlphaFest.")
+                        if tpl.get("autopilot_aprovado"):
+                            st.success("Liberado para uso no Piloto Automático.")
+                        else:
+                            st.info("Disponível para teste/manutenção no Studio. Ainda não substitui o template oficial no Piloto Automático.")
+                        if tpl.get("source") == "library":
+                            try:
+                                pacote_tpl = export_template_zip(tpl["id"])
+                                st.download_button("📦 Exportar template", pacote_tpl, file_name=f"{tpl['id']}.zip", mime="application/zip", key=f"mkt_export_tpl_{tpl['id']}")
+                            except Exception:
+                                pass
 
             with st.container(border=True):
-                st.markdown("#### ➕ Importar novo template")
-                st.caption("Envie um ZIP contendo fundo.png, layout.json e config.json. preview.png é opcional.")
+                st.markdown("#### ➕ Importar template para teste")
+                st.caption("Envie um ZIP contendo fundo.png, layout.json e config.json. preview.png é opcional. O pacote entra como 'Em teste' e não toma o lugar do mestre HF7.")
                 tpl_zip = st.file_uploader("Pacote do template (.zip)", type=["zip"], key="mkt_template_zip_upload_2000")
                 replace_tpl = st.checkbox("Substituir se já existir", value=False, key="mkt_template_replace_2000")
                 if st.button("📥 Instalar template", use_container_width=True, disabled=tpl_zip is None, key="mkt_install_template_2000"):
@@ -28235,29 +28329,12 @@ if pagina_atual == "crescimento":
                         config_marketing.setdefault("template_packages", {})[instalado["id"]] = base64.b64encode(pacote_bytes).decode("ascii")
                         marketing["config"] = config_marketing
                         salvar_marketing(marketing)
-                        st.success(f"Template '{instalado['nome']}' instalado e salvo. Ele continuará disponível após reinícios do Streamlit.")
+                        st.success(f"Template '{instalado['nome']}' instalado como teste. O Template Mestre homologado continua sendo o padrão do Piloto Automático.")
                         st.rerun()
                     except Exception as exc:
                         st.error(f"Não foi possível instalar o template: {exc}")
 
-            if not templates_biblioteca:
-                st.info("Nenhum template externo instalado.")
-            for tpl in templates_biblioteca:
-                with st.container(border=True):
-                    cprev, cinfo = st.columns([1, 2])
-                    with cprev:
-                        preview_path = Path(tpl.get("preview") or "")
-                        if preview_path.exists():
-                            st.image(str(preview_path), use_container_width=True)
-                    with cinfo:
-                        st.markdown(f"#### {tpl.get('nome', tpl.get('id'))}")
-                        st.caption(tpl.get("descricao") or "Template da biblioteca AlphaFest.")
-                        try:
-                            pacote_tpl = export_template_zip(tpl["id"])
-                            st.download_button("📦 Exportar template", pacote_tpl, file_name=f"{tpl['id']}.zip", mime="application/zip", key=f"mkt_export_tpl_{tpl['id']}")
-                        except Exception:
-                            pass
-
+            st.info("Próxima evolução do roteiro: criar e homologar um segundo template comercial. Até lá, o HF53.2-HF5-HF7 permanece como único padrão automático de produção.")
             st.markdown("---")
             st.subheader("🖼️ Banco de mídia AlphaFest")
             st.caption("Fotos e vídeos continuam ligados às campanhas e ao catálogo existente.")
