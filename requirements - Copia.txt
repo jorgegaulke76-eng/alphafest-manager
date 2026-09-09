@@ -1,0 +1,18 @@
+streamlit>=1.36
+pandas>=2.0
+requests>=2.31
+altair>=5.0
+openpyxl>=3.1
+
+pillow>=10.0
+
+openai>=1.50
+
+opencv-python-headless>=4.10
+
+# Fontes portáteis DejaVu para renderização no Streamlit Cloud
+matplotlib>=3.8
+
+
+qrcode[pil]>=7.4
+reportlab>=4.0

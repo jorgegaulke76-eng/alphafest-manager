@@ -1,0 +1,308 @@
+[
+    {
+        "numero_proposta": "PROP-202607311222",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "31/07/2026",
+        "cliente_nome": "DIPDRINKS MANU",
+        "itens": [
+            {
+                "produto": "PAPEL ARROZ 25/6",
+                "especificacoes": "Tema: VARIOS  | Nome:  | Idade:  | Cor:  | Obs: COPA - MONOGRAMA",
+                "quantidade": 5,
+                "valor_unitario": 10.0
+            },
+            {
+                "produto": "PAPEL ARROZ ",
+                "especificacoes": "Tema: MADU 18ANOS | Nome:  | Idade:  | Cor:  | Obs: ",
+                "quantidade": 4,
+                "valor_unitario": 10.0
+            },
+            {
+                "produto": "PAPEL ARROZ ",
+                "especificacoes": "Tema: THE WILKES | Nome:  | Idade:  | Cor:  | Obs: LOGO",
+                "quantidade": 7,
+                "valor_unitario": 10.0
+            }
+        ],
+        "valor_total": 160.0,
+        "pago": false,
+        "entregue": false
+    },
+    {
+        "numero_proposta": "PROP-202607311200",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "31/07/2026",
+        "cliente_nome": "SILVIA ROSA",
+        "itens": [
+            {
+                "produto": "PAPEL DE ARROZ",
+                "especificacoes": "Tema:  | Nome:  | Idade:  | Cor:  | Obs: Desenho aprovado cliente  Tamanho -a4 impressao-20x28",
+                "quantidade": 1,
+                "valor_unitario": 12.0
+            }
+        ],
+        "valor_total": 12.0,
+        "pago": true,
+        "entregue": false
+    },
+    {
+        "numero_proposta": "PROP-202607311156",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "30/07/2026",
+        "cliente_nome": "TATIANE CARVALHO",
+        "itens": [
+            {
+                "produto": "KIT FESTA RÁPIDA",
+                "especificacoes": "Tema: TOY STORY | Nome: LORENZO | Idade: 3 | Cor:  | Obs: MODELO ENVIADA PELA MÃE",
+                "quantidade": 1,
+                "valor_unitario": 35.0
+            }
+        ],
+        "valor_total": 35.0,
+        "pago": true,
+        "entregue": false
+    },
+    {
+        "numero_proposta": "PROP-202607311154",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "31/07/2026",
+        "cliente_nome": "DAGMAR BOLOS",
+        "itens": [
+            {
+                "produto": "TOPO DE BOLO",
+                "especificacoes": "Tema: ROBLOX | Nome: ANTHONY | Idade: 4 | Cor: VERMELHO E BRANCO | Obs: COLOCAR MAIS PERSONAGENS",
+                "quantidade": 1,
+                "valor_unitario": 15.0
+            }
+        ],
+        "valor_total": 15.0,
+        "pago": true,
+        "entregue": false
+    },
+    {
+        "numero_proposta": "PROP-202607311150",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "31/07/2026",
+        "cliente_nome": "ELISANGELA BOLOS",
+        "itens": [
+            {
+                "produto": "PAPEL DE ARROZ",
+                "especificacoes": "Tema: CINDERELA | Nome:  | Idade:  | Cor:  | Obs: 1 folha inteira e 2 folhas com faixas na altura de 10 cm",
+                "quantidade": 3,
+                "valor_unitario": 10.0
+            }
+        ],
+        "valor_total": 30.0,
+        "pago": false,
+        "entregue": false
+    },
+    {
+        "numero_proposta": "PROP-202607310123",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "09/08/2026",
+        "cliente_nome": "THAIS CRIVELARO",
+        "itens": [
+            {
+                "produto": "CENTRO DE MESA CACHEPO",
+                "especificacoes": "Tema: BRANCA DE NEVE | Nome: VALENTINA | Idade: 2 | Cor: VERMELHO E AMARELO | Obs: HASTE COM BALÃO",
+                "quantidade": 29,
+                "valor_unitario": 4.9
+            },
+            {
+                "produto": "MONTAGEM E ENTREGA",
+                "especificacoes": "Tema: BRANCA DE NEVE | Nome: VALENTINA | Idade: 2 | Cor: VERMELHO E AMARELO | Obs: HASTE COM BALÃO",
+                "quantidade": 1,
+                "valor_unitario": 25.0
+            }
+        ],
+        "valor_total": 167.10000000000002,
+        "pago": false,
+        "entregue": false
+    },
+    {
+        "numero_proposta": "PROP-202607310120",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "05/08/2026",
+        "cliente_nome": "ADRIANA DAMIM",
+        "itens": [
+            {
+                "produto": "TOPO DE BOLO 3D",
+                "especificacoes": "Tema: FELIZ DIA DOS PAIS | Nome:  | Idade:  | Cor: AZUL | Obs: 8X6 COM PALITO 3D PLA",
+                "quantidade": 60,
+                "valor_unitario": 6.0
+            }
+        ],
+        "valor_total": 360.0,
+        "pago": false,
+        "entregue": false
+    },
+    {
+        "numero_proposta": "PROP-202607310118",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "31/07/2026",
+        "cliente_nome": "ADRIANA DAMIM",
+        "itens": [
+            {
+                "produto": "TOPO DE BOLO 3D",
+                "especificacoes": "Tema: HAPPY BIRTHDAY | Nome:  | Idade:  | Cor: DOURADO | Obs: 3D PLA",
+                "quantidade": 7,
+                "valor_unitario": 5.0
+            },
+            {
+                "produto": "TOPO DE BOLO 3D",
+                "especificacoes": "Tema: FELIZ ANIVERSÁRIO | Nome:  | Idade:  | Cor: DOURADO | Obs: 3D PLA",
+                "quantidade": 2,
+                "valor_unitario": 5.0
+            },
+            {
+                "produto": "CAIXA DE PÓ PARA DOCES PEQ",
+                "especificacoes": "Tema: PORTA PÓ PARA DOCE | Nome:  | Idade:  | Cor: LILAS | Obs: 3D PLA",
+                "quantidade": 2,
+                "valor_unitario": 19.0
+            }
+        ],
+        "valor_total": 83.0,
+        "pago": false,
+        "entregue": false
+    },
+    {
+        "numero_proposta": "PROP-202607310115",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "31/07/2026",
+        "cliente_nome": "CRISTIANE REGINA",
+        "itens": [
+            {
+                "produto": "PAPEL DE ARROZ",
+                "especificacoes": "Tema: FLORK | Nome:  | Idade:  | Cor:  | Obs: DESENHO CLIENTE 20X28",
+                "quantidade": 2,
+                "valor_unitario": 10.0
+            },
+            {
+                "produto": "PAPEL DE ARROZ",
+                "especificacoes": "Tema: FELIZ DIA DOS PAIS | Nome:  | Idade:  | Cor:  | Obs: DESENHO CLIENTE 20X28",
+                "quantidade": 1,
+                "valor_unitario": 10.0
+            }
+        ],
+        "valor_total": 30.0,
+        "pago": true,
+        "entregue": true
+    },
+    {
+        "numero_proposta": "PROP-202607310111",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "31/07/2026",
+        "cliente_nome": "CARLA BOLOS",
+        "itens": [
+            {
+                "produto": "TOPO DE BOLO",
+                "especificacoes": "Tema: GUERREIRA K-POP | Nome: LUNA | Idade: 4 | Cor:  | Obs: S5 DIAMETRO E 10 ALT BOLO",
+                "quantidade": 1,
+                "valor_unitario": 15.0
+            }
+        ],
+        "valor_total": 15.0,
+        "pago": true,
+        "entregue": false
+    },
+    {
+        "numero_proposta": "PROP-202607310054",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "31/07/2026",
+        "cliente_nome": "KELLEN CRISTINA",
+        "itens": [
+            {
+                "produto": "TOPO DE BOLO",
+                "especificacoes": "Tema: PACMAN | Nome: THEODORO | Idade: 6 | Cor:  | Obs: ARTE DO CLIENTE",
+                "quantidade": 1,
+                "valor_unitario": 18.0
+            },
+            {
+                "produto": "ADESIVO 5 cm",
+                "especificacoes": "Tema: PACMAN | Nome: THEODORO | Idade: 6 | Cor:  | Obs: ARTE DO CLIENTE",
+                "quantidade": 30,
+                "valor_unitario": 0.65
+            },
+            {
+                "produto": "TAG 5 cm",
+                "especificacoes": "Tema: PACMAN | Nome: THEODORO | Idade: 6 | Cor:  | Obs: ARTE DO CLIENTE",
+                "quantidade": 30,
+                "valor_unitario": 0.55
+            },
+            {
+                "produto": "ADESIVO 20X20",
+                "especificacoes": "Tema: PACMAN | Nome: THEODORO | Idade: 6 | Cor:  | Obs: ARTE DO CLIENTE",
+                "quantidade": 30,
+                "valor_unitario": 6.5
+            }
+        ],
+        "valor_total": 249.0,
+        "pago": true,
+        "entregue": false
+    },
+    {
+        "numero_proposta": "PROP-202607310050",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "31/07/2026",
+        "cliente_nome": "MARCELA jAYMES",
+        "itens": [
+            {
+                "produto": "PAPEL DE ARROZ",
+                "especificacoes": "Tema: GUERREIRA K-POP | Nome: PERSONALIZADO | Idade:  | Cor:  | Obs: 15 FIGURAS DE 5 CM POR FOLHA",
+                "quantidade": 2,
+                "valor_unitario": 12.0
+            }
+        ],
+        "valor_total": 24.0,
+        "pago": true,
+        "entregue": true
+    },
+    {
+        "numero_proposta": "PROP-202607310016",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "15/08/2026",
+        "cliente_nome": "HELOISA PANCOTO",
+        "cliente_cpf_cnpj": "",
+        "cliente_wa": "11999551084",
+        "itens": [
+            {
+                "produto": "CHAVEIRO 3D",
+                "especificacoes": "Tema: ESPORTES MATERNIDADE | Nome: VICENTE | Idade: NASCIMENTO | Cor:  | Obs: COM CARTÃO ESPORTES",
+                "quantidade": 16,
+                "valor_unitario": 3.8
+            },
+            {
+                "produto": "TUBOLATA ESPORTES",
+                "especificacoes": "Tema: ESPORTES MATERNIDADE | Nome: VICENTE | Idade: NASCIMENTO | Cor: BRANCO | Obs: RÓTULO /COM TAG ESPORTES",
+                "quantidade": 16,
+                "valor_unitario": 5.5
+            }
+        ],
+        "desconto_valor": 0.0,
+        "prazo_dias": "10",
+        "frete_tipo": "Retirada em Itatiba",
+        "pago": false,
+        "entregue": false
+    },
+    {
+        "numero_proposta": "PROP-202607310002",
+        "data_geracao": "31/07/2026",
+        "data_entrega": "30/07/2026",
+        "cliente_nome": "PAULA FELIPE",
+        "cliente_cpf_cnpj": "",
+        "cliente_wa": "11976561566",
+        "itens": [
+            {
+                "produto": "PAPEL DE ARROZ",
+                "especificacoes": "Tema: QUADRA DE VOLEI | Nome:  | Idade:  | Cor:  | Obs: ARTE APROVADO CLIENTE",
+                "quantidade": 1,
+                "valor_unitario": 12.0
+            }
+        ],
+        "desconto_valor": 0.0,
+        "prazo_dias": "10",
+        "frete_tipo": "Retirada em Itatiba",
+        "pago": true,
+        "entregue": true
+    }
+]

@@ -1,0 +1,13 @@
+{
+  "config": {
+    "modo": "Manual",
+    "boas_vindas": "Assistido",
+    "catalogo": "Assistido",
+    "orcamento": "Manual",
+    "comprovante": "Manual",
+    "aprovacao_arte": "Manual",
+    "duvidas_negociacao": "Manual",
+    "integracao_whatsapp": false
+  },
+  "itens": []
+}

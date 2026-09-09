@@ -1,0 +1,158 @@
+"""20.4.9-I8.11.1-HF3 — fonte única de status de propostas.
+
+Este módulo não grava dados e não depende do Streamlit. Ele concentra as regras
+usadas por Anna, Jorge, THU, Alpha Core e painéis executivos para que a mesma
+proposta nunca seja considerada concluída em uma tela e pendente em outra.
+"""
+from __future__ import annotations
+
+from typing import Any
+
+
+def valor_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value or "").strip().casefold() in {
+        "1", "true", "sim", "yes", "ok", "pago", "aprovado", "pronto", "entregue"
+    }
+
+
+def valor_campo(record: dict[str, Any] | None, campo: str, default: Any = None) -> Any:
+    """Lê um campo oficial aceitando apenas aliases legados conhecidos.
+
+    A fonte continua sendo a própria proposta; esta função evita que telas novas
+    criem regras próprias para ``Aprovado/aprovado``, ``Pago/pago``,
+    ``Pronto/pronto`` e ``Entregue/entregue``. O primeiro valor realmente presente vence.
+    """
+    record = record or {}
+    aliases = {
+        "aprovado": ("aprovado", "Aprovado"),
+        "pago": ("pago", "Pago"),
+        "pronto": ("pronto", "Pronto"),
+        "entregue": ("entregue", "Entregue"),
+        "encerrado": ("encerrado", "Encerrado"),
+        "faturamento_mensal": ("faturamento_mensal", "FaturamentoMensal"),
+        "modalidade_cobranca": ("modalidade_cobranca", "ModalidadeCobranca"),
+    }.get(campo, (campo,))
+    for alias in aliases:
+        if alias in record and record.get(alias) is not None:
+            return record.get(alias)
+    return default
+
+
+def status_bool(record: dict[str, Any] | None, campo: str) -> bool:
+    return valor_bool(valor_campo(record, campo, False))
+
+
+def proposta_faturamento_mensal(record: dict[str, Any] | None) -> bool:
+    record = record or {}
+    if status_bool(record, "faturamento_mensal"):
+        return True
+    modalidade = str(valor_campo(record, "modalidade_cobranca", "") or "").strip().casefold()
+    return modalidade in {"faturamento mensal", "mensal", "mensalista"}
+
+
+def proposta_encerrada(record: dict[str, Any] | None) -> bool:
+    """Retorna se a proposta está realmente fora da operação.
+
+    HF18: marcas antigas de "não fechado" podem ter permanecido gravadas em
+    propostas que depois avançaram de verdade (Pago/Pronto/Entregue). Esses
+    marcadores comerciais deixam de encerrar a leitura quando existe progresso
+    operacional posterior inequívoco. Cancelamentos/arquivamentos explícitos
+    continuam prevalecendo.
+    """
+    record = record or {}
+    status = str(
+        record.get("status_comercial")
+        or record.get("situacao_comercial")
+        or record.get("status")
+        or ""
+    ).strip().casefold()
+
+    # Cancelamento/recusa/arquivamento são encerramentos definitivos. Já rótulos
+    # genéricos de "encerrado" ou "não fechado" podem ser marcas comerciais
+    # antigas que ficaram gravadas antes de o pedido avançar.
+    hard_status = status in {
+        "cancelado", "cancelada", "recusado", "recusada",
+        "arquivado", "arquivada", "excluído", "excluida", "excluída",
+    }
+    if hard_status:
+        return True
+
+    motivo_nao_fechado = valor_bool(record.get("nao_fechado_pagamento")) or valor_bool(record.get("nao_fechado_sem_retorno"))
+    status_encerramento_comercial = status in {
+        "encerrado", "encerrada", "encerrado sem retorno", "encerrado por preço", "encerrado por preco",
+        "encerrado pelo cliente", "encerrado por prazo",
+        "nao_fechado_pagamento", "não fechado — falta de pagamento",
+        "nao_fechado_sem_retorno", "não fechado — sem retorno do cliente",
+    }
+    progrediu_depois = status_bool(record, "pago") or status_bool(record, "pronto") or status_bool(record, "entregue")
+
+    # Pago/Pronto/Entregue é evidência inequívoca de que a proposta voltou a ser
+    # um pedido real depois do encerramento comercial antigo.
+    encerrado_flag = status_bool(record, "encerrado")
+    encerramento_apenas_comercial = motivo_nao_fechado or status_encerramento_comercial
+    if progrediu_depois and encerramento_apenas_comercial:
+        return False
+
+    return encerramento_apenas_comercial or encerrado_flag
+
+
+def proposta_pronta(record: dict[str, Any] | None) -> bool:
+    """Status oficial Pronto. Entregue sempre implica Pronto."""
+    record = record or {}
+    return status_bool(record, "pronto") or status_bool(record, "entregue")
+
+
+def proposta_concluida(record: dict[str, Any] | None) -> bool:
+    """Regra oficial de conclusão operacional da HF2.
+
+    O status ``Entregue`` fecha a operação. Pagamento continua sendo informação
+    financeira e pode permanecer pendente sem manter o pedido nas filas de
+    produção/entrega. ``Pronto`` ainda é operacionalmente aberto: o pedido
+    aguarda retirada do cliente ou entrega pela AlphaFest.
+    """
+    record = record or {}
+    return status_bool(record, "aprovado") and status_bool(record, "entregue")
+
+
+def proposta_ativa_operacional(record: dict[str, Any] | None) -> bool:
+    return not proposta_encerrada(record) and not proposta_concluida(record)
+
+
+def pagamento_individual_pendente(record: dict[str, Any] | None) -> bool:
+    """Indica pendência de pagamento que deve aparecer nos painéis operacionais.
+
+    Mensalistas nunca entram como pagamento individual pendente: o financeiro é
+    acompanhado no fechamento mensal.
+    """
+    record = record or {}
+    return (
+        not proposta_encerrada(record)
+        and not proposta_concluida(record)
+        and status_bool(record, "aprovado")
+        and not proposta_faturamento_mensal(record)
+        and not status_bool(record, "pago")
+    )
+
+
+def resumo_status(record: dict[str, Any] | None) -> dict[str, Any]:
+    record = record or {}
+    mensal = proposta_faturamento_mensal(record)
+    concluida = proposta_concluida(record)
+    encerrada = proposta_encerrada(record)
+    entregue = status_bool(record, "entregue")
+    pronto = proposta_pronta(record)
+    return {
+        "mensalista": mensal,
+        "encerrada": encerrada,
+        "concluida": concluida,
+        "ativa": not encerrada and not concluida,
+        "pagamento_individual_pendente": pagamento_individual_pendente(record),
+        "aprovado": status_bool(record, "aprovado"),
+        "pago": status_bool(record, "pago"),
+        "pronto": pronto,
+        "entregue": entregue,
+    }
