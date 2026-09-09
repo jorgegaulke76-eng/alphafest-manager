@@ -193,6 +193,10 @@ from thu_comercial_service import (
     montar_cobrancas_assistidas as _thu_comercial_montar_cobrancas,
     montar_agenda_executiva as _thu_comercial_montar_agenda,
 )
+from catalogo_midias_service import (
+    resolver_galeria_fotos as _catalogo_resolver_galeria_fotos,
+    chave_estado_catalogo_pertence_ao_formulario as _catalogo_chave_estado_formulario,
+)
 from catalogo_orcamento_service import (
     ORCAMENTO_PRODUTO_LIVRE as _catalogo_orcamento_livre,
     normalizar_identidade_produto as _catalogo_normalizar_identidade,
@@ -33033,6 +33037,10 @@ if pagina_atual == "catalogo":
                 "Até 5 mídias por produto. A primeira foto é a capa/principal; as demais mostram ângulos, "
                 "modelos e exemplos. Uma das 5 posições pode ser usada por vídeo."
             )
+            st.caption(
+                "🔄 Fotos sempre editáveis: você pode remover, substituir, adicionar imagens atualizadas "
+                "e redefinir a principal sempre que precisar."
+            )
 
             remover_indices = []
             if item_edicao and imagens_cadastradas:
@@ -33177,34 +33185,29 @@ if pagina_atual == "catalogo":
                     )
                     return
 
-                # CAT1-HF5 — galeria marketplace: no máximo 5 mídias, com uma
-                # foto principal e até um vídeo. Fotos novas entram depois da
-                # principal para não trocar a capa do produto sem intenção.
-                _principal_original_cat = (
-                    imagens_cadastradas[principal_indice_cat]
-                    if imagens_cadastradas and 0 <= int(principal_indice_cat) < len(imagens_cadastradas)
-                    else ""
-                )
-                if substituir_fotos_cat:
-                    imagens = []
-                else:
-                    imagens = [
-                        x for _i, x in enumerate(imagens_cadastradas)
-                        if _i not in set(remover_indices) and not str(x).startswith("http")
-                    ]
-
+                # HF53.3-HF5-HF1 — galeria permanentemente editável. A remoção
+                # vale para imagens locais e URLs e nunca pode ser anulada pelo
+                # estado antigo do campo de URLs ou pela foto principal anterior.
                 urls_digitadas = [u.strip() for u in urls_cat.splitlines() if u.strip()]
-                imagens.extend(urls_digitadas)
-
+                novas_referencias_cat = []
                 for foto in fotos_cat or []:
                     caminho_novo = salvar_upload_catalogo(foto)
                     if caminho_novo:
-                        imagens.append(caminho_novo)
+                        novas_referencias_cat.append(caminho_novo)
 
                 drive_imagens, drive_erros = importar_imagens_google_drive(drive_fotos_cat)
-                imagens.extend(drive_imagens)
+                novas_referencias_cat.extend(drive_imagens)
                 if drive_erros:
                     st.warning("Google Drive: " + " ".join(dict.fromkeys(drive_erros)))
+
+                imagens = _catalogo_resolver_galeria_fotos(
+                    imagens_cadastradas,
+                    remover_indices,
+                    principal_indice_cat,
+                    urls_digitadas,
+                    novas_referencias_cat,
+                    substituir_todas=bool(substituir_fotos_cat),
+                )
 
                 if (
                     prefill_i8
@@ -33238,9 +33241,6 @@ if pagina_atual == "catalogo":
                         )
 
                 imagens = list(dict.fromkeys(str(x).strip() for x in imagens if str(x).strip()))
-                if _principal_original_cat and _principal_original_cat in imagens:
-                    imagens.remove(_principal_original_cat)
-                    imagens.insert(0, _principal_original_cat)
 
                 video_catalogo = "" if remover_video_cat else str(video_catalogo_atual or "").strip()
                 if str(video_url_cat or "").strip():
@@ -33402,6 +33402,12 @@ if pagina_atual == "catalogo":
                         f"✅ {nome_cat.strip()} foi SALVO no Catálogo Oficial. "
                         "A fonte histórica ficou vinculada e o preço antigo permaneceu somente como histórico."
                     )
+                # Limpa todo o estado do formulário salvo, inclusive checkboxes
+                # de remoção com índice e o campo de URLs. Sem isso, o Streamlit
+                # poderia reapresentar uma URL antiga ao reabrir o mesmo produto.
+                for _chave_cat in list(st.session_state.keys()):
+                    if _catalogo_chave_estado_formulario(_chave_cat, sufixo):
+                        st.session_state.pop(_chave_cat, None)
                 st.session_state.catalogo_edit_index = None
                 st.session_state["_thu_auditar_produto_nome"] = nome_cat.strip()
                 st.success("Produto salvo com sucesso.")
@@ -33413,7 +33419,7 @@ if pagina_atual == "catalogo":
                 st.session_state.pop("_thu_i8_prefill_catalogo", None)
                 st.session_state.pop("_thu_i8_fonte_pendente_novo", None)
             for chave in list(st.session_state.keys()):
-                if str(chave).startswith("cat_") and str(chave).endswith(f"_{sufixo}"):
+                if _catalogo_chave_estado_formulario(chave, sufixo):
                     st.session_state.pop(chave, None)
             st.rerun()
 

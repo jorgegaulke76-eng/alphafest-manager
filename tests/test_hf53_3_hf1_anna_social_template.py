@@ -16,7 +16,7 @@ def _sample_png() -> bytes:
 
 
 def test_hf53_3_hf1_version():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF5'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF5-HF1'
 
 
 def test_anna_social_is_second_protected_template_in_validation():
