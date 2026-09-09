@@ -7,7 +7,7 @@ from marketing_template_engine import render_template, _format_phone_br
 
 
 def test_hf6_version_and_phone_format():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF7'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF8-HF1'
     assert _format_phone_br('11972949533') == '(11) 97294-9533'
     assert _format_phone_br('5511972949533') == '(11) 97294-9533'
 

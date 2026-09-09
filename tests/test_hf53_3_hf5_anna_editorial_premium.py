@@ -12,9 +12,9 @@ def _sample():
 
 
 def test_hf53_3_hf5_version_and_anna_metadata():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF7'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF8-HF1'
     anna=next(x for x in engine.listar_templates() if x['id']=='anna_social_redes')
-    assert anna['versao_template']=='HF53.3-HF7'
+    assert anna['versao_template']=='HF53.3-HF8-HF1'
     assert anna['status_template']=='Em validação'
     assert anna['oficial'] is False
 

@@ -10,4 +10,4 @@ def test_hf52_1_hf1_metrics_autorefresh_contract():
 
 
 def test_hf52_1_hf1_version():
-    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF7"
+    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF8-HF1"
