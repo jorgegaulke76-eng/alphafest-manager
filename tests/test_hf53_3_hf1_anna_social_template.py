@@ -16,14 +16,14 @@ def _sample_png() -> bytes:
 
 
 def test_hf53_3_hf1_version():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF4'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF5'
 
 
 def test_anna_social_is_second_protected_template_in_validation():
     catalog = engine.listar_templates()
     anna = next(item for item in catalog if item['id'] == 'anna_social_redes')
     assert anna['status_template'] == 'Em validação'
-    assert anna['versao_template'] == 'HF53.3-HF4'
+    assert anna['versao_template'] == 'HF53.3-HF5'
     assert anna['protegido'] is True
     assert anna['oficial'] is False
     assert anna['autopilot_aprovado'] is True
@@ -68,4 +68,4 @@ def test_ui_exposes_native_network_sizes_and_validation_state():
     assert 'Template Anna — Redes Sociais' in app
     assert 'Formatos gerados nativamente' in app
     assert '🧪 {_mkt_template_status.upper()}' in app
-    assert 'Designer Comercial AlphaFest HF53.3-HF4' in app
+    assert 'Designer Comercial AlphaFest HF53.3-HF5' in app

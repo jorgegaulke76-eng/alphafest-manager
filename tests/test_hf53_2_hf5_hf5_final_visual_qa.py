@@ -14,7 +14,7 @@ def _solid_png(rgb):
 
 
 def test_hf5_hf5_version_and_deduplication_contract():
-    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF4"
+    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF5"
     primary = Image.open(io.BytesIO(_solid_png((230, 30, 60)))).convert("RGBA")
     sources = _unique_application_sources(
         primary,

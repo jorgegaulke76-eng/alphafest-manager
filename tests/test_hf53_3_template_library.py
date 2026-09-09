@@ -4,7 +4,7 @@ import marketing_template_engine as engine
 
 
 def test_hf53_3_version():
-    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF4"
+    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF5"
 
 
 def test_official_master_is_first_homologated_and_protected():

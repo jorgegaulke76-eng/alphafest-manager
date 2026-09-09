@@ -52,4 +52,4 @@ def test_redes_vazias_nao_criam_links_errados():
 
 
 def test_versao_hf52_2_hf1():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF4'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF5'
