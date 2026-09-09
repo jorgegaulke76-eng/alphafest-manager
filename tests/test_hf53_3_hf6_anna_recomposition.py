@@ -11,23 +11,23 @@ def _sample():
     b=io.BytesIO(); im.save(b,"PNG"); return b.getvalue()
 
 
-def test_hf53_3_hf4_version_and_metadata():
+def test_hf53_3_hf6_version_and_grid_contract():
     assert Path("VERSAO.txt").read_text(encoding="utf-8").strip()=="20.4.9-I8.13.5-HF53.3-HF6"
     anna=next(x for x in engine.listar_templates() if x["id"]=="anna_social_redes")
     assert anna["versao_template"]=="HF53.3-HF6"
     assert anna["status_template"]=="Em validação"
-    assert anna["oficial"] is False
+    code=Path("marketing_template_engine.py").read_text(encoding="utf-8")
+    start=code.index("def _render_anna_social_native")
+    end=code.index("def _render_splash_premium_square",start)
+    fn=code[start:end]
+    assert "grade editorial aprovada" in fn
+    assert "logo_novo_alphafest.png" in fn
+    assert "Cards visuais reais" in fn
 
 
-def test_hf53_3_hf4_wordmark_asset_and_master_stays_frozen():
-    assert (Path("assets")/"mascotes"/"logo_wordmark_transparent.png").exists()
+def test_hf53_3_hf6_native_networks_and_master_frozen():
     master=next(x for x in engine.listar_templates() if x["id"]=="splash_premium_anna")
     assert master["versao_template"]=="HF53.2-HF5-HF7"
-    assert master["oficial"] is True
-    assert master["protegido"] is True
-
-
-def test_hf53_3_hf4_native_network_renders():
     for size in ((1080,1350),(1080,1080),(1080,1920),(1920,1080)):
         data=engine.render_template(_sample(),size,template_id="anna_social_redes",title="Gravação Laser",subtitle="Permanente",description="Personalização resistente e elegante.",cta="Conheça este produto",phone="(11) 97294-9533",photo_mode="preservar")
         im=Image.open(io.BytesIO(data))

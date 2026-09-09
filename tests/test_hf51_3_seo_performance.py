@@ -22,4 +22,4 @@ def test_hf51_3_producao_injeta_canonical_e_robots_sem_duplicar_description():
 
 
 def test_versao_hf51_3():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF5-HF1'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF6'
