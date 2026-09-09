@@ -6,4 +6,4 @@ def test_hf53_2_hf4_master_template_contract():
     assert "HF53.2-HF5 — Template Mestre Comercial profissional (1080x1350 nativo)" in engine
     assert "produto protagonista" in engine
     assert "Template Mestre Comercial AlphaFest" in app
-    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip()=="20.4.9-I8.13.5-HF53.2-HF5-HF5"
+    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip()=="20.4.9-I8.13.5-HF53.2-HF5-HF6"

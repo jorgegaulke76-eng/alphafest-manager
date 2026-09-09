@@ -1,6 +1,6 @@
 """AlphaFest Marketing Template Engine.
 
-HF53.2-HF5-HF5 — Template Mestre Comercial • Aprovação Final Comercial.
+HF53.2-HF5-HF6 — Template Mestre Comercial • QA Tipográfico e CTA Final.
 O template oficial nasce em 1080x1350 (4:5), baseado na composição comercial
 aprovada pela AlphaFest. Story, Status e Facebook são derivados do mestre sem
 recortar o conteúdo principal; templates legados continuam usando a engine quadrada.
@@ -26,7 +26,7 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "splash_premium_anna": {
         "id": "splash_premium_anna",
         "nome": "Template Mestre Comercial AlphaFest ⭐",
-        "descricao": "Modelo oficial HF53.2-HF5-HF5 em 1080×1350: QA visual final, textos legíveis, miniaturas sem repetição, CTA WhatsApp refinado e rodapé ampliado.",
+        "descricao": "Modelo oficial HF53.2-HF5-HF6 em 1080×1350: QA tipográfico final, selo ampliado, faixa de campanha coerente, WhatsApp legível e rodapé padronizado.",
         "paleta": {
             "fundo": "#FFFFFF",
             "azul": "#087CE8",
@@ -219,29 +219,19 @@ def _draw_check(draw: ImageDraw.ImageDraw, cx: int, cy: int, radius: int, fill, 
 
 
 def _draw_whatsapp(draw: ImageDraw.ImageDraw, cx: int, cy: int, radius: int, fill):
-    """HF53.2-HF5-HF5: ícone vetorial limpo, reconhecível e proporcional ao CTA."""
-    white = (255, 255, 255, 255)
-    # disco verde com aro branco: melhora leitura mesmo sobre CTA escuro/dourado
-    draw.ellipse((cx-radius, cy-radius, cx+radius, cy+radius), fill=fill, outline=white, width=max(3, radius//10))
-    bubble_r = int(radius * .64)
-    bw = max(4, radius//8)
-    draw.ellipse((cx-bubble_r, cy-bubble_r, cx+bubble_r, cy+bubble_r), outline=white, width=bw)
-    # cauda do balão
-    draw.polygon([
-        (cx-int(radius*.45), cy+int(radius*.36)),
-        (cx-int(radius*.62), cy+int(radius*.62)),
-        (cx-int(radius*.20), cy+int(radius*.50)),
-    ], fill=white)
-    # handset mais espesso e com terminais arredondados
-    hw = max(5, radius//6)
-    box=(cx-int(radius*.38), cy-int(radius*.38), cx+int(radius*.38), cy+int(radius*.38))
-    draw.arc(box, 132, 308, fill=white, width=hw)
-    for px,py in [
-        (cx-int(radius*.27), cy-int(radius*.29)),
-        (cx+int(radius*.28), cy+int(radius*.25)),
-    ]:
-        rr=max(4,hw//2)
-        draw.ellipse((px-rr,py-rr,px+rr,py+rr),fill=white)
+    """HF53.2-HF5-HF6: ícone de contato legível mesmo na miniatura do Feed.
+
+    Usa disco verde com aro branco e um handset vetorial da fonte portátil.
+    O glifo ✆ permanece nítido em escalas pequenas, ao contrário do arco manual
+    que podia parecer apenas a letra C.
+    """
+    white=(255,255,255,255)
+    draw.ellipse((cx-radius,cy-radius,cx+radius,cy+radius),fill=fill,outline=white,width=max(4,radius//9))
+    glyph="✆"
+    gf=_font(max(24,int(radius*1.12)),bold=True)
+    bb=draw.textbbox((0,0),glyph,font=gf)
+    tw,th=bb[2]-bb[0],bb[3]-bb[1]
+    draw.text((cx-tw//2-bb[0],cy-th//2-bb[1]-1),glyph,font=gf,fill=white)
 
 
 def _soft_shadow(alpha: Image.Image, blur: int = 22, opacity: int = 105) -> Image.Image:
@@ -713,6 +703,17 @@ def _unique_application_sources(primary: Image.Image, application_images: list[b
     return unique
 
 
+def _format_phone_br(value: str) -> str:
+    digits=re.sub(r"\D", "", str(value or ""))
+    if digits.startswith("55") and len(digits) in {12,13}:
+        digits=digits[2:]
+    if len(digits)==11:
+        return f"({digits[:2]}) {digits[2:7]}-{digits[7:]}"
+    if len(digits)==10:
+        return f"({digits[:2]}) {digits[2:6]}-{digits[6:]}"
+    return str(value or "(11) 97294-9533").strip() or "(11) 97294-9533"
+
+
 def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto", application_images: list[bytes] | None = None) -> Image.Image:
     """HF53.2-HF5 — Template Mestre Comercial profissional (1080x1350 nativo).
 
@@ -785,17 +786,17 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
         ty += line_h + spacing
 
     # Selo de aprovação no alto direito.
-    sx,sy,sr=934,280,78
+    sx,sy,sr=934,280,92
     draw.ellipse((sx-sr-5,sy-sr-5,sx+sr+5,sy+sr+5),fill=_hex(_shade(p["rosa"],1.30),155))
     draw.ellipse((sx-sr,sy-sr,sx+sr,sy+sr),fill=dark_accent,outline=white,width=5)
     # Ícone de aprovação maior que no HF4 para equilibrar texto x símbolo.
-    ir=28; icy=sy-30
+    ir=31; icy=sy-35
     draw.ellipse((sx-ir,icy-ir,sx+ir,icy+ir),fill=white)
     draw.line((sx-13,icy,sx-4,icy+9),fill=dark_accent,width=7)
     draw.line((sx-4,icy+9,sx+15,icy-13),fill=dark_accent,width=7)
     for j,line in enumerate(["ARTE","APROVADA"]):
-        badgef=_fit_font(draw,line,122,18,15,bold=True)
-        bb=draw.textbbox((0,0),line,font=badgef); draw.text((sx-(bb[2]-bb[0])//2,sy+11+j*21),line,font=badgef,fill=white)
+        badgef=_fit_font(draw,line,132,17,15,bold=True)
+        bb=draw.textbbox((0,0),line,font=badgef); draw.text((sx-(bb[2]-bb[0])//2,sy+17+j*22),line,font=badgef,fill=white)
 
     # Faixa de campanha em duas hierarquias.
     banner_y=408
@@ -807,9 +808,19 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
         band_title="OUTUBRO ROSA • Personalização"
         band_sub="com propósito para presentes, brindes e empresa"
     else:
-        compact_body=" ".join(campaign_body.split()[:5]) if campaign_body else "Personalização sob medida"
-        band_title=f"{label} • {compact_body}" if campaign_label else compact_body
-        band_sub=campaign_body if campaign_body and campaign_body != compact_body else (profile.get("subtitle") or "Personalização sob medida para você")
+        # HF6: a linha principal deve ser uma frase completa. Nunca corta o corpo
+        # no meio nem repete o mesmo texto na linha de baixo.
+        title_key=raw_title.casefold()
+        if any(k in title_key for k in ("copo", "caneca", "squeeze", "garrafa")):
+            band_theme="PRESENTE PERSONALIZADO"
+        elif any(k in title_key for k in ("gravação", "gravacao", "laser")):
+            band_theme="PERSONALIZAÇÃO COM PROPÓSITO"
+        elif any(k in title_key for k in ("balão", "balao", "decoração", "decoracao")):
+            band_theme="DECORAÇÃO PERSONALIZADA"
+        else:
+            band_theme="PERSONALIZAÇÃO ALPHAFEST"
+        band_title=f"{label} • {band_theme}" if campaign_label else band_theme
+        band_sub=campaign_body or (profile.get("subtitle") or "Personalização sob medida para você")
     btf=_fit_font(draw,band_title,500,27,19,bold=True)
     draw.text((82,banner_y+16),band_title,font=btf,fill=white)
     bsf=_fit_font(draw,band_sub,510,18,14,bold=False)
@@ -879,7 +890,7 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
     _draw_whatsapp(draw,618,1054,48,green)
     ctf=_fit_font(draw,cta_label,340,25,18,bold=True)
     bb=draw.textbbox((0,0),cta_label,font=ctf); draw.text((855-(bb[2]-bb[0])//2,1001),cta_label,font=ctf,fill=white)
-    phone_text=phone or "(11) 97294-9533"
+    phone_text=_format_phone_br(phone or "(11) 97294-9533")
     phf=_fit_font(draw,phone_text,350,43,30,bold=True)
     pbb=draw.textbbox((0,0),phone_text,font=phf); draw.text((855-(pbb[2]-pbb[0])//2,1042),phone_text,font=phf,fill=white)
 
@@ -893,11 +904,12 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
     for i,label in enumerate(footer_labels):
         left=i*cell
         _draw_check(draw,left+47,1200,26,white,icon=footer_icons[i],icon_color=dark_accent)
-        # QA final: usar melhor o espaço disponível e manter leitura em tela pequena.
-        ff=_fit_font(draw,str(label).upper(),180,23,16,bold=True)
+        # HF6: todos os quatro diferenciais usam exatamente o mesmo tamanho
+        # tipográfico; muda apenas a quebra de linha quando necessário.
+        ff=_font(20,bold=True)
         lines=_wrap(draw,str(label).upper(),ff,180,2)
-        yy=1186 if len(lines)>1 else 1195
-        step=max(21,int(getattr(ff,"size",18)*1.05))
+        yy=1184 if len(lines)>1 else 1194
+        step=23
         for line in lines:
             draw.text((left+82,yy),line,font=ff,fill=white); yy+=step
         if i: draw.line((left,1164,left,1238),fill=(255,255,255,105),width=2)
@@ -905,9 +917,10 @@ def _render_splash_premium_portrait(image_bytes: bytes, *, title: str, subtitle:
     # Rodapé em ondas, com assinatura emocional curta.
     draw.polygon([(0,1250),(180,1270),(380,1255),(600,1280),(820,1258),(1080,1278),(1080,1350),(0,1350)],fill=_hex(_shade(p["rosa"],1.28),205))
     phrase="Pequenas personalizações, grandes histórias!"
-    pf=_font(24,bold=True,serif=True,italic=True)
-    draw.text((70,1287),phrase,font=pf,fill=dark_accent)
-    _draw_heart(draw,610,1305,28,fill=accent)
+    pf=_fit_font(draw,phrase,930,32,27,bold=True,serif=True,italic=True)
+    pbb=draw.textbbox((0,0),phrase,font=pf)
+    px=(W-(pbb[2]-pbb[0]))//2
+    draw.text((px,1281),phrase,font=pf,fill=dark_accent)
     if awareness:
         _draw_campaign_ribbon(draw,902,1253,.55,accent)
     return canvas
@@ -1056,7 +1069,7 @@ def _render_square(image_bytes: bytes, *, title: str, subtitle: str, description
     phone_box=(610,775,1045,875)
     draw.rounded_rectangle(phone_box,radius=34,fill=cta_color)
     _draw_whatsapp(draw,662,825,34,green)
-    phone_text=phone or "11 97294-9533"
+    phone_text=_format_phone_br(phone or "(11) 97294-9533")
     phf=_fit_font(draw,phone_text,315,48,34,bold=True)
     pbb=draw.textbbox((0,0),phone_text,font=phf)
     text_left,text_right=706,1030
@@ -1151,7 +1164,7 @@ def render_template(
     description: str="",
     price: str="",
     cta: str="FAÇA SEU PEDIDO!",
-    phone: str="11 97294-9533",
+    phone: str="(11) 97294-9533",
     logo_path: str|Path|None=None,
     palette_override: dict[str,str] | None=None,
     photo_mode: str="auto",

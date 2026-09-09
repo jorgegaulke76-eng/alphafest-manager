@@ -18,7 +18,7 @@ def _sample_png():
 
 
 def test_hf5_master_is_native_4x5_and_campaign_aware():
-    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.2-HF5-HF5"
+    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.2-HF5-HF6"
     assert detect_theme("Outubro Rosa") == "outubro_rosa"
     palette = get_theme("outubro_rosa")["palette"]
     art = render_template(
