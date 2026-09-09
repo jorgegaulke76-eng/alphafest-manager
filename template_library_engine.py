@@ -34,7 +34,7 @@ REQUIRED_FILES = ("fundo.png", "layout.json", "config.json")
 # HF53.3 — IDs do núcleo não podem ser ocupados por pacotes importados.
 # Isto impede que um ZIP externo substitua silenciosamente o Template Mestre
 # Comercial homologado ou seus aliases de compatibilidade.
-RESERVED_TEMPLATE_IDS = {"splash_premium_anna", "alphafest_agencia_anna", "alphafest_agencia"}
+RESERVED_TEMPLATE_IDS = {"splash_premium_anna", "anna_social_redes", "alphafest_agencia_anna", "alphafest_agencia"}
 
 LAYOUT_OVERRIDES: dict[str, dict[str, Any]] = {}
 

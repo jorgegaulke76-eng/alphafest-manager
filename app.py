@@ -26460,7 +26460,7 @@ if pagina_atual == "crescimento":
     # HF53.3 — Biblioteca de Templates: mestre HF7 congelado + seleção segura no Piloto Automático.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.3: Biblioteca de Templates ativa. O Template Mestre Comercial HF53.2-HF5-HF7 permanece homologado, protegido e é o padrão do Piloto Automático. Nada é publicado sem sua aprovação.")
+        st.caption("HF53.3-HF1: Biblioteca ativa. O Mestre HF7 continua oficial e protegido; o novo Template Anna — Redes Sociais entra em validação controlada, com composição nativa por formato. Nada é publicado sem sua aprovação.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26522,16 +26522,17 @@ if pagina_atual == "crescimento":
                     list(_mkt_template_labels.keys()),
                     index=0,
                     key="mkt_autopilot_template_hf53_3",
-                    help="Somente templates homologados aparecem aqui. Instalar um template no Studio não altera o padrão oficial.",
+                    help="O Mestre HF7 continua oficial. Templates embutidos em validação podem ser testados aqui sem substituir o padrão oficial; ZIPs importados continuam restritos ao Studio até homologação.",
                 )
                 _mkt_template = _mkt_template_labels[_mkt_template_label]
                 _mkt_template_id = str(_mkt_template.get("id") or "splash_premium_anna")
                 _mkt_template_name = str(_mkt_template.get("nome") or "Template Mestre Comercial AlphaFest")
                 _mkt_template_version = str(_mkt_template.get("versao_template") or "")
                 _mkt_template_status = str(_mkt_template.get("status_template") or "Homologado")
+                _mkt_status_badge = "✅ HOMOLOGADO" if _mkt_template_status.lower() == "homologado" else f"🧪 {_mkt_template_status.upper()}"
                 _mkt_template_badges = [
                     "⭐ OFICIAL" if _mkt_template.get("oficial") else "🧩 BIBLIOTECA",
-                    f"✅ {_mkt_template_status.upper()}",
+                    _mkt_status_badge,
                 ]
                 if _mkt_template.get("protegido"):
                     _mkt_template_badges.append("🔒 PROTEGIDO")
@@ -26599,7 +26600,7 @@ if pagina_atual == "crescimento":
                 else:
                     _mkt_palette = _mkt_palette_presets.get(_mkt_palette_name) or _mkt_palette_presets["Automático AlphaFest"]
                     _mkt_theme_label = _mkt_palette_name
-                st.caption(f"Tema aplicado ao Template Mestre: {_mkt_theme_label}")
+                st.caption(f"Tema aplicado ao template selecionado: {_mkt_theme_label}")
                 st.markdown(
                     "<div style='display:flex;gap:7px;align-items:center;margin:2px 0 8px'>"
                     + "".join(f"<span title='{k}' style='width:26px;height:18px;border-radius:6px;border:1px solid #ffffff44;background:{v};display:inline-block'></span>" for k,v in _mkt_palette.items() if k in {"primary","secondary","accent","background"})
@@ -26619,6 +26620,13 @@ if pagina_atual == "crescimento":
                 default=_mkt_channels_default,
                 key="mkt_autopilot_canais_hf53_1",
             )
+            _mkt_sizes_caption = []
+            for _mkt_canal_nome in _mkt_channels:
+                _mkt_sz = CANAL_MIDIA_CONFIG.get(_mkt_canal_nome, {}).get("size")
+                if _mkt_sz:
+                    _mkt_sizes_caption.append(f"{_mkt_canal_nome}: {_mkt_sz[0]}×{_mkt_sz[1]}")
+            if _mkt_sizes_caption:
+                st.caption("Formatos gerados nativamente • " + " • ".join(_mkt_sizes_caption))
             if st.button(
                 "⚡ Gerar campanha automaticamente",
                 type="primary",
@@ -26682,7 +26690,7 @@ if pagina_atual == "crescimento":
                             "categoria": str(_mkt_product.get("Categoria") or ""),
                             "campanha": _mkt_campaign.strip() or "Permanente",
                             "objetivo": _mkt_objective,
-                            "origem_criativa": "Designer Comercial AlphaFest HF53.3",
+                            "origem_criativa": "Designer Comercial AlphaFest HF53.3-HF1",
                             "tipo_registro": "campanha_automatica",
                             "canais": list(_mkt_channels),
                             "artes_png": _mkt_arts,
@@ -26702,7 +26710,7 @@ if pagina_atual == "crescimento":
                             "quality_gate": "APROVADO AUTOMATICAMENTE",
                             "paleta_nome": _mkt_palette_name,
                             "paleta_visual": dict(_mkt_palette),
-                            "designer_rules_version": "HF53.3",
+                            "designer_rules_version": "HF53.3-HF1",
                         }
                         conteudos.insert(0, _mkt_record)
                         marketing["conteudos"] = conteudos
@@ -28334,7 +28342,7 @@ if pagina_atual == "crescimento":
                     except Exception as exc:
                         st.error(f"Não foi possível instalar o template: {exc}")
 
-            st.info("Próxima evolução do roteiro: criar e homologar um segundo template comercial. Até lá, o HF53.2-HF5-HF7 permanece como único padrão automático de produção.")
+            st.info("HF53.3-HF1: o Mestre HF7 permanece oficial. O Template Anna — Redes Sociais está em validação para Feed, Story, Facebook e Status sem redimensionamento destrutivo.")
             st.markdown("---")
             st.subheader("🖼️ Banco de mídia AlphaFest")
             st.caption("Fotos e vídeos continuam ligados às campanhas e ao catálogo existente.")

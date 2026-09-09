@@ -45,6 +45,28 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
             "verde": "#20B956",
         },
     },
+    "anna_social_redes": {
+        "id": "anna_social_redes",
+        "nome": "Template Anna — Redes Sociais",
+        "descricao": "Modelo leve e direto para postagens, inspirado na referência da Anna. Renderiza nativamente cada proporção sem esticar o Feed: 4:5, 1:1, 9:16 e 16:9.",
+        "categoria_template": "Redes Sociais",
+        "status_template": "Em validação",
+        "versao_template": "HF53.3-HF1",
+        "oficial": False,
+        "protegido": True,
+        "autopilot_aprovado": True,
+        "preview": "assets/marketing/template_anna_redes_preview.png",
+        "paleta": {
+            "fundo": "#FFFFFF",
+            "azul": "#087CE8",
+            "azul_escuro": "#07349B",
+            "azul_claro": "#DDF5FF",
+            "rosa": "#EF2A92",
+            "amarelo": "#FFD12B",
+            "texto": "#102D50",
+            "verde": "#20B956",
+        },
+    },
     "alphafest_agencia_anna": {
         "id": "alphafest_agencia_anna",
         "nome": "AlphaFest Agência — Legado",
@@ -1023,6 +1045,181 @@ def _adapt_master_portrait_to_channel(portrait: Image.Image, size: tuple[int,int
     return canvas
 
 
+
+def _render_anna_social_native(
+    image_bytes: bytes,
+    size: tuple[int, int],
+    *,
+    title: str,
+    subtitle: str,
+    description: str,
+    price: str,
+    cta: str,
+    phone: str,
+    logo_path: Path,
+    cfg: dict[str, Any],
+    palette_override: dict[str, str] | None = None,
+    photo_mode: str = "auto",
+) -> Image.Image:
+    """HF53.3-HF1 — Template Anna para redes sociais.
+
+    Diferente do Template Mestre, este modelo não redimensiona uma arte pronta.
+    Cada proporção recebe composição própria, mantendo a mesma identidade e as
+    áreas seguras de título, produto e CTA. Assim Story/Status, Feed, Facebook e
+    horizontal preservam leitura sem barras ou cortes artificiais.
+    """
+    W, H = (int(size[0]), int(size[1]))
+    p = _template_palette_from_override(cfg, palette_override)
+    bg = _hex(p["fundo"])
+    primary = _hex(p.get("cor_titulo", p["azul_escuro"]))
+    secondary = _hex(p["azul"])
+    accent = _hex(p["rosa"])
+    yellow = _hex(p["amarelo"])
+    textc = _hex(p["texto"])
+    green = _hex(p["verde"])
+    white = (255, 255, 255, 255)
+
+    canvas = Image.new("RGBA", (W, H), bg)
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    source = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
+
+    # Identidade de fundo inspirada no modelo enviado: limpa, leve e com formas
+    # orgânicas grandes, sem disputar atenção com o produto.
+    draw.ellipse((-int(W*.28), -int(H*.10), int(W*.48), int(H*.28)), fill=secondary)
+    draw.ellipse((int(W*.70), -int(H*.08), int(W*1.18), int(H*.23)), fill=accent)
+    draw.ellipse((int(W*.76), int(H*.78), int(W*1.16), int(H*1.08)), fill=_hex(_shade(p["azul"], 1.25), 150))
+    draw.ellipse((-int(W*.18), int(H*.84), int(W*.32), int(H*1.12)), fill=_hex(_shade(p["rosa"], 1.15), 150))
+
+    # Pequenos pontos de identidade AlphaFest.
+    dot_r=max(4, int(min(W,H)*.006))
+    for px,py,col in ((.10,.30,accent),(.89,.32,yellow),(.84,.72,secondary),(.15,.75,yellow)):
+        x,y=int(W*px),int(H*py)
+        draw.ellipse((x-dot_r,y-dot_r,x+dot_r,y+dot_r),fill=col)
+
+    anna_logo_path = BASE_DIR / "assets" / "mascotes" / "logo_wordmark_transparent.png"
+    logo = _load_logo(anna_logo_path if anna_logo_path.exists() else logo_path, (int(W*.66), int(H*.16)))
+    profile = _product_profile(title, description, subtitle)
+    clean_title = re.sub(r"\s+", " ", str(title or "Produto AlphaFest")).strip().upper()
+    clean_sub = re.sub(r"\s+", " ", str(subtitle or profile.get("subtitle") or "Personalizado do seu jeito")).strip()
+    clean_desc = re.sub(r"\s+", " ", str(description or "")).strip()
+    if len(clean_desc) > 145:
+        clean_desc = clean_desc[:142].rstrip(" ,.;:-") + "…"
+    cta_label = re.sub(r"\s+", " ", str(cta or "CHAME NO WHATSAPP")).strip().upper()
+    phone_text = _format_phone_br(phone or "(11) 97294-9533")
+
+    ratio = W / max(1, H)
+    is_story = ratio < .72
+    is_landscape = ratio > 1.32
+    is_square = .90 <= ratio <= 1.10
+
+    if is_landscape:
+        # 16:9 — texto à esquerda, produto à direita.
+        safe_x = int(W*.055)
+        if logo:
+            logo.thumbnail((int(W*.28), int(H*.20)), Image.Resampling.LANCZOS)
+            canvas.alpha_composite(logo,(safe_x,int(H*.055)))
+        campaign = (clean_sub or "ALPHAFEST").upper()
+        cf=_fit_font(draw,campaign,int(W*.36),int(H*.050),int(H*.032),bold=True)
+        draw.text((safe_x,int(H*.27)),campaign,font=cf,fill=accent)
+        tf=_fit_font(draw,clean_title,int(W*.42),int(H*.105),int(H*.055),bold=True)
+        lines=_wrap(draw,clean_title,tf,int(W*.42),3)
+        yy=int(H*.34)
+        step=int(draw.textbbox((0,0),"Ag",font=tf)[3]*1.02)
+        for line in lines:
+            draw.text((safe_x,yy),line,font=tf,fill=primary); yy+=step
+        if clean_desc:
+            df=_fit_font(draw,clean_desc,int(W*.38),int(H*.035),int(H*.024),bold=False)
+            for line in _wrap(draw,clean_desc,df,int(W*.39),3):
+                draw.text((safe_x,yy+int(H*.02)),line,font=df,fill=textc); yy+=int(H*.042)
+        _paste_photo(canvas,source,(int(W*.50),int(H*.10),int(W*.95),int(H*.80)),int(H*.04),mode=photo_mode,product_title=title)
+        cbox=(safe_x,int(H*.78),int(W*.43),int(H*.92))
+        draw.rounded_rectangle(cbox,radius=int(H*.04),fill=primary)
+        _draw_whatsapp(draw,int(W*.095),int(H*.85),int(H*.045),green)
+        ctf=_fit_font(draw,cta_label,int(W*.23),int(H*.035),int(H*.022),bold=True)
+        draw.text((int(W*.14),int(H*.805)),cta_label,font=ctf,fill=white)
+        phf=_fit_font(draw,phone_text,int(W*.24),int(H*.050),int(H*.031),bold=True)
+        draw.text((int(W*.14),int(H*.845)),phone_text,font=phf,fill=white)
+        return canvas
+
+    if is_story:
+        # 9:16 — respeita áreas seguras de interface no topo e no rodapé.
+        top_safe=int(H*.075); bottom_safe=int(H*.085); mx=int(W*.075)
+        if logo:
+            logo.thumbnail((int(W*.62),int(H*.11)), Image.Resampling.LANCZOS)
+            canvas.alpha_composite(logo,((W-logo.width)//2,top_safe))
+        campaign=(clean_sub or "ALPHAFEST").upper()
+        cf=_fit_font(draw,campaign,int(W*.78),int(H*.030),int(H*.020),bold=True)
+        bb=draw.textbbox((0,0),campaign,font=cf); draw.text(((W-(bb[2]-bb[0]))//2,int(H*.18)),campaign,font=cf,fill=accent)
+        tf=_fit_font(draw,clean_title,int(W*.84),int(H*.065),int(H*.040),bold=True)
+        title_lines=_wrap(draw,clean_title,tf,int(W*.84),3)
+        yy=int(H*.225); step=int(H*.058)
+        for line in title_lines:
+            bb=draw.textbbox((0,0),line,font=tf); draw.text(((W-(bb[2]-bb[0]))//2,yy),line,font=tf,fill=primary); yy+=step
+        photo_top=max(int(H*.39),yy+int(H*.015))
+        _paste_photo(canvas,source,(mx,photo_top,W-mx,int(H*.72)),int(W*.055),mode=photo_mode,product_title=title)
+        # Faixa curta de benefício/descrição.
+        mini = clean_desc or "Personalização feita para marcar momentos especiais."
+        mf=_fit_font(draw,mini,int(W*.76),int(H*.026),int(H*.018),bold=False)
+        mlines=_wrap(draw,mini,mf,int(W*.76),2)
+        my=int(H*.745)
+        for line in mlines:
+            bb=draw.textbbox((0,0),line,font=mf); draw.text(((W-(bb[2]-bb[0]))//2,my),line,font=mf,fill=textc); my+=int(H*.028)
+        cbox=(mx,int(H*.815),W-mx,H-bottom_safe)
+        draw.rounded_rectangle(cbox,radius=int(W*.07),fill=primary)
+        _draw_whatsapp(draw,int(W*.165),int(H*.866),int(W*.055),green)
+        ctf=_fit_font(draw,cta_label,int(W*.53),int(H*.027),int(H*.019),bold=True)
+        draw.text((int(W*.25),int(H*.835)),cta_label,font=ctf,fill=white)
+        phf=_fit_font(draw,phone_text,int(W*.56),int(H*.042),int(H*.029),bold=True)
+        draw.text((int(W*.25),int(H*.873)),phone_text,font=phf,fill=white)
+        return canvas
+
+    # Feed 4:5 e quadrado: mesma linguagem, composição nativa por altura.
+    mx=int(W*.055)
+    if logo:
+        logo.thumbnail((int(W*.50),int(H*.12)), Image.Resampling.LANCZOS)
+        canvas.alpha_composite(logo,(mx,int(H*.045)))
+    # Tag de campanha no topo direito.
+    tag=(clean_sub or "ALPHAFEST").upper()
+    tagf=_fit_font(draw,tag,int(W*.32),int(H*.026),int(H*.017),bold=True)
+    tbb=draw.textbbox((0,0),tag,font=tagf)
+    tx=W-mx-(tbb[2]-tbb[0])-int(W*.025)
+    draw.rounded_rectangle((tx-int(W*.018),int(H*.065),W-mx,int(H*.11)),radius=int(H*.018),fill=accent)
+    draw.text((tx,int(H*.073)),tag,font=tagf,fill=white)
+
+    tf=_fit_font(draw,clean_title,int(W*.82),int(H*.075 if not is_square else H*.068),int(H*.040),bold=True)
+    lines=_wrap(draw,clean_title,tf,int(W*.82),3)
+    yy=int(H*.18)
+    step=max(int(H*.057),draw.textbbox((0,0),"Ag",font=tf)[3]+4)
+    for line in lines:
+        draw.text((mx,yy),line,font=tf,fill=primary); yy+=step
+
+    photo_top=max(int(H*.36),yy+int(H*.02))
+    photo_bottom=int(H*.70 if not is_square else H*.69)
+    _paste_photo(canvas,source,(mx,photo_top,W-mx,photo_bottom),int(W*.045),mode=photo_mode,product_title=title)
+
+    # Texto curto abaixo da foto, sem bloco denso.
+    mini=clean_desc or "Feito para marcar momentos especiais."
+    mf=_fit_font(draw,mini,int(W*.82),int(H*.026),int(H*.018),bold=False)
+    mlines=_wrap(draw,mini,mf,int(W*.82),2)
+    my=int(H*.72 if not is_square else H*.715)
+    for line in mlines:
+        draw.text((mx,my),line,font=mf,fill=textc); my+=int(H*.03)
+
+    ctop=int(H*.80 if not is_square else H*.805)
+    cbottom=int(H*.915 if not is_square else H*.925)
+    draw.rounded_rectangle((mx,ctop,W-mx,cbottom),radius=int(W*.055),fill=primary)
+    _draw_whatsapp(draw,int(W*.145),(ctop+cbottom)//2,int(W*.048),green)
+    ctf=_fit_font(draw,cta_label,int(W*.55),int(H*.027),int(H*.019),bold=True)
+    draw.text((int(W*.22),ctop+int(H*.018)),cta_label,font=ctf,fill=white)
+    phf=_fit_font(draw,phone_text,int(W*.58),int(H*.040),int(H*.027),bold=True)
+    draw.text((int(W*.22),ctop+int(H*.052)),phone_text,font=phf,fill=white)
+
+    slogan="O poder de estar presente em cada presente!"
+    sf=_fit_font(draw,slogan,int(W*.80),int(H*.021),int(H*.014),bold=True,serif=True,italic=True)
+    sbb=draw.textbbox((0,0),slogan,font=sf)
+    draw.text(((W-(sbb[2]-sbb[0]))//2,int(H*.95)),slogan,font=sf,fill=primary)
+    return canvas
+
 def _render_splash_premium_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto", application_images: list[bytes] | None = None) -> Image.Image:
     """Compatibilidade: deriva o quadrado a partir do novo mestre 4:5 HF53.2-HF5."""
     portrait=_render_splash_premium_portrait(image_bytes,title=title,subtitle=subtitle,description=description,price=price,cta=cta,phone=phone,logo_path=logo_path,cfg=cfg,palette_override=palette_override,photo_mode=photo_mode,application_images=application_images)
@@ -1251,6 +1448,12 @@ def render_template(
             palette_override=palette_override, photo_mode=photo_mode, application_images=application_images,
         )
         final=_adapt_master_portrait_to_channel(portrait,size,cfg,palette_override)
+    elif str(cfg.get("id")) == "anna_social_redes" and str(cfg.get("source")) != "library":
+        final=_render_anna_social_native(
+            image_bytes, size, title=title, subtitle=subtitle, description=description, price=price,
+            cta=cta, phone=phone, logo_path=_logo, cfg=cfg,
+            palette_override=palette_override, photo_mode=photo_mode,
+        )
     else:
         square=_render_square(
             image_bytes,
