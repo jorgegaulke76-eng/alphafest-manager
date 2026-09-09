@@ -48,10 +48,10 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "anna_social_redes": {
         "id": "anna_social_redes",
         "nome": "Template Anna — Redes Sociais",
-        "descricao": "Modelo leve e direto para postagens, inspirado na referência da Anna. Renderiza nativamente cada proporção sem esticar o Feed: 4:5, 1:1, 9:16 e 16:9.",
+        "descricao": "Modelo comercial completo inspirado nas referências da Anna: logo protagonista, título editorial, produto em destaque, benefícios, aplicações e CTA. Renderiza nativamente 4:5, 1:1, 9:16 e 16:9 sem esticar a arte.",
         "categoria_template": "Redes Sociais",
         "status_template": "Em validação",
-        "versao_template": "HF53.3-HF1",
+        "versao_template": "HF53.3-HF2",
         "oficial": False,
         "protegido": True,
         "autopilot_aprovado": True,
@@ -520,6 +520,19 @@ def _paste_photo(canvas: Image.Image, source: Image.Image, box: tuple[int,int,in
     zone.alpha_composite(product, (px, py))
     canvas.alpha_composite(zone, (x1, y1))
 
+def _commercial_subtitle(subtitle: str, fallback: str) -> str:
+    """Evita usar apenas o nome da campanha como promessa comercial do template Anna."""
+    txt = re.sub(r"\s+", " ", str(subtitle or "")).strip()
+    short_campaigns = {
+        "permanente", "natal", "outubro rosa", "dia das crianças", "dia das criancas",
+        "dia das mães", "dia das maes", "dia dos pais", "páscoa", "pascoa",
+        "corporativo", "black friday", "ano novo", "festa junina", "carnaval",
+    }
+    if not txt or txt.casefold() in short_campaigns:
+        return fallback
+    return txt
+
+
 def _product_profile(title: str, description: str, subtitle: str) -> dict[str, Any]:
     raw = re.sub(r"\([^)]*\)", " ", str(title or "Produto AlphaFest"))
     raw = re.sub(r"^[^\wÀ-ÿ]+", "", raw)
@@ -529,7 +542,7 @@ def _product_profile(title: str, description: str, subtitle: str) -> dict[str, A
         return {
             "title1": "Leopardo",
             "title2": "Voronoi",
-            "subtitle": subtitle if subtitle and "personaliz" not in subtitle.casefold() else "Design moderno que transforma qualquer ambiente!",
+            "subtitle": _commercial_subtitle(subtitle, "Design moderno que transforma qualquer ambiente!"),
             "benefits": [
                 ("DESIGN EXCLUSIVO", "Geometria marcante que valoriza sua decoração.", "star"),
                 ("IMPRESSÃO 3D PREMIUM", "Alta definição e precisão em cada detalhe.", "check"),
@@ -547,7 +560,7 @@ def _product_profile(title: str, description: str, subtitle: str) -> dict[str, A
         return {
             "title1": "Gravação",
             "title2": "Laser",
-            "subtitle": subtitle or "Personalização durável para presentes, brindes e empresas",
+            "subtitle": _commercial_subtitle(subtitle, "Personalização durável para presentes, brindes e empresas"),
             "benefits": [
                 ("DESIGN EXCLUSIVO", "Criado para encantar e valorizar", "diamond"),
                 ("FÁCIL DE USAR", "Prático, rápido e pronto para o dia a dia", "check"),
@@ -566,7 +579,7 @@ def _product_profile(title: str, description: str, subtitle: str) -> dict[str, A
         return {
             "title1": "Carimbos",
             "title2": "para Doces",
-            "subtitle": subtitle or "Transforme seus doces em pequenas obras de arte!",
+            "subtitle": _commercial_subtitle(subtitle, "Transforme seus doces em pequenas obras de arte!"),
             "benefits": [
                 ("DESIGN EXCLUSIVO", "Desenhos lindos que encantam e valorizam seus doces.", "star"),
                 ("FÁCIL DE USAR", "É só pressionar e pronto! Prático, rápido e perfeito.", "check"),
@@ -585,7 +598,7 @@ def _product_profile(title: str, description: str, subtitle: str) -> dict[str, A
         return {
             "title1": "Balão",
             "title2": "Cake Personalizado",
-            "subtitle": subtitle or "Um detalhe especial para deixar sua festa inesquecível!",
+            "subtitle": _commercial_subtitle(subtitle, "Um detalhe especial para deixar sua festa inesquecível!"),
             "benefits": [
                 ("DESIGN EXCLUSIVO", "Criado especialmente para combinar com o tema da sua festa.", "star"),
                 ("PERSONALIZAÇÃO TOTAL", "Nome, idade, cores e elementos escolhidos por você.", "check"),
@@ -622,7 +635,7 @@ def _product_profile(title: str, description: str, subtitle: str) -> dict[str, A
     return {
         "title1": t1,
         "title2": t2,
-        "subtitle": subtitle or "Personalizado do seu jeito!",
+        "subtitle": _commercial_subtitle(subtitle, "Personalizado do seu jeito!"),
         "benefits": generic,
         "center": "Detalhes que\nencantam e\nfazem toda a\ndiferença!",
         "badge": "TESTADO E\nAPROVADO!",
@@ -1060,164 +1073,343 @@ def _render_anna_social_native(
     cfg: dict[str, Any],
     palette_override: dict[str, str] | None = None,
     photo_mode: str = "auto",
+    application_images: list[bytes] | None = None,
 ) -> Image.Image:
-    """HF53.3-HF1 — Template Anna para redes sociais.
+    """HF53.3-HF2 — Template Anna reconstruído a partir das referências aprovadas.
 
-    Diferente do Template Mestre, este modelo não redimensiona uma arte pronta.
-    Cada proporção recebe composição própria, mantendo a mesma identidade e as
-    áreas seguras de título, produto e CTA. Assim Story/Status, Feed, Facebook e
-    horizontal preservam leitura sem barras ou cortes artificiais.
+    O HF1 validou apenas a arquitetura multi-rede. O HF2 reconstrói a direção
+    de arte: logo-splash protagonista, título editorial grande, faixa de promessa,
+    produto dominante, bloco comercial, benefícios, selo, aplicações, CTA e
+    rodapé. Cada proporção continua nativa — nenhum canal recebe uma arte
+    simplesmente esticada ou encaixada com barras.
     """
-    W, H = (int(size[0]), int(size[1]))
+    W, H = int(size[0]), int(size[1])
     p = _template_palette_from_override(cfg, palette_override)
-    bg = _hex(p["fundo"])
-    primary = _hex(p.get("cor_titulo", p["azul_escuro"]))
-    secondary = _hex(p["azul"])
-    accent = _hex(p["rosa"])
+    white = (255, 255, 255, 255)
+    bg = _hex(p.get("fundo", "#FFFFFF"))
+    blue = _hex(p["azul"])
+    dark = _hex(p["azul_escuro"])
+    pink = _hex(p["rosa"])
     yellow = _hex(p["amarelo"])
     textc = _hex(p["texto"])
     green = _hex(p["verde"])
-    white = (255, 255, 255, 255)
 
     canvas = Image.new("RGBA", (W, H), bg)
     draw = ImageDraw.Draw(canvas, "RGBA")
     source = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
-
-    # Identidade de fundo inspirada no modelo enviado: limpa, leve e com formas
-    # orgânicas grandes, sem disputar atenção com o produto.
-    draw.ellipse((-int(W*.28), -int(H*.10), int(W*.48), int(H*.28)), fill=secondary)
-    draw.ellipse((int(W*.70), -int(H*.08), int(W*1.18), int(H*.23)), fill=accent)
-    draw.ellipse((int(W*.76), int(H*.78), int(W*1.16), int(H*1.08)), fill=_hex(_shade(p["azul"], 1.25), 150))
-    draw.ellipse((-int(W*.18), int(H*.84), int(W*.32), int(H*1.12)), fill=_hex(_shade(p["rosa"], 1.15), 150))
-
-    # Pequenos pontos de identidade AlphaFest.
-    dot_r=max(4, int(min(W,H)*.006))
-    for px,py,col in ((.10,.30,accent),(.89,.32,yellow),(.84,.72,secondary),(.15,.75,yellow)):
-        x,y=int(W*px),int(H*py)
-        draw.ellipse((x-dot_r,y-dot_r,x+dot_r,y+dot_r),fill=col)
-
-    anna_logo_path = BASE_DIR / "assets" / "mascotes" / "logo_wordmark_transparent.png"
-    logo = _load_logo(anna_logo_path if anna_logo_path.exists() else logo_path, (int(W*.66), int(H*.16)))
     profile = _product_profile(title, description, subtitle)
-    clean_title = re.sub(r"\s+", " ", str(title or "Produto AlphaFest")).strip().upper()
-    clean_sub = re.sub(r"\s+", " ", str(subtitle or profile.get("subtitle") or "Personalizado do seu jeito")).strip()
+    apps = _default_applications(profile, title)
     clean_desc = re.sub(r"\s+", " ", str(description or "")).strip()
-    if len(clean_desc) > 145:
-        clean_desc = clean_desc[:142].rstrip(" ,.;:-") + "…"
-    cta_label = re.sub(r"\s+", " ", str(cta or "CHAME NO WHATSAPP")).strip().upper()
     phone_text = _format_phone_br(phone or "(11) 97294-9533")
+    cta_label = re.sub(r"\s+", " ", str(cta or "FAÇA SEU PEDIDO!")).strip().upper()
+    t1 = str(profile.get("title1") or title or "AlphaFest").strip()
+    t2 = str(profile.get("title2") or "").strip()
+    promise = re.sub(r"\s+", " ", str(profile.get("subtitle") or subtitle or "Personalizado do seu jeito!")).strip()
+    badge = str(profile.get("badge") or "TESTADO E\nAPROVADO!")
+    center_text = re.sub(r"\s+", " ", str(profile.get("center") or "Detalhes que fazem toda a diferença!").replace("\n", " ")).strip()
+    slogan = re.sub(r"\s+", " ", str(profile.get("pink") or "Pequenos detalhes que fazem toda a diferença!")).strip()
+    benefits = list(profile.get("benefits") or [])[:5]
+    footer = list(profile.get("footer") or ["PRÁTICO", "CRIATIVO", "FEITO COM AMOR", "PERSONALIZADO PARA VOCÊ"])[:4]
 
     ratio = W / max(1, H)
     is_story = ratio < .72
     is_landscape = ratio > 1.32
     is_square = .90 <= ratio <= 1.10
 
-    if is_landscape:
-        # 16:9 — texto à esquerda, produto à direita.
-        safe_x = int(W*.055)
+    # ---------- helpers visuais ----------
+    def sc(v: float) -> int:
+        return max(1, int(min(W, H) * v))
+
+    def draw_splashes(*, dense: bool = True) -> None:
+        # Cantos líquidos em camadas, inspirados no splash AlphaFest.
+        draw.pieslice((-int(W*.20), -int(H*.07), int(W*.38), int(H*.22)), 0, 180, fill=dark)
+        draw.pieslice((-int(W*.16), -int(H*.05), int(W*.34), int(H*.18)), 0, 180, fill=blue)
+        draw.pieslice((int(W*.78), -int(H*.06), int(W*1.18), int(H*.18)), 0, 180, fill=dark)
+        draw.pieslice((int(W*.82), -int(H*.035), int(W*1.14), int(H*.145)), 0, 180, fill=blue)
+        # Gotas e brilhos pequenos — decoração, não ruído.
+        pts = [(.06,.15,pink),(.12,.12,yellow),(.19,.16,blue),(.82,.15,pink),(.91,.12,yellow),(.95,.18,blue)]
+        if dense:
+            pts += [(.07,.52,blue),(.93,.56,pink),(.88,.68,yellow),(.10,.73,pink)]
+        for x,y,c in pts:
+            r=sc(.0065)
+            cx,cy=int(W*x),int(H*y)
+            draw.ellipse((cx-r,cy-r,cx+r,cy+r),fill=c)
+        # pequenas estrelas
+        for x,y in ((.24,.055),(.72,.07),(.86,.31)):
+            cx,cy=int(W*x),int(H*y); r=sc(.008)
+            draw.polygon([(cx,cy-r),(cx+r//3,cy-r//3),(cx+r,cy),(cx+r//3,cy+r//3),(cx,cy+r),(cx-r//3,cy+r//3),(cx-r,cy),(cx-r//3,cy-r//3)], fill=yellow)
+
+    def alpha_logo(max_w: int, max_h: int, y: int, *, x: int | None = None) -> None:
+        splash_path = BASE_DIR / "assets" / "mascotes" / "logo_novo_alphafest.png"
+        wordmark_path = BASE_DIR / "assets" / "mascotes" / "logo_wordmark_transparent.png"
+        logo = _load_logo(splash_path if splash_path.exists() else wordmark_path, (max_w, max_h))
+        if not logo:
+            logo = _load_logo(logo_path, (max_w, max_h))
         if logo:
-            logo.thumbnail((int(W*.28), int(H*.20)), Image.Resampling.LANCZOS)
-            canvas.alpha_composite(logo,(safe_x,int(H*.055)))
-        campaign = (clean_sub or "ALPHAFEST").upper()
-        cf=_fit_font(draw,campaign,int(W*.36),int(H*.050),int(H*.032),bold=True)
-        draw.text((safe_x,int(H*.27)),campaign,font=cf,fill=accent)
-        tf=_fit_font(draw,clean_title,int(W*.42),int(H*.105),int(H*.055),bold=True)
-        lines=_wrap(draw,clean_title,tf,int(W*.42),3)
-        yy=int(H*.34)
-        step=int(draw.textbbox((0,0),"Ag",font=tf)[3]*1.02)
+            px = (W-logo.width)//2 if x is None else x
+            canvas.alpha_composite(logo, (px, y))
+
+    def seal(cx: int, cy: int, r: int) -> None:
+        draw.ellipse((cx-r-5,cy-r-5,cx+r+5,cy+r+5), fill=white, outline=blue, width=max(3,r//18))
+        draw.ellipse((cx-r,cy-r,cx+r,cy+r), fill=dark, outline=white, width=max(3,r//20))
+        # coração/check superior
+        _draw_check(draw, cx, cy-int(r*.48), max(10,int(r*.18)), white, icon="heart", icon_color=dark)
+        lines = [x.strip() for x in badge.split("\n") if x.strip()] or ["APROVADO"]
+        f=_fit_font(draw,max(lines,key=len),int(r*1.45),max(18,int(r*.27)),max(12,int(r*.17)),bold=True)
+        lh=max(15,draw.textbbox((0,0),"Ag",font=f)[3]+2)
+        yy=cy-int(lh*len(lines)*.35)
         for line in lines:
-            draw.text((safe_x,yy),line,font=tf,fill=primary); yy+=step
-        if clean_desc:
-            df=_fit_font(draw,clean_desc,int(W*.38),int(H*.035),int(H*.024),bold=False)
-            for line in _wrap(draw,clean_desc,df,int(W*.39),3):
-                draw.text((safe_x,yy+int(H*.02)),line,font=df,fill=textc); yy+=int(H*.042)
-        _paste_photo(canvas,source,(int(W*.50),int(H*.10),int(W*.95),int(H*.80)),int(H*.04),mode=photo_mode,product_title=title)
-        cbox=(safe_x,int(H*.78),int(W*.43),int(H*.92))
-        draw.rounded_rectangle(cbox,radius=int(H*.04),fill=primary)
-        _draw_whatsapp(draw,int(W*.095),int(H*.85),int(H*.045),green)
-        ctf=_fit_font(draw,cta_label,int(W*.23),int(H*.035),int(H*.022),bold=True)
-        draw.text((int(W*.14),int(H*.805)),cta_label,font=ctf,fill=white)
-        phf=_fit_font(draw,phone_text,int(W*.24),int(H*.050),int(H*.031),bold=True)
-        draw.text((int(W*.14),int(H*.845)),phone_text,font=phf,fill=white)
-        return canvas
+            bb=draw.textbbox((0,0),line,font=f)
+            draw.text((cx-(bb[2]-bb[0])//2,yy),line,font=f,fill=white)
+            yy+=lh
 
+    def ribbon(x1:int,y1:int,x2:int,y2:int,text:str, *, color=None) -> None:
+        color = color or dark
+        h=y2-y1
+        draw.polygon([(x1,y1+int(h*.2)),(x1-int(h*.38),y1+int(h*.5)),(x1,y2-int(h*.2))], fill=color)
+        draw.polygon([(x2,y1+int(h*.2)),(x2+int(h*.38),y1+int(h*.5)),(x2,y2-int(h*.2))], fill=color)
+        draw.rounded_rectangle((x1,y1,x2,y2),radius=max(8,h//5),fill=color)
+        f=_fit_font(draw,text,int((x2-x1)*.88),max(16,int(h*.44)),max(12,int(h*.27)),bold=True)
+        lines=_wrap_complete(draw,text,f,int((x2-x1)*.88))[:2]
+        lh=max(14,draw.textbbox((0,0),"Ag",font=f)[3]+2)
+        yy=(y1+y2)//2 - (lh*len(lines))//2
+        for line in lines:
+            bb=draw.textbbox((0,0),line,font=f)
+            draw.text(((x1+x2-(bb[2]-bb[0]))//2,yy),line,font=f,fill=white)
+            yy+=lh
+
+    def promo_box(box: tuple[int,int,int,int]) -> None:
+        x1,y1,x2,y2=box
+        draw.rounded_rectangle(box,radius=max(18,sc(.025)),fill=(255,255,255,238),outline=(225,232,245,255),width=max(2,sc(.002)))
+        hook=center_text
+        hf=_fit_font(draw,hook,int((x2-x1)*.84),max(20,int((y2-y1)*.115)),max(14,int((y2-y1)*.075)),bold=True)
+        hlines=_wrap_complete(draw,hook,hf,int((x2-x1)*.84))[:3]
+        yy=y1+int((y2-y1)*.10)
+        for line in hlines:
+            bb=draw.textbbox((0,0),line,font=hf)
+            draw.text((x1+int((x2-x1)*.08),yy),line,font=hf,fill=pink)
+            yy+=max(18,draw.textbbox((0,0),"Ag",font=hf)[3]+3)
+        body=clean_desc or promise
+        bf=_fit_font(draw,body,int((x2-x1)*.84),max(17,int((y2-y1)*.075)),max(12,int((y2-y1)*.052)),bold=False)
+        blines=_wrap_complete(draw,body,bf,int((x2-x1)*.84))[:5]
+        yy+=int((y2-y1)*.05)
+        for line in blines:
+            draw.text((x1+int((x2-x1)*.08),yy),line,font=bf,fill=textc)
+            yy+=max(16,draw.textbbox((0,0),"Ag",font=bf)[3]+3)
+
+    def draw_benefits(x:int,y:int,width:int,item_h:int, *, max_items:int=5) -> None:
+        for i,(head,desc,icon) in enumerate(benefits[:max_items]):
+            top=y+i*item_h
+            rr=max(17,int(item_h*.24))
+            _draw_check(draw,x+rr,top+rr+2,rr,dark,icon=icon)
+            hf=_fit_font(draw,head,int(width*.73),max(17,int(item_h*.25)),max(13,int(item_h*.18)),bold=True)
+            draw.text((x+rr*2+14,top),head,font=hf,fill=dark)
+            df=_fit_font(draw,desc,int(width*.73),max(14,int(item_h*.18)),max(11,int(item_h*.135)),bold=False)
+            dlines=_wrap_complete(draw,desc,df,int(width*.73))[:2]
+            dy=top+max(19,draw.textbbox((0,0),"Ag",font=hf)[3]+2)
+            for line in dlines:
+                draw.text((x+rr*2+14,dy),line,font=df,fill=textc)
+                dy+=max(14,draw.textbbox((0,0),"Ag",font=df)[3]+2)
+            draw.line((x+rr*2+14,top+item_h-5,x+width,top+item_h-5),fill=(*blue[:3],130),width=max(1,sc(.0015)))
+
+    def application_strip(y:int, h:int, *, left:int, right:int, use_images: bool=True) -> None:
+        draw.rounded_rectangle((left,y,right,y+h),radius=max(16,sc(.018)),fill=(255,255,255,244),outline=(220,230,248,255),width=max(2,sc(.002)))
+        # faixa rosa "Ideal para"
+        label="Ideal para:"
+        tagw=int((right-left)*.28); tagh=max(28,int(h*.20))
+        tx=(left+right-tagw)//2
+        draw.polygon([(tx,y),(tx-22,y+tagh//2),(tx,y+tagh)],fill=pink)
+        draw.polygon([(tx+tagw,y),(tx+tagw+22,y+tagh//2),(tx+tagw,y+tagh)],fill=pink)
+        draw.rectangle((tx,y,tx+tagw,y+tagh),fill=pink)
+        lf=_fit_font(draw,label,int(tagw*.84),int(tagh*.62),max(13,int(tagh*.42)),bold=True)
+        bb=draw.textbbox((0,0),label,font=lf)
+        draw.text((tx+(tagw-(bb[2]-bb[0]))//2,y+(tagh-(bb[3]-bb[1]))//2-bb[1]),label,font=lf,fill=white)
+        count=4
+        gap=int((right-left)*.015)
+        card_w=int((right-left-gap*(count+1))/count)
+        available_images=[]
+        if use_images:
+            # Usa imagens diferentes quando vierem do cadastro. Não duplica a foto principal.
+            seen=set()
+            for raw in (application_images or []):
+                try:
+                    im=Image.open(io.BytesIO(raw)).convert("RGBA")
+                    sig=(im.width,im.height,hash(raw[:256]))
+                    if sig not in seen:
+                        seen.add(sig); available_images.append(im)
+                except Exception:
+                    pass
+        for i,label in enumerate(apps[:4]):
+            cx=left+gap+i*(card_w+gap)
+            cy=y+tagh+int(h*.08)
+            ch=h-tagh-int(h*.12)
+            # círculo visual
+            r=min(card_w//3,int(ch*.34))
+            ccx=cx+card_w//2; ccy=cy+r
+            if i < len(available_images):
+                im=ImageOps.fit(available_images[i],(r*2,r*2),method=Image.Resampling.LANCZOS)
+                mask=Image.new("L",(r*2,r*2),0); ImageDraw.Draw(mask).ellipse((0,0,r*2-1,r*2-1),fill=255)
+                canvas.paste(im,(ccx-r,ccy-r),mask)
+                draw.ellipse((ccx-r-2,ccy-r-2,ccx+r+2,ccy+r+2),outline=blue,width=max(2,sc(.002)))
+            else:
+                fills=[blue,pink,yellow,dark]
+                icons=["star","heart","diamond","check"]
+                _draw_check(draw,ccx,ccy,r,fills[i%4],icon=icons[i%4])
+            tf=_fit_font(draw,label,int(card_w*.94),max(13,int(h*.105)),max(10,int(h*.075)),bold=True)
+            lines=_wrap_complete(draw,label,tf,int(card_w*.94))[:2]
+            yy=cy+r*2+int(h*.025)
+            for line in lines:
+                bb=draw.textbbox((0,0),line,font=tf)
+                draw.text((ccx-(bb[2]-bb[0])//2,yy),line,font=tf,fill=dark)
+                yy+=max(12,draw.textbbox((0,0),"Ag",font=tf)[3]+1)
+
+    def cta_box(box: tuple[int,int,int,int]) -> None:
+        x1,y1,x2,y2=box
+        draw.rounded_rectangle(box,radius=max(22,sc(.030)),fill=dark)
+        h=y2-y1
+        r=int(h*.30)
+        _draw_whatsapp(draw,x1+int(h*.52),(y1+y2)//2,r,green)
+        text_x=x1+int(h*.98)
+        label_w=max(80,x2-text_x-int(h*.16))
+        lf=_fit_font(draw,cta_label,label_w,max(18,int(h*.21)),max(13,int(h*.15)),bold=True)
+        draw.text((text_x,y1+int(h*.13)),cta_label,font=lf,fill=white)
+        pf=_fit_font(draw,phone_text,label_w,max(26,int(h*.34)),max(18,int(h*.22)),bold=True)
+        draw.text((text_x,y1+int(h*.43)),phone_text,font=pf,fill=white)
+
+    def footer_band(y1:int,y2:int) -> None:
+        draw.rectangle((0,y1,W,y2),fill=dark)
+        colw=W//4
+        for i,label in enumerate(footer[:4]):
+            cx=i*colw+colw//2
+            r=max(13,int((y2-y1)*.22))
+            _draw_check(draw,i*colw+int(colw*.17),(y1+y2)//2,r,white,icon="check",icon_color=dark)
+            maxw=int(colw*.66)
+            ff=_fit_font(draw,label,maxw,max(14,int((y2-y1)*.24)),max(10,int((y2-y1)*.17)),bold=True)
+            lines=_wrap_complete(draw,label,ff,maxw)[:2]
+            lh=max(12,draw.textbbox((0,0),"Ag",font=ff)[3]+1)
+            yy=(y1+y2)//2-(lh*len(lines))//2
+            for line in lines:
+                draw.text((i*colw+int(colw*.31),yy),line,font=ff,fill=white)
+                yy+=lh
+            if i<3:
+                draw.line(((i+1)*colw,y1+int((y2-y1)*.22),(i+1)*colw,y2-int((y2-y1)*.22)),fill=(255,255,255,130),width=2)
+
+    def slogan_brush(box: tuple[int,int,int,int]) -> None:
+        x1,y1,x2,y2=box
+        # pincelada simulada com retângulo irregular e bolhas arredondadas
+        draw.rounded_rectangle(box,radius=max(12,(y2-y1)//4),fill=pink)
+        for dx in (-18,-9,7,18):
+            draw.ellipse((x1+dx,y1+int((y2-y1)*.15),x1+dx+28,y2-int((y2-y1)*.10)),fill=pink)
+        sf=_fit_font(draw,slogan,int((x2-x1)*.88),max(14,int((y2-y1)*.31)),max(10,int((y2-y1)*.19)),bold=True,serif=True,italic=True)
+        lines=_wrap_complete(draw,slogan,sf,int((x2-x1)*.88))[:3]
+        lh=max(14,draw.textbbox((0,0),"Ag",font=sf)[3]+2)
+        yy=(y1+y2)//2-(lh*len(lines))//2
+        for line in lines:
+            bb=draw.textbbox((0,0),line,font=sf)
+            draw.text(((x1+x2-(bb[2]-bb[0]))//2,yy),line,font=sf,fill=white)
+            yy+=lh
+
+    def title_block(x:int,y:int,max_w:int,max_h:int, *, center: bool=False) -> int:
+        # Duas famílias para reproduzir a hierarquia editorial das referências.
+        main=t1
+        second=t2
+        f1=_fit_font(draw,main,max_w,max(28,int(max_h*.37)),max(22,int(max_h*.23)),bold=True,serif=True,italic=True)
+        lines1=_wrap_complete(draw,main,f1,max_w)[:2]
+        yy=y
+        lh1=max(24,draw.textbbox((0,0),"Ag",font=f1)[3]+2)
+        for line in lines1:
+            bb=draw.textbbox((0,0),line,font=f1)
+            px=x if not center else x+(max_w-(bb[2]-bb[0]))//2
+            draw.text((px,yy),line,font=f1,fill=dark,stroke_width=max(1,sc(.0015)),stroke_fill=white)
+            yy+=lh1
+        if second:
+            f2=_fit_font(draw,second,max_w,max(24,int(max_h*.28)),max(18,int(max_h*.18)),bold=True,serif=True,italic=True)
+            lines2=_wrap_complete(draw,second,f2,max_w)[:2]
+            lh2=max(22,draw.textbbox((0,0),"Ag",font=f2)[3]+2)
+            for line in lines2:
+                bb=draw.textbbox((0,0),line,font=f2)
+                px=x if not center else x+(max_w-(bb[2]-bb[0]))//2
+                draw.text((px,yy),line,font=f2,fill=blue,stroke_width=max(1,sc(.001)),stroke_fill=white)
+                yy+=lh2
+        return yy
+
+    draw_splashes(dense=not is_landscape)
+
+    # ---------- STORY / STATUS 9:16 ----------
     if is_story:
-        # 9:16 — respeita áreas seguras de interface no topo e no rodapé.
-        top_safe=int(H*.075); bottom_safe=int(H*.085); mx=int(W*.075)
-        if logo:
-            logo.thumbnail((int(W*.62),int(H*.11)), Image.Resampling.LANCZOS)
-            canvas.alpha_composite(logo,((W-logo.width)//2,top_safe))
-        campaign=(clean_sub or "ALPHAFEST").upper()
-        cf=_fit_font(draw,campaign,int(W*.78),int(H*.030),int(H*.020),bold=True)
-        bb=draw.textbbox((0,0),campaign,font=cf); draw.text(((W-(bb[2]-bb[0]))//2,int(H*.18)),campaign,font=cf,fill=accent)
-        tf=_fit_font(draw,clean_title,int(W*.84),int(H*.065),int(H*.040),bold=True)
-        title_lines=_wrap(draw,clean_title,tf,int(W*.84),3)
-        yy=int(H*.225); step=int(H*.058)
-        for line in title_lines:
-            bb=draw.textbbox((0,0),line,font=tf); draw.text(((W-(bb[2]-bb[0]))//2,yy),line,font=tf,fill=primary); yy+=step
-        photo_top=max(int(H*.39),yy+int(H*.015))
-        _paste_photo(canvas,source,(mx,photo_top,W-mx,int(H*.72)),int(W*.055),mode=photo_mode,product_title=title)
-        # Faixa curta de benefício/descrição.
-        mini = clean_desc or "Personalização feita para marcar momentos especiais."
-        mf=_fit_font(draw,mini,int(W*.76),int(H*.026),int(H*.018),bold=False)
-        mlines=_wrap(draw,mini,mf,int(W*.76),2)
-        my=int(H*.745)
-        for line in mlines:
-            bb=draw.textbbox((0,0),line,font=mf); draw.text(((W-(bb[2]-bb[0]))//2,my),line,font=mf,fill=textc); my+=int(H*.028)
-        cbox=(mx,int(H*.815),W-mx,H-bottom_safe)
-        draw.rounded_rectangle(cbox,radius=int(W*.07),fill=primary)
-        _draw_whatsapp(draw,int(W*.165),int(H*.866),int(W*.055),green)
-        ctf=_fit_font(draw,cta_label,int(W*.53),int(H*.027),int(H*.019),bold=True)
-        draw.text((int(W*.25),int(H*.835)),cta_label,font=ctf,fill=white)
-        phf=_fit_font(draw,phone_text,int(W*.56),int(H*.042),int(H*.029),bold=True)
-        draw.text((int(W*.25),int(H*.873)),phone_text,font=phf,fill=white)
+        alpha_logo(int(W*.45), int(H*.14), int(H*.020))
+        seal(int(W*.86), int(H*.115), int(W*.075))
+        title_end=title_block(int(W*.055),int(H*.135),int(W*.72),int(H*.20))
+        rib_y=max(int(H*.255),title_end+5)
+        ribbon(int(W*.035),rib_y,int(W*.965),rib_y+int(H*.045),promise)
+
+        # Produto grande e comercial, preservado à direita.
+        _paste_photo(canvas,source,(int(W*.53),int(H*.315),int(W*.96),int(H*.52)),int(W*.032),mode=photo_mode,product_title=title,upscale=True)
+        promo_box((int(W*.045),int(H*.315),int(W*.50),int(H*.455)))
+        draw_benefits(int(W*.045),int(H*.475),int(W*.46),int(H*.040),max_items=5)
+
+        # Selo textual central abaixo do produto.
+        cx,cy,cr=int(W*.72),int(H*.585),int(W*.105)
+        draw.ellipse((cx-cr,cy-cr,cx+cr,cy+cr),fill=white,outline=blue,width=max(3,sc(.003)))
+        cf=_fit_font(draw,center_text,int(cr*1.55),max(16,int(cr*.19)),max(12,int(cr*.14)),bold=True)
+        clines=_wrap_complete(draw,center_text,cf,int(cr*1.55))[:5]
+        lh=max(15,draw.textbbox((0,0),"Ag",font=cf)[3]+1); yy=cy-(lh*len(clines))//2
+        for line in clines:
+            bb=draw.textbbox((0,0),line,font=cf); draw.text((cx-(bb[2]-bb[0])//2,yy),line,font=cf,fill=dark); yy+=lh
+
+        application_strip(int(H*.700),int(H*.115),left=int(W*.05),right=int(W*.95))
+        cta_box((int(W*.05),int(H*.835),int(W*.63),int(H*.915)))
+        slogan_brush((int(W*.66),int(H*.842),int(W*.96),int(H*.910)))
+        footer_band(int(H*.940),H)
         return canvas
 
-    # Feed 4:5 e quadrado: mesma linguagem, composição nativa por altura.
-    mx=int(W*.055)
-    if logo:
-        logo.thumbnail((int(W*.50),int(H*.12)), Image.Resampling.LANCZOS)
-        canvas.alpha_composite(logo,(mx,int(H*.045)))
-    # Tag de campanha no topo direito.
-    tag=(clean_sub or "ALPHAFEST").upper()
-    tagf=_fit_font(draw,tag,int(W*.32),int(H*.026),int(H*.017),bold=True)
-    tbb=draw.textbbox((0,0),tag,font=tagf)
-    tx=W-mx-(tbb[2]-tbb[0])-int(W*.025)
-    draw.rounded_rectangle((tx-int(W*.018),int(H*.065),W-mx,int(H*.11)),radius=int(H*.018),fill=accent)
-    draw.text((tx,int(H*.073)),tag,font=tagf,fill=white)
+    # ---------- HORIZONTAL 16:9 ----------
+    if is_landscape:
+        alpha_logo(int(W*.22),int(H*.25),int(H*.025),x=int(W*.06))
+        seal(int(W*.43),int(H*.14),int(H*.095))
+        title_end=title_block(int(W*.045),int(H*.24),int(W*.42),int(H*.28))
+        ribbon(int(W*.055),max(int(H*.48),title_end+6),int(W*.43),max(int(H*.48),title_end+6)+int(H*.095),promise)
+        _paste_photo(canvas,source,(int(W*.50),int(H*.08),int(W*.96),int(H*.74)),int(H*.04),mode=photo_mode,product_title=title,upscale=True)
+        draw_benefits(int(W*.045),int(H*.59),int(W*.42),int(H*.052),max_items=5)
+        cta_box((int(W*.52),int(H*.77),int(W*.95),int(H*.93)))
+        footer_band(int(H*.94),H)
+        return canvas
 
-    tf=_fit_font(draw,clean_title,int(W*.82),int(H*.075 if not is_square else H*.068),int(H*.040),bold=True)
-    lines=_wrap(draw,clean_title,tf,int(W*.82),3)
-    yy=int(H*.18)
-    step=max(int(H*.057),draw.textbbox((0,0),"Ag",font=tf)[3]+4)
-    for line in lines:
-        draw.text((mx,yy),line,font=tf,fill=primary); yy+=step
+    # ---------- FEED 4:5 ----------
+    if not is_square:
+        alpha_logo(int(W*.40),int(H*.15),int(H*.018))
+        seal(int(W*.87),int(H*.11),int(W*.067))
+        title_end=title_block(int(W*.045),int(H*.145),int(W*.75),int(H*.18))
+        rib_y=max(int(H*.305),title_end+6)
+        ribbon(int(W*.07),rib_y,int(W*.66),rib_y+int(H*.058),promise)
+        _paste_photo(canvas,source,(int(W*.51),int(H*.35),int(W*.96),int(H*.66)),int(W*.035),mode=photo_mode,product_title=title,upscale=True)
+        promo_box((int(W*.045),int(H*.385),int(W*.49),int(H*.525)))
+        draw_benefits(int(W*.045),int(H*.545),int(W*.47),int(H*.040),max_items=5)
+        # selo central discreto próximo à foto
+        cx,cy,cr=int(W*.72),int(H*.665),int(W*.070)
+        draw.ellipse((cx-cr,cy-cr,cx+cr,cy+cr),fill=white,outline=blue,width=max(3,sc(.003)))
+        cf=_fit_font(draw,center_text,int(cr*1.55),max(13,int(cr*.19)),10,bold=True)
+        clines=_wrap_complete(draw,center_text,cf,int(cr*1.55))[:4]; lh=max(12,draw.textbbox((0,0),"Ag",font=cf)[3]+1); yy=cy-(lh*len(clines))//2
+        for line in clines:
+            bb=draw.textbbox((0,0),line,font=cf); draw.text((cx-(bb[2]-bb[0])//2,yy),line,font=cf,fill=dark); yy+=lh
+        application_strip(int(H*.735),int(H*.105),left=int(W*.045),right=int(W*.955))
+        cta_box((int(W*.045),int(H*.855),int(W*.63),int(H*.935)))
+        slogan_brush((int(W*.66),int(H*.862),int(W*.955),int(H*.930)))
+        footer_band(int(H*.950),H)
+        return canvas
 
-    photo_top=max(int(H*.36),yy+int(H*.02))
-    photo_bottom=int(H*.70 if not is_square else H*.69)
-    _paste_photo(canvas,source,(mx,photo_top,W-mx,photo_bottom),int(W*.045),mode=photo_mode,product_title=title)
-
-    # Texto curto abaixo da foto, sem bloco denso.
-    mini=clean_desc or "Feito para marcar momentos especiais."
-    mf=_fit_font(draw,mini,int(W*.82),int(H*.026),int(H*.018),bold=False)
-    mlines=_wrap(draw,mini,mf,int(W*.82),2)
-    my=int(H*.72 if not is_square else H*.715)
-    for line in mlines:
-        draw.text((mx,my),line,font=mf,fill=textc); my+=int(H*.03)
-
-    ctop=int(H*.80 if not is_square else H*.805)
-    cbottom=int(H*.915 if not is_square else H*.925)
-    draw.rounded_rectangle((mx,ctop,W-mx,cbottom),radius=int(W*.055),fill=primary)
-    _draw_whatsapp(draw,int(W*.145),(ctop+cbottom)//2,int(W*.048),green)
-    ctf=_fit_font(draw,cta_label,int(W*.55),int(H*.027),int(H*.019),bold=True)
-    draw.text((int(W*.22),ctop+int(H*.018)),cta_label,font=ctf,fill=white)
-    phf=_fit_font(draw,phone_text,int(W*.58),int(H*.040),int(H*.027),bold=True)
-    draw.text((int(W*.22),ctop+int(H*.052)),phone_text,font=phf,fill=white)
-
-    slogan="O poder de estar presente em cada presente!"
-    sf=_fit_font(draw,slogan,int(W*.80),int(H*.021),int(H*.014),bold=True,serif=True,italic=True)
-    sbb=draw.textbbox((0,0),slogan,font=sf)
-    draw.text(((W-(sbb[2]-sbb[0]))//2,int(H*.95)),slogan,font=sf,fill=primary)
+    # ---------- FACEBOOK / QUADRADO 1:1 ----------
+    alpha_logo(int(W*.34),int(H*.18),int(H*.015),x=int(W*.07))
+    seal(int(W*.90),int(H*.12),int(W*.065))
+    title_end=title_block(int(W*.035),int(H*.15),int(W*.55),int(H*.27))
+    rib_y=max(int(H*.39),title_end+5)
+    ribbon(int(W*.05),rib_y,int(W*.56),rib_y+int(H*.065),promise)
+    _paste_photo(canvas,source,(int(W*.53),int(H*.16),int(W*.97),int(H*.61)),int(W*.03),mode=photo_mode,product_title=title,upscale=True)
+    draw_benefits(int(W*.035),int(H*.47),int(W*.47),int(H*.053),max_items=5)
+    application_strip(int(H*.745),int(H*.115),left=int(W*.035),right=int(W*.52))
+    cta_box((int(W*.55),int(H*.765),int(W*.96),int(H*.895)))
+    slogan_brush((int(W*.55),int(H*.905),int(W*.96),int(H*.958)))
+    footer_band(int(H*.960),H)
     return canvas
 
 def _render_splash_premium_square(image_bytes: bytes, *, title: str, subtitle: str, description: str, price: str, cta: str, phone: str, logo_path: Path, cfg: dict[str,Any], palette_override: dict[str,str] | None = None, photo_mode: str = "auto", application_images: list[bytes] | None = None) -> Image.Image:
@@ -1452,7 +1644,7 @@ def render_template(
         final=_render_anna_social_native(
             image_bytes, size, title=title, subtitle=subtitle, description=description, price=price,
             cta=cta, phone=phone, logo_path=_logo, cfg=cfg,
-            palette_override=palette_override, photo_mode=photo_mode,
+            palette_override=palette_override, photo_mode=photo_mode, application_images=application_images,
         )
     else:
         square=_render_square(
