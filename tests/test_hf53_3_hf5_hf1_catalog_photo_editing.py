@@ -6,7 +6,7 @@ from catalogo_midias_service import (
 )
 
 
-VERSAO = "20.4.9-I8.13.5-HF53.3-HF8-HF1"
+VERSAO = "20.4.9-I8.13.5-HF53.3-HF8-HF2"
 
 
 def test_version_and_catalog_contract():

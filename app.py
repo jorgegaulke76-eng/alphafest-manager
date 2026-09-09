@@ -7074,6 +7074,17 @@ CANAL_MIDIA_CONFIG = {
     "YouTube Horizontal": {"size": (1920, 1080), "tipo": "video", "rotulo": "YouTube Horizontal", "plataforma": "youtube", "arquivo": "MP4", "cor": "#FF0000"},
 }
 
+def _marketing_effective_size(canal, template_id=""):
+    """Tamanho final por template sem alterar o Mestre homologado.
+
+    HF53.3-HF8-HF2: o prompt aprovado da Anna é quadrado no Feed. O Mestre
+    Comercial continua 1080x1350 e todos os demais templates seguem a tabela global.
+    """
+    base = CANAL_MIDIA_CONFIG.get(canal, CANAL_MIDIA_CONFIG["Instagram Feed"])["size"]
+    if str(template_id or "") == "anna_social_redes" and canal == "Instagram Feed":
+        return (1080, 1080)
+    return base
+
 PLATFORM_ICON_FILES = {
     "instagram": "assets/platforms/instagram.svg",
     "facebook": "assets/platforms/facebook.svg",
@@ -7262,6 +7273,7 @@ def _desenhar_texto_centralizado(draw, texto, fonte, caixa, cor):
 def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no WhatsApp", descricao="", template_id=MARKETING_DEFAULT_TEMPLATE, palette_override=None, photo_mode="auto", application_origins=None):
     """Renderiza uma peça usando a Engine de Templates AlphaFest."""
     config = CANAL_MIDIA_CONFIG.get(canal, CANAL_MIDIA_CONFIG["Instagram Feed"])
+    tamanho_efetivo = _marketing_effective_size(canal, template_id)
     bruto = _ler_bytes_midia(origem)
     if not bruto:
         raise ValueError("Selecione uma imagem válida.")
@@ -7275,7 +7287,7 @@ def gerar_arte_png(origem, canal, titulo, subtitulo="", preco="", cta="Chame no 
             continue
     return renderizar_template_marketing(
         bruto,
-        config["size"],
+        tamanho_efetivo,
         template_id=template_id,
         title=titulo,
         subtitle=subtitulo or "Personalize seus momentos",
@@ -26464,7 +26476,7 @@ if pagina_atual == "crescimento":
     # HF53.3 — Biblioteca de Templates: mestre HF7 congelado + seleção segura no Piloto Automático.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.3-HF8-HF1: Template Anna — Redes Sociais • Prompt Premium em validação: grade publicitária fixa baseada no prompt aprovado da Anna, com logo splash grande, manchete forte, produto protagonista, benefícios legíveis, vitrine de aplicações, CTA WhatsApp e acabamento premium. O Mestre HF7 continua oficial e protegido.")
+        st.caption("HF53.3-HF8-HF2: Template Anna — Redes Sociais • Prompt Premium em validação: grade publicitária fixa baseada no prompt aprovado da Anna, com logo splash grande, manchete forte, produto protagonista, benefícios legíveis, vitrine de aplicações, CTA WhatsApp e acabamento premium. O Mestre HF7 continua oficial e protegido.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26626,7 +26638,7 @@ if pagina_atual == "crescimento":
             )
             _mkt_sizes_caption = []
             for _mkt_canal_nome in _mkt_channels:
-                _mkt_sz = CANAL_MIDIA_CONFIG.get(_mkt_canal_nome, {}).get("size")
+                _mkt_sz = _marketing_effective_size(_mkt_canal_nome, _mkt_template_id)
                 if _mkt_sz:
                     _mkt_sizes_caption.append(f"{_mkt_canal_nome}: {_mkt_sz[0]}×{_mkt_sz[1]}")
             if _mkt_sizes_caption:
@@ -26680,7 +26692,7 @@ if pagina_atual == "crescimento":
                                 palette_override=_mkt_palette,
                                 application_origins=_mkt_application_images,
                             )
-                            _mkt_review = _alpha_validate_art_bytes(_mkt_art_bytes, CANAL_MIDIA_CONFIG[_mkt_channel]["size"])
+                            _mkt_review = _alpha_validate_art_bytes(_mkt_art_bytes, _marketing_effective_size(_mkt_channel, _mkt_template_id))
                             if not _mkt_review.get("ok"):
                                 raise ValueError(f"Arte de {_mkt_channel} reprovada: {_mkt_review.get('reason', 'formato inválido')}.")
                             _mkt_art_reviews[_mkt_channel] = _mkt_review
@@ -26694,7 +26706,7 @@ if pagina_atual == "crescimento":
                             "categoria": str(_mkt_product.get("Categoria") or ""),
                             "campanha": _mkt_campaign.strip() or "Permanente",
                             "objetivo": _mkt_objective,
-                            "origem_criativa": "Designer Comercial AlphaFest HF53.3-HF8-HF1",
+                            "origem_criativa": "Designer Comercial AlphaFest HF53.3-HF8-HF2",
                             "tipo_registro": "campanha_automatica",
                             "canais": list(_mkt_channels),
                             "artes_png": _mkt_arts,
@@ -26714,7 +26726,7 @@ if pagina_atual == "crescimento":
                             "quality_gate": "APROVADO AUTOMATICAMENTE",
                             "paleta_nome": _mkt_palette_name,
                             "paleta_visual": dict(_mkt_palette),
-                            "designer_rules_version": "HF53.3-HF6",
+                            "designer_rules_version": "HF53.3-HF8-HF2",
                         }
                         conteudos.insert(0, _mkt_record)
                         marketing["conteudos"] = conteudos
@@ -28346,7 +28358,7 @@ if pagina_atual == "crescimento":
                     except Exception as exc:
                         st.error(f"Não foi possível instalar o template: {exc}")
 
-            st.info("HF53.3-HF8-HF1: o Mestre HF7 permanece oficial. O Template Anna agora segue a grade fixa do prompt aprovado da Anna e continua em validação para Feed, Story, Facebook e Status.")
+            st.info("HF53.3-HF8-HF2: o Mestre HF7 permanece oficial. O Template Anna agora segue a grade fixa do prompt aprovado da Anna e continua em validação para Feed, Story, Facebook e Status.")
             st.markdown("---")
             st.subheader("🖼️ Banco de mídia AlphaFest")
             st.caption("Fotos e vídeos continuam ligados às campanhas e ao catálogo existente.")

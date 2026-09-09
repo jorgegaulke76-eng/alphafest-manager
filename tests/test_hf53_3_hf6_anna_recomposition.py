@@ -12,9 +12,9 @@ def _sample():
 
 
 def test_hf53_3_hf6_version_and_grid_contract():
-    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip()=="20.4.9-I8.13.5-HF53.3-HF8-HF1"
+    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip()=="20.4.9-I8.13.5-HF53.3-HF8-HF2"
     anna=next(x for x in engine.listar_templates() if x["id"]=="anna_social_redes")
-    assert anna["versao_template"]=="HF53.3-HF8-HF1"
+    assert anna["versao_template"]=="HF53.3-HF8-HF2"
     assert anna["status_template"]=="Em validação"
     code=Path("marketing_template_engine.py").read_text(encoding="utf-8")
     start=code.index("def _render_anna_social_native")

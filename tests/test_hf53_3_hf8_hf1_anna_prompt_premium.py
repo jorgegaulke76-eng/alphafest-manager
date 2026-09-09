@@ -13,7 +13,7 @@ def _sample():
 
 def test_hf8_hf1_prompt_spec_is_fixed_and_explicit():
     spec=engine.ANNA_PROMPT_SPEC
-    assert spec['versao']=='HF53.3-HF8-HF1'
+    assert spec['versao']=='HF53.3-HF8-HF2'
     assert spec['layout_fixo']==[
         'logo','titulo','faixa','beneficios','produto','selo_central',
         'ideal_para','cta_whatsapp','faixa_emocional','rodape',
@@ -21,16 +21,16 @@ def test_hf8_hf1_prompt_spec_is_fixed_and_explicit():
     assert spec['cta']=='FAÇA SEU PEDIDO!'
     assert 'TESTADO' in spec['selo_superior']
     assert spec['faixa_emocional']=='Pequenos detalhes que fazem toda a diferença!'
-    assert spec['formatos']['Instagram Feed']==(1080,1350)
+    assert spec['formatos']['Instagram Feed']==(1080,1080)
     assert spec['formatos']['Facebook']==(1080,1080)
     assert spec['formatos']['Instagram Story']==(1080,1920)
 
 
 def test_hf8_hf1_anna_is_validation_and_master_is_frozen():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip()=='20.4.9-I8.13.5-HF53.3-HF8-HF1'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip()=='20.4.9-I8.13.5-HF53.3-HF8-HF2'
     anna=next(x for x in engine.listar_templates() if x['id']=='anna_social_redes')
     master=next(x for x in engine.listar_templates() if x['id']=='splash_premium_anna')
-    assert anna['versao_template']=='HF53.3-HF8-HF1'
+    assert anna['versao_template']=='HF53.3-HF8-HF2'
     assert anna['status_template']=='Em validação'
     assert master['versao_template']=='HF53.2-HF5-HF7'
     assert master['status_template']=='Homologado'

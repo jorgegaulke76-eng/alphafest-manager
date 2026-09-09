@@ -17,13 +17,14 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from alphafest_font_manager import get_font, resolve_font_path
 from template_library_engine import list_library_templates, load_library_template, render_library_square
+from marketing_anna_renderer import render_anna_prompt
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_TEMPLATE = "anna_base_dinamica"
 EMBEDDED_DEFAULT_TEMPLATE = "splash_premium_anna"
 
 ANNA_PROMPT_SPEC: dict[str, Any] = {
-    "versao": "HF53.3-HF8-HF1",
+    "versao": "HF53.3-HF8-HF2",
     "nome": "Anna Prompt Premium",
     "layout_fixo": [
         "logo", "titulo", "faixa", "beneficios", "produto", "selo_central",
@@ -34,7 +35,7 @@ ANNA_PROMPT_SPEC: dict[str, Any] = {
     "faixa_emocional": "Pequenos detalhes que fazem toda a diferença!",
     "rodape": ["PRÁTICO", "CRIATIVO", "VALORIZA SEU PRODUTO", "AUMENTA SUAS VENDAS"],
     "formatos": {
-        "Instagram Feed": (1080, 1350),
+        "Instagram Feed": (1080, 1080),
         "Facebook": (1080, 1080),
         "Instagram Story": (1080, 1920),
         "Status WhatsApp": (1080, 1920),
@@ -68,10 +69,10 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "anna_social_redes": {
         "id": "anna_social_redes",
         "nome": "Template Anna — Redes Sociais",
-        "descricao": "Template Anna Prompt Premium: grade publicitária fixa baseada no prompt aprovado da Anna, com logo splash grande, manchete dominante, produto protagonista, benefícios legíveis, selo central, aplicações visuais, CTA WhatsApp e acabamento AlphaFest premium. Renderiza nativamente 4:5, 1:1, 9:16 e 16:9 sem esticar a arte.",
+        "descricao": "Template Anna Prompt Premium HF8-HF2: renderer independente da composição antiga, com Feed quadrado 1080×1080 conforme o prompt aprovado da Anna, logo splash grande, manchete dominante, produto protagonista, benefícios legíveis, vitrine de aplicações, CTA WhatsApp e acabamento AlphaFest premium. Story/Status e horizontal são adaptados sem cortar a arte principal.",
         "categoria_template": "Redes Sociais",
         "status_template": "Em validação",
-        "versao_template": "HF53.3-HF8-HF1",
+        "versao_template": "HF53.3-HF8-HF2",
         "oficial": False,
         "protegido": True,
         "autopilot_aprovado": True,
@@ -1095,7 +1096,7 @@ def _render_anna_social_native(
     photo_mode: str = "auto",
     application_images: list[bytes] | None = None,
 ) -> Image.Image:
-    """HF53.3-HF8-HF1 — Template Anna Prompt Premium, com grade comercial fixa baseada na grade editorial aprovada.
+    """HF53.3-HF8-HF2 — Template Anna Prompt Premium, com grade comercial fixa baseada na grade editorial aprovada.
 
     O wordmark horizontal fica proibido neste template; somente o logo splash aprovado pela Anna é usado no cabeçalho.
     A referência deixa de ser apenas inspiração: a composição passa a obedecer à
@@ -1165,7 +1166,7 @@ def _render_anna_social_native(
         promise_display = promise
 
     def decorate():
-        # HF53.3-HF8-HF1: linguagem visual fixa do prompt premium. O fundo deixa de parecer uma
+        # HF53.3-HF8-HF2: linguagem visual fixa do prompt premium. O fundo deixa de parecer uma
         # tela vazia do sistema e ganha continuidade visual com a marca AlphaFest.
         draw.pieslice((-int(W*.25), -int(H*.10), int(W*.42), int(H*.15)), 0, 180, fill=dark)
         draw.pieslice((-int(W*.22), -int(H*.07), int(W*.38), int(H*.125)), 0, 180, fill=blue)
@@ -1671,10 +1672,15 @@ def render_template(
         )
         final=_adapt_master_portrait_to_channel(portrait,size,cfg,palette_override)
     elif str(cfg.get("id")) == "anna_social_redes" and str(cfg.get("source")) != "library":
-        final=_render_anna_social_native(
-            image_bytes, size, title=title, subtitle=subtitle, description=description, price=price,
-            cta=cta, phone=phone, logo_path=_logo, cfg=cfg,
-            palette_override=palette_override, photo_mode=photo_mode, application_images=application_images,
+        # HF53.3-HF8-HF2: renderer Anna realmente independente. Não reutiliza o compositor
+        # visual antigo nem o Template Mestre. O perfil textual continua vindo da mesma fonte
+        # de dados, mas toda a composição é construída em marketing_anna_renderer.py.
+        _profile = _product_profile(title, description, subtitle)
+        _profile["applications"] = _default_applications(_profile, title)
+        final = render_anna_prompt(
+            image_bytes, size, title=title, subtitle=subtitle, description=description, phone=phone,
+            profile=_profile, palette=_template_palette_from_override(cfg, palette_override),
+            base_dir=BASE_DIR, photo_mode=photo_mode, application_images=application_images,
         )
     else:
         square=_render_square(
