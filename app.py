@@ -26464,7 +26464,7 @@ if pagina_atual == "crescimento":
     # HF53.3 — Biblioteca de Templates: mestre HF7 congelado + seleção segura no Piloto Automático.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.3-HF6: Template Anna — Redes Sociais • Recomposição Editorial em validação: grade comercial reconstruída a partir das referências da Anna, com marca, título, produto, benefícios, aplicações e CTA em hierarquia forte. O Mestre HF7 continua oficial e protegido.")
+        st.caption("HF53.3-HF7: Template Anna — Redes Sociais • Visual Final em validação: escala comercial reforçada, logo splash protagonista, título gigante, produto dominante, benefícios grandes, vitrine de aplicações e CTA de alto impacto. O Mestre HF7 continua oficial e protegido.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26694,7 +26694,7 @@ if pagina_atual == "crescimento":
                             "categoria": str(_mkt_product.get("Categoria") or ""),
                             "campanha": _mkt_campaign.strip() or "Permanente",
                             "objetivo": _mkt_objective,
-                            "origem_criativa": "Designer Comercial AlphaFest HF53.3-HF6",
+                            "origem_criativa": "Designer Comercial AlphaFest HF53.3-HF7",
                             "tipo_registro": "campanha_automatica",
                             "canais": list(_mkt_channels),
                             "artes_png": _mkt_arts,
@@ -28346,7 +28346,7 @@ if pagina_atual == "crescimento":
                     except Exception as exc:
                         st.error(f"Não foi possível instalar o template: {exc}")
 
-            st.info("HF53.3-HF6: o Mestre HF7 permanece oficial. O Template Anna foi recomposto pela grade visual aprovada pela Anna e continua em validação para Feed, Story, Facebook e Status.")
+            st.info("HF53.3-HF7: o Mestre HF7 permanece oficial. O Template Anna recebeu a rodada final de impacto visual e continua em validação para Feed, Story, Facebook e Status.")
             st.markdown("---")
             st.subheader("🖼️ Banco de mídia AlphaFest")
             st.caption("Fotos e vídeos continuam ligados às campanhas e ao catálogo existente.")

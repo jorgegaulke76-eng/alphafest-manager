@@ -48,10 +48,10 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "anna_social_redes": {
         "id": "anna_social_redes",
         "nome": "Template Anna — Redes Sociais",
-        "descricao": "Modelo editorial recomposto pela grade aprovada pela Anna: logo splash grande, título gigante, faixa comercial, produto protagonista, bloco emocional, cinco benefícios legíveis, cards visuais de aplicação, CTA forte e rodapé editorial. Renderiza nativamente 4:5, 1:1, 9:16 e 16:9 sem esticar a arte.",
+        "descricao": "Modelo Anna Visual Final: logo splash protagonista, título editorial gigante, produto dominante, benefícios grandes e legíveis, vitrine de aplicações, CTA de alto impacto e acabamento AlphaFest. Renderiza nativamente 4:5, 1:1, 9:16 e 16:9 sem esticar a arte.",
         "categoria_template": "Redes Sociais",
         "status_template": "Em validação",
-        "versao_template": "HF53.3-HF6",
+        "versao_template": "HF53.3-HF7",
         "oficial": False,
         "protegido": True,
         "autopilot_aprovado": True,
@@ -1075,7 +1075,7 @@ def _render_anna_social_native(
     photo_mode: str = "auto",
     application_images: list[bytes] | None = None,
 ) -> Image.Image:
-    """HF53.3-HF6 — Template Anna recomposto pela grade editorial aprovada.
+    """HF53.3-HF7 — Template Anna Visual Final, recomposto pela grade editorial aprovada.
 
     O wordmark horizontal fica proibido neste template; somente o logo splash aprovado pela Anna é usado no cabeçalho.
     A referência deixa de ser apenas inspiração: a composição passa a obedecer à
@@ -1145,23 +1145,29 @@ def _render_anna_social_native(
         promise_display = promise
 
     def decorate():
-        # Grandes formas fluidas como moldura, sem criar cards corporativos.
-        draw.pieslice((-int(W*.20), -int(H*.08), int(W*.34), int(H*.13)), 0, 180, fill=dark)
-        draw.pieslice((-int(W*.18), -int(H*.055), int(W*.31), int(H*.11)), 0, 180, fill=blue)
-        draw.pieslice((int(W*.76), -int(H*.07), int(W*1.17), int(H*.12)), 0, 180, fill=dark)
-        draw.pieslice((int(W*.80), -int(H*.04), int(W*1.15), int(H*.095)), 0, 180, fill=blue)
-        # Respingos com cores do logo.
+        # HF53.3-HF7: moldura viva e editorial. O fundo deixa de parecer uma
+        # tela vazia do sistema e ganha continuidade visual com a marca AlphaFest.
+        draw.pieslice((-int(W*.25), -int(H*.10), int(W*.42), int(H*.15)), 0, 180, fill=dark)
+        draw.pieslice((-int(W*.22), -int(H*.07), int(W*.38), int(H*.125)), 0, 180, fill=blue)
+        draw.pieslice((int(W*.70), -int(H*.09), int(W*1.20), int(H*.14)), 0, 180, fill=dark)
+        draw.pieslice((int(W*.75), -int(H*.055), int(W*1.18), int(H*.115)), 0, 180, fill=blue)
+        # ondas/halos suaves que conectam produto, benefícios e CTA.
+        draw.ellipse((int(W*.44),int(H*.19),int(W*1.08),int(H*.70)),fill=(*pale[:3],105))
+        draw.arc((int(W*.42),int(H*.20),int(W*1.05),int(H*.72)),205,335,fill=(*blue[:3],165),width=max(5,sc(.004)))
+        draw.arc((int(W*.45),int(H*.23),int(W*1.02),int(H*.69)),210,330,fill=(*pink[:3],130),width=max(3,sc(.0025)))
         dots = [
-            (.035,.16,blue,.008),(.075,.115,pink,.006),(.13,.155,yellow,.005),(.20,.11,blue,.005),
-            (.77,.145,pink,.007),(.86,.11,yellow,.006),(.95,.16,blue,.007),(.91,.22,pink,.004),
-            (.47,.69,blue,.006),(.51,.72,pink,.008),(.56,.70,yellow,.005),(.63,.68,blue,.004),
+            (.025,.18,blue,.010),(.07,.125,pink,.007),(.12,.17,yellow,.006),(.20,.11,blue,.006),
+            (.76,.14,pink,.009),(.84,.105,yellow,.007),(.95,.17,blue,.009),(.91,.23,pink,.006),
+            (.45,.66,blue,.009),(.50,.70,pink,.011),(.56,.68,yellow,.007),(.62,.73,blue,.006),
+            (.30,.76,pink,.005),(.70,.76,yellow,.005),(.94,.62,blue,.006),
         ]
         for x,y,c,r in dots:
             rr=sc(r); cx=int(W*x); cy=int(H*y)
             draw.ellipse((cx-rr,cy-rr,cx+rr,cy+rr), fill=c)
-        # pequenos pingos orgânicos
-        for x,y,c in ((.02,.31,blue),(.97,.29,pink),(.60,.74,blue),(.66,.71,pink)):
-            cx=int(W*x); cy=int(H*y); rr=sc(.007)
+            if rr>5:
+                draw.ellipse((cx-rr//3,cy-rr//2,cx+rr//5,cy-rr//6),fill=(255,255,255,145))
+        for x,y,c in ((.02,.32,blue),(.98,.30,pink),(.60,.73,blue),(.67,.70,pink),(.39,.81,blue)):
+            cx=int(W*x); cy=int(H*y); rr=sc(.008)
             draw.ellipse((cx-rr,cy-rr,cx+rr,cy+rr),fill=c)
             draw.ellipse((cx-rr//2,cy-rr*2,cx+rr//2,cy),fill=c)
 
@@ -1191,19 +1197,21 @@ def _render_anna_social_native(
             yy+=lh
 
     def big_title(x: int, y: int, max_w: int, max_h: int) -> int:
-        # Título editorial dominante: serif/cursivo forte como as referências.
-        f1=_fit_font(draw,t1,max_w,max(92,int(max_h*.70)),max(54,int(max_h*.42)),bold=True,serif=True,italic=True)
+        # Manchete comercial: ocupa o espaço como na referência da Anna.
+        # Sombra curta + contorno dão leitura forte mesmo no preview do Manager.
+        f1=_fit_font(draw,t1,max_w,max(122,int(max_h*.72)),max(68,int(max_h*.44)),bold=True,serif=True,italic=True)
         lines1=_wrap_complete(draw,t1,f1,max_w)[:2]
-        yy=y; lh1=max(58,draw.textbbox((0,0),"Ag",font=f1)[3]+3)
+        yy=y; lh1=max(72,draw.textbbox((0,0),"Ag",font=f1)[3]+1)
         for line in lines1:
-            draw.text((x+4,yy+5),line,font=f1,fill=(255,255,255,225),stroke_width=max(2,sc(.0018)),stroke_fill=blue)
-            draw.text((x,yy),line,font=f1,fill=dark,stroke_width=max(1,sc(.001)),stroke_fill=white)
+            draw.text((x+7,yy+8),line,font=f1,fill=(*blue[:3],120),stroke_width=max(2,sc(.002)),stroke_fill=(255,255,255,80))
+            draw.text((x,yy),line,font=f1,fill=dark,stroke_width=max(2,sc(.0018)),stroke_fill=white)
             yy+=lh1
         if t2:
-            f2=_fit_font(draw,t2,max_w,max(76,int(max_h*.53)),max(44,int(max_h*.34)),bold=True,serif=True,italic=True)
+            f2=_fit_font(draw,t2,max_w,max(92,int(max_h*.54)),max(54,int(max_h*.35)),bold=True,serif=True,italic=True)
             for line in _wrap_complete(draw,t2,f2,max_w)[:2]:
-                draw.text((x+6,yy),line,font=f2,fill=blue,stroke_width=max(1,sc(.001)),stroke_fill=white)
-                yy+=max(48,draw.textbbox((0,0),"Ag",font=f2)[3]+3)
+                draw.text((x+4,yy+4),line,font=f2,fill=(*dark[:3],95))
+                draw.text((x,yy),line,font=f2,fill=blue,stroke_width=max(2,sc(.0014)),stroke_fill=white)
+                yy+=max(60,draw.textbbox((0,0),"Ag",font=f2)[3]+1)
         return yy
 
     def promise_ribbon(x1: int, y1: int, x2: int, y2: int):
@@ -1243,23 +1251,25 @@ def _render_anna_social_native(
         icons=["star","heart","diamond","check","heart"]
         for i,(head,desc,icon) in enumerate(benefits[:5]):
             top=y+i*item_h
-            rr=max(21,int(item_h*.28)); use_icon=icon if icon in {"star","heart","diamond","check"} else icons[i%5]
-            _draw_check(draw,x+rr,top+rr,rr,dark,icon=use_icon,icon_color=white)
-            tx=x+rr*2+17; maxw=width-(tx-x)
-            hf=_fit_font(draw,str(head).upper(),maxw,max(29,int(item_h*.33)),max(20,int(item_h*.24)),bold=True)
-            draw.text((tx,top),str(head).upper(),font=hf,fill=dark)
-            df=_fit_font(draw,str(desc),maxw,max(23,int(item_h*.23)),max(16,int(item_h*.17)),bold=False)
+            rr=max(27,int(item_h*.29)); use_icon=icon if icon in {"star","heart","diamond","check"} else icons[i%5]
+            _draw_check(draw,x+rr,top+rr+2,rr,dark,icon=use_icon,icon_color=white)
+            tx=x+rr*2+20; maxw=width-(tx-x)
+            hf=_fit_font(draw,str(head).upper(),maxw,max(38,int(item_h*.34)),max(25,int(item_h*.25)),bold=True)
+            draw.text((tx,top-1),str(head).upper(),font=hf,fill=dark)
+            df=_fit_font(draw,str(desc),maxw,max(29,int(item_h*.255)),max(19,int(item_h*.19)),bold=False)
             lines=_wrap_complete(draw,str(desc),df,maxw)[:3]
-            dy=top+max(29,draw.textbbox((0,0),"Ag",font=hf)[3]+2)
+            dy=top+max(35,draw.textbbox((0,0),"Ag",font=hf)[3]+2)
             for line in lines:
-                draw.text((tx,dy),line,font=df,fill=(25,35,55,255)); dy+=max(18,draw.textbbox((0,0),"Ag",font=df)[3]+1)
-            draw.line((tx,top+item_h-5,x+width,top+item_h-5),fill=(*blue[:3],155),width=max(1,sc(.0015)))
+                draw.text((tx,dy),line,font=df,fill=(20,31,51,255)); dy+=max(23,draw.textbbox((0,0),"Ag",font=df)[3]+1)
+            draw.line((tx,top+item_h+1,x+width,top+item_h+1),fill=(*dark[:3],135),width=max(2,sc(.0014)))
 
     def product_stage(box: tuple[int,int,int,int]):
         x1,y1,x2,y2=box; bw=x2-x1; bh=y2-y1
-        # Produto protagoniza metade da peça, apoiado em base/halo e respingos.
-        draw.ellipse((x1-int(bw*.02),y1+int(bh*.08),x2+int(bw*.01),y2-int(bh*.01)),fill=(*pale[:3],125))
-        draw.ellipse((x1+int(bw*.02),y2-int(bh*.17),x2-int(bw*.02),y2+int(bh*.015)),fill=(*yellow[:3],220))
+        # Palco grande: produto deixa de parecer uma miniatura solta e passa a
+        # dominar a metade direita, como nos exemplos aprovados pela Anna.
+        draw.ellipse((x1-int(bw*.05),y1+int(bh*.04),x2+int(bw*.03),y2-int(bh*.01)),fill=(*pale[:3],150))
+        draw.arc((x1-int(bw*.03),y1+int(bh*.05),x2+int(bw*.02),y2-int(bh*.01)),215,335,fill=(*blue[:3],150),width=max(5,sc(.004)))
+        draw.ellipse((x1-int(bw*.02),y2-int(bh*.16),x2+int(bw*.01),y2+int(bh*.02)),fill=(*yellow[:3],235))
         _paste_photo(canvas,source,box,max(18,sc(.024)),mode=photo_mode,product_title=title,upscale=True)
 
     def message_badge(cx: int, cy: int, r: int):
@@ -1274,7 +1284,7 @@ def _render_anna_social_native(
     def applications(y: int, h: int, left: int, right: int):
         # Cards visuais reais, não ícones de sistema soltos.
         draw.rounded_rectangle((left,y,right,y+h),radius=max(18,sc(.015)),fill=(255,255,255,252),outline=(*pale[:3],205),width=max(2,sc(.0015)))
-        tag="Ideal para:"; tagw=int((right-left)*.22); tagh=max(34,int(h*.20)); tx=left+12
+        tag="Ideal para:"; tagw=int((right-left)*.25); tagh=max(42,int(h*.22)); tx=left+12
         draw.rounded_rectangle((tx,y-10,tx+tagw,y+tagh),radius=tagh//2,fill=dark)
         tf=_fit_font(draw,tag,int(tagw*.84),int(tagh*.60),max(14,int(tagh*.40)),bold=True)
         bb=draw.textbbox((0,0),tag,font=tf); draw.text((tx+(tagw-(bb[2]-bb[0]))//2,y+(tagh-(bb[3]-bb[1]))//2-bb[1]-2),tag,font=tf,fill=white)
@@ -1298,7 +1308,7 @@ def _render_anna_social_native(
                 _draw_check(draw,(img_box[0]+img_box[2])//2,(img_box[1]+img_box[3])//2,rr,icon_c,icon=["star","heart","diamond","check"][i],icon_color=white if i!=2 else dark)
             pill_y=bottom-int((bottom-cy)*.24)
             draw.rounded_rectangle((cx+5,pill_y,cx+cardw-5,bottom-4),radius=max(8,int(cardw*.04)),fill=dark)
-            lf=_fit_font(draw,label,int(cardw*.84),max(20,int(h*.12)),max(13,int(h*.078)),bold=True)
+            lf=_fit_font(draw,label,int(cardw*.88),max(27,int(h*.145)),max(17,int(h*.095)),bold=True)
             lines=_wrap_complete(draw,label,lf,int(cardw*.84))[:2]; lh=max(15,draw.textbbox((0,0),"Ag",font=lf)[3]+1); yy=(pill_y+bottom-4)//2-(lh*len(lines))//2
             for line in lines:
                 bb=draw.textbbox((0,0),line,font=lf); draw.text((cx+cardw//2-(bb[2]-bb[0])//2,yy),line,font=lf,fill=white); yy+=lh
@@ -1306,12 +1316,16 @@ def _render_anna_social_native(
     def cta_box(box: tuple[int,int,int,int]):
         x1,y1,x2,y2=box; h=y2-y1
         draw.rounded_rectangle(box,radius=max(28,int(h*.30)),fill=dark,outline=blue,width=max(3,sc(.0025)))
-        r=int(h*.32); _draw_whatsapp(draw,x1+int(h*.48),(y1+y2)//2,r,green)
-        tx=x1+int(h*.92); avail=x2-tx-int(h*.10)
-        lf=_fit_font(draw,cta_label,avail,max(26,int(h*.22)),max(17,int(h*.15)),bold=True)
-        draw.text((tx,y1+int(h*.08)),cta_label,font=lf,fill=white)
-        pf=_fit_font(draw,phone_text,avail,max(46,int(h*.43)),max(22,int(h*.19)),bold=True)
-        draw.text((tx,y1+int(h*.40)),phone_text,font=pf,fill=white)
+        r=int(h*.31); _draw_whatsapp(draw,x1+int(h*.48),(y1+y2)//2,r,green)
+        tx=x1+int(h*.94); avail=x2-tx-int(h*.10)
+        compact = avail < 330
+        lf=_fit_font(draw,cta_label,avail,24 if compact else max(31,int(h*.24)),14 if compact else max(17,int(h*.15)),bold=True)
+        lbb=draw.textbbox((0,0),cta_label,font=lf)
+        draw.text((tx,y1+max(5,int(h*.07))-lbb[1]),cta_label,font=lf,fill=white)
+        pf=_fit_font(draw,phone_text,avail,36 if compact else max(49,int(h*.40)),20 if compact else max(23,int(h*.20)),bold=True)
+        pbb=draw.textbbox((0,0),phone_text,font=pf)
+        py=y2-int(h*.08)-(pbb[3]-pbb[1])-pbb[1]
+        draw.text((tx,py),phone_text,font=pf,fill=white)
 
     def slogan_box(box: tuple[int,int,int,int]):
         x1,y1,x2,y2=box; h=y2-y1
@@ -1335,64 +1349,65 @@ def _render_anna_social_native(
     decorate()
 
     if is_square:
-        # 1:1: mesma leitura da referência da Anna — título forte à esquerda,
-        # produto protagonista à direita e benefícios sem qualquer colisão.
-        logo(int(W*.31),int(H*.19),-6)
-        approval_seal(int(W*.91),int(H*.115),int(W*.070))
-        title_end=big_title(int(W*.035),int(H*.17),int(W*.50),int(H*.18))
-        rib_y=max(int(H*.385),title_end+2)
-        promise_ribbon(int(W*.045),rib_y,int(W*.52),rib_y+int(H*.060))
-        product_stage((int(W*.54),int(H*.22),int(W*.995),int(H*.67)))
-        benefits_block(int(W*.035),int(H*.47),int(W*.45),int(H*.056))
-        message_badge(int(W*.79),int(H*.70),int(W*.072))
-        applications(int(H*.77),int(H*.145),int(W*.02),int(W*.585))
-        cta_box((int(W*.60),int(H*.79),int(W*.985),int(H*.925)))
-        footer_band(int(H*.95),H)
+        # Facebook 1:1 — aproxima-se diretamente da referência quadrada da Anna.
+        logo(int(W*.38),int(H*.20),-12)
+        approval_seal(int(W*.91),int(H*.115),int(W*.076))
+        title_end=big_title(int(W*.035),int(H*.145),int(W*.52),int(H*.205))
+        rib_y=max(int(H*.36),title_end+2)
+        promise_ribbon(int(W*.045),rib_y,int(W*.55),rib_y+int(H*.070))
+        product_stage((int(W*.54),int(H*.20),int(W*.995),int(H*.68)))
+        benefit_y=max(int(H*.47),rib_y+int(H*.075))
+        benefits_block(int(W*.035),benefit_y,int(W*.45),int(H*.066))
+        message_badge(int(W*.80),int(H*.70),int(W*.072))
+        applications(int(H*.80),int(H*.135),int(W*.02),int(W*.58))
+        cta_box((int(W*.60),int(H*.805),int(W*.99),int(H*.935)))
+        footer_band(int(H*.955),H)
         return canvas
 
     if is_story:
-        logo(int(W*.38),int(H*.15),-4)
-        approval_seal(int(W*.88),int(H*.075),int(W*.075))
-        title_end=big_title(int(W*.045),int(H*.145),int(W*.70),int(H*.16))
-        rib_y=max(int(H*.28),title_end+4); promise_ribbon(int(W*.06),rib_y,int(W*.94),rib_y+int(H*.05))
-        product_stage((int(W*.47),int(H*.31),int(W*.99),int(H*.60)))
-        emotional_box(int(W*.04),int(H*.34),int(W*.40),int(H*.12))
-        benefits_block(int(W*.04),int(H*.48),int(W*.42),int(H*.050))
-        message_badge(int(W*.77),int(H*.64),int(W*.095))
-        applications(int(H*.72),int(H*.125),int(W*.04),int(W*.96))
-        cta_box((int(W*.05),int(H*.86),int(W*.95),int(H*.93)))
-        slogan_box((int(W*.17),int(H*.938),int(W*.83),int(H*.965)))
-        footer_band(int(H*.972),H)
+        logo(int(W*.43),int(H*.16),-8)
+        approval_seal(int(W*.88),int(H*.070),int(W*.078))
+        title_end=big_title(int(W*.045),int(H*.125),int(W*.68),int(H*.14))
+        rib_y=max(int(H*.265),title_end+4)
+        promise_ribbon(int(W*.055),rib_y,int(W*.94),rib_y+int(H*.055))
+        product_stage((int(W*.47),int(H*.34),int(W*.995),int(H*.63)))
+        emotional_box(int(W*.04),int(H*.345),int(W*.40),int(H*.100))
+        benefits_block(int(W*.04),int(H*.47),int(W*.43),int(H*.054))
+        message_badge(int(W*.78),int(H*.65),int(W*.090))
+        applications(int(H*.755),int(H*.115),int(W*.04),int(W*.96))
+        cta_box((int(W*.045),int(H*.875),int(W*.955),int(H*.94)))
+        slogan_box((int(W*.16),int(H*.946),int(W*.84),int(H*.973)))
+        footer_band(int(H*.978),H)
         return canvas
 
     if is_landscape:
-        # 16:9: leitura em duas colunas. Não comprime os cinco benefícios.
-        logo(int(W*.20),int(H*.22),-10)
-        approval_seal(int(W*.94),int(H*.13),int(H*.070))
-        title_end=big_title(int(W*.025),int(H*.15),int(W*.40),int(H*.22))
-        rib_y=max(int(H*.43),title_end+2)
-        promise_ribbon(int(W*.035),rib_y,int(W*.41),rib_y+int(H*.085))
-        benefits_block(int(W*.025),int(H*.54),int(W*.40),int(H*.073))
-        product_stage((int(W*.49),int(H*.14),int(W*.995),int(H*.71)))
-        message_badge(int(W*.79),int(H*.68),int(H*.080))
-        applications(int(H*.75),int(H*.155),int(W*.47),int(W*.705))
-        cta_box((int(W*.71),int(H*.76),int(W*.99),int(H*.91)))
-        footer_band(int(H*.94),H)
+        logo(int(W*.24),int(H*.24),-12)
+        approval_seal(int(W*.94),int(H*.13),int(H*.074))
+        title_end=big_title(int(W*.025),int(H*.12),int(W*.41),int(H*.25))
+        rib_y=max(int(H*.40),title_end+2)
+        promise_ribbon(int(W*.035),rib_y,int(W*.42),rib_y+int(H*.085))
+        benefit_y=max(int(H*.53),rib_y+int(H*.105))
+        benefits_block(int(W*.025),benefit_y,int(W*.43),int(H*.073))
+        product_stage((int(W*.47),int(H*.10),int(W*.995),int(H*.72)))
+        message_badge(int(W*.78),int(H*.68),int(H*.082))
+        applications(int(H*.75),int(H*.16),int(W*.46),int(W*.70))
+        cta_box((int(W*.705),int(H*.755),int(W*.99),int(H*.915)))
+        footer_band(int(H*.945),H)
         return canvas
 
-    # Feed 4:5 — grade principal inspirada diretamente nas referências aprovadas.
-    logo(int(W*.34),int(H*.17),-6)
-    approval_seal(int(W*.91),int(H*.085),int(W*.066))
-    title_end=big_title(int(W*.035),int(H*.15),int(W*.58),int(H*.145))
-    rib_y=max(int(H*.315),title_end+2)
-    promise_ribbon(int(W*.05),rib_y,int(W*.56),rib_y+int(H*.055))
-    product_stage((int(W*.50),int(H*.27),int(W*.995),int(H*.66)))
-    emotional_box(int(W*.035),int(H*.385),int(W*.42),int(H*.135))
-    benefits_block(int(W*.035),int(H*.525),int(W*.42),int(H*.045))
-    message_badge(int(W*.80),int(H*.70),int(W*.073))
-    applications(int(H*.765),int(H*.125),int(W*.025),int(W*.975))
-    cta_box((int(W*.025),int(H*.900),int(W*.655),int(H*.958)))
-    slogan_box((int(W*.67),int(H*.900),int(W*.975),int(H*.958)))
+    # Instagram Feed 4:5 — grade final, com escala comercial real e sem colisões.
+    logo(int(W*.41),int(H*.19),-10)
+    approval_seal(int(W*.91),int(H*.082),int(W*.074))
+    title_end=big_title(int(W*.035),int(H*.135),int(W*.52),int(H*.165))
+    rib_y=max(int(H*.305),title_end+2)
+    promise_ribbon(int(W*.045),rib_y,int(W*.56),rib_y+int(H*.057))
+    product_stage((int(W*.52),int(H*.225),int(W*.995),int(H*.690)))
+    # Como na referência "Velas": benefícios entram imediatamente após a faixa,
+    # evitando um card corporativo extra que reduz a escala do conteúdo.
+    benefits_block(int(W*.035),int(H*.445),int(W*.43),int(H*.061))
+    message_badge(int(W*.81),int(H*.695),int(W*.070))
+    applications(int(H*.755),int(H*.130),int(W*.025),int(W*.975))
+    cta_box((int(W*.025),int(H*.892),int(W*.975),int(H*.958)))
     footer_band(int(H*.965),H)
     return canvas
 

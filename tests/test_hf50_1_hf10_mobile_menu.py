@@ -11,4 +11,4 @@ def test_mobile_more_contract():
 
 def test_version_and_production_contract():
     assert 'HF51.4-HF3' in APP
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF6'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF7'

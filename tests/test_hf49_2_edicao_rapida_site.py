@@ -16,4 +16,4 @@ def test_hf492_grade_rapida_autosave_existe_e_preserva_hf44():
 
 
 def test_hf492_versao_manager():
-    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF6"
+    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF7"
