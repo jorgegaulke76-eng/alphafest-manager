@@ -6,7 +6,7 @@ from marketing_template_engine import render_template, WHATSAPP_ICON_PATH
 
 
 def test_hf7_uses_classic_whatsapp_asset():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF3'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF4'
     assert WHATSAPP_ICON_PATH.exists()
     icon = Image.open(WHATSAPP_ICON_PATH).convert('RGBA')
     assert icon.size == (256, 256)

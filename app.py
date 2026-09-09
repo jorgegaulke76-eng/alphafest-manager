@@ -26460,7 +26460,7 @@ if pagina_atual == "crescimento":
     # HF53.3 — Biblioteca de Templates: mestre HF7 congelado + seleção segura no Piloto Automático.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.3-HF3: Template Anna — Redes Sociais em direção editorial de alto impacto, alinhado às referências da Anna. O Mestre HF7 continua oficial e protegido; cada rede recebe composição nativa e segue dependente de aprovação.")
+        st.caption("HF53.3-HF4: Template Anna — Redes Sociais • Editorial Forte em validação: marca maior, título e produto protagonistas, bloco emocional, benefícios ampliados, aplicações e CTA forte. O Mestre HF7 continua oficial e protegido.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26690,7 +26690,7 @@ if pagina_atual == "crescimento":
                             "categoria": str(_mkt_product.get("Categoria") or ""),
                             "campanha": _mkt_campaign.strip() or "Permanente",
                             "objetivo": _mkt_objective,
-                            "origem_criativa": "Designer Comercial AlphaFest HF53.3-HF3",
+                            "origem_criativa": "Designer Comercial AlphaFest HF53.3-HF4",
                             "tipo_registro": "campanha_automatica",
                             "canais": list(_mkt_channels),
                             "artes_png": _mkt_arts,
@@ -26710,7 +26710,7 @@ if pagina_atual == "crescimento":
                             "quality_gate": "APROVADO AUTOMATICAMENTE",
                             "paleta_nome": _mkt_palette_name,
                             "paleta_visual": dict(_mkt_palette),
-                            "designer_rules_version": "HF53.3-HF3",
+                            "designer_rules_version": "HF53.3-HF4",
                         }
                         conteudos.insert(0, _mkt_record)
                         marketing["conteudos"] = conteudos
@@ -28342,7 +28342,7 @@ if pagina_atual == "crescimento":
                     except Exception as exc:
                         st.error(f"Não foi possível instalar o template: {exc}")
 
-            st.info("HF53.3-HF3: o Mestre HF7 permanece oficial. O Template Anna agora usa título e produto protagonistas, benefícios maiores, aplicações e CTA forte; segue em validação para Feed, Story, Facebook e Status.")
+            st.info("HF53.3-HF4: o Mestre HF7 permanece oficial. O Template Anna ganhou acabamento editorial forte e continua em validação para Feed, Story, Facebook e Status.")
             st.markdown("---")
             st.subheader("🖼️ Banco de mídia AlphaFest")
             st.caption("Fotos e vídeos continuam ligados às campanhas e ao catálogo existente.")
