@@ -1,6 +1,6 @@
 """Renderer independente do Template Anna — Prompt Premium.
 
-HF53.3-HF8-HF3: este módulo não reutiliza a composição visual do Template Mestre
+HF53.3-HF8-HF4: este módulo não reutiliza a composição visual do Template Mestre
 nem o compositor legado. Ele recebe somente dados já preparados pelo motor e
 constrói nativamente cada proporção do Template Anna.
 """
@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import math
 import re
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -216,6 +217,123 @@ def _icon_circle(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, fill, symb
     draw.text((cx-(bb[2]-bb[0])//2, cy-(bb[3]-bb[1])//2-bb[1]), symbol, font=f, fill=(255,255,255,255))
 
 
+def _theme_key(label: str) -> str:
+    raw = unicodedata.normalize("NFKD", str(label or "")).encode("ascii", "ignore").decode("ascii").casefold()
+    return re.sub(r"[^a-z0-9]+", " ", raw).strip()
+
+
+def _draw_theme_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, label: str, fill, dark, white=(255,255,255,255)):
+    """Ícone vetorial semântico para os cards `Ideal para`.
+
+    HF53.3-HF8-HF4: a faixa inferior deixa de repetir miniaturas do produto.
+    Cada card usa um pictograma coerente com o próprio rótulo, mantendo o
+    visual de propaganda e leitura imediata em celular.
+    """
+    key = _theme_key(label)
+    draw.ellipse((cx-r, cy-r, cx+r, cy+r), fill=fill)
+    lw=max(3, r//8)
+    x0,y0=cx,cy
+
+    def line(points, width=lw):
+        draw.line(points, fill=white, width=width, joint="curve")
+
+    # Presentes / gift box
+    if any(k in key for k in ("presente", "gift")):
+        draw.rounded_rectangle((x0-int(r*.55), y0-int(r*.12), x0+int(r*.55), y0+int(r*.48)), radius=max(3,r//9), outline=white, width=lw)
+        draw.rectangle((x0-int(r*.62), y0-int(r*.32), x0+int(r*.62), y0-int(r*.08)), outline=white, width=lw)
+        line((x0, y0-int(r*.32), x0, y0+int(r*.48)))
+        draw.arc((x0-int(r*.38),y0-int(r*.58),x0,y0-int(r*.18)),200,350,fill=white,width=lw)
+        draw.arc((x0,y0-int(r*.58),x0+int(r*.38),y0-int(r*.18)),190,340,fill=white,width=lw)
+        return
+
+    # Empresas / corporativo / escritórios
+    if any(k in key for k in ("empresa", "corporativo", "escritorio", "negocio")):
+        draw.rectangle((x0-int(r*.45), y0-int(r*.50), x0+int(r*.45), y0+int(r*.48)), outline=white, width=lw)
+        draw.rectangle((x0-int(r*.13), y0+int(r*.12), x0+int(r*.13), y0+int(r*.48)), outline=white, width=max(2,lw-1))
+        for yy in (-.28,-.02):
+            for xx in (-.25,.05):
+                draw.rectangle((x0+int(r*xx), y0+int(r*yy), x0+int(r*(xx+.16)), y0+int(r*(yy+.13))), fill=white)
+        return
+
+    # Eventos / festas / aniversários
+    if any(k in key for k in ("evento", "festa", "aniversario", "moment")):
+        draw.rounded_rectangle((x0-int(r*.52), y0-int(r*.43), x0+int(r*.52), y0+int(r*.42)), radius=max(3,r//10), outline=white, width=lw)
+        line((x0-int(r*.52), y0-int(r*.18), x0+int(r*.52), y0-int(r*.18)))
+        line((x0-int(r*.28), y0-int(r*.58), x0-int(r*.28), y0-int(r*.30)))
+        line((x0+int(r*.28), y0-int(r*.58), x0+int(r*.28), y0-int(r*.30)))
+        # pequeno brilho/estrela no calendário
+        draw.polygon([(x0,y0-int(r*.04)),(x0+int(r*.08),y0+int(r*.10)),(x0+int(r*.23),y0+int(r*.12)),(x0+int(r*.11),y0+int(r*.22)),(x0+int(r*.15),y0+int(r*.38)),(x0,y0+int(r*.29)),(x0-int(r*.15),y0+int(r*.38)),(x0-int(r*.11),y0+int(r*.22)),(x0-int(r*.23),y0+int(r*.12)),(x0-int(r*.08),y0+int(r*.10))], fill=white)
+        return
+
+    # Brindes: troféu
+    if any(k in key for k in ("brinde", "premio", "trofeu")):
+        draw.arc((x0-int(r*.42),y0-int(r*.50),x0+int(r*.42),y0+int(r*.16)),0,180,fill=white,width=lw)
+        line((x0-int(r*.38),y0-int(r*.38),x0-int(r*.55),y0-int(r*.34),x0-int(r*.50),y0-int(r*.02),x0-int(r*.30),y0+int(r*.08)))
+        line((x0+int(r*.38),y0-int(r*.38),x0+int(r*.55),y0-int(r*.34),x0+int(r*.50),y0-int(r*.02),x0+int(r*.30),y0+int(r*.08)))
+        line((x0,y0+int(r*.08),x0,y0+int(r*.38)))
+        line((x0-int(r*.28),y0+int(r*.43),x0+int(r*.28),y0+int(r*.43)))
+        return
+
+    # Doces / brigadeiros / confeitaria
+    if any(k in key for k in ("brigadeiro", "doce", "confeit", "cupcake")):
+        draw.polygon([(x0-int(r*.42),y0+int(r*.02)),(x0+int(r*.42),y0+int(r*.02)),(x0+int(r*.29),y0+int(r*.49)),(x0-int(r*.29),y0+int(r*.49))], outline=white)
+        draw.arc((x0-int(r*.45),y0-int(r*.45),x0+int(r*.45),y0+int(r*.18)),190,350,fill=white,width=lw)
+        draw.ellipse((x0-int(r*.08),y0-int(r*.50),x0+int(r*.08),y0-int(r*.34)),fill=white)
+        return
+
+    # Biscoitos
+    if "biscoit" in key or "cookie" in key:
+        draw.ellipse((x0-int(r*.48),y0-int(r*.48),x0+int(r*.48),y0+int(r*.48)),outline=white,width=lw)
+        for ox,oy in [(-.22,-.20),(.18,-.15),(-.12,.12),(.22,.22)]:
+            rr=max(2,r//11); px=x0+int(r*ox); py=y0+int(r*oy); draw.ellipse((px-rr,py-rr,px+rr,py+rr),fill=white)
+        return
+
+    # Pasta americana / bolos
+    if any(k in key for k in ("pasta americana", "bolo", "cake")):
+        draw.rounded_rectangle((x0-int(r*.48),y0-int(r*.05),x0+int(r*.48),y0+int(r*.38)),radius=max(3,r//10),outline=white,width=lw)
+        draw.arc((x0-int(r*.48),y0-int(r*.34),x0+int(r*.48),y0+int(r*.16)),180,360,fill=white,width=lw)
+        line((x0-int(r*.32),y0+int(r*.13),x0+int(r*.32),y0+int(r*.13)),max(2,lw-1))
+        return
+
+    # Lembranças
+    if "lembranc" in key:
+        draw.polygon([(x0-int(r*.48),y0-int(r*.28)),(x0+int(r*.14),y0-int(r*.28)),(x0+int(r*.48),y0),(x0+int(r*.14),y0+int(r*.28)),(x0-int(r*.48),y0+int(r*.28))],outline=white)
+        rr=max(3,r//9); draw.ellipse((x0-int(r*.30)-rr,y0-rr,x0-int(r*.30)+rr,y0+rr),fill=white)
+        return
+
+    # Temáticos / temas especiais
+    if any(k in key for k in ("tematic", "tema", "especial")):
+        pts=[]
+        for j in range(10):
+            a=-math.pi/2+j*math.pi/5
+            rad=r*(.50 if j%2==0 else .22)
+            pts.append((x0+int(math.cos(a)*rad),y0+int(math.sin(a)*rad)))
+        draw.polygon(pts,outline=white)
+        for ox,oy in [(-.52,-.38),(.48,-.35),(.50,.36)]:
+            rr=max(2,r//10); px=x0+int(r*ox); py=y0+int(r*oy); draw.ellipse((px-rr,py-rr,px+rr,py+rr),fill=white)
+        return
+
+    # Decoração
+    if "decor" in key:
+        draw.polygon([(x0,y0-int(r*.55)),(x0+int(r*.42),y0),(x0,y0+int(r*.55)),(x0-int(r*.42),y0)],outline=white)
+        draw.ellipse((x0-int(r*.10),y0-int(r*.10),x0+int(r*.10),y0+int(r*.10)),fill=white)
+        return
+
+    # Nome e idade / personalizado
+    if any(k in key for k in ("nome", "idade", "personaliz")):
+        f=_font(max(16,int(r*.56)),bold=True)
+        txt="A1"; bb=draw.textbbox((0,0),txt,font=f); draw.text((x0-(bb[2]-bb[0])//2,y0-(bb[3]-bb[1])//2-bb[1]),txt,font=f,fill=white)
+        return
+
+    # Fallback: estrela clara e coerente com a identidade.
+    pts=[]
+    for j in range(10):
+        a=-math.pi/2+j*math.pi/5
+        rad=r*(.50 if j%2==0 else .22)
+        pts.append((x0+int(math.cos(a)*rad),y0+int(math.sin(a)*rad)))
+    draw.polygon(pts,fill=white)
+
+
 def _draw_splash(draw: ImageDraw.ImageDraw, W: int, H: int, blue, dark, pink, yellow):
     # Moldura líquida AlphaFest com mais presença, sem invadir a área de leitura.
     draw.pieslice((-int(W*.22),-int(H*.15),int(W*.43),int(H*.20)),0,180,fill=dark)
@@ -237,7 +355,7 @@ def _draw_square(
     profile: dict[str, Any], palette: dict[str, str], base_dir: Path, photo_mode: str,
     application_images: list[bytes] | None,
 ) -> Image.Image:
-    """HF53.3-HF8-HF3 — refino comercial do renderer Anna.
+    """HF53.3-HF8-HF4 — refino comercial do renderer Anna.
 
     Hierarquia fixa: marca forte -> manchete -> promessa -> produto -> benefícios ->
     vitrine -> CTA. O objetivo é leitura em miniatura de feed, não densidade de sistema.
@@ -339,33 +457,31 @@ def _draw_square(
         bb=draw.textbbox((0,0),line,font=cf); draw.text((cx-(bb[2]-bb[0])//2,yy),line,font=cf,fill=dark); yy+=20
     draw.text((cx-8,cy+cr-28),"♥",font=_font(20,bold=True),fill=pink)
 
-    # Vitrine "Ideal para": imagens ocupam o card, legenda vira tarja publicitária.
+    # Vitrine "Ideal para" — HF53.3-HF8-HF4:
+    # NÃO repete miniatura do produto. Cada tema recebe um ícone semântico próprio
+    # (presente, empresa, evento, brinde, doces etc.), coerente com o texto do card.
     apps=list(profile.get("applications") or ["Presentes","Lembranças","Brindes","Temáticos"])[:4]
     while len(apps)<4: apps.append(["Presentes","Lembranças","Brindes","Temáticos"][len(apps)])
     strip_y=808
     draw.rounded_rectangle((30,strip_y,610,1002),radius=24,fill=(251,253,255,248),outline=(*blue[:3],125),width=2)
     draw.rounded_rectangle((38,strip_y-18,170,strip_y+22),radius=16,fill=dark)
     draw.text((54,strip_y-12),"Ideal para:",font=_font(19,bold=True),fill=white)
-    unique=[]
-    for raw in application_images or []:
-        try:
-            im=Image.open(io.BytesIO(raw)).convert("RGBA")
-            sig=(im.width,im.height,im.resize((8,8)).convert("RGB").tobytes())
-            if sig not in [u[0] for u in unique]: unique.append((sig,im))
-        except Exception:
-            pass
+    accents=[blue,pink,green,dark]
     card_w=132; gap=8
     for i,label in enumerate(apps):
         x=39+i*(card_w+gap); y=834
         draw.rounded_rectangle((x,y,x+card_w,y+145),radius=18,fill=white,outline=(*blue[:3],145),width=2)
-        if i < len(unique):
-            thumb=ImageOps.fit(unique[i][1],(118,105),Image.Resampling.LANCZOS,centering=(.5,.48))
-            mask=Image.new("L",thumb.size,0); ImageDraw.Draw(mask).rounded_rectangle((0,0,117,104),radius=13,fill=255); thumb.putalpha(mask); canvas.alpha_composite(thumb,(x+7,y+7))
-        else:
-            draw.rounded_rectangle((x+7,y+7,x+card_w-7,y+112),radius=13,fill=(232,247,255,255))
-            _icon_circle(draw,x+card_w//2,y+58,29,blue,["★","♥","◆","✓"][i])
+        # área superior limpa e uniforme, com ícone temático grande no lugar de foto.
+        draw.rounded_rectangle((x+7,y+7,x+card_w-7,y+112),radius=13,fill=(239,249,255,255))
+        _draw_theme_icon(draw,x+card_w//2,y+59,35,label,accents[i],dark,white)
         draw.rounded_rectangle((x+6,y+113,x+card_w-6,y+139),radius=10,fill=dark)
-        lf=_fit(draw,label,card_w-18,14,10,bold=True); bb=draw.textbbox((0,0),label,font=lf); draw.text((x+(card_w-(bb[2]-bb[0]))//2,y+118),label,font=lf,fill=white)
+        lf=_fit(draw,label,card_w-18,14,10,bold=True)
+        lines=_wrap(draw,label,lf,card_w-18,2)
+        total_h=max(14,len(lines)*13); yy=y+126-total_h//2
+        for line in lines:
+            bb=draw.textbbox((0,0),line,font=lf)
+            draw.text((x+(card_w-(bb[2]-bb[0]))//2,yy),line,font=lf,fill=white)
+            yy+=13
 
     # CTA: um dos três maiores pesos da peça.
     cta=(625,785,1048,925)

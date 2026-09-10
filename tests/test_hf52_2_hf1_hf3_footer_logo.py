@@ -10,4 +10,4 @@ def test_footer_reuses_header_wordmark():
 
 
 def test_version_hf52_2_hf1_hf3():
-    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF8-HF3"
+    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF8-HF4"
