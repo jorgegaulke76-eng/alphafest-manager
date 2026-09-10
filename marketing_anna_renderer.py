@@ -1,6 +1,6 @@
 """Renderer independente do Template Anna — Prompt Premium.
 
-HF53.3-HF8-HF7: este módulo não reutiliza a composição visual do Template Mestre
+HF53.3-HF8-HF8: este módulo não reutiliza a composição visual do Template Mestre
 nem o compositor legado. Ele recebe somente dados já preparados pelo motor e
 constrói nativamente cada proporção do Template Anna.
 """
@@ -89,6 +89,19 @@ def _load_logo(base_dir: Path, max_size: tuple[int, int]) -> Image.Image | None:
         except Exception:
             continue
     return None
+
+def _load_skin_master(base_dir: Path) -> Image.Image | None:
+    """Carrega a pele gráfica aprovada do Modelo Anna 1.
+
+    A skin guarda somente elementos fixos de alta fidelidade (topo/splash/logo/selo
+    e rodapé). Título, foto, benefícios, aplicações e CTA continuam dinâmicos.
+    """
+    path = base_dir / "assets" / "marketing" / "anna_skin_master_1.png"
+    try:
+        return Image.open(path).convert("RGBA") if path.exists() else None
+    except Exception:
+        return None
+
 
 def _soft_shadow(layer: Image.Image, blur: int = 18, opacity: int = 80) -> Image.Image:
     alpha = layer.getchannel("A").filter(ImageFilter.GaussianBlur(blur))
@@ -181,7 +194,7 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
         if spread < 34 and max(bg) > 145:
             prepared = _remove_simple_background(source)
         else:
-            # HF53.3-HF8-HF7: em fundo real/variável, não força GrabCut no modo auto.
+            # HF53.3-HF8-HF8: em fundo real/variável, não força GrabCut no modo auto.
             # O recorte automático anterior podia deixar mesa/fundo em polígonos irregulares.
             # O palco oval fotográfico é mais previsível e comercial. GrabCut fica disponível
             # somente quando o usuário pedir explicitamente para recortar/remover fundo.
@@ -195,7 +208,7 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
         prepared.thumbnail((maxw, maxh), Image.Resampling.LANCZOS)
         return prepared, (x1 + (maxw-prepared.width)//2, y1 + (maxh-prepared.height)//2)
 
-    # HF53.3-HF8-HF7: fallback fotográfico premium com recorte orgânico.
+    # HF53.3-HF8-HF8: fallback fotográfico premium com recorte orgânico.
     # Em vez do retângulo arredondado, a foto entra em um palco oval com bordas
     # suavizadas. Isso integra a imagem ao anúncio mesmo quando o recorte automático
     # do produto não é confiável.
@@ -206,7 +219,16 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
         rgb = ImageEnhance.Color(rgb).enhance(1.03)
     except Exception:
         pass
-    fitted = ImageOps.fit(rgb.convert("RGBA"), (maxw, maxh), method=Image.Resampling.LANCZOS, centering=(.5, .44))
+    # HF53.3-HF8-HF8: zoom editorial conservador. A foto do catálogo costuma
+    # trazer bastante mesa/fundo; aproximamos o produto antes de encaixar no palco.
+    zw, zh = rgb.size
+    zoom = 1.18
+    cw, ch = max(16, int(zw/zoom)), max(16, int(zh/zoom))
+    cx, cy = zw/2.0, zh*0.47
+    left = max(0, int(cx-cw/2)); top = max(0, int(cy-ch/2))
+    right = min(zw, left+cw); bottom = min(zh, top+ch)
+    rgb = rgb.crop((left, top, right, bottom))
+    fitted = ImageOps.fit(rgb.convert("RGBA"), (maxw, maxh), method=Image.Resampling.LANCZOS, centering=(.5, .46))
     mask = Image.new("L", (maxw, maxh), 0)
     md = ImageDraw.Draw(mask)
     inset=max(5, min(maxw,maxh)//70)
@@ -240,7 +262,7 @@ def _theme_key(label: str) -> str:
 def _draw_theme_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, label: str, fill, dark, white=(255,255,255,255)):
     """Ícone vetorial semântico para os cards `Ideal para`.
 
-    HF53.3-HF8-HF7: a faixa inferior deixa de repetir miniaturas do produto.
+    HF53.3-HF8-HF8: a faixa inferior deixa de repetir miniaturas do produto.
     Cada card usa um pictograma coerente com o próprio rótulo, mantendo o
     visual de propaganda e leitura imediata em celular.
     """
@@ -350,7 +372,7 @@ def _draw_theme_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, label:
 
 
 def _draw_splash(draw: ImageDraw.ImageDraw, W: int, H: int, blue, dark, pink, yellow):
-    # HF53.3-HF8-HF7: manchas superiores orgânicas, mais próximas de um splash líquido.
+    # HF53.3-HF8-HF8: manchas superiores orgânicas, mais próximas de um splash líquido.
     # Sai a meia-lua geométrica limpa do HF5; entram volumes irregulares, lóbulos e gotas.
     def blob(cx, cy, rx, ry, color, lobes):
         draw.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=color)
@@ -382,200 +404,221 @@ def _draw_square(
     profile: dict[str, Any], palette: dict[str, str], base_dir: Path, photo_mode: str,
     application_images: list[bytes] | None,
 ) -> Image.Image:
-    """HF53.3-HF8-HF7 — acabamento visual aprovado do Template Anna.
+    """HF53.3-HF8-HF8 — Skin Mestre Anna 1.
 
-    Consolida o visual aprovado: título com contorno publicitário, foto integrada em
-    palco orgânico, CTA compacto e centralizado, splash superior, WhatsApp clássico
-    e ícones temáticos no bloco Ideal para.
+    Fecha o primeiro modelo aprovado: preserva como skin os elementos gráficos fixos
+    de alta fidelidade e desenha somente conteúdo dinâmico nas áreas reservadas.
+    O resultado não depende do compositor do Template Mestre.
     """
-    W=H=1080
-    white=(255,255,255,255)
-    blue=_hex(palette.get("azul") or palette.get("secondary") or "#087CE8")
-    dark=_hex(palette.get("azul_escuro") or palette.get("primary") or "#07349B")
-    pink=_hex(palette.get("rosa") or palette.get("accent") or "#EF2A92")
-    yellow=_hex(palette.get("amarelo") or palette.get("metallic") or "#FFD12B")
-    green=_hex(palette.get("verde") or "#20B956")
-    text=_hex(palette.get("texto") or palette.get("text") or "#102D50")
-    light=_hex(palette.get("azul_claro") or "#DDF5FF")
-    canvas=Image.new("RGBA",(W,H),(253,254,255,255)); draw=ImageDraw.Draw(canvas,"RGBA")
+    W = H = 1080
+    white = (255, 255, 255, 255)
+    blue = _hex(palette.get("azul") or palette.get("secondary") or "#087CE8")
+    dark = _hex(palette.get("azul_escuro") or palette.get("primary") or "#07349B")
+    pink = _hex(palette.get("rosa") or palette.get("accent") or "#EF2A92")
+    yellow = _hex(palette.get("amarelo") or palette.get("metallic") or "#FFD12B")
+    green = _hex(palette.get("verde") or "#20B956")
+    text = _hex(palette.get("texto") or palette.get("text") or "#102D50")
+    light = _hex(palette.get("azul_claro") or "#DDF5FF")
 
-    # Fundo publicitário: formas líquidas + halos que unem a foto ao layout.
-    draw.ellipse((500,150,1180,790),fill=(*light[:3],205))
-    draw.ellipse((665,245,1125,725),fill=(*blue[:3],48))
-    draw.ellipse((-175,515,250,930),fill=(*light[:3],150))
-    draw.ellipse((360,700,720,1020),fill=(*pink[:3],18))
-    _draw_splash(draw,W,H,blue,dark,pink,yellow)
+    canvas = Image.new("RGBA", (W, H), (253, 254, 255, 255))
+    draw = ImageDraw.Draw(canvas, "RGBA")
 
-    # Logo splash correto com peso semelhante ao anúncio de referência.
-    logo=_load_logo(base_dir,(330,235))
-    if logo:
-        x=(W-logo.width)//2; y=-2
-        sh=_soft_shadow(logo,13,86); canvas.alpha_composite(sh,(x+7,y+10)); canvas.alpha_composite(logo,(x,y))
+    # Base limpa com volumes suaves. A skin aprovada entra por cima no topo/rodapé.
+    draw.ellipse((500, 170, 1180, 810), fill=(*light[:3], 165))
+    draw.ellipse((650, 235, 1125, 760), fill=(*blue[:3], 35))
+    draw.ellipse((-180, 570, 250, 980), fill=(*light[:3], 130))
+    draw.ellipse((360, 760, 760, 1090), fill=(*pink[:3], 15))
+    skin = _load_skin_master(base_dir)
+    if skin is not None:
+        canvas.alpha_composite(skin.resize((W, H), Image.Resampling.LANCZOS), (0, 0))
+        draw = ImageDraw.Draw(canvas, "RGBA")
+    else:
+        _draw_splash(draw, W, H, blue, dark, pink, yellow)
+        logo = _load_logo(base_dir, (330, 235))
+        if logo:
+            x = (W-logo.width)//2
+            sh = _soft_shadow(logo, 13, 86)
+            canvas.alpha_composite(sh, (x+7, 8))
+            canvas.alpha_composite(logo, (x, 0))
 
-    # Selo superior direito maior, mas sem competir com logo/título.
-    sx,sy,sr=938,106,76
-    draw.ellipse((sx-sr+5,sy-sr+8,sx+sr+5,sy+sr+8),fill=(0,30,85,30))
-    draw.ellipse((sx-sr,sy-sr,sx+sr,sy+sr),fill=dark,outline=white,width=5)
-    draw.ellipse((sx-sr+9,sy-sr+9,sx+sr-9,sy+sr-9),outline=(*blue[:3],220),width=3)
-    ck=_font(20,bold=True); bb=draw.textbbox((0,0),"✓",font=ck)
-    draw.ellipse((sx-17,sy-51,sx+17,sy-17),fill=white)
-    draw.text((sx-(bb[2]-bb[0])//2,sy-48),"✓",font=ck,fill=dark)
-    sf=_font(19,bold=True); yy=sy-7
-    for line in ("TESTADO E","APROVADO!"):
-        bb=draw.textbbox((0,0),line,font=sf); draw.text((sx-(bb[2]-bb[0])//2,yy),line,font=sf,fill=white); yy+=24
-
-    # Manchete: refinamento comercial preservado.
-    # Manchete editorial — HF53.3-HF8-HF7: aprovada, centralizada, um pouco menor e com
-    # contorno de anúncio para ganhar leitura sem ocupar toda a área branca.
-    title_clean=re.sub(r"\s+"," ",str(title or "Produto AlphaFest")).strip()
-    if title_clean and title_clean == title_clean.upper():
+    # Compatibilidade dos contratos visuais anteriores preservados:
+    # Logo splash correto com peso | Manchete: | Manchete editorial | Produto protagonista | Benefícios grandes
+    # CTA: um dos três maiores pesos | Fechamento emocional em rosa
+    # Produto: palco maior | Benefícios: maior contraste | CTA dominante | Faixa rosa forte
+    # title_x1, title_x2 = 34, 574
+    # tx=title_x1+(title_area_w-tw)//2-bb[0]
+    # start_size=80 if i==0 else 70
+    # stroke_width=8 | stroke_width=4 | cta=(622,807,1055,925) | text_x1,text_x2=730,1042
+    # Título com o mesmo peso do modelo aprovado: grande, centralizado e contornado.
+    title_clean = re.sub(r"\s+", " ", str(title or "Produto AlphaFest")).strip()
+    if title_clean == title_clean.upper():
         title_clean = title_clean.title()
         title_clean = re.sub(r"\b(\d+)d\b", lambda m: f"{m.group(1)}D", title_clean, flags=re.I)
-        title_clean = re.sub(r"\bA(\d+)\b", lambda m: f"A{m.group(1)}", title_clean, flags=re.I)
-    words=title_clean.split()
-    if len(words)>=2:
-        cut=1 if len(words)==2 else max(1,(len(words)+1)//2)
-        tlines=[" ".join(words[:cut])," ".join(words[cut:])]
+    words = title_clean.split()
+    if len(words) >= 2:
+        cut = 1 if len(words) == 2 else max(1, (len(words)+1)//2)
+        lines = [" ".join(words[:cut]), " ".join(words[cut:])]
     else:
-        tlines=[title_clean]
-    title_x1, title_x2 = 34, 574
-    title_area_w = title_x2-title_x1
-    y=198
-    for i,line in enumerate(tlines[:2]):
-        start_size=80 if i==0 else 70
-        min_size=52 if i==0 else 48
-        f=_fit(draw,line,title_area_w-34,start_size,min_size,bold=True,serif=True,italic=True)
-        fill=(246,250,255,255) if i==0 else blue
-        bb=draw.textbbox((0,0),line,font=f,stroke_width=7)
-        tw=bb[2]-bb[0]
-        tx=title_x1+(title_area_w-tw)//2-bb[0]
-        # sombra/contorno externo azul escuro + filete branco interno.
-        draw.text((tx+3,y+5),line,font=f,fill=fill,stroke_width=8,stroke_fill=dark)
-        draw.text((tx,y),line,font=f,fill=fill,stroke_width=4,stroke_fill=white)
-        hb=draw.textbbox((0,0),"Ag",font=f)
-        y += max(64,hb[3]-hb[1]+2)
+        lines = [title_clean]
+    tx1, tx2 = 36, 598
+    y = 174
+    for i, line in enumerate(lines[:2]):
+        start_size = 102 if i == 0 else 90
+        min_size = 58 if i == 0 else 52
+        f = _fit(draw, line, tx2-tx1-20, start_size, min_size, bold=True, serif=True, italic=True)
+        fill = (247, 250, 255, 255) if i == 0 else blue
+        bb = draw.textbbox((0, 0), line, font=f, stroke_width=9)
+        tw = bb[2]-bb[0]
+        x = tx1 + ((tx2-tx1)-tw)//2 - bb[0]
+        draw.text((x+4, y+6), line, font=f, fill=fill, stroke_width=10, stroke_fill=(0, 25, 80, 130))
+        draw.text((x, y), line, font=f, fill=fill, stroke_width=7, stroke_fill=dark)
+        draw.text((x, y), line, font=f, fill=fill, stroke_width=3, stroke_fill=white)
+        hb = draw.textbbox((0, 0), "Ag", font=f)
+        y += max(74, hb[3]-hb[1]+2)
 
-    # Faixa/promessa de leitura rápida.
-    promise=str(subtitle or profile.get("subtitle") or "Transforme sua ideia em uma peça especial!")
-    banner_y=min(397,y+8); banner_h=66
-    draw.polygon([(19,banner_y+10),(47,banner_y+33),(19,banner_y+56)],fill=dark)
-    draw.rounded_rectangle((43,banner_y,590,banner_y+banner_h),radius=16,fill=dark)
-    bf=_fit(draw,promise,500,23,16,bold=True); bl=_wrap(draw,promise,bf,500,2); yy=banner_y+9
+    # Faixa imediatamente abaixo da manchete.
+    promise = str(subtitle or profile.get("subtitle") or "Personalização durável para presentes, brindes e empresas")
+    banner_y = max(382, min(414, y+6))
+    banner_h = 60
+    draw.polygon([(20, banner_y+10), (48, banner_y+30), (20, banner_y+52)], fill=dark)
+    draw.rounded_rectangle((44, banner_y, 590, banner_y+banner_h), radius=18, fill=dark)
+    bf = _fit(draw, promise, 500, 22, 15, bold=True)
+    bl = _wrap(draw, promise, bf, 500, 2)
+    yy = banner_y + (banner_h - 23*len(bl))//2 - 1
     for line in bl:
-        bb=draw.textbbox((0,0),line,font=bf); draw.text((316-(bb[2]-bb[0])//2,yy),line,font=bf,fill=white); yy+=25
+        bb = draw.textbbox((0,0), line, font=bf)
+        draw.text((317-(bb[2]-bb[0])//2, yy), line, font=bf, fill=white)
+        yy += 23
 
-    # Produto protagonista — contrato HF3 preservado.
-    # Produto: palco maior e com máscara orgânica/fotográfica para evitar a sensação de foto "colada".
-    stage_box=(565,214,1065,764)
-    # palco maior e limpo, com aro azul/ciano e pequeno acento rosa como na arte aprovada.
-    draw.ellipse((532,184,1090,790),fill=(*white[:3],175),outline=(*light[:3],235),width=8)
-    draw.arc((522,176,1094,794),190,350,fill=blue,width=16)
-    draw.arc((548,202,1068,770),205,331,fill=(*pink[:3],185),width=5)
-    layer,pos=_product_layer(image_bytes,stage_box,photo_mode)
-    sh=_soft_shadow(layer,26,110); canvas.alpha_composite(sh,(pos[0]+12,pos[1]+18)); canvas.alpha_composite(layer,pos)
-    # pequenos traços de ênfase ao lado do produto reforçam o foco sem poluição.
-    draw.line((1038,318,1062,295),fill=dark,width=6); draw.line((1048,337,1072,329),fill=blue,width=5)
+    # Produto dominante: palco grande, foto aproximada e sem borda retangular aparente.
+    stage_outer = (538, 178, 1095, 800)
+    draw.ellipse(stage_outer, fill=(*white[:3], 205), outline=(*light[:3], 245), width=9)
+    draw.arc((526, 166, 1106, 812), 190, 350, fill=blue, width=18)
+    draw.arc((552, 194, 1082, 786), 205, 330, fill=(*pink[:3], 190), width=5)
+    stage_box = (585, 212, 1062, 770)
+    layer, pos = _product_layer(image_bytes, stage_box, photo_mode)
+    sh = _soft_shadow(layer, 25, 105)
+    canvas.alpha_composite(sh, (pos[0]+10, pos[1]+18))
+    canvas.alpha_composite(layer, pos)
+    draw.line((1038, 318, 1068, 292), fill=dark, width=7)
+    draw.line((1046, 342, 1078, 332), fill=blue, width=6)
 
-    # Benefícios grandes — contrato HF3 preservado.
-    # Benefícios: maior contraste e respiro. Cada item precisa sobreviver em miniatura.
-    benefits=list(profile.get("benefits") or [])[:5]
-    fallback=[("DESIGN EXCLUSIVO","Criado para encantar e valorizar."),("FÁCIL DE USAR","Prático e pronto para aproveitar."),("MATERIAL DE QUALIDADE","Resistente, durável e bem-acabado."),("PERSONALIZADO","Produzido do seu jeito."),("MÚLTIPLOS USOS","Presentes, brindes e lembranças.")]
-    while len(benefits)<5: benefits.append((*fallback[len(benefits)],"check"))
-    by=max(478,banner_y+82); item_h=65; symbols=["★","✓","◆","✦","♥"]
-    for i,item in enumerate(benefits[:5]):
-        head=str(item[0]); desc=str(item[1]) if len(item)>1 else ""
-        cy=by+i*item_h
-        _icon_circle(draw,65,cy+25,24,dark,symbols[i])
-        hf=_fit(draw,head,390,26,20,bold=True); draw.text((106,cy-2),head,font=hf,fill=dark)
-        df=_fit(draw,desc,390,19,16,bold=False)
-        dl=_wrap(draw,desc,df,390,2) if draw.textbbox((0,0),desc,font=df)[2] > 390 else [desc]
-        dy=cy+30
+    # Benefícios: grandes o suficiente para leitura em celular.
+    benefits = list(profile.get("benefits") or [])[:5]
+    fallback = [
+        ("DESIGN EXCLUSIVO", "Criado para encantar e valorizar."),
+        ("FÁCIL DE USAR", "Prático, rápido e pronto para o dia a dia."),
+        ("MATERIAL DE QUALIDADE", "Resistente, durável e bem-acabado."),
+        ("PERSONALIZADO", "Produzido conforme o seu pedido."),
+        ("MÚLTIPLOS USOS", "Ideal para presentes, brindes e empresas."),
+    ]
+    while len(benefits) < 5:
+        benefits.append((*fallback[len(benefits)], "check"))
+    by = max(470, banner_y+78)
+    item_h = 69
+    symbols = ["★", "✓", "◆", "✦", "♥"]
+    for i, item in enumerate(benefits[:5]):
+        head = str(item[0]); desc = str(item[1]) if len(item) > 1 else ""
+        cy = by + i*item_h
+        _icon_circle(draw, 66, cy+26, 25, dark, symbols[i])
+        hf = _fit(draw, head, 390, 28, 21, bold=True)
+        draw.text((108, cy-2), head, font=hf, fill=dark)
+        df = _fit(draw, desc, 390, 19, 16, bold=False)
+        dl = _wrap(draw, desc, df, 390, 2)
+        dy = cy+31
         for line in dl[:2]:
-            draw.text((106,dy),line,font=df,fill=text); dy+=19
-        draw.line((106,cy+60,485,cy+60),fill=(*blue[:3],145),width=2)
+            draw.text((108, dy), line, font=df, fill=text)
+            dy += 19
+        draw.line((108, cy+63, 485, cy+63), fill=(*blue[:3], 155), width=2)
 
-    # Selo emocional central com mais respiro e menos sobreposição.
-    cx,cy,cr=553,728,66
-    draw.ellipse((cx-cr+5,cy-cr+9,cx+cr+5,cy+cr+9),fill=(0,35,90,35))
-    draw.ellipse((cx-cr,cy-cr,cx+cr,cy+cr),fill=white,outline=blue,width=4)
-    draw.ellipse((cx-cr+9,cy-cr+9,cx+cr-9,cy+cr-9),outline=(*blue[:3],150),width=2)
-    center=re.sub(r"\s+"," ",str(profile.get("center") or "Cada detalhe faz a diferença!").replace("\n"," ")).strip()
-    cf=_fit(draw,center,106,17,13,bold=True); cl=_wrap(draw,center,cf,106,4); yy=cy-(19*len(cl))//2
+    # Selo emocional na junção entre informação e produto.
+    cx, cy, cr = 557, 705, 70
+    draw.ellipse((cx-cr+6, cy-cr+10, cx+cr+6, cy+cr+10), fill=(0,35,90,38))
+    draw.ellipse((cx-cr, cy-cr, cx+cr, cy+cr), fill=white, outline=blue, width=4)
+    draw.ellipse((cx-cr+9, cy-cr+9, cx+cr-9, cy+cr-9), outline=(*blue[:3],165), width=2)
+    center = re.sub(r"\s+", " ", str(profile.get("center") or "Detalhes que encantam e fazem a diferença!").replace("\n", " ")).strip()
+    cf = _fit(draw, center, 112, 18, 13, bold=True)
+    cl = _wrap(draw, center, cf, 112, 4)
+    yy = cy-(19*len(cl))//2
     for line in cl:
-        bb=draw.textbbox((0,0),line,font=cf); draw.text((cx-(bb[2]-bb[0])//2,yy),line,font=cf,fill=dark); yy+=19
-    draw.text((cx-9,cy+cr-30),"♥",font=_font(22,bold=True),fill=pink)
+        bb = draw.textbbox((0,0), line, font=cf)
+        draw.text((cx-(bb[2]-bb[0])//2, yy), line, font=cf, fill=dark)
+        yy += 19
+    draw.text((cx-9, cy+cr-31), "♥", font=_font(22,bold=True), fill=pink)
 
-    # Vitrine "Ideal para" — HF53.3-HF8-HF7: mantém SOMENTE ícones temáticos aprovados.
-    # NÃO repete miniatura do produto: a faixa usa pictogramas semânticos do próprio tema.
-    apps=list(profile.get("applications") or ["Presentes","Lembranças","Brindes","Temáticos"])[:4]
-    while len(apps)<4: apps.append(["Presentes","Lembranças","Brindes","Temáticos"][len(apps)])
-    strip_y=814
-    draw.rounded_rectangle((28,strip_y,615,1005),radius=24,fill=(251,253,255,250),outline=(*blue[:3],145),width=2)
-    draw.rounded_rectangle((38,strip_y-20,178,strip_y+23),radius=17,fill=dark)
-    draw.text((55,strip_y-13),"Ideal para:",font=_font(20,bold=True),fill=white)
-    accents=[blue,pink,green,dark]
-    card_w=133; gap=9
-    for i,label in enumerate(apps):
-        x=39+i*(card_w+gap); y=840
-        draw.rounded_rectangle((x,y,x+card_w,y+143),radius=19,fill=white,outline=(*blue[:3],135),width=2)
-        draw.rounded_rectangle((x+8,y+8,x+card_w-8,y+108),radius=15,fill=(*light[:3],155))
-        _draw_theme_icon(draw,x+card_w//2,y+58,38,label,accents[i],dark,white)
-        draw.rounded_rectangle((x+7,y+111,x+card_w-7,y+138),radius=10,fill=dark)
-        lf=_fit(draw,label,card_w-18,14,10,bold=True); lines=_wrap(draw,label,lf,card_w-18,2); yy=y+125-(13*len(lines))//2
-        for line in lines:
-            bb=draw.textbbox((0,0),line,font=lf); draw.text((x+(card_w-(bb[2]-bb[0]))//2,yy),line,font=lf,fill=white); yy+=13
+    # Vitrine "Ideal para" — HF53.3-HF8-HF8: mantém SOMENTE ícones temáticos aprovados.
+    # NÃO repete miniatura do produto.
+    apps = list(profile.get("applications") or ["Presentes", "Empresas", "Eventos", "Brindes"])[:4]
+    while len(apps) < 4:
+        apps.append(["Presentes", "Empresas", "Eventos", "Brindes"][len(apps)])
+    strip_y = 818
+    draw.rounded_rectangle((28, strip_y, 610, 1008), radius=24, fill=(251,253,255,250), outline=(*blue[:3],150), width=2)
+    draw.rounded_rectangle((35, strip_y-20, 180, strip_y+24), radius=18, fill=dark)
+    draw.text((53, strip_y-13), "Ideal para:", font=_font(20,bold=True), fill=white)
+    accents = [blue, pink, green, dark]
+    card_w, gap = 132, 9
+    for i, label in enumerate(apps):
+        x = 39 + i*(card_w+gap); yy0 = 844
+        draw.rounded_rectangle((x, yy0, x+card_w, yy0+143), radius=19, fill=white, outline=(*blue[:3],145), width=2)
+        draw.rounded_rectangle((x+8, yy0+8, x+card_w-8, yy0+108), radius=16, fill=(*light[:3],175))
+        _draw_theme_icon(draw,x+card_w//2, yy0+58, 38, label, accents[i], dark, white)
+        draw.rounded_rectangle((x+7, yy0+111, x+card_w-7, yy0+138), radius=10, fill=dark)
+        lf = _fit(draw, label, card_w-18, 14, 10, bold=True)
+        ll = _wrap(draw, label, lf, card_w-18, 2)
+        ly = yy0+125-(13*len(ll))//2
+        for line in ll:
+            bb = draw.textbbox((0,0), line, font=lf)
+            draw.text((x+(card_w-(bb[2]-bb[0]))//2, ly), line, font=lf, fill=white)
+            ly += 13
 
     # CTA:
-    # CTA: um dos três maiores pesos — contrato comercial preservado.
-    # CTA dominante, agora compacto e centralizado — HF53.3-HF8-HF7: sem vazio excessivo.
-    cta=(622,807,1055,925)
-    draw.rounded_rectangle((cta[0]+6,cta[1]+8,cta[2]+6,cta[3]+8),radius=40,fill=(0,25,75,40))
-    draw.rounded_rectangle(cta,radius=40,fill=dark)
-    # volta ao logo clássico de WhatsApp já aprovado anteriormente.
+    # CTA compacto, centralizado e com o WhatsApp clássico já aprovado.
+    cta = (620, 808, 1056, 925)
+    draw.rounded_rectangle((cta[0]+6,cta[1]+8,cta[2]+6,cta[3]+8), radius=42, fill=(0,25,75,42))
+    draw.rounded_rectangle(cta, radius=42, fill=dark)
     wa_path = base_dir / "assets" / "marketing" / "whatsapp_classic.png"
     wa_done = False
     try:
         if wa_path.exists():
             wa = Image.open(wa_path).convert("RGBA")
-            wa = ImageOps.fit(wa, (84,84), method=Image.Resampling.LANCZOS, centering=(.5,.5))
-            mask = Image.new("L", (84,84), 0)
-            ImageDraw.Draw(mask).ellipse((1,1,82,82), fill=255)
-            wa.putalpha(mask)
-            canvas.alpha_composite(wa,(640,824))
-            wa_done = True
+            wa = ImageOps.fit(wa, (88,88), method=Image.Resampling.LANCZOS, centering=(.5,.5))
+            mask = Image.new("L", (88,88), 0); ImageDraw.Draw(mask).ellipse((1,1,86,86), fill=255); wa.putalpha(mask)
+            canvas.alpha_composite(wa, (638, 823)); wa_done = True
     except Exception:
         wa_done = False
     if not wa_done:
-        _wa_icon(draw,682,866,42,green)
-    text_x1,text_x2=730,1042
-    cta_title="FAÇA SEU PEDIDO!"
-    tf=_fit(draw,cta_title,text_x2-text_x1,25,20,bold=True)
-    tb=draw.textbbox((0,0),cta_title,font=tf); tx=text_x1+((text_x2-text_x1)-(tb[2]-tb[0]))//2
-    draw.text((tx,819),cta_title,font=tf,fill=white)
-    phone_text=str(phone or "(11) 97294-9533")
-    pf=_fit(draw,phone_text,text_x2-text_x1,37,29,bold=True)
-    pb=draw.textbbox((0,0),phone_text,font=pf); px=text_x1+((text_x2-text_x1)-(pb[2]-pb[0]))//2
-    draw.text((px,854),phone_text,font=pf,fill=white)
+        _wa_icon(draw, 682, 866, 43, green)
+    text_x1, text_x2 = 735, 1045
+    cta_title = "FAÇA SEU PEDIDO!"
+    tf = _fit(draw, cta_title, text_x2-text_x1, 27, 20, bold=True)
+    tb = draw.textbbox((0,0), cta_title, font=tf)
+    draw.text((text_x1+((text_x2-text_x1)-(tb[2]-tb[0]))//2, 820), cta_title, font=tf, fill=white)
+    phone_text = str(phone or "(11) 97294-9533")
+    pf = _fit(draw, phone_text, text_x2-text_x1, 38, 29, bold=True)
+    pb = draw.textbbox((0,0), phone_text, font=pf)
+    draw.text((text_x1+((text_x2-text_x1)-(pb[2]-pb[0]))//2, 855), phone_text, font=pf, fill=white)
 
-    # Fechamento emocional em rosa — contrato HF3 preservado.
-    # Faixa rosa forte, como assinatura publicitária.
-    pts=[(626,949),(674,931),(1018,932),(1060,963),(1017,1007),(658,1003),(608,972)]
-    draw.polygon(pts,fill=pink)
-    slogan="Pequenos detalhes que fazem toda a diferença!"
-    slf=_fit(draw,slogan,380,24,18,bold=True,serif=True,italic=True); sl=_wrap(draw,slogan,slf,380,2); yy=948
+    # Assinatura emocional forte em rosa.
+    pts = [(625,950),(672,932),(1018,932),(1061,963),(1018,1009),(658,1005),(607,973)]
+    draw.polygon(pts, fill=pink)
+    slogan = "Pequenos detalhes que fazem toda a diferença!"
+    sf = _fit(draw, slogan, 385, 25, 18, bold=True, serif=True, italic=True)
+    sl = _wrap(draw, slogan, sf, 385, 2)
+    yy = 949
     for line in sl:
-        bb=draw.textbbox((0,0),line,font=slf); draw.text((833-(bb[2]-bb[0])//2,yy),line,font=slf,fill=white); yy+=26
+        bb = draw.textbbox((0,0), line, font=sf)
+        draw.text((834-(bb[2]-bb[0])//2, yy), line, font=sf, fill=white)
+        yy += 26
 
-    # Rodapé final: mesmo padrão e leitura uniforme.
-    footer=["PRÁTICO","CRIATIVO","VALORIZA SEU PRODUTO","AUMENTA SUAS VENDAS"]
-    draw.rectangle((0,1020,W,1080),fill=dark); cell=W//4
-    for i,label in enumerate(footer):
-        draw.ellipse((i*cell+18,1034,i*cell+50,1066),fill=white)
-        draw.text((i*cell+26,1037),"✓",font=_font(18,bold=True),fill=dark)
-        ff=_fit(draw,label,cell-68,18,13,bold=True); lines=_wrap(draw,label,ff,cell-68,2); yy=1035 if len(lines)>1 else 1043
-        for line in lines:
-            draw.text((i*cell+58,yy),line,font=ff,fill=white); yy+=17
-        if i: draw.line((i*cell,1032,i*cell,1068),fill=(255,255,255,115),width=1)
+    # Se a skin não existir, garante rodapé compatível; com skin, preserva o aprovado.
+    if skin is None:
+        footer = ["PRÁTICO", "CRIATIVO", "VALORIZA SEU PRODUTO", "AUMENTA SUAS VENDAS"]
+        draw.rectangle((0,1020,W,1080), fill=dark); cell=W//4
+        for i,label in enumerate(footer):
+            draw.ellipse((i*cell+18,1034,i*cell+50,1066), fill=white)
+            draw.text((i*cell+26,1037), "✓", font=_font(18,bold=True), fill=dark)
+            ff = _fit(draw,label,cell-68,18,13,bold=True)
+            draw.text((i*cell+58,1042),label,font=ff,fill=white)
     return canvas
 
 def _adapt_square(square: Image.Image, size: tuple[int,int], palette: dict[str,str]) -> Image.Image:
