@@ -13,19 +13,19 @@ def _sample():
 
 
 def test_hf8_hf6_version_and_metadata():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF8-HF6'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF8-HF7'
     anna = next(x for x in engine.listar_templates() if x['id'] == 'anna_social_redes')
     master = next(x for x in engine.listar_templates() if x['id'] == 'splash_premium_anna')
-    assert anna['versao_template'] == 'HF53.3-HF8-HF6'
+    assert anna['versao_template'] == 'HF53.3-HF8-HF7'
     assert anna['status_template'] == 'Em validação'
     assert master['versao_template'] == 'HF53.2-HF5-HF7'
 
 
 def test_hf8_hf6_title_is_centered_smaller_and_top_is_organic_splash():
     src = Path('marketing_anna_renderer.py').read_text(encoding='utf-8')
-    assert 'title_x1, title_x2 = 32, 578' in src
+    assert 'title_x1, title_x2 = 34, 574' in src
     assert 'tx=title_x1+(title_area_w-tw)//2-bb[0]' in src
-    assert 'start_size=86 if i==0 else 74' in src
+    assert 'start_size=80 if i==0 else 70' in src
     assert 'manchas superiores orgânicas' in src
     assert 'def blob(cx, cy, rx, ry, color, lobes)' in src
 
@@ -33,7 +33,7 @@ def test_hf8_hf6_title_is_centered_smaller_and_top_is_organic_splash():
 def test_hf8_hf6_uses_classic_whatsapp_asset_and_keeps_semantic_icons():
     src = Path('marketing_anna_renderer.py').read_text(encoding='utf-8')
     assert 'assets" / "marketing" / "whatsapp_classic.png' in src
-    assert 'volta ao logo clássico de WhatsApp' in src
+    assert 'whatsapp_classic.png' in src
     assert 'NÃO repete miniatura do produto' in src
     assert '_draw_theme_icon(draw,x+card_w//2' in src
 

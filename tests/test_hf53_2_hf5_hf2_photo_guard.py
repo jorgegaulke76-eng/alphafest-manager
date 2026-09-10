@@ -30,4 +30,4 @@ def test_hf5_hf2_photo_is_physically_clipped_to_protected_zone():
 
 
 def test_hf5_hf2_package_version():
-    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF8-HF6"
+    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF8-HF7"

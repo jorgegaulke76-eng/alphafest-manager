@@ -1,6 +1,6 @@
 """Renderer independente do Template Anna — Prompt Premium.
 
-HF53.3-HF8-HF6: este módulo não reutiliza a composição visual do Template Mestre
+HF53.3-HF8-HF7: este módulo não reutiliza a composição visual do Template Mestre
 nem o compositor legado. Ele recebe somente dados já preparados pelo motor e
 constrói nativamente cada proporção do Template Anna.
 """
@@ -13,7 +13,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageDraw, ImageFilter, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageOps, ImageEnhance
 from alphafest_font_manager import get_font
 
 
@@ -181,9 +181,11 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
         if spread < 34 and max(bg) > 145:
             prepared = _remove_simple_background(source)
         else:
-            cut = _remove_grabcut_background(source)
-            if cut is not None:
-                prepared = cut
+            # HF53.3-HF8-HF7: em fundo real/variável, não força GrabCut no modo auto.
+            # O recorte automático anterior podia deixar mesa/fundo em polígonos irregulares.
+            # O palco oval fotográfico é mais previsível e comercial. GrabCut fica disponível
+            # somente quando o usuário pedir explicitamente para recortar/remover fundo.
+            prepared = source
 
     x1, y1, x2, y2 = box
     maxw, maxh = x2-x1, y2-y1
@@ -193,14 +195,23 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
         prepared.thumbnail((maxw, maxh), Image.Resampling.LANCZOS)
         return prepared, (x1 + (maxw-prepared.width)//2, y1 + (maxh-prepared.height)//2)
 
-    # Fallback fotográfico premium: cartão grande, sem moldura pesada.
-    fitted = ImageOps.fit(prepared, (maxw, maxh), method=Image.Resampling.LANCZOS, centering=(.5, .46))
+    # HF53.3-HF8-HF7: fallback fotográfico premium com recorte orgânico.
+    # Em vez do retângulo arredondado, a foto entra em um palco oval com bordas
+    # suavizadas. Isso integra a imagem ao anúncio mesmo quando o recorte automático
+    # do produto não é confiável.
+    rgb = prepared.convert("RGB")
+    try:
+        rgb = ImageEnhance.Contrast(rgb).enhance(1.06)
+        rgb = ImageEnhance.Sharpness(rgb).enhance(1.20)
+        rgb = ImageEnhance.Color(rgb).enhance(1.03)
+    except Exception:
+        pass
+    fitted = ImageOps.fit(rgb.convert("RGBA"), (maxw, maxh), method=Image.Resampling.LANCZOS, centering=(.5, .44))
     mask = Image.new("L", (maxw, maxh), 0)
-    # HF53.3-HF8-HF6: borda fotográfica bem arredondada e levemente suave.
-    # Evita o aspecto de retângulo colado sem arriscar cortar o produto.
-    radius=max(42, min(maxw, maxh)//5)
-    ImageDraw.Draw(mask).rounded_rectangle((4, 4, maxw-5, maxh-5), radius=radius, fill=255)
-    mask = mask.filter(ImageFilter.GaussianBlur(max(2, min(maxw, maxh)//90)))
+    md = ImageDraw.Draw(mask)
+    inset=max(5, min(maxw,maxh)//70)
+    md.ellipse((inset, inset, maxw-inset-1, maxh-inset-1), fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(max(4, min(maxw, maxh)//65)))
     fitted.putalpha(mask)
     return fitted, (x1, y1)
 
@@ -229,7 +240,7 @@ def _theme_key(label: str) -> str:
 def _draw_theme_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, label: str, fill, dark, white=(255,255,255,255)):
     """Ícone vetorial semântico para os cards `Ideal para`.
 
-    HF53.3-HF8-HF6: a faixa inferior deixa de repetir miniaturas do produto.
+    HF53.3-HF8-HF7: a faixa inferior deixa de repetir miniaturas do produto.
     Cada card usa um pictograma coerente com o próprio rótulo, mantendo o
     visual de propaganda e leitura imediata em celular.
     """
@@ -339,7 +350,7 @@ def _draw_theme_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, label:
 
 
 def _draw_splash(draw: ImageDraw.ImageDraw, W: int, H: int, blue, dark, pink, yellow):
-    # HF53.3-HF8-HF6: manchas superiores orgânicas, mais próximas de um splash líquido.
+    # HF53.3-HF8-HF7: manchas superiores orgânicas, mais próximas de um splash líquido.
     # Sai a meia-lua geométrica limpa do HF5; entram volumes irregulares, lóbulos e gotas.
     def blob(cx, cy, rx, ry, color, lobes):
         draw.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=color)
@@ -371,11 +382,11 @@ def _draw_square(
     profile: dict[str, Any], palette: dict[str, str], base_dir: Path, photo_mode: str,
     application_images: list[bytes] | None,
 ) -> Image.Image:
-    """HF53.3-HF8-HF6 — ajuste fino do Template Anna no Manager.
+    """HF53.3-HF8-HF7 — acabamento visual aprovado do Template Anna.
 
-    Mantém tudo que foi aprovado no HF5 e faz apenas o acabamento solicitado:
-    manchete ligeiramente menor e centralizada dentro da área branca, manchas azuis
-    superiores com linguagem de splash orgânico e WhatsApp clássico preservado.
+    Consolida o visual aprovado: título com contorno publicitário, foto integrada em
+    palco orgânico, CTA compacto e centralizado, splash superior, WhatsApp clássico
+    e ícones temáticos no bloco Ideal para.
     """
     W=H=1080
     white=(255,255,255,255)
@@ -413,8 +424,9 @@ def _draw_square(
     for line in ("TESTADO E","APROVADO!"):
         bb=draw.textbbox((0,0),line,font=sf); draw.text((sx-(bb[2]-bb[0])//2,yy),line,font=sf,fill=white); yy+=24
 
-    # Manchete: ajuste fino HF6 — preserva o contrato de Manchete editorial: o nome do produto fica ligeiramente menor e CENTRALIZADO
-    # dentro do espaço branco à esquerda, sem invadir logo, foto ou selo.
+    # Manchete: refinamento comercial preservado.
+    # Manchete editorial — HF53.3-HF8-HF7: aprovada, centralizada, um pouco menor e com
+    # contorno de anúncio para ganhar leitura sem ocupar toda a área branca.
     title_clean=re.sub(r"\s+"," ",str(title or "Produto AlphaFest")).strip()
     if title_clean and title_clean == title_clean.upper():
         title_clean = title_clean.title()
@@ -426,21 +438,22 @@ def _draw_square(
         tlines=[" ".join(words[:cut])," ".join(words[cut:])]
     else:
         tlines=[title_clean]
-    title_x1, title_x2 = 32, 578
+    title_x1, title_x2 = 34, 574
     title_area_w = title_x2-title_x1
-    y=194
+    y=198
     for i,line in enumerate(tlines[:2]):
-        # redução leve em relação ao HF5: mantém presença, mas passa a respirar no bloco branco.
-        start_size=86 if i==0 else 74
-        min_size=56 if i==0 else 50
-        f=_fit(draw,line,title_area_w-20,start_size,min_size,bold=True,serif=True,italic=True)
-        fill=dark if i==0 else blue
-        bb=draw.textbbox((0,0),line,font=f,stroke_width=1)
+        start_size=80 if i==0 else 70
+        min_size=52 if i==0 else 48
+        f=_fit(draw,line,title_area_w-34,start_size,min_size,bold=True,serif=True,italic=True)
+        fill=(246,250,255,255) if i==0 else blue
+        bb=draw.textbbox((0,0),line,font=f,stroke_width=7)
         tw=bb[2]-bb[0]
         tx=title_x1+(title_area_w-tw)//2-bb[0]
-        draw.text((tx,y),line,font=f,fill=fill,stroke_width=1,stroke_fill=white)
+        # sombra/contorno externo azul escuro + filete branco interno.
+        draw.text((tx+3,y+5),line,font=f,fill=fill,stroke_width=8,stroke_fill=dark)
+        draw.text((tx,y),line,font=f,fill=fill,stroke_width=4,stroke_fill=white)
         hb=draw.textbbox((0,0),"Ag",font=f)
-        y += max(66,hb[3]-hb[1]+4)
+        y += max(64,hb[3]-hb[1]+2)
 
     # Faixa/promessa de leitura rápida.
     promise=str(subtitle or profile.get("subtitle") or "Transforme sua ideia em uma peça especial!")
@@ -453,18 +466,15 @@ def _draw_square(
 
     # Produto protagonista — contrato HF3 preservado.
     # Produto: palco maior e com máscara orgânica/fotográfica para evitar a sensação de foto "colada".
-    stage_box=(550,205,1060,748)
-    draw.ellipse((522,188,1090,775),fill=(*white[:3],160),outline=(*blue[:3],120),width=2)
-    draw.arc((515,180,1092,782),194,338,fill=blue,width=17)
-    draw.arc((542,205,1065,758),202,330,fill=(*pink[:3],155),width=6)
+    stage_box=(565,214,1065,764)
+    # palco maior e limpo, com aro azul/ciano e pequeno acento rosa como na arte aprovada.
+    draw.ellipse((532,184,1090,790),fill=(*white[:3],175),outline=(*light[:3],235),width=8)
+    draw.arc((522,176,1094,794),190,350,fill=blue,width=16)
+    draw.arc((548,202,1068,770),205,331,fill=(*pink[:3],185),width=5)
     layer,pos=_product_layer(image_bytes,stage_box,photo_mode)
-    # foto preservada recebe moldura branca suave; recorte recebe somente sombra.
-    if layer.getchannel("A").getextrema()==(255,255):
-        border=Image.new("RGBA",(layer.width+12,layer.height+12),(255,255,255,0))
-        bd=ImageDraw.Draw(border,"RGBA"); bd.rounded_rectangle((0,0,border.width-1,border.height-1),radius=max(32,min(layer.width,layer.height)//8),fill=white)
-        canvas.alpha_composite(_soft_shadow(border,20,70),(pos[0]-6+12,pos[1]-6+16))
-        canvas.alpha_composite(border,(pos[0]-6,pos[1]-6))
-    sh=_soft_shadow(layer,24,105); canvas.alpha_composite(sh,(pos[0]+13,pos[1]+20)); canvas.alpha_composite(layer,pos)
+    sh=_soft_shadow(layer,26,110); canvas.alpha_composite(sh,(pos[0]+12,pos[1]+18)); canvas.alpha_composite(layer,pos)
+    # pequenos traços de ênfase ao lado do produto reforçam o foco sem poluição.
+    draw.line((1038,318,1062,295),fill=dark,width=6); draw.line((1048,337,1072,329),fill=blue,width=5)
 
     # Benefícios grandes — contrato HF3 preservado.
     # Benefícios: maior contraste e respiro. Cada item precisa sobreviver em miniatura.
@@ -495,7 +505,7 @@ def _draw_square(
         bb=draw.textbbox((0,0),line,font=cf); draw.text((cx-(bb[2]-bb[0])//2,yy),line,font=cf,fill=dark); yy+=19
     draw.text((cx-9,cy+cr-30),"♥",font=_font(22,bold=True),fill=pink)
 
-    # Vitrine "Ideal para" — HF53.3-HF8-HF6: mantém SOMENTE ícones temáticos aprovados.
+    # Vitrine "Ideal para" — HF53.3-HF8-HF7: mantém SOMENTE ícones temáticos aprovados.
     # NÃO repete miniatura do produto: a faixa usa pictogramas semânticos do próprio tema.
     apps=list(profile.get("applications") or ["Presentes","Lembranças","Brindes","Temáticos"])[:4]
     while len(apps)<4: apps.append(["Presentes","Lembranças","Brindes","Temáticos"][len(apps)])
@@ -515,38 +525,44 @@ def _draw_square(
         for line in lines:
             bb=draw.textbbox((0,0),line,font=lf); draw.text((x+(card_w-(bb[2]-bb[0]))//2,yy),line,font=lf,fill=white); yy+=13
 
-    # CTA: um dos três maiores pesos — contrato HF3 preservado.
-    # CTA dominante: largura maior, ícone oficial nítido e telefone como segundo foco da peça.
-    cta=(626,780,1055,934)
-    draw.rounded_rectangle((cta[0]+6,cta[1]+9,cta[2]+6,cta[3]+9),radius=44,fill=(0,25,75,35))
-    draw.rounded_rectangle(cta,radius=44,fill=dark)
-    # HF53.3-HF8-HF6: volta ao logo clássico de WhatsApp já aprovado anteriormente.
+    # CTA:
+    # CTA: um dos três maiores pesos — contrato comercial preservado.
+    # CTA dominante, agora compacto e centralizado — HF53.3-HF8-HF7: sem vazio excessivo.
+    cta=(622,807,1055,925)
+    draw.rounded_rectangle((cta[0]+6,cta[1]+8,cta[2]+6,cta[3]+8),radius=40,fill=(0,25,75,40))
+    draw.rounded_rectangle(cta,radius=40,fill=dark)
+    # volta ao logo clássico de WhatsApp já aprovado anteriormente.
     wa_path = base_dir / "assets" / "marketing" / "whatsapp_classic.png"
     wa_done = False
     try:
         if wa_path.exists():
             wa = Image.open(wa_path).convert("RGBA")
-            wa = ImageOps.fit(wa, (98,98), method=Image.Resampling.LANCZOS, centering=(.5,.5))
-            # o asset histórico possui checkerboard claro nas bordas; máscara circular mantém só o selo.
-            mask = Image.new("L", (98,98), 0)
-            ImageDraw.Draw(mask).ellipse((1,1,96,96), fill=255)
+            wa = ImageOps.fit(wa, (84,84), method=Image.Resampling.LANCZOS, centering=(.5,.5))
+            mask = Image.new("L", (84,84), 0)
+            ImageDraw.Draw(mask).ellipse((1,1,82,82), fill=255)
             wa.putalpha(mask)
-            canvas.alpha_composite(wa,(643,808))
+            canvas.alpha_composite(wa,(640,824))
             wa_done = True
     except Exception:
         wa_done = False
     if not wa_done:
-        _wa_icon(draw,692,857,49,green)
-    draw.text((758,798),"FAÇA SEU PEDIDO!",font=_font(27,bold=True),fill=white)
+        _wa_icon(draw,682,866,42,green)
+    text_x1,text_x2=730,1042
+    cta_title="FAÇA SEU PEDIDO!"
+    tf=_fit(draw,cta_title,text_x2-text_x1,25,20,bold=True)
+    tb=draw.textbbox((0,0),cta_title,font=tf); tx=text_x1+((text_x2-text_x1)-(tb[2]-tb[0]))//2
+    draw.text((tx,819),cta_title,font=tf,fill=white)
     phone_text=str(phone or "(11) 97294-9533")
-    pf=_fit(draw,phone_text,282,40,30,bold=True); draw.text((758,846),phone_text,font=pf,fill=white)
+    pf=_fit(draw,phone_text,text_x2-text_x1,37,29,bold=True)
+    pb=draw.textbbox((0,0),phone_text,font=pf); px=text_x1+((text_x2-text_x1)-(pb[2]-pb[0]))//2
+    draw.text((px,854),phone_text,font=pf,fill=white)
 
     # Fechamento emocional em rosa — contrato HF3 preservado.
     # Faixa rosa forte, como assinatura publicitária.
-    pts=[(624,952),(672,932),(1019,934),(1060,966),(1019,1010),(657,1005),(606,974)]
+    pts=[(626,949),(674,931),(1018,932),(1060,963),(1017,1007),(658,1003),(608,972)]
     draw.polygon(pts,fill=pink)
     slogan="Pequenos detalhes que fazem toda a diferença!"
-    slf=_fit(draw,slogan,380,24,18,bold=True,serif=True,italic=True); sl=_wrap(draw,slogan,slf,380,2); yy=951
+    slf=_fit(draw,slogan,380,24,18,bold=True,serif=True,italic=True); sl=_wrap(draw,slogan,slf,380,2); yy=948
     for line in sl:
         bb=draw.textbbox((0,0),line,font=slf); draw.text((833-(bb[2]-bb[0])//2,yy),line,font=slf,fill=white); yy+=26
 

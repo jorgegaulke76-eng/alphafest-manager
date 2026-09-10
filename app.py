@@ -7077,7 +7077,7 @@ CANAL_MIDIA_CONFIG = {
 def _marketing_effective_size(canal, template_id=""):
     """Tamanho final por template sem alterar o Mestre homologado.
 
-    HF53.3-HF8-HF6: o prompt aprovado da Anna é quadrado no Feed. O Mestre
+    HF53.3-HF8-HF7: o prompt aprovado da Anna é quadrado no Feed. O Mestre
     Comercial continua 1080x1350 e todos os demais templates seguem a tabela global.
     """
     base = CANAL_MIDIA_CONFIG.get(canal, CANAL_MIDIA_CONFIG["Instagram Feed"])["size"]
@@ -26476,7 +26476,7 @@ if pagina_atual == "crescimento":
     # HF53.3 — Biblioteca de Templates: mestre HF7 congelado + seleção segura no Piloto Automático.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.3-HF8-HF6: Template Anna — Redes Sociais • Em validação: ajuste fino solicitado no Manager — título ligeiramente menor e centralizado, manchas superiores em splash orgânico e WhatsApp clássico aprovado. Estrutura, ícones temáticos e Mestre HF7 preservados.")
+        st.caption("HF53.3-HF8-HF7: Template Anna — Redes Sociais • Em validação final no Manager: título com contorno e destaque, produto integrado em palco orgânico, CTA compacto e centralizado, splash superior, WhatsApp clássico e ícones temáticos preservados. Mestre HF7 intacto.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26706,7 +26706,7 @@ if pagina_atual == "crescimento":
                             "categoria": str(_mkt_product.get("Categoria") or ""),
                             "campanha": _mkt_campaign.strip() or "Permanente",
                             "objetivo": _mkt_objective,
-                            "origem_criativa": "Designer Comercial AlphaFest HF53.3-HF8-HF6",
+                            "origem_criativa": "Designer Comercial AlphaFest HF53.3-HF8-HF7",
                             "tipo_registro": "campanha_automatica",
                             "canais": list(_mkt_channels),
                             "artes_png": _mkt_arts,
@@ -26726,7 +26726,7 @@ if pagina_atual == "crescimento":
                             "quality_gate": "APROVADO AUTOMATICAMENTE",
                             "paleta_nome": _mkt_palette_name,
                             "paleta_visual": dict(_mkt_palette),
-                            "designer_rules_version": "HF53.3-HF8-HF6",
+                            "designer_rules_version": "HF53.3-HF8-HF7",
                         }
                         conteudos.insert(0, _mkt_record)
                         marketing["conteudos"] = conteudos
@@ -28358,7 +28358,7 @@ if pagina_atual == "crescimento":
                     except Exception as exc:
                         st.error(f"Não foi possível instalar o template: {exc}")
 
-            st.info("HF53.3-HF8-HF6: o Mestre HF7 permanece oficial. O Template Anna agora segue a grade fixa do prompt aprovado da Anna e continua em validação para Feed, Story, Facebook e Status.")
+            st.info("HF53.3-HF8-HF7: o Mestre HF7 permanece oficial e congelado. O Template Anna está em validação final com o acabamento visual aprovado para Feed, Story, Facebook e Status.")
             st.markdown("---")
             st.subheader("🖼️ Banco de mídia AlphaFest")
             st.caption("Fotos e vídeos continuam ligados às campanhas e ao catálogo existente.")

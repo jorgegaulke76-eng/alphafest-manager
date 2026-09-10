@@ -2,7 +2,7 @@ from pathlib import Path
 
 
 def test_hf53_2_hf3_version_and_autopilot_template_contract():
-    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF8-HF6"
+    assert Path("VERSAO.txt").read_text(encoding="utf-8").strip() == "20.4.9-I8.13.5-HF53.3-HF8-HF7"
     app = Path("app.py").read_text(encoding="utf-8")
     assert 'template_id="splash_premium_anna"' in app
     assert '"template_nome": "Template Mestre Comercial AlphaFest"' in app
