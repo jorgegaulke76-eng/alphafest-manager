@@ -1,6 +1,6 @@
 """Renderer independente do Template Anna — Prompt Premium.
 
-HF53.3-HF8-HF8: este módulo não reutiliza a composição visual do Template Mestre
+HF53.3-HF8-HF9: este módulo não reutiliza a composição visual do Template Mestre
 nem o compositor legado. Ele recebe somente dados já preparados pelo motor e
 constrói nativamente cada proporção do Template Anna.
 """
@@ -194,7 +194,7 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
         if spread < 34 and max(bg) > 145:
             prepared = _remove_simple_background(source)
         else:
-            # HF53.3-HF8-HF8: em fundo real/variável, não força GrabCut no modo auto.
+            # HF53.3-HF8-HF9: em fundo real/variável, não força GrabCut no modo auto.
             # O recorte automático anterior podia deixar mesa/fundo em polígonos irregulares.
             # O palco oval fotográfico é mais previsível e comercial. GrabCut fica disponível
             # somente quando o usuário pedir explicitamente para recortar/remover fundo.
@@ -208,7 +208,7 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
         prepared.thumbnail((maxw, maxh), Image.Resampling.LANCZOS)
         return prepared, (x1 + (maxw-prepared.width)//2, y1 + (maxh-prepared.height)//2)
 
-    # HF53.3-HF8-HF8: fallback fotográfico premium com recorte orgânico.
+    # HF53.3-HF8-HF9: fallback fotográfico premium com recorte orgânico.
     # Em vez do retângulo arredondado, a foto entra em um palco oval com bordas
     # suavizadas. Isso integra a imagem ao anúncio mesmo quando o recorte automático
     # do produto não é confiável.
@@ -219,7 +219,7 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
         rgb = ImageEnhance.Color(rgb).enhance(1.03)
     except Exception:
         pass
-    # HF53.3-HF8-HF8: zoom editorial conservador. A foto do catálogo costuma
+    # HF53.3-HF8-HF9: zoom editorial conservador. A foto do catálogo costuma
     # trazer bastante mesa/fundo; aproximamos o produto antes de encaixar no palco.
     zw, zh = rgb.size
     zoom = 1.18
@@ -236,6 +236,49 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
     mask = mask.filter(ImageFilter.GaussianBlur(max(4, min(maxw, maxh)//65)))
     fitted.putalpha(mask)
     return fitted, (x1, y1)
+
+def _product_stage_photo(image_bytes: bytes, size: tuple[int, int]) -> Image.Image:
+    """Cena fotográfica integrada: fundo desfocado + produto nítido no centro.
+
+    Evita o retângulo duro da foto sem depender de um recorte perfeito. O mesmo
+    enquadramento alimenta fundo e primeiro plano; as bordas ficam naturalmente
+    dissolvidas dentro do palco oval.
+    """
+    source = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    W, H = size
+    # Zoom editorial para reduzir parede/mesa sobrando e valorizar o produto.
+    sw, sh = source.size
+    zoom = 1.24
+    cw, ch = max(32, int(sw / zoom)), max(32, int(sh / zoom))
+    cx, cy = sw * .50, sh * .43
+    left = max(0, min(sw-cw, int(cx-cw/2)))
+    top = max(0, min(sh-ch, int(cy-ch/2)))
+    crop = source.crop((left, top, left+cw, top+ch))
+    sharp = ImageOps.fit(crop, (W, H), Image.Resampling.LANCZOS, centering=(.5, .44))
+    try:
+        sharp = ImageEnhance.Contrast(sharp).enhance(1.07)
+        sharp = ImageEnhance.Sharpness(sharp).enhance(1.28)
+        sharp = ImageEnhance.Color(sharp).enhance(1.03)
+    except Exception:
+        pass
+    blurred = sharp.filter(ImageFilter.GaussianBlur(max(14, min(W,H)//26)))
+    # Máscara radial suave: produto permanece nítido no miolo e o fundo dissolve.
+    mask = Image.new("L", (W,H), 0)
+    md = ImageDraw.Draw(mask)
+    inset_x, inset_y = int(W*.08), int(H*.055)
+    md.ellipse((inset_x, inset_y, W-inset_x, H-inset_y), fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(max(16, min(W,H)//18)))
+    scene = blurred.convert("RGBA")
+    crisp = sharp.convert("RGBA")
+    scene = Image.composite(crisp, scene, mask)
+    # Palco inteiro também recebe máscara oval firme, eliminando qualquer canto.
+    outer = Image.new("L", (W,H), 0)
+    od = ImageDraw.Draw(outer)
+    od.ellipse((2,2,W-3,H-3), fill=255)
+    outer = outer.filter(ImageFilter.GaussianBlur(max(3, min(W,H)//110)))
+    scene.putalpha(outer)
+    return scene
+
 
 def _wa_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, green):
     draw.ellipse((cx-r, cy-r, cx+r, cy+r), fill=green, outline=(255,255,255,255), width=max(4, r//9))
@@ -262,7 +305,7 @@ def _theme_key(label: str) -> str:
 def _draw_theme_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, label: str, fill, dark, white=(255,255,255,255)):
     """Ícone vetorial semântico para os cards `Ideal para`.
 
-    HF53.3-HF8-HF8: a faixa inferior deixa de repetir miniaturas do produto.
+    HF53.3-HF8-HF9: a faixa inferior deixa de repetir miniaturas do produto.
     Cada card usa um pictograma coerente com o próprio rótulo, mantendo o
     visual de propaganda e leitura imediata em celular.
     """
@@ -372,7 +415,7 @@ def _draw_theme_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, label:
 
 
 def _draw_splash(draw: ImageDraw.ImageDraw, W: int, H: int, blue, dark, pink, yellow):
-    # HF53.3-HF8-HF8: manchas superiores orgânicas, mais próximas de um splash líquido.
+    # HF53.3-HF8-HF9: manchas superiores orgânicas, mais próximas de um splash líquido.
     # Sai a meia-lua geométrica limpa do HF5; entram volumes irregulares, lóbulos e gotas.
     def blob(cx, cy, rx, ry, color, lobes):
         draw.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=color)
@@ -404,7 +447,7 @@ def _draw_square(
     profile: dict[str, Any], palette: dict[str, str], base_dir: Path, photo_mode: str,
     application_images: list[bytes] | None,
 ) -> Image.Image:
-    """HF53.3-HF8-HF8 — Skin Mestre Anna 1.
+    """HF53.3-HF8-HF9 — Skin Mestre Anna 1.
 
     Fecha o primeiro modelo aprovado: preserva como skin os elementos gráficos fixos
     de alta fidelidade e desenha somente conteúdo dinâmico nas áreas reservadas.
@@ -427,7 +470,7 @@ def _draw_square(
     draw.ellipse((500, 170, 1180, 810), fill=(*light[:3], 165))
     draw.ellipse((650, 235, 1125, 760), fill=(*blue[:3], 35))
     draw.ellipse((-180, 570, 250, 980), fill=(*light[:3], 130))
-    draw.ellipse((360, 760, 760, 1090), fill=(*pink[:3], 15))
+    # HF9: sem mancha rosa estrutural; o modelo aprovado usa base branca/azul limpa.
     skin = _load_skin_master(base_dir)
     if skin is not None:
         canvas.alpha_composite(skin.resize((W, H), Image.Resampling.LANCZOS), (0, 0))
@@ -460,11 +503,11 @@ def _draw_square(
         lines = [" ".join(words[:cut]), " ".join(words[cut:])]
     else:
         lines = [title_clean]
-    tx1, tx2 = 36, 598
-    y = 174
+    tx1, tx2 = 48, 592
+    y = 176
     for i, line in enumerate(lines[:2]):
-        start_size = 102 if i == 0 else 90
-        min_size = 58 if i == 0 else 52
+        start_size = 94 if i == 0 else 84
+        min_size = 54 if i == 0 else 49
         f = _fit(draw, line, tx2-tx1-20, start_size, min_size, bold=True, serif=True, italic=True)
         fill = (247, 250, 255, 255) if i == 0 else blue
         bb = draw.textbbox((0, 0), line, font=f, stroke_width=9)
@@ -478,30 +521,32 @@ def _draw_square(
 
     # Faixa imediatamente abaixo da manchete.
     promise = str(subtitle or profile.get("subtitle") or "Personalização durável para presentes, brindes e empresas")
-    banner_y = max(382, min(414, y+6))
-    banner_h = 60
+    banner_y = max(390, min(422, y+8))
+    banner_h = 62
     draw.polygon([(20, banner_y+10), (48, banner_y+30), (20, banner_y+52)], fill=dark)
-    draw.rounded_rectangle((44, banner_y, 590, banner_y+banner_h), radius=18, fill=dark)
-    bf = _fit(draw, promise, 500, 22, 15, bold=True)
-    bl = _wrap(draw, promise, bf, 500, 2)
+    draw.rounded_rectangle((42, banner_y, 592, banner_y+banner_h), radius=18, fill=dark)
+    bf = _fit(draw, promise, 510, 22, 15, bold=True)
+    bl = _wrap(draw, promise, bf, 510, 2)
     yy = banner_y + (banner_h - 23*len(bl))//2 - 1
     for line in bl:
         bb = draw.textbbox((0,0), line, font=bf)
         draw.text((317-(bb[2]-bb[0])//2, yy), line, font=bf, fill=white)
         yy += 23
 
-    # Produto dominante: palco grande, foto aproximada e sem borda retangular aparente.
-    stage_outer = (538, 178, 1095, 800)
-    draw.ellipse(stage_outer, fill=(*white[:3], 205), outline=(*light[:3], 245), width=9)
-    draw.arc((526, 166, 1106, 812), 190, 350, fill=blue, width=18)
-    draw.arc((552, 194, 1082, 786), 205, 330, fill=(*pink[:3], 190), width=5)
-    stage_box = (585, 212, 1062, 770)
-    layer, pos = _product_layer(image_bytes, stage_box, photo_mode)
-    sh = _soft_shadow(layer, 25, 105)
-    canvas.alpha_composite(sh, (pos[0]+10, pos[1]+18))
-    canvas.alpha_composite(layer, pos)
-    draw.line((1038, 318, 1068, 292), fill=dark, width=7)
-    draw.line((1046, 342, 1078, 332), fill=blue, width=6)
+    # Produto protagonista no padrão aprovado: grande, integrado e sem retângulo duro.
+    stage_outer = (565, 176, 1118, 805)
+    draw.ellipse(stage_outer, fill=(*white[:3], 235), outline=(*light[:3], 245), width=8)
+    draw.arc((552, 164, 1130, 818), 185, 352, fill=blue, width=18)
+    draw.arc((574, 190, 1104, 792), 200, 332, fill=(*blue[:3], 175), width=5)
+    stage_box = (596, 205, 1092, 783)
+    sx1, sy1, sx2, sy2 = stage_box
+    scene = _product_stage_photo(image_bytes, (sx2-sx1, sy2-sy1))
+    sh = _soft_shadow(scene, 24, 92)
+    canvas.alpha_composite(sh, (sx1+8, sy1+14))
+    canvas.alpha_composite(scene, (sx1, sy1))
+    # pequenos respingos junto ao palco reforçam a integração visual
+    for cx0, cy0, rx0, ry0 in ((584,606,16,31),(607,637,11,22),(1053,664,14,27),(1074,637,9,18)):
+        draw.ellipse((cx0-rx0,cy0-ry0,cx0+rx0,cy0+ry0), fill=blue)
 
     # Benefícios: grandes o suficiente para leitura em celular.
     benefits = list(profile.get("benefits") or [])[:5]
@@ -514,8 +559,8 @@ def _draw_square(
     ]
     while len(benefits) < 5:
         benefits.append((*fallback[len(benefits)], "check"))
-    by = max(470, banner_y+78)
-    item_h = 69
+    by = max(478, banner_y+78)
+    item_h = 68
     symbols = ["★", "✓", "◆", "✦", "♥"]
     for i, item in enumerate(benefits[:5]):
         head = str(item[0]); desc = str(item[1]) if len(item) > 1 else ""
@@ -532,7 +577,7 @@ def _draw_square(
         draw.line((108, cy+63, 485, cy+63), fill=(*blue[:3], 155), width=2)
 
     # Selo emocional na junção entre informação e produto.
-    cx, cy, cr = 557, 705, 70
+    cx, cy, cr = 590, 718, 70
     draw.ellipse((cx-cr+6, cy-cr+10, cx+cr+6, cy+cr+10), fill=(0,35,90,38))
     draw.ellipse((cx-cr, cy-cr, cx+cr, cy+cr), fill=white, outline=blue, width=4)
     draw.ellipse((cx-cr+9, cy-cr+9, cx+cr-9, cy+cr-9), outline=(*blue[:3],165), width=2)
@@ -546,13 +591,13 @@ def _draw_square(
         yy += 19
     draw.text((cx-9, cy+cr-31), "♥", font=_font(22,bold=True), fill=pink)
 
-    # Vitrine "Ideal para" — HF53.3-HF8-HF8: mantém SOMENTE ícones temáticos aprovados.
+    # Vitrine "Ideal para" — HF53.3-HF8-HF9: mantém SOMENTE ícones temáticos aprovados.
     # NÃO repete miniatura do produto.
     apps = list(profile.get("applications") or ["Presentes", "Empresas", "Eventos", "Brindes"])[:4]
     while len(apps) < 4:
         apps.append(["Presentes", "Empresas", "Eventos", "Brindes"][len(apps)])
-    strip_y = 818
-    draw.rounded_rectangle((28, strip_y, 610, 1008), radius=24, fill=(251,253,255,250), outline=(*blue[:3],150), width=2)
+    strip_y = 820
+    draw.rounded_rectangle((28, strip_y, 620, 1008), radius=24, fill=(251,253,255,250), outline=(*blue[:3],150), width=2)
     draw.rounded_rectangle((35, strip_y-20, 180, strip_y+24), radius=18, fill=dark)
     draw.text((53, strip_y-13), "Ideal para:", font=_font(20,bold=True), fill=white)
     accents = [blue, pink, green, dark]
@@ -573,7 +618,7 @@ def _draw_square(
 
     # CTA:
     # CTA compacto, centralizado e com o WhatsApp clássico já aprovado.
-    cta = (620, 808, 1056, 925)
+    cta = (650, 814, 1054, 920)
     draw.rounded_rectangle((cta[0]+6,cta[1]+8,cta[2]+6,cta[3]+8), radius=42, fill=(0,25,75,42))
     draw.rounded_rectangle(cta, radius=42, fill=dark)
     wa_path = base_dir / "assets" / "marketing" / "whatsapp_classic.png"
@@ -583,32 +628,33 @@ def _draw_square(
             wa = Image.open(wa_path).convert("RGBA")
             wa = ImageOps.fit(wa, (88,88), method=Image.Resampling.LANCZOS, centering=(.5,.5))
             mask = Image.new("L", (88,88), 0); ImageDraw.Draw(mask).ellipse((1,1,86,86), fill=255); wa.putalpha(mask)
-            canvas.alpha_composite(wa, (638, 823)); wa_done = True
+            canvas.alpha_composite(wa, (664, 823)); wa_done = True
     except Exception:
         wa_done = False
     if not wa_done:
-        _wa_icon(draw, 682, 866, 43, green)
-    text_x1, text_x2 = 735, 1045
+        _wa_icon(draw, 708, 866, 43, green)
+    text_x1, text_x2 = 760, 1044
     cta_title = "FAÇA SEU PEDIDO!"
     tf = _fit(draw, cta_title, text_x2-text_x1, 27, 20, bold=True)
     tb = draw.textbbox((0,0), cta_title, font=tf)
-    draw.text((text_x1+((text_x2-text_x1)-(tb[2]-tb[0]))//2, 820), cta_title, font=tf, fill=white)
+    draw.text((text_x1+((text_x2-text_x1)-(tb[2]-tb[0]))//2, 822), cta_title, font=tf, fill=white)
     phone_text = str(phone or "(11) 97294-9533")
     pf = _fit(draw, phone_text, text_x2-text_x1, 38, 29, bold=True)
     pb = draw.textbbox((0,0), phone_text, font=pf)
-    draw.text((text_x1+((text_x2-text_x1)-(pb[2]-pb[0]))//2, 855), phone_text, font=pf, fill=white)
+    draw.text((text_x1+((text_x2-text_x1)-(pb[2]-pb[0]))//2, 854), phone_text, font=pf, fill=white)
 
-    # Assinatura emocional forte em rosa.
-    pts = [(625,950),(672,932),(1018,932),(1061,963),(1018,1009),(658,1005),(607,973)]
-    draw.polygon(pts, fill=pink)
+    # Assinatura emocional no padrão aprovado: faixa cyan clara + texto azul escuro.
+    pts = [(650,946),(690,932),(1018,932),(1062,958),(1022,1007),(684,1004),(635,972)]
+    draw.polygon(pts, fill=(*light[:3], 245))
+    draw.line((685,940,1020,940), fill=(*blue[:3],130), width=2)
     slogan = "Pequenos detalhes que fazem toda a diferença!"
-    sf = _fit(draw, slogan, 385, 25, 18, bold=True, serif=True, italic=True)
-    sl = _wrap(draw, slogan, sf, 385, 2)
-    yy = 949
+    sf = _fit(draw, slogan, 360, 24, 18, bold=True, serif=True, italic=True)
+    sl = _wrap(draw, slogan, sf, 360, 2)
+    yy = 950
     for line in sl:
         bb = draw.textbbox((0,0), line, font=sf)
-        draw.text((834-(bb[2]-bb[0])//2, yy), line, font=sf, fill=white)
-        yy += 26
+        draw.text((850-(bb[2]-bb[0])//2, yy), line, font=sf, fill=dark)
+        yy += 25
 
     # Se a skin não existir, garante rodapé compatível; com skin, preserva o aprovado.
     if skin is None:

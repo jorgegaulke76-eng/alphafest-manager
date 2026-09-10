@@ -15,10 +15,10 @@ def _sample():
 
 
 def test_hf8_hf8_version_and_skin_metadata():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF8-HF8'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF8-HF9'
     anna = next(x for x in engine.listar_templates() if x['id'] == 'anna_social_redes')
     master = next(x for x in engine.listar_templates() if x['id'] == 'splash_premium_anna')
-    assert anna['versao_template'] == 'HF53.3-HF8-HF8'
+    assert anna['versao_template'] == 'HF53.3-HF8-HF9'
     assert 'Skin Mestre 1' in anna['descricao']
     assert master['versao_template'] == 'HF53.2-HF5-HF7'
     assert master['oficial'] is True and master['protegido'] is True
