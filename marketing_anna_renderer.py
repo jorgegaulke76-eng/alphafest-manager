@@ -1,6 +1,6 @@
 """Renderer independente do Template Anna — Prompt Premium.
 
-HF53.3-HF8-HF5: este módulo não reutiliza a composição visual do Template Mestre
+HF53.3-HF8-HF6: este módulo não reutiliza a composição visual do Template Mestre
 nem o compositor legado. Ele recebe somente dados já preparados pelo motor e
 constrói nativamente cada proporção do Template Anna.
 """
@@ -196,7 +196,7 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
     # Fallback fotográfico premium: cartão grande, sem moldura pesada.
     fitted = ImageOps.fit(prepared, (maxw, maxh), method=Image.Resampling.LANCZOS, centering=(.5, .46))
     mask = Image.new("L", (maxw, maxh), 0)
-    # HF53.3-HF8-HF5: borda fotográfica bem arredondada e levemente suave.
+    # HF53.3-HF8-HF6: borda fotográfica bem arredondada e levemente suave.
     # Evita o aspecto de retângulo colado sem arriscar cortar o produto.
     radius=max(42, min(maxw, maxh)//5)
     ImageDraw.Draw(mask).rounded_rectangle((4, 4, maxw-5, maxh-5), radius=radius, fill=255)
@@ -229,7 +229,7 @@ def _theme_key(label: str) -> str:
 def _draw_theme_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, label: str, fill, dark, white=(255,255,255,255)):
     """Ícone vetorial semântico para os cards `Ideal para`.
 
-    HF53.3-HF8-HF5: a faixa inferior deixa de repetir miniaturas do produto.
+    HF53.3-HF8-HF6: a faixa inferior deixa de repetir miniaturas do produto.
     Cada card usa um pictograma coerente com o próprio rótulo, mantendo o
     visual de propaganda e leitura imediata em celular.
     """
@@ -339,14 +339,26 @@ def _draw_theme_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, label:
 
 
 def _draw_splash(draw: ImageDraw.ImageDraw, W: int, H: int, blue, dark, pink, yellow):
-    # Moldura líquida AlphaFest com mais presença, sem invadir a área de leitura.
-    draw.pieslice((-int(W*.22),-int(H*.15),int(W*.43),int(H*.20)),0,180,fill=dark)
-    draw.pieslice((-int(W*.17),-int(H*.11),int(W*.39),int(H*.16)),0,180,fill=blue)
-    draw.pieslice((int(W*.72),-int(H*.13),int(W*1.18),int(H*.19)),0,180,fill=dark)
-    draw.pieslice((int(W*.77),-int(H*.09),int(W*1.13),int(H*.15)),0,180,fill=blue)
-    # pequenas gotas 3D simuladas: círculo + brilho
-    dots=[(.025,.20,blue,.011),(.08,.11,pink,.008),(.145,.16,yellow,.007),(.22,.095,blue,.006),
-          (.80,.16,pink,.010),(.87,.10,yellow,.007),(.965,.19,blue,.010),(.91,.25,pink,.006),
+    # HF53.3-HF8-HF6: manchas superiores orgânicas, mais próximas de um splash líquido.
+    # Sai a meia-lua geométrica limpa do HF5; entram volumes irregulares, lóbulos e gotas.
+    def blob(cx, cy, rx, ry, color, lobes):
+        draw.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=color)
+        for ox, oy, rr in lobes:
+            draw.ellipse((cx+ox-rr, cy+oy-rr, cx+ox+rr, cy+oy+rr), fill=color)
+
+    # base escura dá profundidade ao splash; camada azul menor funciona como brilho/volume.
+    blob(int(W*.08), -int(H*.04), int(W*.30), int(H*.16), dark,
+         [(int(W*.25),int(H*.07),int(W*.075)),(int(W*.31),int(H*.015),int(W*.045)),(int(W*.18),int(H*.115),int(W*.055))])
+    blob(int(W*.06), -int(H*.055), int(W*.27), int(H*.125), blue,
+         [(int(W*.24),int(H*.055),int(W*.058)),(int(W*.29),int(H*.005),int(W*.032)),(int(W*.16),int(H*.09),int(W*.040))])
+    blob(int(W*.94), -int(H*.035), int(W*.25), int(H*.15), dark,
+         [(-int(W*.20),int(H*.07),int(W*.065)),(-int(W*.27),int(H*.025),int(W*.040)),(-int(W*.13),int(H*.115),int(W*.050))])
+    blob(int(W*.95), -int(H*.05), int(W*.22), int(H*.115), blue,
+         [(-int(W*.19),int(H*.055),int(W*.050)),(-int(W*.25),int(H*.012),int(W*.028)),(-int(W*.12),int(H*.09),int(W*.036))])
+
+    # gotas soltas e brilhos completam o aspecto splash, sem invadir a leitura.
+    dots=[(.025,.20,blue,.011),(.075,.145,blue,.007),(.08,.11,pink,.008),(.145,.16,yellow,.007),(.22,.095,blue,.006),
+          (.80,.16,pink,.010),(.87,.10,yellow,.007),(.965,.19,blue,.010),(.91,.25,pink,.006),(.935,.135,blue,.007),
           (.47,.72,blue,.008),(.52,.75,pink,.011),(.58,.72,yellow,.007),(.64,.76,blue,.006)]
     for x,y,c,rv in dots:
         r=max(4,int(min(W,H)*rv)); cx=int(W*x); cy=int(H*y)
@@ -359,11 +371,11 @@ def _draw_square(
     profile: dict[str, Any], palette: dict[str, str], base_dir: Path, photo_mode: str,
     application_images: list[bytes] | None,
 ) -> Image.Image:
-    """HF53.3-HF8-HF5 — impacto editorial premium do renderer Anna.
+    """HF53.3-HF8-HF6 — ajuste fino do Template Anna no Manager.
 
-    Mantém a grade fixa e os ícones temáticos aprovados, mas força os quatro pesos
-    comerciais da referência: marca, manchete, produto e CTA. O corpo recebe mais
-    respiro e leitura em celular, sem voltar à aparência de interface do Manager.
+    Mantém tudo que foi aprovado no HF5 e faz apenas o acabamento solicitado:
+    manchete ligeiramente menor e centralizada dentro da área branca, manchas azuis
+    superiores com linguagem de splash orgânico e WhatsApp clássico preservado.
     """
     W=H=1080
     white=(255,255,255,255)
@@ -401,11 +413,9 @@ def _draw_square(
     for line in ("TESTADO E","APROVADO!"):
         bb=draw.textbbox((0,0),line,font=sf); draw.text((sx-(bb[2]-bb[0])//2,yy),line,font=sf,fill=white); yy+=24
 
-    # Manchete: contrato HF3 preservado.
-    # Manchete editorial: duas hierarquias, como as artes aprovadas da Anna.
+    # Manchete: ajuste fino HF6 — preserva o contrato de Manchete editorial: o nome do produto fica ligeiramente menor e CENTRALIZADO
+    # dentro do espaço branco à esquerda, sem invadir logo, foto ou selo.
     title_clean=re.sub(r"\s+"," ",str(title or "Produto AlphaFest")).strip()
-    # O Manager costuma enviar nomes em CAIXA ALTA; a referência da Anna usa
-    # manchete editorial em caixa natural, mais premium e menos "sistema".
     if title_clean and title_clean == title_clean.upper():
         title_clean = title_clean.title()
         title_clean = re.sub(r"\b(\d+)d\b", lambda m: f"{m.group(1)}D", title_clean, flags=re.I)
@@ -416,16 +426,21 @@ def _draw_square(
         tlines=[" ".join(words[:cut])," ".join(words[cut:])]
     else:
         tlines=[title_clean]
-    title_area_w=585
-    y=178
+    title_x1, title_x2 = 32, 578
+    title_area_w = title_x2-title_x1
+    y=194
     for i,line in enumerate(tlines[:2]):
-        start_size=94 if i==0 else 80
-        min_size=60 if i==0 else 54
-        f=_fit(draw,line,title_area_w,start_size,min_size,bold=True,serif=True,italic=True)
+        # redução leve em relação ao HF5: mantém presença, mas passa a respirar no bloco branco.
+        start_size=86 if i==0 else 74
+        min_size=56 if i==0 else 50
+        f=_fit(draw,line,title_area_w-20,start_size,min_size,bold=True,serif=True,italic=True)
         fill=dark if i==0 else blue
-        draw.text((42,y),line,font=f,fill=fill,stroke_width=1,stroke_fill=white)
+        bb=draw.textbbox((0,0),line,font=f,stroke_width=1)
+        tw=bb[2]-bb[0]
+        tx=title_x1+(title_area_w-tw)//2-bb[0]
+        draw.text((tx,y),line,font=f,fill=fill,stroke_width=1,stroke_fill=white)
         hb=draw.textbbox((0,0),"Ag",font=f)
-        y += max(72,hb[3]-hb[1]+5)
+        y += max(66,hb[3]-hb[1]+4)
 
     # Faixa/promessa de leitura rápida.
     promise=str(subtitle or profile.get("subtitle") or "Transforme sua ideia em uma peça especial!")
@@ -480,7 +495,7 @@ def _draw_square(
         bb=draw.textbbox((0,0),line,font=cf); draw.text((cx-(bb[2]-bb[0])//2,yy),line,font=cf,fill=dark); yy+=19
     draw.text((cx-9,cy+cr-30),"♥",font=_font(22,bold=True),fill=pink)
 
-    # Vitrine "Ideal para" — HF53.3-HF8-HF5: mantém SOMENTE ícones temáticos aprovados.
+    # Vitrine "Ideal para" — HF53.3-HF8-HF6: mantém SOMENTE ícones temáticos aprovados.
     # NÃO repete miniatura do produto: a faixa usa pictogramas semânticos do próprio tema.
     apps=list(profile.get("applications") or ["Presentes","Lembranças","Brindes","Temáticos"])[:4]
     while len(apps)<4: apps.append(["Presentes","Lembranças","Brindes","Temáticos"][len(apps)])
@@ -505,7 +520,23 @@ def _draw_square(
     cta=(626,780,1055,934)
     draw.rounded_rectangle((cta[0]+6,cta[1]+9,cta[2]+6,cta[3]+9),radius=44,fill=(0,25,75,35))
     draw.rounded_rectangle(cta,radius=44,fill=dark)
-    _wa_icon(draw,692,857,49,green)
+    # HF53.3-HF8-HF6: volta ao logo clássico de WhatsApp já aprovado anteriormente.
+    wa_path = base_dir / "assets" / "marketing" / "whatsapp_classic.png"
+    wa_done = False
+    try:
+        if wa_path.exists():
+            wa = Image.open(wa_path).convert("RGBA")
+            wa = ImageOps.fit(wa, (98,98), method=Image.Resampling.LANCZOS, centering=(.5,.5))
+            # o asset histórico possui checkerboard claro nas bordas; máscara circular mantém só o selo.
+            mask = Image.new("L", (98,98), 0)
+            ImageDraw.Draw(mask).ellipse((1,1,96,96), fill=255)
+            wa.putalpha(mask)
+            canvas.alpha_composite(wa,(643,808))
+            wa_done = True
+    except Exception:
+        wa_done = False
+    if not wa_done:
+        _wa_icon(draw,692,857,49,green)
     draw.text((758,798),"FAÇA SEU PEDIDO!",font=_font(27,bold=True),fill=white)
     phone_text=str(phone or "(11) 97294-9533")
     pf=_fit(draw,phone_text,282,40,30,bold=True); draw.text((758,846),phone_text,font=pf,fill=white)

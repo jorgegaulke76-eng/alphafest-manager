@@ -24,7 +24,7 @@ DEFAULT_TEMPLATE = "anna_base_dinamica"
 EMBEDDED_DEFAULT_TEMPLATE = "splash_premium_anna"
 
 ANNA_PROMPT_SPEC: dict[str, Any] = {
-    "versao": "HF53.3-HF8-HF5",
+    "versao": "HF53.3-HF8-HF6",
     "nome": "Anna Prompt Premium",
     "layout_fixo": [
         "logo", "titulo", "faixa", "beneficios", "produto", "selo_central",
@@ -69,10 +69,10 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "anna_social_redes": {
         "id": "anna_social_redes",
         "nome": "Template Anna — Redes Sociais",
-        "descricao": "Template Anna Prompt Premium HF8-HF5: renderer independente com Feed 1080×1080 e impacto editorial premium. Logo splash com presença real, manchete forte sem esmagar o corpo, produto protagonista com recorte assistido quando possível, benefícios maiores, vitrine de aplicações com ícones temáticos coerentes (sem repetir foto do produto) e CTA WhatsApp dominante. Story/Status e horizontal preservam a linguagem do Feed.",
+        "descricao": "Template Anna Prompt Premium HF8-HF6: ajuste fino no Manager. Mantém a composição aprovada do HF5, centraliza e reduz levemente o nome do produto no espaço branco, converte as manchas azuis superiores em splash orgânico e restaura o WhatsApp clássico aprovado; ícones temáticos do Ideal para e demais blocos permanecem preservados.",
         "categoria_template": "Redes Sociais",
         "status_template": "Em validação",
-        "versao_template": "HF53.3-HF8-HF5",
+        "versao_template": "HF53.3-HF8-HF6",
         "oficial": False,
         "protegido": True,
         "autopilot_aprovado": True,
@@ -1672,7 +1672,7 @@ def render_template(
         )
         final=_adapt_master_portrait_to_channel(portrait,size,cfg,palette_override)
     elif str(cfg.get("id")) == "anna_social_redes" and str(cfg.get("source")) != "library":
-        # HF53.3-HF8-HF5: renderer Anna realmente independente. Não reutiliza o compositor
+        # HF53.3-HF8-HF6: renderer Anna independente com acabamento fino aprovado. Não reutiliza o compositor
         # visual antigo nem o Template Mestre. O perfil textual continua vindo da mesma fonte
         # de dados, mas toda a composição é construída em marketing_anna_renderer.py.
         _profile = _product_profile(title, description, subtitle)

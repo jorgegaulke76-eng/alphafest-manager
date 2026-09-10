@@ -28,4 +28,4 @@ def test_hf51_5_sitemap_is_enriched():
 
 
 def test_version_file_hf51_5():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF8-HF5'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF8-HF6'
