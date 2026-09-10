@@ -1,6 +1,6 @@
 """Renderer independente do Template Anna — Prompt Premium.
 
-HF53.3-HF8-HF9: este módulo não reutiliza a composição visual do Template Mestre
+HF53.3-HF8-HF10: este módulo não reutiliza a composição visual do Template Mestre
 nem o compositor legado. Ele recebe somente dados já preparados pelo motor e
 constrói nativamente cada proporção do Template Anna.
 """
@@ -194,7 +194,7 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
         if spread < 34 and max(bg) > 145:
             prepared = _remove_simple_background(source)
         else:
-            # HF53.3-HF8-HF9: em fundo real/variável, não força GrabCut no modo auto.
+            # HF53.3-HF8-HF10: em fundo real/variável, não força GrabCut no modo auto.
             # O recorte automático anterior podia deixar mesa/fundo em polígonos irregulares.
             # O palco oval fotográfico é mais previsível e comercial. GrabCut fica disponível
             # somente quando o usuário pedir explicitamente para recortar/remover fundo.
@@ -208,7 +208,7 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
         prepared.thumbnail((maxw, maxh), Image.Resampling.LANCZOS)
         return prepared, (x1 + (maxw-prepared.width)//2, y1 + (maxh-prepared.height)//2)
 
-    # HF53.3-HF8-HF9: fallback fotográfico premium com recorte orgânico.
+    # HF53.3-HF8-HF10: fallback fotográfico premium com recorte orgânico.
     # Em vez do retângulo arredondado, a foto entra em um palco oval com bordas
     # suavizadas. Isso integra a imagem ao anúncio mesmo quando o recorte automático
     # do produto não é confiável.
@@ -219,7 +219,7 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
         rgb = ImageEnhance.Color(rgb).enhance(1.03)
     except Exception:
         pass
-    # HF53.3-HF8-HF9: zoom editorial conservador. A foto do catálogo costuma
+    # HF53.3-HF8-HF10: zoom editorial conservador. A foto do catálogo costuma
     # trazer bastante mesa/fundo; aproximamos o produto antes de encaixar no palco.
     zw, zh = rgb.size
     zoom = 1.18
@@ -238,44 +238,37 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
     return fitted, (x1, y1)
 
 def _product_stage_photo(image_bytes: bytes, size: tuple[int, int]) -> Image.Image:
-    """Cena fotográfica integrada: fundo desfocado + produto nítido no centro.
+    """HF10 — palco fotográfico nítido, sem efeito embaçado.
 
-    Evita o retângulo duro da foto sem depender de um recorte perfeito. O mesmo
-    enquadramento alimenta fundo e primeiro plano; as bordas ficam naturalmente
-    dissolvidas dentro do palco oval.
+    Mantém a fotografia original o mais nítida possível, aproxima o produto e
+    aplica somente máscara oval suave nas bordas. Não desfoca o miolo nem o
+    fundo da própria foto, evitando a sensação de imagem esfumaçada.
     """
     source = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     W, H = size
-    # Zoom editorial para reduzir parede/mesa sobrando e valorizar o produto.
     sw, sh = source.size
-    zoom = 1.24
+    # aproxima o produto, reduzindo parede/mesa excedente sem cortar as tampas
+    zoom = 1.30
     cw, ch = max(32, int(sw / zoom)), max(32, int(sh / zoom))
-    cx, cy = sw * .50, sh * .43
+    cx, cy = sw * .50, sh * .44
     left = max(0, min(sw-cw, int(cx-cw/2)))
     top = max(0, min(sh-ch, int(cy-ch/2)))
     crop = source.crop((left, top, left+cw, top+ch))
-    sharp = ImageOps.fit(crop, (W, H), Image.Resampling.LANCZOS, centering=(.5, .44))
+    sharp = ImageOps.fit(crop, (W, H), Image.Resampling.LANCZOS, centering=(.5, .45))
     try:
-        sharp = ImageEnhance.Contrast(sharp).enhance(1.07)
-        sharp = ImageEnhance.Sharpness(sharp).enhance(1.28)
-        sharp = ImageEnhance.Color(sharp).enhance(1.03)
+        sharp = ImageEnhance.Contrast(sharp).enhance(1.09)
+        sharp = ImageEnhance.Sharpness(sharp).enhance(1.60)
+        sharp = sharp.filter(ImageFilter.UnsharpMask(radius=1.25, percent=145, threshold=2))
+        sharp = ImageEnhance.Color(sharp).enhance(1.02)
     except Exception:
         pass
-    blurred = sharp.filter(ImageFilter.GaussianBlur(max(14, min(W,H)//26)))
-    # Máscara radial suave: produto permanece nítido no miolo e o fundo dissolve.
-    mask = Image.new("L", (W,H), 0)
-    md = ImageDraw.Draw(mask)
-    inset_x, inset_y = int(W*.08), int(H*.055)
-    md.ellipse((inset_x, inset_y, W-inset_x, H-inset_y), fill=255)
-    mask = mask.filter(ImageFilter.GaussianBlur(max(16, min(W,H)//18)))
-    scene = blurred.convert("RGBA")
-    crisp = sharp.convert("RGBA")
-    scene = Image.composite(crisp, scene, mask)
-    # Palco inteiro também recebe máscara oval firme, eliminando qualquer canto.
+    scene = sharp.convert("RGBA")
+    # Só a borda recebe dissolução leve. O conteúdo inteiro permanece nítido.
     outer = Image.new("L", (W,H), 0)
     od = ImageDraw.Draw(outer)
-    od.ellipse((2,2,W-3,H-3), fill=255)
-    outer = outer.filter(ImageFilter.GaussianBlur(max(3, min(W,H)//110)))
+    inset = max(2, min(W,H)//120)
+    od.ellipse((inset, inset, W-inset-1, H-inset-1), fill=255)
+    outer = outer.filter(ImageFilter.GaussianBlur(max(2, min(W,H)//150)))
     scene.putalpha(outer)
     return scene
 
@@ -305,7 +298,7 @@ def _theme_key(label: str) -> str:
 def _draw_theme_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, label: str, fill, dark, white=(255,255,255,255)):
     """Ícone vetorial semântico para os cards `Ideal para`.
 
-    HF53.3-HF8-HF9: a faixa inferior deixa de repetir miniaturas do produto.
+    HF53.3-HF8-HF10: a faixa inferior deixa de repetir miniaturas do produto.
     Cada card usa um pictograma coerente com o próprio rótulo, mantendo o
     visual de propaganda e leitura imediata em celular.
     """
@@ -415,7 +408,7 @@ def _draw_theme_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, label:
 
 
 def _draw_splash(draw: ImageDraw.ImageDraw, W: int, H: int, blue, dark, pink, yellow):
-    # HF53.3-HF8-HF9: manchas superiores orgânicas, mais próximas de um splash líquido.
+    # HF53.3-HF8-HF10: manchas superiores orgânicas, mais próximas de um splash líquido.
     # Sai a meia-lua geométrica limpa do HF5; entram volumes irregulares, lóbulos e gotas.
     def blob(cx, cy, rx, ry, color, lobes):
         draw.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=color)
@@ -442,12 +435,46 @@ def _draw_splash(draw: ImageDraw.ImageDraw, W: int, H: int, blue, dark, pink, ye
         if r>=7:
             draw.ellipse((cx-r//3,cy-r//2,cx+r//5,cy-r//6),fill=(255,255,255,150))
 
+def _approval_seal_overlay(skin: Image.Image | None, size: tuple[int, int]) -> Image.Image | None:
+    """Recorta o selo aprovado da skin e o devolve com máscara circular.
+
+    É aplicado no final do renderer para ficar sempre no topo de todas as
+    camadas, sem gerar um segundo selo em posição diferente.
+    """
+    if skin is None:
+        return None
+    try:
+        base = skin.resize(size, Image.Resampling.LANCZOS)
+        W, H = size
+        # região do único selo oficial no canto superior direito
+        box = (int(W*.80), 0, W, int(H*.25))
+        crop = base.crop(box).convert("RGBA")
+        mask = Image.new("L", crop.size, 0)
+        md = ImageDraw.Draw(mask)
+        # círculo amplo suficiente para manter borda/sombra do selo, sem trazer
+        # a faixa/splash adjacente para cima do produto.
+        cx, cy = int(crop.width*.61), int(crop.height*.44)
+        r = int(min(crop.width, crop.height)*.43)
+        md.ellipse((cx-r, cy-r, cx+r, cy+r), fill=255)
+        mask = mask.filter(ImageFilter.GaussianBlur(1.2))
+        alpha = crop.getchannel("A")
+        try:
+            from PIL import ImageChops
+            alpha = ImageChops.multiply(alpha, mask)
+        except Exception:
+            pass
+        crop.putalpha(alpha)
+        return crop
+    except Exception:
+        return None
+
+
 def _draw_square(
     image_bytes: bytes, *, title: str, subtitle: str, description: str, phone: str,
     profile: dict[str, Any], palette: dict[str, str], base_dir: Path, photo_mode: str,
     application_images: list[bytes] | None,
 ) -> Image.Image:
-    """HF53.3-HF8-HF9 — Skin Mestre Anna 1.
+    """HF53.3-HF8-HF10 — Skin Mestre Anna 1.
 
     Fecha o primeiro modelo aprovado: preserva como skin os elementos gráficos fixos
     de alta fidelidade e desenha somente conteúdo dinâmico nas áreas reservadas.
@@ -591,7 +618,7 @@ def _draw_square(
         yy += 19
     draw.text((cx-9, cy+cr-31), "♥", font=_font(22,bold=True), fill=pink)
 
-    # Vitrine "Ideal para" — HF53.3-HF8-HF9: mantém SOMENTE ícones temáticos aprovados.
+    # Vitrine "Ideal para" — HF53.3-HF8-HF10: mantém SOMENTE ícones temáticos aprovados.
     # NÃO repete miniatura do produto.
     apps = list(profile.get("applications") or ["Presentes", "Empresas", "Eventos", "Brindes"])[:4]
     while len(apps) < 4:
@@ -665,6 +692,12 @@ def _draw_square(
             draw.text((i*cell+26,1037), "✓", font=_font(18,bold=True), fill=dark)
             ff = _fit(draw,label,cell-68,18,13,bold=True)
             draw.text((i*cell+58,1042),label,font=ff,fill=white)
+
+    # HF10: o selo oficial é a última camada. Assim nunca fica atrás da foto,
+    # do arco do palco ou de qualquer outro elemento.
+    seal = _approval_seal_overlay(skin, (W, H))
+    if seal is not None:
+        canvas.alpha_composite(seal, (int(W*.80), 0))
     return canvas
 
 def _adapt_square(square: Image.Image, size: tuple[int,int], palette: dict[str,str]) -> Image.Image:

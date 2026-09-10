@@ -24,7 +24,7 @@ DEFAULT_TEMPLATE = "anna_base_dinamica"
 EMBEDDED_DEFAULT_TEMPLATE = "splash_premium_anna"
 
 ANNA_PROMPT_SPEC: dict[str, Any] = {
-    "versao": "HF53.3-HF8-HF9",
+    "versao": "HF53.3-HF8-HF10",
     "nome": "Anna Prompt Premium",
     "layout_fixo": [
         "logo", "titulo", "faixa", "beneficios", "produto", "selo_central",
@@ -69,10 +69,10 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "anna_social_redes": {
         "id": "anna_social_redes",
         "nome": "Template Anna — Redes Sociais",
-        "descricao": "Template Anna — Skin Mestre 1 HF8-HF8: primeiro modelo visual aprovado fechado como skin gráfica. Topo/splash/logo/selo e rodapé preservados em alta fidelidade; título, produto, benefícios, Ideal para e CTA permanecem dinâmicos. Mestre HF7 permanece congelado.",
+        "descricao": "Template Anna — Modelo 1 HF8-HF10: acabamento final aprovado. Título dinâmico em serif itálica com contorno multicamada e fundo transparente; foto do produto nítida no palco oval; selo oficial sempre na camada superior; Ideal para mantém cards com fundo e ícones temáticos; Mestre HF7 permanece congelado.",
         "categoria_template": "Redes Sociais",
         "status_template": "Em validação",
-        "versao_template": "HF53.3-HF8-HF9",
+        "versao_template": "HF53.3-HF8-HF10",
         "oficial": False,
         "protegido": True,
         "autopilot_aprovado": True,
@@ -1672,7 +1672,7 @@ def render_template(
         )
         final=_adapt_master_portrait_to_channel(portrait,size,cfg,palette_override)
     elif str(cfg.get("id")) == "anna_social_redes" and str(cfg.get("source")) != "library":
-        # HF53.3-HF8-HF9: renderer Anna independente com acabamento visual aprovado para validação no Manager. Não reutiliza o compositor
+        # HF53.3-HF8-HF10: renderer Anna independente com acabamento visual aprovado para validação no Manager. Não reutiliza o compositor
         # visual antigo nem o Template Mestre. O perfil textual continua vindo da mesma fonte
         # de dados, mas toda a composição é construída em marketing_anna_renderer.py.
         _profile = _product_profile(title, description, subtitle)
