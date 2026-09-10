@@ -24,7 +24,7 @@ DEFAULT_TEMPLATE = "anna_base_dinamica"
 EMBEDDED_DEFAULT_TEMPLATE = "splash_premium_anna"
 
 ANNA_PROMPT_SPEC: dict[str, Any] = {
-    "versao": "HF53.3-HF8-HF4",
+    "versao": "HF53.3-HF8-HF5",
     "nome": "Anna Prompt Premium",
     "layout_fixo": [
         "logo", "titulo", "faixa", "beneficios", "produto", "selo_central",
@@ -69,10 +69,10 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "anna_social_redes": {
         "id": "anna_social_redes",
         "nome": "Template Anna — Redes Sociais",
-        "descricao": "Template Anna Prompt Premium HF8-HF4: renderer independente com Feed 1080×1080 e refino comercial de hierarquia. Logo splash com presença real, manchete forte sem esmagar o corpo, produto protagonista com recorte assistido quando possível, benefícios maiores, vitrine de aplicações com ícones temáticos coerentes (sem repetir foto do produto) e CTA WhatsApp dominante. Story/Status e horizontal preservam a linguagem do Feed.",
+        "descricao": "Template Anna Prompt Premium HF8-HF5: renderer independente com Feed 1080×1080 e impacto editorial premium. Logo splash com presença real, manchete forte sem esmagar o corpo, produto protagonista com recorte assistido quando possível, benefícios maiores, vitrine de aplicações com ícones temáticos coerentes (sem repetir foto do produto) e CTA WhatsApp dominante. Story/Status e horizontal preservam a linguagem do Feed.",
         "categoria_template": "Redes Sociais",
         "status_template": "Em validação",
-        "versao_template": "HF53.3-HF8-HF4",
+        "versao_template": "HF53.3-HF8-HF5",
         "oficial": False,
         "protegido": True,
         "autopilot_aprovado": True,
@@ -1096,7 +1096,7 @@ def _render_anna_social_native(
     photo_mode: str = "auto",
     application_images: list[bytes] | None = None,
 ) -> Image.Image:
-    """HF53.3-HF8-HF4 — Template Anna Prompt Premium, com grade comercial fixa baseada na grade editorial aprovada.
+    """HF53.3-HF8-HF5 — Template Anna Prompt Premium, com grade comercial fixa baseada na grade editorial aprovada.
 
     O wordmark horizontal fica proibido neste template; somente o logo splash aprovado pela Anna é usado no cabeçalho.
     A referência deixa de ser apenas inspiração: a composição passa a obedecer à
@@ -1166,7 +1166,7 @@ def _render_anna_social_native(
         promise_display = promise
 
     def decorate():
-        # HF53.3-HF8-HF4: linguagem visual fixa do prompt premium. O fundo deixa de parecer uma
+        # HF53.3-HF8-HF5: linguagem visual fixa do prompt premium. O fundo deixa de parecer uma
         # tela vazia do sistema e ganha continuidade visual com a marca AlphaFest.
         draw.pieslice((-int(W*.25), -int(H*.10), int(W*.42), int(H*.15)), 0, 180, fill=dark)
         draw.pieslice((-int(W*.22), -int(H*.07), int(W*.38), int(H*.125)), 0, 180, fill=blue)
@@ -1672,7 +1672,7 @@ def render_template(
         )
         final=_adapt_master_portrait_to_channel(portrait,size,cfg,palette_override)
     elif str(cfg.get("id")) == "anna_social_redes" and str(cfg.get("source")) != "library":
-        # HF53.3-HF8-HF4: renderer Anna realmente independente. Não reutiliza o compositor
+        # HF53.3-HF8-HF5: renderer Anna realmente independente. Não reutiliza o compositor
         # visual antigo nem o Template Mestre. O perfil textual continua vindo da mesma fonte
         # de dados, mas toda a composição é construída em marketing_anna_renderer.py.
         _profile = _product_profile(title, description, subtitle)

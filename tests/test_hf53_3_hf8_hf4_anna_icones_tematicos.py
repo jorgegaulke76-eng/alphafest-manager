@@ -13,10 +13,10 @@ def _sample():
 
 
 def test_hf8_hf4_version_and_metadata():
-    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF8-HF4'
+    assert Path('VERSAO.txt').read_text(encoding='utf-8').strip() == '20.4.9-I8.13.5-HF53.3-HF8-HF5'
     anna = next(x for x in engine.listar_templates() if x['id'] == 'anna_social_redes')
     master = next(x for x in engine.listar_templates() if x['id'] == 'splash_premium_anna')
-    assert anna['versao_template'] == 'HF53.3-HF8-HF4'
+    assert anna['versao_template'] == 'HF53.3-HF8-HF5'
     assert master['versao_template'] == 'HF53.2-HF5-HF7'
 
 
@@ -26,7 +26,7 @@ def test_hf8_hf4_ideal_para_uses_semantic_icons_not_product_thumbnails():
     assert 'NÃO repete miniatura do produto' in src
     assert '_draw_theme_icon(draw,x+card_w//2' in src
     # bloco HF4 não deve mais decidir entre foto real e placeholder nos cards
-    block = src.split('# Vitrine "Ideal para" — HF53.3-HF8-HF4:',1)[1].split('# CTA:',1)[0]
+    block = src.split('# Vitrine "Ideal para" — HF53.3-HF8-HF5:',1)[1].split('# CTA:',1)[0]
     assert 'ImageOps.fit' not in block
     assert 'application_images' not in block
 

@@ -1,4 +1,4 @@
-# 20.4.9-I8.13.5-HF53.3-HF8-HF4
+# 20.4.9-I8.13.5-HF53.3-HF8-HF5
 
 ## Template Anna — Ícones Temáticos no “Ideal para”
 - preserva o renderer independente do HF8-HF3 e o Feed 1080x1080;
