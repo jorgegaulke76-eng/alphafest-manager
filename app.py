@@ -26513,7 +26513,7 @@ if pagina_atual == "crescimento":
     # HF53.3 — Biblioteca de Templates: mestre HF7 congelado + seleção segura no Piloto Automático.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.3-HF8-HF14: Template Anna — Redes Sociais • ajuste fino visual do Anna com base HF11 • Mestre HF7 intacto.")
+        st.caption("HF53.3-HF8-HF15: Template Anna — Redes Sociais • correção do palco sem sobreposição de produto • Mestre HF7 intacto.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -28414,7 +28414,7 @@ if pagina_atual == "crescimento":
                     except Exception as exc:
                         st.error(f"Não foi possível instalar o template: {exc}")
 
-            st.info("HF53.3-HF8-HF14: o Mestre HF7 permanece oficial e congelado. O Template Anna recebe ajuste fino visual mantendo a identificação do renderer aprovado HF11 no runtime.")
+            st.info("HF53.3-HF8-HF15: o Mestre HF7 permanece oficial e congelado. O Template Anna corrige a sobreposição do produto e mantém a identificação do renderer aprovado HF11 no runtime.")
             st.markdown("---")
             st.subheader("🖼️ Banco de mídia AlphaFest")
             st.caption("Fotos e vídeos continuam ligados às campanhas e ao catálogo existente.")

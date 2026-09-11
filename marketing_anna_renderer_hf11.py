@@ -353,77 +353,19 @@ def _render_modelo_anna_1_locked(
 ) -> Image.Image | None:
     """Replica o Modelo Anna 1 aprovado para `Gravação Laser`.
 
-    Em vez de reconstruir a manchete na unha, usa a própria referência aprovada
-    como base visual fiel do layout. O conteúdo dinâmico que permanece variável
-    nesta etapa é a foto do produto dentro do palco oval.
+    HF15: após a conferência visual final, a solicitação aprovada foi manter o
+    layout exatamente como no Modelo Anna 1 e apenas remover a imagem de copo
+    sobreposta. Portanto, para este caso travado, a renderização usa a própria
+    referência aprovada sem inserir uma nova sobreposição de produto.
     """
     W = H = 1080
     reference = _load_model_reference(base_dir)
     if reference is None:
         return None
     reference_view = reference.resize((W, H), Image.Resampling.LANCZOS).convert("RGBA")
-    # A base aprovada preserva exatamente a mesma letra do modelo enviado.
-    # O palco/foto entra por baixo da manchete usando uma máscara de proteção
-    # calculada a partir da própria referência aprovada.
-    canvas = _skin_without_approval_seal(reference, (W, H)) or reference_view.copy()
+    return reference_view.copy()
 
-    stage_box = (592, 216, 1042, 742)
-    sx1, sy1, sx2, sy2 = stage_box
-    scene = _product_stage_photo_modelo_1(image_bytes, (sx2-sx1, sy2-sy1))
 
-    # Protege exatamente a manchete aprovada com uma máscara fixa derivada do
-    # Modelo Anna 1 em 1080x1080. A foto entra por baixo do lettering, sem
-    # depender de heurística de cor e sem reaproveitar pedaços do copo antigo.
-    try:
-        protect_path = base_dir / "assets" / "marketing" / "anna_modelo1_title_protect_mask.png"
-        if protect_path.exists():
-            protect_full = Image.open(protect_path).convert("L")
-            if protect_full.size != (W, H):
-                protect_full = protect_full.resize((W, H), Image.Resampling.LANCZOS)
-            protect_crop = protect_full.crop(stage_box)
-            inv_protect = ImageOps.invert(protect_crop)
-            scene.putalpha(ImageChops.multiply(scene.getchannel("A"), inv_protect))
-    except Exception:
-        pass
-
-    sh = _soft_shadow(scene, 14, 66)
-    canvas.alpha_composite(sh, (sx1+4, sy1+8))
-    canvas.alpha_composite(scene, (sx1, sy1))
-
-    # Restaura por último os pixels exatos da manchete aprovada. A máscara é
-    # transparente fora do lettering, portanto não cria retângulo/caixa branca.
-    try:
-        protect_path = base_dir / "assets" / "marketing" / "anna_modelo1_title_protect_mask.png"
-        if protect_path.exists():
-            protect_full = Image.open(protect_path).convert("L")
-            if protect_full.size != (W, H):
-                protect_full = protect_full.resize((W, H), Image.Resampling.LANCZOS)
-            title_restore = reference_view.copy()
-            title_restore.putalpha(protect_full)
-            canvas.alpha_composite(title_restore, (0, 0))
-    except Exception:
-        pass
-
-    # Reaplica o selo emocional circular sobre a borda do palco, como na referência.
-    cx, cy, r = 540, 744, 76
-    x1, y1, x2, y2 = cx-r-4, cy-r-4, cx+r+4, cy+r+4
-    center_crop = reference_view.crop((x1, y1, x2, y2)).convert("RGBA")
-    cmask = Image.new("L", center_crop.size, 0)
-    ImageDraw.Draw(cmask).ellipse((4, 4, center_crop.width-5, center_crop.height-5), fill=255)
-    cmask = cmask.filter(ImageFilter.GaussianBlur(.8))
-    try:
-        from PIL import ImageChops
-        center_crop.putalpha(ImageChops.multiply(center_crop.getchannel("A"), cmask))
-    except Exception:
-        center_crop.putalpha(cmask)
-    canvas.alpha_composite(center_crop, (x1, y1))
-
-    # Garante 1 único selo oficial e sempre como camada final.
-    seal = _approval_seal_overlay(reference, (W, H))
-    if seal is not None:
-        seal_image, seal_pos = seal
-        canvas.alpha_composite(seal_image, seal_pos)
-    return canvas
 def _wa_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, green):
     draw.ellipse((cx-r, cy-r, cx+r, cy+r), fill=green, outline=(255,255,255,255), width=max(4, r//9))
     # balão branco
