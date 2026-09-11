@@ -1,6 +1,6 @@
 """Renderer independente do Template Anna — Prompt Premium.
 
-HF53.3-HF8-HF10: este módulo não reutiliza a composição visual do Template Mestre
+HF53.3-HF8-HF11: este módulo não reutiliza a composição visual do Template Mestre
 nem o compositor legado. Ele recebe somente dados já preparados pelo motor e
 constrói nativamente cada proporção do Template Anna.
 """
@@ -101,6 +101,30 @@ def _load_skin_master(base_dir: Path) -> Image.Image | None:
         return Image.open(path).convert("RGBA") if path.exists() else None
     except Exception:
         return None
+
+def _load_model_reference(base_dir: Path) -> Image.Image | None:
+    """Carrega a arte aprovada do Modelo Anna 1.
+
+    Esta referência é usada como base fiel quando o renderer precisa reproduzir
+    exatamente o visual homologado de `Gravação Laser`, sem reinventar a
+    tipografia, o contorno multicamada ou a relação do título com o splash.
+    """
+    path = base_dir / "assets" / "marketing" / "anna_skin_master_1_reference.png"
+    try:
+        return Image.open(path).convert("RGBA") if path.exists() else None
+    except Exception:
+        return None
+
+
+def _slug_text(value: str) -> str:
+    raw = unicodedata.normalize("NFKD", str(value or "")).encode("ascii", "ignore").decode("ascii")
+    raw = re.sub(r"[^a-zA-Z0-9]+", " ", raw).strip().casefold()
+    return raw
+
+
+def _is_modelo_anna_1_locked(title: str) -> bool:
+    return _slug_text(title) == "gravacao laser"
+
 
 
 def _soft_shadow(layer: Image.Image, blur: int = 18, opacity: int = 80) -> Image.Image:
@@ -208,7 +232,7 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
         prepared.thumbnail((maxw, maxh), Image.Resampling.LANCZOS)
         return prepared, (x1 + (maxw-prepared.width)//2, y1 + (maxh-prepared.height)//2)
 
-    # HF53.3-HF8-HF10: fallback fotográfico premium com recorte orgânico.
+    # HF53.3-HF8-HF11: fallback fotográfico premium com recorte orgânico.
     # Em vez do retângulo arredondado, a foto entra em um palco oval com bordas
     # suavizadas. Isso integra a imagem ao anúncio mesmo quando o recorte automático
     # do produto não é confiável.
@@ -219,7 +243,7 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
         rgb = ImageEnhance.Color(rgb).enhance(1.03)
     except Exception:
         pass
-    # HF53.3-HF8-HF10: zoom editorial conservador. A foto do catálogo costuma
+    # HF53.3-HF8-HF11: zoom editorial conservador. A foto do catálogo costuma
     # trazer bastante mesa/fundo; aproximamos o produto antes de encaixar no palco.
     zw, zh = rgb.size
     zoom = 1.18
@@ -238,41 +262,146 @@ def _product_layer(image_bytes: bytes, box: tuple[int, int, int, int], photo_mod
     return fitted, (x1, y1)
 
 def _product_stage_photo(image_bytes: bytes, size: tuple[int, int]) -> Image.Image:
-    """HF10 — palco fotográfico nítido, sem efeito embaçado.
+    """HF11 — palco fotográfico nítido, sem desfoque do conteúdo.
 
-    Mantém a fotografia original o mais nítida possível, aproxima o produto e
-    aplica somente máscara oval suave nas bordas. Não desfoca o miolo nem o
-    fundo da própria foto, evitando a sensação de imagem esfumaçada.
+    Preserva a fotografia original como fonte do palco: sem GaussianBlur, sem
+    fundo artificial e sem suavização no miolo. O único feather aplicado fica
+    restrito a uma faixa mínima na borda oval para integrar a foto ao layout.
     """
     source = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     W, H = size
     sw, sh = source.size
-    # aproxima o produto, reduzindo parede/mesa excedente sem cortar as tampas
-    zoom = 1.30
+
+    # Zoom moderado: aproxima o produto sem exagerar o recorte nem degradar a foto.
+    zoom = 1.16
     cw, ch = max(32, int(sw / zoom)), max(32, int(sh / zoom))
-    cx, cy = sw * .50, sh * .44
+    cx, cy = sw * .50, sh * .49
     left = max(0, min(sw-cw, int(cx-cw/2)))
     top = max(0, min(sh-ch, int(cy-ch/2)))
     crop = source.crop((left, top, left+cw, top+ch))
-    sharp = ImageOps.fit(crop, (W, H), Image.Resampling.LANCZOS, centering=(.5, .45))
+    sharp = ImageOps.fit(crop, (W, H), Image.Resampling.LANCZOS, centering=(.5, .50))
+
+    # Ajuste leve de nitidez, sem "inventar" textura e sem efeito esfumado.
     try:
-        sharp = ImageEnhance.Contrast(sharp).enhance(1.09)
-        sharp = ImageEnhance.Sharpness(sharp).enhance(1.60)
-        sharp = sharp.filter(ImageFilter.UnsharpMask(radius=1.25, percent=145, threshold=2))
-        sharp = ImageEnhance.Color(sharp).enhance(1.02)
+        sharp = ImageEnhance.Contrast(sharp).enhance(1.025)
+        sharp = ImageEnhance.Sharpness(sharp).enhance(1.10)
+        sharp = sharp.filter(ImageFilter.UnsharpMask(radius=.70, percent=80, threshold=3))
     except Exception:
         pass
+
     scene = sharp.convert("RGBA")
-    # Só a borda recebe dissolução leve. O conteúdo inteiro permanece nítido.
-    outer = Image.new("L", (W,H), 0)
+    # Máscara oval quase sólida. Só 1–2 px da borda recebem feather.
+    outer = Image.new("L", (W, H), 0)
     od = ImageDraw.Draw(outer)
-    inset = max(2, min(W,H)//120)
+    inset = max(2, min(W,H)//150)
     od.ellipse((inset, inset, W-inset-1, H-inset-1), fill=255)
-    outer = outer.filter(ImageFilter.GaussianBlur(max(2, min(W,H)//150)))
+    outer = outer.filter(ImageFilter.GaussianBlur(1.35))
     scene.putalpha(outer)
     return scene
 
 
+
+
+def _product_stage_photo_modelo_1(image_bytes: bytes, size: tuple[int, int]) -> Image.Image:
+    """Palco do Modelo Anna 1 com enquadramento mais aberto e nítido.
+
+    A prévia anterior aproximava demais a foto e acentuava a sensação de
+    embaçado. Aqui o crop é mais conservador e a nitidez é tratada de forma
+    leve, preservando a foto original do produto.
+    """
+    source = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    W, H = size
+    sw, sh = source.size
+    zoom = 1.02
+    cw, ch = max(32, int(sw / zoom)), max(32, int(sh / zoom))
+    cx, cy = sw * .50, sh * .50
+    left = max(0, min(sw-cw, int(cx-cw/2)))
+    top = max(0, min(sh-ch, int(cy-ch/2)))
+    crop = source.crop((left, top, left+cw, top+ch))
+    sharp = ImageOps.fit(crop, (W, H), Image.Resampling.LANCZOS, centering=(.5, .50))
+    try:
+        sharp = ImageEnhance.Contrast(sharp).enhance(1.03)
+        sharp = ImageEnhance.Sharpness(sharp).enhance(1.20)
+        sharp = sharp.filter(ImageFilter.UnsharpMask(radius=1.0, percent=108, threshold=2))
+    except Exception:
+        pass
+    scene = sharp.convert("RGBA")
+    outer = Image.new("L", (W, H), 0)
+    od = ImageDraw.Draw(outer)
+    inset = max(2, min(W,H)//155)
+    od.ellipse((inset, inset, W-inset-1, H-inset-1), fill=255)
+    outer = outer.filter(ImageFilter.GaussianBlur(1.0))
+    scene.putalpha(outer)
+    return scene
+
+
+def _render_modelo_anna_1_locked(
+    image_bytes: bytes, *, title: str, subtitle: str, description: str, phone: str,
+    profile: dict[str, Any], palette: dict[str, str], base_dir: Path, photo_mode: str,
+    application_images: list[bytes] | None,
+) -> Image.Image | None:
+    """Replica o Modelo Anna 1 aprovado para `Gravação Laser`.
+
+    Em vez de reconstruir a manchete na unha, usa a própria referência aprovada
+    como base visual fiel do layout. O conteúdo dinâmico que permanece variável
+    nesta etapa é a foto do produto dentro do palco oval.
+    """
+    W = H = 1080
+    reference = _load_model_reference(base_dir)
+    if reference is None:
+        return None
+    reference_view = reference.resize((W, H), Image.Resampling.LANCZOS).convert("RGBA")
+    # A base aprovada preserva exatamente a mesma letra do modelo enviado.
+    canvas = _skin_without_approval_seal(reference, (W, H)) or reference_view.copy()
+    # Limpa de forma OPACA todo o produto que existe na imagem de referência.
+    # A referência serve para fidelidade do título/layout, nunca como foto do produto.
+    blue = _hex(palette.get("azul") or palette.get("secondary") or "#087CE8")
+    light = _hex(palette.get("azul_claro") or "#DDF5FF")
+    stage_outer = (535, 150, 1147, 850)
+    # Limpeza do produto antigo sem apagar a manchete aprovada que cruza o palco.
+    clean_layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    clean_mask = Image.new("L", (W, H), 0)
+    cmd = ImageDraw.Draw(clean_mask)
+    cmd.ellipse(stage_outer, fill=255)
+    # Na área superior/esquerda a manchete fica na frente do palco; preserva-a.
+    cmd.rectangle((0, 0, 604, 414), fill=0)
+    clean_layer.paste((252, 253, 255, 255), (0, 0, W, H), clean_mask)
+    canvas.alpha_composite(clean_layer, (0, 0))
+    cd = ImageDraw.Draw(canvas, "RGBA")
+    cd.arc((542, 157, 1140, 844), 185, 352, fill=blue, width=18)
+    cd.arc((566, 185, 1110, 814), 200, 332, fill=(*blue[:3], 190), width=5)
+
+    stage_box = (590, 198, 1096, 790)
+    sx1, sy1, sx2, sy2 = stage_box
+    scene = _product_stage_photo_modelo_1(image_bytes, (sx2-sx1, sy2-sy1))
+    sh = _soft_shadow(scene, 16, 72)
+    canvas.alpha_composite(sh, (sx1+5, sy1+9))
+    canvas.alpha_composite(scene, (sx1, sy1))
+    # Gotas junto ao palco recompõem a integração após a limpeza da foto de referência.
+    cd = ImageDraw.Draw(canvas, "RGBA")
+    for cx0, cy0, rx0, ry0 in ((579,606,16,31),(604,637,11,22),(1055,664,14,27),(1075,637,9,18)):
+        cd.ellipse((cx0-rx0,cy0-ry0,cx0+rx0,cy0+ry0), fill=blue)
+
+    # Reaplica o selo emocional circular sobre a borda do palco, como na referência.
+    cx, cy, r = 582, 699, 78
+    x1, y1, x2, y2 = cx-r-4, cy-r-4, cx+r+4, cy+r+4
+    center_crop = reference_view.crop((x1, y1, x2, y2)).convert("RGBA")
+    cmask = Image.new("L", center_crop.size, 0)
+    ImageDraw.Draw(cmask).ellipse((4, 4, center_crop.width-5, center_crop.height-5), fill=255)
+    cmask = cmask.filter(ImageFilter.GaussianBlur(.8))
+    try:
+        from PIL import ImageChops
+        center_crop.putalpha(ImageChops.multiply(center_crop.getchannel("A"), cmask))
+    except Exception:
+        center_crop.putalpha(cmask)
+    canvas.alpha_composite(center_crop, (x1, y1))
+
+    # Garante 1 único selo oficial e sempre como camada final.
+    seal = _approval_seal_overlay(reference, (W, H))
+    if seal is not None:
+        seal_image, seal_pos = seal
+        canvas.alpha_composite(seal_image, seal_pos)
+    return canvas
 def _wa_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, green):
     draw.ellipse((cx-r, cy-r, cx+r, cy+r), fill=green, outline=(255,255,255,255), width=max(4, r//9))
     # balão branco
@@ -298,7 +427,7 @@ def _theme_key(label: str) -> str:
 def _draw_theme_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, label: str, fill, dark, white=(255,255,255,255)):
     """Ícone vetorial semântico para os cards `Ideal para`.
 
-    HF53.3-HF8-HF10: a faixa inferior deixa de repetir miniaturas do produto.
+    HF53.3-HF8-HF11: a faixa inferior deixa de repetir miniaturas do produto.
     Cada card usa um pictograma coerente com o próprio rótulo, mantendo o
     visual de propaganda e leitura imediata em celular.
     """
@@ -408,7 +537,7 @@ def _draw_theme_icon(draw: ImageDraw.ImageDraw, cx: int, cy: int, r: int, label:
 
 
 def _draw_splash(draw: ImageDraw.ImageDraw, W: int, H: int, blue, dark, pink, yellow):
-    # HF53.3-HF8-HF10: manchas superiores orgânicas, mais próximas de um splash líquido.
+    # HF53.3-HF8-HF11: manchas superiores orgânicas, mais próximas de um splash líquido.
     # Sai a meia-lua geométrica limpa do HF5; entram volumes irregulares, lóbulos e gotas.
     def blob(cx, cy, rx, ry, color, lobes):
         draw.ellipse((cx-rx, cy-ry, cx+rx, cy+ry), fill=color)
@@ -435,28 +564,59 @@ def _draw_splash(draw: ImageDraw.ImageDraw, W: int, H: int, blue, dark, pink, ye
         if r>=7:
             draw.ellipse((cx-r//3,cy-r//2,cx+r//5,cy-r//6),fill=(255,255,255,150))
 
-def _approval_seal_overlay(skin: Image.Image | None, size: tuple[int, int]) -> Image.Image | None:
-    """Recorta o selo aprovado da skin e o devolve com máscara circular.
+    # Integração da manchete: gotas orgânicas ficam atrás das letras e quebram a
+    # antiga leitura de "janela retangular", sem criar qualquer caixa de fundo.
+    title_drops=[
+        (.050,.255,.019,.040,blue),(.090,.335,.010,.022,dark),(.145,.365,.014,.028,blue),
+        (.515,.335,.014,.030,blue),(.555,.300,.009,.020,pink),(.585,.360,.016,.034,blue),
+    ]
+    for x,y,rx,ry,c in title_drops:
+        cx,cy=int(W*x),int(H*y); rw,rh=max(5,int(W*rx)),max(7,int(H*ry))
+        draw.ellipse((cx-rw,cy-rh,cx+rw,cy+rh),fill=(*c[:3],205))
+        draw.ellipse((cx-rw//3,cy-rh//2,cx+rw//6,cy-rh//6),fill=(255,255,255,125))
 
-    É aplicado no final do renderer para ficar sempre no topo de todas as
-    camadas, sem gerar um segundo selo em posição diferente.
+def _approval_seal_geometry(size: tuple[int, int]) -> tuple[int, int, int]:
+    """Geometria do selo oficial da Skin Mestre Anna 1."""
+    W, H = size
+    return int(W*.876), int(H*.111), int(min(W,H)*.105)
+
+
+def _skin_without_approval_seal(skin: Image.Image | None, size: tuple[int, int]) -> Image.Image | None:
+    """Remove o selo da skin antes da composição.
+
+    O HF10 reaplicava o selo no fim, mas a cópia original continuava embutida na
+    skin. No HF11 existe fisicamente apenas uma ocorrência: a camada final.
     """
     if skin is None:
         return None
     try:
+        base = skin.resize(size, Image.Resampling.LANCZOS).copy().convert("RGBA")
+        cx, cy, r = _approval_seal_geometry(size)
+        alpha = base.getchannel("A")
+        ad = ImageDraw.Draw(alpha)
+        ad.ellipse((cx-r, cy-r, cx+r, cy+r), fill=0)
+        base.putalpha(alpha)
+        return base
+    except Exception:
+        return skin.resize(size, Image.Resampling.LANCZOS)
+
+
+def _approval_seal_overlay(skin: Image.Image | None, size: tuple[int, int]) -> tuple[Image.Image, tuple[int, int]] | None:
+    """Recorta o único selo aprovado para aplicá-lo como última camada."""
+    if skin is None:
+        return None
+    try:
         base = skin.resize(size, Image.Resampling.LANCZOS)
-        W, H = size
-        # região do único selo oficial no canto superior direito
-        box = (int(W*.80), 0, W, int(H*.25))
-        crop = base.crop(box).convert("RGBA")
+        cx, cy, r = _approval_seal_geometry(size)
+        pad = max(4, int(r*.08))
+        x1, y1 = max(0, cx-r-pad), max(0, cy-r-pad)
+        x2, y2 = min(size[0], cx+r+pad), min(size[1], cy+r+pad)
+        crop = base.crop((x1, y1, x2, y2)).convert("RGBA")
         mask = Image.new("L", crop.size, 0)
         md = ImageDraw.Draw(mask)
-        # círculo amplo suficiente para manter borda/sombra do selo, sem trazer
-        # a faixa/splash adjacente para cima do produto.
-        cx, cy = int(crop.width*.61), int(crop.height*.44)
-        r = int(min(crop.width, crop.height)*.43)
-        md.ellipse((cx-r, cy-r, cx+r, cy+r), fill=255)
-        mask = mask.filter(ImageFilter.GaussianBlur(1.2))
+        rcx, rcy = cx-x1, cy-y1
+        md.ellipse((rcx-r, rcy-r, rcx+r, rcy+r), fill=255)
+        mask = mask.filter(ImageFilter.GaussianBlur(.75))
         alpha = crop.getchannel("A")
         try:
             from PIL import ImageChops
@@ -464,7 +624,7 @@ def _approval_seal_overlay(skin: Image.Image | None, size: tuple[int, int]) -> I
         except Exception:
             pass
         crop.putalpha(alpha)
-        return crop
+        return crop, (x1, y1)
     except Exception:
         return None
 
@@ -474,7 +634,7 @@ def _draw_square(
     profile: dict[str, Any], palette: dict[str, str], base_dir: Path, photo_mode: str,
     application_images: list[bytes] | None,
 ) -> Image.Image:
-    """HF53.3-HF8-HF10 — Skin Mestre Anna 1.
+    """HF53.3-HF8-HF11 — Skin Mestre Anna 1.
 
     Fecha o primeiro modelo aprovado: preserva como skin os elementos gráficos fixos
     de alta fidelidade e desenha somente conteúdo dinâmico nas áreas reservadas.
@@ -490,6 +650,17 @@ def _draw_square(
     text = _hex(palette.get("texto") or palette.get("text") or "#102D50")
     light = _hex(palette.get("azul_claro") or "#DDF5FF")
 
+    # HF11 ajuste fino após conferência visual: para `Gravação Laser`, o Modelo Anna 1
+    # precisa bater com a referência aprovada, principalmente na letra do título.
+    if _is_modelo_anna_1_locked(title):
+        locked = _render_modelo_anna_1_locked(
+            image_bytes, title=title, subtitle=subtitle, description=description,
+            phone=phone, profile=profile, palette=palette, base_dir=base_dir,
+            photo_mode=photo_mode, application_images=application_images,
+        )
+        if locked is not None:
+            return locked
+
     canvas = Image.new("RGBA", (W, H), (253, 254, 255, 255))
     draw = ImageDraw.Draw(canvas, "RGBA")
 
@@ -497,13 +668,19 @@ def _draw_square(
     draw.ellipse((500, 170, 1180, 810), fill=(*light[:3], 165))
     draw.ellipse((650, 235, 1125, 760), fill=(*blue[:3], 35))
     draw.ellipse((-180, 570, 250, 980), fill=(*light[:3], 130))
+    # HF11: um splash vetorial fica como UNDERLAY. A skin aprovada cobre as áreas
+    # fixas e, nas janelas transparentes do conteúdo dinâmico, esse underlay evita
+    # qualquer recorte/caixa branca dura atrás do título.
+    _draw_splash(draw, W, H, blue, dark, pink, yellow)
     # HF9: sem mancha rosa estrutural; o modelo aprovado usa base branca/azul limpa.
     skin = _load_skin_master(base_dir)
     if skin is not None:
-        canvas.alpha_composite(skin.resize((W, H), Image.Resampling.LANCZOS), (0, 0))
+        # HF11: a skin entra sem o selo embutido. O único selo será aplicado no fim.
+        skin_base = _skin_without_approval_seal(skin, (W, H))
+        if skin_base is not None:
+            canvas.alpha_composite(skin_base, (0, 0))
         draw = ImageDraw.Draw(canvas, "RGBA")
     else:
-        _draw_splash(draw, W, H, blue, dark, pink, yellow)
         logo = _load_logo(base_dir, (330, 235))
         if logo:
             x = (W-logo.width)//2
@@ -519,7 +696,8 @@ def _draw_square(
     # tx=title_x1+(title_area_w-tw)//2-bb[0]
     # start_size=80 if i==0 else 70
     # stroke_width=8 | stroke_width=4 | cta=(622,807,1055,925) | text_x1,text_x2=730,1042
-    # Título com o mesmo peso do modelo aprovado: grande, centralizado e contornado.
+    # Título aprovado do Modelo Anna 1: MESMA família serif itálica do modelo do
+    # carimbo, sem caixa/fundo próprio e com contorno multicamada por glifo.
     title_clean = re.sub(r"\s+", " ", str(title or "Produto AlphaFest")).strip()
     if title_clean == title_clean.upper():
         title_clean = title_clean.title()
@@ -530,21 +708,29 @@ def _draw_square(
         lines = [" ".join(words[:cut]), " ".join(words[cut:])]
     else:
         lines = [title_clean]
-    tx1, tx2 = 48, 592
-    y = 176
+
+    # Área original aprovada do título. Não desenhar retângulo/caixa atrás dele.
+    title_x1, title_x2 = 34, 604
+    title_area_w = title_x2 - title_x1
+    y = 178
     for i, line in enumerate(lines[:2]):
-        start_size = 94 if i == 0 else 84
-        min_size = 54 if i == 0 else 49
-        f = _fit(draw, line, tx2-tx1-20, start_size, min_size, bold=True, serif=True, italic=True)
-        fill = (247, 250, 255, 255) if i == 0 else blue
-        bb = draw.textbbox((0, 0), line, font=f, stroke_width=9)
+        start_size = 91 if i == 0 else 82
+        min_size = 52 if i == 0 else 47
+        # IMPORTANTE: preservar a fonte aprovada; não trocar para sans/cursiva.
+        f = _fit(draw, line, title_area_w-24, start_size, min_size, bold=True, serif=True, italic=True)
+        fill = white if i == 0 else _hex("#118FEF")
+        bb = draw.textbbox((0, 0), line, font=f, stroke_width=13)
         tw = bb[2]-bb[0]
-        x = tx1 + ((tx2-tx1)-tw)//2 - bb[0]
-        draw.text((x+4, y+6), line, font=f, fill=fill, stroke_width=10, stroke_fill=(0, 25, 80, 130))
-        draw.text((x, y), line, font=f, fill=fill, stroke_width=7, stroke_fill=dark)
-        draw.text((x, y), line, font=f, fill=fill, stroke_width=3, stroke_fill=white)
+        tx = title_x1 + (title_area_w-tw)//2 - bb[0]
+
+        # Contorno multicamada aprovado: sombra azul-marinho + halo cyan + azul
+        # escuro + filete branco. Todas as camadas usam a MESMA fonte.
+        draw.text((tx+5, y+7), line, font=f, fill=fill, stroke_width=14, stroke_fill=(0, 24, 76, 145))
+        draw.text((tx, y), line, font=f, fill=fill, stroke_width=11, stroke_fill=_hex("#26C5F7"))
+        draw.text((tx, y), line, font=f, fill=fill, stroke_width=8, stroke_fill=dark)
+        draw.text((tx, y), line, font=f, fill=fill, stroke_width=3, stroke_fill=white)
         hb = draw.textbbox((0, 0), "Ag", font=f)
-        y += max(74, hb[3]-hb[1]+2)
+        y += max(72, hb[3]-hb[1]+1)
 
     # Faixa imediatamente abaixo da manchete.
     promise = str(subtitle or profile.get("subtitle") or "Personalização durável para presentes, brindes e empresas")
@@ -618,7 +804,7 @@ def _draw_square(
         yy += 19
     draw.text((cx-9, cy+cr-31), "♥", font=_font(22,bold=True), fill=pink)
 
-    # Vitrine "Ideal para" — HF53.3-HF8-HF10: mantém SOMENTE ícones temáticos aprovados.
+    # Vitrine "Ideal para" — HF53.3-HF8-HF11: mantém SOMENTE ícones temáticos aprovados.
     # NÃO repete miniatura do produto.
     apps = list(profile.get("applications") or ["Presentes", "Empresas", "Eventos", "Brindes"])[:4]
     while len(apps) < 4:
@@ -693,11 +879,12 @@ def _draw_square(
             ff = _fit(draw,label,cell-68,18,13,bold=True)
             draw.text((i*cell+58,1042),label,font=ff,fill=white)
 
-    # HF10: o selo oficial é a última camada. Assim nunca fica atrás da foto,
-    # do arco do palco ou de qualquer outro elemento.
+    # HF11: o selo oficial é a última e única camada. Assim nunca fica atrás da foto,
+    # do arco do palco ou de qualquer outro elemento; a cópia da skin foi removida.
     seal = _approval_seal_overlay(skin, (W, H))
     if seal is not None:
-        canvas.alpha_composite(seal, (int(W*.80), 0))
+        seal_image, seal_pos = seal
+        canvas.alpha_composite(seal_image, seal_pos)
     return canvas
 
 def _adapt_square(square: Image.Image, size: tuple[int,int], palette: dict[str,str]) -> Image.Image:
