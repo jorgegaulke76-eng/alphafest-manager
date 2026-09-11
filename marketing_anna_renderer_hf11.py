@@ -305,34 +305,43 @@ def _product_stage_photo(image_bytes: bytes, size: tuple[int, int]) -> Image.Ima
 
 
 def _product_stage_photo_modelo_1(image_bytes: bytes, size: tuple[int, int]) -> Image.Image:
-    """Palco do Modelo Anna 1 com enquadramento mais aberto e nítido.
+    """HF14 — palco oval mais limpo, com foco no produto e melhor leitura da gravação.
 
-    A prévia anterior aproximava demais a foto e acentuava a sensação de
-    embaçado. Aqui o crop é mais conservador e a nitidez é tratada de forma
-    leve, preservando a foto original do produto.
+    Ajustes validados após conferência visual do usuário:
+    - aproximação um pouco maior para valorizar a gravação do copo principal;
+    - enquadramento mais alto, evitando conflito no rodapé direito do palco;
+    - nitidez um pouco mais forte, mas ainda sem efeito artificial;
+    - máscara oval com margem interna para o produto respirar melhor.
     """
     source = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     W, H = size
     sw, sh = source.size
-    zoom = 1.02
+
+    # Enquadramento mais comercial: prioriza o copo principal e evita sobrar muito
+    # piso na base do palco. O centro vai levemente para a direita/para cima.
+    zoom = 1.12
     cw, ch = max(32, int(sw / zoom)), max(32, int(sh / zoom))
-    cx, cy = sw * .50, sh * .50
+    cx, cy = sw * .54, sh * .46
     left = max(0, min(sw-cw, int(cx-cw/2)))
     top = max(0, min(sh-ch, int(cy-ch/2)))
     crop = source.crop((left, top, left+cw, top+ch))
-    sharp = ImageOps.fit(crop, (W, H), Image.Resampling.LANCZOS, centering=(.5, .50))
+
+    sharp = ImageOps.fit(crop, (W, H), Image.Resampling.LANCZOS, centering=(.56, .44))
     try:
-        sharp = ImageEnhance.Contrast(sharp).enhance(1.03)
-        sharp = ImageEnhance.Sharpness(sharp).enhance(1.20)
-        sharp = sharp.filter(ImageFilter.UnsharpMask(radius=1.0, percent=108, threshold=2))
+        sharp = ImageEnhance.Contrast(sharp).enhance(1.08)
+        sharp = ImageEnhance.Color(sharp).enhance(1.02)
+        sharp = ImageEnhance.Sharpness(sharp).enhance(1.34)
+        sharp = sharp.filter(ImageFilter.UnsharpMask(radius=1.1, percent=135, threshold=2))
     except Exception:
         pass
     scene = sharp.convert("RGBA")
+
     outer = Image.new("L", (W, H), 0)
     od = ImageDraw.Draw(outer)
-    inset = max(2, min(W,H)//155)
-    od.ellipse((inset, inset, W-inset-1, H-inset-1), fill=255)
-    outer = outer.filter(ImageFilter.GaussianBlur(1.0))
+    inset_x = max(12, W//24)
+    inset_y = max(12, H//24)
+    od.ellipse((inset_x, inset_y, W-inset_x-1, H-inset_y-1), fill=255)
+    outer = outer.filter(ImageFilter.GaussianBlur(1.2))
     scene.putalpha(outer)
     return scene
 
@@ -358,7 +367,7 @@ def _render_modelo_anna_1_locked(
     # calculada a partir da própria referência aprovada.
     canvas = _skin_without_approval_seal(reference, (W, H)) or reference_view.copy()
 
-    stage_box = (565, 190, 1096, 790)
+    stage_box = (592, 216, 1042, 742)
     sx1, sy1, sx2, sy2 = stage_box
     scene = _product_stage_photo_modelo_1(image_bytes, (sx2-sx1, sy2-sy1))
 
@@ -377,8 +386,8 @@ def _render_modelo_anna_1_locked(
     except Exception:
         pass
 
-    sh = _soft_shadow(scene, 16, 72)
-    canvas.alpha_composite(sh, (sx1+5, sy1+9))
+    sh = _soft_shadow(scene, 14, 66)
+    canvas.alpha_composite(sh, (sx1+4, sy1+8))
     canvas.alpha_composite(scene, (sx1, sy1))
 
     # Restaura por último os pixels exatos da manchete aprovada. A máscara é
@@ -396,7 +405,7 @@ def _render_modelo_anna_1_locked(
         pass
 
     # Reaplica o selo emocional circular sobre a borda do palco, como na referência.
-    cx, cy, r = 582, 699, 78
+    cx, cy, r = 540, 744, 76
     x1, y1, x2, y2 = cx-r-4, cy-r-4, cx+r+4, cy+r+4
     center_crop = reference_view.crop((x1, y1, x2, y2)).convert("RGBA")
     cmask = Image.new("L", center_crop.size, 0)
