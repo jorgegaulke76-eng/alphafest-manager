@@ -31,6 +31,7 @@ CRITICAL_PYTHON_FILES = (
     "system_health_ui.py",
     "trash_ui.py",
     "alpha_connect_ui.py",
+    "audit_ui.py",
 )
 
 # Versões do Manager aparecem em muitos formatos. O regex é propositalmente
