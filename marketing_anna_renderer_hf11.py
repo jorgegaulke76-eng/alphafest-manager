@@ -264,7 +264,11 @@ def _extract_product_palette(image_bytes: bytes) -> dict[str, str]:
 
 def _build_adaptive_palette_for_generic(image_bytes: bytes, palette: dict[str, str]) -> dict[str, str]:
     base = dict(palette or {})
-    if not _palette_seems_default_blue(base):
+    # HF17: paleta escolhida pelo usuário é mandatória. Nunca substituir Rosa,
+    # Verde, Vermelho, Preto, Roxo, Azul etc. pelas cores extraídas da foto.
+    # Extração automática só existe quando o seletor estiver em Automático AlphaFest.
+    mode = str(base.get("__palette_mode") or "manual").strip().casefold()
+    if mode != "auto":
         return base
     extracted = _extract_product_palette(image_bytes)
     if not extracted:

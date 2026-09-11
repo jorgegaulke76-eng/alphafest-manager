@@ -69,7 +69,7 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "anna_social_redes": {
         "id": "anna_social_redes",
         "nome": "Template Anna — Redes Sociais",
-        "descricao": "Template Anna — Modelo 1 HF8-HF16: mantém o caso aprovado de Gravação Laser e adiciona paleta dinâmica no Anna genérico. Produtos fora do caso travado passam a adaptar fundo, destaque e contraste ao item renderizado, preservando logo, estrutura e HF7 congelado.",
+        "descricao": "Template Anna — Modelo 1 HF8-HF17: mantém o caso aprovado de Gravação Laser e corrige a prioridade de cores no Anna genérico. Paletas manuais são obedecidas exatamente; somente Automático AlphaFest pode adaptar cores pelo produto. HF7 permanece congelado.",
         "categoria_template": "Redes Sociais",
         "status_template": "Homologado",
         "versao_template": ANNA_RENDERER_VERSION,
@@ -221,6 +221,8 @@ def _template_palette_from_override(cfg: dict[str, Any], override: dict[str, str
     text = override.get("text", p["texto"])
     metallic = override.get("metallic", p["amarelo"])
     p.update({
+        "__palette_mode": str(override.get("__palette_mode") or "manual"),
+        "__palette_name": str(override.get("__palette_name") or ""),
         "fundo": background,
         "azul": secondary,
         "azul_escuro": primary,

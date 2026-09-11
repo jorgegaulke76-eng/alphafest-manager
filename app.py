@@ -26513,7 +26513,7 @@ if pagina_atual == "crescimento":
     # HF53.3 — Biblioteca de Templates: mestre HF7 congelado + seleção segura no Piloto Automático.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.3-HF8-HF16: Template Anna — Redes Sociais • paleta dinâmica para produtos genéricos • Mestre HF7 intacto.")
+        st.caption("HF53.3-HF8-HF17: Template Anna — Redes Sociais • paleta manual obedecida sem substituição automática • Mestre HF7 intacto.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26655,15 +26655,21 @@ if pagina_atual == "crescimento":
                     "Roxo Premium": {"primary":"#4C2A92","secondary":"#7654D6","accent":"#C49BFF","background":"#FBF8FF","text":"#36206D","metallic":"#D8C6F5"},
                 }
                 if _mkt_custom_palette:
-                    _mkt_palette = _mkt_custom_palette
+                    _mkt_palette = dict(_mkt_custom_palette)
+                    _mkt_palette["__palette_mode"] = "manual"
+                    _mkt_palette["__palette_name"] = "Personalizada"
                     _mkt_theme_label = "Personalizada"
                 elif _mkt_palette_name == "Automático AlphaFest":
                     _mkt_theme_id = detect_theme(_mkt_campaign, _mkt_selected_name)
                     _mkt_theme = get_theme(_mkt_theme_id)
                     _mkt_palette = dict(_mkt_theme.get("palette") or _mkt_palette_presets["Automático AlphaFest"])
+                    _mkt_palette["__palette_mode"] = "auto"
+                    _mkt_palette["__palette_name"] = "Automático AlphaFest"
                     _mkt_theme_label = str(_mkt_theme.get("label") or "AlphaFest Clássico")
                 else:
-                    _mkt_palette = _mkt_palette_presets.get(_mkt_palette_name) or _mkt_palette_presets["Automático AlphaFest"]
+                    _mkt_palette = dict(_mkt_palette_presets.get(_mkt_palette_name) or _mkt_palette_presets["Automático AlphaFest"])
+                    _mkt_palette["__palette_mode"] = "manual"
+                    _mkt_palette["__palette_name"] = _mkt_palette_name
                     _mkt_theme_label = _mkt_palette_name
                 st.caption(f"Tema aplicado ao template selecionado: {_mkt_theme_label}")
                 st.markdown(
@@ -28414,7 +28420,7 @@ if pagina_atual == "crescimento":
                     except Exception as exc:
                         st.error(f"Não foi possível instalar o template: {exc}")
 
-            st.info("HF53.3-HF8-HF16: o Mestre HF7 permanece oficial e congelado. O Template Anna mantém o caso aprovado do copo e adapta automaticamente a paleta para outros produtos, preservando a identificação do renderer aprovado HF11 no runtime.")
+            st.info("HF53.3-HF8-HF17: o Mestre HF7 permanece oficial e congelado. No Template Anna, paletas escolhidas manualmente são aplicadas diretamente; somente Automático AlphaFest pode adaptar cores pelo produto. O renderer aprovado HF11 permanece identificado no runtime.")
             st.markdown("---")
             st.subheader("🖼️ Banco de mídia AlphaFest")
             st.caption("Fotos e vídeos continuam ligados às campanhas e ao catálogo existente.")
