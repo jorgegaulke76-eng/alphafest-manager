@@ -20,6 +20,7 @@ import copy
 import calendar
 import requests
 import inspect
+from functools import lru_cache
 
 from lazy_runtime import LazyModule
 
@@ -55,6 +56,7 @@ except Exception as _site_cf_import_exc:
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 from alpha_marketing_autopilot import rank_products as _alpha_marketing_rank_products
 from alpha_marketing_designer import build_design_plan as _alpha_build_design_plan, sanitize_channel_copy as _alpha_sanitize_channel_copy, validate_design_plan as _alpha_validate_design_plan, validate_art_bytes as _alpha_validate_art_bytes
+from global_search_service import build_global_search_index as _build_global_search_index, query_global_search_index as _query_global_search_index
 from backup_schedule_service import backup_due as _backup_due, slot_id as _backup_slot_id, reservation_is_active as _backup_reservation_active
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
@@ -1841,27 +1843,49 @@ def formatar_msg_whatsapp(prop):
         ])
     return "\n".join(linhas)
 
+def _local_file_signature(path):
+    try:
+        stat = os.stat(path)
+        return int(getattr(stat, "st_mtime_ns", int(stat.st_mtime * 1_000_000_000))), int(stat.st_size)
+    except OSError:
+        return None
+
+
+@lru_cache(maxsize=96)
+def _get_image_base64_cached(path_abs, mtime_ns, size):
+    try:
+        with open(path_abs, "rb") as image_file:
+            return base64.b64encode(image_file.read()).decode("utf-8")
+    except OSError:
+        return ""
+
+
 def get_image_base64(path):
-    if os.path.exists(path):
-        with open(path, "rb") as image_file:
-            return base64.b64encode(image_file.read()).decode('utf-8')
-    return ""
+    """HF24: codifica arquivo local só quando o conteúdo realmente muda."""
+    if not path:
+        return ""
+    path_abs = os.path.abspath(str(path))
+    signature = _local_file_signature(path_abs)
+    if signature is None:
+        return ""
+    return _get_image_base64_cached(path_abs, signature[0], signature[1])
 
 
-def encontrar_logo_base64():
-    """Localiza automaticamente o logo existente no repositório."""
+@lru_cache(maxsize=12)
+def _encontrar_logo_path_cached(cwd_abs, dir_mtime_ns):
     nomes_preferidos = [
         "logo.png", "Logo.png", "LOGO.png", "logo_alphafest.png",
         "alphafest.png", "logo.jpg", "logo.jpeg", "logo.webp",
     ]
     for nome in nomes_preferidos:
-        if os.path.exists(nome):
-            return get_image_base64(nome), os.path.splitext(nome)[1].lower()
+        candidato = os.path.join(cwd_abs, nome)
+        if os.path.exists(candidato):
+            return candidato
 
     extensoes = (".png", ".jpg", ".jpeg", ".webp")
     candidatos = []
     try:
-        for nome in os.listdir("."):
+        for nome in os.listdir(cwd_abs):
             nome_lower = nome.lower()
             if nome_lower.endswith(extensoes) and ("logo" in nome_lower or "alpha" in nome_lower):
                 candidatos.append(nome)
@@ -1870,9 +1894,21 @@ def encontrar_logo_base64():
 
     if candidatos:
         candidatos.sort(key=lambda n: ("logo" not in n.lower(), len(n)))
-        nome = candidatos[0]
-        return get_image_base64(nome), os.path.splitext(nome)[1].lower()
-    return "", ""
+        return os.path.join(cwd_abs, candidatos[0])
+    return ""
+
+
+def encontrar_logo_base64():
+    """HF24: localiza o logo sem revarrer/reler o mesmo arquivo em cada rerun."""
+    cwd_abs = os.path.abspath(".")
+    try:
+        dir_mtime_ns = int(getattr(os.stat(cwd_abs), "st_mtime_ns", 0))
+    except OSError:
+        dir_mtime_ns = 0
+    caminho = _encontrar_logo_path_cached(cwd_abs, dir_mtime_ns)
+    if not caminho:
+        return "", ""
+    return get_image_base64(caminho), os.path.splitext(caminho)[1].lower()
 
 def carregar_historico(force_refresh=False):
     """Carrega propostas do Supabase, com fallback automático para JSON local."""
@@ -13176,83 +13212,76 @@ def slug_html(texto):
     return texto.strip("_") or "categoria"
 
 
-def pesquisar_global(termo, limite_por_tipo=8):
-    """Pesquisa sob demanda em clientes, propostas, catálogo, atendimentos e projetos.
+_GLOBAL_SEARCH_DOCUMENT_KEYS = (
+    "clientes_db", "historico_orcamentos", "catalogo_db",
+    "atendimentos_db", "componentes_db", "projetos_db",
+)
 
-    A função só deve ser chamada quando o usuário digitar ao menos dois caracteres,
-    evitando consultas desnecessárias ao Supabase durante os reruns do Streamlit.
+
+def _global_search_document_signature():
+    """Assinatura barata dos documentos já presentes no cache da sessão."""
+    cache = _document_cache()
+    now = time.monotonic()
+    signature = []
+    for key in _GLOBAL_SEARCH_DOCUMENT_KEYS:
+        cached = cache.get(key)
+        if not cached:
+            return None
+        cached_time = float(cached.get("time", 0) or 0)
+        if now - cached_time >= DOCUMENT_CACHE_TTL_SECONDS:
+            return None
+        signature.append((key, cached_time))
+    return tuple(signature)
+
+
+def _global_search_index():
+    """HF24: monta a Pesquisa Global uma vez por revisão dos documentos.
+
+    Antes, cada tecla digitada chamava seis loaders, criava deep copies de bases
+    inteiras e reconstruía todos os textos pesquisáveis. Agora isso só acontece
+    quando uma das seis fontes muda ou expira no cache curto da sessão.
     """
+    cached_index = st.session_state.get("_hf24_global_search_index")
+    signature = _global_search_document_signature()
+    if cached_index and signature is not None and cached_index.get("signature") == signature:
+        return cached_index.get("index") or {}
+
+    clientes = carregar_clientes()
+    propostas = carregar_historico()
+    produtos = carregar_catalogo()
+    atendimentos = carregar_atendimentos()
+    componentes = carregar_componentes()
+    projetos = carregar_projetos()
+
+    index = _build_global_search_index(
+        clientes=clientes,
+        propostas=propostas,
+        produtos=produtos,
+        atendimentos=atendimentos,
+        componentes=componentes,
+        projetos=projetos,
+        proposal_text=normalizar_texto_busca,
+        project_components_text=texto_componentes_projeto,
+    )
+    signature = _global_search_document_signature()
+    st.session_state["_hf24_global_search_index"] = {
+        "signature": signature,
+        "index": index,
+        "built_at": time.monotonic(),
+    }
+    return index
+
+
+def pesquisar_global(termo, limite_por_tipo=8):
+    """Pesquisa global usando índice reaproveitado por revisão dos documentos."""
     termo = str(termo or "").strip().lower()
-    resultado = {"clientes": [], "propostas": [], "produtos": [], "atendimentos": [], "projetos": [], "componentes": []}
     if len(termo) < 2:
-        return resultado
-
-    for cliente in carregar_clientes():
-        base = " ".join(str(cliente.get(c, "")) for c in [
-            "nome", "documento", "whatsapp", "email", "cidade", "observacoes",
-            "segmentos", "interesses", "campanhas_interesse"
-        ]).lower()
-        if termo in base:
-            resultado["clientes"].append(cliente)
-            if len(resultado["clientes"]) >= limite_por_tipo:
-                break
-
-    for proposta in carregar_historico():
-        if termo in normalizar_texto_busca(proposta):
-            resultado["propostas"].append(proposta)
-            if len(resultado["propostas"]) >= limite_por_tipo:
-                break
-
-    for indice, produto in enumerate(carregar_catalogo()):
-        base = (
-            " ".join(str(produto.get(c, "")) for c in [
-                "Nome", "Categoria", "Subcategoria", "CodigoInterno", "Descricao",
-                "DescricaoCurta", "DescricaoCompleta", "PalavrasChave", "Tags"
-            ])
-            + " "
-            + " ".join(str(x) for x in (produto.get("Aliases", []) or []))
-        ).lower()
-        if termo in base:
-            registro = dict(produto)
-            registro["_indice_catalogo"] = indice
-            resultado["produtos"].append(registro)
-            if len(resultado["produtos"]) >= limite_por_tipo:
-                break
-
-    dados_at = carregar_atendimentos()
-    for atendimento in dados_at.get("itens", []):
-        base = " ".join(str(atendimento.get(c, "")) for c in [
-            "cliente", "telefone", "mensagem", "status", "assunto", "responsavel"
-        ]).lower()
-        if termo in base:
-            resultado["atendimentos"].append(atendimento)
-            if len(resultado["atendimentos"]) >= limite_por_tipo:
-                break
-
-    for categoria, valores in carregar_componentes().items():
-        for valor in valores:
-            if termo in f"{categoria} {valor}".lower():
-                resultado["componentes"].append({"categoria": categoria, "valor": valor})
-                if len(resultado["componentes"]) >= limite_por_tipo:
-                    break
-        if len(resultado["componentes"]) >= limite_por_tipo:
-            break
-
-    for projeto in carregar_projetos():
-        arquivos = projeto.get("arquivos", []) if isinstance(projeto.get("arquivos"), list) else []
-        partes = [
-            projeto.get("cliente", ""), projeto.get("tema", ""), projeto.get("produto", ""),
-            projeto.get("numero_proposta", ""), projeto.get("observacoes", ""),
-            texto_componentes_projeto(projeto), projeto.get("caracteristicas_livres", ""), projeto.get("necessidade", ""), projeto.get("detalhes", "")
-        ]
-        for arquivo in arquivos:
-            partes.extend([arquivo.get("nome", ""), arquivo.get("descricao", ""), arquivo.get("tags", "")])
-        if termo in " ".join(map(str, partes)).lower():
-            resultado["projetos"].append(projeto)
-            if len(resultado["projetos"]) >= limite_por_tipo:
-                break
-    return resultado
-
+        return {key: [] for key in ("clientes", "propostas", "produtos", "atendimentos", "projetos", "componentes")}
+    return _query_global_search_index(
+        _global_search_index(),
+        termo,
+        limite_por_tipo=limite_por_tipo,
+    )
 
 def montar_fila_operacional(historico, tarefas, atendimentos, limite=10):
     """Cria uma fila única de próximas ações, ordenada por urgência."""
