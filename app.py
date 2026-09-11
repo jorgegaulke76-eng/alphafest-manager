@@ -7077,7 +7077,7 @@ CANAL_MIDIA_CONFIG = {
 def _marketing_effective_size(canal, template_id=""):
     """Tamanho final por template sem alterar o Mestre homologado.
 
-    HF53.3-HF8-HF10: o prompt aprovado da Anna é quadrado no Feed. O Mestre
+    HF53.3-HF8-HF11: o prompt aprovado da Anna é quadrado no Feed. O Mestre
     Comercial continua 1080x1350 e todos os demais templates seguem a tabela global.
     """
     base = CANAL_MIDIA_CONFIG.get(canal, CANAL_MIDIA_CONFIG["Instagram Feed"])["size"]
@@ -7362,6 +7362,42 @@ def gerar_copy_comercial(produto, objetivo, campanha, canal, observacoes="", tom
         return f"{gancho}\n\n{beneficio}\n\n{diferencial}{oferta}\n\n📲 {cta}"
     return f"{gancho}\n\n{beneficio}\n\n{diferencial}{oferta}\n\n📲 {cta}\n\n{hashtags}"
 
+def _marketing_designer_version(template_id="", template_version=""):
+    """Versão registrada na origem da campanha.
+
+    Para o Template Anna, a origem acompanha a versão real do template em uso,
+    evitando que futuras atualizações continuem gravando um HF antigo por string fixa.
+    Os demais templates preservam o identificador legado do Designer Comercial.
+    """
+    if str(template_id or "").strip() == "anna_social_redes":
+        return str(template_version or "HF53.3-HF8-HF11").strip() or "HF53.3-HF8-HF11"
+    return "HF53.3-HF8-HF10"
+
+
+def _marketing_normalizar_origem_anna(dados):
+    """Corrige somente registros Anna HF11 que foram rotulados como HF10.
+
+    O HF11 já renderizava pelo template novo, mas `app.py` ainda gravava a origem
+    como HF10. A correção é conservadora: só altera registros cujo `template_id`
+    é Anna e cuja `template_versao` confirma HF11.
+    """
+    if not isinstance(dados, dict):
+        return dados
+    for item in dados.get("conteudos", []) or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("template_id") or "") != "anna_social_redes":
+            continue
+        versao = str(item.get("template_versao") or "").strip()
+        if versao != "HF53.3-HF8-HF11":
+            continue
+        if str(item.get("origem_criativa") or "").strip() == "Designer Comercial AlphaFest HF53.3-HF8-HF10":
+            item["origem_criativa"] = "Designer Comercial AlphaFest HF53.3-HF8-HF11"
+        if str(item.get("designer_rules_version") or "").strip() == "HF53.3-HF8-HF10":
+            item["designer_rules_version"] = "HF53.3-HF8-HF11"
+    return dados
+
+
 def carregar_marketing():
     dados = load_document("marketing_db", ARQUIVO_MARKETING, {"conteudos": [], "config": {}})
     if not isinstance(dados, dict): dados = {"conteudos": [], "config": {}}
@@ -7369,6 +7405,7 @@ def carregar_marketing():
     dados.setdefault("config", {})
     dados.setdefault("publicacoes_sociais", [])
     dados.setdefault("thu_campanhas_sugeridas", [])
+    _marketing_normalizar_origem_anna(dados)
     return dados
 
 def salvar_marketing(dados):
@@ -26476,7 +26513,7 @@ if pagina_atual == "crescimento":
     # HF53.3 — Biblioteca de Templates: mestre HF7 congelado + seleção segura no Piloto Automático.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.3-HF8-HF10: Template Anna — Redes Sociais • Skin Mestre 1 • Em validação final no Manager: primeiro modelo aprovado convertido em skin gráfica, com conteúdo dinâmico e Mestre HF7 intacto.")
+        st.caption("HF53.3-HF8-HF12: Template Anna — Redes Sociais • Renderer HF11 • origem da campanha agora acompanha a versão real do template; Mestre HF7 intacto.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26699,6 +26736,7 @@ if pagina_atual == "crescimento":
                             _mkt_arts[_mkt_channel] = base64.b64encode(_mkt_art_bytes).decode("ascii")
 
                         _mkt_id = f"MKT-AUTO-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
+                        _mkt_designer_version = _marketing_designer_version(_mkt_template_id, _mkt_template_version)
                         _mkt_record = {
                             "id": _mkt_id,
                             "criado_em": agora_local().isoformat(),
@@ -26706,7 +26744,7 @@ if pagina_atual == "crescimento":
                             "categoria": str(_mkt_product.get("Categoria") or ""),
                             "campanha": _mkt_campaign.strip() or "Permanente",
                             "objetivo": _mkt_objective,
-                            "origem_criativa": "Designer Comercial AlphaFest HF53.3-HF8-HF10",
+                            "origem_criativa": f"Designer Comercial AlphaFest {_mkt_designer_version}",
                             "tipo_registro": "campanha_automatica",
                             "canais": list(_mkt_channels),
                             "artes_png": _mkt_arts,
@@ -26726,7 +26764,7 @@ if pagina_atual == "crescimento":
                             "quality_gate": "APROVADO AUTOMATICAMENTE",
                             "paleta_nome": _mkt_palette_name,
                             "paleta_visual": dict(_mkt_palette),
-                            "designer_rules_version": "HF53.3-HF8-HF10",
+                            "designer_rules_version": _mkt_designer_version,
                         }
                         conteudos.insert(0, _mkt_record)
                         marketing["conteudos"] = conteudos
@@ -28358,7 +28396,7 @@ if pagina_atual == "crescimento":
                     except Exception as exc:
                         st.error(f"Não foi possível instalar o template: {exc}")
 
-            st.info("HF53.3-HF8-HF10: o Mestre HF7 permanece oficial e congelado. O Template Anna Skin Mestre 1 está em validação final para Feed, Story, Facebook e Status.")
+            st.info("HF53.3-HF8-HF12: o Mestre HF7 permanece oficial e congelado. O Template Anna usa renderer HF11 e grava a origem correta da campanha em todos os novos registros.")
             st.markdown("---")
             st.subheader("🖼️ Banco de mídia AlphaFest")
             st.caption("Fotos e vídeos continuam ligados às campanhas e ao catálogo existente.")
