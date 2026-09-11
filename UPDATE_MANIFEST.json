@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF19",
-  "generated_at_utc": "2026-09-11T18:36:16.859876+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF20",
+  "generated_at_utc": "2026-09-11T18:53:36.090347+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "file_count": 361,
-  "uncompressed_bytes": 36426828,
+  "uncompressed_bytes": 36428980,
   "files": [
     {
       "path": ".gitignore",
@@ -89,19 +89,19 @@
       "sha256": "946fa266f1d1626e8a04926fb1318365e371a102824f09cca5b08a77b54189ae"
     },
     {
-      "path": "UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF19.md",
-      "size": 769,
-      "sha256": "f81972810c6784f98e56755f84692fedd38b5319ad17f6a73ba4a2cee45e15e4"
+      "path": "UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF20.md",
+      "size": 512,
+      "sha256": "7b44eef27f92689422950ce2a327d4c8c645f426cf88fb0e184115543639957c"
     },
     {
       "path": "VERSAO",
       "size": 31,
-      "sha256": "a533fcbd46555ebadc18859ce7055ee1e6dd9fabc46cf666b4e53b5fd19a5f3e"
+      "sha256": "c238184ee058de95033c729ca38d99d7fdd33a956be8eac3c132d447c375888c"
     },
     {
       "path": "VERSAO.txt",
       "size": 31,
-      "sha256": "a533fcbd46555ebadc18859ce7055ee1e6dd9fabc46cf666b4e53b5fd19a5f3e"
+      "sha256": "c238184ee058de95033c729ca38d99d7fdd33a956be8eac3c132d447c375888c"
     },
     {
       "path": "__init__.py",
@@ -120,8 +120,8 @@
     },
     {
       "path": "alpha_live.py",
-      "size": 5053,
-      "sha256": "5c94fe82d22d9d5219cb967ec8768ca67d067bd7e9f45e6d9550affb99058919"
+      "size": 5892,
+      "sha256": "f157eee7e7def44afb8cc7a2132d3308d13aed230fd55b5ea211cfebba5de57c"
     },
     {
       "path": "alpha_marketing_autopilot.py",
@@ -160,8 +160,8 @@
     },
     {
       "path": "app.py",
-      "size": 1937020,
-      "sha256": "3b9127cab80154ac4a1b839c0d5452b07920dca916fc6c514a271034371dece1"
+      "size": 1938590,
+      "sha256": "3dbb17b87afcd41ac8bd737578e5838b733fcfb0ae4ddcb3c3a16804a0f54a50"
     },
     {
       "path": "assets/catalogos_legados/acervo_catalogos_legados.json",

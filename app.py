@@ -16203,10 +16203,25 @@ with st.sidebar:
             for projeto in resultados_globais["projetos"]:
                 st.write(f"🧠 **{projeto.get('tema') or projeto.get('produto') or 'Projeto'}** · {projeto.get('cliente', 'Cliente')}")
 
-    h_atual = carregar_historico()
-    st.download_button("📥 BAIXAR BACKUP", data=json.dumps(h_atual, ensure_ascii=False, indent=4), file_name="backup_historico.json", mime="application/json", type="primary", use_container_width=True)
-    st.download_button("📦 BACKUP DO CATÁLOGO", data=json.dumps(carregar_catalogo(), ensure_ascii=False, indent=4), file_name="backup_catalogo.json", mime="application/json", use_container_width=True)
-    st.download_button("👥 BACKUP DE CLIENTES", data=json.dumps(carregar_clientes(), ensure_ascii=False, indent=4), file_name="backup_clientes.json", mime="application/json", use_container_width=True)
+    # HF20 — backups manuais são preparados somente quando solicitados. Antes,
+    # três json.dumps grandes rodavam em todo rerun da barra lateral.
+    if st.button("💾 Preparar backups para download", key="hf20_preparar_backups_sidebar", use_container_width=True):
+        st.session_state["_hf20_backups_sidebar"] = {
+            "historico": json.dumps(carregar_historico(), ensure_ascii=False, indent=4),
+            "catalogo": json.dumps(carregar_catalogo(), ensure_ascii=False, indent=4),
+            "clientes": json.dumps(carregar_clientes(), ensure_ascii=False, indent=4),
+            "preparado_em": agora_local().isoformat(),
+        }
+    _hf20_backups = st.session_state.get("_hf20_backups_sidebar")
+    if isinstance(_hf20_backups, dict):
+        st.download_button("📥 BACKUP DO HISTÓRICO", data=_hf20_backups.get("historico", "[]"), file_name="backup_historico.json", mime="application/json", type="primary", use_container_width=True)
+        st.download_button("📦 BACKUP DO CATÁLOGO", data=_hf20_backups.get("catalogo", "[]"), file_name="backup_catalogo.json", mime="application/json", use_container_width=True)
+        st.download_button("👥 BACKUP DE CLIENTES", data=_hf20_backups.get("clientes", "[]"), file_name="backup_clientes.json", mime="application/json", use_container_width=True)
+        try:
+            _hf20_preparado = datetime.fromisoformat(str(_hf20_backups.get("preparado_em") or "")).strftime("%H:%M")
+            st.caption(f"Backups preparados às {_hf20_preparado}. Clique novamente em Preparar para atualizar.")
+        except Exception:
+            pass
 
     dados_sidebar_at = carregar_atendimentos()
     abertos_sidebar_at = [a for a in dados_sidebar_at.get("itens", []) if a.get("status") not in ("Entregue", "Pós-venda", "Arquivado")]
@@ -16258,36 +16273,40 @@ iniciar_estado("alerta_proposta_numero", None)
 aplicar_limpeza_formulario_pendente()
 aplicar_proposta_pendente_no_formulario()
 
-# --- ALERTAS DE ENTREGA ALINHADOS À FONTE ÚNICA (HF18) ---
-# A Agenda da Anna, Histórico, THU e operação precisam partir do mesmo universo:
-# proposta ativa = não encerrada/cancelada e ainda não Entregue. A data sozinha
-# nunca reabre um registro histórico nem transforma orçamento não aprovado em
-# atraso de produção.
-hoje = hoje_local()
-alertas_hoje, alertas_atrasados, alertas_saida_atrasada, alertas_proximos, alertas_prazo_aprovacao = [], [], [], [], []
-for p in carregar_historico():
-    estado_alerta = _status_resumo(p)
-    if not estado_alerta.get("ativa"):
-        continue
-    entrega = data_entrega_segura(p.get("data_entrega"))
-    if not entrega:
-        continue
-    dias = (entrega - hoje).days
+# --- ALERTAS DE ENTREGA ALINHADOS À FONTE ÚNICA (HF20) ---
+def _calcular_alertas_entrega_hf20():
+    """Calcula alertas somente nas telas que realmente os exibem.
 
-    if not estado_alerta.get("aprovado"):
+    Antes do HF20 a varredura completa do Histórico acontecia em todo rerun do
+    aplicativo, inclusive Catálogo, Marketing, Configurações etc.
+    """
+    hoje = hoje_local()
+    alertas_hoje, alertas_atrasados, alertas_saida_atrasada, alertas_proximos, alertas_prazo_aprovacao = [], [], [], [], []
+    historico_alertas = carregar_historico()
+    for p in historico_alertas if isinstance(historico_alertas, list) else []:
+        estado_alerta = _status_resumo(p)
+        if not estado_alerta.get("ativa"):
+            continue
+        entrega = data_entrega_segura(p.get("data_entrega"))
+        if not entrega:
+            continue
+        dias = (entrega - hoje).days
+
+        if not estado_alerta.get("aprovado"):
+            if dias < 0:
+                alertas_prazo_aprovacao.append((p, abs(dias)))
+            continue
+
         if dias < 0:
-            alertas_prazo_aprovacao.append((p, abs(dias)))
-        continue
-
-    if dias < 0:
-        if estado_alerta.get("pronto"):
-            alertas_saida_atrasada.append((p, abs(dias)))
-        else:
-            alertas_atrasados.append((p, abs(dias)))
-    elif dias == 0:
-        alertas_hoje.append((p, bool(estado_alerta.get("pronto"))))
-    elif dias <= 3:
-        alertas_proximos.append((p, dias))
+            if estado_alerta.get("pronto"):
+                alertas_saida_atrasada.append((p, abs(dias)))
+            else:
+                alertas_atrasados.append((p, abs(dias)))
+        elif dias == 0:
+            alertas_hoje.append((p, bool(estado_alerta.get("pronto"))))
+        elif dias <= 3:
+            alertas_proximos.append((p, dias))
+    return historico_alertas, alertas_hoje, alertas_atrasados, alertas_saida_atrasada, alertas_proximos, alertas_prazo_aprovacao
 
 def renderizar_alertas_clicaveis(titulo, alertas, tipo, prefixo):
     if not alertas:
@@ -16318,6 +16337,7 @@ def renderizar_alertas_clicaveis(titulo, alertas, tipo, prefixo):
             st.rerun()
 
 def renderizar_painel_alertas(prefixo):
+    historico_alertas, alertas_hoje, alertas_atrasados, alertas_saida_atrasada, alertas_proximos, alertas_prazo_aprovacao = _calcular_alertas_entrega_hf20()
     renderizar_alertas_clicaveis("🚨 Produção atrasada", alertas_atrasados, "atrasado", prefixo)
     renderizar_alertas_clicaveis("🚚 Retiradas/entregas atrasadas", alertas_saida_atrasada, "saida_atrasada", prefixo)
     renderizar_alertas_clicaveis("⏰ Propostas com prazo vencido aguardando aprovação", alertas_prazo_aprovacao, "prazo_aprovacao", prefixo)
@@ -16328,7 +16348,7 @@ def renderizar_painel_alertas(prefixo):
         return
 
     proposta_alerta = next(
-        (p for p in carregar_historico() if p.get("numero_proposta") == st.session_state.alerta_proposta_numero),
+        (p for p in historico_alertas if p.get("numero_proposta") == st.session_state.alerta_proposta_numero),
         None,
     )
     if not proposta_alerta:
@@ -16420,7 +16440,8 @@ erro_migracao = st.session_state.pop("_erro_migracao", None)
 if erro_migracao:
     st.warning(erro_migracao)
 
-_dados_atendimento_badge = carregar_atendimentos()
+# HF20: reutiliza a leitura já feita na barra lateral no mesmo rerun.
+_dados_atendimento_badge = dados_sidebar_at if isinstance(globals().get("dados_sidebar_at"), dict) else carregar_atendimentos()
 _qtd_atendimento_badge = sum(1 for _a in _dados_atendimento_badge.get("itens", []) if _a.get("status") not in ("Entregue", "Pós-venda", "Arquivado"))
 _rotulo_atendimento = f"📥 Atendimento ({_qtd_atendimento_badge})" if _qtd_atendimento_badge else "📥 Multicanal"
 

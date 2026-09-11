@@ -31,6 +31,7 @@ def _agora() -> datetime:
 
 
 def _carregar() -> dict[str, Any]:
+    """Leitura fresca usada em operações de escrita."""
     if load_document is None:
         return dict(DEFAULT)
     dados = load_document(DOC_KEY, LOCAL_PATH, DEFAULT)
@@ -41,9 +42,28 @@ def _carregar() -> dict[str, Any]:
     return dados
 
 
+@st.cache_data(ttl=10, show_spinner=False)
+def _carregar_snapshot_leitura() -> dict[str, Any]:
+    """HF20: snapshot curto compartilhado entre Alpha Live e Radar.
+
+    Os dois fragmentos atualizam a cada 15s e antes faziam duas leituras do mesmo
+    documento. Um TTL de 10s mantém a sensação de tempo real e evita consulta
+    duplicada no mesmo ciclo. Escritas continuam usando `_carregar()` fresco.
+    """
+    dados = _carregar()
+    return {
+        "usuarios": {str(k): dict(v) for k, v in (dados.get("usuarios") or {}).items() if isinstance(v, dict)},
+        "eventos": [dict(x) for x in (dados.get("eventos") or []) if isinstance(x, dict)],
+    }
+
+
 def _salvar(dados: dict[str, Any]) -> None:
     if save_document is not None:
         save_document(DOC_KEY, dados, LOCAL_PATH)
+    try:
+        _carregar_snapshot_leitura.clear()
+    except Exception:
+        pass
 
 
 def session_id() -> str:
@@ -101,7 +121,7 @@ def registrar_atividade(usuario: dict[str, Any] | str, acao: str, modulo: str = 
 
 
 def obter_operacao_online(expira_segundos: int = 180) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    dados = _carregar()
+    dados = _carregar_snapshot_leitura()
     agora = _agora()
     limite = agora - timedelta(seconds=max(30, int(expira_segundos)))
     online = []
@@ -131,8 +151,8 @@ def obter_operacao_online(expira_segundos: int = 180) -> tuple[list[dict[str, An
 
 
 def obter_eventos_recentes(limite: int = 80) -> list[dict[str, Any]]:
-    """HF4: retorna somente a trilha leve de eventos concluídos da equipe."""
-    dados = _carregar()
+    """HF20: retorna a trilha usando o mesmo snapshot curto do Alpha Live."""
+    dados = _carregar_snapshot_leitura()
     eventos = dados.get("eventos", []) if isinstance(dados, dict) else []
     if not isinstance(eventos, list):
         return []
