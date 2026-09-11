@@ -37361,6 +37361,29 @@ if pagina_atual == "configuracoes":
                 for _hf18_warning in _hf18_preflight.warnings:
                     st.caption(f"ℹ️ {_hf18_warning}")
 
+            # HF23: diagnóstico da release atual. Testes históricos com versão
+            # congelada são separados do gate real, enquanto sintaxe/runtime/HF7
+            # continuam bloqueando uma atualização insegura.
+            try:
+                from release_diagnostics import run_release_diagnostics as _hf23_run_release_diagnostics
+                _hf23_release_diag = _hf23_run_release_diagnostics(Path(__file__).resolve().parent)
+            except Exception as _hf23_diag_exc:
+                _hf23_release_diag = None
+                st.warning(f"Diagnóstico da release indisponível: {_hf23_diag_exc}")
+
+            if _hf23_release_diag is not None:
+                _hf23_tests = _hf23_release_diag.test_inventory
+                if _hf23_release_diag.ok:
+                    st.success(
+                        "Diagnóstico da release: OK • "
+                        f"{_hf23_tests.portable_files + _hf23_tests.current_release_files} teste(s) atual(is)/portável(is) • "
+                        f"{_hf23_tests.historical_version_files} histórico(s) separado(s)."
+                    )
+                else:
+                    st.error("Diagnóstico da release reprovado: " + " • ".join(_hf23_release_diag.problems))
+                for _hf23_warning in _hf23_release_diag.warnings:
+                    st.caption(f"🧪 {_hf23_warning}")
+
             st.json({
                 "versao_app": VERSAO_APP,
                 "versao_dados": VERSAO_DADOS,
@@ -37375,8 +37398,21 @@ if pagina_atual == "configuracoes":
                         "avisos": _hf18_preflight.warnings,
                     } if _hf18_preflight is not None else {"status": "INDISPONÍVEL"}
                 ),
+                "diagnostico_release_hf23": (
+                    {
+                        "status": "OK" if _hf23_release_diag.ok else "REPROVADO",
+                        "versao": _hf23_release_diag.version,
+                        "problemas": _hf23_release_diag.problems,
+                        "avisos": _hf23_release_diag.warnings,
+                        "testes": _hf23_release_diag.test_inventory.to_dict(),
+                        "checks": _hf23_release_diag.checks,
+                    } if _hf23_release_diag is not None else {"status": "INDISPONÍVEL"}
+                ),
             }, expanded=False)
-            _hf18_update_blocked = bool(_hf18_preflight is not None and not _hf18_preflight.ok)
+            _hf18_update_blocked = bool(
+                (_hf18_preflight is not None and not _hf18_preflight.ok)
+                or (_hf23_release_diag is not None and not _hf23_release_diag.ok)
+            )
             if st.button("🛡️ Preparar atualização segura", type="primary", key="preparar_update_seguro", use_container_width=True, disabled=_hf18_update_blocked):
                 try:
                     bk = criar_backup_completo(tipo="antes_atualizacao", protegido=True, motivo=f"Ponto de restauração antes de atualizar a partir da versão {VERSAO_APP}")

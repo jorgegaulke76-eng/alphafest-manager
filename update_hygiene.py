@@ -24,6 +24,7 @@ REQUIRED_RUNTIME_FILES = {
     "VERSAO.txt",
     "cloud_db.py",
     "backup_schedule_service.py",
+    "release_diagnostics.py",
     "config.py",
     "marketing_template_engine.py",
     "marketing_anna_renderer_hf11.py",
@@ -183,13 +184,29 @@ def _manifest(root: Path, files: list[Path], version: str) -> dict:
         size = p.stat().st_size
         total += size
         entries.append({"path": rel, "size": size, "sha256": sha256_file(p)})
+    validation = {}
+    try:
+        # Import tardio evita ciclo: release_diagnostics usa runtime_integrity_check.
+        from release_diagnostics import run_release_diagnostics
+        diag = run_release_diagnostics(root)
+        validation = {
+            "status": "OK" if diag.ok else "REPROVADO",
+            "problems": list(diag.problems),
+            "warnings": list(diag.warnings),
+            "critical_python_compile": diag.checks.get("critical_python_compile", {}),
+            "tests": diag.test_inventory.to_dict(),
+        }
+    except Exception as exc:
+        validation = {"status": "INDISPONIVEL", "problems": [str(exc)]}
+
     return {
-        "schema": 1,
+        "schema": 2,
         "product": "AlphaFest Manager",
         "version": version,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "policy": "codigo_assets_migracoes_sem_dados",
         "hf7_preview_sha256": HF7_PREVIEW_SHA256,
+        "validation": validation,
         "file_count": len(entries),
         "uncompressed_bytes": total,
         "files": entries,
@@ -280,8 +297,29 @@ def audit_update_zip(zip_path: str | Path) -> AuditResult:
                 problems.append("HF7 dentro do ZIP não confere com o hash congelado.")
         except Exception as exc:
             problems.append(f"Não foi possível validar HF7 dentro do ZIP: {exc}")
-        if f"{top}/UPDATE_MANIFEST.json" not in names:
+        manifest_name = f"{top}/UPDATE_MANIFEST.json"
+        if manifest_name not in names:
             problems.append("UPDATE_MANIFEST.json ausente.")
+        else:
+            try:
+                manifest = json.loads(zf.read(manifest_name).decode("utf-8"))
+                if str(manifest.get("version") or "").strip() != version:
+                    problems.append("Versão do UPDATE_MANIFEST diverge da versão do ZIP.")
+                validation = manifest.get("validation") or {}
+                if validation.get("status") != "OK":
+                    problems.append(
+                        "Diagnóstico gravado no UPDATE_MANIFEST não está aprovado: "
+                        + str(validation.get("status") or "AUSENTE")
+                    )
+                expected_count = manifest.get("file_count")
+                if isinstance(expected_count, int):
+                    packaged_payload = len([n for n in names if n != manifest_name])
+                    if expected_count != packaged_payload:
+                        problems.append(
+                            f"Contagem do UPDATE_MANIFEST diverge do ZIP: {expected_count} != {packaged_payload}."
+                        )
+            except Exception as exc:
+                problems.append(f"UPDATE_MANIFEST inválido: {exc}")
 
     return AuditResult(
         ok=not problems,
