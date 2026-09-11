@@ -38,6 +38,7 @@ __all__ = [
     "connection_test",
     "load_document",
     "save_document",
+    "delete_document",
     "save_document_cas",
     "mutate_document",
     "mutate_list_record",
@@ -198,6 +199,39 @@ def save_document(document_key: str, value: Any, local_path: str) -> bool:
         pass
     return True
 
+
+
+
+def delete_document(document_key: str, local_path: str) -> bool:
+    """Remove um documento do banco oficial e da contingência local.
+
+    HF22 — usado pela retenção real dos backups. Quando há Supabase, a remoção
+    local só acontece depois de o DELETE online ser confirmado.
+    """
+    if not online_configured():
+        try:
+            Path(local_path).unlink(missing_ok=True)
+            return True
+        except OSError:
+            return False
+
+    url, _ = _config()
+    try:
+        response = _SESSION.delete(
+            f"{url}/rest/v1/app_data",
+            headers=_headers({"Prefer": "return=minimal"}),
+            params={"key": f"eq.{document_key}"},
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+    except requests.RequestException:
+        return False
+
+    try:
+        Path(local_path).unlink(missing_ok=True)
+    except OSError:
+        pass
+    return True
 
 
 

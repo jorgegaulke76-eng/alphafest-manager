@@ -23,6 +23,7 @@ REQUIRED_RUNTIME_FILES = {
     "VERSAO",
     "VERSAO.txt",
     "cloud_db.py",
+    "backup_schedule_service.py",
     "config.py",
     "marketing_template_engine.py",
     "marketing_anna_renderer_hf11.py",

@@ -55,6 +55,7 @@ except Exception as _site_cf_import_exc:
 from alphafest_design_system import inject_design_system, hero as af_hero, feature_card as af_feature_card, section_title as af_section_title
 from alpha_marketing_autopilot import rank_products as _alpha_marketing_rank_products
 from alpha_marketing_designer import build_design_plan as _alpha_build_design_plan, sanitize_channel_copy as _alpha_sanitize_channel_copy, validate_design_plan as _alpha_validate_design_plan, validate_art_bytes as _alpha_validate_art_bytes
+from backup_schedule_service import backup_due as _backup_due, slot_id as _backup_slot_id, reservation_is_active as _backup_reservation_active
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
 # padrão é estável e preserva campanhas existentes sem importar a engine no boot.
@@ -15869,6 +15870,9 @@ BACKUP_CONFIG_PADRAO = {
     "horario": "22:00",
     "retencao_automatica": 30,
     "ultimo_backup_em": "",
+    "ultimo_backup_slot": "",
+    "backup_em_andamento_slot": "",
+    "backup_em_andamento_em": "",
     "versao_dados": VERSAO_DADOS,
 }
 
@@ -15901,8 +15905,8 @@ DOCUMENTOS_BACKUP = [
     ("planejamento_compras_db", ARQUIVO_PLANEJAMENTO_COMPRAS, []),
 ]
 
-def carregar_config_backup():
-    dados = load_document("backup_config", ARQUIVO_BACKUP_CONFIG, BACKUP_CONFIG_PADRAO)
+def carregar_config_backup(force_refresh=False):
+    dados = load_document("backup_config", ARQUIVO_BACKUP_CONFIG, BACKUP_CONFIG_PADRAO, force_refresh=force_refresh)
     config = dict(BACKUP_CONFIG_PADRAO)
     if isinstance(dados, dict):
         config.update(dados)
@@ -15912,7 +15916,7 @@ def salvar_config_backup(config):
     dados = dict(BACKUP_CONFIG_PADRAO)
     if isinstance(config, dict):
         dados.update(config)
-    save_document("backup_config", dados, ARQUIVO_BACKUP_CONFIG)
+    return bool(save_document("backup_config", dados, ARQUIVO_BACKUP_CONFIG))
 
 def coletar_dados_backup():
     documentos = {}
@@ -15935,9 +15939,60 @@ def carregar_indice_backups():
     return dados if isinstance(dados, list) else []
 
 def salvar_indice_backups(indice):
-    save_document("backups_index", indice, "backups_index.json")
+    return bool(save_document("backups_index", indice, "backups_index.json"))
 
-def criar_backup_completo(tipo="manual", protegido=False, motivo=""):
+def excluir_documento_backup(backup_id):
+    backup_id = str(backup_id or "").strip()
+    if not backup_id:
+        return False
+    func = getattr(_cloud_db, "delete_document", None) if _cloud_db else None
+    caminho = f"backup_{backup_id}.json"
+    if callable(func):
+        ok = bool(func(f"backup_{backup_id}", caminho))
+    else:
+        try:
+            Path(caminho).unlink(missing_ok=True)
+            ok = True
+        except OSError:
+            ok = False
+    if ok:
+        invalidate_document_cache(f"backup_{backup_id}")
+    return ok
+
+def aplicar_retencao_backups(indice, limite):
+    """Mantém somente N backups automáticos não protegidos e apaga os excedentes."""
+    limite = max(1, int(limite or 30))
+    automaticos = 0
+    manter, expirar = [], []
+    for item in list(indice or []):
+        if item.get("tipo") == "automatico" and not item.get("protegido"):
+            automaticos += 1
+            if automaticos > limite:
+                expirar.append(item)
+                continue
+        manter.append(item)
+
+    # Primeiro confirma o índice enxuto. Só depois remove os documentos físicos.
+    if not salvar_indice_backups(manter):
+        raise RuntimeError("Não foi possível confirmar o índice de backups no banco.")
+
+    falharam = []
+    removidos = []
+    for item in expirar:
+        bid = str(item.get("backup_id") or "").strip()
+        if bid and excluir_documento_backup(bid):
+            removidos.append(bid)
+        else:
+            falharam.append(item)
+
+    if falharam:
+        # Mantém no índice o que não foi possível apagar para tentar novamente depois.
+        indice_retry = manter + falharam
+        indice_retry.sort(key=lambda x: str(x.get("criado_em") or ""), reverse=True)
+        salvar_indice_backups(indice_retry)
+    return removidos, falharam
+
+def criar_backup_completo(tipo="manual", protegido=False, motivo="", slot_automatico=""):
     documentos, contagens = coletar_dados_backup()
     instante = agora_local()
     backup_id = instante.strftime("%Y%m%d_%H%M%S_%f")
@@ -15954,23 +16009,24 @@ def criar_backup_completo(tipo="manual", protegido=False, motivo=""):
     }
     serializado = json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")
     payload["sha256"] = hashlib.sha256(serializado).hexdigest()
-    save_document(f"backup_{backup_id}", payload, f"backup_{backup_id}.json")
+    if not save_document(f"backup_{backup_id}", payload, f"backup_{backup_id}.json"):
+        raise RuntimeError("O banco não confirmou a gravação do backup completo.")
     indice = carregar_indice_backups()
     indice.insert(0, {k: payload[k] for k in ["backup_id", "criado_em", "tipo", "protegido", "motivo", "versao_app", "versao_dados", "contagens", "sha256"]})
-    config = carregar_config_backup()
+    config = carregar_config_backup(force_refresh=True)
     limite = max(1, int(config.get("retencao_automatica", 30) or 30))
-    automaticos = 0
-    novo_indice = []
-    for item in indice:
-        if item.get("tipo") == "automatico" and not item.get("protegido"):
-            automaticos += 1
-            if automaticos > limite:
-                continue
-        novo_indice.append(item)
-    salvar_indice_backups(novo_indice)
+    removidos, falharam = aplicar_retencao_backups(indice, limite)
     config["ultimo_backup_em"] = instante.isoformat()
-    salvar_config_backup(config)
-    registrar_auditoria("Criar backup", "Backup", backup_id, {"tipo": tipo, "contagens": contagens})
+    if slot_automatico:
+        config["ultimo_backup_slot"] = str(slot_automatico)
+    config["backup_em_andamento_slot"] = ""
+    config["backup_em_andamento_em"] = ""
+    if not salvar_config_backup(config):
+        raise RuntimeError("Backup criado, mas o banco não confirmou a atualização da rotina de backup.")
+    registrar_auditoria("Criar backup", "Backup", backup_id, {
+        "tipo": tipo, "contagens": contagens, "retencao_removidos": len(removidos),
+        "retencao_pendentes": len(falharam), "slot": str(slot_automatico or ""),
+    })
     return payload
 
 def carregar_backup_por_id(backup_id):
@@ -16014,39 +16070,80 @@ def restaurar_backup_payload(payload):
     registrar_auditoria("Restaurar backup", "Backup", payload.get("backup_id", ""), {"documentos": restaurados})
     return restaurados
 
+def _reservar_slot_backup_automatico(config, slot, agora):
+    """Reserva o slot diário usando CAS para evitar dois backups simultâneos."""
+    slot_txt = _backup_slot_id(slot)
+    if str(config.get("ultimo_backup_slot") or "") == slot_txt:
+        return False
+    if (
+        str(config.get("backup_em_andamento_slot") or "") == slot_txt
+        and _backup_reservation_active(str(config.get("backup_em_andamento_em") or ""), agora, 30)
+    ):
+        return False
+
+    reservado = dict(config)
+    reservado["backup_em_andamento_slot"] = slot_txt
+    reservado["backup_em_andamento_em"] = agora.isoformat()
+    cas_func = getattr(_cloud_db, "save_document_cas", None) if _cloud_db else None
+    online_func = getattr(_cloud_db, "online_configured", None) if _cloud_db else None
+    online = bool(online_func()) if callable(online_func) else False
+    if online and callable(cas_func):
+        ok, _motivo = cas_func("backup_config", config, reservado, ARQUIVO_BACKUP_CONFIG)
+        if not ok:
+            invalidate_document_cache("backup_config")
+            return False
+        invalidate_document_cache("backup_config")
+        return True
+
+    # Contingência local: não há concorrência entre servidores remotos.
+    return bool(salvar_config_backup(reservado))
+
+
 def executar_backup_automatico_se_necessario():
-    if st.session_state.get("backup_auto_verificado"):
+    # HF22: reavalia durante a sessão, mas no máximo uma vez a cada 5 minutos.
+    agora_mono = time.monotonic()
+    ultima_verificacao = float(st.session_state.get("_backup_auto_ultima_verificacao_mono", 0) or 0)
+    if ultima_verificacao and agora_mono - ultima_verificacao < 300:
         return
-    st.session_state.backup_auto_verificado = True
-    config = carregar_config_backup()
+    st.session_state["_backup_auto_ultima_verificacao_mono"] = agora_mono
+
+    config = carregar_config_backup(force_refresh=True)
     if not config.get("ativo", True):
         return
     agora = agora_local()
+    deve_fazer, slot = _backup_due(agora, str(config.get("horario", "22:00")), str(config.get("ultimo_backup_em", "")))
+    if not deve_fazer:
+        return
+    if not _reservar_slot_backup_automatico(config, slot, agora):
+        return
+
+    slot_txt = _backup_slot_id(slot)
     try:
-        hora, minuto = [int(x) for x in str(config.get("horario", "22:00")).split(":", 1)]
-    except Exception:
-        hora, minuto = 22, 0
-    horario_alvo = agora.replace(hour=hora, minute=minuto, second=0, microsecond=0)
-    ultimo = None
-    try:
-        ultimo = datetime.fromisoformat(str(config.get("ultimo_backup_em", "")))
-        if ultimo.tzinfo is None:
-            ultimo = ultimo.replace(tzinfo=agora.tzinfo)
-    except Exception:
-        ultimo = None
-    deve_fazer = agora >= horario_alvo and (ultimo is None or ultimo.date() < agora.date())
-    if deve_fazer:
+        criar_backup_completo(
+            tipo="automatico",
+            motivo=f"Rotina diária automática — competência {slot.strftime('%d/%m/%Y %H:%M')}",
+            slot_automatico=slot_txt,
+        )
+        st.session_state._mensagem_sucesso_pendente = "Backup automático diário concluído com sucesso."
+    except Exception as exc:
+        # Libera a reserva para permitir nova tentativa num próximo ciclo.
         try:
-            criar_backup_completo(tipo="automatico", motivo="Rotina diária automática")
-            st.session_state._mensagem_sucesso_pendente = "Backup automático diário concluído com sucesso."
-        except Exception as exc:
-            st.session_state._erro_backup_automatico = f"Não foi possível concluir o backup automático: {exc}"
+            cfg_falha = carregar_config_backup(force_refresh=True)
+            if str(cfg_falha.get("backup_em_andamento_slot") or "") == slot_txt:
+                cfg_falha["backup_em_andamento_slot"] = ""
+                cfg_falha["backup_em_andamento_em"] = ""
+                salvar_config_backup(cfg_falha)
+        except Exception:
+            pass
+        st.session_state._erro_backup_automatico = f"Não foi possível concluir o backup automático: {exc}"
 
 # Manutenções isoladas: se uma delas falhar, a tela continua disponível.
 if not st.session_state.get("_manutencao_boot_1424_concluida"):
     executar_etapa_segura("Migrações seguras", executar_migracoes_seguras)
-    executar_etapa_segura("Backup automático", executar_backup_automatico_se_necessario)
     st.session_state["_manutencao_boot_1424_concluida"] = True
+# HF22: a sessão pode permanecer aberta antes/depois do horário do backup. A
+# própria função é barata e se limita a uma verificação a cada cinco minutos.
+executar_etapa_segura("Backup automático", executar_backup_automatico_se_necessario)
 
 # --- SIDEBAR ---
 with st.sidebar:
@@ -37013,7 +37110,7 @@ if pagina_atual == "configuracoes":
         with st.form("form_config_backup"):
             b1, b2, b3 = st.columns(3)
             backup_ativo = b1.checkbox("Backup automático ativo", value=bool(cfg_backup.get("ativo", True)))
-            horario_backup = b2.text_input("Horário diário", value=str(cfg_backup.get("horario", "22:00")), help="Formato HH:MM. Se o sistema estiver fechado, o backup será feito no primeiro acesso após esse horário.")
+            horario_backup = b2.text_input("Horário diário", value=str(cfg_backup.get("horario", "22:00")), help="Formato HH:MM. Se o Manager estiver fechado no horário, o backup pendente será feito no primeiro acesso seguinte, mesmo que seja no dia seguinte.")
             retencao_backup = b3.number_input("Backups automáticos mantidos", min_value=1, max_value=365, value=int(cfg_backup.get("retencao_automatica", 30) or 30))
             salvar_backup_cfg = st.form_submit_button("💾 Salvar rotina de backup", use_container_width=True)
         if salvar_backup_cfg:
