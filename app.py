@@ -58,6 +58,7 @@ from alpha_marketing_autopilot import rank_products as _alpha_marketing_rank_pro
 from alpha_marketing_designer import build_design_plan as _alpha_build_design_plan, sanitize_channel_copy as _alpha_sanitize_channel_copy, validate_design_plan as _alpha_validate_design_plan, validate_art_bytes as _alpha_validate_art_bytes
 from global_search_service import build_global_search_index as _build_global_search_index, query_global_search_index as _query_global_search_index
 from update_safe_ui import render_update_safe_tab as _render_update_safe_tab
+from system_health_ui import render_system_health_tab as _render_system_health_tab, render_boot_manager_tab as _render_boot_manager_tab
 from backup_schedule_service import backup_due as _backup_due, slot_id as _backup_slot_id, reservation_is_active as _backup_reservation_active
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
@@ -37211,45 +37212,13 @@ if pagina_atual == "configuracoes":
         tab_diag, tab_boot, tab_audit, tab_lix, tab_update = st.tabs(["🩺 Saúde do sistema", "🚦 Boot Manager", "🧾 Auditoria", "🗑️ Lixeira", "🔄 Atualização segura"])
 
         with tab_diag:
-            diag = diagnostico_sistema()
-            d1, d2, d3, d4 = st.columns(4)
-            d1.metric("Supabase", "🟢 Online" if diag["supabase_ok"] else "🟡 Contingência")
-            d2.metric("Integridade", "🟢 OK" if diag["integridade_ok"] else "🔴 Atenção")
-            d3.metric("Backup", "🟢 Atual" if diag["backup_ok"] else "🟡 Verificar")
-            d4.metric("Estrutura de dados", f"v{diag['schema_version']}")
-            st.caption(diag["supabase_mensagem"])
-            if diag["backup_idade_horas"] is not None:
-                st.caption(f"Último backup há aproximadamente {diag['backup_idade_horas']:.1f} hora(s).")
-            if diag["problemas"]:
-                for problema in diag["problemas"]:
-                    st.error(problema)
-            else:
-                st.success("Estruturas principais válidas.")
-            st.write(f"Registros de auditoria: **{diag['auditorias']}** • Itens recuperáveis na lixeira: **{diag['lixeira']}**")
-            if st.button("🔄 Executar diagnóstico novamente", key="health_refresh", use_container_width=True):
-                st.rerun()
+            _render_system_health_tab(diagnostico_sistema=diagnostico_sistema)
 
         with tab_boot:
-            st.subheader("🚦 Boot Manager 14.2.5")
-            st.caption("Diagnóstico exclusivo da Central do Jorge. Nenhuma configuração da Central da Anna é alterada.")
-            registros_boot = diagnostico_boot_1424()
-            linhas_boot = []
-            for nome_etapa, info_etapa in registros_boot.items():
-                status_etapa = str(info_etapa.get("status", "ok"))
-                icone = "🟢" if status_etapa == "ok" else ("🟡" if status_etapa in {"contingencia", "isolado"} else "🔴")
-                linhas_boot.append({
-                    "Etapa": nome_etapa,
-                    "Estado": f"{icone} {status_etapa}",
-                    "Tempo (s)": round(float(info_etapa.get("duracao", 0.0) or 0.0), 3),
-                    "Detalhe": str(info_etapa.get("detalhe", "")),
-                })
-            st.dataframe(pd.DataFrame(linhas_boot), use_container_width=True, hide_index=True)
-            flags_boot = feature_flags()
-            st.markdown("#### Chaves de segurança")
-            st.json(flags_boot, expanded=False)
-            st.info("Preview, IA e Campanha Mestre permanecem desligados até homologação na Central do Jorge.")
-            if st.button("🔄 Atualizar diagnóstico do boot", key="boot1424_refresh", use_container_width=True):
-                st.rerun()
+            _render_boot_manager_tab(
+                diagnostico_boot=diagnostico_boot_1424,
+                feature_flags=feature_flags,
+            )
 
         with tab_audit:
             st.subheader("🔗 Auditoria de Sincronização Operacional · HF7")
