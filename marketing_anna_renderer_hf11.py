@@ -33,6 +33,21 @@ def _hex(value: str, alpha: int = 255):
         return (0, 0, 0, alpha)
 
 
+def _shade(value: str, factor: float = 1.0) -> str:
+    r, g, b, _ = _hex(value)
+    if factor >= 1:
+        amt = min(factor - 1.0, 1.0)
+        r = int(r + (255 - r) * amt)
+        g = int(g + (255 - g) * amt)
+        b = int(b + (255 - b) * amt)
+    else:
+        amt = max(factor, 0.0)
+        r = int(r * amt)
+        g = int(g * amt)
+        b = int(b * amt)
+    return f"#{max(0,min(255,r)):02X}{max(0,min(255,g)):02X}{max(0,min(255,b)):02X}"
+
+
 def _fit(draw: ImageDraw.ImageDraw, text: str, width: int, start: int, minimum: int, *, bold=True, serif=False, italic=False):
     text = str(text or "")
     for size in range(int(start), int(minimum) - 1, -2):
@@ -126,6 +141,147 @@ def _slug_text(value: str) -> str:
 
 def _is_modelo_anna_1_locked(title: str) -> bool:
     return _slug_text(title) == "gravacao laser"
+
+
+def _rgb_to_hex(rgb: tuple[int, int, int]) -> str:
+    return f"#{rgb[0]:02X}{rgb[1]:02X}{rgb[2]:02X}"
+
+
+def _hsv_triplet(rgb: tuple[int, int, int]) -> tuple[float, float, float]:
+    import colorsys
+    r, g, b = [max(0, min(255, int(v))) / 255.0 for v in rgb]
+    return colorsys.rgb_to_hsv(r, g, b)
+
+
+def _looks_blueish(value: str) -> bool:
+    try:
+        r, g, b, _ = _hex(value)
+    except Exception:
+        return False
+    h, s, v = _hsv_triplet((r, g, b))
+    return (0.50 <= h <= 0.72 and s >= 0.25 and v >= 0.20)
+
+
+def _palette_seems_default_blue(palette: dict[str, str]) -> bool:
+    primary = str(palette.get("azul_escuro") or palette.get("primary") or "")
+    secondary = str(palette.get("azul") or palette.get("secondary") or "")
+    return _looks_blueish(primary) and _looks_blueish(secondary)
+
+
+def _extract_product_palette(image_bytes: bytes) -> dict[str, str]:
+    """Extrai uma paleta simples do produto para o Anna genérico.
+
+    O objetivo não é reproduzir cor científica, mas permitir que produtos fora do
+    caso travado do copo mudem de linguagem visual automaticamente.
+    """
+    try:
+        im = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    except Exception:
+        return {}
+    # foca mais no miolo do produto e reduz ruído
+    w, h = im.size
+    crop = im.crop((int(w * 0.10), int(h * 0.08), int(w * 0.90), int(h * 0.92)))
+    crop.thumbnail((220, 220), Image.Resampling.LANCZOS)
+
+    bins: dict[tuple[int, int, int], int] = {}
+    for (r, g, b) in crop.getdata():
+        mx, mn = max(r, g, b), min(r, g, b)
+        # descarta fundos quase brancos e brilhos muito neutros
+        if mx > 244 and mn > 230:
+            continue
+        sat = 0 if mx == 0 else (mx - mn) / mx
+        if sat < 0.07 and mx > 205:
+            continue
+        key = (int(round(r / 24) * 24), int(round(g / 24) * 24), int(round(b / 24) * 24))
+        bins[key] = bins.get(key, 0) + 1
+    if not bins:
+        return {}
+
+    ranked = [rgb for rgb, _ in sorted(bins.items(), key=lambda item: item[1], reverse=True)]
+
+    def lum(rgb: tuple[int, int, int]) -> float:
+        return 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]
+
+    def sat(rgb: tuple[int, int, int]) -> float:
+        h, s, v = _hsv_triplet(rgb)
+        return s
+
+    def distinct(rgb: tuple[int, int, int], others: list[tuple[int, int, int]], min_dist: float = 56.0) -> bool:
+        for o in others:
+            d = ((rgb[0] - o[0]) ** 2 + (rgb[1] - o[1]) ** 2 + (rgb[2] - o[2]) ** 2) ** 0.5
+            if d < min_dist:
+                return False
+        return True
+
+    primary = None
+    for rgb in ranked:
+        if lum(rgb) < 145 and sat(rgb) >= 0.12:
+            primary = rgb
+            break
+    if primary is None:
+        for rgb in ranked:
+            if lum(rgb) < 170:
+                primary = rgb
+                break
+    if primary is None:
+        primary = ranked[0]
+
+    secondary = None
+    for rgb in ranked:
+        if lum(rgb) >= 80 and sat(rgb) >= 0.24 and distinct(rgb, [primary]):
+            secondary = rgb
+            break
+    if secondary is None:
+        for rgb in ranked:
+            if distinct(rgb, [primary]):
+                secondary = rgb
+                break
+    if secondary is None:
+        secondary = primary
+
+    accent = None
+    for rgb in ranked:
+        if sat(rgb) >= 0.32 and lum(rgb) >= 70 and distinct(rgb, [primary, secondary]):
+            accent = rgb
+            break
+    if accent is None:
+        # fallback: clareia a cor secundária para virar destaque amigável
+        sr, sg, sb = secondary
+        accent = (min(255, int(sr * 0.35 + 165)), min(255, int(sg * 0.35 + 165)), min(255, int(sb * 0.35 + 165)))
+
+    # fundo claro levemente tingido pela cor secundária
+    background = tuple(min(255, int(c * 0.12 + 242)) for c in secondary)
+    text = primary if lum(primary) < 120 else tuple(max(0, int(c * 0.58)) for c in primary)
+
+    return {
+        "primary": _rgb_to_hex(primary),
+        "secondary": _rgb_to_hex(secondary),
+        "accent": _rgb_to_hex(accent),
+        "background": _rgb_to_hex(background),
+        "text": _rgb_to_hex(text),
+    }
+
+
+def _build_adaptive_palette_for_generic(image_bytes: bytes, palette: dict[str, str]) -> dict[str, str]:
+    base = dict(palette or {})
+    if not _palette_seems_default_blue(base):
+        return base
+    extracted = _extract_product_palette(image_bytes)
+    if not extracted:
+        return base
+    merged = dict(base)
+    merged["primary"] = extracted.get("primary", merged.get("primary", "#07349B"))
+    merged["secondary"] = extracted.get("secondary", merged.get("secondary", "#087CE8"))
+    merged["accent"] = extracted.get("accent", merged.get("accent", "#EF2A92"))
+    merged["background"] = extracted.get("background", merged.get("background", "#FFFFFF"))
+    merged["text"] = extracted.get("text", merged.get("text", "#102D50"))
+    merged["azul_escuro"] = merged["primary"]
+    merged["azul"] = merged["secondary"]
+    merged["rosa"] = merged["accent"]
+    merged["fundo"] = merged["background"]
+    merged["texto"] = merged["text"]
+    merged["azul_claro"] = _shade(merged["secondary"], 1.38)
+    return merged
 
 
 
@@ -605,14 +761,18 @@ def _draw_square(
     O resultado não depende do compositor do Template Mestre.
     """
     W = H = 1080
+    # HF16: para o Anna genérico, a paleta precisa reagir ao produto. O caso
+    # travado de Gravação Laser permanece intocado.
+    palette = _build_adaptive_palette_for_generic(image_bytes, palette)
     white = (255, 255, 255, 255)
     blue = _hex(palette.get("azul") or palette.get("secondary") or "#087CE8")
     dark = _hex(palette.get("azul_escuro") or palette.get("primary") or "#07349B")
     pink = _hex(palette.get("rosa") or palette.get("accent") or "#EF2A92")
     yellow = _hex(palette.get("amarelo") or palette.get("metallic") or "#FFD12B")
-    green = _hex(palette.get("verde") or "#20B956")
+    green = _hex(palette.get("verde") or palette.get("accent") or "#20B956")
     text = _hex(palette.get("texto") or palette.get("text") or "#102D50")
-    light = _hex(palette.get("azul_claro") or "#DDF5FF")
+    light = _hex(palette.get("azul_claro") or _shade(palette.get("secondary") or "#DDF5FF", 1.38))
+    surface = _hex(palette.get("fundo") or palette.get("background") or "#FFFFFF")
 
     # HF11 ajuste fino após conferência visual: para `Gravação Laser`, o Modelo Anna 1
     # precisa bater com a referência aprovada, principalmente na letra do título.
@@ -625,7 +785,7 @@ def _draw_square(
         if locked is not None:
             return locked
 
-    canvas = Image.new("RGBA", (W, H), (253, 254, 255, 255))
+    canvas = Image.new("RGBA", (W, H), (*surface[:3], 255))
     draw = ImageDraw.Draw(canvas, "RGBA")
 
     # Base limpa com volumes suaves. A skin aprovada entra por cima no topo/rodapé.
@@ -637,20 +797,15 @@ def _draw_square(
     # qualquer recorte/caixa branca dura atrás do título.
     _draw_splash(draw, W, H, blue, dark, pink, yellow)
     # HF9: sem mancha rosa estrutural; o modelo aprovado usa base branca/azul limpa.
-    skin = _load_skin_master(base_dir)
-    if skin is not None:
-        # HF11: a skin entra sem o selo embutido. O único selo será aplicado no fim.
-        skin_base = _skin_without_approval_seal(skin, (W, H))
-        if skin_base is not None:
-            canvas.alpha_composite(skin_base, (0, 0))
-        draw = ImageDraw.Draw(canvas, "RGBA")
-    else:
-        logo = _load_logo(base_dir, (330, 235))
-        if logo:
-            x = (W-logo.width)//2
-            sh = _soft_shadow(logo, 13, 86)
-            canvas.alpha_composite(sh, (x+7, 8))
-            canvas.alpha_composite(logo, (x, 0))
+    # HF16: o Anna genérico não deve herdar a skin azul fixa do copo. Mantemos o
+    # logo oficial e desenhamos o restante com a paleta dinâmica do produto.
+    skin = None
+    logo = _load_logo(base_dir, (330, 235))
+    if logo:
+        x = (W-logo.width)//2
+        sh = _soft_shadow(logo, 13, 86)
+        canvas.alpha_composite(sh, (x+7, 8))
+        canvas.alpha_composite(logo, (x, 0))
 
     # Compatibilidade dos contratos visuais anteriores preservados:
     # Logo splash correto com peso | Manchete: | Manchete editorial | Produto protagonista | Benefícios grandes
@@ -682,7 +837,7 @@ def _draw_square(
         min_size = 52 if i == 0 else 47
         # IMPORTANTE: preservar a fonte aprovada; não trocar para sans/cursiva.
         f = _fit(draw, line, title_area_w-24, start_size, min_size, bold=True, serif=True, italic=True)
-        fill = white if i == 0 else _hex("#118FEF")
+        fill = white if i == 0 else blue
         bb = draw.textbbox((0, 0), line, font=f, stroke_width=13)
         tw = bb[2]-bb[0]
         tx = title_x1 + (title_area_w-tw)//2 - bb[0]
@@ -690,7 +845,7 @@ def _draw_square(
         # Contorno multicamada aprovado: sombra azul-marinho + halo cyan + azul
         # escuro + filete branco. Todas as camadas usam a MESMA fonte.
         draw.text((tx+5, y+7), line, font=f, fill=fill, stroke_width=14, stroke_fill=(0, 24, 76, 145))
-        draw.text((tx, y), line, font=f, fill=fill, stroke_width=11, stroke_fill=_hex("#26C5F7"))
+        draw.text((tx, y), line, font=f, fill=fill, stroke_width=11, stroke_fill=blue)
         draw.text((tx, y), line, font=f, fill=fill, stroke_width=8, stroke_fill=dark)
         draw.text((tx, y), line, font=f, fill=fill, stroke_width=3, stroke_fill=white)
         hb = draw.textbbox((0, 0), "Ag", font=f)

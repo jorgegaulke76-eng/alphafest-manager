@@ -69,7 +69,7 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "anna_social_redes": {
         "id": "anna_social_redes",
         "nome": "Template Anna — Redes Sociais",
-        "descricao": "Template Anna — Modelo 1 HF8-HF15: correção de composição mantendo o renderer aprovado HF11. Gravação Laser preserva a manchete visual homologada e o tipo de letra aprovado; remove a sobreposição indevida do produto herdada da referência-base; mantém palco oval limpo, produto nítido, selo único e cards temáticos; Mestre HF7 permanece congelado.",
+        "descricao": "Template Anna — Modelo 1 HF8-HF16: mantém o caso aprovado de Gravação Laser e adiciona paleta dinâmica no Anna genérico. Produtos fora do caso travado passam a adaptar fundo, destaque e contraste ao item renderizado, preservando logo, estrutura e HF7 congelado.",
         "categoria_template": "Redes Sociais",
         "status_template": "Homologado",
         "versao_template": ANNA_RENDERER_VERSION,
