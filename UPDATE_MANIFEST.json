@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF18",
-  "generated_at_utc": "2026-09-11T18:26:25.615656+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF19",
+  "generated_at_utc": "2026-09-11T18:36:16.859876+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "file_count": 361,
-  "uncompressed_bytes": 36421619,
+  "uncompressed_bytes": 36426828,
   "files": [
     {
       "path": ".gitignore",
@@ -89,19 +89,19 @@
       "sha256": "946fa266f1d1626e8a04926fb1318365e371a102824f09cca5b08a77b54189ae"
     },
     {
-      "path": "UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF18.md",
-      "size": 976,
-      "sha256": "091e7f9dedd068189d61031c6cd06f3d07e903a0fc9bbf96a5d9969f34ddb1eb"
+      "path": "UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF19.md",
+      "size": 769,
+      "sha256": "f81972810c6784f98e56755f84692fedd38b5319ad17f6a73ba4a2cee45e15e4"
     },
     {
       "path": "VERSAO",
       "size": 31,
-      "sha256": "cf9d1960028fc002f6aa67bec728cb524c1a094713fa30f0a6f0a6f4a5d386ef"
+      "sha256": "a533fcbd46555ebadc18859ce7055ee1e6dd9fabc46cf666b4e53b5fd19a5f3e"
     },
     {
       "path": "VERSAO.txt",
       "size": 31,
-      "sha256": "cf9d1960028fc002f6aa67bec728cb524c1a094713fa30f0a6f0a6f4a5d386ef"
+      "sha256": "a533fcbd46555ebadc18859ce7055ee1e6dd9fabc46cf666b4e53b5fd19a5f3e"
     },
     {
       "path": "__init__.py",
@@ -160,8 +160,8 @@
     },
     {
       "path": "app.py",
-      "size": 1934784,
-      "sha256": "ef186d7e0f67f3232c495f2eb2b182065ea04a0d9f7c81abd062ee9c2471431f"
+      "size": 1937020,
+      "sha256": "3b9127cab80154ac4a1b839c0d5452b07920dca916fc6c514a271034371dece1"
     },
     {
       "path": "assets/catalogos_legados/acervo_catalogos_legados.json",
@@ -1515,8 +1515,8 @@
     },
     {
       "path": "cloud_db.py",
-      "size": 33764,
-      "sha256": "52a287478368c4464bd5b2586371233298b4672cc9ac0efce20ca0103f6d7877"
+      "size": 36944,
+      "sha256": "81cbb1bce11d0cc62c06639a503009876aea22807d60323d0a11548267d1c383"
     },
     {
       "path": "config.py",

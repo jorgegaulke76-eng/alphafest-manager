@@ -38,6 +38,7 @@ __all__ = [
     "connection_test",
     "load_document",
     "save_document",
+    "save_document_cas",
     "mutate_document",
     "mutate_list_record",
     "append_list_record",
@@ -198,6 +199,74 @@ def save_document(document_key: str, value: Any, local_path: str) -> bool:
     return True
 
 
+
+
+def save_document_cas(document_key: str, expected_value: Any, value: Any, local_path: str, retries: int = 2):
+    """Grava um documento somente se ele ainda for a versão que a sessão leu.
+
+    HF19 — proteção genérica contra sobrescrita silenciosa. A sessão entrega em
+    ``expected_value`` a cópia que recebeu do banco. Antes de gravar, conferimos
+    se o valor remoto continua igual. Se outra sessão (ex.: Jorge/Anna) salvou
+    algo entre a leitura e o clique de salvar, a escrita é recusada.
+
+    Retorna ``(ok, motivo)``. Motivos principais: ``online``, ``conflito`` e
+    ``erro:<Classe>``. A contingência local nunca é promovida como confirmação
+    oficial quando o banco online estiver indisponível.
+    """
+    if not online_configured():
+        return False, "sem confirmação online"
+
+    url, _ = _config()
+    ultimo_erro = "conflito"
+    for _ in range(max(1, int(retries or 1))):
+        try:
+            leitura = _SESSION.get(
+                f"{url}/rest/v1/app_data",
+                headers=_headers(),
+                params={"select": "value,updated_at", "key": f"eq.{document_key}", "limit": "1"},
+                timeout=TIMEOUT,
+            )
+            leitura.raise_for_status()
+            rows = leitura.json()
+            if not rows:
+                # Documento novo: só cria quando a sessão também partiu de uma
+                # estrutura vazia. O POST usa a regra normal de upsert.
+                if expected_value not in (None, [], {}):
+                    return False, "conflito: documento remoto ausente"
+                return (True, "online") if save_document(document_key, value, local_path) else (False, "erro ao criar documento")
+
+            row = rows[0]
+            remoto = row.get("value")
+            updated_at = row.get("updated_at")
+            if remoto != expected_value:
+                return False, "conflito: documento alterado em outra sessão"
+
+            novo_updated_at = datetime.now(timezone.utc).isoformat()
+            params = {"key": f"eq.{document_key}", "select": "key"}
+            if updated_at:
+                # Segunda trava: mesmo após a conferência acima, outra sessão pode
+                # gravar nos milissegundos seguintes. O updated_at torna o PATCH CAS.
+                params["updated_at"] = f"eq.{updated_at}"
+            resposta = _SESSION.patch(
+                f"{url}/rest/v1/app_data",
+                headers=_headers({"Prefer": "return=representation"}),
+                params=params,
+                json={"value": value, "updated_at": novo_updated_at},
+                timeout=TIMEOUT,
+            )
+            resposta.raise_for_status()
+            confirmacao = resposta.json()
+            if not confirmacao:
+                ultimo_erro = "conflito: versão mudou durante a gravação"
+                continue
+            try:
+                _write_local(local_path, value)
+            except OSError:
+                pass
+            return True, "online"
+        except (requests.RequestException, ValueError, TypeError) as exc:
+            ultimo_erro = f"erro:{exc.__class__.__name__}"
+    return False, ultimo_erro
 
 
 def mutate_document(document_key: str, local_path: str, default: Any, updater, retries: int = 4):

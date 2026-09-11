@@ -474,28 +474,71 @@ def load_document(document_key, local_path, default, force_refresh=False):
     return copy.deepcopy(value)
 
 def save_document(document_key, value, local_path):
-    """Grava um documento e só promove o novo valor ao cache após confirmação.
+    """Grava e confirma documentos do Manager.
 
-    I8.13.3 generaliza a proteção homologada na HF11: falha de persistência não
-    pode deixar a sessão enxergando um valor que o banco oficial não confirmou.
+    HF19 — documentos com uso concorrente (Catálogo, Clientes, Atendimentos,
+    Marketing e Projetos) recebem proteção CAS. A sessão só salva se o banco
+    ainda contiver exatamente a versão que ela carregou. Isso evita Jorge e
+    Anna sobrescreverem silenciosamente o trabalho um do outro.
+
+    Em qualquer falha crítica o rerun é interrompido antes de um ``st.success``
+    posterior poder afirmar que algo foi salvo.
     """
-    func = getattr(_cloud_db, "save_document", None) if _cloud_db else None
-    result = func(document_key, value, local_path) if callable(func) else _write_json_fallback(local_path, value)
-    confirmado = bool(result)
-    st.session_state["_last_write_status"] = {
-        "ok": confirmado,
-        "documento": str(document_key),
-        "momento": agora_local().strftime("%d/%m/%Y %H:%M:%S") if "agora_local" in globals() else datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+    key = str(document_key)
+    cache = _document_cache()
+    cached = cache.get(key)
+    protected_keys = {
+        "catalogo_db", "clientes_db", "atendimentos_db", "marketing_db", "projetos_db"
     }
+
+    confirmado = False
+    motivo = ""
+    if key in protected_keys and cached is not None:
+        cas_func = getattr(_cloud_db, "save_document_cas", None) if _cloud_db else None
+        if callable(cas_func):
+            esperado = copy.deepcopy(cached.get("value"))
+            confirmado, motivo = cas_func(document_key, esperado, value, local_path)
+        else:
+            # Compatibilidade temporária: se o backend ainda não expuser CAS,
+            # mantém a gravação tradicional, mas nunca finge confirmação.
+            func = getattr(_cloud_db, "save_document", None) if _cloud_db else None
+            confirmado = bool(func(document_key, value, local_path)) if callable(func) else bool(_write_json_fallback(local_path, value))
+            motivo = "compatibilidade sem CAS" if confirmado else "gravação não confirmada"
+    else:
+        func = getattr(_cloud_db, "save_document", None) if _cloud_db else None
+        confirmado = bool(func(document_key, value, local_path)) if callable(func) else bool(_write_json_fallback(local_path, value))
+        motivo = "online" if confirmado else "gravação não confirmada"
+
+    st.session_state["_last_write_status"] = {
+        "ok": bool(confirmado),
+        "documento": key,
+        "momento": agora_local().strftime("%d/%m/%Y %H:%M:%S") if "agora_local" in globals() else datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        "motivo": str(motivo or ""),
+    }
+
     if confirmado:
-        _document_cache()[str(document_key)] = {
+        cache[key] = {
             "time": time.monotonic(),
             "value": copy.deepcopy(value),
         }
-    else:
-        # Uma tentativa não confirmada jamais pode virar a nova verdade da sessão.
-        invalidate_document_cache(document_key)
-    return confirmado
+        return True
+
+    # Uma tentativa não confirmada jamais pode virar a nova verdade da sessão.
+    invalidate_document_cache(document_key)
+    if key in protected_keys:
+        texto_motivo = str(motivo or "").casefold()
+        if "conflito" in texto_motivo:
+            st.error(
+                "⚠️ Esta informação foi alterada em outra sessão antes do seu salvamento. "
+                "Nada foi sobrescrito. Atualize a tela, confira a versão mais recente e salve novamente."
+            )
+        else:
+            st.error(
+                "🔴 O banco não confirmou esta gravação. Nada foi considerado salvo. "
+                "Verifique a conexão e tente novamente."
+            )
+        st.stop()
+    return False
 
 
 def database_credential_mode():
@@ -7409,9 +7452,11 @@ def carregar_marketing():
     return dados
 
 def salvar_marketing(dados):
-    save_document("marketing_db", dados, ARQUIVO_MARKETING)
-    st.session_state.pop("_thu_i7_analise", None)
-    st.session_state.pop("_thu_i7_periodo_analisado", None)
+    ok = save_document("marketing_db", dados, ARQUIVO_MARKETING)
+    if ok:
+        st.session_state.pop("_thu_i7_analise", None)
+        st.session_state.pop("_thu_i7_periodo_analisado", None)
+    return bool(ok)
 
 def _thu_normalizar_campanha(valor):
     texto=str(valor or "").strip().casefold()
@@ -9683,7 +9728,7 @@ def carregar_atendimentos():
     return {"config": config, "itens": itens}
 
 def salvar_atendimentos(dados):
-    save_document("atendimentos_db", dados, ARQUIVO_ATENDIMENTOS)
+    return bool(save_document("atendimentos_db", dados, ARQUIVO_ATENDIMENTOS))
 
 
 def _telefone_chave(valor):
@@ -10502,7 +10547,7 @@ def carregar_projetos():
 def salvar_projetos(lista):
     if not isinstance(lista, list):
         raise ValueError("A memória de projetos precisa ser uma lista.")
-    save_document("projetos_db", lista, ARQUIVO_PROJETOS)
+    return bool(save_document("projetos_db", lista, ARQUIVO_PROJETOS))
 
 
 def obter_ou_criar_projeto(proposta):
@@ -11059,9 +11104,11 @@ def carregar_catalogo():
 def salvar_catalogo(lista):
     if not isinstance(lista, list):
         raise ValueError("O catálogo precisa ser uma lista de produtos.")
-    save_document("catalogo_db", lista, ARQUIVO_CATALOGO)
-    st.session_state.pop("_thu_i7_analise", None)
-    st.session_state.pop("_thu_i7_periodo_analisado", None)
+    ok = save_document("catalogo_db", lista, ARQUIVO_CATALOGO)
+    if ok:
+        st.session_state.pop("_thu_i7_analise", None)
+        st.session_state.pop("_thu_i7_periodo_analisado", None)
+    return bool(ok)
 
 
 
@@ -16090,6 +16137,8 @@ with st.sidebar:
                 f"{icone_gravacao} Última gravação: {ultima_gravacao.get('documento', '—')} · "
                 f"{ultima_gravacao.get('momento', '—')}"
             )
+            if not ultima_gravacao.get("ok") and ultima_gravacao.get("motivo"):
+                st.caption(f"↳ {str(ultima_gravacao.get('motivo'))[:120]}")
         ultima_auditoria_i8134 = st.session_state.get("_last_audit_status") or {}
         if ultima_auditoria_i8134:
             icone_auditoria_i8134 = "🧾" if ultima_auditoria_i8134.get("ok") else "🔴"
@@ -37186,9 +37235,9 @@ if pagina_atual == "configuracoes":
 
             if _hf18_preflight is not None:
                 if _hf18_preflight.ok:
-                    st.success("Preflight HF18: runtime íntegro e Template Mestre HF7 protegido.")
+                    st.success("Preflight de atualização: runtime íntegro e Template Mestre HF7 protegido.")
                 else:
-                    st.error("Preflight HF18 reprovado: " + " • ".join(_hf18_preflight.problems))
+                    st.error("Preflight de atualização reprovado: " + " • ".join(_hf18_preflight.problems))
                 for _hf18_warning in _hf18_preflight.warnings:
                     st.caption(f"ℹ️ {_hf18_warning}")
 
