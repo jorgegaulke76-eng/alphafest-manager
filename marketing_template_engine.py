@@ -17,14 +17,14 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from alphafest_font_manager import get_font, resolve_font_path
 from template_library_engine import list_library_templates, load_library_template, render_library_square
-from marketing_anna_renderer import render_anna_prompt
+from marketing_anna_renderer_hf11 import render_anna_prompt, ANNA_RENDERER_VERSION
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_TEMPLATE = "anna_base_dinamica"
 EMBEDDED_DEFAULT_TEMPLATE = "splash_premium_anna"
 
 ANNA_PROMPT_SPEC: dict[str, Any] = {
-    "versao": "HF53.3-HF8-HF11",
+    "versao": ANNA_RENDERER_VERSION,
     "nome": "Anna Prompt Premium",
     "layout_fixo": [
         "logo", "titulo", "faixa", "beneficios", "produto", "selo_central",
@@ -69,10 +69,10 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
     "anna_social_redes": {
         "id": "anna_social_redes",
         "nome": "Template Anna — Redes Sociais",
-        "descricao": "Template Anna — Modelo 1 HF8-HF11: renderer alinhado ao Modelo Anna 1 aprovado. Gravação Laser preserva a manchete visual homologada, sem caixa branca; fotografia original entra nítida no palco oval; um único selo oficial fica na última camada; Ideal para mantém cards com fundo e ícones temáticos; Mestre HF7 permanece congelado.",
+        "descricao": "Template Anna — Modelo 1 HF8-HF13: renderer dedicado HF11 travado em runtime e alinhado ao Modelo Anna 1 aprovado. Gravação Laser preserva a manchete visual homologada, sem caixa branca; fotografia original entra nítida no palco oval; um único selo oficial fica na última camada; Ideal para mantém cards com fundo e ícones temáticos; Mestre HF7 permanece congelado.",
         "categoria_template": "Redes Sociais",
         "status_template": "Homologado",
-        "versao_template": "HF53.3-HF8-HF11",
+        "versao_template": ANNA_RENDERER_VERSION,
         "oficial": False,
         "protegido": True,
         "autopilot_aprovado": True,
@@ -110,6 +110,11 @@ EMBEDDED_TEMPLATES: dict[str, dict[str, Any]] = {
         },
     },
 }
+
+
+def anna_runtime_version() -> str:
+    """Versão efetivamente carregada pelo renderer dedicado do Template Anna."""
+    return str(ANNA_RENDERER_VERSION)
 
 
 def listar_templates() -> list[dict[str, Any]]:

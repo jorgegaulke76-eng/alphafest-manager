@@ -7362,39 +7362,39 @@ def gerar_copy_comercial(produto, objetivo, campanha, canal, observacoes="", tom
         return f"{gancho}\n\n{beneficio}\n\n{diferencial}{oferta}\n\n📲 {cta}"
     return f"{gancho}\n\n{beneficio}\n\n{diferencial}{oferta}\n\n📲 {cta}\n\n{hashtags}"
 
-def _marketing_designer_version(template_id="", template_version=""):
-    """Versão registrada na origem da campanha.
+def _marketing_anna_runtime_version():
+    """Lê a versão do renderer Anna que está realmente carregado em runtime."""
+    try:
+        value = str(_marketing_templates.anna_runtime_version() or "").strip()
+        if value:
+            return value
+    except Exception:
+        pass
+    return "HF53.3-HF8-HF11"
 
-    Para o Template Anna, a origem acompanha a versão real do template em uso,
-    evitando que futuras atualizações continuem gravando um HF antigo por string fixa.
-    Os demais templates preservam o identificador legado do Designer Comercial.
+
+def _marketing_designer_version(template_id="", template_version="", template_name=""):
+    """Versão registrada na origem da campanha sem depender de strings antigas.
+
+    O Template Anna sempre usa a versão do renderer dedicado carregado em runtime.
+    Outros templates usam a própria versão declarada no catálogo.
     """
-    if str(template_id or "").strip() == "anna_social_redes":
-        return str(template_version or "HF53.3-HF8-HF11").strip() or "HF53.3-HF8-HF11"
+    tid = str(template_id or "").strip()
+    tname = str(template_name or "").strip().casefold()
+    if tid == "anna_social_redes" or "template anna" in tname:
+        return _marketing_anna_runtime_version()
+    # Demais templates preservam a identificação histórica do Designer Comercial.
+    # O HF13 não altera o fluxo do Mestre HF7 nem de outros templates.
     return "HF53.3-HF8-HF10"
 
 
 def _marketing_normalizar_origem_anna(dados):
-    """Corrige somente registros Anna HF11 que foram rotulados como HF10.
+    """Preserva a origem histórica das artes já salvas.
 
-    O HF11 já renderizava pelo template novo, mas `app.py` ainda gravava a origem
-    como HF10. A correção é conservadora: só altera registros cujo `template_id`
-    é Anna e cuja `template_versao` confirma HF11.
+    O HF13 não renomeia uma arte antiga de HF10 para HF11 só porque o Manager foi
+    atualizado. A versão real do renderer passa a ser gravada explicitamente nos
+    NOVOS registros em `renderer_runtime_version`.
     """
-    if not isinstance(dados, dict):
-        return dados
-    for item in dados.get("conteudos", []) or []:
-        if not isinstance(item, dict):
-            continue
-        if str(item.get("template_id") or "") != "anna_social_redes":
-            continue
-        versao = str(item.get("template_versao") or "").strip()
-        if versao != "HF53.3-HF8-HF11":
-            continue
-        if str(item.get("origem_criativa") or "").strip() == "Designer Comercial AlphaFest HF53.3-HF8-HF10":
-            item["origem_criativa"] = "Designer Comercial AlphaFest HF53.3-HF8-HF11"
-        if str(item.get("designer_rules_version") or "").strip() == "HF53.3-HF8-HF10":
-            item["designer_rules_version"] = "HF53.3-HF8-HF11"
     return dados
 
 
@@ -26513,7 +26513,7 @@ if pagina_atual == "crescimento":
     # HF53.3 — Biblioteca de Templates: mestre HF7 congelado + seleção segura no Piloto Automático.
     with st.container(border=True):
         af_section_title("⚡ Piloto Automático de Conteúdo", "Designer Comercial AlphaFest: produto, copy, layout por canal e revisão automática antes de salvar.")
-        st.caption("HF53.3-HF8-HF12: Template Anna — Redes Sociais • Renderer HF11 • origem da campanha agora acompanha a versão real do template; Mestre HF7 intacto.")
+        st.caption("HF53.3-HF8-HF13: Template Anna — Redes Sociais • Renderer dedicado HF11 travado em runtime • Mestre HF7 intacto.")
         try:
             _mkt_metrics = _site_metrics_summary() if _site_metrics_tracking_available() else {}
         except Exception:
@@ -26570,18 +26570,30 @@ if pagina_atual == "crescimento":
                     f"{item.get('nome', item.get('id'))} • {item.get('status_template', 'Disponível')}": item
                     for item in _mkt_templates_aprovados
                 }
+                _mkt_template_choices = list(_mkt_template_labels.keys())
+                # HF13: após reinício/atualização do Streamlit, o selectbox perdia o estado
+                # e voltava ao primeiro item (Mestre HF7). Como estamos homologando o
+                # Template Anna, ele passa a ser o padrão desta tela. O Mestre HF7 continua
+                # disponível, oficial e congelado, mas não é escolhido por acidente.
+                _mkt_default_template_idx = next((
+                    i for i, label in enumerate(_mkt_template_choices)
+                    if str(_mkt_template_labels[label].get("id") or "") == "anna_social_redes"
+                ), 0)
                 _mkt_template_label = st.selectbox(
                     "Template comercial",
-                    list(_mkt_template_labels.keys()),
-                    index=0,
+                    _mkt_template_choices,
+                    index=_mkt_default_template_idx,
                     key="mkt_autopilot_template_hf53_3",
-                    help="O Mestre HF7 continua oficial. Templates embutidos em validação podem ser testados aqui sem substituir o padrão oficial; ZIPs importados continuam restritos ao Studio até homologação.",
+                    help="Template Anna fica selecionado por padrão nesta etapa. O Mestre HF7 continua oficial, disponível e congelado; ZIPs importados continuam restritos ao Studio até homologação.",
                 )
                 _mkt_template = _mkt_template_labels[_mkt_template_label]
                 _mkt_template_id = str(_mkt_template.get("id") or "splash_premium_anna")
                 _mkt_template_name = str(_mkt_template.get("nome") or "Template Mestre Comercial AlphaFest")
                 _mkt_template_version = str(_mkt_template.get("versao_template") or "")
                 _mkt_template_status = str(_mkt_template.get("status_template") or "Homologado")
+                # HF13: o Anna não confia em metadado/cópia antiga; usa a versão do renderer realmente carregado.
+                if _mkt_template_id == "anna_social_redes":
+                    _mkt_template_version = _marketing_anna_runtime_version()
                 _mkt_status_badge = "✅ HOMOLOGADO" if _mkt_template_status.lower() == "homologado" else f"🧪 {_mkt_template_status.upper()}"
                 _mkt_template_badges = [
                     "⭐ OFICIAL" if _mkt_template.get("oficial") else "🧩 BIBLIOTECA",
@@ -26736,7 +26748,7 @@ if pagina_atual == "crescimento":
                             _mkt_arts[_mkt_channel] = base64.b64encode(_mkt_art_bytes).decode("ascii")
 
                         _mkt_id = f"MKT-AUTO-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
-                        _mkt_designer_version = _marketing_designer_version(_mkt_template_id, _mkt_template_version)
+                        _mkt_designer_version = _marketing_designer_version(_mkt_template_id, _mkt_template_version, _mkt_template_name)
                         _mkt_record = {
                             "id": _mkt_id,
                             "criado_em": agora_local().isoformat(),
@@ -26765,6 +26777,7 @@ if pagina_atual == "crescimento":
                             "paleta_nome": _mkt_palette_name,
                             "paleta_visual": dict(_mkt_palette),
                             "designer_rules_version": _mkt_designer_version,
+                            "renderer_runtime_version": (_marketing_anna_runtime_version() if _mkt_template_id == "anna_social_redes" else ""),
                         }
                         conteudos.insert(0, _mkt_record)
                         marketing["conteudos"] = conteudos
@@ -28119,7 +28132,12 @@ if pagina_atual == "crescimento":
                         st.caption(f"{item.get('categoria') or 'Sem categoria'} • {tema_card}")
                         st.caption(f"Origem: {item.get('origem_criativa') or item.get('modo_origem') or 'Legado'}")
                         if item.get("template_nome"):
-                            st.caption(f"Template: {item.get('template_nome')}")
+                            _tpl_txt = f"Template: {item.get('template_nome')}"
+                            if str(item.get("template_id") or "") == "anna_social_redes":
+                                _renderer_used = str(item.get("renderer_runtime_version") or "").strip()
+                                if _renderer_used:
+                                    _tpl_txt += f" • Renderer usado: {_renderer_used}"
+                            st.caption(_tpl_txt)
                         if item.get("preco_arte"):
                             st.markdown(f"**Preço salvo:** {item.get('preco_arte')}")
                         criado_txt = str(item.get("criado_em") or "")[:10]
@@ -28396,7 +28414,7 @@ if pagina_atual == "crescimento":
                     except Exception as exc:
                         st.error(f"Não foi possível instalar o template: {exc}")
 
-            st.info("HF53.3-HF8-HF12: o Mestre HF7 permanece oficial e congelado. O Template Anna usa renderer HF11 e grava a origem correta da campanha em todos os novos registros.")
+            st.info("HF53.3-HF8-HF13: o Mestre HF7 permanece oficial e congelado. O Template Anna usa módulo dedicado HF11 e grava a versão efetivamente carregada no runtime.")
             st.markdown("---")
             st.subheader("🖼️ Banco de mídia AlphaFest")
             st.caption("Fotos e vídeos continuam ligados às campanhas e ao catálogo existente.")
