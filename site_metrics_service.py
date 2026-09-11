@@ -23,6 +23,8 @@ except Exception:  # permite testes/empacotamento fora do Streamlit
 
 TIMEOUT = 10
 TABLE = "site_metrics_events"
+DASHBOARD_PAGE_SIZE = 5000
+DASHBOARD_EVENT_TYPES = ("page_view", "product_open", "whatsapp_click", "search")
 
 
 def _secret(name: str) -> str:
@@ -167,6 +169,59 @@ def _rows(event_type: str, since: datetime, limit: int = 5000) -> list[dict[str,
     return data if isinstance(data, list) else []
 
 
+def _dashboard_rows(since: datetime, until: datetime | None = None, page_size: int = DASHBOARD_PAGE_SIZE) -> list[dict[str, Any]]:
+    """Busca os eventos usados pelo painel em uma única consulta paginada.
+
+    HF21: substitui quatro leituras por tipo + nove consultas de contagem.
+    A paginação mantém os totais exatos mesmo se o período ultrapassar 5 mil
+    eventos. O limite superior fixa um snapshot consistente durante a leitura.
+    """
+    cfg = server_config()
+    if not cfg["url"] or not cfg["key"]:
+        raise RuntimeError("Credencial de servidor do Supabase não configurada.")
+    until = (until or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    since = since.astimezone(timezone.utc)
+    page_size = max(1, int(page_size or DASHBOARD_PAGE_SIZE))
+    rows: list[dict[str, Any]] = []
+    offset = 0
+    event_filter = "in.(" + ",".join(DASHBOARD_EVENT_TYPES) + ")"
+    while True:
+        # Lista de tuplas preserva os dois filtros created_at do PostgREST.
+        params = [
+            ("select", "event_type,product_name,created_at,referrer,page_path,client_id,session_id"),
+            ("event_type", event_filter),
+            ("created_at", "gte." + since.isoformat()),
+            ("created_at", "lte." + until.isoformat()),
+            ("order", "created_at.asc,id.asc"),
+            ("limit", str(page_size)),
+            ("offset", str(offset)),
+        ]
+        r = requests.get(
+            f"{cfg['url']}/rest/v1/{TABLE}",
+            headers=_headers_server(),
+            params=params,
+            timeout=TIMEOUT,
+        )
+        if r.status_code == 404:
+            raise LookupError("Tabela de métricas ainda não criada.")
+        r.raise_for_status()
+        data = r.json()
+        page = data if isinstance(data, list) else []
+        rows.extend(page)
+        if len(page) < page_size:
+            break
+        offset += len(page)
+    return rows
+
+
+def _event_rows(rows: Iterable[dict[str, Any]], event_type: str) -> list[dict[str, Any]]:
+    return [x for x in rows if str(x.get("event_type") or "").strip() == event_type]
+
+
+def _event_count(rows: Iterable[dict[str, Any]], since: datetime) -> int:
+    return sum(1 for x in rows if _row_at_or_after(x, since))
+
+
 def _row_at_or_after(row: dict[str, Any], since: datetime) -> bool:
     raw = str(row.get("created_at") or "").strip()
     if not raw:
@@ -232,14 +287,12 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
     d7 = now - timedelta(days=7)
     d30 = now - timedelta(days=30)
 
-    page_rows = _rows("page_view", d30)
-    product_rows = _rows("product_open", d30)
-    wa_rows = _rows("whatsapp_click", d30)
-    try:
-        search_rows = _rows("search", d30)
-    except (KeyError, LookupError):
-        # Compatibilidade com a tabela anterior ao HF52.1-HF3 / testes legados.
-        search_rows = []
+    # HF21: um snapshot paginado único alimenta contagens, funil e rankings.
+    all_rows = _dashboard_rows(d30, now)
+    page_rows = _event_rows(all_rows, "page_view")
+    product_rows = _event_rows(all_rows, "product_open")
+    wa_rows = _event_rows(all_rows, "whatsapp_click")
+    search_rows = _event_rows(all_rows, "search")
 
     products = Counter(str(x.get("product_name") or "").strip() for x in product_rows if str(x.get("product_name") or "").strip())
     wa_products = Counter(str(x.get("product_name") or "").strip() for x in wa_rows if str(x.get("product_name") or "").strip())
@@ -254,9 +307,9 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
         product_sessions = _session_ids(product_rows, since)
         wa_sessions = _session_ids(wa_rows, since)
         periods[key] = {
-            "pageviews": _count("page_view", since),
-            "products": _count("product_open", since),
-            "whatsapp": _count("whatsapp_click", since),
+            "pageviews": _event_count(page_rows, since),
+            "products": _event_count(product_rows, since),
+            "whatsapp": _event_count(wa_rows, since),
             "sessions": len(page_sessions),
             "product_sessions": len(product_sessions),
             "whatsapp_sessions": len(wa_sessions),
@@ -284,3 +337,21 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
         "traffic_sources": traffic_sources.most_common(10),
         "searches_30d": len(search_rows),
     }
+
+
+# HF21 — o painel automático roda a cada 30s; um cache curto impede que outros
+# reruns da mesma sessão (por exemplo o Piloto Automático de Marketing) repitam a
+# consulta imediatamente. O botão "Atualizar agora" limpa este cache explicitamente.
+if st is not None:
+    @st.cache_data(ttl=25, show_spinner=False)
+    def dashboard_summary_cached() -> Dict[str, Any]:
+        return dashboard_summary()
+
+    def clear_dashboard_summary_cache() -> None:
+        dashboard_summary_cached.clear()
+else:
+    def dashboard_summary_cached() -> Dict[str, Any]:
+        return dashboard_summary()
+
+    def clear_dashboard_summary_cache() -> None:
+        return None

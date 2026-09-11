@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF20",
-  "generated_at_utc": "2026-09-11T18:53:36.090347+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF21",
+  "generated_at_utc": "2026-09-11T18:58:58.774111+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "file_count": 361,
-  "uncompressed_bytes": 36428980,
+  "uncompressed_bytes": 36432521,
   "files": [
     {
       "path": ".gitignore",
@@ -85,23 +85,23 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 472,
-      "sha256": "946fa266f1d1626e8a04926fb1318365e371a102824f09cca5b08a77b54189ae"
+      "size": 660,
+      "sha256": "a5760fc390e3bcf6978bc087a1a7b235e9af4c434dde7baaca243c235124a82b"
     },
     {
-      "path": "UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF20.md",
-      "size": 512,
-      "sha256": "7b44eef27f92689422950ce2a327d4c8c645f426cf88fb0e184115543639957c"
+      "path": "UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF21.md",
+      "size": 660,
+      "sha256": "a5760fc390e3bcf6978bc087a1a7b235e9af4c434dde7baaca243c235124a82b"
     },
     {
       "path": "VERSAO",
       "size": 31,
-      "sha256": "c238184ee058de95033c729ca38d99d7fdd33a956be8eac3c132d447c375888c"
+      "sha256": "ed691655cee8d1e280f04da43be7f7791a529ec7e248cc1bcec784fea6ebfc17"
     },
     {
       "path": "VERSAO.txt",
       "size": 31,
-      "sha256": "c238184ee058de95033c729ca38d99d7fdd33a956be8eac3c132d447c375888c"
+      "sha256": "ed691655cee8d1e280f04da43be7f7791a529ec7e248cc1bcec784fea6ebfc17"
     },
     {
       "path": "__init__.py",
@@ -160,8 +160,8 @@
     },
     {
       "path": "app.py",
-      "size": 1938590,
-      "sha256": "3dbb17b87afcd41ac8bd737578e5838b733fcfb0ae4ddcb3c3a16804a0f54a50"
+      "size": 1938781,
+      "sha256": "7c2e670471c56955a2cb531ca74708b555d1731a69449b6c7851ef6ab120fe8b"
     },
     {
       "path": "assets/catalogos_legados/acervo_catalogos_legados.json",
@@ -1695,8 +1695,8 @@
     },
     {
       "path": "site_metrics_service.py",
-      "size": 11286,
-      "sha256": "885550e149bdbc64fdf2b2ff73ed1fcf779f4dd9de16123f608ce75141ccf7b8"
+      "size": 14300,
+      "sha256": "fb15cabc63e659429812b1896eae83e46bfcc56446c9944fef73a0fc890b217f"
     },
     {
       "path": "site_production_service.py",

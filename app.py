@@ -34,7 +34,7 @@ from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_T
 from site_manager_service import resumir_catalogo_site as _site_resumir_catalogo, ordenar_produtos_site as _site_ordenar_produtos
 from site_vitrine_service import resumir_vitrine as _site_resumir_vitrine
 from site_completo_service import gerar_html_site_completo as _site_gerar_html_completo
-from site_metrics_service import dashboard_summary as _site_metrics_summary, tracking_available as _site_metrics_tracking_available, server_config as _site_metrics_server_config
+from site_metrics_service import dashboard_summary_cached as _site_metrics_summary, clear_dashboard_summary_cache as _site_metrics_clear_cache, tracking_available as _site_metrics_tracking_available, server_config as _site_metrics_server_config
 from site_galeria_service import resumir_galeria_site as _site_resumir_galeria
 from site_staging_service import gerar_pacote_staging as _site_gerar_pacote_staging, resumo_staging as _site_resumo_staging
 from site_cutover_service import gerar_kit_pre_virada as _site_gerar_kit_pre_virada, resumo_pre_virada as _site_resumo_pre_virada
@@ -25726,9 +25726,11 @@ if pagina_atual == "site":
 
                 _refresh_col, _status_col = st.columns([1, 3])
                 with _refresh_col:
-                    st.button("↻ Atualizar agora", key="site_metrics_refresh_hf52_1_hf1", use_container_width=True)
+                    _metrics_force_refresh = st.button("↻ Atualizar agora", key="site_metrics_refresh_hf52_1_hf1", use_container_width=True)
 
                 try:
+                    if _metrics_force_refresh:
+                        _site_metrics_clear_cache()
                     _m = _site_metrics_summary()
                     _updated_ms = int(time.time() * 1000)
                     with _status_col:
