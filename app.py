@@ -57,6 +57,7 @@ from alphafest_design_system import inject_design_system, hero as af_hero, featu
 from alpha_marketing_autopilot import rank_products as _alpha_marketing_rank_products
 from alpha_marketing_designer import build_design_plan as _alpha_build_design_plan, sanitize_channel_copy as _alpha_sanitize_channel_copy, validate_design_plan as _alpha_validate_design_plan, validate_art_bytes as _alpha_validate_art_bytes
 from global_search_service import build_global_search_index as _build_global_search_index, query_global_search_index as _query_global_search_index
+from update_safe_ui import render_update_safe_tab as _render_update_safe_tab
 from backup_schedule_service import backup_due as _backup_due, slot_id as _backup_slot_id, reservation_is_active as _backup_reservation_active
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
@@ -37373,83 +37374,15 @@ if pagina_atual == "configuracoes":
                             st.rerun()
 
         with tab_update:
-            st.info("Antes de publicar uma nova versão, gere um ponto de restauração e anote as contagens. O pacote de atualização deve conter somente código e migrações, nunca os dados da empresa.")
-            diag_pre = diagnostico_sistema()
-            try:
-                from update_hygiene import runtime_integrity_check as _hf18_runtime_integrity_check
-                _hf18_preflight = _hf18_runtime_integrity_check(Path(__file__).resolve().parent)
-            except Exception as _hf18_preflight_exc:
-                _hf18_preflight = None
-                st.warning(f"Preflight técnico indisponível: {_hf18_preflight_exc}")
-
-            if _hf18_preflight is not None:
-                if _hf18_preflight.ok:
-                    st.success("Preflight de atualização: runtime íntegro e Template Mestre HF7 protegido.")
-                else:
-                    st.error("Preflight de atualização reprovado: " + " • ".join(_hf18_preflight.problems))
-                for _hf18_warning in _hf18_preflight.warnings:
-                    st.caption(f"ℹ️ {_hf18_warning}")
-
-            # HF23: diagnóstico da release atual. Testes históricos com versão
-            # congelada são separados do gate real, enquanto sintaxe/runtime/HF7
-            # continuam bloqueando uma atualização insegura.
-            try:
-                from release_diagnostics import run_release_diagnostics as _hf23_run_release_diagnostics
-                _hf23_release_diag = _hf23_run_release_diagnostics(Path(__file__).resolve().parent)
-            except Exception as _hf23_diag_exc:
-                _hf23_release_diag = None
-                st.warning(f"Diagnóstico da release indisponível: {_hf23_diag_exc}")
-
-            if _hf23_release_diag is not None:
-                _hf23_tests = _hf23_release_diag.test_inventory
-                if _hf23_release_diag.ok:
-                    st.success(
-                        "Diagnóstico da release: OK • "
-                        f"{_hf23_tests.portable_files + _hf23_tests.current_release_files} teste(s) atual(is)/portável(is) • "
-                        f"{_hf23_tests.historical_version_files} histórico(s) separado(s)."
-                    )
-                else:
-                    st.error("Diagnóstico da release reprovado: " + " • ".join(_hf23_release_diag.problems))
-                for _hf23_warning in _hf23_release_diag.warnings:
-                    st.caption(f"🧪 {_hf23_warning}")
-
-            st.json({
-                "versao_app": VERSAO_APP,
-                "versao_dados": VERSAO_DADOS,
-                "contagens_antes_atualizacao": diag_pre["contagens"],
-                "supabase": diag_pre["supabase_mensagem"],
-                "integridade": "OK" if diag_pre["integridade_ok"] else diag_pre["problemas"],
-                "preflight_update": (
-                    {
-                        "status": "OK" if _hf18_preflight.ok else "REPROVADO",
-                        "versao": _hf18_preflight.version,
-                        "problemas": _hf18_preflight.problems,
-                        "avisos": _hf18_preflight.warnings,
-                    } if _hf18_preflight is not None else {"status": "INDISPONÍVEL"}
-                ),
-                "diagnostico_release_hf23": (
-                    {
-                        "status": "OK" if _hf23_release_diag.ok else "REPROVADO",
-                        "versao": _hf23_release_diag.version,
-                        "problemas": _hf23_release_diag.problems,
-                        "avisos": _hf23_release_diag.warnings,
-                        "testes": _hf23_release_diag.test_inventory.to_dict(),
-                        "checks": _hf23_release_diag.checks,
-                    } if _hf23_release_diag is not None else {"status": "INDISPONÍVEL"}
-                ),
-            }, expanded=False)
-            _hf18_update_blocked = bool(
-                (_hf18_preflight is not None and not _hf18_preflight.ok)
-                or (_hf23_release_diag is not None and not _hf23_release_diag.ok)
+            _render_update_safe_tab(
+                root_dir=Path(__file__).resolve().parent,
+                version_app=VERSAO_APP,
+                version_data=VERSAO_DADOS,
+                diagnostico_sistema=diagnostico_sistema,
+                criar_backup_completo=criar_backup_completo,
+                registrar_auditoria=registrar_auditoria,
+                backup_para_zip_bytes=backup_para_zip_bytes,
             )
-            if st.button("🛡️ Preparar atualização segura", type="primary", key="preparar_update_seguro", use_container_width=True, disabled=_hf18_update_blocked):
-                try:
-                    bk = criar_backup_completo(tipo="antes_atualizacao", protegido=True, motivo=f"Ponto de restauração antes de atualizar a partir da versão {VERSAO_APP}")
-                    registrar_auditoria("Preparar atualização", "Sistema", VERSAO_APP, {"backup_id": bk.get("backup_id"), "contagens": bk.get("contagens")})
-                    st.success(f"Atualização preparada. Backup protegido: {bk.get('backup_id')}")
-                    st.download_button("⬇️ Baixar ponto de restauração", data=backup_para_zip_bytes(bk), file_name=f"antes_atualizacao_{bk.get('backup_id')}.zip", mime="application/zip", use_container_width=True)
-                except Exception as exc:
-                    st.error(f"Falha ao preparar atualização: {exc}")
 
 
         st.caption(f"Versão do aplicativo: {VERSAO_APP} • Versão dos dados: {VERSAO_DADOS}")

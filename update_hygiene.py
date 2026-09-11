@@ -25,6 +25,7 @@ REQUIRED_RUNTIME_FILES = {
     "cloud_db.py",
     "backup_schedule_service.py",
     "release_diagnostics.py",
+    "update_safe_ui.py",
     "config.py",
     "marketing_template_engine.py",
     "marketing_anna_renderer_hf11.py",

@@ -27,6 +27,7 @@ CRITICAL_PYTHON_FILES = (
     "marketing_anna_renderer_hf11.py",
     "site_metrics_service.py",
     "global_search_service.py",
+    "update_safe_ui.py",
 )
 
 # Versões do Manager aparecem em muitos formatos. O regex é propositalmente
