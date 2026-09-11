@@ -59,6 +59,7 @@ from alpha_marketing_designer import build_design_plan as _alpha_build_design_pl
 from global_search_service import build_global_search_index as _build_global_search_index, query_global_search_index as _query_global_search_index
 from update_safe_ui import render_update_safe_tab as _render_update_safe_tab
 from system_health_ui import render_system_health_tab as _render_system_health_tab, render_boot_manager_tab as _render_boot_manager_tab
+from trash_ui import render_trash_tab as _render_trash_tab
 from backup_schedule_service import backup_due as _backup_due, slot_id as _backup_slot_id, reservation_is_active as _backup_reservation_active
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
@@ -37315,32 +37316,13 @@ if pagina_atual == "configuracoes":
                 st.download_button("⬇️ Exportar auditoria JSON", json.dumps(auditoria, ensure_ascii=False, indent=2), file_name=f"auditoria_festmanager_{hoje_local().isoformat()}.json", mime="application/json", use_container_width=True)
 
         with tab_lix:
-            lixeira = carregar_lixeira()
-            if not lixeira:
-                st.success("A lixeira está vazia.")
-            else:
-                st.warning(f"{len(lixeira)} item(ns) podem ser restaurados. A remoção definitiva exige confirmação.")
-                for reg in lixeira[:200]:
-                    try:
-                        dt_fmt = datetime.fromisoformat(reg.get("excluido_em", "")).astimezone(agora_local().tzinfo).strftime("%d/%m/%Y %H:%M")
-                    except Exception:
-                        dt_fmt = reg.get("excluido_em", "")
-                    with st.expander(f"{reg.get('tipo')} — {reg.get('identificador') or 'sem identificação'} — {dt_fmt}"):
-                        st.caption(f"Movido por: {reg.get('excluido_por', 'Não informado')}")
-                        st.json(reg.get("item", {}), expanded=False)
-                        r1, r2 = st.columns(2)
-                        if r1.button("♻️ Restaurar", key=f"lix_restore_{reg.get('id_lixeira')}", use_container_width=True):
-                            try:
-                                restaurar_item_lixeira(reg)
-                                st.success("Item restaurado.")
-                                st.rerun()
-                            except Exception as exc:
-                                st.error(f"Não foi possível restaurar: {exc}")
-                        confirm = r2.checkbox("Confirmar remoção definitiva", key=f"lix_confirm_{reg.get('id_lixeira')}")
-                        if st.button("❌ Remover definitivamente", key=f"lix_purge_{reg.get('id_lixeira')}", disabled=not confirm, use_container_width=True):
-                            remover_da_lixeira(reg.get("id_lixeira"))
-                            registrar_auditoria("Remover definitivamente", reg.get("tipo", "Item"), reg.get("identificador", ""))
-                            st.rerun()
+            _render_trash_tab(
+                carregar_lixeira=carregar_lixeira,
+                restaurar_item_lixeira=restaurar_item_lixeira,
+                remover_da_lixeira=remover_da_lixeira,
+                registrar_auditoria=registrar_auditoria,
+                agora_local=agora_local,
+            )
 
         with tab_update:
             _render_update_safe_tab(
