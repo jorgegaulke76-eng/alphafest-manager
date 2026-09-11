@@ -37177,14 +37177,38 @@ if pagina_atual == "configuracoes":
         with tab_update:
             st.info("Antes de publicar uma nova versão, gere um ponto de restauração e anote as contagens. O pacote de atualização deve conter somente código e migrações, nunca os dados da empresa.")
             diag_pre = diagnostico_sistema()
+            try:
+                from update_hygiene import runtime_integrity_check as _hf18_runtime_integrity_check
+                _hf18_preflight = _hf18_runtime_integrity_check(Path(__file__).resolve().parent)
+            except Exception as _hf18_preflight_exc:
+                _hf18_preflight = None
+                st.warning(f"Preflight técnico indisponível: {_hf18_preflight_exc}")
+
+            if _hf18_preflight is not None:
+                if _hf18_preflight.ok:
+                    st.success("Preflight HF18: runtime íntegro e Template Mestre HF7 protegido.")
+                else:
+                    st.error("Preflight HF18 reprovado: " + " • ".join(_hf18_preflight.problems))
+                for _hf18_warning in _hf18_preflight.warnings:
+                    st.caption(f"ℹ️ {_hf18_warning}")
+
             st.json({
                 "versao_app": VERSAO_APP,
                 "versao_dados": VERSAO_DADOS,
                 "contagens_antes_atualizacao": diag_pre["contagens"],
                 "supabase": diag_pre["supabase_mensagem"],
                 "integridade": "OK" if diag_pre["integridade_ok"] else diag_pre["problemas"],
+                "preflight_update": (
+                    {
+                        "status": "OK" if _hf18_preflight.ok else "REPROVADO",
+                        "versao": _hf18_preflight.version,
+                        "problemas": _hf18_preflight.problems,
+                        "avisos": _hf18_preflight.warnings,
+                    } if _hf18_preflight is not None else {"status": "INDISPONÍVEL"}
+                ),
             }, expanded=False)
-            if st.button("🛡️ Preparar atualização segura", type="primary", key="preparar_update_seguro", use_container_width=True):
+            _hf18_update_blocked = bool(_hf18_preflight is not None and not _hf18_preflight.ok)
+            if st.button("🛡️ Preparar atualização segura", type="primary", key="preparar_update_seguro", use_container_width=True, disabled=_hf18_update_blocked):
                 try:
                     bk = criar_backup_completo(tipo="antes_atualizacao", protegido=True, motivo=f"Ponto de restauração antes de atualizar a partir da versão {VERSAO_APP}")
                     registrar_auditoria("Preparar atualização", "Sistema", VERSAO_APP, {"backup_id": bk.get("backup_id"), "contagens": bk.get("contagens")})
