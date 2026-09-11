@@ -60,6 +60,7 @@ from global_search_service import build_global_search_index as _build_global_sea
 from update_safe_ui import render_update_safe_tab as _render_update_safe_tab
 from system_health_ui import render_system_health_tab as _render_system_health_tab, render_boot_manager_tab as _render_boot_manager_tab
 from trash_ui import render_trash_tab as _render_trash_tab
+from alpha_connect_ui import render_alpha_connect as _render_alpha_connect
 from backup_schedule_service import backup_due as _backup_due, slot_id as _backup_slot_id, reservation_is_active as _backup_reservation_active
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
@@ -36838,128 +36839,21 @@ if pagina_atual == "calendario":
 
 
 
-def _secret_valor(nome):
-    try:
-        valor = st.secrets.get(nome, "")
-    except Exception:
-        valor = os.getenv(nome, "")
-    return str(valor or "").strip()
-
-
-def _secret_configurado(nome):
-    return bool(_secret_valor(nome))
-
-
-def carregar_status_integracoes():
-    dados = load_document("integracoes_db", ARQUIVO_INTEGRACOES, {})
-    return dados if isinstance(dados, dict) else {}
-
-
-def salvar_status_integracoes(dados):
-    save_document("integracoes_db", dados if isinstance(dados, dict) else {}, ARQUIVO_INTEGRACOES)
-
-
-def _status_integracao(chave, nome, obrigatorios, observacao="", opcionais=None):
-    presentes = [campo for campo in obrigatorios if _secret_configurado(campo)]
-    opcionais = opcionais or []
-    total = len(obrigatorios)
-    if total and len(presentes) == total:
-        status, icone = "Configurado", "🟢"
-    elif presentes:
-        status, icone = "Incompleto", "🟡"
-    else:
-        status, icone = "Não configurado", "⚪"
-    return {
-        "chave": chave, "nome": nome, "status": status, "icone": icone,
-        "detalhe": observacao, "faltando": [c for c in obrigatorios if c not in presentes],
-        "opcionais_faltando": [c for c in opcionais if not _secret_configurado(c)],
-    }
-
-
-def _testar_integracao(chave):
-    """Executa um teste leve, sem publicar, enviar mensagens ou alterar dados externos."""
-    try:
-        if chave == "openai":
-            OpenAI = _openai_class()
-            if OpenAI is None:
-                return False, "Biblioteca OpenAI não instalada."
-            client = OpenAI(api_key=_secret_valor("OPENAI_API_KEY"))
-            modelos = client.models.list()
-            return True, f"Conexão confirmada. {len(list(modelos.data))} modelo(s) acessível(is)."
-        if chave == "meta":
-            page_id, token = _secret_valor("META_PAGE_ID"), _secret_valor("META_ACCESS_TOKEN")
-            r = requests.get(f"https://graph.facebook.com/v21.0/{page_id}", params={"fields":"id,name", "access_token":token}, timeout=15)
-            r.raise_for_status(); data=r.json()
-            return True, f"Página conectada: {data.get('name', data.get('id','Meta'))}."
-        if chave == "instagram":
-            account, token = _secret_valor("INSTAGRAM_ACCOUNT_ID"), _secret_valor("META_ACCESS_TOKEN")
-            r = requests.get(f"https://graph.facebook.com/v21.0/{account}", params={"fields":"id,username,name", "access_token":token}, timeout=15)
-            r.raise_for_status(); data=r.json()
-            return True, f"Instagram conectado: @{data.get('username','conta profissional')}."
-        if chave == "whatsapp":
-            phone_id, token = _secret_valor("WHATSAPP_PHONE_NUMBER_ID"), _secret_valor("META_ACCESS_TOKEN")
-            r = requests.get(f"https://graph.facebook.com/v21.0/{phone_id}", params={"fields":"display_phone_number,verified_name", "access_token":token}, timeout=15)
-            r.raise_for_status(); data=r.json()
-            return True, f"WhatsApp conectado: {data.get('verified_name','')} {data.get('display_phone_number','')}.".strip()
-        if chave == "youtube":
-            if not _secret_configurado("YOUTUBE_REFRESH_TOKEN"):
-                return False, "Cliente OAuth criado, mas ainda falta autorizar o canal e salvar YOUTUBE_REFRESH_TOKEN."
-            payload = {"client_id":_secret_valor("YOUTUBE_CLIENT_ID"), "client_secret":_secret_valor("YOUTUBE_CLIENT_SECRET"), "refresh_token":_secret_valor("YOUTUBE_REFRESH_TOKEN"), "grant_type":"refresh_token"}
-            r = requests.post("https://oauth2.googleapis.com/token", data=payload, timeout=15)
-            r.raise_for_status()
-            return True, "OAuth do YouTube renovado com sucesso."
-        if chave == "tiktok":
-            return False, "Credenciais básicas presentes; teste completo ficará disponível após a revisão do aplicativo TikTok."
-        return False, "Integração desconhecida."
-    except Exception as exc:
-        mensagem = str(exc)
-        if len(mensagem) > 240:
-            mensagem = mensagem[:237] + "..."
-        return False, mensagem
-
-
-def renderizar_alpha_connect():
-    st.subheader("🔗 Alpha Connect Pro")
-    st.caption("Diagnóstico seguro das integrações. Nenhuma chave secreta é exibida e os testes não publicam conteúdo.")
-    integracoes = [
-        _status_integracao("openai", "OpenAI", ["OPENAI_API_KEY"], "Textos comerciais e análise visual.", ["OPENAI_MODEL"]),
-        _status_integracao("meta", "Meta / Facebook", ["META_APP_ID", "META_APP_SECRET", "META_ACCESS_TOKEN", "META_PAGE_ID"], "Página e publicação pela Meta Graph API."),
-        _status_integracao("instagram", "Instagram", ["META_ACCESS_TOKEN", "INSTAGRAM_ACCOUNT_ID"], "Conta profissional vinculada à Página."),
-        _status_integracao("whatsapp", "WhatsApp Business", ["META_ACCESS_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_BUSINESS_ACCOUNT_ID"], "Mensagens pela plataforma oficial."),
-        _status_integracao("youtube", "YouTube", ["YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET"], "OAuth do canal para vídeos e Shorts.", ["YOUTUBE_REFRESH_TOKEN", "YOUTUBE_CHANNEL_ID"]),
-        _status_integracao("tiktok", "TikTok", ["TIKTOK_CLIENT_KEY", "TIKTOK_CLIENT_SECRET"], "Pendente até concluir a revisão do aplicativo."),
-    ]
-    historico = carregar_status_integracoes()
-    cols = st.columns(2)
-    for indice, item in enumerate(integracoes):
-        with cols[indice % 2].container(border=True):
-            st.markdown(f"### {item['icone']} {item['nome']}")
-            st.write(f"**Status:** {item['status']}")
-            st.caption(item["detalhe"])
-            if item["faltando"]:
-                st.caption("Faltando: " + ", ".join(item["faltando"]))
-            ultimo = historico.get(item["chave"], {}) if isinstance(historico, dict) else {}
-            if ultimo:
-                selo = "✅" if ultimo.get("ok") else "⚠️"
-                st.caption(f"{selo} Último teste: {ultimo.get('quando','—')} — {ultimo.get('mensagem','')}")
-            pode_testar = item["status"] == "Configurado" and pode_executar_acoes_tecnicas()
-            if usuario_em_operacao_protegida():
-                st.caption("🛡️ Testes técnicos bloqueados no modo de atendimento.")
-            if st.button("🧪 Testar conexão", key=f"teste_connect_{item['chave']}", use_container_width=True, disabled=not pode_testar):
-                with st.spinner(f"Testando {item['nome']}..."):
-                    ok, mensagem = _testar_integracao(item["chave"])
-                historico[item["chave"]] = {"ok": ok, "mensagem": mensagem, "quando": agora_local().strftime("%d/%m/%Y %H:%M"), "usuario": obter_usuario_atual().get("nome", "Equipe")}
-                salvar_status_integracoes(historico)
-                (st.success if ok else st.warning)(mensagem)
-                st.rerun()
-    st.info("Credencial configurada não significa permissão de publicação. A publicação será habilitada somente após OAuth, permissões e teste específico do canal.")
-
 
 if pagina_atual == "configuracoes":
     st.header("⚙️ Configurações e Integrações")
     aba_cfg_empresa, aba_cfg_connect, aba_cfg_usuarios, aba_cfg_thu = st.tabs(["🏢 Empresa", "🔗 Alpha Connect", "👥 Usuários e permissões", "🎓 Orientações do THU"])
     with aba_cfg_connect:
-        renderizar_alpha_connect()
+        _render_alpha_connect(
+            load_document=load_document,
+            save_document=save_document,
+            integrations_file=ARQUIVO_INTEGRACOES,
+            can_execute_technical_actions=pode_executar_acoes_tecnicas,
+            user_in_protected_operation=usuario_em_operacao_protegida,
+            now_local=agora_local,
+            current_user=obter_usuario_atual,
+            openai_class=_openai_class,
+        )
     with aba_cfg_thu:
         renderizar_configuracoes_orientacoes_thu()
     with aba_cfg_usuarios:

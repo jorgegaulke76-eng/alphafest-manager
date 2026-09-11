@@ -28,6 +28,7 @@ REQUIRED_RUNTIME_FILES = {
     "update_safe_ui.py",
     "system_health_ui.py",
     "trash_ui.py",
+    "alpha_connect_ui.py",
     "config.py",
     "marketing_template_engine.py",
     "marketing_anna_renderer_hf11.py",
