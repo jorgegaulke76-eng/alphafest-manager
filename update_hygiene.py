@@ -30,6 +30,7 @@ REQUIRED_RUNTIME_FILES = {
     "trash_ui.py",
     "alpha_connect_ui.py",
     "audit_ui.py",
+    "catalogo_diagnostics_service.py",
     "config.py",
     "marketing_template_engine.py",
     "marketing_anna_renderer_hf11.py",

@@ -205,6 +205,11 @@ from catalogo_midias_service import (
     resolver_galeria_fotos as _catalogo_resolver_galeria_fotos,
     chave_estado_catalogo_pertence_ao_formulario as _catalogo_chave_estado_formulario,
 )
+from catalogo_diagnostics_service import (
+    chave_duplicidade as _catalogo_diag_chave_duplicidade,
+    nome_flexivel as _catalogo_diag_nome_flexivel,
+    possiveis_duplicidades as _catalogo_diag_possiveis_duplicidades,
+)
 from catalogo_orcamento_service import (
     ORCAMENTO_PRODUTO_LIVRE as _catalogo_orcamento_livre,
     normalizar_identidade_produto as _catalogo_normalizar_identidade,
@@ -12340,11 +12345,7 @@ def thu_i861_aplicar_permanente(indice_produto):
 
 
 def thu_i861_chave_duplicidade(nome_a, nome_b):
-    nomes = sorted([
-        normalizar_identidade_produto(nome_a),
-        normalizar_identidade_produto(nome_b),
-    ])
-    return "duplicidade:" + "|".join(nomes)
+    return _catalogo_diag_chave_duplicidade(nome_a, nome_b)
 
 
 def thu_i861_confirmar_nao_duplicados(indice_a, indice_b, justificativa):
@@ -12383,88 +12384,13 @@ def thu_i861_confirmar_nao_duplicados(indice_a, indice_b, justificativa):
 
 
 def thu_i86_nome_flexivel(nome):
-    """Normalização conservadora para localizar possíveis duplicidades de cadastro."""
-    import unicodedata
-    texto = unicodedata.normalize("NFKD", str(nome or ""))
-    texto = "".join(c for c in texto if not unicodedata.combining(c)).casefold()
-    texto = re.sub(r"[^a-z0-9]+", " ", texto)
-    palavras = [
-        p for p in texto.split()
-        if p not in {"de", "do", "da", "dos", "das", "para", "com"}
-    ]
-    return " ".join(palavras).strip()
+    """Compatibilidade: normalização agora centralizada no serviço de diagnóstico."""
+    return _catalogo_diag_nome_flexivel(nome)
 
 
 def thu_i86_possiveis_duplicidades(catalogo):
-    """Retorna somente sinais fortes. Não une, apaga ou altera cadastros."""
-    catalogo = list(catalogo or [])
-    pares = []
-    vistos = set()
-
-    for i, produto_a in enumerate(catalogo):
-        nome_a = str((produto_a or {}).get("Nome") or "").strip()
-        if not nome_a:
-            continue
-        estrita_a = normalizar_identidade_produto(nome_a)
-        flex_a = thu_i86_nome_flexivel(nome_a)
-        aliases_a = {
-            normalizar_identidade_produto(x)
-            for x in ((produto_a or {}).get("Aliases", []) or [])
-            if str(x).strip()
-        }
-
-        for j in range(i + 1, len(catalogo)):
-            produto_b = catalogo[j] or {}
-            nome_b = str(produto_b.get("Nome") or "").strip()
-            if not nome_b:
-                continue
-
-            estrita_b = normalizar_identidade_produto(nome_b)
-            flex_b = thu_i86_nome_flexivel(nome_b)
-            aliases_b = {
-                normalizar_identidade_produto(x)
-                for x in (produto_b.get("Aliases", []) or [])
-                if str(x).strip()
-            }
-
-            motivo = ""
-            nivel = ""
-
-            if estrita_a and estrita_a == estrita_b:
-                motivo = "Mesmo nome após normalização"
-                nivel = "forte"
-            elif (
-                estrita_a in aliases_b
-                or estrita_b in aliases_a
-            ):
-                motivo = "Nome de um cadastro aparece como alias do outro"
-                nivel = "forte"
-            elif flex_a and flex_a == flex_b and estrita_a != estrita_b:
-                motivo = "Nomes equivalentes após remover palavras de ligação"
-                nivel = "provável"
-
-            if not motivo:
-                continue
-
-            chave_revisao = thu_i861_chave_duplicidade(nome_a, nome_b)
-            if (
-                thu_i861_alerta_aceito(produto_a, chave_revisao)
-                and thu_i861_alerta_aceito(produto_b, chave_revisao)
-            ):
-                continue
-
-            chave = tuple(sorted((i, j)))
-            if chave in vistos:
-                continue
-            vistos.add(chave)
-            pares.append({
-                "indices": (i, j),
-                "nomes": (nome_a, nome_b),
-                "motivo": motivo,
-                "nivel": nivel,
-            })
-
-    return pares
+    """HF30 — detecção indexada/cacheada; continua somente leitura."""
+    return _catalogo_diag_possiveis_duplicidades(catalogo)
 
 
 def thu_i86_diagnosticar_catalogo(catalogo):
