@@ -1367,3 +1367,8 @@ hangelog
 - Evita `force_refresh` e eventual gravação do `producao_db` apenas por abrir o dashboard.
 - Recortes de tarefas do painel passam a ser montados em uma única passagem.
 - Nenhuma regra de status, produção ou indicador foi alterada.
+
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF55
+- Galeria de Trabalhos: exclusão individual e confirmada de foto, preservando o restante do trabalho.
+- Persistência segura: banco confirmado antes da remoção física do arquivo privado.
