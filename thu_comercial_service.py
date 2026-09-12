@@ -81,88 +81,93 @@ def aplicar_registro_envio(
     return proposta
 
 
+def _montar_item_retorno(
+    proposta: dict[str, Any],
+    estado: dict[str, Any],
+    hoje: date,
+) -> dict[str, Any] | None:
+    """Classifica uma proposta para a fila de retorno sem recalcular o status."""
+    if estado.get("encerrada") or estado.get("entregue") or estado.get("aprovado"):
+        return None
+    if not valor_bool(proposta.get("enviado")):
+        return None
+
+    contato_dt = (
+        _parse_datetime(proposta.get("ultimo_envio_em"))
+        or _parse_datetime(proposta.get("enviado_em"))
+        or _parse_datetime(proposta.get("data_geracao"))
+        or _parse_datetime(proposta.get("data"))
+    )
+    dias_sem_retorno = max(0, (hoje - contato_dt.date()).days) if contato_dt else 0
+    entrega = _parse_date(proposta.get("data_entrega"))
+    dias_entrega = (entrega - hoje).days if entrega else None
+
+    if dias_entrega is not None and dias_entrega < 0:
+        prioridade = 1000 + min(abs(dias_entrega), 30) * 8 + min(dias_sem_retorno, 30)
+        nivel = "urgente"
+        motivo = f"Prazo informado venceu há {abs(dias_entrega)} dia(s) · último contato há {dias_sem_retorno} dia(s)"
+        acao = "Retomar agora e confirmar se o cliente ainda deseja seguir"
+    elif dias_entrega is not None and dias_entrega <= 2:
+        prioridade = 900 + (2 - dias_entrega) * 20 + min(dias_sem_retorno, 30)
+        nivel = "alta"
+        prazo_txt = "hoje" if dias_entrega == 0 else f"em {dias_entrega} dia(s)"
+        motivo = f"Prazo {prazo_txt} · último contato há {dias_sem_retorno} dia(s)"
+        acao = "Retomar cliente e confirmar aprovação ou ajuste"
+    elif dias_sem_retorno >= 3:
+        prioridade = 800 + min(dias_sem_retorno, 30) * 4
+        nivel = "alta"
+        motivo = f"Sem aprovação após {dias_sem_retorno} dia(s) do último contato"
+        acao = "Fazer acompanhamento comercial"
+    elif dias_sem_retorno >= 1:
+        prioridade = 650 + dias_sem_retorno * 4
+        nivel = "normal"
+        motivo = f"Aguardando retorno há {dias_sem_retorno} dia(s)"
+        acao = "Retomar cliente de forma leve"
+    else:
+        prioridade = 300
+        nivel = "aguardar"
+        motivo = "Envio/retorno registrado hoje"
+        acao = "Aguardar retorno do cliente"
+
+    nome = str(proposta.get("cliente_nome") or proposta.get("cliente") or "Cliente").strip() or "Cliente"
+    numero = str(proposta.get("numero_proposta") or "—").strip() or "—"
+    whatsapp = str(proposta.get("whatsapp") or proposta.get("cliente_wa") or "").strip()
+    mensagem = (
+        f"Olá, {nome}! Passando para saber se conseguiu analisar o orçamento {numero}. "
+        "Se quiser, posso tirar dúvidas ou ajustar algum detalhe."
+    )
+    return {
+        "numero_proposta": numero,
+        "cliente_nome": nome,
+        "whatsapp": whatsapp,
+        "whatsapp_chave": _telefone_chave(whatsapp),
+        "ultimo_contato_em": str(proposta.get("ultimo_envio_em") or proposta.get("enviado_em") or ""),
+        "dias_sem_retorno": dias_sem_retorno,
+        "data_entrega": str(proposta.get("data_entrega") or ""),
+        "dias_para_entrega": dias_entrega,
+        "nivel": nivel,
+        "motivo": motivo,
+        "acao": acao,
+        "prioridade": prioridade,
+        "mensagem_sugerida": mensagem,
+        "envios_qtd": int(proposta.get("envios_qtd") or 1) if str(proposta.get("envios_qtd") or "1").isdigit() else 1,
+    }
+
+
 def montar_retornos_comerciais(
     historico: list[dict[str, Any]] | None,
     hoje: date,
     *,
     limite: int = 8,
 ) -> list[dict[str, Any]]:
-    """Monta fila assistida de propostas enviadas ainda sem aprovação.
-
-    Só entram propostas com envio explicitamente registrado. Assim o THU não
-    presume que abrir/gerar um orçamento significa que ele foi realmente enviado.
-    """
+    """Monta fila assistida de propostas enviadas ainda sem aprovação."""
     saida: list[dict[str, Any]] = []
     for proposta in historico or []:
         if not isinstance(proposta, dict):
             continue
-        estado = resumo_status(proposta)
-        if estado.get("encerrada") or estado.get("entregue") or estado.get("aprovado"):
-            continue
-        if not valor_bool(proposta.get("enviado")):
-            continue
-
-        contato_dt = (
-            _parse_datetime(proposta.get("ultimo_envio_em"))
-            or _parse_datetime(proposta.get("enviado_em"))
-            or _parse_datetime(proposta.get("data_geracao"))
-            or _parse_datetime(proposta.get("data"))
-        )
-        dias_sem_retorno = max(0, (hoje - contato_dt.date()).days) if contato_dt else 0
-        entrega = _parse_date(proposta.get("data_entrega"))
-        dias_entrega = (entrega - hoje).days if entrega else None
-
-        if dias_entrega is not None and dias_entrega < 0:
-            prioridade = 1000 + min(abs(dias_entrega), 30) * 8 + min(dias_sem_retorno, 30)
-            nivel = "urgente"
-            motivo = f"Prazo informado venceu há {abs(dias_entrega)} dia(s) · último contato há {dias_sem_retorno} dia(s)"
-            acao = "Retomar agora e confirmar se o cliente ainda deseja seguir"
-        elif dias_entrega is not None and dias_entrega <= 2:
-            prioridade = 900 + (2 - dias_entrega) * 20 + min(dias_sem_retorno, 30)
-            nivel = "alta"
-            prazo_txt = "hoje" if dias_entrega == 0 else f"em {dias_entrega} dia(s)"
-            motivo = f"Prazo {prazo_txt} · último contato há {dias_sem_retorno} dia(s)"
-            acao = "Retomar cliente e confirmar aprovação ou ajuste"
-        elif dias_sem_retorno >= 3:
-            prioridade = 800 + min(dias_sem_retorno, 30) * 4
-            nivel = "alta"
-            motivo = f"Sem aprovação após {dias_sem_retorno} dia(s) do último contato"
-            acao = "Fazer acompanhamento comercial"
-        elif dias_sem_retorno >= 1:
-            prioridade = 650 + dias_sem_retorno * 4
-            nivel = "normal"
-            motivo = f"Aguardando retorno há {dias_sem_retorno} dia(s)"
-            acao = "Retomar cliente de forma leve"
-        else:
-            prioridade = 300
-            nivel = "aguardar"
-            motivo = "Envio/retorno registrado hoje"
-            acao = "Aguardar retorno do cliente"
-
-        nome = str(proposta.get("cliente_nome") or proposta.get("cliente") or "Cliente").strip() or "Cliente"
-        numero = str(proposta.get("numero_proposta") or "—").strip() or "—"
-        whatsapp = str(proposta.get("whatsapp") or proposta.get("cliente_wa") or "").strip()
-        mensagem = (
-            f"Olá, {nome}! Passando para saber se conseguiu analisar o orçamento {numero}. "
-            "Se quiser, posso tirar dúvidas ou ajustar algum detalhe."
-        )
-        saida.append({
-            "numero_proposta": numero,
-            "cliente_nome": nome,
-            "whatsapp": whatsapp,
-            "whatsapp_chave": _telefone_chave(whatsapp),
-            "ultimo_contato_em": str(proposta.get("ultimo_envio_em") or proposta.get("enviado_em") or ""),
-            "dias_sem_retorno": dias_sem_retorno,
-            "data_entrega": str(proposta.get("data_entrega") or ""),
-            "dias_para_entrega": dias_entrega,
-            "nivel": nivel,
-            "motivo": motivo,
-            "acao": acao,
-            "prioridade": prioridade,
-            "mensagem_sugerida": mensagem,
-            "envios_qtd": int(proposta.get("envios_qtd") or 1) if str(proposta.get("envios_qtd") or "1").isdigit() else 1,
-        })
-
+        item = _montar_item_retorno(proposta, resumo_status(proposta), hoje)
+        if item is not None:
+            saida.append(item)
     saida.sort(key=lambda item: (-int(item.get("prioridade") or 0), -int(item.get("dias_sem_retorno") or 0), str(item.get("numero_proposta") or "")))
     return saida[: max(0, int(limite or 0))]
 
@@ -191,118 +196,119 @@ def aplicar_registro_cobranca(
     return proposta
 
 
+def _montar_item_cobranca(
+    proposta: dict[str, Any],
+    estado: dict[str, Any],
+    hoje: date,
+) -> dict[str, Any] | None:
+    """Classifica uma proposta para cobrança sem recalcular o status oficial."""
+    if estado.get("encerrada") or estado.get("mensalista"):
+        return None
+    if not estado.get("aprovado") or estado.get("pago"):
+        return None
+
+    cobranca_dt = (
+        _parse_datetime(proposta.get("ultima_cobranca_em"))
+        or _parse_datetime(proposta.get("primeira_cobranca_em"))
+    )
+    aprovacao_dt = (
+        _parse_datetime(proposta.get("aprovado_em"))
+        or _parse_datetime(proposta.get("data_aprovacao"))
+        or _parse_datetime(proposta.get("data_geracao"))
+        or _parse_datetime(proposta.get("data"))
+    )
+    referencia_dt = cobranca_dt or aprovacao_dt
+    dias_sem_cobranca = max(0, (hoje - referencia_dt.date()).days) if referencia_dt else 0
+    cobranca_ja_registrada = bool(cobranca_dt) or valor_bool(proposta.get("cobranca_registrada"))
+
+    entrega = _parse_date(proposta.get("data_entrega"))
+    dias_entrega = (entrega - hoje).days if entrega else None
+
+    if estado.get("entregue"):
+        prioridade = 1250 + min(dias_sem_cobranca, 30) * 5
+        nivel = "urgente"
+        motivo = f"Pedido entregue com pagamento pendente · última referência há {dias_sem_cobranca} dia(s)"
+        acao = "Confirmar recebimento do pagamento ou solicitar comprovante"
+    elif dias_entrega is not None and dias_entrega < 0:
+        prioridade = 1150 + min(abs(dias_entrega), 30) * 8 + min(dias_sem_cobranca, 30)
+        nivel = "urgente"
+        motivo = f"Prazo de entrega venceu há {abs(dias_entrega)} dia(s) · pagamento ainda pendente"
+        acao = "Cobrar agora e alinhar pagamento antes da conclusão da saída"
+    elif estado.get("pronto"):
+        prioridade = 1050 + min(dias_sem_cobranca, 30) * 4
+        nivel = "alta"
+        motivo = f"Pedido pronto com pagamento pendente · última referência há {dias_sem_cobranca} dia(s)"
+        acao = "Confirmar pagamento antes da retirada/entrega"
+    elif dias_entrega is not None and dias_entrega <= 1:
+        prioridade = 980 + (1 - dias_entrega) * 20 + min(dias_sem_cobranca, 30)
+        nivel = "alta"
+        prazo_txt = "hoje" if dias_entrega == 0 else "amanhã"
+        motivo = f"Entrega {prazo_txt} · pagamento pendente"
+        acao = "Confirmar pagamento com o cliente"
+    elif not cobranca_ja_registrada:
+        prioridade = 780 + min(dias_sem_cobranca, 30) * 4
+        nivel = "normal"
+        motivo = f"Pedido aprovado e ainda sem cobrança registrada · há {dias_sem_cobranca} dia(s)"
+        acao = "Enviar lembrete de pagamento e registrar a cobrança"
+    elif dias_sem_cobranca >= 3:
+        prioridade = 860 + min(dias_sem_cobranca, 30) * 4
+        nivel = "alta"
+        motivo = f"Pagamento pendente · última cobrança há {dias_sem_cobranca} dia(s)"
+        acao = "Retomar cobrança"
+    elif dias_sem_cobranca >= 1:
+        prioridade = 690 + dias_sem_cobranca * 4
+        nivel = "normal"
+        motivo = f"Pagamento pendente · última cobrança há {dias_sem_cobranca} dia(s)"
+        acao = "Acompanhar pagamento"
+    else:
+        prioridade = 320
+        nivel = "aguardar"
+        motivo = "Cobrança registrada hoje · pagamento ainda pendente"
+        acao = "Aguardar retorno/comprovante do cliente"
+
+    nome = str(proposta.get("cliente_nome") or proposta.get("cliente") or "Cliente").strip() or "Cliente"
+    numero = str(proposta.get("numero_proposta") or "—").strip() or "—"
+    whatsapp = str(proposta.get("whatsapp") or proposta.get("cliente_wa") or "").strip()
+    mensagem = (
+        f"Olá, {nome}! Sobre o pedido {numero}, consta o pagamento pendente. "
+        "Se já realizou, pode me enviar o comprovante, por favor? "
+        "Se precisar, envio novamente os dados do PIX."
+    )
+    return {
+        "numero_proposta": numero,
+        "cliente_nome": nome,
+        "whatsapp": whatsapp,
+        "whatsapp_chave": _telefone_chave(whatsapp),
+        "ultima_cobranca_em": str(proposta.get("ultima_cobranca_em") or proposta.get("primeira_cobranca_em") or ""),
+        "cobranca_registrada": cobranca_ja_registrada,
+        "dias_sem_cobranca": dias_sem_cobranca,
+        "data_entrega": str(proposta.get("data_entrega") or ""),
+        "dias_para_entrega": dias_entrega,
+        "pronto": bool(estado.get("pronto")),
+        "entregue": bool(estado.get("entregue")),
+        "nivel": nivel,
+        "motivo": motivo,
+        "acao": acao,
+        "prioridade": prioridade,
+        "mensagem_sugerida": mensagem,
+        "cobrancas_qtd": int(proposta.get("cobrancas_qtd") or 0) if str(proposta.get("cobrancas_qtd") or "0").isdigit() else 0,
+    }
+
+
 def montar_cobrancas_assistidas(
     historico: list[dict[str, Any]] | None,
     hoje: date,
     *,
     limite: int = 8,
 ) -> list[dict[str, Any]]:
-    """Monta fila de pedidos aprovados e ainda não pagos.
-
-    Regras de segurança:
-    - mensalistas ficam fora: o pagamento deles pertence ao fechamento mensal;
-    - proposta encerrada fica fora;
-    - ``Pago`` continua vindo exclusivamente da Fonte Única de Status;
-    - pedido entregue e não pago continua na fila financeira (a entrega encerra
-      a operação, mas não apaga a pendência financeira).
-    """
+    """Monta fila de pedidos aprovados e ainda não pagos."""
     saida: list[dict[str, Any]] = []
     for proposta in historico or []:
         if not isinstance(proposta, dict):
             continue
-        estado = resumo_status(proposta)
-        if estado.get("encerrada") or estado.get("mensalista"):
-            continue
-        if not estado.get("aprovado") or estado.get("pago"):
-            continue
-
-        cobranca_dt = (
-            _parse_datetime(proposta.get("ultima_cobranca_em"))
-            or _parse_datetime(proposta.get("primeira_cobranca_em"))
-        )
-        aprovacao_dt = (
-            _parse_datetime(proposta.get("aprovado_em"))
-            or _parse_datetime(proposta.get("data_aprovacao"))
-            or _parse_datetime(proposta.get("data_geracao"))
-            or _parse_datetime(proposta.get("data"))
-        )
-        referencia_dt = cobranca_dt or aprovacao_dt
-        dias_sem_cobranca = max(0, (hoje - referencia_dt.date()).days) if referencia_dt else 0
-        cobranca_ja_registrada = bool(cobranca_dt) or valor_bool(proposta.get("cobranca_registrada"))
-
-        entrega = _parse_date(proposta.get("data_entrega"))
-        dias_entrega = (entrega - hoje).days if entrega else None
-
-        if estado.get("entregue"):
-            prioridade = 1250 + min(dias_sem_cobranca, 30) * 5
-            nivel = "urgente"
-            motivo = f"Pedido entregue com pagamento pendente · última referência há {dias_sem_cobranca} dia(s)"
-            acao = "Confirmar recebimento do pagamento ou solicitar comprovante"
-        elif dias_entrega is not None and dias_entrega < 0:
-            prioridade = 1150 + min(abs(dias_entrega), 30) * 8 + min(dias_sem_cobranca, 30)
-            nivel = "urgente"
-            motivo = f"Prazo de entrega venceu há {abs(dias_entrega)} dia(s) · pagamento ainda pendente"
-            acao = "Cobrar agora e alinhar pagamento antes da conclusão da saída"
-        elif estado.get("pronto"):
-            prioridade = 1050 + min(dias_sem_cobranca, 30) * 4
-            nivel = "alta"
-            motivo = f"Pedido pronto com pagamento pendente · última referência há {dias_sem_cobranca} dia(s)"
-            acao = "Confirmar pagamento antes da retirada/entrega"
-        elif dias_entrega is not None and dias_entrega <= 1:
-            prioridade = 980 + (1 - dias_entrega) * 20 + min(dias_sem_cobranca, 30)
-            nivel = "alta"
-            prazo_txt = "hoje" if dias_entrega == 0 else "amanhã"
-            motivo = f"Entrega {prazo_txt} · pagamento pendente"
-            acao = "Confirmar pagamento com o cliente"
-        elif not cobranca_ja_registrada:
-            prioridade = 780 + min(dias_sem_cobranca, 30) * 4
-            nivel = "normal"
-            motivo = f"Pedido aprovado e ainda sem cobrança registrada · há {dias_sem_cobranca} dia(s)"
-            acao = "Enviar lembrete de pagamento e registrar a cobrança"
-        elif dias_sem_cobranca >= 3:
-            prioridade = 860 + min(dias_sem_cobranca, 30) * 4
-            nivel = "alta"
-            motivo = f"Pagamento pendente · última cobrança há {dias_sem_cobranca} dia(s)"
-            acao = "Retomar cobrança"
-        elif dias_sem_cobranca >= 1:
-            prioridade = 690 + dias_sem_cobranca * 4
-            nivel = "normal"
-            motivo = f"Pagamento pendente · última cobrança há {dias_sem_cobranca} dia(s)"
-            acao = "Acompanhar pagamento"
-        else:
-            prioridade = 320
-            nivel = "aguardar"
-            motivo = "Cobrança registrada hoje · pagamento ainda pendente"
-            acao = "Aguardar retorno/comprovante do cliente"
-
-        nome = str(proposta.get("cliente_nome") or proposta.get("cliente") or "Cliente").strip() or "Cliente"
-        numero = str(proposta.get("numero_proposta") or "—").strip() or "—"
-        whatsapp = str(proposta.get("whatsapp") or proposta.get("cliente_wa") or "").strip()
-        mensagem = (
-            f"Olá, {nome}! Sobre o pedido {numero}, consta o pagamento pendente. "
-            "Se já realizou, pode me enviar o comprovante, por favor? "
-            "Se precisar, envio novamente os dados do PIX."
-        )
-        saida.append({
-            "numero_proposta": numero,
-            "cliente_nome": nome,
-            "whatsapp": whatsapp,
-            "whatsapp_chave": _telefone_chave(whatsapp),
-            "ultima_cobranca_em": str(proposta.get("ultima_cobranca_em") or proposta.get("primeira_cobranca_em") or ""),
-            "cobranca_registrada": cobranca_ja_registrada,
-            "dias_sem_cobranca": dias_sem_cobranca,
-            "data_entrega": str(proposta.get("data_entrega") or ""),
-            "dias_para_entrega": dias_entrega,
-            "pronto": bool(estado.get("pronto")),
-            "entregue": bool(estado.get("entregue")),
-            "nivel": nivel,
-            "motivo": motivo,
-            "acao": acao,
-            "prioridade": prioridade,
-            "mensagem_sugerida": mensagem,
-            "cobrancas_qtd": int(proposta.get("cobrancas_qtd") or 0) if str(proposta.get("cobrancas_qtd") or "0").isdigit() else 0,
-        })
-
+        item = _montar_item_cobranca(proposta, resumo_status(proposta), hoje)
+        if item is not None:
+            saida.append(item)
     saida.sort(
         key=lambda item: (
             -int(item.get("prioridade") or 0),
@@ -311,6 +317,51 @@ def montar_cobrancas_assistidas(
         )
     )
     return saida[: max(0, int(limite or 0))]
+
+
+def montar_filas_comerciais(
+    historico: list[dict[str, Any]] | None,
+    hoje: date,
+    *,
+    limite_retornos: int = 8,
+    limite_cobrancas: int = 8,
+) -> dict[str, Any]:
+    """HF35: prepara Retornos + Cobranças em uma única passagem no Histórico.
+
+    É somente leitura e preserva a classificação das funções públicas antigas.
+    Também devolve o índice por número para os blocos de resumo financeiro.
+    """
+    retornos: list[dict[str, Any]] = []
+    cobrancas: list[dict[str, Any]] = []
+    por_numero: dict[str, dict[str, Any]] = {}
+
+    for proposta in historico or []:
+        if not isinstance(proposta, dict):
+            continue
+        numero = str(proposta.get("numero_proposta") or "").strip()
+        if numero:
+            por_numero[numero] = proposta
+        estado = resumo_status(proposta)
+        retorno = _montar_item_retorno(proposta, estado, hoje)
+        if retorno is not None:
+            retornos.append(retorno)
+        cobranca = _montar_item_cobranca(proposta, estado, hoje)
+        if cobranca is not None:
+            cobrancas.append(cobranca)
+
+    retornos.sort(key=lambda item: (-int(item.get("prioridade") or 0), -int(item.get("dias_sem_retorno") or 0), str(item.get("numero_proposta") or "")))
+    cobrancas.sort(
+        key=lambda item: (
+            -int(item.get("prioridade") or 0),
+            -int(item.get("dias_sem_cobranca") or 0),
+            str(item.get("numero_proposta") or ""),
+        )
+    )
+    return {
+        "retornos": retornos[: max(0, int(limite_retornos or 0))],
+        "cobrancas": cobrancas[: max(0, int(limite_cobrancas or 0))],
+        "propostas_por_numero": por_numero,
+    }
 
 
 def montar_agenda_executiva(

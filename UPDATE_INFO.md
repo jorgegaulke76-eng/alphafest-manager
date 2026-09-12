@@ -1,10 +1,12 @@
-# AlphaFest Manager — HF53.3-HF8-HF34
+# AlphaFest Manager — HF53.3-HF8-HF35
 
-## HF34 — Atendimentos / CRM otimizado
+## HF35 — THU / Central comercial otimizada
 
-- Índice de leitura para Clientes + Histórico usado pelo Índice Alpha.
-- Evita varrer clientes e propostas inteiros para cada atendimento.
-- Pré-calcula texto de busca, canal e tempo de espera por oportunidade no rerun.
-- Atualização de oportunidade usa mapa por ID em vez de nova varredura da fila.
-- Nenhuma regra de CRM, status, prioridade, THU, retorno ou cobrança foi alterada.
-- Template Mestre HF7, Template Anna e Marketing Engine permanecem preservados.
+O HF35 reduz recomputação dentro da Central executiva sem alterar nenhuma regra comercial.
+
+- Retornos e Cobranças passam a ser preparados em uma única passagem no Histórico.
+- O status oficial de cada proposta é calculado uma vez e reaproveitado nas duas filas.
+- O índice de propostas por número é reaproveitado pelo resumo financeiro.
+- Mesmas prioridades, mensagens, limites e decisões assistidas já homologadas.
+- Nenhum envio automático, mudança de status ou cobrança automática foi criado.
+- HF7, Template Anna e Marketing Engine permanecem preservados.

@@ -199,6 +199,7 @@ from thu_comercial_service import (
     montar_retornos_comerciais as _thu_comercial_montar_retornos,
     aplicar_registro_cobranca as _thu_comercial_aplicar_registro_cobranca,
     montar_cobrancas_assistidas as _thu_comercial_montar_cobrancas,
+    montar_filas_comerciais as _thu_comercial_montar_filas,
     montar_agenda_executiva as _thu_comercial_montar_agenda,
 )
 from catalogo_midias_service import (
@@ -23765,16 +23766,18 @@ if pagina_atual == "central":
     # agenda executiva única por proposta. É somente leitura: nenhum contato,
     # status ou decisão é registrado por este bloco.
     if usuario_eh_jorge_i8112hf1:
-        retornos_comerciais_hf14 = _thu_comercial_montar_retornos(
+        # HF35 — uma única passagem no Histórico prepara Retornos e Cobranças,
+        # preservando as mesmas regras e evitando recalcular o status oficial
+        # das mesmas propostas duas vezes no mesmo rerun.
+        _filas_comerciais_hf35 = _thu_comercial_montar_filas(
             historico_central,
             hoje_central,
-            limite=20,
+            limite_retornos=20,
+            limite_cobrancas=20,
         )
-        cobrancas_hf15 = _thu_comercial_montar_cobrancas(
-            historico_central,
-            hoje_central,
-            limite=20,
-        )
+        retornos_comerciais_hf14 = _filas_comerciais_hf35.get("retornos", [])
+        cobrancas_hf15 = _filas_comerciais_hf35.get("cobrancas", [])
+        _propostas_por_numero_hf35 = _filas_comerciais_hf35.get("propostas_por_numero", {})
         # HF25 — calcula a fotografia de produção também para a Agenda Executiva.
         # Isso permite prevenção de prazo/material sem criar uma fonte paralela.
         _previsao_agenda_hf25 = _i8127_previsao_producao(historico=historico_central)
@@ -24452,11 +24455,8 @@ if pagina_atual == "central":
             "Clientes de faturamento mensal continuam no fechamento mensal."
         )
         if cobrancas_hf15:
-            _mapa_cobranca_hf15 = {
-                str((p or {}).get("numero_proposta") or ""): p
-                for p in historico_central
-                if isinstance(p, dict)
-            }
+            # HF35 — índice já construído junto das filas comerciais.
+            _mapa_cobranca_hf15 = _propostas_por_numero_hf35
             _cobrar_agora_hf15 = [c for c in cobrancas_hf15 if c.get("nivel") != "aguardar"]
             _valor_cobrancas_hf15 = sum(
                 calcular_valores_proposta(_mapa_cobranca_hf15.get(str(c.get("numero_proposta") or ""), {}))[2]
