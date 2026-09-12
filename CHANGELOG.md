@@ -1,3 +1,9 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF47 — Agenda/Fechamento Runtime
+- Fechamento diário reaproveita a agenda atual já calculada pela Central.
+- Remove recálculo duplicado de status/produtos/ordenação no mesmo rerun.
+- Sem alteração nos indicadores, PDFs, status ou persistência operacional.
+- HF7, Template Anna e Marketing Engine preservados.
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF46 — Marketing Intelligence Runtime
 - THU reutiliza a mesma resolução saneada de produto durante toda a análise.
 - Histórico social é preparado uma vez e compartilhado entre as leituras do período e sinais temporais.

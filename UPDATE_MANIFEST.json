@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF46",
-  "generated_at_utc": "2026-09-12T18:32:24.906563+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF47",
+  "generated_at_utc": "2026-09-12T18:50:49.319860+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -11,19 +11,19 @@
     "warnings": [],
     "critical_python_compile": {
       "status": "OK",
-      "files_checked": 32,
-      "files_ok": 32
+      "files_checked": 33,
+      "files_ok": 33
     },
     "tests": {
-      "total_files": 1,
+      "total_files": 0,
       "portable_files": 0,
-      "current_release_files": 1,
+      "current_release_files": 0,
       "historical_version_files": 0,
       "historical_examples": []
     }
   },
   "file_count": 380,
-  "uncompressed_bytes": 36536642,
+  "uncompressed_bytes": 36537265,
   "files": [
     {
       "path": ".gitignore",
@@ -42,8 +42,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size": 85995,
-      "sha256": "daa38ed26f8e987980aa9ca0cae3e83b3c2a14a507b5854995996b229cff19bd"
+      "size": 86344,
+      "sha256": "354e78d2416058a50926759b1d22b067f08b3214dff113d0d72b298910ab8042"
     },
     {
       "path": "EDGE_FUNCTION_CATALOGO_PUBLICO.md",
@@ -102,23 +102,23 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 752,
-      "sha256": "020508982dd0375a0081f4d7af46795358a2a5a921a355d614ebdc5c78ef8773"
+      "size": 564,
+      "sha256": "3955b41389948e44d0e8e4de9ef6c3f6ec7b35c519c2b5f7daa25fad7c81edc6"
     },
     {
-      "path": "UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF46.md",
-      "size": 752,
-      "sha256": "020508982dd0375a0081f4d7af46795358a2a5a921a355d614ebdc5c78ef8773"
+      "path": "UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF47.md",
+      "size": 564,
+      "sha256": "3955b41389948e44d0e8e4de9ef6c3f6ec7b35c519c2b5f7daa25fad7c81edc6"
     },
     {
       "path": "VERSAO",
       "size": 31,
-      "sha256": "31cf0ffbf80b2439966c7367eb017e255e5925339dd203aa69ef5867119c53ac"
+      "sha256": "204364990d6c9da51e9c259c68844cfe60f1d0b6efb6f519c30cc7b9e4a38785"
     },
     {
       "path": "VERSAO.txt",
       "size": 31,
-      "sha256": "31cf0ffbf80b2439966c7367eb017e255e5925339dd203aa69ef5867119c53ac"
+      "sha256": "204364990d6c9da51e9c259c68844cfe60f1d0b6efb6f519c30cc7b9e4a38785"
     },
     {
       "path": "__init__.py",
@@ -177,13 +177,13 @@
     },
     {
       "path": "anna_fechamento_service.py",
-      "size": 12785,
-      "sha256": "1dcb4715f1c7b819926a13edb2c0a92b23d68c027499a21de959f0537954e864"
+      "size": 13207,
+      "sha256": "c9baec58aa6463cb058093ea000248a06639e7bfedcddec84260e6197ff55ef7"
     },
     {
       "path": "app.py",
-      "size": 1938220,
-      "sha256": "90d9967509029466cf7516ad1de892403a9c62431176c47a0ca896097047012e"
+      "size": 1938414,
+      "sha256": "2b5c718024e36c7b9c5aadf5cbc981deba591f85dd653a1c3995556f2fcecebe"
     },
     {
       "path": "assets/catalogos_legados/acervo_catalogos_legados.json",
@@ -1752,8 +1752,8 @@
     },
     {
       "path": "release_diagnostics.py",
-      "size": 6687,
-      "sha256": "ef57bd8860a624041ba0658d054e369f8e84417e8a290d968387a15ff5c08564"
+      "size": 6721,
+      "sha256": "719acd8a0318ff97670523664ed4c1dfbd6286c7c30f8863c3237c4827b51fb1"
     },
     {
       "path": "requirements.txt",

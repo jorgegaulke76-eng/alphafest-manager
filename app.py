@@ -23302,7 +23302,16 @@ def renderizar_workspace_anna_isolado():
                 )
 
             st.markdown("#### 🌙 Fechamento do dia — comparação com a manhã")
-            comparativo_hf19 = _anna_comparar_fechamento(snapshot_hoje_hf19, historico, hoje=hoje_local()) if _anna_comparar_fechamento else {}
+            comparativo_hf19 = (
+                _anna_comparar_fechamento(
+                    snapshot_hoje_hf19,
+                    historico,
+                    hoje=hoje_local(),
+                    agenda_atual=agenda_anna_hf17,
+                )
+                if _anna_comparar_fechamento
+                else {}
+            )
             resumo_fech_hf19 = comparativo_hf19.get("resumo", {}) if isinstance(comparativo_hf19, dict) else {}
             fc1_hf19, fc2_hf19, fc3_hf19, fc4_hf19 = st.columns(4)
             fc1_hf19.metric("Entregues", int(resumo_fech_hf19.get("entregues", 0) or 0))

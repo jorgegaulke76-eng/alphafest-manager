@@ -71,6 +71,8 @@ def comparar_fechamento(
     snapshot: dict[str, Any] | None,
     propostas_atuais: Iterable[dict[str, Any]] | None,
     hoje: date | None = None,
+    *,
+    agenda_atual: Iterable[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Compara a fotografia da manhã com a situação atual do banco.
 
@@ -85,7 +87,11 @@ def comparar_fechamento(
     hoje = hoje or date.today()
     snapshot = snapshot or {}
     manha = [x for x in snapshot.get("linhas", []) if isinstance(x, dict)] if snapshot_valido(snapshot) else []
-    atual = montar_agenda_anna(propostas_atuais, hoje)
+    # HF47 — quando a Central já montou a agenda atual neste mesmo rerun,
+    # reaproveitamos exatamente essa fotografia em vez de recalcular status,
+    # produtos e ordenação uma segunda vez. Chamadas antigas continuam
+    # compatíveis: sem ``agenda_atual`` o comportamento permanece idêntico.
+    atual = list(agenda_atual) if agenda_atual is not None else montar_agenda_anna(propostas_atuais, hoje)
 
     manha_por_numero = {
         str(x.get("numero_proposta") or "").strip(): x

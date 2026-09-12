@@ -40,6 +40,7 @@ CRITICAL_PYTHON_FILES = (
     "project_runtime_index_service.py",
     "proposal_runtime_index_service.py",
     "document_runtime_service.py",
+    "anna_fechamento_service.py",
     "compras_runtime_index_service.py",
     "marketing_results_runtime_service.py",
     "thu_comercial_service.py",
