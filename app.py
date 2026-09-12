@@ -260,6 +260,7 @@ from finance_runtime_index_service import (
     resolve_billing_client as _finance_resolve_billing_client,
     resolve_relationship_client as _finance_resolve_relationship_client,
 )
+from project_runtime_index_service import build_project_runtime_index as _project_build_runtime_index, filter_projects as _project_filter_runtime, proposal_map as _project_proposal_map
 from proposal_runtime_index_service import (
     build_proposal_runtime_index as _proposal_build_runtime_index,
     filter_active_recent as _proposal_filter_active_recent,
@@ -10242,6 +10243,9 @@ def renderizar_base_conhecimento():
     tab_biblioteca, tab_vincular, tab_pesquisa = st.tabs([
         "🧩 Biblioteca de componentes", "🔗 Componentes dos projetos", "🔎 Pesquisa por características"
     ])
+    # HF41 — projetos são carregados/indexados uma única vez por rerun desta tela.
+    projetos_kb = carregar_projetos()
+    projetos_kb_index = _project_runtime_index_cached(projetos_kb)
 
     with tab_biblioteca:
         componentes = carregar_componentes()
@@ -10283,7 +10287,7 @@ def renderizar_base_conhecimento():
                         st.rerun()
 
     with tab_vincular:
-        projetos = carregar_projetos()
+        projetos = projetos_kb
         if not projetos:
             st.info("Ainda não há projetos na Memória da Empresa.")
         else:
@@ -10319,17 +10323,8 @@ def renderizar_base_conhecimento():
 
     with tab_pesquisa:
         termo = st.text_input("Pesquisar", placeholder="Ex.: coração, fosco, dourado, LED, beach tennis", key="kb_busca").strip().lower()
-        projetos = carregar_projetos()
         if termo:
-            encontrados = []
-            for projeto in projetos:
-                base = " ".join([
-                    texto_busca_projeto(projeto), texto_componentes_projeto(projeto),
-                    str(projeto.get("caracteristicas_livres", "")), str(projeto.get("necessidade", "")),
-                    str(projeto.get("detalhes", "")),
-                ]).lower()
-                if termo in base:
-                    encontrados.append(projeto)
+            encontrados = _project_filter_runtime(projetos_kb_index, termo, "Todos")
             st.caption(f"{len(encontrados)} projeto(s) encontrado(s)")
             for projeto in encontrados[:50]:
                 with st.expander(f"{projeto.get('id')} — {projeto.get('cliente_nome') or 'Cliente'}"):
@@ -10659,14 +10654,33 @@ def carregar_projetos():
 def salvar_projetos(lista):
     if not isinstance(lista, list):
         raise ValueError("A memória de projetos precisa ser uma lista.")
-    return bool(save_document("projetos_db", lista, ARQUIVO_PROJETOS))
+    ok = bool(save_document("projetos_db", lista, ARQUIVO_PROJETOS))
+    if ok:
+        st.session_state.pop("_project_runtime_cache_hf41", None)
+    return ok
+
+
+def _project_document_revision():
+    cached = _document_cache().get("projetos_db") or {}
+    value = cached.get("value")
+    return (cached.get("time"), len(value) if isinstance(value, list) else None)
+
+
+def _project_runtime_index_cached(projects):
+    token = _project_document_revision()
+    entry = st.session_state.get("_project_runtime_cache_hf41") or {}
+    if entry.get("token") == token and entry.get("index") is not None:
+        return entry["index"]
+    index = _project_build_runtime_index(projects)
+    st.session_state["_project_runtime_cache_hf41"] = {"token": token, "index": index}
+    return index
 
 
 def obter_ou_criar_projeto(proposta):
     """Retorna a Caixa do Projeto ligada à proposta, criando-a quando necessário."""
     numero = str(proposta.get("numero_proposta", "")).strip()
     projetos = carregar_projetos()
-    projeto = next((p for p in projetos if str(p.get("numero_proposta", "")) == numero), None)
+    projeto = _project_runtime_index_cached(projetos).by_proposal.get(numero) if numero else None
     if projeto:
         return projeto, projetos
     itens = proposta.get("itens", []) or []
@@ -36667,21 +36681,19 @@ if pagina_atual == "memoria":
     st.header("🧠 Memória da Empresa")
     st.caption("Encontre projetos, temas, clientes, produtos e arquivos em poucos segundos.")
     projetos_memoria = carregar_projetos()
+    projetos_memoria_index = _project_runtime_index_cached(projetos_memoria)
+    historico_memoria = carregar_historico()
+    propostas_memoria_por_numero = _project_proposal_map(historico_memoria)
     busca_memoria = st.text_input(
         "🔎 Pesquisar na memória",
         placeholder="Tema, cliente, produto, pedido, arquivo ou tag",
         key="busca_memoria_empresa",
     ).strip().lower()
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Projetos", len(projetos_memoria))
-    m2.metric("Modelos", sum(1 for p in projetos_memoria if p.get("modelo")))
-    m3.metric("Favoritos", sum(1 for p in projetos_memoria if p.get("favorito")))
-    m4.metric("Arquivos", sum(len([a for a in p.get("arquivos", []) or [] if not a.get("arquivado")]) for p in projetos_memoria))
-
-    if busca_memoria:
-        projetos_filtrados = [p for p in projetos_memoria if busca_memoria in texto_busca_projeto(p)]
-    else:
-        projetos_filtrados = projetos_memoria
+    m1.metric("Projetos", len(projetos_memoria_index.items))
+    m2.metric("Modelos", projetos_memoria_index.models_count)
+    m3.metric("Favoritos", projetos_memoria_index.favorites_count)
+    m4.metric("Arquivos", projetos_memoria_index.active_files_count)
 
     filtro_memoria = st.radio(
         "Mostrar",
@@ -36689,10 +36701,7 @@ if pagina_atual == "memoria":
         horizontal=True,
         key="filtro_memoria",
     )
-    if filtro_memoria == "Modelos reutilizáveis":
-        projetos_filtrados = [p for p in projetos_filtrados if p.get("modelo")]
-    elif filtro_memoria == "Favoritos":
-        projetos_filtrados = [p for p in projetos_filtrados if p.get("favorito")]
+    projetos_filtrados = _project_filter_runtime(projetos_memoria_index, busca_memoria, filtro_memoria)
 
     st.caption(f"{len(projetos_filtrados)} projeto(s) encontrado(s)")
     if not projetos_filtrados:
@@ -36723,7 +36732,7 @@ if pagina_atual == "memoria":
                     x1.write(f"{'⭐ ' if arq.get('mestre') else ''}{arq.get('nome', 'Arquivo')} — {arq.get('categoria', '')}")
                     if arq.get("url"):
                         x2.link_button("Abrir / baixar", arq.get("url"), use_container_width=True)
-            proposta_origem = next((p for p in carregar_historico() if p.get("numero_proposta") == projeto.get("numero_proposta")), None)
+            proposta_origem = propostas_memoria_por_numero.get(str(projeto.get("numero_proposta") or "").strip())
             if proposta_origem:
                 b1, b2 = st.columns(2)
                 if b1.button("📋 Duplicar como novo pedido", key=f"mem_dup_{projeto.get('id')}", use_container_width=True):

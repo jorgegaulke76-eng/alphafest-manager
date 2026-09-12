@@ -1,29 +1,33 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF40",
-  "generated_at_utc": "2026-09-12T17:05:56.268194+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF41",
+  "generated_at_utc": "2026-09-12T17:21:26.444921+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
     "status": "OK",
     "problems": [],
-    "warnings": [],
+    "warnings": [
+      "1 arquivo(s) de teste dependem de versão histórica; eles são classificados como legado e não reprovam a release atual apenas pelo número antigo."
+    ],
     "critical_python_compile": {
       "status": "OK",
-      "files_checked": 28,
-      "files_ok": 28
+      "files_checked": 29,
+      "files_ok": 29
     },
     "tests": {
-      "total_files": 1,
+      "total_files": 2,
       "portable_files": 0,
       "current_release_files": 1,
-      "historical_version_files": 0,
-      "historical_examples": []
+      "historical_version_files": 1,
+      "historical_examples": [
+        "tests/test_hf53_3_hf8_hf40_proposal_runtime.py"
+      ]
     }
   },
-  "file_count": 375,
-  "uncompressed_bytes": 36508543,
+  "file_count": 376,
+  "uncompressed_bytes": 36513712,
   "files": [
     {
       "path": ".gitignore",
@@ -102,18 +106,18 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 620,
-      "sha256": "33ed69d1b1af217cbb4fe8494f02142250bb2a81984ccbee5758bf848ee96628"
+      "size": 621,
+      "sha256": "367c2b2022fad603bae6af7afbb1275a4b3e76c4af8b791bbd6e291217251cb5"
     },
     {
       "path": "VERSAO",
       "size": 31,
-      "sha256": "e8fb9918df494dacf463d584da15c7ed24be64bcc4b7181111bc1dd277c83bcd"
+      "sha256": "7f035cbc3ac5b1c6c5c1c0cbe027fcc6a11551a935f1e9c4c61726eb3b4a7981"
     },
     {
       "path": "VERSAO.txt",
       "size": 31,
-      "sha256": "e8fb9918df494dacf463d584da15c7ed24be64bcc4b7181111bc1dd277c83bcd"
+      "sha256": "7f035cbc3ac5b1c6c5c1c0cbe027fcc6a11551a935f1e9c4c61726eb3b4a7981"
     },
     {
       "path": "__init__.py",
@@ -177,8 +181,8 @@
     },
     {
       "path": "app.py",
-      "size": 1930411,
-      "sha256": "efe5b98e612138d8f9b86fdb1c65c77d6822b71c0df1cfcde2921c84df8eeff3"
+      "size": 1930847,
+      "sha256": "52b6d452951e8fadef8f9096734a79e1e4fd9b81c5c2043d3830de5c5efd792d"
     },
     {
       "path": "assets/catalogos_legados/acervo_catalogos_legados.json",
@@ -1701,6 +1705,11 @@
       "sha256": "b9ee9ca86127e3f95778e20034dcce90de0c5c85967779906ada98d344624c89"
     },
     {
+      "path": "project_runtime_index_service.py",
+      "size": 4652,
+      "sha256": "302130d49cdb211d670c1e7bacb537bea905c4f912d0217c979adf3b70ee76b4"
+    },
+    {
       "path": "proposal_persistence_service.py",
       "size": 2693,
       "sha256": "d6894ff04cf3aed2de72cb4c59a35d48c9d1f72cafb7a95dd698cd1b052316bf"
@@ -1727,8 +1736,8 @@
     },
     {
       "path": "release_diagnostics.py",
-      "size": 6528,
-      "sha256": "66c016f545880d5ef153b72395932b2e781deeac05535c25f8053d355d01609d"
+      "size": 6568,
+      "sha256": "e70458c18718699b21c74ad76aa5cad868ef6127db810d4394e8bf744a6cad89"
     },
     {
       "path": "requirements.txt",
@@ -1892,8 +1901,8 @@
     },
     {
       "path": "update_hygiene.py",
-      "size": 14611,
-      "sha256": "8ff08d52110e72e81303d911f6bb5c1495f4e238f083901c046d834fabe7115e"
+      "size": 14651,
+      "sha256": "8c174d76110c3a2821187769b173be39e1a1ce3f9591e195c2f5ff0e141e7a20"
     },
     {
       "path": "update_safe_ui.py",

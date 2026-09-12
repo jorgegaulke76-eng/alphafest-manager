@@ -1,13 +1,12 @@
-# AlphaFest Manager — HF53.3-HF8-HF40
+# AlphaFest Manager — HF53.3-HF8-HF41
 
-## HF40 — Propostas / Histórico / Central da Anna otimizada
+## HF41 — Projetos / Memória da Empresa otimizada
 
-O HF40 consolida filtros recorrentes de propostas em uma fotografia de leitura única na Central da Anna e evita reler/revarrer o cadastro de Clientes para cada proposta no Histórico.
+O HF41 cria um índice de leitura único para Projetos, arquivos e vínculos com propostas. A Memória da Empresa deixa de revarrer o Histórico para cada projeto e as pesquisas reutilizam textos já indexados enquanto o documento de Projetos não muda.
 
 ### Preservado
-- mesmos filtros de propostas ativas, propostas de hoje e entregas de hoje;
-- mesma ordenação das propostas recentes;
-- mesma busca rápida;
-- mesma regra de vínculo com o cadastro mestre;
-- itens, valores, datas e status históricos não são alterados;
+- mesmas regras de Projeto Personalizado e Jornada;
+- mesmos arquivos, tags, favoritos e modelos reutilizáveis;
+- mesma Caixa do Projeto;
+- nenhuma gravação ou arquivo é alterado automaticamente;
 - HF7, Template Anna e Marketing permanecem congelados.
