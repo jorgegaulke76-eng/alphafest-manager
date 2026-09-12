@@ -1355,3 +1355,10 @@ hangelog
 - Sem sobrescrever snapshot existente e sem alterar propostas/status.
 - Botão manual preservado como contingência de gravação.
 
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF53 — Painel Executivo somente leitura
+- Remove leitura de Clientes sem uso no dashboard executivo.
+- Painel Executivo deixa de chamar sincronização persistente do Fluxo; usa a mesma projeção oficial em memória.
+- Evita `force_refresh` e eventual gravação do `producao_db` apenas por abrir o dashboard.
+- Recortes de tarefas do painel passam a ser montados em uma única passagem.
+- Nenhuma regra de status, produção ou indicador foi alterada.

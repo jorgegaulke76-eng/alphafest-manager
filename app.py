@@ -32811,9 +32811,18 @@ if pagina_atual == "executivo":
     hoje_exec = hoje_local()
     inicio_mes_exec = hoje_exec.replace(day=1)
     historico_exec = carregar_historico()
-    clientes_exec = carregar_clientes()
     atendimentos_exec = carregar_atendimentos()
-    tarefas_exec = [t for t in sincronizar_producao_com_propostas(historico_exec) if t.get("ativa", True)]
+
+    # HF53 — o Painel Executivo é uma tela de leitura. Antes ele chamava
+    # `sincronizar_producao_com_propostas`, que força refresh do espelho do Fluxo
+    # e pode persistir reconciliação apenas por abrir o dashboard. Aqui usamos a
+    # mesma projeção oficial, porém de forma pura/somente leitura.
+    producao_exec = carregar_producao()
+    tarefas_projetadas_exec, _ = _fluxo_reconciliar_lista_fluxo(
+        producao_exec, historico_exec,
+        now_text=agora_local().strftime("%d/%m/%Y %H:%M"),
+    )
+    tarefas_exec = [t for t in tarefas_projetadas_exec if t.get("ativa", True)]
 
     # 20.4.9-G — fonte oficial compartilhada com Relatórios.
     resultados_exec = calcular_resultados_oficiais(historico_exec, hoje_exec)
@@ -32902,10 +32911,14 @@ if pagina_atual == "executivo":
     col_graf1, col_graf2 = st.columns(2)
     linhas_mes = []
     produtos_mes = {}
+    totais_exec_por_objeto = resultados_exec.get("_totais_por_objeto") or {}
     for p in propostas_mes:
         d = _data_exec(p.get("data_geracao") or p.get("data") or p.get("criado_em"))
         if d:
-            linhas_mes.append({"Dia": d.strftime("%d/%m"), "Valor": calcular_valores_proposta(p)[2]})
+            valor_exec = totais_exec_por_objeto.get(id(p))
+            if valor_exec is None:
+                valor_exec = calcular_valores_proposta(p)[2]
+            linhas_mes.append({"Dia": d.strftime("%d/%m"), "Valor": valor_exec})
         for item in p.get("itens", []) or []:
             nome = str(item.get("produto", "Não informado")).strip() or "Não informado"
             qtd = valor_float(item.get("quantidade"))

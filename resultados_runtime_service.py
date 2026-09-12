@@ -123,6 +123,9 @@ def calcular_resultados_runtime(
         "ticket_aprovado_mes": (total_aprovadas_mes / len(aprovadas_mes)) if aprovadas_mes else 0.0,
         "conversao_mes": (len(aprovadas_mes) / len(propostas_mes) * 100.0) if propostas_mes else 0.0,
         "fallback_eventos": fallback_eventos,
+        # HF53: mapa interno somente leitura para telas que já receberam esta
+        # consolidação não recalcularem o total da mesma proposta no mesmo rerun.
+        "_totais_por_objeto": totais_por_objeto,
         "_listas": {
             "propostas": propostas,
             "validas": validas,
