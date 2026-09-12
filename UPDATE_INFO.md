@@ -1,18 +1,13 @@
-# AlphaFest Manager — HF53.3-HF8-HF39
+# AlphaFest Manager — HF53.3-HF8-HF40
 
-## HF39 — Financeiro / faturamento mensal otimizado
+## HF40 — Propostas / Histórico / Central da Anna otimizada
 
-O HF39 reduz cruzamentos repetidos entre Clientes, propostas e faturamento mensal sem alterar nenhuma regra financeira.
+O HF40 consolida filtros recorrentes de propostas em uma fotografia de leitura única na Central da Anna e evita reler/revarrer o cadastro de Clientes para cada proposta no Histórico.
 
-### Alterações
-- cria índice leve de Clientes para o faturamento mensal, preservando exatamente a precedência histórica de relacionamento_id, WhatsApp, nome e documento;
-- `montar_grupos_faturamento_mensal` carrega Clientes uma vez e deixa de varrer a base inteira para cada proposta mensal;
-- perfis comerciais já resolvidos são reaproveitados dentro da mesma montagem de grupos;
-- o Resumo mensal calcula a composição de faturamento em aberto uma única vez e a reutiliza no mês atual e no comparativo com o mês anterior;
-- nenhuma baixa, cobrança, fechamento, recebimento, valor ou status é alterado automaticamente.
-
-### Proteções
-- resolução de clientes comparada por equivalência contra a rotina histórica em milhares de cenários;
-- Template Mestre HF7 preservado;
-- Template Anna preservado;
-- Marketing Engine preservado.
+### Preservado
+- mesmos filtros de propostas ativas, propostas de hoje e entregas de hoje;
+- mesma ordenação das propostas recentes;
+- mesma busca rápida;
+- mesma regra de vínculo com o cadastro mestre;
+- itens, valores, datas e status históricos não são alterados;
+- HF7, Template Anna e Marketing permanecem congelados.

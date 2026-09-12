@@ -258,6 +258,12 @@ from relacionamentos_service import (
 from finance_runtime_index_service import (
     build_finance_client_index as _finance_build_client_index,
     resolve_billing_client as _finance_resolve_billing_client,
+    resolve_relationship_client as _finance_resolve_relationship_client,
+)
+from proposal_runtime_index_service import (
+    build_proposal_runtime_index as _proposal_build_runtime_index,
+    filter_active_recent as _proposal_filter_active_recent,
+    proposal_with_current_client_data as _proposal_with_current_client_data,
 )
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
@@ -23026,10 +23032,16 @@ def renderizar_workspace_anna_isolado():
     atendimentos = carregar_atendimentos()
     fila = [x for x in atendimentos.get("itens", []) if x.get("status") not in ("Arquivado", "Entregue", "Pós-venda") and str(x.get("responsavel", "")).strip() in ("", "Anna")]
     historico = carregar_historico(force_refresh=True)
-    ativos = [p for p in historico if proposta_ativa_operacional(p)]
+    hoje_anna_hf40 = hoje_local()
+    propostas_runtime_hf40 = _proposal_build_runtime_index(
+        historico,
+        active_predicate=proposta_ativa_operacional,
+        today=hoje_anna_hf40,
+    )
+    ativos = list(propostas_runtime_hf40.active)
     qtd_novos = len([x for x in fila if x.get("status") == "Novo contato"])
     qtd_aguardando = len([x for x in fila if x.get("status") == "Aguardando cliente"])
-    qtd_entregas = len([p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()])
+    qtd_entregas = len(propostas_runtime_hf40.deliveries_today)
     resumo = f"Hoje: {qtd_novos} novo(s) atendimento(s), {qtd_aguardando} aguardando cliente, {len(ativos)} pedido(s) ativo(s) e {qtd_entregas} entrega(s)."
     renderizar_boas_vindas_anna(resumo)
 
@@ -23091,8 +23103,8 @@ def renderizar_workspace_anna_isolado():
     if k7.button("🌐 Site AlphaFest", use_container_width=True):
         rerun_na_aba("site")
 
-    entregas_hoje = [p for p in ativos if data_entrega_segura(p.get("data_entrega")) == hoje_local()]
-    propostas_hoje = _ordenar_propostas_recentes([p for p in historico if proposta_ativa_operacional(p) and _proposta_eh_de_hoje(p)])
+    entregas_hoje = list(propostas_runtime_hf40.deliveries_today)
+    propostas_hoje = list(propostas_runtime_hf40.today_recent)
 
     m1,m2,m3,m4=st.columns(4)
     m1.metric("Para atender", len([x for x in fila if x.get("status") == "Novo contato"]))
@@ -23272,7 +23284,7 @@ def renderizar_workspace_anna_isolado():
     st.markdown("### 📄 Todas as propostas e pedidos")
     busca = st.text_input("Pesquisar", placeholder="Cliente, proposta ou telefone", key="anna_busca_rapida")
     termo = busca.strip().lower()
-    lista = _ordenar_propostas_recentes([p for p in historico if proposta_ativa_operacional(p) and (not termo or termo in normalizar_texto_busca(p))])
+    lista = _proposal_filter_active_recent(propostas_runtime_hf40, termo)
     for idx, prop in enumerate(lista[:20]):
         _renderizar_linha_proposta_anna(prop, f"anna_lista_{idx}")
 
@@ -29383,6 +29395,8 @@ if pagina_atual == "historico":
     renderizar_painel_alertas("historico")
 
     historico = carregar_historico(force_refresh=True)
+    clientes_hist_hf40 = carregar_clientes()
+    clientes_idx_hist_hf40 = _finance_build_client_index(clientes_hist_hf40)
     busca = st.text_input("🔎 Pesquisar por cliente, proposta, telefone ou produto")
     if busca.strip():
         termo = busca.strip().lower()
@@ -29399,7 +29413,8 @@ if pagina_atual == "historico":
             fluxo_por_pedido_hist_i8134.setdefault(numero_hist_i8134, []).append(tarefa_hist_i8134)
 
     for prop in historico:
-        prop_atual, relacionamento_atual = proposta_com_dados_atuais(prop)
+        relacionamento_atual = _finance_resolve_relationship_client(clientes_idx_hist_hf40, prop)
+        prop_atual, relacionamento_atual = _proposal_with_current_client_data(prop, relacionamento_atual)
         num_p = prop.get("numero_proposta", "SEM-NÚMERO")
         cliente_p = prop_atual.get("cliente_nome", "Cliente não informado")
         subtotal_p, desconto_p, total_p = calcular_valores_proposta(prop)
