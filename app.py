@@ -133,6 +133,7 @@ def adapt_square_to_channel(*args, **kwargs):
 from clientes_inteligencia import renderizar_inteligencia_clientes
 from constants import STATUS_FLUXO, PROCESSOS_FLUXO, PRIORIDADES_FLUXO
 from painel_indicadores import calcular_indicadores_unificados
+from resultados_runtime_service import calcular_resultados_runtime as _calcular_resultados_runtime
 from alpha_live import registrar_atividade, obter_operacao_online, obter_eventos_recentes
 from thu_executivo import calcular_briefing, renderizar_briefing_thu
 from alpha_core import calcular_alpha_core, listar_atrasados_operacionais
@@ -3816,119 +3817,21 @@ def _data_evento_resultado(proposta, campos_principais, campos_legado=()):
 
 
 def calcular_resultados_oficiais(historico, referencia=None):
-    """20.4.9-G — fonte única dos resultados financeiros/comerciais.
+    """Fonte única dos resultados financeiros/comerciais.
 
-    Regras:
-    - Total orçado: tudo que foi efetivamente registrado como proposta.
-    - Total aprovado: propostas aprovadas e não encerradas/canceladas.
-    - Recebido: propostas pagas e não encerradas/canceladas.
-    - A receber: aprovadas, não pagas e não encerradas/canceladas.
-    - Indicadores 'hoje' usam a data do evento (aprovação/pagamento/entrega);
-      registros legados sem data do evento são auditados, mas não têm a data adivinhada.
+    HF48: preserva as regras homologadas e delega a consolidação ao runtime
+    otimizado, que calcula o valor de cada proposta uma única vez.
     """
     referencia = referencia or hoje_local()
-    propostas = [p for p in (historico or []) if isinstance(p, dict)]
-    validas = [p for p in propostas if not proposta_encerrada(p)]
-    aprovadas = [p for p in validas if valor_bool(p.get("aprovado"))]
-    pagas = [p for p in validas if valor_bool(p.get("pago"))]
-    mensais_a_faturar = [p for p in aprovadas if proposta_faturamento_mensal(p) and not valor_bool(p.get("pago"))]
-    a_receber = [p for p in aprovadas if not proposta_faturamento_mensal(p) and not valor_bool(p.get("pago"))]
-
-    def total_lista(lista):
-        return sum(calcular_valores_proposta(p)[2] for p in lista)
-
-    criadas_hoje = []
-    propostas_mes = []
-    inicio_mes = referencia.replace(day=1)
-    for p in propostas:
-        d, _, _ = _data_evento_resultado(
-            p,
-            ("data_geracao", "data", "criado_em", "created_at"),
-        )
-        if d == referencia:
-            criadas_hoje.append(p)
-        if d and inicio_mes <= d <= referencia:
-            propostas_mes.append(p)
-
-    aprovadas_hoje = []
-    pagas_hoje = []
-    entregues_hoje = []
-    fallback_eventos = {"aprovacao": 0, "pagamento": 0, "entrega": 0}
-
-    for p in aprovadas:
-        d, _, _ = _data_evento_resultado(
-            p,
-            ("aprovado_em", "data_aprovacao"),
-        )
-        if d == referencia:
-            aprovadas_hoje.append(p)
-        if d is None:
-            fallback_eventos["aprovacao"] += 1
-
-    for p in pagas:
-        d, _, _ = _data_evento_resultado(
-            p,
-            ("pago_em", "data_pagamento"),
-        )
-        if d == referencia:
-            pagas_hoje.append(p)
-        if d is None:
-            fallback_eventos["pagamento"] += 1
-
-    entregues_validas = [p for p in validas if valor_bool(p.get("entregue"))]
-    for p in entregues_validas:
-        d, _, _ = _data_evento_resultado(
-            p,
-            ("entregue_em", "data_entrega_real"),
-        )
-        if d == referencia:
-            entregues_hoje.append(p)
-        if d is None:
-            fallback_eventos["entrega"] += 1
-
-    aprovadas_mes = [p for p in propostas_mes if (not proposta_encerrada(p)) and valor_bool(p.get("aprovado"))]
-
-    return {
-        "referencia": referencia,
-        "propostas_total": len(propostas),
-        "propostas_validas": len(validas),
-        "propostas_encerradas": len(propostas) - len(validas),
-        "aprovadas_total": len(aprovadas),
-        "pagas_total": len(pagas),
-        "a_receber_total_qtd": len(a_receber),
-        "mensais_a_faturar_qtd": len(mensais_a_faturar),
-        "total_orcado": total_lista(propostas),
-        "total_orcado_valido": total_lista(validas),
-        "total_aprovado": total_lista(aprovadas),
-        "total_recebido": total_lista(pagas),
-        "a_receber": total_lista(a_receber),
-        "mensais_a_faturar": total_lista(mensais_a_faturar),
-        "orcado_hoje": total_lista(criadas_hoje),
-        "confirmado_hoje": total_lista(aprovadas_hoje),
-        "recebido_hoje": total_lista(pagas_hoje),
-        "entregues_hoje": len(entregues_hoje),
-        "propostas_mes": propostas_mes,
-        "aprovadas_mes": aprovadas_mes,
-        "total_mes": total_lista(propostas_mes),
-        "confirmado_mes": total_lista(aprovadas_mes),
-        "ticket_medio": (total_lista(propostas) / len(propostas)) if propostas else 0.0,
-        "ticket_aprovado_mes": (total_lista(aprovadas_mes) / len(aprovadas_mes)) if aprovadas_mes else 0.0,
-        "conversao_mes": (len(aprovadas_mes) / len(propostas_mes) * 100.0) if propostas_mes else 0.0,
-        "fallback_eventos": fallback_eventos,
-        "_listas": {
-            "propostas": propostas,
-            "validas": validas,
-            "aprovadas": aprovadas,
-            "pagas": pagas,
-            "a_receber": a_receber,
-            "mensais_a_faturar": mensais_a_faturar,
-            "criadas_hoje": criadas_hoje,
-            "aprovadas_hoje": aprovadas_hoje,
-            "pagas_hoje": pagas_hoje,
-            "entregues_hoje": entregues_hoje,
-        },
-    }
-
+    return _calcular_resultados_runtime(
+        historico,
+        referencia,
+        proposta_encerrada=proposta_encerrada,
+        proposta_faturamento_mensal=proposta_faturamento_mensal,
+        valor_bool=valor_bool,
+        total_proposta=lambda p: calcular_valores_proposta(p)[2],
+        data_evento=_data_evento_resultado,
+    )
 
 def auditar_integridade_resultados(historico):
     """Audita inconsistências que podem fazer telas exibirem resultados estranhos."""

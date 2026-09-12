@@ -1,3 +1,9 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF48 — Indicadores comerciais/financeiros Runtime
+- Consolida resultados comerciais/financeiros com uma única leitura principal das propostas.
+- Calcula o valor de cada proposta uma única vez e reaproveita o total em todos os indicadores.
+- Preserva listas, regras, datas de evento, mensalistas, conversão e valores exibidos.
+- Nenhuma mudança em status, cobrança, propostas ou regras operacionais.
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF47 — Agenda/Fechamento Runtime
 - Fechamento diário reaproveita a agenda atual já calculada pela Central.
 - Remove recálculo duplicado de status/produtos/ordenação no mesmo rerun.
