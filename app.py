@@ -210,6 +210,12 @@ from catalogo_diagnostics_service import (
     nome_flexivel as _catalogo_diag_nome_flexivel,
     possiveis_duplicidades as _catalogo_diag_possiveis_duplicidades,
 )
+from catalogo_runtime_index_service import (
+    build_catalog_view_index as _catalogo_build_view_index,
+    filter_quick_indices as _catalogo_filter_quick_indices,
+    filter_full_indices as _catalogo_filter_full_indices,
+    build_history_stats as _catalogo_build_history_stats,
+)
 from catalogo_orcamento_service import (
     ORCAMENTO_PRODUTO_LIVRE as _catalogo_orcamento_livre,
     normalizar_identidade_produto as _catalogo_normalizar_identidade,
@@ -11155,9 +11161,47 @@ def salvar_catalogo(lista):
     if ok:
         st.session_state.pop("_thu_i7_analise", None)
         st.session_state.pop("_thu_i7_periodo_analisado", None)
+        st.session_state.pop("_catalogo_runtime_cache_hf31", None)
     return bool(ok)
 
 
+def _catalogo_document_revision(document_key):
+    cached = _document_cache().get(str(document_key)) or {}
+    return (cached.get("time"), len(cached.get("value") or []) if isinstance(cached.get("value"), list) else None)
+
+
+def _catalogo_runtime_cached(cache_key, token, builder):
+    bucket = st.session_state.setdefault("_catalogo_runtime_cache_hf31", {})
+    entry = bucket.get(cache_key) or {}
+    if entry.get("token") == token:
+        return entry.get("value")
+    value = builder()
+    bucket[cache_key] = {"token": token, "value": value}
+    return value
+
+
+def _catalogo_view_index_cached(catalogo):
+    token = _catalogo_document_revision("catalogo_db")
+    return _catalogo_runtime_cached(
+        "view_index", token,
+        lambda: _catalogo_build_view_index(catalogo, normalize=normalizar_identidade_produto),
+    )
+
+
+def _catalogo_history_stats_cached(catalogo, historico):
+    token = (
+        _catalogo_document_revision("catalogo_db"),
+        _catalogo_document_revision("historico_orcamentos"),
+    )
+    return _catalogo_runtime_cached(
+        "history_stats", token,
+        lambda: _catalogo_build_history_stats(
+            catalogo, historico,
+            resolve_official_name=nome_produto_oficial_catalogo,
+            normalize=normalizar_identidade_produto,
+            value_float=valor_float,
+        ),
+    )
 
 
 def carregar_galeria_trabalhos():
@@ -33714,34 +33758,28 @@ if pagina_atual == "catalogo":
                 "a publicação continua pelo fluxo seguro do HF44. O carrossel mostra até 5 produtos por vez."
             )
 
+            # HF31 — índice de leitura compartilhado pela edição rápida e pela
+            # busca completa. É reconstruído somente quando o Catálogo muda.
+            _catalogo_view_hf31 = _catalogo_view_index_cached(catalogo)
+
             _hf492_f1, _hf492_f2 = st.columns([2, 1])
             _hf492_busca = _hf492_f1.text_input(
                 "🔎 Filtrar produtos para edição rápida",
                 key="hf492_busca_site_rapida",
                 placeholder="Nome, categoria ou subcategoria…",
             ).strip().casefold()
-            _hf492_categorias = sorted({
-                str((p or {}).get("Categoria") or "").strip()
-                for p in (catalogo or [])
-                if str((p or {}).get("Categoria") or "").strip()
-            }, key=lambda x: normalizar_identidade_produto(x))
+            _hf492_categorias = list(_catalogo_view_hf31.get("categories") or [])
             _hf492_categoria = _hf492_f2.selectbox(
                 "Categoria",
                 ["Todas"] + _hf492_categorias,
                 key="hf492_categoria_site_rapida",
             )
 
-            _hf492_indices = []
-            for _idx_hf492, _prod_hf492 in enumerate(catalogo or []):
-                _nome_hf492 = str((_prod_hf492 or {}).get("Nome") or "Produto")
-                _cat_hf492 = str((_prod_hf492 or {}).get("Categoria") or "")
-                _sub_hf492 = str((_prod_hf492 or {}).get("Subcategoria") or "")
-                _hay_hf492 = f"{_nome_hf492} {_cat_hf492} {_sub_hf492}".casefold()
-                if _hf492_busca and _hf492_busca not in _hay_hf492:
-                    continue
-                if _hf492_categoria != "Todas" and _cat_hf492 != _hf492_categoria:
-                    continue
-                _hf492_indices.append(_idx_hf492)
+            _hf492_indices = _catalogo_filter_quick_indices(
+                _catalogo_view_hf31,
+                search=_hf492_busca,
+                category=_hf492_categoria,
+            )
 
             _hf492_linhas = []
             for _idx_hf492 in _hf492_indices:
@@ -33760,13 +33798,7 @@ if pagina_atual == "catalogo":
             # HF51.4-HF3 — atalhos de carrossel sazonal sem criar cadastro paralelo.
             # Reaproveita CampanhasPermitidas do Catálogo Oficial e apenas marca/desmarca
             # CarrosselSite. Nada é publicado automaticamente.
-            _hf514_campanhas = sorted({
-                str(camp).strip()
-                for _prod_hf514 in (catalogo or [])
-                for camp in ((_prod_hf514 or {}).get("CampanhasPermitidas") or [])
-                if str(camp or "").strip()
-                and str(camp or "").strip().casefold() not in {"permanente / todas as épocas", "permanente", "todas as épocas"}
-            }, key=lambda x: normalizar_identidade_produto(x))
+            _hf514_campanhas = list(_catalogo_view_hf31.get("campaigns") or [])
             if _hf514_campanhas:
                 st.markdown("##### 🎯 Carrossel sazonal rápido")
                 st.caption(
@@ -34008,10 +34040,11 @@ if pagina_atual == "catalogo":
                 st.session_state.pop("hf452_editor_revisao", None)
                 st.session_state.pop("hf452_confirmar_salvar", None)
 
-            _hf452_ordenados = sorted(
-                list(enumerate(catalogo or [])),
-                key=lambda item: normalizar_identidade_produto((item[1] or {}).get("Nome", "")),
-            )
+            _hf452_ordenados = [
+                (int(_row_hf31["index"]), catalogo[int(_row_hf31["index"])])
+                for _row_hf31 in (_catalogo_view_hf31.get("rows_sorted") or [])
+                if 0 <= int(_row_hf31["index"]) < len(catalogo)
+            ]
             _hf452_linhas = []
             for _ord_hf452, (_idx_hf452, _prod_hf452) in enumerate(_hf452_ordenados, 1):
                 _hf452_linhas.append({
@@ -34114,19 +34147,16 @@ if pagina_atual == "catalogo":
                 "🔎 Pesquisar produto ou categoria",
                 key="pesquisa_catalogo",
             ).strip().lower()
-            filtrados = [
-                (i, p) for i, p in enumerate(catalogo)
-                if not termo_cat
-                or termo_cat in (f"{p.get('Nome','')} {p.get('Categoria','')} {p.get('Subcategoria','')} {p.get('CodigoInterno','')} {p.get('Descricao','')} {p.get('PalavrasChave','')} {' '.join(str(x) for x in (p.get('Aliases', []) or []))} {' '.join(str(x) for x in (p.get('Variacoes', []) or []))} " + " ".join(
-                    f"{a.get('nome','')} {a.get('descricao','')} {' '.join(a.get('tags', []) or [])}"
-                    for a in (p.get('ArquivosBiblioteca', []) or [])
-                )).lower()
-            ]
-            filtrados.sort(
-                key=lambda item: normalizar_identidade_produto(
-                    (item[1] or {}).get("Nome", "")
-                )
-            )
+            _filtrados_indices_hf31 = _catalogo_filter_full_indices(_catalogo_view_hf31, termo_cat)
+            filtrados = [(i, catalogo[i]) for i in _filtrados_indices_hf31 if 0 <= i < len(catalogo)]
+
+            # HF31 — uma única leitura/consolidação do Histórico para todos os
+            # cartões; antes o Histórico inteiro era relido para cada produto.
+            if filtrados:
+                _historico_catalogo_hf31 = carregar_historico()
+                _stats_catalogo_hf31 = _catalogo_history_stats_cached(catalogo, _historico_catalogo_hf31)
+            else:
+                _stats_catalogo_hf31 = {}
             st.write(f"**{len(filtrados)} produto(s)** • ordem alfabética")
             for i, produto_cat in filtrados:
                 with st.container(border=True):
@@ -34178,22 +34208,12 @@ if pagina_atual == "catalogo":
                         cinfo.warning("💰 Preço atual pendente de revisão")
 
                     # Estatísticas históricas consolidadas pelo nome oficial + aliases.
-                    orcado_qtd = 0.0
-                    orcado_valor = 0.0
-                    ultima_ocorrencia = "—"
-                    for proposta_hist in carregar_historico():
-                        for item_hist in proposta_hist.get("itens", []) or []:
-                            nome_hist_oficial = nome_produto_oficial_catalogo(
-                                item_hist.get("produto", ""),
-                                catalogo,
-                            )
-                            if normalizar_identidade_produto(nome_hist_oficial) == normalizar_identidade_produto(nome_produto):
-                                qtd_hist = valor_float(item_hist.get("quantidade", 0))
-                                unit_hist = valor_float(item_hist.get("valor_unitario", 0))
-                                orcado_qtd += qtd_hist
-                                orcado_valor += qtd_hist * unit_hist
-                                if ultima_ocorrencia == "—":
-                                    ultima_ocorrencia = str(proposta_hist.get("data_geracao", "—"))
+                    _stat_hist_hf31 = _stats_catalogo_hf31.get(
+                        normalizar_identidade_produto(nome_produto), {}
+                    )
+                    orcado_qtd = float(_stat_hist_hf31.get("quantidade", 0.0) or 0.0)
+                    orcado_valor = float(_stat_hist_hf31.get("valor", 0.0) or 0.0)
+                    ultima_ocorrencia = str(_stat_hist_hf31.get("ultima_ocorrencia", "—") or "—")
                     cinfo.caption(
                         f"Orçado histórico: {orcado_qtd:g} un. | Valor orçado: {formatar_preco_catalogo(orcado_valor)} | Última ocorrência: {ultima_ocorrencia}"
                     )

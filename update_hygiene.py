@@ -31,6 +31,7 @@ REQUIRED_RUNTIME_FILES = {
     "alpha_connect_ui.py",
     "audit_ui.py",
     "catalogo_diagnostics_service.py",
+    "catalogo_runtime_index_service.py",
     "config.py",
     "marketing_template_engine.py",
     "marketing_anna_renderer_hf11.py",
