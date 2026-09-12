@@ -36974,8 +36974,14 @@ if pagina_atual == "calendario":
 
 if pagina_atual == "configuracoes":
     st.header("⚙️ Configurações e Integrações")
-    aba_cfg_empresa, aba_cfg_connect, aba_cfg_usuarios, aba_cfg_thu = st.tabs(["🏢 Empresa", "🔗 Alpha Connect", "👥 Usuários e permissões", "🎓 Orientações do THU"])
-    with aba_cfg_connect:
+    secao_cfg_hf49 = st.radio(
+        "Área de configuração",
+        ["🏢 Empresa", "🔗 Alpha Connect", "👥 Usuários e permissões", "🎓 Orientações do THU"],
+        horizontal=True,
+        key="configuracoes_secao_hf49",
+        label_visibility="collapsed",
+    )
+    if secao_cfg_hf49 == "🔗 Alpha Connect":
         _render_alpha_connect(
             load_document=load_document,
             save_document=save_document,
@@ -36986,9 +36992,9 @@ if pagina_atual == "configuracoes":
             current_user=obter_usuario_atual,
             openai_class=_openai_class,
         )
-    with aba_cfg_thu:
+    elif secao_cfg_hf49 == "🎓 Orientações do THU":
         renderizar_configuracoes_orientacoes_thu()
-    with aba_cfg_usuarios:
+    elif secao_cfg_hf49 == "👥 Usuários e permissões":
         if not pode_executar_acoes_tecnicas():
             st.warning("Somente o Jorge pode alterar usuários e permissões.")
         else:
@@ -37067,7 +37073,7 @@ if pagina_atual == "configuracoes":
                     salvar_config_usuarios(dados_usuarios)
                     st.success("Usuário criado. Depois configure o login/OIDC para esse e-mail.")
                     st.rerun()
-    with aba_cfg_empresa:
+    else:  # 🏢 Empresa
         st.caption("Os dados salvos aqui são usados no painel, WhatsApp, HTML da proposta e catálogo do cliente.")
         config_atual = carregar_config_empresa()
 
@@ -37236,18 +37242,24 @@ if pagina_atual == "configuracoes":
         st.divider()
         st.header("🏭 Núcleo Profissional")
         st.caption("Migrações seguras, auditoria, lixeira e diagnóstico para manter o FestManager em produção sem perder dados.")
-        tab_diag, tab_boot, tab_audit, tab_lix, tab_update = st.tabs(["🩺 Saúde do sistema", "🚦 Boot Manager", "🧾 Auditoria", "🗑️ Lixeira", "🔄 Atualização segura"])
+        nucleo_cfg_hf49 = st.radio(
+            "Núcleo profissional",
+            ["🩺 Saúde do sistema", "🚦 Boot Manager", "🧾 Auditoria", "🗑️ Lixeira", "🔄 Atualização segura"],
+            horizontal=True,
+            key="configuracoes_nucleo_hf49",
+            label_visibility="collapsed",
+        )
 
-        with tab_diag:
+        if nucleo_cfg_hf49 == "🩺 Saúde do sistema":
             _render_system_health_tab(diagnostico_sistema=diagnostico_sistema)
 
-        with tab_boot:
+        elif nucleo_cfg_hf49 == "🚦 Boot Manager":
             _render_boot_manager_tab(
                 diagnostico_boot=diagnostico_boot_1424,
                 feature_flags=feature_flags,
             )
 
-        with tab_audit:
+        elif nucleo_cfg_hf49 == "🧾 Auditoria":
             _render_audit_tab(
                 executar_auditoria_sincronizacao_operacional=executar_auditoria_sincronizacao_operacional,
                 renderizar_auditoria_sincronizacao_operacional=renderizar_auditoria_sincronizacao_operacional,
@@ -37261,7 +37273,7 @@ if pagina_atual == "configuracoes":
                 hoje_local=hoje_local,
             )
 
-        with tab_lix:
+        elif nucleo_cfg_hf49 == "🗑️ Lixeira":
             _render_trash_tab(
                 carregar_lixeira=carregar_lixeira,
                 restaurar_item_lixeira=restaurar_item_lixeira,
@@ -37270,7 +37282,7 @@ if pagina_atual == "configuracoes":
                 agora_local=agora_local,
             )
 
-        with tab_update:
+        else:  # 🔄 Atualização segura
             _render_update_safe_tab(
                 root_dir=Path(__file__).resolve().parent,
                 version_app=VERSAO_APP,

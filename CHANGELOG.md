@@ -1,3 +1,9 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF49 — Configurações Lazy Runtime
+- Configurações deixa de executar simultaneamente Empresa, Alpha Connect, Usuários e Orientações THU em todo rerun.
+- Núcleo Profissional passa a renderizar somente Saúde, Boot, Auditoria, Lixeira ou Atualização segura conforme a seleção ativa.
+- Mantém permissões, backup, diagnóstico, auditoria, integrações e regras existentes sem mudança funcional.
+- HF7, Template Anna e Marketing Engine preservados.
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF48 — Indicadores comerciais/financeiros Runtime
 - Consolida resultados comerciais/financeiros com uma única leitura principal das propostas.
 - Calcula o valor de cada proposta uma única vez e reaproveita o total em todos os indicadores.
