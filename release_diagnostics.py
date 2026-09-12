@@ -39,6 +39,7 @@ CRITICAL_PYTHON_FILES = (
     "finance_runtime_index_service.py",
     "project_runtime_index_service.py",
     "proposal_runtime_index_service.py",
+    "document_runtime_service.py",
     "thu_comercial_service.py",
     "central_operational_runtime.py",
     "central_entregas_engine.py",

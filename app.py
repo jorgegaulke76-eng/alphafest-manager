@@ -266,6 +266,7 @@ from proposal_runtime_index_service import (
     filter_active_recent as _proposal_filter_active_recent,
     proposal_with_current_client_data as _proposal_with_current_client_data,
 )
+from document_runtime_service import cache_get_or_build as _document_cache_get_or_build
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -23220,12 +23221,23 @@ def renderizar_workspace_anna_isolado():
 
         data_arquivo_hf19 = hoje_local().strftime("%Y-%m-%d")
 
-        # HF20 — além da fotografia fixa da manhã, a Anna pode regenerar uma agenda
-        # atual durante o expediente. Este PDF sempre usa o banco do momento e não
-        # altera nem substitui o snapshot registrado no início do dia.
-        pdf_atual_hf20 = _anna_gerar_pdf_agenda(agenda_anna_hf17, "Agenda atualizada", gerado_em=agora_local())
+        # HF42 — PDFs da agenda deixam de ser reconstruídos em cada rerun. A assinatura
+        # inclui os dados atuais; qualquer mudança real na agenda invalida o cache.
+        # Para a agenda atual, a hora entra por minuto para manter o documento recente
+        # sem gastar CPU em cliques que não alteraram a operação.
+        _doc_cache_hf42 = st.session_state.setdefault("_document_runtime_cache_hf42", {})
+        _agora_pdf_hf42 = agora_local()
+        _minuto_pdf_hf42 = _agora_pdf_hf42.replace(second=0, microsecond=0)
+        pdf_atual_hf20, _pdf_atual_hit_hf42 = _document_cache_get_or_build(
+            _doc_cache_hf42,
+            "anna_agenda_atual",
+            {"linhas": agenda_anna_hf17, "minuto": _minuto_pdf_hf42.isoformat()},
+            lambda: _anna_gerar_pdf_agenda(agenda_anna_hf17, "Agenda atualizada", gerado_em=_agora_pdf_hf42),
+            ttl_seconds=15 * 60,
+            max_entries=12,
+        )
         if pdf_atual_hf20:
-            hora_arquivo_hf20 = agora_local().strftime("%H%M")
+            hora_arquivo_hf20 = _agora_pdf_hf42.strftime("%H%M")
             st.download_button(
                 "🔄 Atualizar e baixar agenda atual (PDF)",
                 pdf_atual_hf20,
@@ -23247,7 +23259,17 @@ def renderizar_workspace_anna_isolado():
                 gerado_manha_hf19 = datetime.fromisoformat(str(snapshot_hoje_hf19.get("registrado_em") or ""))
             except Exception:
                 gerado_manha_hf19 = agora_local()
-            pdf_manha_hf19 = _anna_gerar_pdf_agenda(linhas_manha_hf19, "Início do dia", gerado_em=gerado_manha_hf19)
+            pdf_manha_hf19, _pdf_manha_hit_hf42 = _document_cache_get_or_build(
+                _doc_cache_hf42,
+                "anna_agenda_inicio",
+                {
+                    "linhas": linhas_manha_hf19,
+                    "registrado_em": gerado_manha_hf19.isoformat() if hasattr(gerado_manha_hf19, "isoformat") else str(gerado_manha_hf19),
+                },
+                lambda: _anna_gerar_pdf_agenda(linhas_manha_hf19, "Início do dia", gerado_em=gerado_manha_hf19),
+                ttl_seconds=24 * 60 * 60,
+                max_entries=12,
+            )
             if pdf_manha_hf19:
                 st.download_button(
                     "🖨️ Baixar roteiro registrado — início do dia (PDF)",
@@ -23270,7 +23292,17 @@ def renderizar_workspace_anna_isolado():
                 "O fechamento compara o banco atual com a fotografia registrada pela manhã. "
                 "Entregas, avanços e novos pedidos são calculados automaticamente; nada é gravado nos pedidos."
             )
-            pdf_fech_hf19 = _anna_gerar_pdf_fechamento(comparativo_hf19, gerado_em=agora_local()) if _anna_gerar_pdf_fechamento else None
+            if _anna_gerar_pdf_fechamento:
+                pdf_fech_hf19, _pdf_fech_hit_hf42 = _document_cache_get_or_build(
+                    _doc_cache_hf42,
+                    "anna_fechamento",
+                    {"comparativo": comparativo_hf19, "minuto": _minuto_pdf_hf42.isoformat()},
+                    lambda: _anna_gerar_pdf_fechamento(comparativo_hf19, gerado_em=_agora_pdf_hf42),
+                    ttl_seconds=15 * 60,
+                    max_entries=12,
+                )
+            else:
+                pdf_fech_hf19 = None
             if pdf_fech_hf19:
                 st.download_button(
                     "🌙 Baixar fechamento comparativo do dia (PDF)",
