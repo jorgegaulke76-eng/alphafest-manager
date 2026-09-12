@@ -1,3 +1,8 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF52
+- Relacionamentos: total, status, modalidade e data de cada proposta calculados uma vez por rerun.
+- Cartões e histórico reutilizam a mesma fotografia de runtime.
+- Sem alteração de dados ou regras comerciais.
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF49 — Configurações Lazy Runtime
 - Configurações deixa de executar simultaneamente Empresa, Alpha Connect, Usuários e Orientações THU em todo rerun.
 - Núcleo Profissional passa a renderizar somente Saúde, Boot, Auditoria, Lixeira ou Atualização segura conforme a seleção ativa.

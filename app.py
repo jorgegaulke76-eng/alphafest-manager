@@ -226,6 +226,10 @@ from clientes_runtime_index_service import (
     build_client_proposals_index as _clientes_build_proposals_index,
     proposals_for_client as _clientes_proposals_for_client,
 )
+from relacionamentos_runtime_service import (
+    build_relationship_proposal_facts as _rel_runtime_build_proposal_facts,
+    facts_for_proposal as _rel_runtime_facts_for_proposal,
+)
 from crm_runtime_index_service import (
     build_crm_read_index as _crm_build_read_index,
     crm_relationship_stats as _crm_relationship_stats,
@@ -13459,15 +13463,30 @@ def registrar_cobranca_financeira_proposta(numero):
     return ok, atualizada, motivo
 
 
-def resumo_cliente_operacional(cliente, propostas):
-    """Calcula um cartão operacional sem alterar nenhum dado do cliente."""
+def resumo_cliente_operacional(cliente, propostas, proposta_facts=None):
+    """Calcula um cartão operacional sem alterar nenhum dado do cliente.
+
+    HF52: quando a tela Relacionamentos fornece ``proposta_facts``, total e data
+    de ordenação já vêm calculados uma vez para o rerun atual. O fallback mantém
+    compatibilidade integral com chamadas antigas.
+    """
     propostas = propostas or []
-    totais = [calcular_valores_proposta(p)[2] for p in propostas]
+    proposta_facts = proposta_facts or {}
+
+    def _fact(prop):
+        return _rel_runtime_facts_for_proposal(prop, proposta_facts)
+
+    totais = []
+    for p in propostas:
+        fact = _fact(p)
+        totais.append(fact.get("total") if fact and "total" in fact else calcular_valores_proposta(p)[2])
     total = sum(totais)
     ticket = total / len(totais) if totais else 0.0
     ordenadas = sorted(
         propostas,
-        key=lambda p: data_entrega_segura(p.get("data_geracao")) or date.min,
+        key=lambda p: (_fact(p).get("date_sort") if _fact(p) else None)
+        or data_entrega_segura(p.get("data_geracao"))
+        or date.min,
         reverse=True,
     )
     ultima = ordenadas[0] if ordenadas else None
@@ -36298,6 +36317,18 @@ if pagina_atual == "relacionamentos":
     _indice_rel_hf43 = _clientes_build_proposals_index(
         _historico_rel_hf43, client_key=chave_cliente
     )
+    # HF52 — cada proposta ganha uma fotografia de runtime (total, status, data
+    # e modalidade) uma única vez. Os cartões deixam de recalcular esses mesmos
+    # fatos em métricas, resumo, próxima ação e tabela histórica.
+    _facts_rel_hf52 = _rel_runtime_build_proposal_facts(
+        _historico_rel_hf43,
+        value_calculator=calcular_valores_proposta,
+        status_resolver=_status_resumo,
+        date_resolver=data_entrega_segura,
+        monthly_resolver=proposta_faturamento_mensal,
+    )
+    def _fact_rel_hf52(prop):
+        return _rel_runtime_facts_for_proposal(prop, _facts_rel_hf52)
     def _propostas_rel_hf43(cliente):
         return _clientes_proposals_for_client(
             cliente, _indice_rel_hf43, client_key=chave_cliente
@@ -36379,17 +36410,18 @@ if pagina_atual == "relacionamentos":
         st.write(f"**{len(filtrados_cli)} relacionamento(s) encontrado(s)**")
         for cli in sorted(filtrados_cli, key=lambda x: str(x.get("nome", "")).lower()):
             propostas_cli = _propostas_rel_hf43(cli)
-            totais = [calcular_valores_proposta(p)[2] for p in propostas_cli]
-            total_orcado_cli = sum(totais)
-            total_pago_cli = sum(calcular_valores_proposta(p)[2] for p in propostas_cli if p.get("pago", False))
-            ultima_data = "—"
-            if propostas_cli:
-                ordenadas = sorted(
-                    propostas_cli,
-                    key=lambda p: data_entrega_segura(p.get("data_geracao")) or date.min,
-                    reverse=True,
-                )
-                ultima_data = ordenadas[0].get("data_geracao", "—")
+            _facts_cli_hf52 = [_fact_rel_hf52(p) for p in propostas_cli]
+            total_orcado_cli = sum(valor_float(f.get("total")) for f in _facts_cli_hf52)
+            total_pago_cli = sum(
+                valor_float(f.get("total"))
+                for f in _facts_cli_hf52
+                if f.get("paid_raw")
+            )
+            _ordenadas_cli_hf52 = sorted(
+                propostas_cli,
+                key=lambda p: (_fact_rel_hf52(p).get("date_sort") or date.min),
+                reverse=True,
+            )
 
             titulo_cli = f"{cli.get('nome', 'Cliente')} — {len(propostas_cli)} proposta(s)"
             with st.expander(titulo_cli):
@@ -36423,7 +36455,7 @@ if pagina_atual == "relacionamentos":
                     if cli.get("observacoes"):
                         st.write(f"**Observações:** {cli.get('observacoes')}")
                 with cstats:
-                    resumo_cli = resumo_cliente_operacional(cli, propostas_cli)
+                    resumo_cli = resumo_cliente_operacional(cli, propostas_cli, _facts_rel_hf52)
                     st.metric("Total orçado", f"R$ {total_orcado_cli:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                     st.metric("Total recebido", f"R$ {total_pago_cli:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
                     st.metric("Ticket médio", f"R$ {resumo_cli['ticket']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
@@ -36433,7 +36465,7 @@ if pagina_atual == "relacionamentos":
                     if resumo_cli["temas"]:
                         st.write("**Temas recorrentes:** " + ", ".join(resumo_cli["temas"]))
                     if propostas_cli:
-                        st.info(f"🎯 Próxima ação sugerida: {proxima_acao_proposta(sorted(propostas_cli, key=lambda p: data_entrega_segura(p.get('data_geracao')) or date.min, reverse=True)[0])}")
+                        st.info(f"🎯 Próxima ação sugerida: {proxima_acao_proposta(_ordenadas_cli_hf52[0])}")
                     else:
                         st.info("🎯 Próxima ação sugerida: iniciar relacionamento ou registrar primeiro orçamento")
 
@@ -36455,17 +36487,19 @@ if pagina_atual == "relacionamentos":
                     st.markdown("#### Histórico de propostas")
                     linhas_cli = []
                     for pcli in propostas_cli:
-                        _, _, total_cli = calcular_valores_proposta(pcli)
+                        _fact_cli_hf52 = _fact_rel_hf52(pcli)
+                        _status_cli_hf52 = _fact_cli_hf52.get("status") or {}
+                        _mensal_cli_hf52 = bool(_fact_cli_hf52.get("monthly"))
                         linhas_cli.append({
                             "Proposta": pcli.get("numero_proposta", ""),
                             "Emissão": pcli.get("data_geracao", ""),
                             "Entrega": pcli.get("data_entrega", ""),
                             "Produtos": resumo_produtos_pedido(pcli),
-                            "Total": total_cli,
-                            "Cobrança": I811_MODALIDADE_MENSAL if proposta_faturamento_mensal(pcli) else I811_MODALIDADE_NORMAL,
-                            "Pago": "Mensal" if proposta_faturamento_mensal(pcli) else ("Sim" if _status_resumo(pcli).get("pago") else "Não"),
-                            "Pronto": "Sim" if _status_resumo(pcli).get("pronto") else "Não",
-                            "Entregue": "Sim" if _status_resumo(pcli).get("entregue") else "Não",
+                            "Total": _fact_cli_hf52.get("total", 0),
+                            "Cobrança": I811_MODALIDADE_MENSAL if _mensal_cli_hf52 else I811_MODALIDADE_NORMAL,
+                            "Pago": "Mensal" if _mensal_cli_hf52 else ("Sim" if _status_cli_hf52.get("pago") else "Não"),
+                            "Pronto": "Sim" if _status_cli_hf52.get("pronto") else "Não",
+                            "Entregue": "Sim" if _status_cli_hf52.get("entregue") else "Não",
                         })
                     st.dataframe(
                         pd.DataFrame(linhas_cli),

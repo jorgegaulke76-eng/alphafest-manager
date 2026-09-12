@@ -1,3 +1,5 @@
-# AlphaFest Manager — HF51
+# Atualização atual
 
-Automação segura da fotografia diária da Agenda da Anna. A primeira abertura da Central no dia registra a mesma fotografia que antes dependia de clique manual, sem alterar pedidos ou status.
+**20.4.9-I8.13.5-HF53.3-HF8-HF52 — Relacionamentos Runtime II**
+
+Otimização somente leitura da tela Relacionamentos: fatos de cada proposta são preparados uma vez e reutilizados em métricas, resumo, ordenação e histórico.
