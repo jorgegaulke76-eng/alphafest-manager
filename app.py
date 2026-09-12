@@ -221,6 +221,10 @@ from clientes_runtime_index_service import (
     build_client_proposals_index as _clientes_build_proposals_index,
     proposals_for_client as _clientes_proposals_for_client,
 )
+from crm_runtime_index_service import (
+    build_crm_read_index as _crm_build_read_index,
+    crm_relationship_stats as _crm_relationship_stats,
+)
 from catalogo_orcamento_service import (
     ORCAMENTO_PRODUTO_LIVRE as _catalogo_orcamento_livre,
     normalizar_identidade_produto as _catalogo_normalizar_identidade,
@@ -9821,8 +9825,13 @@ def proxima_acao_crm(item):
 
 
 
-def calcular_indice_alpha(item, historico=None, clientes=None):
-    """Pontuação explicável de 0 a 100 para ordenar oportunidades."""
+def calcular_indice_alpha(item, historico=None, clientes=None, contexto_crm=None):
+    """Pontuação explicável de 0 a 100 para ordenar oportunidades.
+
+    HF34: quando ``contexto_crm`` é informado, Clientes e Histórico já estão
+    indexados e não precisam ser varridos novamente para cada atendimento.
+    O caminho legado continua disponível para compatibilidade.
+    """
     historico = historico or []
     clientes = clientes or []
     status = str(item.get("status", "Novo contato"))
@@ -9861,27 +9870,32 @@ def calcular_indice_alpha(item, historico=None, clientes=None):
 
     tel = _telefone_chave(item.get("telefone"))
     nome = str(item.get("cliente", "")).strip().lower()
-    cliente_existente = any(
-        (tel and _telefone_chave(c.get("whatsapp") or c.get("telefone")) == tel)
-        or (nome and str(c.get("nome", "")).strip().lower() == nome)
-        for c in clientes
-    )
+    if contexto_crm is not None:
+        rel_stats = _crm_relationship_stats(item, contexto_crm, phone_key=_telefone_chave)
+        cliente_existente = bool(rel_stats.get("client_exists"))
+        compras = int(rel_stats.get("purchases") or 0)
+        valor_historico = float(rel_stats.get("historical_value") or 0.0)
+    else:
+        cliente_existente = any(
+            (tel and _telefone_chave(c.get("whatsapp") or c.get("telefone")) == tel)
+            or (nome and str(c.get("nome", "")).strip().lower() == nome)
+            for c in clientes
+        )
+        compras = 0
+        valor_historico = 0.0
+        for proposta in historico:
+            prop_tel = _telefone_chave(proposta.get("cliente_whatsapp") or proposta.get("whatsapp") or proposta.get("telefone"))
+            prop_nome = str(proposta.get("cliente_nome", "")).strip().lower()
+            if (tel and prop_tel == tel) or (nome and prop_nome == nome):
+                if proposta.get("aprovado") or proposta.get("pago"):
+                    compras += 1
+                    try:
+                        valor_historico += calcular_valores_proposta(proposta)[2]
+                    except Exception:
+                        pass
     if cliente_existente:
         pontos += 8
         motivos.append("Cliente já cadastrado")
-
-    compras = 0
-    valor_historico = 0.0
-    for proposta in historico:
-        prop_tel = _telefone_chave(proposta.get("cliente_whatsapp") or proposta.get("whatsapp") or proposta.get("telefone"))
-        prop_nome = str(proposta.get("cliente_nome", "")).strip().lower()
-        if (tel and prop_tel == tel) or (nome and prop_nome == nome):
-            if proposta.get("aprovado") or proposta.get("pago"):
-                compras += 1
-                try:
-                    valor_historico += calcular_valores_proposta(proposta)[2]
-                except Exception:
-                    pass
     if compras:
         pontos += min(12, 5 + compras * 2)
         motivos.append(f"Cliente recorrente ({compras} pedido(s))")
@@ -25633,26 +25647,41 @@ if pagina_atual == "crm":
     itens_crm = dados_crm.get("itens", [])
     historico_crm = carregar_historico()
     clientes_crm = carregar_clientes()
+    contexto_leitura_crm = _crm_build_read_index(
+        historico_crm, clientes_crm, phone_key=_telefone_chave,
+        proposal_total=lambda proposta: calcular_valores_proposta(proposta)[2],
+    )
     tarefas_crm = sincronizar_producao_com_propostas(historico_crm)
     indicadores_unificados_crm = calcular_indicadores_unificados(
         historico_crm, itens_crm, tarefas_crm, agora_local().date()
     )
 
     oportunidades = []
+    originais_crm_por_id = {}
     for item in itens_crm:
-        indice, motivos = calcular_indice_alpha(item, historico_crm, clientes_crm)
+        indice, motivos = calcular_indice_alpha(
+            item, historico_crm, clientes_crm, contexto_crm=contexto_leitura_crm
+        )
         enriquecido = dict(item)
         enriquecido["indice_alpha"] = indice
         enriquecido["motivos_alpha"] = motivos
         enriquecido["temperatura"] = temperatura_indice_alpha(indice)
         enriquecido["estagio_funil"] = estagio_funil_atendimento(item)
+        enriquecido["_crm_minutos"] = minutos_aguardando(item)
+        enriquecido["_crm_canal"] = str(item.get("canal") or item.get("origem") or "Outro")
+        enriquecido["_crm_busca"] = " ".join(
+            str(item.get(k, "")) for k in ("cliente", "telefone", "mensagem", "status", "canal", "origem")
+        ).lower()
         oportunidades.append(enriquecido)
+        # Preserva a semântica anterior: em caso de ID repetido (inclusive None),
+        # a primeira ocorrência da fila é a que recebe a atualização.
+        originais_crm_por_id.setdefault(item.get("id"), item)
 
     estagios = ["Novos leads", "Em atendimento", "Orçamento", "Aguardando resposta", "Fechados", "Perdidos / arquivados"]
     contagem_funil = {e: indicadores_unificados_crm["funil"].get(e, 0) for e in estagios}
     abertas_crm = [o for o in oportunidades if o.get("status") not in ("Entregue", "Pós-venda", "Arquivado")]
     quentes_crm = [o for o in abertas_crm if o["indice_alpha"] >= 80]
-    sem_retorno_crm = [o for o in abertas_crm if o.get("status") == "Aguardando cliente" and minutos_aguardando(o) >= 1440]
+    sem_retorno_crm = [o for o in abertas_crm if o.get("status") == "Aguardando cliente" and o.get("_crm_minutos", 0) >= 1440]
     media_indice = sum(o["indice_alpha"] for o in abertas_crm) / len(abertas_crm) if abertas_crm else 0
 
     st.markdown("#### Visão geral comercial — mesma fonte da Central")
@@ -25683,25 +25712,24 @@ if pagina_atual == "crm":
 
     lista_crm = []
     for op in oportunidades:
-        base = " ".join(str(op.get(k, "")) for k in ("cliente", "telefone", "mensagem", "status", "canal", "origem")).lower()
-        if busca_crm and busca_crm not in base:
+        if busca_crm and busca_crm not in op.get("_crm_busca", ""):
             continue
         if filtro_temp != "Todas" and op["temperatura"] != filtro_temp:
             continue
         if filtro_estagio != "Todas" and op["estagio_funil"] != filtro_estagio:
             continue
-        canal_op = str(op.get("canal") or op.get("origem") or "Outro")
+        canal_op = op.get("_crm_canal", "Outro")
         if filtro_canal_crm != "Todos" and canal_op != filtro_canal_crm:
             continue
         lista_crm.append(op)
-    lista_crm.sort(key=lambda x: (-x["indice_alpha"], -minutos_aguardando(x)))
+    lista_crm.sort(key=lambda x: (-x["indice_alpha"], -x.get("_crm_minutos", 0)))
 
     st.markdown("#### Quem precisa de atenção")
     if not lista_crm:
         st.info("Nenhuma oportunidade encontrada com os filtros selecionados.")
     for op in lista_crm[:50]:
         op_id = op.get("id")
-        canal_op = str(op.get("canal") or op.get("origem") or "Outro")
+        canal_op = op.get("_crm_canal", "Outro")
         with st.container(border=True):
             a, b, c = st.columns([4, 1.2, 1.5])
             a.markdown(f"**{html.escape(str(op.get('cliente') or 'Contato sem nome'))}** · {html.escape(canal_op)}")
@@ -25734,13 +25762,12 @@ if pagina_atual == "crm":
                 key=f"crm_resp_{op_id}", label_visibility="collapsed",
             )
             if ac4.button("💾 Atualizar", key=f"crm_salvar_{op_id}", use_container_width=True):
-                for original in dados_crm.get("itens", []):
-                    if original.get("id") == op_id:
-                        original["status"] = novo_status_crm
-                        original["responsavel"] = "" if novo_resp_crm == "Sem responsável" else novo_resp_crm
-                        original["atualizado_em"] = agora_local().isoformat()
-                        adicionar_evento_timeline(original, f"CRM atualizado: {novo_status_crm}", obter_usuario_atual().get("nome", "Equipe"))
-                        break
+                original = originais_crm_por_id.get(op_id)
+                if original is not None:
+                    original["status"] = novo_status_crm
+                    original["responsavel"] = "" if novo_resp_crm == "Sem responsável" else novo_resp_crm
+                    original["atualizado_em"] = agora_local().isoformat()
+                    adicionar_evento_timeline(original, f"CRM atualizado: {novo_status_crm}", obter_usuario_atual().get("nome", "Equipe"))
                 salvar_atendimentos(dados_crm)
                 st.success("Oportunidade atualizada.")
                 st.rerun()
