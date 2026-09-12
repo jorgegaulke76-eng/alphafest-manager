@@ -36283,10 +36283,34 @@ if pagina_atual == "relacionamentos":
     st.caption("Um único cadastro para clientes, fornecedores, parceiros e contatos que exigem regras especiais de atendimento.")
 
     clientes = sincronizar_clientes_do_historico()
+    # HF43 — Relacionamentos: o Histórico é lido uma única vez nesta tela e
+    # indexado por relacionamento + chave legada. Isso evita o padrão N+1 em
+    # ``propostas_do_cliente`` (uma nova leitura/varredura para cada cadastro).
+    _historico_rel_hf43 = carregar_historico()
+    _indice_rel_hf43 = _clientes_build_proposals_index(
+        _historico_rel_hf43, client_key=chave_cliente
+    )
+    def _propostas_rel_hf43(cliente):
+        return _clientes_proposals_for_client(
+            cliente, _indice_rel_hf43, client_key=chave_cliente
+        )
+
+    # Perfil comercial é puro e era recalculado em filtro, métricas e cartão.
+    # Uma fotografia por relacionamento mantém a mesma regra com menos trabalho.
+    _perfil_rel_hf43 = {
+        str(cli.get("id") or f"__pos_{pos}"): resumo_perfil_comercial(cli)
+        for pos, cli in enumerate(clientes)
+    }
+    _pos_rel_hf43 = {id(cli): pos for pos, cli in enumerate(clientes)}
+    def _resumo_perfil_rel_hf43(cliente):
+        pos = _pos_rel_hf43.get(id(cliente), -1)
+        chave = str(cliente.get("id") or f"__pos_{pos}")
+        return _perfil_rel_hf43.get(chave) or resumo_perfil_comercial(cliente)
+
     with st.expander("🧬 Cadastro Mestre e integridade dos vínculos", expanded=False):
         st.caption("Relacionamentos são a fonte oficial dos dados pessoais. Orçamentos, projetos, produção, atendimentos e campanhas guardam o vínculo pelo ID permanente.")
         ids_ok = sum(1 for c in clientes if str(c.get("id", "")).strip())
-        hist_atual = carregar_historico()
+        hist_atual = _historico_rel_hf43
         hist_vinc = sum(1 for p in hist_atual if str(p.get("relacionamento_id", "")).strip())
         c1, c2, c3 = st.columns(3)
         c1.metric("Relacionamentos com ID", f"{ids_ok}/{len(clientes)}")
@@ -36325,7 +36349,7 @@ if pagina_atual == "relacionamentos":
         if filtro_comercial_i811 != "Todos":
             filtrados_tmp = []
             for cli in filtrados_cli:
-                resumo_pc = resumo_perfil_comercial(cli)
+                resumo_pc = _resumo_perfil_rel_hf43(cli)
                 if filtro_comercial_i811 == "Faturamento mensal" and resumo_pc.get("faturamento_mensal"):
                     filtrados_tmp.append(cli)
                 elif filtro_comercial_i811 == "Com abatimento especial" and resumo_pc.get("qtd_regras_ativas", 0) > 0:
@@ -36335,9 +36359,9 @@ if pagina_atual == "relacionamentos":
             filtrados_cli = filtrados_tmp
 
         total_clientes = len(clientes)
-        clientes_com_pedidos = sum(1 for cli in clientes if propostas_do_cliente(cli))
-        mensalistas_i811 = sum(1 for cli in clientes if resumo_perfil_comercial(cli).get("faturamento_mensal"))
-        especiais_i811 = sum(1 for cli in clientes if resumo_perfil_comercial(cli).get("qtd_regras_ativas", 0) > 0)
+        clientes_com_pedidos = sum(1 for cli in clientes if _propostas_rel_hf43(cli))
+        mensalistas_i811 = sum(1 for cli in clientes if _resumo_perfil_rel_hf43(cli).get("faturamento_mensal"))
+        especiais_i811 = sum(1 for cli in clientes if _resumo_perfil_rel_hf43(cli).get("qtd_regras_ativas", 0) > 0)
         m1, m2, m3, m4 = st.columns(4)
         m1.metric("Relacionamentos", total_clientes)
         m2.metric("Com propostas", clientes_com_pedidos)
@@ -36346,7 +36370,7 @@ if pagina_atual == "relacionamentos":
 
         st.write(f"**{len(filtrados_cli)} relacionamento(s) encontrado(s)**")
         for cli in sorted(filtrados_cli, key=lambda x: str(x.get("nome", "")).lower()):
-            propostas_cli = propostas_do_cliente(cli)
+            propostas_cli = _propostas_rel_hf43(cli)
             totais = [calcular_valores_proposta(p)[2] for p in propostas_cli]
             total_orcado_cli = sum(totais)
             total_pago_cli = sum(calcular_valores_proposta(p)[2] for p in propostas_cli if p.get("pago", False))
@@ -36370,7 +36394,7 @@ if pagina_atual == "relacionamentos":
                     st.write(f"**Cidade:** {cli.get('cidade') or 'Não informado'}")
                     st.write("**Papéis:** " + ", ".join(papeis_relacionamento(cli)))
                     st.write(f"**Classificação:** {cli.get('classificacao_relacionamento') or 'Não classificado'}")
-                    pc_cli = resumo_perfil_comercial(cli)
+                    pc_cli = _resumo_perfil_rel_hf43(cli)
                     if pc_cli.get("faturamento_mensal"):
                         st.success(f"💳 **Faturamento mensal** · fechamento dia {pc_cli.get('dia_fechamento')} · vencimento dia {pc_cli.get('dia_vencimento')}")
                     if pc_cli.get("qtd_regras_ativas", 0):
