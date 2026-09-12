@@ -271,6 +271,7 @@ from proposal_runtime_index_service import (
     filter_active_recent as _proposal_filter_active_recent,
     proposal_with_current_client_data as _proposal_with_current_client_data,
 )
+from historico_runtime_service import total_paginas_historico, paginar_historico
 from document_runtime_service import cache_get_or_build as _document_cache_get_or_build
 from anna_snapshot_runtime_service import prepare_daily_snapshot as _anna_prepare_daily_snapshot
 from marketing_results_runtime_service import build_marketing_product_resolver as _marketing_build_product_resolver
@@ -29480,7 +29481,44 @@ if pagina_atual == "historico":
     if busca.strip():
         termo = busca.strip().lower()
         historico = [p for p in historico if termo in normalizar_texto_busca(p)]
-    st.caption(f"{len(historico)} proposta(s) encontrada(s)")
+
+    # HF54 — a busca continua varrendo 100% do Histórico, mas a interface deixa
+    # de construir todos os expanders/ações em cada rerun. A paginação é apenas
+    # visual e não altera dados, ordem, status ou resultado da pesquisa.
+    total_historico_hf54 = len(historico)
+    hist_pg1_hf54, hist_pg2_hf54 = st.columns([2, 1])
+    tamanho_label_hf54 = hist_pg1_hf54.selectbox(
+        "Propostas por página",
+        ["30", "60", "Todos"],
+        index=0,
+        key="historico_page_size_hf54",
+    )
+    tamanho_hf54 = None if tamanho_label_hf54 == "Todos" else int(tamanho_label_hf54)
+    total_paginas_hf54 = total_paginas_historico(total_historico_hf54, tamanho_hf54)
+    if tamanho_hf54 is None:
+        pagina_hf54 = 1
+        hist_pg2_hf54.caption("Página única")
+    else:
+        pagina_key_hf54 = "historico_page_hf54"
+        pagina_salva_hf54 = int(st.session_state.get(pagina_key_hf54, 1) or 1)
+        if pagina_salva_hf54 < 1 or pagina_salva_hf54 > total_paginas_hf54:
+            st.session_state[pagina_key_hf54] = 1
+        pagina_hf54 = hist_pg2_hf54.selectbox(
+            "Página",
+            list(range(1, total_paginas_hf54 + 1)),
+            key=pagina_key_hf54,
+        )
+
+    historico_visivel_hf54, inicio_hf54, fim_hf54 = paginar_historico(
+        historico, tamanho_hf54, pagina_hf54
+    )
+    if total_historico_hf54:
+        st.caption(
+            f"{total_historico_hf54} proposta(s) encontrada(s) · "
+            f"exibindo {inicio_hf54 + 1}–{fim_hf54}"
+        )
+    else:
+        st.caption("0 proposta(s) encontrada(s)")
 
     tarefas_fluxo_hist_i8134 = carregar_producao(force_refresh=True)
     fluxo_por_pedido_hist_i8134 = {}
@@ -29491,7 +29529,7 @@ if pagina_atual == "historico":
         if numero_hist_i8134:
             fluxo_por_pedido_hist_i8134.setdefault(numero_hist_i8134, []).append(tarefa_hist_i8134)
 
-    for prop in historico:
+    for prop in historico_visivel_hf54:
         relacionamento_atual = _finance_resolve_relationship_client(clientes_idx_hist_hf40, prop)
         prop_atual, relacionamento_atual = _proposal_with_current_client_data(prop, relacionamento_atual)
         num_p = prop.get("numero_proposta", "SEM-NÚMERO")

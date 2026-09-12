@@ -1,3 +1,8 @@
+
+## HF53.3-HF8-HF54 — Histórico paginado
+- Busca continua global sobre todo o Histórico.
+- Renderização visual limitada a 30 propostas por página por padrão, com opções 60/Todos.
+- Nenhuma regra de proposta/status foi alterada.
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF52
 - Relacionamentos: total, status, modalidade e data de cada proposta calculados uma vez por rerun.
 - Cartões e histórico reutilizam a mesma fotografia de runtime.

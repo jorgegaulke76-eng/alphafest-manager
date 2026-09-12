@@ -47,6 +47,7 @@ CRITICAL_PYTHON_FILES = (
     "compras_runtime_index_service.py",
     "marketing_results_runtime_service.py",
     "reports_runtime_index_service.py",
+    "historico_runtime_service.py",
     "thu_comercial_service.py",
     "central_operational_runtime.py",
     "central_entregas_engine.py",
