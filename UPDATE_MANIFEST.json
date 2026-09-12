@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF37",
-  "generated_at_utc": "2026-09-12T15:42:58.067719+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF38",
+  "generated_at_utc": "2026-09-12T16:42:45.601713+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -11,19 +11,19 @@
     "warnings": [],
     "critical_python_compile": {
       "status": "OK",
-      "files_checked": 24,
-      "files_ok": 24
+      "files_checked": 26,
+      "files_ok": 26
     },
     "tests": {
-      "total_files": 0,
-      "portable_files": 0,
+      "total_files": 1,
+      "portable_files": 1,
       "current_release_files": 0,
       "historical_version_files": 0,
       "historical_examples": []
     }
   },
   "file_count": 373,
-  "uncompressed_bytes": 36493362,
+  "uncompressed_bytes": 36496128,
   "files": [
     {
       "path": ".gitignore",
@@ -42,8 +42,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size": 85232,
-      "sha256": "202198f397edfc1a5ae22cb1d6d454215607c7e9c69bab67f3a9be822d6338de"
+      "size": 85556,
+      "sha256": "18d0dbb897f4b47eb52ad1ce149ef6f2f2e6105c224665be4077ff3f08febecb"
     },
     {
       "path": "EDGE_FUNCTION_CATALOGO_PUBLICO.md",
@@ -102,18 +102,18 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 849,
-      "sha256": "bf302f735a9910a6166505c4cf9704d1f2632963c5ad78d1e26c7521d440bbeb"
+      "size": 1087,
+      "sha256": "6eed06a283aa880670ecc2f517be47198be4bd52995403062c51ad5f9c8fee03"
     },
     {
       "path": "VERSAO",
       "size": 31,
-      "sha256": "76f72a8d8e982d10740eca9da5de82671e33d6f14d4dc6bdcacde7880db3a7ee"
+      "sha256": "981bdd0cf01b76b8f89e38917e9d6ec4e14ba5f331879ef44fc9ffebd6d369c9"
     },
     {
       "path": "VERSAO.txt",
       "size": 31,
-      "sha256": "76f72a8d8e982d10740eca9da5de82671e33d6f14d4dc6bdcacde7880db3a7ee"
+      "sha256": "981bdd0cf01b76b8f89e38917e9d6ec4e14ba5f331879ef44fc9ffebd6d369c9"
     },
     {
       "path": "__init__.py",
@@ -177,8 +177,8 @@
     },
     {
       "path": "app.py",
-      "size": 1928842,
-      "sha256": "d039a737eecca91cf551bca9d6378a12e8d5390cd45edb534d788cabb1615457"
+      "size": 1928171,
+      "sha256": "53d513f9d60af384f7bc2675ab29a746b51b13dbb01b8034c10547880daa4dfd"
     },
     {
       "path": "assets/catalogos_legados/acervo_catalogos_legados.json",
@@ -1532,13 +1532,13 @@
     },
     {
       "path": "central_entregas_engine.py",
-      "size": 7061,
-      "sha256": "977329618ca216a293c70efbe02bf1c623f8485cf335dfe9be85d408e593c7c1"
+      "size": 7243,
+      "sha256": "8ea9f546b8aea3f067e921c7a4b1be99798366b4d701b8199c5e83f734423d79"
     },
     {
       "path": "central_operational_runtime.py",
-      "size": 2782,
-      "sha256": "36c83e85ba41cfe16d73256796c269632ae1fd76bc95e65f8f9e72c17bf4cc1f"
+      "size": 5167,
+      "sha256": "3ba1da5a11138028797dc70393dfa78fa459361d1ecf2f7dcde21e0a9f897466"
     },
     {
       "path": "central_oportunidades.py",
@@ -1687,8 +1687,8 @@
     },
     {
       "path": "prioridade_operacional_engine.py",
-      "size": 9730,
-      "sha256": "1fa26c3160c0f0d40462cf3690a9c07afa0f443c1b9fc7d592c85d731b8bbbcc"
+      "size": 9890,
+      "sha256": "0c6cb06ad3c4eca241ee3b561fe2875fda1851616d48f56d2f4def78aa2ccd64"
     },
     {
       "path": "producao_operacional_service.py",
@@ -1717,8 +1717,8 @@
     },
     {
       "path": "release_diagnostics.py",
-      "size": 6373,
-      "sha256": "c179860a079b45ffe0e298c3a592ac25014e03076902d2541cc35c33aa4babba"
+      "size": 6447,
+      "sha256": "2808a301954edc3abf4e4b6cbcc02033595f88e58dc69f1a0acd0c8984f8d2e4"
     },
     {
       "path": "requirements.txt",
@@ -1882,8 +1882,8 @@
     },
     {
       "path": "update_hygiene.py",
-      "size": 14537,
-      "sha256": "d946bf9f216198a0c39afe2f1b7a6996dfa5861ac52aa851ff74b2bc33a9cac2"
+      "size": 14611,
+      "sha256": "8ff08d52110e72e81303d911f6bb5c1495f4e238f083901c046d834fabe7115e"
     },
     {
       "path": "update_safe_ui.py",

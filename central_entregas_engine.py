@@ -113,7 +113,13 @@ def ordenar_historico_entregues(propostas: Iterable[dict]) -> list[dict]:
     return sorted(itens, key=chave, reverse=True)
 
 
-def montar_fila(propostas: Iterable[dict], hoje: date, resumo_produtos=None) -> list[dict]:
+def montar_fila(
+    propostas: Iterable[dict],
+    hoje: date,
+    resumo_produtos=None,
+    *,
+    status_por_numero: dict[str, dict] | None = None,
+) -> list[dict]:
     linhas = []
     for proposta in propostas or []:
         if not isinstance(proposta, dict):
@@ -121,14 +127,16 @@ def montar_fila(propostas: Iterable[dict], hoje: date, resumo_produtos=None) -> 
         # HF6: Entregas usa a mesma Fonte Única do Histórico/Central.
         # Propostas encerradas/não fechadas não podem reaparecer na fila de saída
         # apenas por possuírem um marcador legado de Pronto.
-        status = resumo_status(proposta)
+        numero = str(proposta.get("numero_proposta") or "").strip()
+        status = (status_por_numero or {}).get(numero) if numero else None
+        if status is None:
+            status = resumo_status(proposta)
         if not status.get("ativa") or not status.get("pronto") or status.get("entregue"):
             continue
         entrega = _date(proposta.get("data_entrega"))
         dias = dias_aguardando(proposta, hoje)
         tipo = str(proposta.get("logistica_tipo") or "").strip()
         avisado_em = str(proposta.get("cliente_avisado_em") or "").strip()
-        numero = str(proposta.get("numero_proposta") or "").strip()
         cliente = str(proposta.get("cliente_nome") or proposta.get("cliente") or "Cliente").strip()
         resumo = resumo_produtos(proposta) if callable(resumo_produtos) else ""
         linhas.append({

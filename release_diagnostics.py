@@ -38,6 +38,8 @@ CRITICAL_PYTHON_FILES = (
     "crm_runtime_index_service.py",
     "thu_comercial_service.py",
     "central_operational_runtime.py",
+    "central_entregas_engine.py",
+    "prioridade_operacional_engine.py",
     "consumo_estoque_engine.py",
     "necessidades_compras_engine.py",
     "risco_producao_engine.py",

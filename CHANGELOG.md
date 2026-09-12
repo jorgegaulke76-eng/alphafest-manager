@@ -1,3 +1,8 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF38 — Central com status/índices compartilhados
+- Central calcula a Fonte Única de Status uma vez por proposta e reutiliza em Entregas/Prioridades.
+- Reaproveita mapas de propostas, consumos, estoque e planejamentos no mesmo rerun.
+- Sem alteração de regra operacional ou persistência.
+
 ## 20.4.9-I8.13.5-HF53.1
 - Alpha Marketing: novo Piloto Automático de Conteúdo.
 - Prioriza produtos do catálogo usando prontidão + sinais das métricas do site quando disponíveis.

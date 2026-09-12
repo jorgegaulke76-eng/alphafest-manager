@@ -23513,24 +23513,9 @@ if pagina_atual == "central":
     tarefas_central = sincronizar_producao_com_propostas(historico_central)
     tarefas_ativas_central = [t for t in tarefas_central if t.get("ativa", True)]
 
-    # I8.12.8-HF2 — a Central lê aprovação/pagamento/pronto/entrega somente pela
-    # fonte oficial de status. A etapa do producao_db nunca decide se um pedido
-    # está aprovado, entregue ou encerrado.
-    estados_oficiais_central = {
-        str(p.get("numero_proposta") or "").strip(): _status_resumo(p)
-        for p in historico_central if isinstance(p, dict) and str(p.get("numero_proposta") or "").strip()
-    }
-    propostas_operacionais_central = [
-        p for p in historico_central
-        if not _status_resumo(p).get("encerrada")
-    ]
-    propostas_aprovadas_abertas_central = [
-        p for p in propostas_operacionais_central
-        if _status_resumo(p).get("aprovado") and not _status_resumo(p).get("entregue")
-    ]
-    # HF36 — uma única fotografia operacional por rerun da Central.
-    # Agenda Executiva, Produção, Prioridades e Saídas passam a compartilhar
-    # exatamente os mesmos derivados e as mesmas fontes lidas neste ciclo.
+    # HF36/HF38 — uma única fotografia operacional por rerun da Central.
+    # Além de Produção/Prioridades/Saídas, o HF38 compartilha também a leitura
+    # oficial de status e os índices de propostas/consumos usados pela própria tela.
     _consumos_runtime_central_hf36 = carregar_consumos_pedidos()
     _estoque_runtime_central_hf36 = carregar_estoque()
     _planejamentos_runtime_central_hf36 = carregar_planejamentos_compras()
@@ -23543,6 +23528,12 @@ if pagina_atual == "central":
         hoje_central,
         resumo_produtos=resumo_produtos_pedido,
     )
+    # I8.12.8-HF2 permanece como fonte única; apenas reutilizamos o cálculo já
+    # feito pelo snapshot em vez de executar resumo_status várias vezes.
+    estados_oficiais_central = _snapshot_operacional_central_hf36["status_por_numero"]
+    mapa_propostas_central_hf38 = _snapshot_operacional_central_hf36["propostas_por_numero"]
+    propostas_operacionais_central = _snapshot_operacional_central_hf36["propostas_operacionais"]
+    propostas_aprovadas_abertas_central = _snapshot_operacional_central_hf36["propostas_aprovadas_abertas"]
     fila_saida_central_i813 = _snapshot_operacional_central_hf36["fila_entregas"]
     resumo_saida_central_i813 = _snapshot_operacional_central_hf36["resumo_fila_entregas"]
     if resumo_saida_central_i813.get("prontos"):
@@ -23560,10 +23551,7 @@ if pagina_atual == "central":
     ]
     # HF2: Central/THU/Alpha Core usam a mesma lista oficial de atrasados.
     pedidos_atrasados_central = listar_atrasados_operacionais(historico_central, hoje_central)
-    aguardando_aprovacao_central = [
-        p for p in propostas_operacionais_central
-        if not _status_resumo(p).get("aprovado") and not _status_resumo(p).get("entregue")
-    ]
+    aguardando_aprovacao_central = _snapshot_operacional_central_hf36["propostas_aguardando_aprovacao"]
     numeros_aprovados_abertos_central = {
         str(p.get("numero_proposta") or "").strip() for p in propostas_aprovadas_abertas_central
         if str(p.get("numero_proposta") or "").strip()
@@ -23572,7 +23560,7 @@ if pagina_atual == "central":
         t for t in tarefas_ativas_central
         if str(t.get("numero_proposta") or "").strip() in numeros_aprovados_abertos_central
     ]
-    pendentes_pagamento_central = [p for p in historico_central if _status_pagamento_pendente(p)]
+    pendentes_pagamento_central = _snapshot_operacional_central_hf36["propostas_pagamento_pendente"]
     valor_previsto_hoje = sum(calcular_valores_proposta(p)[2] for p in entregas_hoje_central)
 
     dados_atendimento_central = carregar_atendimentos()
@@ -24560,8 +24548,7 @@ if pagina_atual == "central":
             prioridade = entregas_hoje_central[0]
             motivo = "Entrega prevista para hoje"
         elif aguardando_aprovacao_central:
-            tarefa = aguardando_aprovacao_central[0]
-            prioridade = next((p for p in historico_central if p.get("numero_proposta") == tarefa.get("numero_proposta")), None)
+            prioridade = aguardando_aprovacao_central[0]
             motivo = "Aguardando aprovação do cliente"
         elif pendentes_pagamento_central:
             prioridade = pendentes_pagamento_central[0]
@@ -24597,7 +24584,7 @@ if pagina_atual == "central":
     estoque_central_i8124 = _estoque_runtime_central_hf36
     pendentes_central_i8124 = []
     revisar_central_i8124 = []
-    mapa_hist_central_i8124 = {str(p.get("numero_proposta") or ""): p for p in historico_central}
+    mapa_hist_central_i8124 = mapa_propostas_central_hf38
     # HF37 — todos os consumos compartilham um único índice dos movimentos neste ciclo.
     _resumos_consumos_central_hf37 = {
         str(consumo.get("id") or ""): resumo
@@ -24638,7 +24625,7 @@ if pagina_atual == "central":
     necessidades_compra_central_i8126 = _i8126_central_necessidades(
         consumos=consumos_central_i8124, estoque=estoque_central_i8124,
         compras=carregar_compras(), historico=historico_central, fornecedores=_i8121_fornecedores(),
-        planejamentos=carregar_planejamentos_compras(),
+        planejamentos=_planejamentos_runtime_central_hf36,
     )
     planos_abertos_central_i8126 = [p for p in _planejamentos_runtime_central_hf36 if isinstance(p, dict) and _i8126_engine_aberta(p) > 0.0000001]
     if necessidades_compra_central_i8126:
@@ -24842,21 +24829,14 @@ if pagina_atual == "central":
     # CAT1-HF9 — todo pedido aprovado e ainda aberto permanece acessível para
     # continuar os status, mesmo depois de sair da fila de reserva ou de não
     # estar em uma faixa de alerta/prioridade.
-    pedidos_em_andamento_hf9 = [
-        p for p in propostas_aprovadas_abertas_central
-        if not _status_resumo(p).get("entregue")
-    ]
+    pedidos_em_andamento_hf9 = propostas_aprovadas_abertas_central
     if pedidos_em_andamento_hf9:
         with st.expander(f"🔄 Pedidos em andamento — continuar atualização ({len(pedidos_em_andamento_hf9)})", expanded=False):
-            consumos_idx_hf9 = {
-                str((c or {}).get("numero_proposta") or "").strip(): c
-                for c in carregar_consumos_pedidos()
-                if isinstance(c, dict) and not c.get("estornado") and str(c.get("numero_proposta") or "").strip()
-            }
-            estoque_andamento_hf9 = carregar_estoque()
+            consumos_idx_hf9 = _snapshot_operacional_central_hf36["consumos_ativos_por_proposta"]
+            estoque_andamento_hf9 = estoque_central_i8124
             for idx_hf9, prop_hf9 in enumerate(_ordenar_propostas_recentes(pedidos_em_andamento_hf9)[:20]):
                 num_hf9 = str(prop_hf9.get("numero_proposta") or "").strip()
-                est_hf9 = _status_resumo(prop_hf9)
+                est_hf9 = estados_oficiais_central.get(num_hf9) or _status_resumo(prop_hf9)
                 cons_hf9 = consumos_idx_hf9.get(num_hf9)
                 if est_hf9.get("pronto"):
                     fase_hf9 = "📦 Pronto — aguardando saída"
@@ -24900,7 +24880,7 @@ if pagina_atual == "central":
             # quando o editor operacional é aberto logo abaixo da lista.
             with st.container(border=True):
                 al1, al2 = st.columns([7, 2])
-                prop_alerta = next((p for p in historico_central if str(p.get("numero_proposta") or "") == str(numero)), None)
+                prop_alerta = mapa_propostas_central_hf38.get(str(numero).strip())
                 resumo_alerta = resumo_produtos_pedido(prop_alerta) if prop_alerta else "Sem itens informados"
                 al1.markdown(f"{icone} **{html.escape(str(numero))} — {html.escape(str(cliente or 'Cliente'))}** · 🧾 {html.escape(resumo_alerta)} · {html.escape(str(texto))}")
                 al2.button(
@@ -24937,11 +24917,11 @@ if pagina_atual == "central":
 
                 # CAT1-HF9 — mostra a mesma leitura da Central de Reserva dentro
                 # do editor e oferece ida/volta direta para o tratamento do pedido.
-                consumo_editor_hf9 = _i8124_consumo_ativo_pedido(numero_central_selecionado, carregar_consumos_pedidos())
+                consumo_editor_hf9 = _i8124_consumo_ativo_pedido(numero_central_selecionado, _consumos_runtime_central_hf36)
                 estado_editor_hf9 = _status_resumo(proposta_central_selecionada)
                 if estado_editor_hf9.get("aprovado") and not estado_editor_hf9.get("pronto"):
                     if consumo_editor_hf9:
-                        resumo_editor_hf9 = _i8124_resumo_consumo(consumo_editor_hf9, carregar_estoque())
+                        resumo_editor_hf9 = _i8124_resumo_consumo(consumo_editor_hf9, _estoque_runtime_central_hf36)
                         if resumo_editor_hf9.get("pendente"):
                             st.warning("📦 Materiais: reserva parcial / ainda há falta. Complete a entrada antes de concluir a produção.")
                         else:

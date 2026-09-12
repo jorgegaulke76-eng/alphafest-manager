@@ -114,6 +114,7 @@ def montar_prioridades_operacionais(
     central_producao: Iterable[dict] | None = None,
     fila_entregas: Iterable[dict] | None = None,
     resumo_produtos=None,
+    status_por_numero: dict[str, dict] | None = None,
 ) -> list[dict]:
     """Monta uma fila única e calculada de pedidos aprovados ainda abertos.
 
@@ -127,11 +128,13 @@ def montar_prioridades_operacionais(
     for proposta in propostas or []:
         if not isinstance(proposta, dict):
             continue
-        status = resumo_status(proposta)
+        numero = _texto(proposta.get("numero_proposta"))
+        status = (status_por_numero or {}).get(numero) if numero else None
+        if status is None:
+            status = resumo_status(proposta)
         if not status.get("aprovado") or not status.get("ativa") or status.get("entregue"):
             continue
 
-        numero = _texto(proposta.get("numero_proposta"))
         if not numero:
             continue
         cliente = _texto(proposta.get("cliente_nome") or proposta.get("cliente"), "Cliente")
