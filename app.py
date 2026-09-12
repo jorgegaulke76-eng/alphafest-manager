@@ -269,6 +269,7 @@ from proposal_runtime_index_service import (
 )
 from document_runtime_service import cache_get_or_build as _document_cache_get_or_build
 from marketing_results_runtime_service import build_marketing_product_resolver as _marketing_build_product_resolver
+from reports_runtime_index_service import build_reports_product_resolver as _reports_build_product_resolver
 from compras_runtime_index_service import (
     build_purchase_runtime_index as _compras_build_runtime_index,
     previous_purchase as _compras_previous_purchase,
@@ -32233,32 +32234,16 @@ if pagina_atual == "relatorios":
             for item in (proposta_nome.get("itens", []) or [])
             if str(item.get("produto") or "").strip()
         })
-        _grupos_graficos = {}
-        for _nome_hist in _nomes_historicos_globais:
-            _chave_hist = normalizar_identidade_produto(_nome_hist)
-            if _chave_hist:
-                _grupos_graficos.setdefault(_chave_hist, []).append(_nome_hist)
-
-        _mapa_nome_grafico = {}
-        for _chave_hist, _variantes_hist in _grupos_graficos.items():
-            _oficial_mesma_chave = next(
-                (
-                    str(prod.get("Nome") or "").strip()
-                    for prod in catalogo_rel
-                    if normalizar_identidade_produto(prod.get("Nome")) == _chave_hist
-                ),
-                "",
-            )
-            if _oficial_mesma_chave:
-                _canonico_hist = _oficial_mesma_chave
-            else:
-                # Prefere uma grafia legível (ex.: "Balão Bubble") a CAIXA ALTA,
-                # sem inventar nome novo.
-                _canonico_hist = sorted(
-                    set(_variantes_hist),
-                    key=lambda x: (str(x).isupper(), len(str(x)), str(x).casefold()),
-                )[0]
-            _mapa_nome_grafico[_chave_hist] = _canonico_hist
+        # HF50: o mesmo nome histórico não volta a executar o saneamento completo
+        # contra o Catálogo em cada item. A regra oficial continua sendo a mesma;
+        # apenas a resolução e o mapa de grafias são indexados uma vez.
+        _resolver_produto_rel_hf50 = _reports_build_product_resolver(
+            catalogo_rel,
+            _nomes_historicos_globais,
+            normalize=normalizar_identidade_produto,
+            resolve_official_name=nome_produto_oficial_catalogo,
+        )
+        _mapa_nome_grafico = _resolver_produto_rel_hf50.graphical_name_map
 
         for p in h:
             subtotal, desconto, total = calcular_valores_proposta(p)
@@ -32276,7 +32261,7 @@ if pagina_atual == "relatorios":
                 qtd = valor_float(item.get("quantidade"))
                 unit = valor_float(item.get("valor_unitario"))
                 nome_original_item = str(item.get("produto", "Não informado")).strip() or "Não informado"
-                nome_oficial_item = nome_produto_oficial_catalogo(nome_original_item, catalogo_rel)
+                nome_oficial_item = _resolver_produto_rel_hf50.resolve_official(nome_original_item)
                 _chave_original_item = normalizar_identidade_produto(nome_original_item)
 
                 if normalizar_identidade_produto(nome_original_item) != normalizar_identidade_produto(nome_oficial_item):

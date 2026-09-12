@@ -1,7 +1,5 @@
-# AlphaFest Manager — HF49 Configurações Lazy Runtime
+# Atualização AlphaFest Manager
 
-O HF49 otimiza a tela Configurações para que o Streamlit execute somente a seção realmente aberta pelo usuário. As antigas abas eram avaliadas todas no mesmo rerun, incluindo Alpha Connect, usuários, orientações THU, backup, saúde, boot, auditoria, lixeira e atualização segura.
+Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF50
 
-Agora a navegação usa seletores horizontais com execução condicional. As funções, permissões, backups, diagnósticos e regras permanecem iguais; muda apenas quando cada bloco é processado.
-
-Arquivos protegidos HF7, Template Anna e Marketing Engine permanecem inalterados.
+HF50 — otimização somente leitura dos Relatórios: resolução de produtos históricos indexada e reutilizada durante o mesmo ciclo.
