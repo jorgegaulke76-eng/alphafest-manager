@@ -1,3 +1,9 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF46 — Marketing Intelligence Runtime
+- THU reutiliza a mesma resolução saneada de produto durante toda a análise.
+- Histórico social é preparado uma vez e compartilhado entre as leituras do período e sinais temporais.
+- Totais comerciais deixam de exigir novas varreduras das propostas já selecionadas.
+- Sem alteração de indicadores, regras comerciais, Template Anna, HF7 ou publicação social.
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF38 — Central com status/índices compartilhados
 - Central calcula a Fonte Única de Status uma vez por proposta e reutiliza em Entregas/Prioridades.
 - Reaproveita mapas de propostas, consumos, estoque e planejamentos no mesmo rerun.

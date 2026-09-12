@@ -267,6 +267,7 @@ from proposal_runtime_index_service import (
     proposal_with_current_client_data as _proposal_with_current_client_data,
 )
 from document_runtime_service import cache_get_or_build as _document_cache_get_or_build
+from marketing_results_runtime_service import build_marketing_product_resolver as _marketing_build_product_resolver
 from compras_runtime_index_service import (
     build_purchase_runtime_index as _compras_build_runtime_index,
     previous_purchase as _compras_previous_purchase,
@@ -19128,6 +19129,8 @@ def thu_i7_consolidar_periodo(
     inicio,
     fim,
     mapa_origens=None,
+    produto_resolver=None,
+    publicacoes_todas=None,
 ):
     """Consolida demanda e exposição sem atribuir causalidade."""
     produtos = {}
@@ -19139,6 +19142,18 @@ def thu_i7_consolidar_periodo(
     propostas_com_origem = 0
     propostas_origem_social = 0
     propostas_por_origem = {}
+    aprovadas_qtd = 0
+    pagas_qtd = 0
+    valor_orcado_total = 0.0
+    valor_aprovado_total = 0.0
+    valor_recebido_total = 0.0
+
+    def resolver_produto(nome):
+        if produto_resolver is not None:
+            return produto_resolver.resolve(nome)
+        oficial = _thu_i7_nome_produto_oficial(nome, catalogo)
+        existe = _thu_i7_produto_existe_catalogo(nome, catalogo) or _thu_i7_produto_existe_catalogo(oficial, catalogo)
+        return oficial, existe
 
     def reg_prod(nome):
         nome = str(nome or "").strip()
@@ -19146,10 +19161,7 @@ def thu_i7_consolidar_periodo(
             return None
         if nome not in produtos:
             produtos[nome] = _thu_i7_registro_produto(nome)
-            produtos[nome]["tem_catalogo"] = _thu_i7_produto_existe_catalogo(
-                nome,
-                catalogo,
-            )
+            produtos[nome]["tem_catalogo"] = resolver_produto(nome)[1]
         return produtos[nome]
 
     for proposta in (historico or []):
@@ -19163,6 +19175,14 @@ def thu_i7_consolidar_periodo(
         encerrada = proposta_encerrada(proposta)
         aprovada = (not encerrada) and valor_bool(proposta.get("aprovado"))
         paga = (not encerrada) and valor_bool(proposta.get("pago"))
+        valor_total_proposta = calcular_valores_proposta(proposta)[2]
+        valor_orcado_total += valor_total_proposta
+        if aprovada:
+            aprovadas_qtd += 1
+            valor_aprovado_total += valor_total_proposta
+        if paga:
+            pagas_qtd += 1
+            valor_recebido_total += valor_total_proposta
 
         atendimento_id = str(proposta.get("atendimento_id") or "").strip()
         origem_atendimento = str(
@@ -19188,14 +19208,7 @@ def thu_i7_consolidar_periodo(
             if not nome_original:
                 continue
             itens_total += 1
-            nome_oficial = _thu_i7_nome_produto_oficial(
-                nome_original,
-                catalogo,
-            )
-            existe = _thu_i7_produto_existe_catalogo(
-                nome_original,
-                catalogo,
-            ) or _thu_i7_produto_existe_catalogo(nome_oficial, catalogo)
+            nome_oficial, existe = resolver_produto(nome_original)
             if existe:
                 itens_catalogados += 1
             else:
@@ -19234,7 +19247,8 @@ def thu_i7_consolidar_periodo(
                     reg["origens_sociais"].get(origem_atendimento, 0) + 1
                 )
 
-    publicacoes_todas = _thu_social_publicacoes(marketing)
+    if publicacoes_todas is None:
+        publicacoes_todas = _thu_social_publicacoes(marketing)
     publicacoes_periodo = []
     publicacoes_sem_produto = 0
     publicacoes_produto_nao_catalogado = 0
@@ -19250,7 +19264,7 @@ def thu_i7_consolidar_periodo(
             publicacoes_sem_produto += 1
             continue
 
-        nome_oficial = _thu_i7_nome_produto_oficial(nome_pub, catalogo)
+        nome_oficial, _ = resolver_produto(nome_pub)
         reg = reg_prod(nome_oficial)
         if reg is None:
             publicacoes_sem_produto += 1
@@ -19274,40 +19288,14 @@ def thu_i7_consolidar_periodo(
         ):
             reg["primeira_publicacao"] = data_pub
 
-    propostas_validas = [
-        p for p in propostas_periodo
-        if not proposta_encerrada(p)
-    ]
-    aprovadas = [
-        p for p in propostas_validas
-        if valor_bool(p.get("aprovado"))
-    ]
-    pagas = [
-        p for p in propostas_validas
-        if valor_bool(p.get("pago"))
-    ]
-
-    valor_orcado_total = sum(
-        calcular_valores_proposta(p)[2]
-        for p in propostas_periodo
-    )
-    valor_aprovado_total = sum(
-        calcular_valores_proposta(p)[2]
-        for p in aprovadas
-    )
-    valor_recebido_total = sum(
-        calcular_valores_proposta(p)[2]
-        for p in pagas
-    )
-
     return {
         "inicio": inicio,
         "fim": fim,
         "produtos": produtos,
         "propostas": propostas_periodo,
         "propostas_qtd": len(propostas_periodo),
-        "aprovadas_qtd": len(aprovadas),
-        "pagas_qtd": len(pagas),
+        "aprovadas_qtd": aprovadas_qtd,
+        "pagas_qtd": pagas_qtd,
         "valor_orcado_total": valor_orcado_total,
         "valor_aprovado_total": valor_aprovado_total,
         "valor_recebido_total": valor_recebido_total,
@@ -19458,13 +19446,21 @@ def thu_i7_sinais_temporais(
     referencia=None,
     janela_dias=14,
     limite_produtos=30,
+    produto_resolver=None,
+    publicacoes=None,
 ):
     """Compara propostas antes/depois de uma publicação com janela completa.
 
     Isso mede associação temporal. Não atribui venda à publicação.
     """
     referencia = referencia or hoje_local()
-    publicacoes = _thu_social_publicacoes(marketing)
+    if publicacoes is None:
+        publicacoes = _thu_social_publicacoes(marketing)
+
+    def nome_oficial_runtime(nome):
+        if produto_resolver is not None:
+            return produto_resolver.official_name(nome)
+        return _thu_i7_nome_produto_oficial(nome, catalogo)
 
     datas_propostas_por_produto = {}
     status_por_produto = {}
@@ -19480,10 +19476,7 @@ def thu_i7_sinais_temporais(
         for item in (proposta.get("itens", []) or []):
             if not isinstance(item, dict):
                 continue
-            nome = _thu_i7_nome_produto_oficial(
-                item.get("produto"),
-                catalogo,
-            )
+            nome = nome_oficial_runtime(item.get("produto"))
             if nome:
                 nomes.add(nome)
 
@@ -19494,10 +19487,7 @@ def thu_i7_sinais_temporais(
 
     pubs_por_produto = {}
     for pub in publicacoes:
-        nome = _thu_i7_nome_produto_oficial(
-            pub.get("produto"),
-            catalogo,
-        )
+        nome = nome_oficial_runtime(pub.get("produto"))
         data_pub = _thu_social_data(pub.get("data_publicacao"))
         if not nome or not data_pub:
             continue
@@ -19578,6 +19568,12 @@ def thu_i7_analisar(
     inicio_anterior = fim_anterior - timedelta(days=dias - 1)
 
     mapa_origens = thu_i7_mapa_origem_atendimento(atendimentos)
+    produto_resolver = _marketing_build_product_resolver(
+        catalogo,
+        normalize=normalizar_identidade_produto,
+        resolve_sanitized=_resolver_produto_catalogo_saneado,
+    )
+    publicacoes_todas = _thu_social_publicacoes(marketing)
 
     atual = thu_i7_consolidar_periodo(
         historico,
@@ -19586,6 +19582,8 @@ def thu_i7_analisar(
         inicio_atual,
         fim_atual,
         mapa_origens=mapa_origens,
+        produto_resolver=produto_resolver,
+        publicacoes_todas=publicacoes_todas,
     )
     anterior = thu_i7_consolidar_periodo(
         historico,
@@ -19594,6 +19592,8 @@ def thu_i7_analisar(
         inicio_anterior,
         fim_anterior,
         mapa_origens=mapa_origens,
+        produto_resolver=produto_resolver,
+        publicacoes_todas=publicacoes_todas,
     )
     sinais = thu_i7_classificar_oportunidades(atual)
     temporais = thu_i7_sinais_temporais(
@@ -19602,6 +19602,8 @@ def thu_i7_analisar(
         catalogo,
         referencia=referencia,
         janela_dias=14,
+        produto_resolver=produto_resolver,
+        publicacoes=publicacoes_todas,
     )
 
     return {
