@@ -138,6 +138,8 @@ from thu_executivo import calcular_briefing, renderizar_briefing_thu
 from alpha_core import calcular_alpha_core, listar_atrasados_operacionais
 from consumo_estoque_engine import (
     resumo_consumo as _i8124_engine_resumo,
+    resumos_consumos as _i8124_engine_resumos,
+    totais_materiais as _i8124_engine_totais_materiais,
     pendencia_material as _i8124_engine_pendencia_material,
     planejar_regularizacao as _i8124_engine_planejar,
     planejar_reducao_reservas as _i8132_engine_reduzir_reservas,
@@ -24596,10 +24598,19 @@ if pagina_atual == "central":
     pendentes_central_i8124 = []
     revisar_central_i8124 = []
     mapa_hist_central_i8124 = {str(p.get("numero_proposta") or ""): p for p in historico_central}
+    # HF37 — todos os consumos compartilham um único índice dos movimentos neste ciclo.
+    _resumos_consumos_central_hf37 = {
+        str(consumo.get("id") or ""): resumo
+        for consumo, resumo in _i8124_engine_resumos(
+            consumos_central_i8124, (estoque_central_i8124 or {}).get("movimentacoes") or []
+        )
+    }
     for consumo_central_i8124 in consumos_central_i8124:
         if not isinstance(consumo_central_i8124, dict) or consumo_central_i8124.get("estornado"):
             continue
-        resumo_central_i8124 = _i8124_resumo_consumo(consumo_central_i8124, estoque_central_i8124)
+        resumo_central_i8124 = _resumos_consumos_central_hf37.get(str(consumo_central_i8124.get("id") or ""))
+        if resumo_central_i8124 is None:
+            resumo_central_i8124 = _i8124_resumo_consumo(consumo_central_i8124, estoque_central_i8124)
         numero_consumo_central_i8124 = str(consumo_central_i8124.get("numero_proposta") or "")
         prop_consumo_central_i8124 = mapa_hist_central_i8124.get(numero_consumo_central_i8124)
         if resumo_central_i8124.get("pendente"):
@@ -30392,9 +30403,17 @@ if pagina_atual == "compras_custos":
     movimentos_i8122 = estoque_i8122.get("movimentacoes") or []
     saldos_i8122 = {str(m.get("id")): _i8122_saldo_material(estoque_i8122, m.get("id")) for m in materiais_i8122}
     consumos_i8124 = carregar_consumos_pedidos()
-    reservados_i8132 = {str(m.get("id")): _i8132_reservado_material(m.get("id"), consumos=consumos_i8124, estoque=estoque_i8122) for m in materiais_i8122}
+    # HF37 — reserva e pendência de todos os materiais em uma única passagem indexada.
+    totais_materiais_i8132 = _i8124_engine_totais_materiais(consumos_i8124, movimentos_i8122)
+    reservados_i8132 = {
+        str(m.get("id")): valor_float((totais_materiais_i8132.get(str(m.get("id"))) or {}).get("reservado", 0))
+        for m in materiais_i8122
+    }
     livres_i8132 = {str(m.get("id")): max(0.0, saldos_i8122.get(str(m.get("id")), 0) - reservados_i8132.get(str(m.get("id")), 0)) for m in materiais_i8122}
-    pendencias_mat_i8124 = {str(m.get("id")): _i8124_pendencia_material(m.get("id"), consumos=consumos_i8124, estoque=estoque_i8122) for m in materiais_i8122}
+    pendencias_mat_i8124 = {
+        str(m.get("id")): valor_float((totais_materiais_i8132.get(str(m.get("id"))) or {}).get("pendente", 0))
+        for m in materiais_i8122
+    }
     baixos_i8122 = [m for m in materiais_i8122 if valor_float(m.get("estoque_minimo", 0)) > 0 and livres_i8132.get(str(m.get("id")), 0) <= valor_float(m.get("estoque_minimo", 0)) + 0.000001]
     zerados_i8122 = [m for m in materiais_i8122 if livres_i8132.get(str(m.get("id")), 0) <= 0.000001]
     mov_mes_i8122 = [

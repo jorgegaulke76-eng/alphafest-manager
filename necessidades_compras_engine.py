@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Any, Iterable
 from datetime import datetime
 
-from consumo_estoque_engine import resumo_consumo
+from consumo_estoque_engine import resumos_consumos
 
 
 def _num(valor: Any) -> float:
@@ -37,12 +37,11 @@ def agregar_necessidades_compra(
         if isinstance(p, dict) and str((p or {}).get("numero_proposta") or "").strip()
     }
     agregadas: dict[str, dict] = {}
-    for consumo in (consumos or []):
-        if not isinstance(consumo, dict) or consumo.get("estornado"):
+    for consumo, resumo in resumos_consumos(consumos or [], movimentos or []):
+        if consumo.get("estornado"):
             continue
         numero = str(consumo.get("numero_proposta") or "").strip()
         proposta = mapa_propostas.get(numero, {})
-        resumo = resumo_consumo(consumo, movimentos or [])
         for nec in resumo.get("necessidades") or []:
             pendente = max(0.0, _num((nec or {}).get("pendente")))
             if pendente <= 1e-7:

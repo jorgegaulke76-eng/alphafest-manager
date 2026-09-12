@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Iterable
 
-from consumo_estoque_engine import resumo_consumo
+from consumo_estoque_engine import resumos_consumos
 from planejamento_compras_engine import quantidade_aberta
 from proposal_status import resumo_status as resumo_status_proposta
 from pedido_resumo import resumo_produtos_pedido
@@ -128,6 +128,11 @@ def montar_previsao_producao(
     propostas_validas = [p for p in (propostas or []) if isinstance(p, dict)]
     consumo_por_pedido = _consumo_ativo_por_pedido(consumos or [])
     movimentos = list(movimentos or [])
+    # HF37 — todos os pedidos compartilham um único índice dos movimentos.
+    resumos_por_consumo = {
+        str(consumo.get("id") or ""): resumo
+        for consumo, resumo in resumos_consumos(consumo_por_pedido.values(), movimentos)
+    }
 
     # Primeiro deriva cada pendência, ordenando pedidos por confirmação para a
     # alocação FIFO das solicitações abertas ao fornecedor.
@@ -148,7 +153,7 @@ def montar_previsao_producao(
         entrega = _data(proposta.get("data_entrega"))
         dias = (entrega - hoje).days if entrega else None
         consumo = consumo_por_pedido.get(numero)
-        resumo = resumo_consumo(consumo, movimentos) if consumo else None
+        resumo = resumos_por_consumo.get(str(consumo.get("id") or "")) if consumo else None
         necessidades = list((resumo or {}).get("necessidades") or [])
         pendentes = [dict(n) for n in necessidades if max(0.0, _num((n or {}).get("pendente"))) > 1e-7]
         base.append({

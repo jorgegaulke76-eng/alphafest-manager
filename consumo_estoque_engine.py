@@ -23,35 +23,55 @@ def _num(valor: Any) -> float:
         return 0.0
 
 
+def _contexto_movimentos(movimentos: Iterable[dict]) -> dict[str, Any]:
+    """Indexa movimentos uma vez para os cálculos derivados de materiais.
+
+    HF37: preserva exatamente as regras existentes, mas evita varrer a lista
+    inteira de movimentos para cada pedido/material.
+    """
+    movimentos_l = list(movimentos or [])
+    # Inclui também a chave vazia para preservar literalmente a semântica
+    # legada de movimento_estornado quando algum movimento não possui id.
+    estornados = {
+        str((mov or {}).get("estorno_de") or "")
+        for mov in movimentos_l
+    }
+    baixado: dict[tuple[str, str], float] = {}
+    for mov in movimentos_l:
+        if not isinstance(mov, dict):
+            continue
+        if str(mov.get("origem_tipo") or "") != "Pedido":
+            continue
+        origem_id = str(mov.get("origem_id") or "")
+        material_id = str(mov.get("material_id") or "")
+        delta = _num(mov.get("delta"))
+        if delta >= 0:
+            continue
+        if str(mov.get("id") or "") in estornados:
+            continue
+        chave = (origem_id, material_id)
+        baixado[chave] = baixado.get(chave, 0.0) + abs(delta)
+    return {
+        "movimentos": movimentos_l,
+        "estornados": estornados,
+        "baixado": {k: round(v, 6) for k, v in baixado.items()},
+    }
+
+
+def _total_baixado_contexto(contexto: dict[str, Any], consumo_id: str, material_id: str) -> float:
+    return round(_num((contexto.get("baixado") or {}).get((str(consumo_id or ""), str(material_id or "")), 0.0)), 6)
+
+
 def movimento_estornado(movimentos: Iterable[dict], movimento_id: str) -> bool:
     alvo = str(movimento_id or "")
-    return any(str((m or {}).get("estorno_de") or "") == alvo for m in (movimentos or []))
+    if not alvo:
+        return False
+    return alvo in _contexto_movimentos(movimentos).get("estornados", set())
 
 
 def total_baixado(consumo_id: str, material_id: str, movimentos: Iterable[dict]) -> float:
-    """Soma consumo físico ativo do pedido/material.
-
-    Registros legados da I8.12.4 já eram gravados como movimentos negativos de
-    origem Pedido. Eles são deliberadamente interpretados como consumo real para
-    que a atualização não faça baixa duplicada.
-    """
-    total = 0.0
-    consumo_id = str(consumo_id or "")
-    material_id = str(material_id or "")
-    movimentos = list(movimentos or [])
-    for mov in movimentos:
-        if str((mov or {}).get("origem_tipo") or "") != "Pedido":
-            continue
-        if str((mov or {}).get("origem_id") or "") != consumo_id:
-            continue
-        if str((mov or {}).get("material_id") or "") != material_id:
-            continue
-        if _num((mov or {}).get("delta")) >= 0:
-            continue
-        if movimento_estornado(movimentos, (mov or {}).get("id")):
-            continue
-        total += abs(_num((mov or {}).get("delta")))
-    return round(total, 6)
+    """Soma consumo físico ativo do pedido/material, preservando compatibilidade."""
+    return _total_baixado_contexto(_contexto_movimentos(movimentos), consumo_id, material_id)
 
 
 def _reservas_validas(consumo: dict, material_id: str | None = None) -> list[dict]:
@@ -77,17 +97,11 @@ def _reservas_validas(consumo: dict, material_id: str | None = None) -> list[dic
     return resultado
 
 
-def reservas_ativas_detalhadas(consumo: dict, movimentos: Iterable[dict], material_id: str) -> list[dict]:
-    """Distribui o consumo físico FIFO sobre as reservas e retorna o restante ativo.
-
-    A reserva não precisa ser alterada quando a produção começa. O movimento
-    físico de Pedido é suficiente para converter, de forma derivada, reserva em
-    consumo. Isso reduz risco de divergência entre dois documentos persistidos.
-    """
+def _reservas_ativas_detalhadas_contexto(consumo: dict, contexto: dict[str, Any], material_id: str) -> list[dict]:
     if not isinstance(consumo, dict) or consumo.get("estornado"):
         return []
     reservas = _reservas_validas(consumo, material_id)
-    consumido_restante = max(0.0, total_baixado(consumo.get("id"), material_id, movimentos))
+    consumido_restante = max(0.0, _total_baixado_contexto(contexto, consumo.get("id"), material_id))
     ativas = []
     for reserva in reservas:
         qtd = max(0.0, _num(reserva.get("quantidade_disponivel", reserva.get("quantidade"))))
@@ -99,32 +113,34 @@ def reservas_ativas_detalhadas(consumo: dict, movimentos: Iterable[dict], materi
     return ativas
 
 
+def reservas_ativas_detalhadas(consumo: dict, movimentos: Iterable[dict], material_id: str) -> list[dict]:
+    """Distribui o consumo físico FIFO sobre as reservas e retorna o restante ativo."""
+    return _reservas_ativas_detalhadas_contexto(consumo, _contexto_movimentos(movimentos), material_id)
+
+
 def total_reservado_ativo(consumo: dict, material_id: str, movimentos: Iterable[dict]) -> float:
-    return round(sum(_num(r.get("quantidade_ativa")) for r in reservas_ativas_detalhadas(consumo, movimentos, material_id)), 6)
+    contexto = _contexto_movimentos(movimentos)
+    return round(sum(_num(r.get("quantidade_ativa")) for r in _reservas_ativas_detalhadas_contexto(consumo, contexto, material_id)), 6)
 
 
 def reservado_ativo_material(consumos: Iterable[dict], movimentos: Iterable[dict], material_id: str) -> float:
     total = 0.0
     material_id = str(material_id or "")
+    contexto = _contexto_movimentos(movimentos)
     for consumo in consumos or []:
         if not isinstance(consumo, dict) or consumo.get("estornado"):
             continue
-        total += total_reservado_ativo(consumo, material_id, movimentos)
+        total += sum(_num(r.get("quantidade_ativa")) for r in _reservas_ativas_detalhadas_contexto(consumo, contexto, material_id))
     return round(total, 6)
 
 
-def resumo_consumo(consumo: dict, movimentos: Iterable[dict]) -> dict:
-    """Deriva Necessário / Reservado / Consumido / Falta do pedido.
-
-    ``pendente`` é mantido como alias da FALTA NÃO RESERVADA para preservar as
-    Centrais de Compras, Previsão e Produção já homologadas.
-    """
+def _resumo_consumo_contexto(consumo: dict, contexto: dict[str, Any]) -> dict:
+    """Versão indexada da regra homologada de resumo do consumo."""
     if not isinstance(consumo, dict):
         return {"status": "Sem liberação", "chave": "sem_consumo", "necessidades": [], "pendente": False}
     if consumo.get("estornado"):
         return {"status": "⚪ Estornado", "chave": "estornado", "necessidades": [], "pendente": False}
 
-    movimentos = list(movimentos or [])
     linhas = []
     total_necessidades = 0.0
     total_consumido = 0.0
@@ -135,9 +151,12 @@ def resumo_consumo(consumo: dict, movimentos: Iterable[dict]) -> dict:
     for nec in consumo.get("necessidades") or []:
         material_id = str((nec or {}).get("material_id") or "")
         necessario = max(0.0, _num((nec or {}).get("necessario")))
-        consumido = min(necessario, total_baixado(consumo.get("id"), material_id, movimentos))
+        consumido = min(necessario, _total_baixado_contexto(contexto, consumo.get("id"), material_id))
         falta_apos_consumo = max(0.0, necessario - consumido)
-        reservado = min(falta_apos_consumo, total_reservado_ativo(consumo, material_id, movimentos))
+        reservado = min(
+            falta_apos_consumo,
+            round(sum(_num(r.get("quantidade_ativa")) for r in _reservas_ativas_detalhadas_contexto(consumo, contexto, material_id)), 6),
+        )
         pendente = max(0.0, necessario - consumido - reservado)
 
         total_necessidades += necessario
@@ -148,7 +167,6 @@ def resumo_consumo(consumo: dict, movimentos: Iterable[dict]) -> dict:
         linhas.append({
             **dict(nec or {}),
             "necessario": round(necessario, 6),
-            # compatibilidade: baixado continua significando baixa física real
             "baixado": round(consumido, 6),
             "consumido": round(consumido, 6),
             "reservado": round(reservado, 6),
@@ -182,18 +200,74 @@ def resumo_consumo(consumo: dict, movimentos: Iterable[dict]) -> dict:
     }
 
 
+def resumo_consumo(consumo: dict, movimentos: Iterable[dict]) -> dict:
+    """Deriva Necessário / Reservado / Consumido / Falta do pedido."""
+    return _resumo_consumo_contexto(consumo, _contexto_movimentos(movimentos))
+
+
+def resumos_consumos(consumos: Iterable[dict], movimentos: Iterable[dict]) -> list[tuple[dict, dict]]:
+    """Resume uma coleção inteira reutilizando um único índice de movimentos."""
+    contexto = _contexto_movimentos(movimentos)
+    resultado: list[tuple[dict, dict]] = []
+    for consumo in consumos or []:
+        if not isinstance(consumo, dict):
+            continue
+        resultado.append((consumo, _resumo_consumo_contexto(consumo, contexto)))
+    return resultado
+
+
 def pendencia_material(consumos: Iterable[dict], movimentos: Iterable[dict], material_id: str) -> float:
     """Falta real não coberta por consumo nem reserva."""
     total = 0.0
     material_id = str(material_id or "")
-    for consumo in consumos or []:
-        if not isinstance(consumo, dict) or consumo.get("estornado"):
+    for consumo, resumo in resumos_consumos(consumos, movimentos):
+        if consumo.get("estornado"):
             continue
-        resumo = resumo_consumo(consumo, movimentos)
         for nec in resumo.get("necessidades") or []:
             if str((nec or {}).get("material_id") or "") == material_id:
                 total += _num((nec or {}).get("pendente"))
     return round(total, 6)
+
+
+def totais_materiais(consumos: Iterable[dict], movimentos: Iterable[dict]) -> dict[str, dict[str, float]]:
+    """Agrega reserva ativa e falta real de todos os materiais em uma passagem.
+
+    ``reservado`` preserva a mesma regra de ``reservado_ativo_material`` (reserva
+    física ativa, inclusive eventual excedente). ``pendente`` preserva a falta
+    derivada de ``resumo_consumo``.
+    """
+    consumos_l = [c for c in (consumos or []) if isinstance(c, dict) and not c.get("estornado")]
+    contexto = _contexto_movimentos(movimentos)
+    totais: dict[str, dict[str, float]] = {}
+    for consumo in consumos_l:
+        ids = {
+            str((n or {}).get("material_id") or "")
+            for n in (consumo.get("necessidades") or [])
+            if str((n or {}).get("material_id") or "")
+        }
+        ids.update(
+            str((r or {}).get("material_id") or "")
+            for r in (consumo.get("reservas") or [])
+            if str((r or {}).get("material_id") or "")
+        )
+        for material_id in ids:
+            reservado = sum(
+                _num(r.get("quantidade_ativa"))
+                for r in _reservas_ativas_detalhadas_contexto(consumo, contexto, material_id)
+            )
+            if reservado > EPS:
+                linha = totais.setdefault(material_id, {"reservado": 0.0, "pendente": 0.0})
+                linha["reservado"] = round(_num(linha.get("reservado")) + reservado, 6)
+
+        resumo = _resumo_consumo_contexto(consumo, contexto)
+        for nec in resumo.get("necessidades") or []:
+            material_id = str((nec or {}).get("material_id") or "")
+            if not material_id:
+                continue
+            pendente = max(0.0, _num((nec or {}).get("pendente")))
+            linha = totais.setdefault(material_id, {"reservado": 0.0, "pendente": 0.0})
+            linha["pendente"] = round(_num(linha.get("pendente")) + pendente, 6)
+    return totais
 
 
 def planejar_reducao_reservas(consumos: Iterable[dict], movimentos: Iterable[dict], saldos: dict[str, float]) -> list[dict]:
@@ -203,6 +277,7 @@ def planejar_reducao_reservas(consumos: Iterable[dict], movimentos: Iterable[dic
     o app deve marcar como liberado; não movimenta estoque.
     """
     movimentos = list(movimentos or [])
+    contexto = _contexto_movimentos(movimentos)
     consumos = [c for c in (consumos or []) if isinstance(c, dict) and not c.get("estornado")]
     ativos_por_material: dict[str, list[dict]] = {}
     for consumo in consumos:
@@ -210,7 +285,7 @@ def planejar_reducao_reservas(consumos: Iterable[dict], movimentos: Iterable[dic
         for material_id in ids:
             if not material_id:
                 continue
-            for reserva in reservas_ativas_detalhadas(consumo, movimentos, material_id):
+            for reserva in _reservas_ativas_detalhadas_contexto(consumo, contexto, material_id):
                 ativos_por_material.setdefault(material_id, []).append({
                     "consumo_id": str(consumo.get("id") or ""),
                     "numero_proposta": str(consumo.get("numero_proposta") or ""),
@@ -249,12 +324,14 @@ def planejar_regularizacao(consumos: Iterable[dict], movimentos: Iterable[dict],
     física é proposta nesta etapa.
     """
     movimentos = list(movimentos or [])
+    contexto = _contexto_movimentos(movimentos)
     ativos = [c for c in (consumos or []) if isinstance(c, dict) and not c.get("estornado")]
     ativos.sort(key=lambda c: (str(c.get("confirmado_em") or ""), str(c.get("id") or "")))
 
+    resumos_por_id = {str(c.get("id") or ""): _resumo_consumo_contexto(c, contexto) for c in ativos}
     reservados_globais: dict[str, float] = {}
     for consumo in ativos:
-        resumo = resumo_consumo(consumo, movimentos)
+        resumo = resumos_por_id.get(str(consumo.get("id") or ""), {})
         for nec in resumo.get("necessidades") or []:
             mid = str(nec.get("material_id") or "")
             reservados_globais[mid] = round(reservados_globais.get(mid, 0.0) + _num(nec.get("reservado")), 6)
@@ -266,7 +343,7 @@ def planejar_regularizacao(consumos: Iterable[dict], movimentos: Iterable[dict],
 
     plano = []
     for consumo in ativos:
-        resumo = resumo_consumo(consumo, movimentos)
+        resumo = resumos_por_id.get(str(consumo.get("id") or ""), {})
         for nec in resumo.get("necessidades") or []:
             material_id = str(nec.get("material_id") or "")
             pendente = max(0.0, _num(nec.get("pendente")))

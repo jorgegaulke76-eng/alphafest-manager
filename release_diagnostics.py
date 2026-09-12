@@ -38,6 +38,9 @@ CRITICAL_PYTHON_FILES = (
     "crm_runtime_index_service.py",
     "thu_comercial_service.py",
     "central_operational_runtime.py",
+    "consumo_estoque_engine.py",
+    "necessidades_compras_engine.py",
+    "risco_producao_engine.py",
 )
 
 # Versões do Manager aparecem em muitos formatos. O regex é propositalmente

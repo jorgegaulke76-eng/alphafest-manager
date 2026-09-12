@@ -1,13 +1,20 @@
-# AlphaFest Manager — HF53.3-HF8-HF36
+# AlphaFest Manager — HF53.3-HF8-HF37
 
-## HF36 — Snapshot operacional compartilhado
+## HF37 — Motor de materiais indexado
 
-O HF36 reduz recomputações dentro da Central sem alterar nenhuma regra operacional.
+O HF37 otimiza consumo, reserva, falta de material, necessidades de compra e risco de produção sem alterar nenhuma regra operacional.
 
-- Previsão de produção, Central de Produção, fila de saídas e prioridades passam a ser calculadas uma única vez por rerun da Central.
-- Agenda Executiva e blocos detalhados consomem a mesma fotografia operacional.
-- Consumos, estoque e planejamentos são lidos uma vez e reaproveitados no mesmo ciclo.
-- A fila de Entregas deixa de ser reconstruída novamente apenas para Prioridades.
-- Mesmos status, riscos, prioridades, datas e regras já homologadas.
-- Nenhuma gravação, automação de status ou mudança de fluxo foi criada.
-- HF7, Template Anna e Marketing Engine permanecem preservados.
+### Alterações
+- movimentos de estoque são indexados uma única vez por cálculo em lote;
+- resumos de vários pedidos compartilham o mesmo índice;
+- Central reaproveita os resumos de consumo no mesmo ciclo;
+- tela de Compras/Estoque calcula reserva e pendência de todos os materiais em uma única passagem;
+- Necessidades de Compra usa resumos em lote;
+- Previsão/Risco de Produção usa os mesmos resumos indexados;
+- reserva, baixa, estorno, FIFO e status permanecem inalterados.
+
+### Proteções
+- Template Mestre HF7 preservado;
+- Template Anna preservado;
+- Marketing Engine preservado;
+- nenhuma migração de dados.
