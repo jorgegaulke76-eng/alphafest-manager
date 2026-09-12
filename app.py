@@ -255,6 +255,10 @@ from relacionamentos_service import (
     proxima_acao_crm as _rel_proxima_acao_crm,
     proxima_acao_proposta as _rel_proxima_acao_proposta,
 )
+from finance_runtime_index_service import (
+    build_finance_client_index as _finance_build_client_index,
+    resolve_billing_client as _finance_resolve_billing_client,
+)
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -6309,7 +6313,7 @@ def _i8112_competencias_resumo(historico, registros, referencia=None):
     return sorted(competencias, reverse=True)
 
 
-def calcular_resumo_mensal_executivo_i8112(historico, registros, competencia, referencia=None):
+def calcular_resumo_mensal_executivo_i8112(historico, registros, competencia, referencia=None, grupos_abertos=None):
     """Resumo mensal com a mesma fonte de propostas/status já homologada no HF3/HF4."""
     referencia = referencia or hoje_local()
     inicio, fim = _i8112_intervalo_mes(competencia, referencia)
@@ -6368,7 +6372,8 @@ def calcular_resumo_mensal_executivo_i8112(historico, registros, competencia, re
         if str(r.get("status") or "") in {I8111_STATUS_FECHADO, I8111_STATUS_FATURADO, I8111_STATUS_REABERTO}
     )
 
-    grupos_abertos = montar_grupos_faturamento_mensal(historico, registros)
+    if grupos_abertos is None:
+        grupos_abertos = montar_grupos_faturamento_mensal(historico, registros)
     mensal_em_composicao = sum(
         valor_float(g.get("total_elegivel"))
         for g in grupos_abertos
@@ -6458,6 +6463,13 @@ def renderizar_resumo_mensal_executivo_i8112(historico, snapshot_alpha_core=None
     """Visão mensal do Jorge; Anna permanece sem alteração nesta versão."""
     registros = carregar_faturamentos_mensais()
     referencia = hoje_local()
+    # HF39: o resumo atual e o comparativo anterior compartilham a mesma
+    # composição de faturamento mensal e o mesmo índice de Clientes.
+    clientes_fin = carregar_clientes()
+    cliente_index_fin = _finance_build_client_index(clientes_fin)
+    grupos_abertos_fin = montar_grupos_faturamento_mensal(
+        historico, registros, clientes=clientes_fin, cliente_index=cliente_index_fin
+    )
     competencias = _i8112_competencias_resumo(historico, registros, referencia)
     competencia_atual = _i8112_competencia_mes(referencia)
     indice_atual = competencias.index(competencia_atual) if competencia_atual in competencias else 0
@@ -6472,9 +6484,13 @@ def renderizar_resumo_mensal_executivo_i8112(historico, snapshot_alpha_core=None
         help="Altera somente a competência exibida. Não modifica propostas, fechamentos ou indicadores.",
     )
 
-    atual = calcular_resumo_mensal_executivo_i8112(historico, registros, competencia, referencia)
+    atual = calcular_resumo_mensal_executivo_i8112(
+        historico, registros, competencia, referencia, grupos_abertos=grupos_abertos_fin
+    )
     anterior_comp = _i8112_mes_anterior(competencia)
-    anterior = calcular_resumo_mensal_executivo_i8112(historico, registros, anterior_comp, referencia)
+    anterior = calcular_resumo_mensal_executivo_i8112(
+        historico, registros, anterior_comp, referencia, grupos_abertos=grupos_abertos_fin
+    )
 
     rm1, rm2, rm3, rm4 = st.columns(4)
     rm1.metric(
@@ -6573,7 +6589,15 @@ def _i8111_data_proposta_mensal(prop):
     )
 
 
-def _i8111_cliente_proposta(prop):
+def _i8111_cliente_proposta(prop, clientes=None, cliente_index=None):
+    # HF39: no faturamento em lote, resolve pelo índice pré-carregado e evita
+    # varrer Clientes novamente para cada proposta. O fallback mantém o contrato
+    # histórico para chamadas isoladas.
+    if cliente_index is not None:
+        return _finance_resolve_billing_client(cliente_index, prop) or {}
+    if isinstance(clientes, list):
+        idx = _finance_build_client_index(clientes)
+        return _finance_resolve_billing_client(idx, prop) or {}
     cliente = relacionamento_da_proposta(prop)
     if cliente:
         return cliente
@@ -6610,7 +6634,7 @@ def _i8111_propostas_vinculadas(registros=None):
     return vinculadas
 
 
-def montar_grupos_faturamento_mensal(historico=None, registros=None):
+def montar_grupos_faturamento_mensal(historico=None, registros=None, clientes=None, cliente_index=None):
     """Monta os ciclos em aberto sem duplicar valores já fechados.
 
     Somente propostas mensais aprovadas + entregues entram no valor elegível para
@@ -6619,16 +6643,22 @@ def montar_grupos_faturamento_mensal(historico=None, registros=None):
     """
     historico = historico if isinstance(historico, list) else carregar_historico()
     registros = registros if isinstance(registros, list) else carregar_faturamentos_mensais()
+    clientes = clientes if isinstance(clientes, list) else carregar_clientes()
+    cliente_index = cliente_index or _finance_build_client_index(clientes)
     vinculadas = _i8111_propostas_vinculadas(registros)
     grupos = {}
+    perfil_cache = {}
     for prop in historico:
         if not isinstance(prop, dict) or not proposta_faturamento_mensal(prop) or proposta_encerrada(prop):
             continue
         numero = str(prop.get("numero_proposta") or "").strip()
         if numero and numero in vinculadas:
             continue
-        cliente = _i8111_cliente_proposta(prop)
-        perfil = resumo_perfil_comercial(cliente) if cliente else resumo_perfil_comercial({})
+        cliente = _i8111_cliente_proposta(prop, clientes=clientes, cliente_index=cliente_index)
+        perfil_key = str((cliente or {}).get("id") or "").strip() or f"OBJ-{id(cliente)}" if cliente else "SEM-CLIENTE"
+        if perfil_key not in perfil_cache:
+            perfil_cache[perfil_key] = resumo_perfil_comercial(cliente) if cliente else resumo_perfil_comercial({})
+        perfil = perfil_cache[perfil_key]
         dia_fecha = int(perfil.get("dia_fechamento") or 1)
         dia_vence = int(perfil.get("dia_vencimento") or 10)
         competencia = str(prop.get("competencia_faturamento") or "").strip() or _i8111_competencia_data(_i8111_data_proposta_mensal(prop), dia_fecha)

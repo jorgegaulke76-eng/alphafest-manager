@@ -1,20 +1,18 @@
-# AlphaFest Manager — HF53.3-HF8-HF38
+# AlphaFest Manager — HF53.3-HF8-HF39
 
-## HF38 — Central: status e índices compartilhados
+## HF39 — Financeiro / faturamento mensal otimizado
 
-O HF38 otimiza Entregas, Prioridades e blocos operacionais da Central sem alterar a regra oficial Aprovado → Pago → Pronto → Entregue.
+O HF39 reduz cruzamentos repetidos entre Clientes, propostas e faturamento mensal sem alterar nenhuma regra financeira.
 
 ### Alterações
-- a leitura oficial de status é calculada uma única vez por proposta no snapshot da Central;
-- Entregas e Prioridades recebem o mesmo mapa oficial de status e deixam de recalculá-lo;
-- listas de propostas operacionais, aprovadas abertas, aguardando aprovação e pagamentos pendentes são reaproveitadas do snapshot;
-- índice por número da proposta é reutilizado nos alertas e nas rotinas de materiais;
-- índice de consumos ativos é reutilizado em Pedidos em andamento;
-- estoque e planejamentos já lidos no início da Central não são consultados novamente nesses blocos;
-- nenhuma gravação automática, migração ou mudança de status.
+- cria índice leve de Clientes para o faturamento mensal, preservando exatamente a precedência histórica de relacionamento_id, WhatsApp, nome e documento;
+- `montar_grupos_faturamento_mensal` carrega Clientes uma vez e deixa de varrer a base inteira para cada proposta mensal;
+- perfis comerciais já resolvidos são reaproveitados dentro da mesma montagem de grupos;
+- o Resumo mensal calcula a composição de faturamento em aberto uma única vez e a reutiliza no mês atual e no comparativo com o mês anterior;
+- nenhuma baixa, cobrança, fechamento, recebimento, valor ou status é alterado automaticamente.
 
 ### Proteções
-- Fonte Única de Status preservada (`proposal_status.resumo_status`);
+- resolução de clientes comparada por equivalência contra a rotina histórica em milhares de cenários;
 - Template Mestre HF7 preservado;
 - Template Anna preservado;
 - Marketing Engine preservado.

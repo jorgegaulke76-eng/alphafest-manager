@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF38",
-  "generated_at_utc": "2026-09-12T16:42:45.601713+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF39",
+  "generated_at_utc": "2026-09-12T16:53:11.208235+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -11,19 +11,19 @@
     "warnings": [],
     "critical_python_compile": {
       "status": "OK",
-      "files_checked": 26,
-      "files_ok": 26
+      "files_checked": 27,
+      "files_ok": 27
     },
     "tests": {
-      "total_files": 1,
-      "portable_files": 1,
+      "total_files": 0,
+      "portable_files": 0,
       "current_release_files": 0,
       "historical_version_files": 0,
       "historical_examples": []
     }
   },
-  "file_count": 373,
-  "uncompressed_bytes": 36496128,
+  "file_count": 374,
+  "uncompressed_bytes": 36501879,
   "files": [
     {
       "path": ".gitignore",
@@ -102,18 +102,18 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 1087,
-      "sha256": "6eed06a283aa880670ecc2f517be47198be4bd52995403062c51ad5f9c8fee03"
+      "size": 1067,
+      "sha256": "499492511a9740285d15d646082d2258fe6ad707983c92ee9147973c1c6af727"
     },
     {
       "path": "VERSAO",
       "size": 31,
-      "sha256": "981bdd0cf01b76b8f89e38917e9d6ec4e14ba5f331879ef44fc9ffebd6d369c9"
+      "sha256": "3132f245138f7520edf06ea59d148740e786626db78ad2992d15b8d62acdb189"
     },
     {
       "path": "VERSAO.txt",
       "size": 31,
-      "sha256": "981bdd0cf01b76b8f89e38917e9d6ec4e14ba5f331879ef44fc9ffebd6d369c9"
+      "sha256": "3132f245138f7520edf06ea59d148740e786626db78ad2992d15b8d62acdb189"
     },
     {
       "path": "__init__.py",
@@ -177,8 +177,8 @@
     },
     {
       "path": "app.py",
-      "size": 1928171,
-      "sha256": "53d513f9d60af384f7bc2675ab29a746b51b13dbb01b8034c10547880daa4dfd"
+      "size": 1929880,
+      "sha256": "e1b71160ec341500791d01bb4638c2bda137432a45ed3d41ee6ddbe9ea79eee2"
     },
     {
       "path": "assets/catalogos_legados/acervo_catalogos_legados.json",
@@ -1601,6 +1601,11 @@
       "sha256": "49d4099153ca1fa038845ff0f49f9a222280f4bf39796fa512e1c8fdbd4ade97"
     },
     {
+      "path": "finance_runtime_index_service.py",
+      "size": 4022,
+      "sha256": "1c35e1fecac3b0f784370f497eac994bb00def2f0bc924bd2f55518bd516c3ac"
+    },
+    {
       "path": "fluxo_operacional_service.py",
       "size": 11357,
       "sha256": "5e4e574a61e18cbe2b8cf0819cd10419332d438cc5af8faf8b2888bf78b71404"
@@ -1717,8 +1722,8 @@
     },
     {
       "path": "release_diagnostics.py",
-      "size": 6447,
-      "sha256": "2808a301954edc3abf4e4b6cbcc02033595f88e58dc69f1a0acd0c8984f8d2e4"
+      "size": 6487,
+      "sha256": "d707e85513473d6e47fe0ae57d9fc6a9d938e63195bf619cec34309710ed1283"
     },
     {
       "path": "requirements.txt",
