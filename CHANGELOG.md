@@ -1,3 +1,9 @@
+## HF53.3-HF8-HF55 — Galeria: exclusão individual de foto
+- adiciona exclusão segura de uma foto específica no trabalho;
+- prévia e confirmação antes de apagar;
+- banco é confirmado antes de apagar o objeto privado;
+- proteção CAS adicionada ao documento da Galeria.
+
 
 ## HF53.3-HF8-HF54 — Histórico paginado
 - Busca continua global sobre todo o Histórico.
@@ -1369,6 +1375,8 @@ hangelog
 - Nenhuma regra de status, produção ou indicador foi alterada.
 
 
-## 20.4.9-I8.13.5-HF53.3-HF8-HF55
-- Galeria de Trabalhos: exclusão individual e confirmada de foto, preservando o restante do trabalho.
-- Persistência segura: banco confirmado antes da remoção física do arquivo privado.
+## 20.4.9-I8.13.5-HF53.3-HF8-HF56 — Galeria pública com lightbox
+- Foto da Galeria passa a abrir ampliada ao clicar/tocar, sem sair da página.
+- Adiciona fundo escurecido, X, fechamento pelo fundo e navegação entre fotos do mesmo trabalho.
+- Mantém filtros, vínculo Produto → Galeria, WhatsApp, métricas e publicação HF44 sem mudanças.
+- Preserva HF55, HF54, Template Mestre HF7 e Template Anna.

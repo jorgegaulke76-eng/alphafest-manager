@@ -547,7 +547,10 @@ def save_document(document_key, value, local_path):
     cache = _document_cache()
     cached = cache.get(key)
     protected_keys = {
-        "catalogo_db", "clientes_db", "atendimentos_db", "marketing_db", "projetos_db"
+        "catalogo_db", "clientes_db", "atendimentos_db", "marketing_db", "projetos_db",
+        # HF55: a Galeria também recebe proteção CAS porque adicionar/remover fotos
+        # altera uma lista compartilhada e não pode sobrescrever outra sessão.
+        "galeria_trabalhos_db",
     }
 
     confirmado = False
@@ -11245,120 +11248,26 @@ def _galeria_status_registro(item):
     return "Uso interno"
 
 
-def _galeria_remover_foto_registro(galeria, registro_id, indice_foto, atualizado_em=""):
-    """HF55 — remove uma foto específica sem alterar as demais do trabalho.
+def _galeria_remover_foto_referencia(galeria, gid, caminho_foto):
+    """HF55: remove somente a referência da foto indicada de um trabalho.
 
-    A função é pura e não apaga o objeto privado. O fluxo de UI primeiro confirma
-    a nova lista no banco e só então remove o arquivo do armazenamento, evitando
-    deixar referência quebrada caso a persistência falhe.
+    Não apaga arquivo físico. A exclusão do storage só acontece depois de o banco
+    confirmar esta nova lista, evitando referência quebrada em caso de falha.
     """
+    alvo_gid = str(gid or "")
+    alvo_path = str(caminho_foto or "")
     nova_lista = []
-    removido = ""
-    restantes = 0
     encontrou = False
-    try:
-        alvo_idx = int(indice_foto)
-    except Exception:
-        return list(galeria or []), "", 0, False
-
-    for item in list(galeria or []):
-        reg = dict(item or {})
-        if str(reg.get("id") or "") == str(registro_id or "") and not encontrou:
-            fotos = list(reg.get("fotos") or [])
-            if 0 <= alvo_idx < len(fotos):
-                removido = str(fotos.pop(alvo_idx) or "").strip()
-                reg["fotos"] = fotos
-                restantes = len(fotos)
-                encontrou = bool(removido)
-                if atualizado_em:
-                    reg["atualizado_em"] = str(atualizado_em)
-                # Trabalho sem foto não pode continuar pré-selecionado/destaque.
-                if not fotos:
-                    reg["selecionado_site"] = False
-                    reg["destaque"] = False
-        nova_lista.append(reg)
-    return nova_lista, removido, restantes, encontrou
-
-
-@st.dialog("🗑️ Gerenciar fotos do trabalho", width="large")
-def _galeria_dialog_excluir_foto(registro_id):
-    """HF55 — exclusão individual, com confirmação visual e persistência segura."""
-    galeria_atual = carregar_galeria_trabalhos()
-    item = next((dict(g or {}) for g in galeria_atual if str((g or {}).get("id") or "") == str(registro_id or "")), None)
-    if not item:
-        st.error("Este trabalho não foi encontrado. Atualize a tela e tente novamente.")
-        return
-
-    fotos = list(item.get("fotos") or [])
-    titulo = str(item.get("produto") or "Trabalho avulso").strip() or "Trabalho avulso"
-    st.markdown(f"**{html.escape(titulo)}**")
-    st.caption(
-        "Escolha somente a foto enviada por engano. As demais imagens e os dados do trabalho serão preservados. "
-        "A exclusão é definitiva no acervo privado."
-    )
-    if not fotos:
-        st.info("Este trabalho não possui fotos no acervo.")
-        return
-
-    colunas = st.columns(3)
-    for idx, caminho in enumerate(fotos):
-        alvo = colunas[idx % 3]
-        with alvo:
-            bruto = _galeria_trabalho_bytes_cache(str(caminho))
-            if bruto:
-                try:
-                    st.image(bruto, use_container_width=True)
-                except Exception:
-                    st.info("Prévia indisponível")
-            else:
-                st.info("Prévia indisponível")
-            st.caption(f"Foto {idx + 1} de {len(fotos)}")
-            confirmar = st.checkbox(
-                "Confirmar exclusão",
-                value=False,
-                key=f"hf55_confirma_foto_{registro_id}_{idx}",
-            )
-            if st.button(
-                "🗑️ Excluir esta foto",
-                key=f"hf55_excluir_foto_{registro_id}_{idx}",
-                use_container_width=True,
-                disabled=not confirmar,
-            ):
-                agora_txt = agora_local().strftime("%d/%m/%Y %H:%M")
-                nova_galeria, removido, restantes, ok = _galeria_remover_foto_registro(
-                    galeria_atual, registro_id, idx, atualizado_em=agora_txt
-                )
-                if not ok or not removido:
-                    st.error("Não foi possível identificar a foto para exclusão.")
-                    return
-                # Primeiro confirma o banco; só depois remove o arquivo privado.
-                if not salvar_galeria_trabalhos(nova_galeria):
-                    st.error("O banco não confirmou a alteração. A foto NÃO foi apagada.")
-                    return
-
-                apagou_arquivo = delete_private_gallery_image(removido)
-                try:
-                    _galeria_trabalho_bytes_cache.clear()
-                except Exception:
-                    pass
-                try:
-                    registrar_auditoria(
-                        "Excluir foto da Galeria",
-                        "Galeria",
-                        str(registro_id or ""),
-                        {"foto": removido, "fotos_restantes": restantes},
-                    )
-                except Exception:
-                    pass
-                if apagou_arquivo:
-                    st.success(f"Foto excluída. Este trabalho ficou com {restantes} foto(s).")
-                else:
-                    st.warning(
-                        "A foto foi removida do trabalho e não aparecerá mais na Galeria, "
-                        "mas o armazenamento privado não confirmou a exclusão física do arquivo. "
-                        "O registro principal ficou consistente."
-                    )
-                st.rerun()
+    for reg in list(galeria or []):
+        copia = dict(reg or {})
+        if str(copia.get("id") or "") == alvo_gid:
+            fotos_reg = list(copia.get("fotos") or [])
+            fotos_novas = [p for p in fotos_reg if str(p) != alvo_path]
+            if len(fotos_novas) != len(fotos_reg):
+                encontrou = True
+                copia["fotos"] = fotos_novas
+        nova_lista.append(copia)
+    return nova_lista, encontrou
 
 
 def renderizar_galeria_trabalhos(catalogo):
@@ -11374,6 +11283,18 @@ def renderizar_galeria_trabalhos(catalogo):
     )
 
     galeria = carregar_galeria_trabalhos()
+    # HF55 — feedback persistente após excluir uma foto e rerodar a tela.
+    _flash_galeria = st.session_state.pop("_hf55_galeria_flash", None)
+    if isinstance(_flash_galeria, dict):
+        _tipo = str(_flash_galeria.get("tipo") or "success")
+        _msg = str(_flash_galeria.get("mensagem") or "").strip()
+        if _msg:
+            if _tipo == "warning":
+                st.warning(_msg)
+            elif _tipo == "error":
+                st.error(_msg)
+            else:
+                st.success(_msg)
     ativos = [g for g in galeria if not bool((g or {}).get("arquivado"))]
     autorizados = [g for g in ativos if bool((g or {}).get("autorizado_publicacao"))]
     selecionados = [g for g in ativos if bool((g or {}).get("selecionado_site"))]
@@ -11585,7 +11506,8 @@ def renderizar_galeria_trabalhos(catalogo):
                 c_info.caption("Obs.: " + str(item.get("observacao")))
 
             if not bool(item.get("arquivado")):
-                with st.expander("➕ Adicionar mais fotos a este trabalho", expanded=False):
+                with st.expander("🖼️ Gerenciar fotos deste trabalho", expanded=False):
+                    st.markdown("**➕ Adicionar mais fotos**")
                     novas_fotos = st.file_uploader(
                         "Novo lote de fotos",
                         type=["png", "jpg", "jpeg", "webp"],
@@ -11629,6 +11551,75 @@ def renderizar_galeria_trabalhos(catalogo):
                                         delete_private_gallery_image(caminho)
                                     st.error("O banco não confirmou a atualização. O lote foi descartado.")
 
+                    # HF55 — exclusão individual e segura de foto. O registro no banco
+                    # é atualizado primeiro; só depois removemos o objeto privado.
+                    if foto_paths:
+                        st.divider()
+                        st.markdown("**🗑️ Excluir foto existente**")
+                        st.caption("Escolha a foto errada. Somente ela será removida; o restante do trabalho permanece intacto.")
+                        caminho_excluir = st.selectbox(
+                            "Foto para excluir",
+                            foto_paths,
+                            format_func=lambda p: f"Foto {foto_paths.index(p) + 1} — {Path(str(p)).name}",
+                            key=f"hf55_del_foto_select_{gid}",
+                        )
+                        if caminho_excluir:
+                            _del_preview = _galeria_trabalho_bytes_cache(str(caminho_excluir))
+                            if _del_preview:
+                                st.image(_del_preview, width=220, caption="Confira a foto antes de excluir")
+                            else:
+                                st.warning("A prévia desta foto não está disponível, mas a referência ainda existe no trabalho.")
+                            _foto_key = hashlib.sha256(str(caminho_excluir).encode("utf-8")).hexdigest()[:12]
+                            confirmar_exclusao = st.checkbox(
+                                "Confirmo que esta foto está errada e pode ser excluída",
+                                value=False,
+                                key=f"hf55_del_confirm_{gid}_{_foto_key}",
+                            )
+                            if len(foto_paths) == 1:
+                                st.warning("Esta é a única foto do trabalho. Se excluir, o registro continuará no acervo sem imagem.")
+                            if st.button(
+                                "🗑️ Excluir somente esta foto",
+                                key=f"hf55_del_btn_{gid}_{_foto_key}",
+                                use_container_width=True,
+                                disabled=not confirmar_exclusao,
+                            ):
+                                galeria_atualizada, encontrou_registro = _galeria_remover_foto_referencia(
+                                    galeria, gid, caminho_excluir
+                                )
+                                if encontrou_registro:
+                                    for _reg in galeria_atualizada:
+                                        if str((_reg or {}).get("id") or "") == gid:
+                                            _reg["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                                            break
+
+                                if not encontrou_registro:
+                                    st.error("Não encontrei essa foto no registro atual. Atualize a tela e tente novamente.")
+                                elif salvar_galeria_trabalhos(galeria_atualizada):
+                                    # O banco já não aponta mais para a foto. A remoção física
+                                    # vem depois para nunca deixar referência quebrada.
+                                    apagou_arquivo = delete_private_gallery_image(str(caminho_excluir))
+                                    try:
+                                        _galeria_trabalho_bytes_cache.clear()
+                                    except Exception:
+                                        pass
+                                    if apagou_arquivo:
+                                        st.session_state["_hf55_galeria_flash"] = {
+                                            "tipo": "success",
+                                            "mensagem": "Foto excluída com segurança. As demais fotos do trabalho foram preservadas.",
+                                        }
+                                    else:
+                                        st.session_state["_hf55_galeria_flash"] = {
+                                            "tipo": "warning",
+                                            "mensagem": (
+                                                "A foto foi retirada do trabalho e não aparecerá mais na Galeria, "
+                                                "mas o armazenamento privado não confirmou a exclusão física do arquivo. "
+                                                "Isso não afeta as outras fotos."
+                                            ),
+                                        }
+                                    st.rerun()
+                                else:
+                                    st.error("O banco não confirmou a exclusão. Nenhuma foto foi removida.")
+
                 if bool(item.get("autorizado_publicacao")) and not bool(item.get("selecionado_site")):
                     if c_acoes.button("⭐ Pré-selecionar", key=f"hf461_sel_{gid}", use_container_width=True):
                         for reg in galeria:
@@ -11646,8 +11637,6 @@ def renderizar_galeria_trabalhos(catalogo):
                             st.rerun()
                 else:
                     c_acoes.caption("🔒 Uso interno — sem autorização para exposição")
-                if foto_paths and c_acoes.button("🗑️ Excluir foto", key=f"hf55_excluir_foto_dialog_{gid}", use_container_width=True):
-                    _galeria_dialog_excluir_foto(gid)
                 if c_acoes.button("📦 Arquivar", key=f"hf461_arq_{gid}", use_container_width=True):
                     for reg in galeria:
                         if str((reg or {}).get("id")) == gid:
