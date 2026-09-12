@@ -36,6 +36,7 @@ REQUIRED_RUNTIME_FILES = {
     "crm_runtime_index_service.py",
     "project_runtime_index_service.py",
     "document_runtime_service.py",
+    "compras_runtime_index_service.py",
     "thu_comercial_service.py",
     "central_operational_runtime.py",
     "central_entregas_engine.py",

@@ -267,6 +267,12 @@ from proposal_runtime_index_service import (
     proposal_with_current_client_data as _proposal_with_current_client_data,
 )
 from document_runtime_service import cache_get_or_build as _document_cache_get_or_build
+from compras_runtime_index_service import (
+    build_purchase_runtime_index as _compras_build_runtime_index,
+    previous_purchase as _compras_previous_purchase,
+    latest_purchase_for_group as _compras_latest_purchase_for_group,
+    last_cost_for_material as _compras_last_cost_for_material,
+)
 from proposal_status import (
     proposta_faturamento_mensal as _status_proposta_mensal,
     proposta_pronta as _status_proposta_pronta,
@@ -4807,7 +4813,11 @@ def _i8121_fornecedores():
     return sorted(fornecedores, key=lambda c: normalizar_texto_cliente(c.get("nome", "")).casefold())
 
 
-def _i8121_compra_anterior(compras, fornecedor_id, item, unidade="", antes_de=None, ignorar_id=""):
+def _i8121_compra_anterior(compras, fornecedor_id, item, unidade="", antes_de=None, ignorar_id="", indice_compras=None):
+    if indice_compras is not None and not antes_de and not ignorar_id:
+        return _compras_latest_purchase_for_group(
+            indice_compras, fornecedor_id, item, unidade, item_key=_i8121_chave_item
+        )
     chave_item = _i8121_chave_item(item)
     candidatos = []
     for compra in compras or []:
@@ -4832,8 +4842,8 @@ def _i8121_compra_anterior(compras, fornecedor_id, item, unidade="", antes_de=No
     return candidatos[0][2]
 
 
-def _i8121_variacao_unitaria(compras, compra):
-    anterior = _i8121_compra_anterior(
+def _i8121_variacao_unitaria(compras, compra, indice_compras=None):
+    anterior = _compras_previous_purchase(indice_compras, compra) if indice_compras is not None else _i8121_compra_anterior(
         compras,
         compra.get("fornecedor_id"),
         compra.get("item"),
@@ -5172,15 +5182,17 @@ def _i8122_estornar_entrada_compra(compra_id, motivo="Compra removida", usuario=
     return bool(salvar_estoque(dados)), "Entrada de estoque estornada."
 
 
-def _i8122_ultimo_custo(material, compras, estoque=None):
+def _i8122_ultimo_custo(material, compras, estoque=None, indice_compras=None):
     """Último custo do material pela referência explícita da compra.
 
     Também herda custos de materiais antigos consolidados para o material atual,
     preservando o item original da compra e sem reescrever histórico.
     """
+    material_id = str((material or {}).get("id") or "")
+    if indice_compras is not None:
+        return _compras_last_cost_for_material(indice_compras, material_id)
     candidatos = []
     estoque = carregar_estoque() if estoque is None else estoque
-    material_id = str((material or {}).get("id") or "")
     unidade = str((material or {}).get("unidade") or "").strip().casefold()
     ids_validos = {material_id} if material_id else set()
     nomes_validos = {_i8121_chave_item((material or {}).get("nome"))}
@@ -5653,13 +5665,17 @@ def _i8125_prioridade_entrega(data_entrega):
     return f"🟢 Em {dias}d", dias
 
 
-def _i8125_central_necessidades(consumos=None, estoque=None, compras=None, historico=None, fornecedores=None):
+def _i8125_central_necessidades(consumos=None, estoque=None, compras=None, historico=None, fornecedores=None, indice_compras=None):
     """Central derivada das fontes oficiais; não persiste uma segunda fila de compras."""
     consumos = carregar_consumos_pedidos() if consumos is None else consumos
     estoque = carregar_estoque() if estoque is None else estoque
     compras = carregar_compras() if compras is None else compras
     historico = carregar_historico() if historico is None else historico
     fornecedores = _i8121_fornecedores() if fornecedores is None else fornecedores
+    if indice_compras is None:
+        indice_compras = _compras_build_runtime_index(
+            compras, estoque, item_key=_i8121_chave_item, date_parser=_i8121_data_compra
+        )
     linhas = _i8125_engine_agregar(consumos, (estoque or {}).get("movimentacoes") or [], historico)
     mapa_forn = {str(f.get("id") or ""): f for f in (fornecedores or []) if isinstance(f, dict)}
     resultado = []
@@ -5667,7 +5683,7 @@ def _i8125_central_necessidades(consumos=None, estoque=None, compras=None, histo
         material = _i8122_material_destino_ativo(estoque, linha.get("material_id")) or _i8122_material_por_id(estoque, linha.get("material_id")) or {
             "id": linha.get("material_id"), "nome": linha.get("material_nome"), "unidade": linha.get("unidade")
         }
-        ultima = _i8122_ultimo_custo(material, compras, estoque=estoque)
+        ultima = _i8122_ultimo_custo(material, compras, estoque=estoque, indice_compras=indice_compras)
         custo = valor_float((ultima or {}).get("custo_unitario", 0)) if ultima else 0.0
         fornecedor_id = str((ultima or {}).get("fornecedor_id") or "")
         fornecedor = mapa_forn.get(fornecedor_id, {})
@@ -5697,9 +5713,12 @@ def _i8125_central_necessidades(consumos=None, estoque=None, compras=None, histo
     return resultado
 
 
-def _i8126_central_necessidades(consumos=None, estoque=None, compras=None, historico=None, fornecedores=None, planejamentos=None):
+def _i8126_central_necessidades(consumos=None, estoque=None, compras=None, historico=None, fornecedores=None, planejamentos=None, indice_compras=None):
     """Acrescenta o que já está solicitado ao fornecedor sem alterar a falta real."""
-    base = _i8125_central_necessidades(consumos=consumos, estoque=estoque, compras=compras, historico=historico, fornecedores=fornecedores)
+    base = _i8125_central_necessidades(
+        consumos=consumos, estoque=estoque, compras=compras, historico=historico,
+        fornecedores=fornecedores, indice_compras=indice_compras,
+    )
     planejamentos = carregar_planejamentos_compras() if planejamentos is None else planejamentos
     return _i8126_engine_aplicar(base, planejamentos)
 
@@ -30445,6 +30464,12 @@ if pagina_atual == "compras_custos":
     compras_i8121 = carregar_compras()
     fornecedores_i8121 = _i8121_fornecedores()
     hoje_i8121 = hoje_local()
+    estoque_i8122 = carregar_estoque()
+    # HF44 — Compras/Estoque: um único índice atende variações históricas e
+    # último custo dos materiais durante todo o rerun desta tela.
+    indice_compras_i8144 = _compras_build_runtime_index(
+        compras_i8121, estoque_i8122, item_key=_i8121_chave_item, date_parser=_i8121_data_compra
+    )
     compras_mes_i8121 = [
         c for c in compras_i8121
         if _i8121_data_compra(c.get("data_compra")).year == hoje_i8121.year
@@ -30453,7 +30478,7 @@ if pagina_atual == "compras_custos":
     fornecedores_mes_i8121 = {str(c.get("fornecedor_id") or c.get("fornecedor_nome") or "") for c in compras_mes_i8121}
     aumentos_mes_i8121 = 0
     for compra_i8121 in compras_mes_i8121:
-        delta_i8121, _ = _i8121_variacao_unitaria(compras_i8121, compra_i8121)
+        delta_i8121, _ = _i8121_variacao_unitaria(compras_i8121, compra_i8121, indice_compras_i8144)
         if delta_i8121 is not None and delta_i8121 > 0.005:
             aumentos_mes_i8121 += 1
 
@@ -30469,7 +30494,6 @@ if pagina_atual == "compras_custos":
     )
 
     # I8.12.2 — estoque manual e entradas originadas pelas compras.
-    estoque_i8122 = carregar_estoque()
     materiais_i8122 = [m for m in (estoque_i8122.get("materiais") or []) if m.get("ativo", True)]
     movimentos_i8122 = estoque_i8122.get("movimentacoes") or []
     saldos_i8122 = {str(m.get("id")): _i8122_saldo_material(estoque_i8122, m.get("id")) for m in materiais_i8122}
@@ -30511,7 +30535,9 @@ if pagina_atual == "compras_custos":
             reservado_i8132 = reservados_i8132.get(str(mat_i8122.get("id")), 0)
             livre_i8132 = livres_i8132.get(str(mat_i8122.get("id")), 0)
             minimo_i8122 = valor_float(mat_i8122.get("estoque_minimo", 0))
-            ultima_compra_i8122 = _i8122_ultimo_custo(mat_i8122, compras_i8121, estoque=estoque_i8122)
+            ultima_compra_i8122 = _i8122_ultimo_custo(
+                mat_i8122, compras_i8121, estoque=estoque_i8122, indice_compras=indice_compras_i8144
+            )
             pendente_i8124 = pendencias_mat_i8124.get(str(mat_i8122.get("id")), 0)
             linhas_estoque_i8122.append({
                 "Material": mat_i8122.get("nome", ""),
@@ -30739,6 +30765,7 @@ if pagina_atual == "compras_custos":
     necessidades_i8126 = _i8126_central_necessidades(
         consumos=consumos_i8124, estoque=estoque_i8122, compras=compras_i8121,
         historico=carregar_historico(), fornecedores=fornecedores_i8121, planejamentos=planejamentos_i8126,
+        indice_compras=indice_compras_i8144,
     )
     planos_abertos_i8126 = [p for p in planejamentos_i8126 if isinstance(p, dict) and _i8126_engine_aberta(p) > 0.0000001]
 
@@ -31934,7 +31961,9 @@ if pagina_atual == "compras_custos":
             pr2.metric("Custo unitário", _i8121_moeda(custo_unit_i8121))
             pr3.metric("Total desta compra", _i8121_moeda(total_i8121))
 
-            anterior_preview_i8121 = _i8121_compra_anterior(compras_i8121, fornecedor_id_i8121, item_i8121, unidade_i8121) if item_i8121.strip() else None
+            anterior_preview_i8121 = _i8121_compra_anterior(
+                compras_i8121, fornecedor_id_i8121, item_i8121, unidade_i8121, indice_compras=indice_compras_i8144
+            ) if item_i8121.strip() else None
             if anterior_preview_i8121:
                 anterior_custo_i8121 = valor_float(anterior_preview_i8121.get("custo_unitario", 0))
                 delta_preview_i8121 = float(custo_unit_i8121) - anterior_custo_i8121
@@ -32061,7 +32090,7 @@ if pagina_atual == "compras_custos":
 
         linhas_i8121 = []
         for compra_i8121 in filtradas_i8121:
-            delta_i8121, _ = _i8121_variacao_unitaria(compras_i8121, compra_i8121)
+            delta_i8121, _ = _i8121_variacao_unitaria(compras_i8121, compra_i8121, indice_compras_i8144)
             linhas_i8121.append({
                 "Data": _i8121_data_compra(compra_i8121.get("data_compra")).strftime("%d/%m/%Y"),
                 "Fornecedor": compra_i8121.get("fornecedor_nome", ""),
@@ -32078,7 +32107,7 @@ if pagina_atual == "compras_custos":
         st.markdown("#### 🔎 Detalhes e alertas")
         for compra_i8121 in filtradas_i8121[:30]:
             data_rot_i8121 = _i8121_data_compra(compra_i8121.get("data_compra")).strftime("%d/%m/%Y")
-            delta_i8121, anterior_i8121 = _i8121_variacao_unitaria(compras_i8121, compra_i8121)
+            delta_i8121, anterior_i8121 = _i8121_variacao_unitaria(compras_i8121, compra_i8121, indice_compras_i8144)
             with st.expander(f"{data_rot_i8121} · {compra_i8121.get('fornecedor_nome', 'Fornecedor')} · {compra_i8121.get('item', 'Item')} · {_i8121_moeda(compra_i8121.get('valor_total', 0))}"):
                 d1, d2, d3 = st.columns(3)
                 d1.metric("Quantidade", f"{_i8121_quantidade(compra_i8121.get('quantidade', 0))} {compra_i8121.get('unidade', '')}")
