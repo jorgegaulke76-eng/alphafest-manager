@@ -25924,6 +25924,9 @@ if pagina_atual == "site":
     catalogo_site_hf35 = carregar_catalogo()
     resumo_site_hf35 = _site_resumir_catalogo(catalogo_site_hf35)
     produtos_site_hf35 = _site_ordenar_produtos(catalogo_site_hf35)
+    # HF45 — cache por assinatura do conteúdo do site. O cache vive somente na
+    # sessão e é invalidado automaticamente quando Catálogo/empresa/Galeria mudam.
+    _site_runtime_cache_hf45 = st.session_state.setdefault("_site_runtime_cache_hf45", {})
 
     topo_site_1, topo_site_2 = st.columns([1.7, 1])
     with topo_site_1:
@@ -26106,12 +26109,19 @@ if pagina_atual == "site":
             horizontal=True,
             key="site_hf36_modo_preview",
         )
-        html_vitrine_hf36 = _site_gerar_html_completo(
-            catalogo_site_hf35,
-            empresa_vitrine_hf36,
-            logo_src=logo_src_hf36,
-            imagem_resolver=_catalogo_html_src_imagem,
-            modo_preview=True,
+        html_vitrine_hf36, _site_preview_hit_hf45 = _document_cache_get_or_build(
+            _site_runtime_cache_hf45,
+            "site-preview-base-hf45",
+            {"catalogo": catalogo_site_hf35, "empresa": empresa_vitrine_hf36, "logo": logo_src_hf36},
+            lambda: _site_gerar_html_completo(
+                catalogo_site_hf35,
+                empresa_vitrine_hf36,
+                logo_src=logo_src_hf36,
+                imagem_resolver=_catalogo_html_src_imagem,
+                modo_preview=True,
+            ),
+            ttl_seconds=180,
+            max_entries=8,
         )
         if resumo_vitrine_hf36.get("total", 0) <= 0:
             st.info("A vitrine aparecerá quando houver produto ativo, marcado para o site e pronto para apresentação.")
@@ -26162,13 +26172,20 @@ if pagina_atual == "site":
             horizontal=True,
             key="site_hf454_modo_preview",
         )
-        html_taxonomia_hf454 = _site_gerar_html_completo(
-            catalogo_site_hf35,
-            empresa_vitrine_hf36,
-            logo_src=logo_src_hf36,
-            imagem_resolver=_catalogo_html_src_imagem,
-            modo_preview=True,
-            usar_taxonomia_catalogo=True,
+        html_taxonomia_hf454, _site_tax_hit_hf45 = _document_cache_get_or_build(
+            _site_runtime_cache_hf45,
+            "site-preview-taxonomia-hf45",
+            {"catalogo": catalogo_site_hf35, "empresa": empresa_vitrine_hf36, "logo": logo_src_hf36},
+            lambda: _site_gerar_html_completo(
+                catalogo_site_hf35,
+                empresa_vitrine_hf36,
+                logo_src=logo_src_hf36,
+                imagem_resolver=_catalogo_html_src_imagem,
+                modo_preview=True,
+                usar_taxonomia_catalogo=True,
+            ),
+            ttl_seconds=180,
+            max_entries=8,
         )
         if resumo_taxonomia_hf454.get("total", 0) <= 0:
             st.info("A prévia aparecerá quando houver produto ativo, marcado para o site e pronto para apresentação.")
@@ -26413,17 +26430,33 @@ if pagina_atual == "site":
             "Ele inclui proteção `noindex` para homologação e propositalmente não contém CNAME nem configuração de DNS."
         )
 
-        html_staging_base_hf39 = _site_gerar_html_completo(
-            catalogo_site_hf35,
-            empresa_vitrine_hf36,
-            logo_src=logo_src_hf36,
-            imagem_resolver=_catalogo_html_src_imagem,
-            modo_preview=False,
-        )
-        pacote_staging_hf39 = _site_gerar_pacote_staging(
-            html_staging_base_hf39,
-            total_produtos=resumo_vitrine_hf36.get("total", 0),
-            versao_manager="20.4.9-I8.13.5-HF40",
+        def _build_staging_hf45():
+            _html = _site_gerar_html_completo(
+                catalogo_site_hf35,
+                empresa_vitrine_hf36,
+                logo_src=logo_src_hf36,
+                imagem_resolver=_catalogo_html_src_imagem,
+                modo_preview=False,
+            )
+            _zip = _site_gerar_pacote_staging(
+                _html,
+                total_produtos=resumo_vitrine_hf36.get("total", 0),
+                versao_manager="20.4.9-I8.13.5-HF40",
+            )
+            return _html, _zip
+
+        (_html_staging_bundle_hf45, pacote_staging_hf39), _site_staging_hit_hf45 = _document_cache_get_or_build(
+            _site_runtime_cache_hf45,
+            "site-staging-bundle-hf45",
+            {
+                "catalogo": catalogo_site_hf35,
+                "empresa": empresa_vitrine_hf36,
+                "logo": logo_src_hf36,
+                "total": resumo_vitrine_hf36.get("total", 0),
+            },
+            _build_staging_hf45,
+            ttl_seconds=180,
+            max_entries=6,
         )
         st.download_button(
             "⬇️ Baixar pacote do site paralelo (ZIP)",
@@ -26492,24 +26525,42 @@ if pagina_atual == "site":
 
             # HF48.3 — produção oficial passa a usar o visual aprovado, mantendo o motor seguro HF44.
             # Catálogo + taxonomia + Galeria autorizada/pré-selecionada + Thu/Fox saem da mesma Fonte Única.
-            html_producao_hf44 = _site_gerar_html_completo(
-                catalogo_site_hf35,
-                empresa_vitrine_hf36,
-                logo_src=logo_src_hf36,
-                imagem_resolver=_catalogo_html_src_imagem,
-                modo_preview=False,
-                usar_taxonomia_catalogo=True,
-                galeria_trabalhos=galeria_site_hf471,
-                galeria_imagem_resolver=_galeria_trabalho_imagem_data_uri,
-                incluir_galeria=True,
-                limite_fotos_galeria=48,
-                visual_hf48=True,
-                mascotes_hf48=True,
-            )
-            pacote_producao_hf44 = _site_gerar_pacote_producao(
-                html_producao_hf44,
-                total_produtos=resumo_vitrine_hf36.get("total", 0),
-                versao_manager="20.4.9-I8.13.5-HF52.1",
+            def _build_producao_hf45():
+                _html = _site_gerar_html_completo(
+                    catalogo_site_hf35,
+                    empresa_vitrine_hf36,
+                    logo_src=logo_src_hf36,
+                    imagem_resolver=_catalogo_html_src_imagem,
+                    modo_preview=False,
+                    usar_taxonomia_catalogo=True,
+                    galeria_trabalhos=galeria_site_hf471,
+                    galeria_imagem_resolver=_galeria_trabalho_imagem_data_uri,
+                    incluir_galeria=True,
+                    limite_fotos_galeria=48,
+                    visual_hf48=True,
+                    mascotes_hf48=True,
+                )
+                _zip = _site_gerar_pacote_producao(
+                    _html,
+                    total_produtos=resumo_vitrine_hf36.get("total", 0),
+                    versao_manager="20.4.9-I8.13.5-HF52.1",
+                )
+                return _html, _zip
+
+            (html_producao_hf44, pacote_producao_hf44), _site_prod_hit_hf45 = _document_cache_get_or_build(
+                _site_runtime_cache_hf45,
+                "site-producao-bundle-hf45",
+                {
+                    "catalogo": catalogo_site_hf35,
+                    "empresa": empresa_vitrine_hf36,
+                    "logo": logo_src_hf36,
+                    "galeria": galeria_site_hf471,
+                    "total": resumo_vitrine_hf36.get("total", 0),
+                    "visual": "HF51.4-HF3",
+                },
+                _build_producao_hf45,
+                ttl_seconds=180,
+                max_entries=6,
             )
 
             # Fallback/manual continua disponível para rollback e contingência.
