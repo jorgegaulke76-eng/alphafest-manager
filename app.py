@@ -268,6 +268,7 @@ from proposal_runtime_index_service import (
     proposal_with_current_client_data as _proposal_with_current_client_data,
 )
 from document_runtime_service import cache_get_or_build as _document_cache_get_or_build
+from anna_snapshot_runtime_service import prepare_daily_snapshot as _anna_prepare_daily_snapshot
 from marketing_results_runtime_service import build_marketing_product_resolver as _marketing_build_product_resolver
 from reports_runtime_index_service import build_reports_product_resolver as _reports_build_product_resolver
 from compras_runtime_index_service import (
@@ -23104,6 +23105,33 @@ def renderizar_workspace_anna_isolado():
         snapshot_hoje_hf19 = snapshots_hf19.get(chave_dia_hf19)
         snapshot_ok_hf19 = bool(_anna_snapshot_valido and _anna_snapshot_valido(snapshot_hoje_hf19))
 
+        # HF51 — automação segura: na primeira abertura da Central do dia, a mesma
+        # fotografia que antes dependia do botão manual é preparada e gravada
+        # automaticamente. Nenhuma proposta/status é alterado. Se o banco não
+        # confirmar, o botão manual logo abaixo continua disponível como contingência.
+        snapshot_auto_criado_hf51 = False
+        if (
+            not ANNA_FECHAMENTO_IMPORT_ERROR
+            and not snapshot_ok_hf19
+            and _anna_criar_snapshot_inicio
+            and _anna_snapshot_valido
+        ):
+            snapshot_auto_hf51, snapshots_auto_hf51, criou_auto_hf51 = _anna_prepare_daily_snapshot(
+                snapshots_hf19,
+                chave_dia_hf19,
+                agenda_anna_hf17,
+                agora_local(),
+                create_snapshot=_anna_criar_snapshot_inicio,
+                validate_snapshot=_anna_snapshot_valido,
+                retention_days=60,
+            )
+            if criou_auto_hf51 and snapshot_auto_hf51:
+                if save_document("agenda_anna_snapshots_db", snapshots_auto_hf51, ARQUIVO_AGENDA_ANNA_SNAPSHOTS):
+                    snapshots_hf19 = snapshots_auto_hf51
+                    snapshot_hoje_hf19 = snapshot_auto_hf51
+                    snapshot_ok_hf19 = True
+                    snapshot_auto_criado_hf51 = True
+
         st.markdown("#### 🌅 Início do dia")
         if ANNA_FECHAMENTO_IMPORT_ERROR:
             st.warning("O comparativo de início/fim do dia não foi carregado. A agenda atual e o restante da Central continuam disponíveis.")
@@ -23113,8 +23141,9 @@ def renderizar_workspace_anna_isolado():
                 texto_registro_hf19 = registrado_hf19.strftime("%d/%m/%Y às %H:%M")
             except Exception:
                 texto_registro_hf19 = str(snapshot_hoje_hf19.get("registrado_em") or "hoje")
+            prefixo_registro_hf51 = "Início do dia registrado automaticamente" if snapshot_auto_criado_hf51 else "Início do dia registrado"
             st.success(
-                f"Início do dia registrado em {texto_registro_hf19} · "
+                f"{prefixo_registro_hf51} em {texto_registro_hf19} · "
                 f"{len(snapshot_hoje_hf19.get('linhas') or [])} pedido(s)/proposta(s) na abertura. "
                 "Esta fotografia fica travada para o comparativo de hoje."
             )

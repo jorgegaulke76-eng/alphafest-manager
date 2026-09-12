@@ -1345,3 +1345,8 @@ hangelog
 
 ## 20.4.9-I8.13.5-HF52.2-HF1
 - Reordena jornada comercial do site e adiciona seção Fale com a AlphaFest com redes sociais configuráveis.
+## HF51 — Agenda automática
+- Fotografia do início do dia registrada automaticamente na primeira abertura da Central.
+- Sem sobrescrever snapshot existente e sem alterar propostas/status.
+- Botão manual preservado como contingência de gravação.
+

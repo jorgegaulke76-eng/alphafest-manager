@@ -1,5 +1,3 @@
-# Atualização AlphaFest Manager
+# AlphaFest Manager — HF51
 
-Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF50
-
-HF50 — otimização somente leitura dos Relatórios: resolução de produtos históricos indexada e reutilizada durante o mesmo ciclo.
+Automação segura da fotografia diária da Agenda da Anna. A primeira abertura da Central no dia registra a mesma fotografia que antes dependia de clique manual, sem alterar pedidos ou status.
