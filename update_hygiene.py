@@ -35,6 +35,7 @@ REQUIRED_RUNTIME_FILES = {
     "clientes_runtime_index_service.py",
     "crm_runtime_index_service.py",
     "thu_comercial_service.py",
+    "central_operational_runtime.py",
     "config.py",
     "marketing_template_engine.py",
     "marketing_anna_renderer_hf11.py",

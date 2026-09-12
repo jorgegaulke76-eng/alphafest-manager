@@ -37,6 +37,7 @@ CRITICAL_PYTHON_FILES = (
     "clientes_runtime_index_service.py",
     "crm_runtime_index_service.py",
     "thu_comercial_service.py",
+    "central_operational_runtime.py",
 )
 
 # Versões do Manager aparecem em muitos formatos. O regex é propositalmente

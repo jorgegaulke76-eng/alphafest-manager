@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF35",
-  "generated_at_utc": "2026-09-12T15:18:12.870297+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF36",
+  "generated_at_utc": "2026-09-12T15:28:43.260101+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -11,8 +11,8 @@
     "warnings": [],
     "critical_python_compile": {
       "status": "OK",
-      "files_checked": 20,
-      "files_ok": 20
+      "files_checked": 21,
+      "files_ok": 21
     },
     "tests": {
       "total_files": 1,
@@ -22,8 +22,8 @@
       "historical_examples": []
     }
   },
-  "file_count": 372,
-  "uncompressed_bytes": 36485256,
+  "file_count": 373,
+  "uncompressed_bytes": 36488444,
   "files": [
     {
       "path": ".gitignore",
@@ -102,18 +102,18 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 664,
-      "sha256": "6c7858dc3db16e3c59ae0530626a8cd9ed6338433329df6e6c3c6c6edd94103c"
+      "size": 779,
+      "sha256": "b531fc58f9c33f8da8fe5bd1662f61dc020d4f5b3cce5cb531d3d64e08f85a2c"
     },
     {
       "path": "VERSAO",
       "size": 31,
-      "sha256": "e2cf76722f62634d2ccd1380cdef5094579073b65bfbe51a7150d14dad158a59"
+      "sha256": "fe32e6e49faf37e0f9444e3f88626222608e1b6c0a01f0a55053e72168d44be9"
     },
     {
       "path": "VERSAO.txt",
       "size": 31,
-      "sha256": "e2cf76722f62634d2ccd1380cdef5094579073b65bfbe51a7150d14dad158a59"
+      "sha256": "fe32e6e49faf37e0f9444e3f88626222608e1b6c0a01f0a55053e72168d44be9"
     },
     {
       "path": "__init__.py",
@@ -177,8 +177,8 @@
     },
     {
       "path": "app.py",
-      "size": 1927804,
-      "sha256": "957ce9fbb8ac92c6cd0fa0dd08a27b5b28a7dcc1041af3d9b96f99b3dc695936"
+      "size": 1928019,
+      "sha256": "c4a8b114f08c26bbb6fdf2f182eb103eb86b4a68f1d844db0740d000234ad765"
     },
     {
       "path": "assets/catalogos_legados/acervo_catalogos_legados.json",
@@ -1536,6 +1536,11 @@
       "sha256": "977329618ca216a293c70efbe02bf1c623f8485cf335dfe9be85d408e593c7c1"
     },
     {
+      "path": "central_operational_runtime.py",
+      "size": 2782,
+      "sha256": "36c83e85ba41cfe16d73256796c269632ae1fd76bc95e65f8f9e72c17bf4cc1f"
+    },
+    {
       "path": "central_oportunidades.py",
       "size": 16792,
       "sha256": "0e9977bb9cd87b599435c6e13980c3b0ffa28a9d4a1bff0467d63150431ae5b5"
@@ -1712,8 +1717,8 @@
     },
     {
       "path": "release_diagnostics.py",
-      "size": 6232,
-      "sha256": "842388107e0cc4ab22b0ac39fa1d4c0a5034c833e1550e963d764e8974f139ac"
+      "size": 6270,
+      "sha256": "a158670090e2c19ca37613db735c64b3949eddb519a8b008850d0fe5d4279ec8"
     },
     {
       "path": "requirements.txt",
@@ -1877,8 +1882,8 @@
     },
     {
       "path": "update_hygiene.py",
-      "size": 14396,
-      "sha256": "1b01c1a40f7f3e9ef25e482f19f6f721429a35a67b7c4b90b29e9df924a67501"
+      "size": 14434,
+      "sha256": "1179204dffd1eef7bc195761299880501941245e7e8934d6a7017ca10b515b5b"
     },
     {
       "path": "update_safe_ui.py",

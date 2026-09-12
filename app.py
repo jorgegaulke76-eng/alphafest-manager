@@ -149,6 +149,7 @@ from risco_producao_engine import montar_previsao_producao as _i8127_engine_prev
 from central_producao_engine import montar_central_producao as _i8128_engine_central, resumo_central as _i8128_engine_resumo, reconciliar_etapa_status_oficial as _i8128_reconciliar_etapa_status, reconciliar_etapa_aprovacao_oficial as _i8134_reconciliar_etapa_aprovacao
 from central_entregas_engine import montar_fila as _i813_engine_fila, resumo_fila as _i813_engine_resumo, dias_aguardando as _i813_engine_dias_aguardando, ordenar_historico_entregues as _i813_engine_ordenar_entregues
 from prioridade_operacional_engine import montar_prioridades_operacionais as _i8131_engine_prioridades, resumo_prioridades as _i8131_engine_resumo, indexar_prioridades as _i8131_engine_indexar
+from central_operational_runtime import montar_snapshot_operacional as _central_runtime_snapshot
 from consistencia_operacional_engine import (
     auditar_consistencia_operacional as _i8134_engine_consistencia,
     planejar_saneamento_status_historicos as _i8134_planejar_saneamento_status,
@@ -23525,8 +23526,23 @@ if pagina_atual == "central":
         p for p in propostas_operacionais_central
         if _status_resumo(p).get("aprovado") and not _status_resumo(p).get("entregue")
     ]
-    fila_saida_central_i813 = _i813_engine_fila(historico_central, hoje_central, resumo_produtos=resumo_produtos_pedido)
-    resumo_saida_central_i813 = _i813_engine_resumo(fila_saida_central_i813)
+    # HF36 — uma única fotografia operacional por rerun da Central.
+    # Agenda Executiva, Produção, Prioridades e Saídas passam a compartilhar
+    # exatamente os mesmos derivados e as mesmas fontes lidas neste ciclo.
+    _consumos_runtime_central_hf36 = carregar_consumos_pedidos()
+    _estoque_runtime_central_hf36 = carregar_estoque()
+    _planejamentos_runtime_central_hf36 = carregar_planejamentos_compras()
+    _snapshot_operacional_central_hf36 = _central_runtime_snapshot(
+        historico_central,
+        tarefas_ativas_central,
+        _consumos_runtime_central_hf36,
+        _estoque_runtime_central_hf36,
+        _planejamentos_runtime_central_hf36,
+        hoje_central,
+        resumo_produtos=resumo_produtos_pedido,
+    )
+    fila_saida_central_i813 = _snapshot_operacional_central_hf36["fila_entregas"]
+    resumo_saida_central_i813 = _snapshot_operacional_central_hf36["resumo_fila_entregas"]
     if resumo_saida_central_i813.get("prontos"):
         st.info(
             f"📦 **{resumo_saida_central_i813.get('prontos')} pronto(s) aguardando saída** · "
@@ -23778,19 +23794,11 @@ if pagina_atual == "central":
         retornos_comerciais_hf14 = _filas_comerciais_hf35.get("retornos", [])
         cobrancas_hf15 = _filas_comerciais_hf35.get("cobrancas", [])
         _propostas_por_numero_hf35 = _filas_comerciais_hf35.get("propostas_por_numero", {})
-        # HF25 — calcula a fotografia de produção também para a Agenda Executiva.
-        # Isso permite prevenção de prazo/material sem criar uma fonte paralela.
-        _previsao_agenda_hf25 = _i8127_previsao_producao(historico=historico_central)
-        _central_prod_agenda_hf25 = _i8128_engine_central(
-            _previsao_agenda_hf25, tarefas_ativas_central, hoje=hoje_central
-        )
-        _prioridades_operacionais_agenda_hf16 = _i8131_engine_prioridades(
-            historico_central,
-            hoje_central,
-            central_producao=_central_prod_agenda_hf25,
-            fila_entregas=fila_saida_central_i813,
-            resumo_produtos=resumo_produtos_pedido,
-        )
+        # HF36 — reutiliza a fotografia operacional única da Central.
+        # Nenhuma engine é recalculada só para a Agenda Executiva.
+        _previsao_agenda_hf25 = _snapshot_operacional_central_hf36["previsao"]
+        _central_prod_agenda_hf25 = _snapshot_operacional_central_hf36["central_producao"]
+        _prioridades_operacionais_agenda_hf16 = _snapshot_operacional_central_hf36["prioridades"]
         _sinais_prev_hf25 = (
             _thu_prevencao_montar_sinais(
                 historico_central,
@@ -24582,8 +24590,9 @@ if pagina_atual == "central":
             st.success("Nenhuma prioridade crítica neste momento. Tudo em dia!")
 
     # I8.12.4-HF3 — comunicação operacional do estoque, fila e compras pela Ficha Técnica.
-    consumos_central_i8124 = carregar_consumos_pedidos()
-    estoque_central_i8124 = carregar_estoque()
+    # HF36 — fontes já lidas no início da Central; não consultar novamente.
+    consumos_central_i8124 = _consumos_runtime_central_hf36
+    estoque_central_i8124 = _estoque_runtime_central_hf36
     pendentes_central_i8124 = []
     revisar_central_i8124 = []
     mapa_hist_central_i8124 = {str(p.get("numero_proposta") or ""): p for p in historico_central}
@@ -24620,7 +24629,7 @@ if pagina_atual == "central":
         compras=carregar_compras(), historico=historico_central, fornecedores=_i8121_fornecedores(),
         planejamentos=carregar_planejamentos_compras(),
     )
-    planos_abertos_central_i8126 = [p for p in carregar_planejamentos_compras() if isinstance(p, dict) and _i8126_engine_aberta(p) > 0.0000001]
+    planos_abertos_central_i8126 = [p for p in _planejamentos_runtime_central_hf36 if isinstance(p, dict) and _i8126_engine_aberta(p) > 0.0000001]
     if necessidades_compra_central_i8126:
         pedidos_compra_central_i8126 = {
             str(p.get("numero_proposta") or "")
@@ -24646,10 +24655,7 @@ if pagina_atual == "central":
         st.info(f"🛒 Não há falta real pendente, mas existem {len(planos_abertos_central_i8126)} solicitação(ões) ao fornecedor ainda em aberto. Revise recebimento/cancelamento em Gestão → Compras, Custos & Estoque.")
 
     # I8.12.7 — a Central do Jorge usa a mesma previsão exibida no Fluxo e em Compras.
-    previsao_central_i8127 = _i8127_previsao_producao(
-        historico=historico_central, consumos=consumos_central_i8124, estoque=estoque_central_i8124,
-        planejamentos=carregar_planejamentos_compras(),
-    )
+    previsao_central_i8127 = _snapshot_operacional_central_hf36["previsao"]
     risco_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "risco_atraso"]
     aguardando_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "aguardando_material"]
     compra_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "compra_em_andamento"]
@@ -24681,8 +24687,8 @@ if pagina_atual == "central":
             st.caption("Detalhes de materiais e compras: Gestão → Compras, Custos & Estoque.")
 
     # I8.12.8 — Central do Jorge recebe a mesma fila operacional do Fluxo.
-    central_prod_central_i8128 = _i8128_engine_central(previsao_central_i8127, tarefas_ativas_central, hoje=hoje_local())
-    resumo_prod_central_i8128 = _i8128_engine_resumo(central_prod_central_i8128)
+    central_prod_central_i8128 = _snapshot_operacional_central_hf36["central_producao"]
+    resumo_prod_central_i8128 = _snapshot_operacional_central_hf36["resumo_central_producao"]
 
     # HF6 — auditoria automática da coerência entre as telas operacionais.
     rel_sync_central_hf6 = _i8134_engine_consistencia(
@@ -24692,18 +24698,10 @@ if pagina_atual == "central":
         renderizar_auditoria_sincronizacao_operacional(rel_sync_central_hf6, expandido=False)
 
     # I8.13.1 — prioridade é derivada, nunca um novo status gravado.
-    fila_saida_central_i8131 = _i813_engine_fila(
-        historico_central, hoje_local(), resumo_produtos=resumo_produtos_pedido
-    )
-    prioridades_central_i8131 = _i8131_engine_prioridades(
-        historico_central,
-        hoje_local(),
-        central_producao=central_prod_central_i8128,
-        fila_entregas=fila_saida_central_i8131,
-        resumo_produtos=resumo_produtos_pedido,
-    )
-    resumo_prioridades_central_i8131 = _i8131_engine_resumo(prioridades_central_i8131)
-    mapa_prioridades_central_i8131 = _i8131_engine_indexar(prioridades_central_i8131)
+    fila_saida_central_i8131 = fila_saida_central_i813
+    prioridades_central_i8131 = _snapshot_operacional_central_hf36["prioridades"]
+    resumo_prioridades_central_i8131 = _snapshot_operacional_central_hf36["resumo_prioridades"]
+    mapa_prioridades_central_i8131 = _snapshot_operacional_central_hf36["mapa_prioridades"]
 
     if str(usuario_atual.get("nome", "")).strip().casefold() == "jorge" and prioridades_central_i8131:
         st.markdown("#### 🧠 Prioridades operacionais · I8.13.1")
