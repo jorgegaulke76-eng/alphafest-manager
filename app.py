@@ -217,6 +217,10 @@ from catalogo_runtime_index_service import (
     build_history_stats as _catalogo_build_history_stats,
     paginate_indices as _catalogo_paginate_indices,
 )
+from clientes_runtime_index_service import (
+    build_client_proposals_index as _clientes_build_proposals_index,
+    proposals_for_client as _clientes_proposals_for_client,
+)
 from catalogo_orcamento_service import (
     ORCAMENTO_PRODUTO_LIVRE as _catalogo_orcamento_livre,
     normalizar_identidade_produto as _catalogo_normalizar_identidade,
@@ -25769,9 +25773,18 @@ if pagina_atual == "intelligence":
 
 if pagina_atual == "clientes_360":
     clientes_360 = sincronizar_clientes_do_historico()
+    # HF33 — o Clientes 360 usava ``propostas_do_cliente`` uma vez por cadastro;
+    # cada chamada recarregava/copiava e percorria o Histórico inteiro. Agora o
+    # Histórico é lido uma única vez e indexado por relacionamento + chave legada.
+    _historico_clientes_360_hf33 = carregar_historico()
+    _indice_clientes_360_hf33 = _clientes_build_proposals_index(
+        _historico_clientes_360_hf33, client_key=chave_cliente
+    )
     renderizar_inteligencia_clientes(
         clientes=clientes_360,
-        propostas_por_cliente=propostas_do_cliente,
+        propostas_por_cliente=lambda cliente: _clientes_proposals_for_client(
+            cliente, _indice_clientes_360_hf33, client_key=chave_cliente
+        ),
         calcular_total=lambda proposta: calcular_valores_proposta(proposta)[2],
         hoje=hoje_local(),
     )
