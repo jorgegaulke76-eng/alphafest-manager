@@ -162,3 +162,27 @@ def build_history_stats(
                 entry["ultima_ocorrencia"] = data_geracao
 
     return stats
+
+
+def paginate_indices(indices: list[int] | None, *, page: int = 1, page_size: int | None = 24) -> dict[str, Any]:
+    """Recorta uma lista de índices para renderização paginada.
+
+    Não altera busca nem ordenação; apenas reduz a quantidade de cartões que o
+    Streamlit precisa construir por rerun. ``page_size=None`` mantém todos.
+    """
+    values = [int(x) for x in (indices or [])]
+    total = len(values)
+    if page_size is None or int(page_size or 0) <= 0:
+        return {
+            "indices": values, "total": total, "page": 1, "pages": 1 if total else 0,
+            "page_size": None, "start": 0, "end": total,
+        }
+    size = max(1, int(page_size))
+    pages = max(1, (total + size - 1) // size) if total else 0
+    current = min(max(1, int(page or 1)), pages or 1)
+    start = (current - 1) * size if total else 0
+    end = min(total, start + size)
+    return {
+        "indices": values[start:end], "total": total, "page": current,
+        "pages": pages, "page_size": size, "start": start, "end": end,
+    }

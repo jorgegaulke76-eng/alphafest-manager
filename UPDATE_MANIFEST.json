@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF31",
-  "generated_at_utc": "2026-09-12T14:23:37.018676+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF32",
+  "generated_at_utc": "2026-09-12T14:46:20.947785+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -16,14 +16,14 @@
     },
     "tests": {
       "total_files": 1,
-      "portable_files": 1,
-      "current_release_files": 0,
+      "portable_files": 0,
+      "current_release_files": 1,
       "historical_version_files": 0,
       "historical_examples": []
     }
   },
   "file_count": 370,
-  "uncompressed_bytes": 36471399,
+  "uncompressed_bytes": 36474753,
   "files": [
     {
       "path": ".gitignore",
@@ -102,18 +102,18 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 819,
-      "sha256": "eea4d64d2de4377d44f11e20b359d82d23505395111e342afcb1df141dfe16d4"
+      "size": 685,
+      "sha256": "7a2a9bf9b1a6d7c989b6e3a483f9f449f78655108e9a2c85e929bb0f70cac0ca"
     },
     {
       "path": "VERSAO",
       "size": 31,
-      "sha256": "5ea449d963f1023c1c7adc1d6a96d1977222429fea736cd09c597f8e4b2c3bd3"
+      "sha256": "fb03a34330159f70daee5b4783b794dcab9247e32c59fb8b5d5acad4c8b85e46"
     },
     {
       "path": "VERSAO.txt",
       "size": 31,
-      "sha256": "5ea449d963f1023c1c7adc1d6a96d1977222429fea736cd09c597f8e4b2c3bd3"
+      "sha256": "fb03a34330159f70daee5b4783b794dcab9247e32c59fb8b5d5acad4c8b85e46"
     },
     {
       "path": "__init__.py",
@@ -177,8 +177,8 @@
     },
     {
       "path": "app.py",
-      "size": 1922864,
-      "sha256": "c691c1d83f9d82041cb21719664fcf25caa3daab82d84fb60f4d37459433772a"
+      "size": 1925310,
+      "sha256": "b3c59220ce2059c465ae25c479241974f499e5555dfa7b7175a8974e606b38bf"
     },
     {
       "path": "assets/catalogos_legados/acervo_catalogos_legados.json",
@@ -1527,8 +1527,8 @@
     },
     {
       "path": "catalogo_runtime_index_service.py",
-      "size": 6093,
-      "sha256": "680b8055f9344bd98ba8d5227f46cad0f3fa82ea497367215b46b0097aeef2e4"
+      "size": 7135,
+      "sha256": "74418d8e2e347040fba9ff02398189108651827bdd395b71d080109bd0e36008"
     },
     {
       "path": "central_entregas_engine.py",

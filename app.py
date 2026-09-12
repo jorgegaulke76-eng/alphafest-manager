@@ -215,6 +215,7 @@ from catalogo_runtime_index_service import (
     filter_quick_indices as _catalogo_filter_quick_indices,
     filter_full_indices as _catalogo_filter_full_indices,
     build_history_stats as _catalogo_build_history_stats,
+    paginate_indices as _catalogo_paginate_indices,
 )
 from catalogo_orcamento_service import (
     ORCAMENTO_PRODUTO_LIVRE as _catalogo_orcamento_livre,
@@ -34148,7 +34149,42 @@ if pagina_atual == "catalogo":
                 key="pesquisa_catalogo",
             ).strip().lower()
             _filtrados_indices_hf31 = _catalogo_filter_full_indices(_catalogo_view_hf31, termo_cat)
-            filtrados = [(i, catalogo[i]) for i in _filtrados_indices_hf31 if 0 <= i < len(catalogo)]
+
+            # HF32 — paginação somente da renderização visual. A busca continua
+            # percorrendo o Catálogo inteiro; limitamos apenas os cartões montados
+            # pelo Streamlit em cada rerun. O usuário pode escolher "Todos".
+            _hf32_total_filtrados = len(_filtrados_indices_hf31)
+            _hf32_tamanho_label = "Todos"
+            _hf32_tamanho = None
+            _hf32_pagina = 1
+            if _hf32_total_filtrados > 24:
+                _hf32_pc1, _hf32_pc2 = st.columns([1, 1])
+                _hf32_tamanho_label = _hf32_pc1.selectbox(
+                    "Exibir por vez", ["24", "48", "Todos"],
+                    key="catalogo_produtos_por_pagina_hf32",
+                    help="A busca continua considerando todos os produtos; esta opção controla apenas quantos cartões são renderizados por vez.",
+                )
+                _hf32_tamanho = None if _hf32_tamanho_label == "Todos" else int(_hf32_tamanho_label)
+                _hf32_preview = _catalogo_paginate_indices(
+                    _filtrados_indices_hf31, page=1, page_size=_hf32_tamanho
+                )
+                if int(_hf32_preview.get("pages") or 0) > 1:
+                    _hf32_assinatura_busca = hashlib.sha256(
+                        (termo_cat + "|" + str(_hf32_tamanho_label)).encode("utf-8")
+                    ).hexdigest()[:10]
+                    _hf32_pagina = _hf32_pc2.selectbox(
+                        "Página",
+                        list(range(1, int(_hf32_preview["pages"]) + 1)),
+                        key=f"catalogo_pagina_hf32_{_hf32_assinatura_busca}",
+                    )
+                else:
+                    _hf32_pc2.caption("Todos os resultados cabem nesta página.")
+
+            _hf32_paginacao = _catalogo_paginate_indices(
+                _filtrados_indices_hf31, page=_hf32_pagina, page_size=_hf32_tamanho
+            )
+            _filtrados_visiveis_hf32 = list(_hf32_paginacao.get("indices") or [])
+            filtrados = [(i, catalogo[i]) for i in _filtrados_visiveis_hf32 if 0 <= i < len(catalogo)]
 
             # HF31 — uma única leitura/consolidação do Histórico para todos os
             # cartões; antes o Histórico inteiro era relido para cada produto.
@@ -34157,7 +34193,15 @@ if pagina_atual == "catalogo":
                 _stats_catalogo_hf31 = _catalogo_history_stats_cached(catalogo, _historico_catalogo_hf31)
             else:
                 _stats_catalogo_hf31 = {}
-            st.write(f"**{len(filtrados)} produto(s)** • ordem alfabética")
+
+            if _hf32_total_filtrados and _hf32_paginacao.get("page_size"):
+                st.write(
+                    f"**{_hf32_total_filtrados} produto(s)** • ordem alfabética • "
+                    f"exibindo {_hf32_paginacao['start'] + 1}–{_hf32_paginacao['end']} "
+                    f"(página {_hf32_paginacao['page']}/{_hf32_paginacao['pages']})"
+                )
+            else:
+                st.write(f"**{_hf32_total_filtrados} produto(s)** • ordem alfabética")
             for i, produto_cat in filtrados:
                 with st.container(border=True):
                     cimg, cinfo, cacoes = st.columns([1, 5, 2])
