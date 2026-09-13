@@ -1420,3 +1420,15 @@ hangelog
 - Reaproveita a mesma lógica da HF59; contadores, Explore por categoria e filtros continuam sincronizados.
 - Preserva HF60, HF58, HF57, HF56, HF55, HF7 e Template Anna.
 
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF62 — Clientes recorrentes e fechamento periódico
+- amplia o antigo faturamento mensal para fechamento Semanal, Quinzenal ou Mensal, mantendo compatibilidade técnica com clientes antigos;
+- Relacionamentos ganha identificação rápida `[S]`, `[Q]`, `[M]` e filtros por periodicidade;
+- Central de Faturamento Mensal passa a se apresentar como **Fechamentos Recorrentes** sem criar conta-corrente paralela;
+- fechamento inclui somente pedidos aprovados, entregues e ainda não vinculados a outro fechamento;
+- período é sugerido automaticamente e pode ser ajustado pelo operador antes da confirmação;
+- boletim de conferência passa a mostrar número/data do pedido, produto, tema, quantidade e valor; data de entrega é omitida do documento;
+- WhatsApp, HTML e PDF usam o mesmo snapshot do fechamento;
+- recebimento continua baixando automaticamente os pedidos vinculados;
+- reabertura/correção auditada preservada;
+- sem migração de banco e sem alteração das regras de produção, catálogo ou site.

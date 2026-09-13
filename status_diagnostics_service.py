@@ -37,7 +37,7 @@ def diagnosticar_sincronizacao_status(historico: Iterable[dict[str, Any]] | None
             divergencias.append({
                 "Proposta": numero,
                 "Cliente": cliente,
-                "Cobrança": "Mensal" if proposta_faturamento_mensal(prop) else "Por proposta",
+                "Cobrança": "Recorrente" if proposta_faturamento_mensal(prop) else "Por proposta",
                 "Aprovado": "Sim" if aprovado else "Não",
                 "Pago": "Sim" if pago else "Não",
                 "Pronto": "Sim" if pronto else "Não",

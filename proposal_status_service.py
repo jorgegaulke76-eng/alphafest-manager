@@ -131,7 +131,7 @@ def aplicar_status_na_proposta(
     if nova_conclusao and callable(registrar_evento):
         descricao = "Entregue — operação finalizada e disponível no Histórico"
         if proposta_faturamento_mensal(proposta):
-            descricao += "; pagamento segue para Faturamento Mensal"
+            descricao += "; pagamento segue para Fechamento Recorrente"
         registrar_evento(proposta, descricao, usuario)
 
     return {
