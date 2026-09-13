@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF62",
-  "generated_at_utc": "2026-09-13T16:12:32.826336+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF63",
+  "generated_at_utc": "2026-09-13T17:44:57.422262+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -23,7 +23,7 @@
     }
   },
   "file_count": 384,
-  "uncompressed_bytes": 36589983,
+  "uncompressed_bytes": 36589942,
   "files": [
     {
       "path": ".gitignore",
@@ -42,8 +42,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size": 93328,
-      "sha256": "b8165c0f2c6e8ea6cc10e83ab4b8088618a943fcc5ae59607a36b1b974578f58"
+      "size": 93763,
+      "sha256": "73f2072ec517ea21acad509bbe276bf6e3f91ab482004bf5194bb5ed1d91dfd9"
     },
     {
       "path": "EDGE_FUNCTION_CATALOGO_PUBLICO.md",
@@ -102,18 +102,18 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 2154,
-      "sha256": "02e4be226f6b21dec7f4c8a0ad8c2cac046ff28975158e5cd18ff1fa06ea309d"
+      "size": 1150,
+      "sha256": "b372c2f0bc7839306ac3139a7f54b50853a06c44d6cdfac74421861b995bb021"
     },
     {
       "path": "VERSAO",
       "size": 31,
-      "sha256": "587aeb531a1f830ac017aeaeef3e7eb3b4ca2f8323d3d6a82ae3c2c7665773bd"
+      "sha256": "714333649b5adc1c9be3b0e4e6d0315e955db82f7c18ec72ba23306f81568592"
     },
     {
       "path": "VERSAO.txt",
       "size": 31,
-      "sha256": "587aeb531a1f830ac017aeaeef3e7eb3b4ca2f8323d3d6a82ae3c2c7665773bd"
+      "sha256": "714333649b5adc1c9be3b0e4e6d0315e955db82f7c18ec72ba23306f81568592"
     },
     {
       "path": "__init__.py",
@@ -182,8 +182,8 @@
     },
     {
       "path": "app.py",
-      "size": 1957257,
-      "sha256": "74b2fa0721e2762eb3f06d6884850aeb9080a28deb7da0aebc1a959f840fd849"
+      "size": 1957785,
+      "sha256": "089a8f0108af2caff00354d3a109178d9b349bdac166e60e013658ccf2265961"
     },
     {
       "path": "assets/catalogos_legados/acervo_catalogos_legados.json",

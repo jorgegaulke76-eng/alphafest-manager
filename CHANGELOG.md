@@ -1432,3 +1432,10 @@ hangelog
 - recebimento continua baixando automaticamente os pedidos vinculados;
 - reabertura/correção auditada preservada;
 - sem migração de banco e sem alteração das regras de produção, catálogo ou site.
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF63 — correção da edição de clientes
+- Corrige o fluxo de **Relacionamentos → Editar cliente**.
+- Ao selecionar um cliente para edição, a aba de edição passa a ser a primeira aba ativa após o rerun.
+- Mantém o Perfil Comercial HF62, fechamento periódico e todas as regras financeiras sem alterações.
+- Sem migração de dados e sem mudança em produção, catálogo, site ou templates.
+

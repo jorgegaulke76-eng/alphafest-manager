@@ -36743,7 +36743,14 @@ if pagina_atual == "relacionamentos":
     if "cliente_edit_id" not in st.session_state:
         st.session_state.cliente_edit_id = None
 
-    aba_cli_lista, aba_cli_cadastro = st.tabs(["🔎 Consultar relacionamentos", "➕ Cadastrar / Editar"])
+    # HF63: quando um cliente é escolhido para edição, a aba de edição passa a ser
+    # a primeira/ativa. Antes o ID era carregado corretamente, mas o Streamlit
+    # voltava visualmente para a aba de consulta após o rerun, dando a impressão
+    # de que o botão "Editar cliente" não funcionava.
+    if st.session_state.cliente_edit_id:
+        aba_cli_cadastro, aba_cli_lista = st.tabs(["✏️ Editar cliente", "🔎 Consultar relacionamentos"])
+    else:
+        aba_cli_lista, aba_cli_cadastro = st.tabs(["🔎 Consultar relacionamentos", "➕ Cadastrar / Editar"])
 
     with aba_cli_lista:
         termo_cli = st.text_input(
@@ -36858,7 +36865,7 @@ if pagina_atual == "relacionamentos":
                     rerun_na_aba("novo_orcamento", f"Cliente {cli.get('nome', 'Cliente')} carregado no Novo Orçamento.")
                 if b2.button("✏️ Editar cliente", key=f"cli_edit_{cli.get('id')}", use_container_width=True):
                     st.session_state.cliente_edit_id = cli.get("id")
-                    st.rerun()
+                    st.rerun()  # HF63: o rerun reabre diretamente na aba de edição.
                 if b3.button("🗑️ Mover para lixeira", key=f"cli_del_{cli.get('id')}", use_container_width=True):
                     enviar_para_lixeira("Cliente", cli, cli.get("id") or cli.get("nome", ""))
                     restantes = [c for c in clientes if c.get("id") != cli.get("id")]
