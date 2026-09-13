@@ -32,7 +32,11 @@ alt = LazyModule("altair")
 _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
-from site_manager_service import resumir_catalogo_site as _site_resumir_catalogo, ordenar_produtos_site as _site_ordenar_produtos
+from site_manager_service import (
+    resumir_catalogo_site as _site_resumir_catalogo,
+    ordenar_produtos_site as _site_ordenar_produtos,
+    categorias_site_produto as _site_categorias_produto,
+)
 from site_vitrine_service import resumir_vitrine as _site_resumir_vitrine
 from site_completo_service import gerar_html_site_completo as _site_gerar_html_completo
 from site_metrics_service import dashboard_summary_cached as _site_metrics_summary, clear_dashboard_summary_cache as _site_metrics_clear_cache, tracking_available as _site_metrics_tracking_available, server_config as _site_metrics_server_config
@@ -26102,32 +26106,11 @@ if pagina_atual == "site":
     )
 
     catalogo_site_hf35 = carregar_catalogo()
-    resumo_site_hf35 = _site_resumir_catalogo(catalogo_site_hf35)
-    produtos_site_hf35 = _site_ordenar_produtos(catalogo_site_hf35)
     # HF45 — cache por assinatura do conteúdo do site. O cache vive somente na
     # sessão e é invalidado automaticamente quando Catálogo/empresa/Galeria mudam.
     _site_runtime_cache_hf45 = st.session_state.setdefault("_site_runtime_cache_hf45", {})
 
-    topo_site_1, topo_site_2 = st.columns([1.7, 1])
-    with topo_site_1:
-        st.info(
-            "📦 **Fonte oficial:** Catálogo do AlphaFest Manager. Nome, descrição, fotos, destaque e "
-            "marcação de publicação são lidos do mesmo cadastro usado nos demais módulos."
-        )
-    with topo_site_2:
-        st.link_button("🌐 Abrir site atual", ALPHAFEST_SITE_BASE, use_container_width=True)
-
-    sm1, sm2, sm3, sm4 = st.columns(4)
-    sm1.metric("Produtos ativos", resumo_site_hf35.get("ativos", 0))
-    sm2.metric("Marcados para o site", resumo_site_hf35.get("marcados_site", 0))
-    sm3.metric("Prontos na vitrine", resumo_site_hf35.get("prontos_marcados", 0))
-    sm4.metric("Precisam revisão", resumo_site_hf35.get("revisar_marcados", 0))
-
-    st.caption(
-        f"⭐ {resumo_site_hf35.get('destaques', 0)} destaque(s) marcado(s) • "
-        f"{resumo_site_hf35.get('prontos_nao_marcados', 0)} produto(s) já com foto/descrição e ainda não marcado(s) para o site. "
-        "Por padrão o preço fica oculto no site; cada produto decide no Catálogo se o valor deve aparecer na vitrine."
-    )
+    # HF59 — removidos cards/avisos redundantes do topo. A tela fica focada em métricas e atualização real do site.
 
 
     # HF52.1-HF3 — métricas privadas por período + funil + origem dos acessos + termos buscados.
@@ -26245,475 +26228,84 @@ if pagina_atual == "site":
             _renderizar_metricas_site_hf52_1_hf3_auto = st.fragment(run_every="30s")(_renderizar_metricas_site_hf52_1_hf3)
             _renderizar_metricas_site_hf52_1_hf3_auto()
 
-    st.success(
-        "✨ **HF40 · Site completo:** Início · Produtos · Serviços · Quem Somos · Contato. "
-        "A essência institucional e os tipos de serviço do site antigo foram reorganizados no novo padrão visual; "
-        "endereço, e-mail e WhatsApp são lidos da configuração oficial do Manager. Fotos antigas não são importadas automaticamente."
+    # HF59 — Central do Site simplificada: somente métricas + fluxo real de atualização/publicação.
+    st.divider()
+    st.markdown("### 🚀 Atualizar o site")
+    st.caption(
+        "Fluxo único: confira a prévia atual → publique. As prévias antigas, staging histórico, comparações e listas auxiliares foram retirados desta tela para reduzir confusão."
     )
 
-    st.success(
-        "🧭 **HF43 · Categorias comerciais:** a vitrine agora agrupa os produtos em categorias mais claras para o cliente "
-        "(Festas & Personalizados, Balões & Decoração, Gráfica Rápida, Brindes, Convites & Papelaria, Impressão 3D, "
-        "Gravação a Laser e Kits Festa). O agrupamento é calculado somente a partir do Catálogo oficial e não cria outro cadastro."
-    )
+    resumo_vitrine_hf59 = _site_resumir_vitrine(catalogo_site_hf35, usar_taxonomia_catalogo=True)
+    empresa_vitrine_hf59 = carregar_config_empresa()
+    galeria_site_hf59 = carregar_galeria_trabalhos()
+    resumo_galeria_hf59 = _site_resumir_galeria(galeria_site_hf59)
+    logo_b64_hf59, logo_ext_hf59 = encontrar_logo_base64()
+    logo_src_hf59 = ""
+    if logo_b64_hf59:
+        ext_hf59 = str(logo_ext_hf59 or ".png").replace(".", "").lower() or "png"
+        if ext_hf59 == "jpg":
+            ext_hf59 = "jpeg"
+        logo_src_hf59 = f"data:image/{ext_hf59};base64,{logo_b64_hf59}"
 
-    st.success(
-        "🚀 **HF44 · Publicação assistida:** você pode cadastrar e marcar vários produtos, conferir a prévia e publicar todos de uma vez. "
-        "A marcação **não publica sozinha**; o envio ao Worker só ocorre após confirmação explícita. O ZIP manual continua como fallback."
-    )
+    hs1, hs2, hs3 = st.columns(3)
+    hs1.metric("Produtos no site", resumo_vitrine_hf59.get("total", 0))
+    hs2.metric("Categorias", resumo_vitrine_hf59.get("total_categorias", 0))
+    hs3.metric("Fotos na Galeria", resumo_galeria_hf59.get("total_fotos", 0))
 
-    # HF40 — mantém a vitrine homologada e acrescenta o site institucional completo sem tocar no domínio atual.
-    resumo_vitrine_hf36 = _site_resumir_vitrine(catalogo_site_hf35)
-    empresa_vitrine_hf36 = carregar_config_empresa()
-    logo_b64_hf36, logo_ext_hf36 = encontrar_logo_base64()
-    logo_src_hf36 = ""
-    if logo_b64_hf36:
-        ext_hf36 = str(logo_ext_hf36 or ".png").replace(".", "").lower() or "png"
-        if ext_hf36 == "jpg":
-            ext_hf36 = "jpeg"
-        logo_src_hf36 = f"data:image/{ext_hf36};base64,{logo_b64_hf36}"
-
-    with st.expander("🌐 Site completo — prévia HF40", expanded=True):
-        st.caption(
-            "Prévia interna do novo site completo: Início, Produtos, Serviços, Quem Somos e Contato na mesma identidade visual da vitrine. "
-            "Produtos e preços continuam vindo do Catálogo oficial; contato vem da configuração oficial do Manager; nenhuma página pública é alterada ou publicada."
-        )
-        pv1_hf36, pv2_hf36, pv3_hf36 = st.columns(3)
-        pv1_hf36.metric("Produtos exibidos", resumo_vitrine_hf36.get("total", 0))
-        pv2_hf36.metric("Categorias", resumo_vitrine_hf36.get("total_categorias", 0))
-        pv3_hf36.metric("Destaques", resumo_vitrine_hf36.get("destaques", 0))
-
-        modo_vitrine_hf36 = st.radio(
-            "Visualização",
-            ["🖥️ Desktop", "📱 Celular"],
-            horizontal=True,
-            key="site_hf36_modo_preview",
-        )
-        html_vitrine_hf36, _site_preview_hit_hf45 = _document_cache_get_or_build(
-            _site_runtime_cache_hf45,
-            "site-preview-base-hf45",
-            {"catalogo": catalogo_site_hf35, "empresa": empresa_vitrine_hf36, "logo": logo_src_hf36},
-            lambda: _site_gerar_html_completo(
+    col_preview_hf59, col_site_hf59 = st.columns([2, 1])
+    if col_preview_hf59.button(
+        "🔄 Preparar / atualizar prévia do site",
+        type="primary",
+        use_container_width=True,
+        key="site_hf59_preparar_preview",
+    ):
+        with st.spinner("Montando o site com o Catálogo e a Galeria atuais…"):
+            st.session_state["site_hf59_html_preview"] = _site_gerar_html_completo(
                 catalogo_site_hf35,
-                empresa_vitrine_hf36,
-                logo_src=logo_src_hf36,
-                imagem_resolver=_catalogo_html_src_imagem,
-                modo_preview=True,
-            ),
-            ttl_seconds=180,
-            max_entries=8,
-        )
-        if resumo_vitrine_hf36.get("total", 0) <= 0:
-            st.info("A vitrine aparecerá quando houver produto ativo, marcado para o site e pronto para apresentação.")
-        elif modo_vitrine_hf36 == "📱 Celular":
-            esp1_hf36, cel_hf36, esp2_hf36 = st.columns([1.0, 0.62, 1.0])
-            with cel_hf36:
-                components.html(html_vitrine_hf36, height=980, scrolling=True)
-        else:
-            components.html(html_vitrine_hf36, height=900, scrolling=True)
-
-        st.download_button(
-            "⬇️ Baixar esta prévia HTML",
-            data=html_vitrine_hf36,
-            file_name="alphafest-site-completo-preview-hf40.html",
-            mime="text/html",
-            use_container_width=True,
-            key="site_hf36_download_preview",
-        )
-
-    # HF45.4 — estrutura futura do site, preparada em paralelo e sem publicação.
-    resumo_taxonomia_hf454 = _site_resumir_vitrine(
-        catalogo_site_hf35,
-        usar_taxonomia_catalogo=True,
-    )
-    with st.expander("🧭 Prévia Categoria → Subcategoria — HF45.4-HF1", expanded=False):
-        st.caption(
-            "Esta prévia usa diretamente **Categoria** e **Subcategoria** do Catálogo Oficial. "
-            "Ela se atualiza conforme as correções da Anna forem salvas no HF45.2. "
-            "Nada desta área é publicado no site oficial: o HF44 continua usando a estrutura homologada atual até a aprovação final."
-        )
-        tx1_hf454, tx2_hf454, tx3_hf454, tx4_hf454 = st.columns(4)
-        tx1_hf454.metric("Produtos da vitrine", resumo_taxonomia_hf454.get("total", 0))
-        tx2_hf454.metric("Categorias atuais", resumo_taxonomia_hf454.get("total_categorias", 0))
-        tx3_hf454.metric("Subcategorias atuais", resumo_taxonomia_hf454.get("total_subcategorias", 0))
-        tx4_hf454.metric("Sem subcategoria", resumo_taxonomia_hf454.get("sem_subcategoria", 0))
-
-        if resumo_taxonomia_hf454.get("sem_subcategoria", 0):
-            st.warning(
-                f"Ainda há {resumo_taxonomia_hf454.get('sem_subcategoria', 0)} produto(s) da vitrine sem subcategoria. "
-                "É esperado enquanto a folha da Anna está em revisão."
-            )
-        else:
-            st.success("✅ Todos os produtos atuais da vitrine já possuem subcategoria cadastrada.")
-
-        modo_taxonomia_hf454 = st.radio(
-            "Visualização da nova organização",
-            ["🖥️ Desktop", "📱 Celular"],
-            horizontal=True,
-            key="site_hf454_modo_preview",
-        )
-        html_taxonomia_hf454, _site_tax_hit_hf45 = _document_cache_get_or_build(
-            _site_runtime_cache_hf45,
-            "site-preview-taxonomia-hf45",
-            {"catalogo": catalogo_site_hf35, "empresa": empresa_vitrine_hf36, "logo": logo_src_hf36},
-            lambda: _site_gerar_html_completo(
-                catalogo_site_hf35,
-                empresa_vitrine_hf36,
-                logo_src=logo_src_hf36,
+                empresa_vitrine_hf59,
+                logo_src=logo_src_hf59,
                 imagem_resolver=_catalogo_html_src_imagem,
                 modo_preview=True,
                 usar_taxonomia_catalogo=True,
-            ),
-            ttl_seconds=180,
-            max_entries=8,
+                galeria_trabalhos=galeria_site_hf59,
+                galeria_imagem_resolver=_galeria_trabalho_imagem_data_uri,
+                incluir_galeria=True,
+                limite_fotos_galeria=48,
+                visual_hf48=True,
+                mascotes_hf48=True,
+            )
+        st.success("✅ Prévia atualizada. Confira abaixo antes de publicar.")
+    col_site_hf59.link_button("🌐 Abrir site atual", "https://alphafest.com.br", use_container_width=True)
+
+    html_preview_hf59 = st.session_state.get("site_hf59_html_preview", "")
+    if html_preview_hf59:
+        modo_preview_hf59 = st.radio(
+            "Visualização",
+            ["🖥️ Desktop", "📱 Celular"],
+            horizontal=True,
+            key="site_hf59_modo_preview",
         )
-        if resumo_taxonomia_hf454.get("total", 0) <= 0:
-            st.info("A prévia aparecerá quando houver produto ativo, marcado para o site e pronto para apresentação.")
-        elif modo_taxonomia_hf454 == "📱 Celular":
-            _txe1_hf454, _txcel_hf454, _txe2_hf454 = st.columns([1.0, 0.62, 1.0])
-            with _txcel_hf454:
-                components.html(html_taxonomia_hf454, height=980, scrolling=True)
+        if modo_preview_hf59 == "📱 Celular":
+            _sp1_hf59, _sp2_hf59, _sp3_hf59 = st.columns([1.0, 0.62, 1.0])
+            with _sp2_hf59:
+                components.html(html_preview_hf59, height=1160, scrolling=True)
         else:
-            components.html(html_taxonomia_hf454, height=900, scrolling=True)
+            components.html(html_preview_hf59, height=1080, scrolling=True)
 
-        st.download_button(
-            "⬇️ Baixar prévia Categoria → Subcategoria",
-            data=html_taxonomia_hf454,
-            file_name="alphafest-preview-categoria-subcategoria-hf45-4.html",
-            mime="text/html",
-            use_container_width=True,
-            key="site_hf454_download_preview",
-        )
-        st.info(
-            "🔒 **Produção protegida:** o botão Publicar site agora (HF44) ainda gera a navegação anterior. "
-            "A nova estrutura só será ativada em produção depois que a classificação da Anna for concluída e você aprovar esta prévia."
-        )
-
-    # HF47.1 — Galeria pública em PRÉVIA INTERNA. As fotos continuam privadas
-    # no Supabase e só são lidas quando Jorge pede para preparar/atualizar a prévia.
-    galeria_site_hf471 = carregar_galeria_trabalhos()
-    resumo_galeria_hf471 = _site_resumir_galeria(galeria_site_hf471)
-    with st.expander("📸 Prévia Galeria no Site — HF47.1", expanded=False):
-        st.caption(
-            "A prévia usa somente trabalhos **autorizados e pré-selecionados** na Galeria do Manager. "
-            "Categoria → Subcategoria → Tema viram filtros no site e cada foto recebe o botão **Quero algo parecido**. "
-            "Nada é publicado no site oficial."
-        )
-        g1_hf471, g2_hf471, g3_hf471, g4_hf471 = st.columns(4)
-        g1_hf471.metric("Trabalhos selecionados", resumo_galeria_hf471.get("total_trabalhos", 0))
-        g2_hf471.metric("Fotos para a Galeria", resumo_galeria_hf471.get("total_fotos", 0))
-        g3_hf471.metric("Categorias", resumo_galeria_hf471.get("total_categorias", 0))
-        g4_hf471.metric("Temas", resumo_galeria_hf471.get("total_temas", 0))
-
-        st.info(
-            "⚡ Para manter o Manager rápido, as fotos privadas **não são carregadas ao abrir esta tela**. "
-            "Use o botão abaixo apenas quando quiser conferir a Galeria."
-        )
-        if st.button("🖼️ Preparar / atualizar prévia da Galeria", use_container_width=True, key="site_hf471_prepare"):
-            with st.spinner("Montando a prévia da Galeria com as fotos selecionadas…"):
-                st.session_state["site_hf471_html_preview"] = _site_gerar_html_completo(
-                    catalogo_site_hf35,
-                    empresa_vitrine_hf36,
-                    logo_src=logo_src_hf36,
-                    imagem_resolver=_catalogo_html_src_imagem,
-                    modo_preview=True,
-                    usar_taxonomia_catalogo=True,
-                    galeria_trabalhos=galeria_site_hf471,
-                    galeria_imagem_resolver=_galeria_trabalho_imagem_data_uri,
-                    incluir_galeria=True,
-                    limite_fotos_galeria=24,
-                )
-                st.session_state["site_hf471_preview_total"] = resumo_galeria_hf471.get("total_fotos", 0)
-            st.success("✅ Prévia preparada. Nenhuma publicação foi feita.")
-
-        html_galeria_hf471 = st.session_state.get("site_hf471_html_preview", "")
-        if html_galeria_hf471:
-            modo_galeria_hf471 = st.radio(
-                "Visualização da Galeria",
-                ["🖥️ Desktop", "📱 Celular"],
-                horizontal=True,
-                key="site_hf471_modo_preview",
-            )
-            if modo_galeria_hf471 == "📱 Celular":
-                _ge1_hf471, _gcel_hf471, _ge2_hf471 = st.columns([1.0, 0.62, 1.0])
-                with _gcel_hf471:
-                    components.html(html_galeria_hf471, height=1050, scrolling=True)
-            else:
-                components.html(html_galeria_hf471, height=980, scrolling=True)
-
-            st.download_button(
-                "⬇️ Baixar prévia da Galeria",
-                data=html_galeria_hf471,
-                file_name="alphafest-preview-galeria-hf47-1.html",
-                mime="text/html",
-                use_container_width=True,
-                key="site_hf471_download_preview",
-            )
-        elif resumo_galeria_hf471.get("total_fotos", 0):
-            st.caption("Clique em **Preparar / atualizar prévia da Galeria** para visualizar as fotos aqui.")
-        else:
-            st.warning("Ainda não há trabalho autorizado e pré-selecionado para a Galeria do site.")
-
-        st.info(
-            "🔒 **HF44 preservado:** Publicar site agora continua gerando o site oficial sem esta Galeria. "
-            "A ativação pública será feita somente depois da sua aprovação."
-        )
-
-
-    # HF48.1 — nova linguagem visual comercial do site, somente em prévia.
-    # Mantém integralmente Catálogo, Taxonomia, Galeria, WhatsApp e publicação HF44.
-    with st.expander("🎨 Novo visual comercial do Site — HF48.1", expanded=False):
-        st.caption(
-            "Prévia de uma nova apresentação mais comercial e organizada, inspirada na experiência de grandes vitrines online, "
-            "mas mantendo a identidade e a operação da AlphaFest. **Nada desta etapa é publicado automaticamente.**"
-        )
-        hv1_hf481, hv2_hf481, hv3_hf481, hv4_hf481 = st.columns(4)
-        hv1_hf481.metric("Produtos da vitrine", resumo_taxonomia_hf454.get("total", 0))
-        hv2_hf481.metric("Categorias", resumo_taxonomia_hf454.get("total_categorias", 0))
-        hv3_hf481.metric("Fotos da Galeria", resumo_galeria_hf471.get("total_fotos", 0))
-        hv4_hf481.metric("Publicação oficial", "Protegida")
-
-        st.info(
-            "⚡ A nova prévia é montada **sob demanda** para não pesar o Manager. "
-            "Ela reaproveita exatamente os mesmos dados já cadastrados; não cria nenhum novo trabalho para a Anna."
-        )
-        if st.button("🎨 Preparar / atualizar novo visual HF48.1", use_container_width=True, key="site_hf481_prepare"):
-            with st.spinner("Montando o novo visual comercial da AlphaFest…"):
-                st.session_state["site_hf481_html_preview"] = _site_gerar_html_completo(
-                    catalogo_site_hf35,
-                    empresa_vitrine_hf36,
-                    logo_src=logo_src_hf36,
-                    imagem_resolver=_catalogo_html_src_imagem,
-                    modo_preview=True,
-                    usar_taxonomia_catalogo=True,
-                    galeria_trabalhos=galeria_site_hf471,
-                    galeria_imagem_resolver=_galeria_trabalho_imagem_data_uri,
-                    incluir_galeria=True,
-                    limite_fotos_galeria=24,
-                    visual_hf48=True,
-                )
-            st.success("✅ Novo visual preparado. O site oficial não foi alterado.")
-
-        html_hf481 = st.session_state.get("site_hf481_html_preview", "")
-        if html_hf481:
-            modo_hf481 = st.radio(
-                "Visualização do novo site",
-                ["🖥️ Desktop", "📱 Celular"],
-                horizontal=True,
-                key="site_hf481_modo_preview",
-            )
-            if modo_hf481 == "📱 Celular":
-                _he1_hf481, _hcel_hf481, _he2_hf481 = st.columns([1.0, 0.62, 1.0])
-                with _hcel_hf481:
-                    components.html(html_hf481, height=1120, scrolling=True)
-            else:
-                components.html(html_hf481, height=1040, scrolling=True)
-
-            st.download_button(
-                "⬇️ Baixar prévia do novo visual HF48.1",
-                data=html_hf481,
-                file_name="alphafest-preview-novo-visual-hf48-1.html",
-                mime="text/html",
-                use_container_width=True,
-                key="site_hf481_download_preview",
-            )
-        else:
-            st.caption("Clique em **Preparar / atualizar novo visual HF48.1** para abrir a nova proposta.")
-
-        st.info(
-            "🔒 **HF44 preservado:** o botão atual de publicação continua gerando o site oficial homologado. "
-            "O HF48.1 é somente uma prévia visual até você e a Anna aprovarem."
-        )
-        st.caption(
-            "🦊 Identidade Thu + Fox: o HF48.1 organiza a nova base visual. A aplicação dos mascotes entra na sequência, "
-            "sem alterar Catálogo, Galeria ou fluxo de atualização."
-        )
-
-    # HF48.2 — identidade visual Thu + Fox sobre a base comercial HF48.1.
-    # Continua somente em prévia; publicação HF44 permanece intocada.
-    with st.expander("🛍️ Vitrine limpa + Ficha comercial do produto — HF51.4-HF3", expanded=False):
-        st.caption(
-            "Mantém o visual aprovado e transforma a listagem de produtos em uma vitrine mais limpa: foto + nome. "
-            "Descrição, preço opcional, WhatsApp, trabalhos realizados e relacionados aparecem ao abrir o produto. **Nada desta etapa é publicado automaticamente.**"
-        )
-        st.info(
-            "🎯 HF51.4-HF3 mantém cabeçalho, Thu + Fox, carrossel, Categoria → Subcategoria e edição rápida já aprovados. "
-            "Na grade pública o selo de Destaque, descrição, preço e CTA saem do card; ao clicar, abre a ficha comercial completa. O preço só aparece se **Mostrar preço** estiver marcado no Manager."
-        )
-        if st.button("🛍️ Preparar / atualizar HF51.4-HF3", use_container_width=True, key="site_hf482_prepare"):
-            with st.spinner("Montando o visual aprovado da AlphaFest…"):
-                st.session_state["site_hf482_html_preview"] = _site_gerar_html_completo(
-                    catalogo_site_hf35,
-                    empresa_vitrine_hf36,
-                    logo_src=logo_src_hf36,
-                    imagem_resolver=_catalogo_html_src_imagem,
-                    modo_preview=True,
-                    usar_taxonomia_catalogo=True,
-                    galeria_trabalhos=galeria_site_hf471,
-                    galeria_imagem_resolver=_galeria_trabalho_imagem_data_uri,
-                    incluir_galeria=True,
-                    limite_fotos_galeria=24,
-                    visual_hf48=True,
-                    mascotes_hf48=True,
-                )
-            st.success("✅ Visual aprovado preparado. O site oficial só muda quando você usar Publicar site agora.")
-
-        html_hf482 = st.session_state.get("site_hf482_html_preview", "")
-        if html_hf482:
-            modo_hf482 = st.radio(
-                "Visualização HF51.4-HF3",
-                ["🖥️ Desktop", "📱 Celular"],
-                horizontal=True,
-                key="site_hf482_modo_preview",
-            )
-            if modo_hf482 == "📱 Celular":
-                _he1_hf482, _hcel_hf482, _he2_hf482 = st.columns([1.0, 0.62, 1.0])
-                with _hcel_hf482:
-                    components.html(html_hf482, height=1160, scrolling=True)
-            else:
-                components.html(html_hf482, height=1080, scrolling=True)
-
-            st.download_button(
-                "⬇️ Baixar prévia HF51.4-HF3",
-                data=html_hf482,
-                file_name="alphafest-preview-hf51-1.html",
-                mime="text/html",
-                use_container_width=True,
-                key="site_hf482_download_preview",
-            )
-        else:
-            st.caption("Clique em **Preparar / atualizar HF51.4-HF3** para conferir o novo cabeçalho e o carrossel antes de publicar.")
-
-        st.info(
-            "✅ **Prévia protegida:** o motor seguro de publicação do HF44 foi preservado. A produção passa a gerar o HF51.4-HF3 somente quando você confirmar **Publicar site agora**."
-        )
-
-    # HF40 — ambiente paralelo/staging: site completo seguro, sem DNS/CNAME.
-    with st.expander("🚧 Site paralelo / staging — HF40", expanded=False):
-        st.caption(
-            "O novo site pode ser hospedado e testado em um endereço temporário sem alterar alphafest.com.br. "
-            "A HF40 não publica, não muda DNS e não desliga o site atual."
-        )
-        _stg_hf39 = _site_resumo_staging(total_produtos=resumo_vitrine_hf36.get("total", 0))
-        sg1_hf39, sg2_hf39, sg3_hf39, sg4_hf39 = st.columns(4)
-        sg1_hf39.metric("Site atual", "Protegido")
-        sg2_hf39.metric("Domínio final", "alphafest.com.br")
-        sg3_hf39.metric("Hospedagem staging", "Cloudflare Workers · Static Assets")
-        sg4_hf39.metric("DNS alterado", "NÃO")
-
-        st.success(
-            "✅ **Endereço preservado:** o site atual continua respondendo em alphafest.com.br. "
-            "O novo site continua homologado primeiro no endereço temporário `*.workers.dev`."
-        )
-        st.info(
-            "📦 O pacote abaixo é um **snapshot do mesmo Catálogo oficial** usado nesta tela. "
-            "Ele inclui proteção `noindex` para homologação e propositalmente não contém CNAME nem configuração de DNS."
-        )
-
-        def _build_staging_hf45():
-            _html = _site_gerar_html_completo(
-                catalogo_site_hf35,
-                empresa_vitrine_hf36,
-                logo_src=logo_src_hf36,
-                imagem_resolver=_catalogo_html_src_imagem,
-                modo_preview=False,
-            )
-            _zip = _site_gerar_pacote_staging(
-                _html,
-                total_produtos=resumo_vitrine_hf36.get("total", 0),
-                versao_manager="20.4.9-I8.13.5-HF40",
-            )
-            return _html, _zip
-
-        (_html_staging_bundle_hf45, pacote_staging_hf39), _site_staging_hit_hf45 = _document_cache_get_or_build(
-            _site_runtime_cache_hf45,
-            "site-staging-bundle-hf45",
-            {
-                "catalogo": catalogo_site_hf35,
-                "empresa": empresa_vitrine_hf36,
-                "logo": logo_src_hf36,
-                "total": resumo_vitrine_hf36.get("total", 0),
-            },
-            _build_staging_hf45,
-            ttl_seconds=180,
-            max_entries=6,
-        )
-        st.download_button(
-            "⬇️ Baixar pacote do site paralelo (ZIP)",
-            data=pacote_staging_hf39,
-            file_name="alphafest-site-staging-hf40.zip",
-            mime="application/zip",
-            use_container_width=True,
-            key="site_hf40_download_staging",
-        )
-        with st.expander("🧭 Ver plano de virada do endereço", expanded=False):
-            st.markdown(
-                "1. Homologar o novo site no endereço temporário.  \n"
-                "2. Conferir desktop, celular, produtos, textos e WhatsApp.  \n"
-                "3. Reaproveitar somente o conteúdo aprovado do site antigo.  \n"
-                "4. Fazer backup do DNS atual.  \n"
-                "5. Somente na virada final conectar **alphafest.com.br** à nova hospedagem.  \n"
-                "6. Confirmar HTTPS e manter rollback antes de desligar a hospedagem antiga."
-            )
-            st.warning("Nenhuma dessas etapas de DNS é executada automaticamente pelo Manager.")
-
-        # HF41 — preparação conservadora da virada: backup primeiro, DNS depois.
-        with st.expander("🔐 Preparação da virada do domínio — HF41 (concluída)", expanded=False):
-            _cut_hf41 = _site_resumo_pre_virada()
-            c1_hf41, c2_hf41, c3_hf41, c4_hf41 = st.columns(4)
-            c1_hf41.metric("Staging externo", _cut_hf41.get("staging_externo", "—"))
-            c2_hf41.metric("DNS alterado", "SIM")
-            c3_hf41.metric("Backup DNS", "Confirmado")
-            c4_hf41.metric("Rollback", _cut_hf41.get("rollback", "Preparado"))
-            st.success(
-                "✅ **Site novo homologado:** Desktop, celular real, navegação e WhatsApp já passaram no ambiente paralelo."
-            )
-            st.info(
-                "✅ **HF41 concluída:** backup DNS registrado; nameservers migrados para Cloudflare; zona Active; "
-                "domínio raiz conectado ao Worker `alphafest-novo`. O rollback anterior permanece documentado."
-            )
-            kit_hf41 = _site_gerar_kit_pre_virada(versao_manager="20.4.9-I8.13.5-HF41")
-            st.download_button(
-                "⬇️ Baixar kit de segurança pré-virada (ZIP)",
-                data=kit_hf41,
-                file_name="alphafest-pre-virada-hf41.zip",
-                mime="application/zip",
-                use_container_width=True,
-                key="site_hf41_download_cutover",
-            )
+        with st.expander("🚀 Publicar site", expanded=True):
             st.caption(
-                "O kit contém uma ficha para copiar o DNS atual, checklist pré-virada e plano de rollback. "
-                "Ele não contém credenciais, CNAME, comandos de DNS nem alteração automática."
+                "A publicação envia ao Worker `alphafest-novo` somente depois da sua confirmação. Catálogo, categorias, Galeria, lightbox, carrossel e demais funções homologadas usam a mesma Fonte Única do Manager."
             )
 
-        # HF44 — publicação assistida no Worker; continua sem tocar em DNS/MX/Custom Domains.
-        with st.expander("🚀 Produção oficial — HF51.4-HF3 · motor HF44", expanded=True):
-            _prod_hf44 = _site_resumo_producao(total_produtos=resumo_vitrine_hf36.get("total", 0))
-            p1_hf44, p2_hf44, p3_hf44, p4_hf44 = st.columns(4)
-            p1_hf44.metric("Zona Cloudflare", _prod_hf44.get("zona_cloudflare", "—"))
-            p2_hf44.metric("Domínio principal", "Conectado")
-            p3_hf44.metric("Publicação", "Assistida")
-            p4_hf44.metric("www", _prod_hf44.get("www", "301 → raiz"))
-            st.success(
-                "✅ O site oficial está estável em `alphafest.com.br` e o `www` redireciona em 301. "
-                "O motor HF44 continua cuidando somente do deployment. O conteúdo aprovado agora inclui HF51.4-HF3: vitrine limpa com foto + nome, ficha comercial ao clicar, preço opcional, relacionados, Produto → Galeria, cabeçalho azul, carrossel, Thu + Fox e visual HF48.3-HF4; DNS, MX, webmail, domínio e Redirect Rules ficam intocados."
-            )
-            st.info(
-                "📌 **Fluxo preservado:** cadastre/edite produtos ou selecione trabalhos da Galeria → confira a prévia → **Publicar site agora**. "
-                "Você pode acumular vários produtos e publicar tudo em um único envio."
-            )
-
-            # HF48.3 — produção oficial passa a usar o visual aprovado, mantendo o motor seguro HF44.
-            # Catálogo + taxonomia + Galeria autorizada/pré-selecionada + Thu/Fox saem da mesma Fonte Única.
-            def _build_producao_hf45():
+            def _build_producao_hf59():
                 _html = _site_gerar_html_completo(
                     catalogo_site_hf35,
-                    empresa_vitrine_hf36,
-                    logo_src=logo_src_hf36,
+                    empresa_vitrine_hf59,
+                    logo_src=logo_src_hf59,
                     imagem_resolver=_catalogo_html_src_imagem,
                     modo_preview=False,
                     usar_taxonomia_catalogo=True,
-                    galeria_trabalhos=galeria_site_hf471,
+                    galeria_trabalhos=galeria_site_hf59,
                     galeria_imagem_resolver=_galeria_trabalho_imagem_data_uri,
                     incluir_galeria=True,
                     limite_fotos_galeria=48,
@@ -26722,279 +26314,135 @@ if pagina_atual == "site":
                 )
                 _zip = _site_gerar_pacote_producao(
                     _html,
-                    total_produtos=resumo_vitrine_hf36.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF52.1",
+                    total_produtos=resumo_vitrine_hf59.get("total", 0),
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF59",
                 )
                 return _html, _zip
 
-            (html_producao_hf44, pacote_producao_hf44), _site_prod_hit_hf45 = _document_cache_get_or_build(
+            (html_producao_hf59, pacote_producao_hf59), _site_prod_hit_hf59 = _document_cache_get_or_build(
                 _site_runtime_cache_hf45,
-                "site-producao-bundle-hf45",
+                "site-producao-bundle-hf59",
                 {
                     "catalogo": catalogo_site_hf35,
-                    "empresa": empresa_vitrine_hf36,
-                    "logo": logo_src_hf36,
-                    "galeria": galeria_site_hf471,
-                    "total": resumo_vitrine_hf36.get("total", 0),
-                    "visual": "HF51.4-HF3",
+                    "empresa": empresa_vitrine_hf59,
+                    "logo": logo_src_hf59,
+                    "galeria": galeria_site_hf59,
+                    "total": resumo_vitrine_hf59.get("total", 0),
+                    "visual": "HF59",
                 },
-                _build_producao_hf45,
+                _build_producao_hf59,
                 ttl_seconds=180,
                 max_entries=6,
             )
 
-            # Fallback/manual continua disponível para rollback e contingência.
-            st.download_button(
-                "⬇️ Baixar ZIP de produção (fallback manual)",
-                data=pacote_producao_hf44,
-                file_name="alphafest-site-producao-hf51-1.zip",
-                mime="application/zip",
-                use_container_width=True,
-                key="site_hf44_download_producao",
-            )
-
-            st.markdown("#### 🚀 Publicar alterações do Catálogo")
-            st.caption(
-                "A publicação usa a API oficial de Static Assets do Worker `alphafest-novo`. "
-                "O API Token é usado somente em memória e não é gravado em JSON, banco, ZIP ou histórico do Manager."
-            )
-
-            _cf_env_hf44 = _site_cf_credenciais_ambiente() if callable(_site_cf_credenciais_ambiente) else {}
-            _cf_secret_account_hf44 = ""
-            _cf_secret_token_hf44 = ""
-            _cf_secret_worker_hf44 = ""
+            _cf_env_hf59 = _site_cf_credenciais_ambiente() if callable(_site_cf_credenciais_ambiente) else {}
+            _cf_secret_account_hf59 = ""
+            _cf_secret_token_hf59 = ""
+            _cf_secret_worker_hf59 = ""
             try:
-                _cf_group_hf44 = st.secrets.get("cloudflare", {})
-                _cf_secret_account_hf44 = str(_cf_group_hf44.get("account_id", "") or "").strip()
-                _cf_secret_token_hf44 = str(_cf_group_hf44.get("api_token", "") or "").strip()
-                _cf_secret_worker_hf44 = str(_cf_group_hf44.get("worker_name", "") or "").strip()
+                _cf_group_hf59 = st.secrets.get("cloudflare", {})
+                _cf_secret_account_hf59 = str(_cf_group_hf59.get("account_id", "") or "").strip()
+                _cf_secret_token_hf59 = str(_cf_group_hf59.get("api_token", "") or "").strip()
+                _cf_secret_worker_hf59 = str(_cf_group_hf59.get("worker_name", "") or "").strip()
             except Exception:
                 pass
 
-            _cf_account_default_hf44 = _cf_secret_account_hf44 or str(_cf_env_hf44.get("account_id", "") or "")
-            _cf_token_seguro_hf44 = _cf_secret_token_hf44 or str(_cf_env_hf44.get("api_token", "") or "")
-            _cf_worker_hf44 = _cf_secret_worker_hf44 or str(_cf_env_hf44.get("worker_name", "") or "") or _site_cf_worker_padrao
+            _cf_account_default_hf59 = _cf_secret_account_hf59 or str(_cf_env_hf59.get("account_id", "") or "")
+            _cf_token_seguro_hf59 = _cf_secret_token_hf59 or str(_cf_env_hf59.get("api_token", "") or "")
+            _cf_worker_hf59 = _cf_secret_worker_hf59 or str(_cf_env_hf59.get("worker_name", "") or "") or _site_cf_worker_padrao
 
-            with st.expander("🔐 Conexão Cloudflare", expanded=not bool(_cf_account_default_hf44 and _cf_token_seguro_hf44)):
-                _cf_account_hf44 = st.text_input(
-                    "Cloudflare Account ID",
-                    value=_cf_account_default_hf44,
-                    key="site_hf44_cf_account",
-                    help="Identificador da conta Cloudflare. Não é senha.",
-                ).strip()
-                st.text_input(
-                    "Worker de destino",
-                    value=_cf_worker_hf44,
-                    key="site_hf44_cf_worker_view",
-                    disabled=True,
-                )
-                if _cf_token_seguro_hf44:
-                    st.success("🔒 API Token carregado de configuração segura do ambiente/Streamlit Secrets.")
-                    _cf_token_hf44 = _cf_token_seguro_hf44
-                else:
-                    _cf_token_hf44 = st.text_input(
-                        "Cloudflare API Token",
-                        type="password",
-                        key="site_hf44_cf_token",
-                        help="O Manager usa este token apenas nesta sessão/publicação e não o salva.",
+            if _cf_account_default_hf59 and _cf_token_seguro_hf59:
+                _cf_account_hf59 = _cf_account_default_hf59
+                _cf_token_hf59 = _cf_token_seguro_hf59
+                st.success(f"🔒 Cloudflare pronta para publicar no Worker `{_cf_worker_hf59}`.")
+            else:
+                with st.expander("🔐 Conexão Cloudflare", expanded=True):
+                    _cf_account_hf59 = st.text_input(
+                        "Cloudflare Account ID",
+                        value=_cf_account_default_hf59,
+                        key="site_hf59_cf_account",
                     ).strip()
-                    st.caption("Para uso diário com um clique, depois podemos guardar o token em Streamlit Secrets — nunca no Catálogo ou em JSON operacional.")
+                    st.text_input("Worker de destino", value=_cf_worker_hf59, disabled=True, key="site_hf59_cf_worker")
+                    _cf_token_hf59 = _cf_token_seguro_hf59 or st.text_input(
+                        "Cloudflare API Token", type="password", key="site_hf59_cf_token"
+                    ).strip()
+                    if not SITE_CF_IMPORT_ERROR and st.button("🔎 Testar conexão sem publicar", key="site_hf59_cf_testar", use_container_width=True):
+                        if not _cf_account_hf59 or not _cf_token_hf59:
+                            st.warning("Informe Account ID e API Token para testar.")
+                        else:
+                            try:
+                                with st.spinner("Conferindo acesso ao Worker…"):
+                                    _site_cf_testar_conexao(
+                                        account_id=_cf_account_hf59,
+                                        api_token=_cf_token_hf59,
+                                        worker_name=_cf_worker_hf59,
+                                    )
+                                st.success("✅ Conexão confirmada. Nenhuma publicação foi feita.")
+                            except Exception as _cf_test_exc_hf59:
+                                st.error(f"Não foi possível validar a conexão: {_cf_test_exc_hf59}")
 
-                if SITE_CF_IMPORT_ERROR:
-                    st.error("Integração Cloudflare isolada: não foi possível carregar o módulo de publicação. O ZIP manual continua disponível.")
-                elif st.button("🔎 Testar conexão sem publicar", key="site_hf44_cf_testar", use_container_width=True):
-                    if not _cf_account_hf44 or not _cf_token_hf44:
-                        st.warning("Informe Account ID e API Token para testar.")
-                    else:
-                        try:
-                            with st.spinner("Conferindo acesso ao Worker sem alterar o site..."):
-                                _cf_teste_hf44 = _site_cf_testar_conexao(
-                                    account_id=_cf_account_hf44,
-                                    api_token=_cf_token_hf44,
-                                    worker_name=_cf_worker_hf44,
-                                )
-                            st.session_state["site_hf44_cf_ok"] = True
-                            st.success(f"✅ Conexão confirmada com o Worker `{_cf_teste_hf44.get('worker_name', _cf_worker_hf44)}`. Nenhuma publicação foi feita.")
-                        except Exception as _cf_test_exc_hf44:
-                            st.session_state["site_hf44_cf_ok"] = False
-                            st.error(f"Não foi possível validar a conexão: {_cf_test_exc_hf44}")
+            if SITE_CF_IMPORT_ERROR:
+                st.error("A integração Cloudflare não pôde ser carregada. Use o ZIP de contingência abaixo.")
 
-            _cf_fingerprint_hf44 = ""
+            _cf_fingerprint_hf59 = ""
             try:
                 if callable(_site_cf_fingerprint_pacote):
-                    _cf_fingerprint_hf44 = _site_cf_fingerprint_pacote(pacote_producao_hf44)
+                    _cf_fingerprint_hf59 = _site_cf_fingerprint_pacote(pacote_producao_hf59)
             except Exception:
                 pass
-            _cf_ultimo_hf44 = str(st.session_state.get("site_hf44_ultimo_fingerprint", "") or "")
-            if _cf_fingerprint_hf44 and _cf_fingerprint_hf44 == _cf_ultimo_hf44:
-                st.info("✅ Este mesmo conteúdo já foi publicado nesta sessão. Se você alterar ou adicionar produtos, o Manager detectará uma nova versão.")
+            _cf_ultimo_hf59 = str(st.session_state.get("site_hf44_ultimo_fingerprint", "") or "")
+            if _cf_fingerprint_hf59 and _cf_fingerprint_hf59 == _cf_ultimo_hf59:
+                st.info("✅ Este mesmo conteúdo já foi publicado nesta sessão. Uma nova alteração no Catálogo ou Galeria gerará outra versão.")
 
-            _cf_confirmar_hf44 = st.checkbox(
-                f"Conferi o HF51.4-HF3 e quero publicar agora os {resumo_vitrine_hf36.get('total', 0)} produto(s) marcados/prontos + a Galeria selecionada + carrossel.",
-                key="site_hf44_confirmar_publicacao",
+            _cf_confirmar_hf59 = st.checkbox(
+                f"Conferi a prévia e quero publicar agora {resumo_vitrine_hf59.get('total', 0)} produto(s) + a Galeria selecionada.",
+                key="site_hf59_confirmar_publicacao",
             )
-            _cf_pode_publicar_hf44 = bool(
+            _cf_pode_publicar_hf59 = bool(
                 callable(_site_cf_publicar_pacote)
-                and _cf_account_hf44
-                and _cf_token_hf44
-                and _cf_confirmar_hf44
-                and (_cf_fingerprint_hf44 != _cf_ultimo_hf44 or not _cf_fingerprint_hf44)
+                and _cf_account_hf59
+                and _cf_token_hf59
+                and _cf_confirmar_hf59
+                and (_cf_fingerprint_hf59 != _cf_ultimo_hf59 or not _cf_fingerprint_hf59)
             )
             if st.button(
                 "🚀 Publicar site agora",
                 type="primary",
                 use_container_width=True,
-                disabled=not _cf_pode_publicar_hf44,
-                key="site_hf44_publicar_agora",
+                disabled=not _cf_pode_publicar_hf59,
+                key="site_hf59_publicar_agora",
             ):
                 try:
-                    with st.spinner("Enviando somente os arquivos alterados e ativando a nova versão do site..."):
-                        _cf_resultado_hf44 = _site_cf_publicar_pacote(
-                            pacote_producao_hf44,
-                            account_id=_cf_account_hf44,
-                            api_token=_cf_token_hf44,
-                            worker_name=_cf_worker_hf44,
-                            versao_manager="20.4.9-I8.13.5-HF52.1",
+                    with st.spinner("Enviando a nova versão do site…"):
+                        _cf_resultado_hf59 = _site_cf_publicar_pacote(
+                            pacote_producao_hf59,
+                            account_id=_cf_account_hf59,
+                            api_token=_cf_token_hf59,
+                            worker_name=_cf_worker_hf59,
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF59",
                         )
-                    st.session_state["site_hf44_ultimo_fingerprint"] = str(_cf_resultado_hf44.get("fingerprint", "") or _cf_fingerprint_hf44)
-                    st.session_state["site_hf44_cf_ok"] = True
+                    st.session_state["site_hf44_ultimo_fingerprint"] = str(
+                        _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
+                    )
                     st.success(
-                        f"✅ Site publicado no Worker `{_cf_worker_hf44}`. "
-                        f"Versão Cloudflare: `{_cf_resultado_hf44.get('version_id', 'confirmada')}` • "
-                        f"assets enviados agora: {_cf_resultado_hf44.get('assets_enviados', 0)}. HF51.4-HF3 ativo."
+                        f"✅ Site publicado no Worker `{_cf_worker_hf59}`. "
+                        f"Versão Cloudflare: `{_cf_resultado_hf59.get('version_id', 'confirmada')}`."
                     )
                     st.link_button("🌐 Abrir alphafest.com.br para conferir", "https://alphafest.com.br", use_container_width=True)
-                    st.caption("Se a conferência visual não estiver correta, o ZIP manual e as versões anteriores do Worker permanecem disponíveis para rollback.")
-                except Exception as _cf_publish_exc_hf44:
-                    st.error(f"A publicação foi interrompida com segurança: {_cf_publish_exc_hf44}")
-                    st.caption("Nenhum DNS, MX, webmail ou regra de redirecionamento é alterado por esta operação. Use o ZIP manual se precisar de contingência.")
+                except Exception as _cf_publish_exc_hf59:
+                    st.error(f"A publicação foi interrompida com segurança: {_cf_publish_exc_hf59}")
 
-    with st.expander(
-        f"🛍️ Produtos marcados para a vitrine/site ({resumo_site_hf35.get('marcados_site', 0)})",
-        expanded=True,
-    ):
-        marcados_hf35 = [x for x in produtos_site_hf35 if x.get("ativo") and x.get("publicar_site")]
-        if not marcados_hf35:
-            st.warning(
-                "Nenhum produto está marcado como **Publicar no site/catálogo online**. "
-                "Nada será publicado automaticamente. Marque os produtos no Catálogo quando desejar montar a vitrine."
-            )
-        for pos_hf35, item_hf35 in enumerate(marcados_hf35[:40]):
-            cimg_hf35, cinfo_hf35, cact_hf35 = st.columns([1.0, 2.8, 1.05])
-            img_hf35 = str(item_hf35.get("imagem_principal") or "").strip()
-            if img_hf35:
-                try:
-                    cimg_hf35.image(img_hf35, use_container_width=True)
-                except Exception:
-                    cimg_hf35.caption("🖼️ Foto cadastrada")
-            else:
-                cimg_hf35.caption("🖼️ Sem foto")
-            cinfo_hf35.markdown(
-                ("⭐ " if item_hf35.get("destaque") else "")
-                + f"**{item_hf35.get('nome', 'Produto')}**"
-            )
-            detalhes_hf35 = []
-            if item_hf35.get("categoria"):
-                detalhes_hf35.append(str(item_hf35.get("categoria")))
-            if item_hf35.get("exibir_preco_site") and item_hf35.get("preco"):
-                detalhes_hf35.append("preço no site: " + formatar_preco_catalogo(item_hf35.get("preco")))
-            else:
-                detalhes_hf35.append("preço oculto no site")
-            cinfo_hf35.caption(" • ".join(detalhes_hf35))
-            if item_hf35.get("pronto"):
-                cinfo_hf35.success("✅ Pronto para a vitrine")
-            else:
-                cinfo_hf35.warning("⚠️ Revisar: " + ", ".join(item_hf35.get("faltas") or []))
-            if cact_hf35.button(
-                "📦 Abrir no Catálogo",
-                key=f"site_hf35_catalogo_{pos_hf35}_{item_hf35.get('indice_catalogo')}",
-                use_container_width=True,
-            ):
-                st.session_state.catalogo_edit_index = int(item_hf35.get("indice_catalogo") or 0)
-                rerun_na_aba("catalogo")
-
-    with st.expander(
-        f"✨ Prontos no Catálogo e ainda não marcados para o site ({resumo_site_hf35.get('prontos_nao_marcados', 0)})",
-        expanded=False,
-    ):
-        candidatos_hf35 = [
-            x for x in produtos_site_hf35
-            if x.get("ativo") and x.get("pronto") and not x.get("publicar_site")
-        ]
-        if not candidatos_hf35:
-            st.success("Nenhum produto pronto está aguardando decisão de publicação.")
-        for pos_hf35, item_hf35 in enumerate(candidatos_hf35[:30]):
-            cc1_hf35, cc2_hf35 = st.columns([3.2, 1])
-            cc1_hf35.markdown(("⭐ " if item_hf35.get("destaque") else "") + f"**{item_hf35.get('nome')}**")
-            cc1_hf35.caption(
-                (str(item_hf35.get("categoria") or "Sem categoria"))
-                + " • "
-                + (("preço no site: " + formatar_preco_catalogo(item_hf35.get("preco"))) if item_hf35.get("exibir_preco_site") and item_hf35.get("preco") else "preço oculto no site")
-            )
-            if cc2_hf35.button(
-                "Revisar no Catálogo",
-                key=f"site_hf35_candidato_{pos_hf35}_{item_hf35.get('indice_catalogo')}",
-                use_container_width=True,
-            ):
-                st.session_state.catalogo_edit_index = int(item_hf35.get("indice_catalogo") or 0)
-                rerun_na_aba("catalogo")
-
-    with st.expander("🔎 Site atual × Catálogo oficial", expanded=False):
-        st.caption(
-            "A análise do site é manual para não deixar o Manager lento. Ela lê apenas páginas públicas de alphafest.com.br "
-            "e reutiliza o mesmo mecanismo já existente no Assistente THU."
-        )
-        marketing_site_hf35 = carregar_marketing()
-        scan_site_hf35 = marketing_site_hf35.get("acervo_site_ultimo_scan") or {}
-        scan_site_hf35 = thu_site_reprocessar_scan(scan_site_hf35) if scan_site_hf35 else {}
-
-        if scan_site_hf35.get("ok"):
-            paginas_site_hf35 = [p for p in (scan_site_hf35.get("paginas") or []) if isinstance(p, dict) and p.get("ok")]
-            produtos_detectados_hf35 = [p for p in paginas_site_hf35 if str(p.get("tipo") or "") == "produto"]
-            pares_hf35 = 0
-            ausentes_hf35 = 0
-            for pg_hf35 in produtos_detectados_hf35:
-                match_hf35 = thu_site_sugerir_produto(
-                    str(pg_hf35.get("nome") or pg_hf35.get("texto_menu") or ""),
-                    catalogo_site_hf35,
-                    alternativas=[pg_hf35.get("texto_menu", ""), pg_hf35.get("titulo_html", ""), *(pg_hf35.get("headings") or [])[:5]],
+            with st.expander("🛟 Contingência / ZIP manual", expanded=False):
+                st.download_button(
+                    "⬇️ Baixar ZIP de produção",
+                    data=pacote_producao_hf59,
+                    file_name="alphafest-site-producao-hf59.zip",
+                    mime="application/zip",
+                    use_container_width=True,
+                    key="site_hf59_download_producao",
                 )
-                if str((match_hf35 or {}).get("status") or "") in {"oficial", "provavel"}:
-                    pares_hf35 += 1
-                else:
-                    ausentes_hf35 += 1
-            sa1_hf35, sa2_hf35, sa3_hf35 = st.columns(3)
-            sa1_hf35.metric("Páginas lidas", len(paginas_site_hf35))
-            sa2_hf35.metric("Produtos com par no Catálogo", pares_hf35)
-            sa3_hf35.metric("Possíveis ausentes", ausentes_hf35)
-            st.caption(
-                "Última análise: "
-                + str(scan_site_hf35.get("lido_em") or "—")[:19].replace("T", " ")
-                + ". O site antigo é referência histórica; o Catálogo continua oficial."
-            )
-        else:
-            st.info("Ainda não há uma análise do site disponível nesta base, ou a última leitura não foi concluída.")
-
-        if st.button("🔄 Analisar site atual agora", key="site_hf35_scan", type="primary", use_container_width=True):
-            with st.spinner("Lendo o site público sem alterar nenhuma página..."):
-                novo_scan_hf35 = thu_site_analisar_acervo(42)
-            if novo_scan_hf35.get("ok"):
-                marketing_site_hf35["acervo_site_ultimo_scan"] = novo_scan_hf35
-                salvar_marketing(marketing_site_hf35)
-                st.session_state["_thu_acervo_site_scan_i3"] = novo_scan_hf35
-                st.session_state["_mensagem_sucesso_pendente"] = "Site atual analisado. A comparação usa o mesmo Catálogo oficial do Manager."
-                st.rerun()
-            else:
-                st.error(novo_scan_hf35.get("erro") or "Não foi possível analisar o site atual neste momento.")
-
-        if usuario_pode_ver_aba("crescimento", obter_usuario_atual()):
-            if st.button("📸 Abrir auditoria detalhada no Alpha Marketing", key="site_hf35_abrir_marketing", use_container_width=True):
-                rerun_na_aba("crescimento")
-
-    st.info(
-        "🚀 **HF44:** o site oficial já está migrado e com categorias comerciais homologadas. "
-        "Agora novos produtos podem ser acumulados no Catálogo e publicados em lote pelo botão **Publicar site agora**, sempre após conferência explícita da prévia."
-    )
+    else:
+        st.info("Clique em **Preparar / atualizar prévia do site**. Depois de conferir, o botão de publicação aparecerá logo abaixo da prévia.")
 
 if pagina_atual == "crescimento":
     if not feature_enabled("marketing_studio", True):
@@ -33356,8 +32804,33 @@ if pagina_atual == "catalogo":
         with tab_info:
             with st.container(border=True):
                 c1, c2 = st.columns(2)
+                _categorias_item_site_hf59 = _site_categorias_produto(item_edicao) if item_edicao else []
+                _categoria_principal_item_hf59 = (_categorias_item_site_hf59[0] if _categorias_item_site_hf59 else "")
                 categoria_cat = c1.text_input(
-                    "Categoria *", value=item_edicao.get("Categoria", "") or prefill_i8.get("categoria", ""), key=f"cat_categoria_{sufixo}"
+                    "Categoria principal *",
+                    value=_categoria_principal_item_hf59 or prefill_i8.get("categoria", ""),
+                    key=f"cat_categoria_{sufixo}",
+                    help="Esta é a categoria principal do produto. Para exibir o mesmo produto em outras categorias do site, use o campo logo abaixo.",
+                )
+                _categorias_conhecidas_hf59 = sorted(
+                    {
+                        str(cat).strip()
+                        for _produto_cat_hf59 in catalogo
+                        for cat in _site_categorias_produto(_produto_cat_hf59)
+                        if str(cat).strip()
+                    },
+                    key=str.casefold,
+                )
+                _extras_atuais_hf59 = _categorias_item_site_hf59[1:] if len(_categorias_item_site_hf59) > 1 else []
+                _opcoes_extras_hf59 = list(dict.fromkeys([*_categorias_conhecidas_hf59, *_extras_atuais_hf59]))
+                _principal_norm_hf59 = str(categoria_cat or "").strip().casefold()
+                _opcoes_extras_hf59 = [x for x in _opcoes_extras_hf59 if x.casefold() != _principal_norm_hf59]
+                categorias_extras_site_cat = c1.multiselect(
+                    "Exibir também nestas categorias do site",
+                    options=_opcoes_extras_hf59,
+                    default=[x for x in _extras_atuais_hf59 if x in _opcoes_extras_hf59],
+                    key=f"cat_categorias_extras_site_{sufixo}",
+                    help="O produto continua cadastrado uma única vez. No site ele aparecerá na categoria principal e também nas categorias marcadas aqui.",
                 )
                 subcategoria_cat = c1.text_input(
                     "Subcategoria", value=item_edicao.get("Subcategoria", "") or prefill_i8.get("subcategoria", ""), key=f"cat_subcategoria_{sufixo}"
@@ -33963,6 +33436,10 @@ if pagina_atual == "catalogo":
                     "LegendaSocial": legenda_instagram.strip(), "Hashtags": hashtags.strip(),
                     "DescricaoMercadoLivre": texto_ml.strip(), "DescricaoShopee": texto_shopee.strip(),
                     "PublicarSite": publicar_site, "ExibirPrecoSite": bool(exibir_preco_site), "Destaque": destaque_cat,
+                    "CategoriasExtrasSite": [
+                        str(cat).strip() for cat in categorias_extras_site_cat
+                        if str(cat).strip() and str(cat).strip().casefold() != categoria_cat.strip().casefold()
+                    ],
                     "ArquivosBiblioteca": list(item_edicao.get("ArquivosBiblioteca", []) or []),
                     "AtualizadoEm": agora_local().isoformat(timespec="seconds"),
                 })

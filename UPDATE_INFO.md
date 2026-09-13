@@ -1,24 +1,30 @@
-# AlphaFest Manager — HF53.3-HF8-HF58
+# AlphaFest Manager — HF59
 
-## Galeria — um trabalho em múltiplas categorias
+## Central do Site simplificada + produtos em múltiplas categorias
 
-Evolução isolada da Galeria, baseada na HF57, sem duplicar trabalhos e sem alterar a categoria principal do produto.
+Atualização incremental sobre a HF58. Mantém as regras de negócio e módulos homologados e concentra a Central do Site apenas no que é usado no dia a dia.
 
-### Entrega
-- cada trabalho mantém sua **categoria principal** atual;
-- adiciona o campo **Exibir também em outras categorias do site**;
-- permite selecionar uma ou várias categorias adicionais tanto ao registrar um novo trabalho quanto em trabalhos já existentes;
-- no site, o mesmo trabalho aparece ao filtrar qualquer categoria marcada;
-- em **Todas as categorias**, o trabalho continua aparecendo apenas uma vez;
-- o filtro interno da Galeria também encontra o trabalho pela categoria principal ou por qualquer categoria adicional;
-- as categorias adicionais entram na busca/filtro público da Galeria sem duplicar fotos ou registros;
-- nenhuma migração de banco é necessária: o novo campo é opcional e compatível com registros antigos.
+### Central do Site
+- mantém o painel de **Métricas privadas**;
+- remove da tela as prévias antigas HF40/HF45/HF47/HF48, staging histórico, listas auxiliares e comparação antiga do site;
+- cria um fluxo único **Preparar / atualizar prévia → Conferir Desktop/Celular → Publicar site agora**;
+- mantém acesso ao site atual, conexão Cloudflare e ZIP manual de contingência;
+- preserva o motor de publicação HF44 e todas as proteções existentes.
+
+### Produtos em múltiplas categorias do site
+- o produto continua com uma **Categoria principal** no Catálogo;
+- novo campo **Exibir também nestas categorias do site** permite associar o mesmo produto a outras categorias sem duplicar cadastro;
+- no site, o produto aparece em todas as categorias marcadas e apenas uma vez em **Todos os produtos**;
+- contadores e cards de categorias passam a considerar as categorias extras;
+- a mesma subcategoria do produto continua válida nas categorias em que ele for exibido;
+- compatibilidade: cadastros que já tenham categorias separadas por vírgula, ponto e vírgula, `|` ou quebra de linha são interpretados sem perder informação e, ao salvar, ficam normalizados no novo campo.
 
 ### Preservado
-- HF57 — categorias públicas sem limite fixo;
+- HF58 — Galeria em múltiplas categorias;
+- HF57 — categorias do site sem limite de 12;
 - HF56 — lightbox da Galeria pública;
 - HF55 — exclusão individual de foto na Galeria interna;
-- vínculo Produto → Galeria, filtros, busca, WhatsApp, métricas e publicação Cloudflare HF44;
+- HF54 e demais otimizações homologadas;
 - Template Mestre Comercial HF7 congelado;
 - Template Anna homologado;
-- nenhuma alteração nas regras de produção, estoque, financeiro, CRM ou pedidos.
+- Catálogo como Fonte Única, métricas, WhatsApp, carrossel, Produto → Galeria e publicação Cloudflare HF44.

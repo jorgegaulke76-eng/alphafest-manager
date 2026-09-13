@@ -1,4 +1,4 @@
-"""Vitrine pública responsiva AlphaFest (HF43).
+"""Vitrine pública responsiva AlphaFest (HF59).
 
 Somente leitura: seleciona produtos diretamente do Catálogo oficial marcados
 para o site e prontos para apresentação. A HF43 acrescenta uma camada de
@@ -158,10 +158,15 @@ def selecionar_produtos_vitrine(
         item["ocasioes_busca"] = _lista(produto.get("Ocasioes") or produto.get("Ocasiões") or produto.get("Ocasiao") or produto.get("Ocasião"))
         item["tags_busca"] = _lista(produto.get("Tags") or produto.get("PalavrasChave") or produto.get("Palavras-chave"))
         item["carrossel_site"] = bool(produto.get("CarrosselSite", False))
-        item["categoria_origem"] = str(item.get("categoria") or "").strip()
+        categorias_origem = _lista(item.get("categorias_site") or [])
+        if not categorias_origem:
+            categorias_origem = [str(item.get("categoria") or "").strip()] if str(item.get("categoria") or "").strip() else []
+        item["categorias_origem"] = categorias_origem
+        item["categoria_origem"] = categorias_origem[0] if categorias_origem else ""
         item["categoria_comercial"] = categoria_comercial_produto(item)
         if usar_taxonomia_catalogo:
-            item["categoria_publica"] = item["categoria_origem"] or "Sem categoria"
+            item["categorias_publicas"] = categorias_origem or ["Sem categoria"]
+            item["categoria_publica"] = item["categorias_publicas"][0]
             item["subcategoria_publica"] = item["subcategoria"] or "Sem subcategoria"
         else:
             item["categoria_publica"] = item["categoria_comercial"] or "Festas & Personalizados"
@@ -192,7 +197,11 @@ def resumir_vitrine(
     produtos = selecionar_produtos_vitrine(catalogo, usar_taxonomia_catalogo=usar_taxonomia_catalogo)
     if usar_taxonomia_catalogo:
         categorias = sorted(
-            {str(x.get("categoria_publica") or "Sem categoria").strip() or "Sem categoria" for x in produtos},
+            {
+                str(cat or "Sem categoria").strip() or "Sem categoria"
+                for x in produtos
+                for cat in (x.get("categorias_publicas") or [x.get("categoria_publica") or "Sem categoria"])
+            },
             key=str.casefold,
         )
         subcategorias_por_categoria: Dict[str, List[str]] = {}
@@ -201,25 +210,29 @@ def resumir_vitrine(
                 {
                     str(x.get("subcategoria_publica") or "Sem subcategoria").strip() or "Sem subcategoria"
                     for x in produtos
-                    if str(x.get("categoria_publica") or "Sem categoria").strip() == categoria
+                    if categoria in (x.get("categorias_publicas") or [x.get("categoria_publica") or "Sem categoria"])
                 },
                 key=str.casefold,
             )
             subcategorias_por_categoria[categoria] = subs
         total_subcategorias = len({
-            (str(x.get("categoria_publica") or "Sem categoria").strip(), str(x.get("subcategoria_publica") or "Sem subcategoria").strip())
+            (categoria, str(x.get("subcategoria_publica") or "Sem subcategoria").strip() or "Sem subcategoria")
             for x in produtos
+            for categoria in (x.get("categorias_publicas") or [x.get("categoria_publica") or "Sem categoria"])
         })
         sem_subcategoria = sum(1 for x in produtos if str(x.get("subcategoria_publica") or "").strip() == "Sem subcategoria")
         contagem_por_categoria = {
-            categoria: sum(1 for x in produtos if str(x.get("categoria_publica") or "Sem categoria").strip() == categoria)
+            categoria: sum(
+                1 for x in produtos
+                if categoria in (x.get("categorias_publicas") or [x.get("categoria_publica") or "Sem categoria"])
+            )
             for categoria in categorias
         }
         contagem_por_subcategoria = {
             categoria: {
                 sub: sum(
                     1 for x in produtos
-                    if str(x.get("categoria_publica") or "Sem categoria").strip() == categoria
+                    if categoria in (x.get("categorias_publicas") or [x.get("categoria_publica") or "Sem categoria"])
                     and str(x.get("subcategoria_publica") or "Sem subcategoria").strip() == sub
                 )
                 for sub in subcategorias_por_categoria.get(categoria, [])
@@ -320,8 +333,12 @@ def gerar_html_vitrine(
     for item in produtos:
         nome = str(item.get("nome") or "Produto").strip() or "Produto"
         descricao = str(item.get("descricao") or "").strip()
+        categorias_origem = _lista(item.get("categorias_origem") or item.get("categorias_site") or [])
         categoria_origem = str(item.get("categoria_origem") or item.get("categoria") or "").strip()
+        categorias_publicas = _lista(item.get("categorias_publicas") or []) if usar_taxonomia_catalogo else []
         categoria = str(item.get("categoria_publica") or item.get("categoria_comercial") or "Festas & Personalizados").strip() or "Festas & Personalizados"
+        if usar_taxonomia_catalogo and not categorias_publicas:
+            categorias_publicas = [categoria]
         subcategoria_publica = str(item.get("subcategoria_publica") or "").strip() if usar_taxonomia_catalogo else ""
         exibir_preco = bool(item.get("exibir_preco_site")) and bool(str(item.get("preco") or "").strip())
         preco = _preco_br(item.get("preco")) if exibir_preco else ""
@@ -349,7 +366,7 @@ def gerar_html_vitrine(
         msg = quote(f"Olá! Vim pelo site da AlphaFest e gostaria de um orçamento para: {nome}. Quero definir tamanho/personalização, cor, quantidade, material e prazo.")
         href = f"https://wa.me/{numero}?text={msg}" if numero else "#"
         busca = " ".join([
-            nome, descricao, categoria, categoria_origem, subcategoria_publica,
+            nome, descricao, categoria, categoria_origem, " ".join(categorias_publicas), " ".join(categorias_origem), subcategoria_publica,
             item.get("subcategoria") or "", item.get("material") or "",
             " ".join(item.get("processos") or []),
             " ".join(item.get("variacoes") or []),
@@ -362,13 +379,14 @@ def gerar_html_vitrine(
         busca = unicodedata.normalize("NFKD", busca).encode("ascii", "ignore").decode("ascii").casefold()
         produto_slug = _slug(nome)
         sub_data = html.escape(_slug(subcategoria_publica), quote=True) if subcategoria_publica else ""
+        categorias_slugs = " " + " ".join(_slug(cat) for cat in categorias_publicas) + " " if usar_taxonomia_catalogo else f" {_slug(categoria)} "
         tem_galeria = produto_slug in produtos_galeria_slugs
         # HF51.2 — vitrine limpa: na listagem pública aparece somente a foto +
         # nome. Destaque, descrição, preço, opções e CTA ficam exclusivamente
         # na ficha aberta pelo cliente.
         cards.append(
             f'''<article class="product-card product-card-compact" role="button" tabindex="0" aria-label="Ver detalhes de {html.escape(nome, quote=True)}"
-                data-cat="{html.escape(_slug(categoria), quote=True)}" data-sub="{sub_data}" data-product="{html.escape(produto_slug, quote=True)}" data-search="{html.escape(busca, quote=True)}"
+                data-cat="{html.escape(_slug(categoria), quote=True)}" data-cats="{html.escape(categorias_slugs, quote=True)}" data-sub="{sub_data}" data-product="{html.escape(produto_slug, quote=True)}" data-search="{html.escape(busca, quote=True)}"
                 data-detail-name="{html.escape(nome, quote=True)}" data-detail-description="{html.escape(descricao, quote=True)}"
                 data-detail-category="{html.escape(categoria, quote=True)}" data-detail-subcategory="{html.escape(subcategoria_publica, quote=True)}"
                 data-detail-price="{html.escape(preco, quote=True)}" data-detail-image="{html.escape(img, quote=True)}"
@@ -459,7 +477,7 @@ def gerar_html_vitrine(
   function apply(){
     const q=norm(input.value); let n=0;
     cards.forEach(c=>{
-      const okCat=cat==='todos'||c.dataset.cat===cat;
+      const okCat=cat==='todos'||((' '+(c.dataset.cats||c.dataset.cat||'')+' ').includes(' '+cat+' '));
       const okSub=sub==='todos'||c.dataset.sub===sub;
       const okQ=smartMatch(c.dataset.search,q);
       const ok=okCat&&okSub&&okQ;
@@ -492,7 +510,7 @@ def gerar_html_vitrine(
 """
     else:
         script_filtros = r"""
-(function(){let cat='todos';const cards=[...document.querySelectorAll('.product-card')];const input=document.getElementById('search');const count=document.getElementById('result-count');function norm(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}function dist(a,b,m){if(Math.abs(a.length-b.length)>m)return m+1;let p=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){let c=[i],r=i;for(let j=1;j<=b.length;j++){const z=a[i-1]===b[j-1]?0:1;c[j]=Math.min(c[j-1]+1,p[j]+1,p[j-1]+z);r=Math.min(r,c[j]);}if(r>m)return m+1;p=c;}return p[b.length];}function match(h,q){h=norm(h);q=norm(q);if(!q||h.includes(q))return true;const hw=h.split(' '),qw=q.split(' ');return qw.every(t=>hw.some(w=>w.includes(t)||(w.length>=3&&t.includes(w))||(t.length>=4&&dist(w,t,t.length>=7?2:1)<=(t.length>=7?2:1))));}function apply(){const q=input.value;let n=0;cards.forEach(c=>{const okCat=cat==='todos'||c.dataset.cat===cat;const okQ=match(c.dataset.search,q);const ok=okCat&&okQ;c.style.display=ok?'flex':'none';if(ok)n++;});count.textContent=n+' produto(s)';}document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');cat=b.dataset.cat;apply();}));input.addEventListener('input',apply);apply();})();
+(function(){let cat='todos';const cards=[...document.querySelectorAll('.product-card')];const input=document.getElementById('search');const count=document.getElementById('result-count');function norm(s){return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ');}function dist(a,b,m){if(Math.abs(a.length-b.length)>m)return m+1;let p=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){let c=[i],r=i;for(let j=1;j<=b.length;j++){const z=a[i-1]===b[j-1]?0:1;c[j]=Math.min(c[j-1]+1,p[j]+1,p[j-1]+z);r=Math.min(r,c[j]);}if(r>m)return m+1;p=c;}return p[b.length];}function match(h,q){h=norm(h);q=norm(q);if(!q||h.includes(q))return true;const hw=h.split(' '),qw=q.split(' ');return qw.every(t=>hw.some(w=>w.includes(t)||(w.length>=3&&t.includes(w))||(t.length>=4&&dist(w,t,t.length>=7?2:1)<=(t.length>=7?2:1))));}function apply(){const q=input.value;let n=0;cards.forEach(c=>{const okCat=cat==='todos'||((' '+(c.dataset.cats||c.dataset.cat||'')+' ').includes(' '+cat+' '));const okQ=match(c.dataset.search,q);const ok=okCat&&okQ;c.style.display=ok?'flex':'none';if(ok)n++;});count.textContent=n+' produto(s)';}document.querySelectorAll('.filter').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));b.classList.add('active');cat=b.dataset.cat;apply();}));input.addEventListener('input',apply);apply();})();
 """
 
     # HF51.2 — ficha comercial: preço em destaque quando autorizado, CTAs antes da descrição e relacionados preservados.

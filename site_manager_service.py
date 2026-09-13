@@ -17,6 +17,57 @@ def _texto(produto: Dict[str, Any], *chaves: str) -> str:
     return ""
 
 
+
+
+def _lista_textos(valor: Any) -> List[str]:
+    if valor is None:
+        return []
+    if isinstance(valor, (str, bytes, bytearray)):
+        valor = [valor]
+    try:
+        itens = list(valor)
+    except TypeError:
+        itens = [valor]
+    saida: List[str] = []
+    vistos = set()
+    for item in itens:
+        texto = str(item or "").strip()
+        chave = texto.casefold()
+        if texto and chave not in vistos:
+            vistos.add(chave)
+            saida.append(texto)
+    return saida
+
+
+def categorias_site_produto(produto: Dict[str, Any]) -> List[str]:
+    """Categorias públicas do produto, preservando a primeira como principal.
+
+    HF59 acrescenta ``CategoriasExtrasSite`` sem quebrar cadastros antigos.
+    Para compatibilidade com edições já digitadas, Categoria também aceita
+    vírgula, ponto e vírgula, barra vertical ou quebra de linha como separador.
+    """
+    produto = produto or {}
+    bruto_principal = _texto(produto, "Categoria", "categoria")
+    partes_principal: List[str] = []
+    if bruto_principal:
+        import re
+        partes_principal = [x.strip() for x in re.split(r"[,;|\n]+", bruto_principal) if x.strip()]
+    extras = _lista_textos(
+        produto.get("CategoriasExtrasSite")
+        or produto.get("CategoriasSiteExtras")
+        or produto.get("categorias_extras_site")
+        or []
+    )
+    saida: List[str] = []
+    vistos = set()
+    for item in [*partes_principal, *extras]:
+        chave = item.casefold()
+        if item and chave not in vistos:
+            vistos.add(chave)
+            saida.append(item)
+    return saida
+
+
 def _imagens(produto: Dict[str, Any]) -> List[str]:
     bruto = produto.get("Imagens", []) or []
     if isinstance(bruto, (str, bytes, bytearray)):
@@ -45,7 +96,8 @@ def avaliar_produto_site(produto: Dict[str, Any]) -> Dict[str, Any]:
     produto = produto or {}
     nome = _texto(produto, "Nome", "nome")
     descricao = _texto(produto, "DescricaoCompleta", "DescricaoCurta", "Descricao", "descricao")
-    categoria = _texto(produto, "Categoria", "categoria")
+    categorias_site = categorias_site_produto(produto)
+    categoria = categorias_site[0] if categorias_site else ""
     preco = _texto(produto, "Preco", "preco")
     imagens = _imagens(produto)
     ativo = produto.get("Ativo") is not False
@@ -72,6 +124,8 @@ def avaliar_produto_site(produto: Dict[str, Any]) -> Dict[str, Any]:
         "nome": nome or "Produto sem nome",
         "descricao": descricao,
         "categoria": categoria,
+        "categorias_site": categorias_site,
+        "categorias_extras_site": categorias_site[1:] if len(categorias_site) > 1 else [],
         "preco": preco,
         "imagens": imagens,
         "imagem_principal": imagens[0] if imagens else "",

@@ -1395,3 +1395,13 @@ hangelog
 - Filtro interno da Galeria passa a considerar categoria principal e categorias adicionais.
 - Preserva HF57, HF56, HF55, Produto → Galeria, lightbox, busca, métricas, WhatsApp, HF44, Template Mestre HF7 e Template Anna.
 - Sem migração de banco; registros antigos continuam compatíveis.
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF59 — Central do Site simplificada + produtos em múltiplas categorias
+- Central do Site fica focada em Métricas privadas e no fluxo real de atualização/publicação.
+- Remove da tela prévias antigas, staging histórico, comparações e listas auxiliares que causavam confusão.
+- Fluxo oficial passa a ser: preparar prévia atual → conferir Desktop/Celular → publicar site agora.
+- Catálogo ganha Categoria principal + “Exibir também nestas categorias do site”.
+- Um produto pode aparecer em várias categorias públicas sem duplicar cadastro ou card em “Todos”.
+- Contadores, navegação Categoria → Subcategoria, busca e cards da home consideram as categorias extras.
+- Compatibilidade com Categoria antiga digitada com múltiplos valores separados por vírgula, ponto e vírgula, barra vertical ou quebra de linha.
+- Preserva HF58, HF57, HF56, HF55, HF54, HF44, Template Mestre HF7 e Template Anna.
