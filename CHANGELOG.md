@@ -1405,3 +1405,11 @@ hangelog
 - Contadores, navegação Categoria → Subcategoria, busca e cards da home consideram as categorias extras.
 - Compatibilidade com Categoria antiga digitada com múltiplos valores separados por vírgula, ponto e vírgula, barra vertical ou quebra de linha.
 - Preserva HF58, HF57, HF56, HF55, HF54, HF44, Template Mestre HF7 e Template Anna.
+
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF60 — correção da conexão Cloudflare
+- Corrige regressão da HF59 em que qualquer Account ID não vazio podia ser tratado visualmente como configuração pronta.
+- Valida o formato do Account ID antes de habilitar a publicação.
+- Reintroduz somente um expander compacto para ajustar/testar a conexão Cloudflare, sem restaurar as telas antigas removidas na HF59.
+- Mantém API Token seguro e oculto quando já configurado em Secrets/ambiente.
+- Preserva HF59, HF58, HF57, HF56, HF55, HF54, motor HF44, Template Mestre HF7 e Template Anna.

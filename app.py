@@ -26315,7 +26315,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF59",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF60",
                 )
                 return _html, _zip
 
@@ -26347,39 +26347,76 @@ if pagina_atual == "site":
             except Exception:
                 pass
 
-            _cf_account_default_hf59 = _cf_secret_account_hf59 or str(_cf_env_hf59.get("account_id", "") or "")
-            _cf_token_seguro_hf59 = _cf_secret_token_hf59 or str(_cf_env_hf59.get("api_token", "") or "")
-            _cf_worker_hf59 = _cf_secret_worker_hf59 or str(_cf_env_hf59.get("worker_name", "") or "") or _site_cf_worker_padrao
+            _cf_account_default_hf60 = _cf_secret_account_hf59 or str(_cf_env_hf59.get("account_id", "") or "")
+            _cf_token_seguro_hf60 = _cf_secret_token_hf59 or str(_cf_env_hf59.get("api_token", "") or "")
+            _cf_worker_hf60 = _cf_secret_worker_hf59 or str(_cf_env_hf59.get("worker_name", "") or "") or _site_cf_worker_padrao
 
-            if _cf_account_default_hf59 and _cf_token_seguro_hf59:
-                _cf_account_hf59 = _cf_account_default_hf59
-                _cf_token_hf59 = _cf_token_seguro_hf59
-                st.success(f"🔒 Cloudflare pronta para publicar no Worker `{_cf_worker_hf59}`.")
-            else:
-                with st.expander("🔐 Conexão Cloudflare", expanded=True):
-                    _cf_account_hf59 = st.text_input(
-                        "Cloudflare Account ID",
-                        value=_cf_account_default_hf59,
-                        key="site_hf59_cf_account",
+            # HF60 — a HF59 simplificou a tela, mas podia ocultar o Account ID quando
+            # havia qualquer valor não vazio em Secrets/ambiente, mesmo que esse valor
+            # estivesse malformado. Mantemos a tela simples, porém a conexão sempre pode
+            # ser corrigida sem expor nem persistir o API Token.
+            def _cf_account_formato_valido_hf60(valor):
+                return bool(re.fullmatch(r"[A-Za-z0-9_-]{8,64}", str(valor or "").strip()))
+
+            _cf_account_inicial_hf60 = str(
+                st.session_state.get("site_hf60_cf_account", _cf_account_default_hf60) or ""
+            ).strip()
+            _cf_expandir_hf60 = not (
+                _cf_account_formato_valido_hf60(_cf_account_inicial_hf60)
+                and bool(_cf_token_seguro_hf60)
+            )
+
+            with st.expander("⚙️ Ajustar conexão Cloudflare", expanded=_cf_expandir_hf60):
+                _cf_account_hf60 = st.text_input(
+                    "Cloudflare Account ID",
+                    value=_cf_account_inicial_hf60,
+                    key="site_hf60_cf_account",
+                    help="É o identificador da conta Cloudflare. Normalmente tem 32 caracteres e não é uma senha.",
+                ).strip()
+                st.text_input(
+                    "Worker de destino",
+                    value=_cf_worker_hf60,
+                    disabled=True,
+                    key="site_hf60_cf_worker",
+                )
+                if _cf_token_seguro_hf60:
+                    _cf_token_hf60 = _cf_token_seguro_hf60
+                    st.caption("🔒 API Token carregado da configuração segura. Ele não é exibido nem gravado no Manager.")
+                else:
+                    _cf_token_hf60 = st.text_input(
+                        "Cloudflare API Token",
+                        type="password",
+                        key="site_hf60_cf_token",
                     ).strip()
-                    st.text_input("Worker de destino", value=_cf_worker_hf59, disabled=True, key="site_hf59_cf_worker")
-                    _cf_token_hf59 = _cf_token_seguro_hf59 or st.text_input(
-                        "Cloudflare API Token", type="password", key="site_hf59_cf_token"
-                    ).strip()
-                    if not SITE_CF_IMPORT_ERROR and st.button("🔎 Testar conexão sem publicar", key="site_hf59_cf_testar", use_container_width=True):
-                        if not _cf_account_hf59 or not _cf_token_hf59:
-                            st.warning("Informe Account ID e API Token para testar.")
-                        else:
-                            try:
-                                with st.spinner("Conferindo acesso ao Worker…"):
-                                    _site_cf_testar_conexao(
-                                        account_id=_cf_account_hf59,
-                                        api_token=_cf_token_hf59,
-                                        worker_name=_cf_worker_hf59,
-                                    )
-                                st.success("✅ Conexão confirmada. Nenhuma publicação foi feita.")
-                            except Exception as _cf_test_exc_hf59:
-                                st.error(f"Não foi possível validar a conexão: {_cf_test_exc_hf59}")
+
+                if not SITE_CF_IMPORT_ERROR and st.button(
+                    "🔎 Testar conexão sem publicar",
+                    key="site_hf60_cf_testar",
+                    use_container_width=True,
+                ):
+                    if not _cf_account_hf60 or not _cf_token_hf60:
+                        st.warning("Informe Account ID e API Token para testar.")
+                    elif not _cf_account_formato_valido_hf60(_cf_account_hf60):
+                        st.warning("O Account ID informado não tem o formato esperado. Confira o identificador da conta Cloudflare.")
+                    else:
+                        try:
+                            with st.spinner("Conferindo acesso ao Worker…"):
+                                _site_cf_testar_conexao(
+                                    account_id=_cf_account_hf60,
+                                    api_token=_cf_token_hf60,
+                                    worker_name=_cf_worker_hf60,
+                                )
+                            st.session_state["site_hf60_cf_ok"] = True
+                            st.success("✅ Conexão confirmada. Nenhuma publicação foi feita.")
+                        except Exception as _cf_test_exc_hf60:
+                            st.session_state["site_hf60_cf_ok"] = False
+                            st.error(f"Não foi possível validar a conexão: {_cf_test_exc_hf60}")
+
+            _cf_account_ok_hf60 = _cf_account_formato_valido_hf60(_cf_account_hf60)
+            if _cf_account_ok_hf60 and _cf_token_hf60:
+                st.success(f"🔒 Cloudflare configurada para publicar no Worker `{_cf_worker_hf60}`.")
+            elif not _cf_account_ok_hf60:
+                st.warning("Confira o **Cloudflare Account ID** em **Ajustar conexão Cloudflare** antes de publicar.")
 
             if SITE_CF_IMPORT_ERROR:
                 st.error("A integração Cloudflare não pôde ser carregada. Use o ZIP de contingência abaixo.")
@@ -26400,8 +26437,9 @@ if pagina_atual == "site":
             )
             _cf_pode_publicar_hf59 = bool(
                 callable(_site_cf_publicar_pacote)
-                and _cf_account_hf59
-                and _cf_token_hf59
+                and _cf_account_ok_hf60
+                and _cf_account_hf60
+                and _cf_token_hf60
                 and _cf_confirmar_hf59
                 and (_cf_fingerprint_hf59 != _cf_ultimo_hf59 or not _cf_fingerprint_hf59)
             )
@@ -26416,16 +26454,16 @@ if pagina_atual == "site":
                     with st.spinner("Enviando a nova versão do site…"):
                         _cf_resultado_hf59 = _site_cf_publicar_pacote(
                             pacote_producao_hf59,
-                            account_id=_cf_account_hf59,
-                            api_token=_cf_token_hf59,
-                            worker_name=_cf_worker_hf59,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF59",
+                            account_id=_cf_account_hf60,
+                            api_token=_cf_token_hf60,
+                            worker_name=_cf_worker_hf60,
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF60",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
                     )
                     st.success(
-                        f"✅ Site publicado no Worker `{_cf_worker_hf59}`. "
+                        f"✅ Site publicado no Worker `{_cf_worker_hf60}`. "
                         f"Versão Cloudflare: `{_cf_resultado_hf59.get('version_id', 'confirmada')}`."
                     )
                     st.link_button("🌐 Abrir alphafest.com.br para conferir", "https://alphafest.com.br", use_container_width=True)
@@ -26436,7 +26474,7 @@ if pagina_atual == "site":
                 st.download_button(
                     "⬇️ Baixar ZIP de produção",
                     data=pacote_producao_hf59,
-                    file_name="alphafest-site-producao-hf59.zip",
+                    file_name="alphafest-site-producao-hf60.zip",
                     mime="application/zip",
                     use_container_width=True,
                     key="site_hf59_download_producao",
