@@ -1,4 +1,4 @@
-"""Galeria pública de trabalhos AlphaFest — HF56 lightbox da Galeria.
+"""Galeria pública de trabalhos AlphaFest — HF58 múltiplas categorias.
 
 Somente leitura. A Fonte Única continua sendo ``galeria_trabalhos_db``: entram
 na prévia apenas trabalhos não arquivados, explicitamente autorizados e
@@ -28,6 +28,31 @@ def _slug(valor: Any) -> str:
     return base or "sem-informacao"
 
 
+def _categorias_extras(item: Dict[str, Any], principal: str = "") -> List[str]:
+    """HF58: normaliza categorias adicionais sem duplicar a categoria principal."""
+    bruto = (item or {}).get("categorias_extras") or []
+    if isinstance(bruto, str):
+        bruto = [bruto]
+    if not isinstance(bruto, (list, tuple, set)):
+        bruto = []
+    principal_cf = _texto(principal).casefold()
+    vistos = set()
+    saida: List[str] = []
+    for valor in bruto:
+        categoria = _texto(valor)
+        chave = categoria.casefold()
+        if not categoria or chave == principal_cf or chave in vistos:
+            continue
+        vistos.add(chave)
+        saida.append(categoria)
+    return saida
+
+
+def _todas_categorias(item: Dict[str, Any]) -> List[str]:
+    principal = _texto((item or {}).get("categoria")) or "Sem categoria"
+    return [principal] + _categorias_extras(item, principal)
+
+
 def _numero_whatsapp(empresa: Dict[str, Any]) -> str:
     numero = re.sub(r"\D", "", _texto((empresa or {}).get("whatsapp_catalogo") or (empresa or {}).get("celular")))
     if numero and not numero.startswith("55"):
@@ -54,6 +79,7 @@ def selecionar_trabalhos_site(galeria: Iterable[Dict[str, Any]]) -> List[Dict[st
         normalizado["fotos"] = fotos
         normalizado["produto"] = _texto(item.get("produto")) or "Trabalho personalizado"
         normalizado["categoria"] = _texto(item.get("categoria")) or "Sem categoria"
+        normalizado["categorias_extras"] = _categorias_extras(item, normalizado["categoria"])
         normalizado["subcategoria"] = _texto(item.get("subcategoria")) or "Sem subcategoria"
         normalizado["tema"] = _texto(item.get("tema"))
         normalizado["cor"] = _texto(item.get("cor"))
@@ -65,7 +91,10 @@ def selecionar_trabalhos_site(galeria: Iterable[Dict[str, Any]]) -> List[Dict[st
 
 def resumir_galeria_site(galeria: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
     trabalhos = selecionar_trabalhos_site(galeria)
-    categorias = sorted({_texto(x.get("categoria")) for x in trabalhos if _texto(x.get("categoria"))}, key=str.casefold)
+    categorias = sorted(
+        {categoria for trabalho in trabalhos for categoria in _todas_categorias(trabalho) if categoria},
+        key=str.casefold,
+    )
     subcategorias = sorted({_texto(x.get("subcategoria")) for x in trabalhos if _texto(x.get("subcategoria"))}, key=str.casefold)
     temas = sorted({_texto(x.get("tema")) for x in trabalhos if _texto(x.get("tema"))}, key=str.casefold)
     return {
@@ -129,6 +158,9 @@ def gerar_fragmento_galeria(
         trabalho_grupo = _slug(trabalho.get("id") or f"trabalho-{trabalho_indice + 1}")
         produto = _texto(trabalho.get("produto")) or "Trabalho personalizado"
         categoria = _texto(trabalho.get("categoria")) or "Sem categoria"
+        categorias_trabalho = _todas_categorias(trabalho)
+        categorias_slugs = "|".join(_slug(cat) for cat in categorias_trabalho)
+        categorias_extras = _categorias_extras(trabalho, categoria)
         subcategoria = _texto(trabalho.get("subcategoria")) or "Sem subcategoria"
         tema = _texto(trabalho.get("tema"))
         cor = _texto(trabalho.get("cor"))
@@ -142,7 +174,7 @@ def gerar_fragmento_galeria(
             mensagem += f" Ocasião: {ocasiao}."
         mensagem += " Quero definir os detalhes, quantidade e prazo."
         href = f"https://wa.me/{numero}?text={quote(mensagem)}" if numero else "#"
-        busca = " ".join([produto, categoria, subcategoria, tema, cor, ocasiao])
+        busca = " ".join([produto, categoria, *categorias_extras, subcategoria, tema, cor, ocasiao])
         busca = unicodedata.normalize("NFKD", busca).encode("ascii", "ignore").decode("ascii").casefold()
 
         for foto in trabalho.get("fotos") or []:
@@ -169,7 +201,7 @@ def gerar_fragmento_galeria(
                 imagem = '<div class="gallery-photo"><div class="gallery-placeholder">AlphaFest</div></div>'
             tema_slug = _slug(tema) if tema else "sem-tema"
             cards.append(
-                f'''<article class="gallery-card" data-cat="{html.escape(_slug(categoria), quote=True)}" data-sub="{html.escape(_slug(subcategoria), quote=True)}" data-theme="{html.escape(tema_slug, quote=True)}" data-product="{html.escape(_slug(produto), quote=True)}" data-search="{html.escape(busca, quote=True)}">
+                f'''<article class="gallery-card" data-cat="{html.escape(_slug(categoria), quote=True)}" data-cats="{html.escape(categorias_slugs, quote=True)}" data-sub="{html.escape(_slug(subcategoria), quote=True)}" data-theme="{html.escape(tema_slug, quote=True)}" data-product="{html.escape(_slug(produto), quote=True)}" data-search="{html.escape(busca, quote=True)}">
                 {imagem}
                 <div class="gallery-body"><div class="gallery-tax">{html.escape(categoria)} <span>›</span> {html.escape(subcategoria)}</div>
                 <h3>{html.escape(produto)}</h3>{f'<p>{detalhe_html}</p>' if detalhe_html else '<p>Personalizado produzido pela AlphaFest.</p>'}
@@ -238,9 +270,10 @@ body.gallery-lightbox-open{overflow:hidden}.gallery-lightbox{position:fixed;inse
  function closeLightbox(){if(!lightbox||lightbox.hidden)return;lightbox.hidden=true;lightbox.setAttribute('aria-hidden','true');document.body.classList.remove('gallery-lightbox-open');if(lightboxTrigger&&typeof lightboxTrigger.focus==='function'){try{lightboxTrigger.focus({preventScroll:true});}catch(e){lightboxTrigger.focus();}}}
  function moveLightbox(step){if(lightboxItems.length<2)return;lightboxIndex=(lightboxIndex+step+lightboxItems.length)%lightboxItems.length;renderLightbox();}
  function clearProductFocus(){productFocus='';if(focus)focus.hidden=true;}
+ function cardHasCat(card,c){if(c==='todos')return true;const raw=card.dataset.cats||card.dataset.cat||'';return raw.split('|').filter(Boolean).includes(c);}
  function refreshSub(){const c=cat.value;subOptions.forEach((o,i)=>{if(i===0){o.hidden=false;return;}o.hidden=(c!=='todos'&&o.dataset.parent!==c);});if(sub.selectedOptions[0]&&sub.selectedOptions[0].hidden)sub.value='todos';}
- function refreshTheme(){const c=cat.value,s=sub.value,allowed=new Set();cards.forEach(x=>{if((c==='todos'||x.dataset.cat===c)&&(s==='todos'||x.dataset.sub===s)&&(!productFocus||x.dataset.product===productFocus))allowed.add(x.dataset.theme);});themeOptions.forEach((o,i)=>{if(i===0){o.hidden=false;return;}o.hidden=!allowed.has(o.value);});if(theme.selectedOptions[0]&&theme.selectedOptions[0].hidden)theme.value='todos';}
- function apply(){const c=cat.value,s=sub.value,t=theme.value;let n=0;cards.forEach(x=>{const ok=(c==='todos'||x.dataset.cat===c)&&(s==='todos'||x.dataset.sub===s)&&(t==='todos'||x.dataset.theme===t)&&(!productFocus||x.dataset.product===productFocus);x.style.display=ok?'flex':'none';if(ok)n++;});count.textContent=n+' foto(s)';}
+ function refreshTheme(){const c=cat.value,s=sub.value,allowed=new Set();cards.forEach(x=>{if(cardHasCat(x,c)&&(s==='todos'||x.dataset.sub===s)&&(!productFocus||x.dataset.product===productFocus))allowed.add(x.dataset.theme);});themeOptions.forEach((o,i)=>{if(i===0){o.hidden=false;return;}o.hidden=!allowed.has(o.value);});if(theme.selectedOptions[0]&&theme.selectedOptions[0].hidden)theme.value='todos';}
+ function apply(){const c=cat.value,s=sub.value,t=theme.value;let n=0;cards.forEach(x=>{const ok=cardHasCat(x,c)&&(s==='todos'||x.dataset.sub===s)&&(t==='todos'||x.dataset.theme===t)&&(!productFocus||x.dataset.product===productFocus);x.style.display=ok?'flex':'none';if(ok)n++;});count.textContent=n+' foto(s)';}
  cat.addEventListener('change',()=>{clearProductFocus();sub.value='todos';theme.value='todos';refreshSub();refreshTheme();apply();});
  sub.addEventListener('change',()=>{clearProductFocus();theme.value='todos';refreshTheme();apply();});theme.addEventListener('change',()=>{clearProductFocus();apply();});
  if(focusClear)focusClear.addEventListener('click',()=>{clearProductFocus();cat.value='todos';sub.value='todos';theme.value='todos';refreshSub();refreshTheme();apply();});

@@ -1387,3 +1387,11 @@ hangelog
 - Preserva HF56, HF55, filtros, busca, métricas, WhatsApp, HF44, Template Mestre HF7 e Template Anna.
 - Sem alteração de banco de dados ou regras de negócio.
 
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF58 — Galeria em múltiplas categorias
+- Mantém a categoria principal de cada trabalho e adiciona categorias extras opcionais para exibição no site.
+- O mesmo trabalho pode aparecer ao filtrar várias categorias sem duplicar registro ou foto em “Todas as categorias”.
+- Permite configurar categorias extras no cadastro de novo trabalho e editar trabalhos já existentes.
+- Filtro interno da Galeria passa a considerar categoria principal e categorias adicionais.
+- Preserva HF57, HF56, HF55, Produto → Galeria, lightbox, busca, métricas, WhatsApp, HF44, Template Mestre HF7 e Template Anna.
+- Sem migração de banco; registros antigos continuam compatíveis.

@@ -11238,6 +11238,45 @@ def _galeria_produto_por_nome(catalogo, nome):
     return {}
 
 
+def _galeria_categorias_extras(item, principal=None):
+    """HF58: categorias adicionais de exibição, sem duplicar a principal."""
+    principal_txt = str(
+        principal if principal is not None else (item or {}).get("categoria") or ""
+    ).strip()
+    principal_cf = principal_txt.casefold()
+    bruto = (item or {}).get("categorias_extras") or []
+    if isinstance(bruto, str):
+        bruto = [bruto]
+    if not isinstance(bruto, (list, tuple, set)):
+        bruto = []
+    vistos = set()
+    saida = []
+    for valor in bruto:
+        categoria = str(valor or "").strip()
+        chave = categoria.casefold()
+        if not categoria or chave == principal_cf or chave in vistos:
+            continue
+        vistos.add(chave)
+        saida.append(categoria)
+    return saida
+
+
+def _galeria_categorias_disponiveis(catalogo, galeria=None):
+    """HF58: lista única de categorias existentes no Catálogo/Galeria."""
+    por_chave = {}
+    for produto in catalogo or []:
+        categoria = str((produto or {}).get("Categoria") or "").strip()
+        if categoria:
+            por_chave.setdefault(categoria.casefold(), categoria)
+    for trabalho in galeria or []:
+        principal = str((trabalho or {}).get("categoria") or "").strip()
+        if principal:
+            por_chave.setdefault(principal.casefold(), principal)
+        for categoria in _galeria_categorias_extras(trabalho, principal):
+            por_chave.setdefault(categoria.casefold(), categoria)
+    return sorted(por_chave.values(), key=lambda x: x.casefold())
+
+
 def _galeria_status_registro(item):
     if bool((item or {}).get("arquivado")):
         return "Arquivado"
@@ -11271,7 +11310,7 @@ def _galeria_remover_foto_referencia(galeria, gid, caminho_foto):
 
 
 def renderizar_galeria_trabalhos(catalogo):
-    """HF46.1 — coleta diária de fotos sem qualquer publicação no site."""
+    """HF58 — acervo da Galeria com exibição opcional em múltiplas categorias."""
     st.markdown("### 📸 Galeria de Trabalhos")
     st.caption(
         "HF46.1-HF2: espaço interno para a Anna guardar as fotos dos trabalhos entregues. "
@@ -11309,6 +11348,7 @@ def renderizar_galeria_trabalhos(catalogo):
         {str((p or {}).get("Nome") or "").strip() for p in (catalogo or []) if str((p or {}).get("Nome") or "").strip()},
         key=lambda x: x.casefold(),
     )
+    categorias_disponiveis_gal = _galeria_categorias_disponiveis(catalogo, galeria)
 
     with st.expander("➕ Registrar fotos do trabalho do dia", expanded=not bool(ativos)):
         st.caption("Você pode vincular ao Catálogo Oficial para herdar Categoria e Subcategoria automaticamente.")
@@ -11330,6 +11370,22 @@ def renderizar_galeria_trabalhos(catalogo):
             c1, c2 = st.columns(2)
             categoria_gal = c1.text_input("Categoria", key="hf461_categoria_manual", placeholder="Ex.: Festas & Personalizados")
             subcategoria_gal = c2.text_input("Subcategoria", key="hf461_subcategoria_manual", placeholder="Ex.: Topos de bolo")
+
+        categoria_principal_gal = str(categoria_gal or "").strip()
+        opcoes_extras_novo = [
+            cat for cat in categorias_disponiveis_gal
+            if cat.casefold() != categoria_principal_gal.casefold()
+        ]
+        categorias_extras_gal = st.multiselect(
+            "Exibir também em outras categorias do site (opcional)",
+            opcoes_extras_novo,
+            default=[],
+            key="hf58_galeria_categorias_extras_novo",
+            help=(
+                "A categoria acima continua sendo a principal. Marque aqui somente categorias adicionais "
+                "em que este mesmo trabalho também deve aparecer na Galeria do site. O trabalho não é duplicado."
+            ),
+        )
 
         d1, d2, d3 = st.columns(3)
         tema_gal = d1.text_input("Tema", key="hf461_tema", placeholder="Ex.: Jardim encantado")
@@ -11401,6 +11457,10 @@ def renderizar_galeria_trabalhos(catalogo):
                         "id": _galeria_id_novo(),
                         "produto": str(produto_ref.get("Nome") or produto_escolhido if produto_ref else "").strip(),
                         "categoria": str(categoria_gal or "").strip(),
+                        "categorias_extras": [
+                            str(cat).strip() for cat in categorias_extras_gal
+                            if str(cat).strip() and str(cat).strip().casefold() != str(categoria_gal or "").strip().casefold()
+                        ],
                         "subcategoria": str(subcategoria_gal or "").strip(),
                         "tema": str(tema_gal or "").strip(),
                         "cor": str(cor_gal or "").strip(),
@@ -11429,7 +11489,7 @@ def renderizar_galeria_trabalhos(catalogo):
         st.info("A Galeria ainda está vazia. Use o formulário acima para guardar o primeiro trabalho.")
         return
 
-    categorias_gal = sorted({str((g or {}).get("categoria") or "").strip() for g in galeria if str((g or {}).get("categoria") or "").strip()}, key=lambda x: x.casefold())
+    categorias_gal = _galeria_categorias_disponiveis([], galeria)
     f1, f2, f3 = st.columns([2, 2, 1])
     filtro_cat = f1.selectbox("Filtrar categoria", ["Todas"] + categorias_gal, key="hf461_filtro_cat")
     filtro_status = f2.selectbox(
@@ -11443,8 +11503,11 @@ def renderizar_galeria_trabalhos(catalogo):
     for g in reversed(galeria):
         if not mostrar_arquivados and bool((g or {}).get("arquivado")):
             continue
-        if filtro_cat != "Todas" and str((g or {}).get("categoria") or "").strip() != filtro_cat:
-            continue
+        if filtro_cat != "Todas":
+            principal_filtro = str((g or {}).get("categoria") or "").strip()
+            categorias_item_filtro = [principal_filtro] + _galeria_categorias_extras(g, principal_filtro)
+            if filtro_cat.casefold() not in {cat.casefold() for cat in categorias_item_filtro if cat}:
+                continue
         if filtro_status != "Todos" and _galeria_status_registro(g) != filtro_status:
             continue
         filtrados.append(g)
@@ -11491,6 +11554,9 @@ def renderizar_galeria_trabalhos(catalogo):
             tax = " › ".join([x for x in [str(item.get("categoria") or "").strip(), str(item.get("subcategoria") or "").strip()] if x])
             if tax:
                 c_info.caption(tax)
+            categorias_extras_item = _galeria_categorias_extras(item, item.get("categoria"))
+            if categorias_extras_item:
+                c_info.caption("Também aparece em: " + ", ".join(categorias_extras_item))
             detalhes = [
                 f"Tema: {item.get('tema')}" if item.get("tema") else "",
                 f"Cor/estilo: {item.get('cor')}" if item.get("cor") else "",
@@ -11506,6 +11572,49 @@ def renderizar_galeria_trabalhos(catalogo):
                 c_info.caption("Obs.: " + str(item.get("observacao")))
 
             if not bool(item.get("arquivado")):
+                categoria_principal_item = str(item.get("categoria") or "").strip()
+                extras_atuais_item = _galeria_categorias_extras(item, categoria_principal_item)
+                opcoes_extras_item = sorted(
+                    {
+                        cat for cat in (categorias_disponiveis_gal + extras_atuais_item)
+                        if str(cat).strip() and str(cat).strip().casefold() != categoria_principal_item.casefold()
+                    },
+                    key=lambda x: x.casefold(),
+                )
+                with st.expander("🌐 Categorias de exibição no site", expanded=False):
+                    st.caption(
+                        f"Categoria principal: **{categoria_principal_item or 'Sem categoria'}**. "
+                        "Selecione outras categorias em que este mesmo trabalho também deve aparecer. "
+                        "Em ‘Todas as categorias’ ele continua aparecendo uma única vez."
+                    )
+                    extras_escolhidas_item = st.multiselect(
+                        "Exibir também em",
+                        opcoes_extras_item,
+                        default=[cat for cat in extras_atuais_item if cat in opcoes_extras_item],
+                        key=f"hf58_extra_cats_{gid}",
+                    )
+                    if st.button(
+                        "💾 Salvar categorias de exibição",
+                        key=f"hf58_extra_cats_save_{gid}",
+                        use_container_width=True,
+                    ):
+                        atualizado_categorias = False
+                        extras_limpas = [
+                            str(cat).strip() for cat in extras_escolhidas_item
+                            if str(cat).strip() and str(cat).strip().casefold() != categoria_principal_item.casefold()
+                        ]
+                        for reg in galeria:
+                            if str((reg or {}).get("id") or "") == gid:
+                                reg["categorias_extras"] = extras_limpas
+                                reg["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                                atualizado_categorias = True
+                                break
+                        if atualizado_categorias and salvar_galeria_trabalhos(galeria):
+                            st.success("Categorias de exibição atualizadas. O trabalho não foi duplicado.")
+                            st.rerun()
+                        else:
+                            st.error("O banco não confirmou a atualização das categorias. Nada foi alterado.")
+
                 with st.expander("🖼️ Gerenciar fotos deste trabalho", expanded=False):
                     st.markdown("**➕ Adicionar mais fotos**")
                     novas_fotos = st.file_uploader(

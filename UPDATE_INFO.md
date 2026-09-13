@@ -1,21 +1,24 @@
-# AlphaFest Manager — HF53.3-HF8-HF57
+# AlphaFest Manager — HF53.3-HF8-HF58
 
-## Site — categorias sem limite fixo
+## Galeria — um trabalho em múltiplas categorias
 
-Correção isolada da seção pública **Explore por categoria**, baseada na HF56.
+Evolução isolada da Galeria, baseada na HF57, sem duplicar trabalhos e sem alterar a categoria principal do produto.
 
 ### Entrega
-- remove o limite técnico de 12 categorias na página inicial;
-- passa a exibir **todas as categorias que possuam produtos publicados**;
-- novas categorias entram automaticamente conforme o Catálogo Oficial;
-- a grade continua responsiva: novas categorias apenas criam novas linhas;
-- não renomeia nem altera categorias existentes.
+- cada trabalho mantém sua **categoria principal** atual;
+- adiciona o campo **Exibir também em outras categorias do site**;
+- permite selecionar uma ou várias categorias adicionais tanto ao registrar um novo trabalho quanto em trabalhos já existentes;
+- no site, o mesmo trabalho aparece ao filtrar qualquer categoria marcada;
+- em **Todas as categorias**, o trabalho continua aparecendo apenas uma vez;
+- o filtro interno da Galeria também encontra o trabalho pela categoria principal ou por qualquer categoria adicional;
+- as categorias adicionais entram na busca/filtro público da Galeria sem duplicar fotos ou registros;
+- nenhuma migração de banco é necessária: o novo campo é opcional e compatível com registros antigos.
 
 ### Preservado
+- HF57 — categorias públicas sem limite fixo;
 - HF56 — lightbox da Galeria pública;
 - HF55 — exclusão individual de foto na Galeria interna;
-- filtros Categoria → Subcategoria;
-- busca, Catálogo, WhatsApp, métricas e publicação Cloudflare HF44;
+- vínculo Produto → Galeria, filtros, busca, WhatsApp, métricas e publicação Cloudflare HF44;
 - Template Mestre Comercial HF7 congelado;
 - Template Anna homologado;
-- nenhuma regra de negócio ou banco de dados alterada.
+- nenhuma alteração nas regras de produção, estoque, financeiro, CRM ou pedidos.
