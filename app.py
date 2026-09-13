@@ -33910,6 +33910,156 @@ if pagina_atual == "catalogo":
             else:
                 st.info("Nenhum produto corresponde aos filtros desta edição rápida.")
 
+            # HF61 — marcação rápida de categorias extras do site.
+            # A lógica de multicategorias da HF59 permanece a mesma; esta grade
+            # oferece somente uma forma mais rápida de marcar/desmarcar produtos
+            # sem abrir o formulário completo de cada item.
+            st.markdown("#### 🏷️ Categorias extras do site · marcação rápida")
+            st.caption(
+                "Escolha uma categoria e marque os produtos que também devem aparecer nela. "
+                "A categoria principal não muda, o produto não é duplicado e cada alteração é salva automaticamente. "
+                "O site continua sendo atualizado somente pelo fluxo de publicação assistida."
+            )
+
+            _hf61_categorias = sorted(
+                {
+                    str(_cat_hf61).strip()
+                    for _prod_hf61 in (catalogo or [])
+                    for _cat_hf61 in _site_categorias_produto(_prod_hf61 or {})
+                    if str(_cat_hf61).strip()
+                },
+                key=str.casefold,
+            )
+
+            if _hf61_categorias:
+                _hf61_c1, _hf61_c2, _hf61_c3 = st.columns([1.25, 1.75, 1])
+                _hf61_alvo = _hf61_c1.selectbox(
+                    "Categoria para marcar",
+                    _hf61_categorias,
+                    key="hf61_categoria_extra_alvo",
+                    help="A caixa na tabela significa: este produto também deve aparecer nesta categoria do site.",
+                )
+                _hf61_busca = _hf61_c2.text_input(
+                    "🔎 Filtrar produtos",
+                    key="hf61_busca_categoria_extra",
+                    placeholder="Nome, categoria principal ou subcategoria…",
+                ).strip().casefold()
+                _hf61_so_site = _hf61_c3.checkbox(
+                    "Só produtos do site",
+                    value=True,
+                    key="hf61_so_publicados",
+                    help="Mostra apenas produtos já marcados em 🌐 Publicar.",
+                )
+
+                _hf61_indices = []
+                _hf61_linhas = []
+                _hf61_alvo_norm = str(_hf61_alvo or "").strip().casefold()
+                for _idx_hf61, _prod_hf61 in enumerate(catalogo or []):
+                    _prod_hf61 = _prod_hf61 or {}
+                    if _prod_hf61.get("Ativo") is False:
+                        continue
+                    if _hf61_so_site and not bool(_prod_hf61.get("PublicarSite", False)):
+                        continue
+                    _cats_hf61 = _site_categorias_produto(_prod_hf61)
+                    _principal_hf61 = (_cats_hf61[0] if _cats_hf61 else str(_prod_hf61.get("Categoria") or "").strip())
+                    # Se esta já é a categoria principal, o produto entra nela automaticamente.
+                    # Não exibimos a linha para evitar a impressão de que seria possível removê-la.
+                    if str(_principal_hf61 or "").strip().casefold() == _hf61_alvo_norm:
+                        continue
+                    _sub_hf61 = str(_prod_hf61.get("Subcategoria") or "").strip()
+                    _nome_hf61 = str(_prod_hf61.get("Nome") or "Produto").strip() or "Produto"
+                    if _hf61_busca:
+                        _texto_busca_hf61 = " ".join([_nome_hf61, _principal_hf61, _sub_hf61]).casefold()
+                        if _hf61_busca not in _texto_busca_hf61:
+                            continue
+                    _extras_hf61 = {str(x).strip().casefold() for x in _cats_hf61[1:] if str(x).strip()}
+                    _hf61_indices.append(_idx_hf61)
+                    _hf61_linhas.append({
+                        "Produto": _nome_hf61,
+                        "Categoria principal": _principal_hf61,
+                        "Subcategoria": _sub_hf61,
+                        "🌐 Site": bool(_prod_hf61.get("PublicarSite", False)),
+                        "✅ Exibir aqui": _hf61_alvo_norm in _extras_hf61,
+                    })
+
+                if _hf61_linhas:
+                    _hf61_assinatura = hashlib.sha256(
+                        (str(_hf61_alvo) + "|" + "|".join(str(i) for i in _hf61_indices) + "|" + str(int(_hf61_so_site))).encode("utf-8")
+                    ).hexdigest()[:12]
+                    _hf61_df = pd.DataFrame(_hf61_linhas)
+                    _hf61_editado = st.data_editor(
+                        _hf61_df,
+                        key=f"hf61_editor_categorias_{_hf61_assinatura}",
+                        use_container_width=True,
+                        hide_index=True,
+                        num_rows="fixed",
+                        disabled=["Produto", "Categoria principal", "Subcategoria", "🌐 Site"],
+                        column_config={
+                            "Produto": st.column_config.TextColumn("Produto", width="large"),
+                            "Categoria principal": st.column_config.TextColumn("Categoria principal", width="medium"),
+                            "Subcategoria": st.column_config.TextColumn("Subcategoria", width="medium"),
+                            "🌐 Site": st.column_config.CheckboxColumn("🌐 Site", width="small"),
+                            "✅ Exibir aqui": st.column_config.CheckboxColumn(
+                                "✅ Exibir aqui",
+                                help=f"Marque para o produto também aparecer em {_hf61_alvo}.",
+                                width="small",
+                            ),
+                        },
+                    )
+
+                    _hf61_mudancas = []
+                    if isinstance(_hf61_editado, pd.DataFrame):
+                        for _pos_hf61, _idx_catalogo_hf61 in enumerate(_hf61_indices):
+                            if _pos_hf61 >= len(_hf61_editado):
+                                break
+                            _novo_hf61 = bool(_hf61_editado.iloc[_pos_hf61].get("✅ Exibir aqui", False))
+                            _prod_atual_hf61 = catalogo[_idx_catalogo_hf61] or {}
+                            _cats_atuais_hf61 = _site_categorias_produto(_prod_atual_hf61)
+                            _extras_atuais_hf61 = [str(x).strip() for x in _cats_atuais_hf61[1:] if str(x).strip()]
+                            _tem_hf61 = any(x.casefold() == _hf61_alvo_norm for x in _extras_atuais_hf61)
+                            if _novo_hf61 != _tem_hf61:
+                                _hf61_mudancas.append((_idx_catalogo_hf61, _novo_hf61))
+
+                    if _hf61_mudancas:
+                        _catalogo_hf61 = [dict(p or {}) for p in (catalogo or [])]
+                        _agora_hf61 = agora_local().isoformat(timespec="seconds")
+                        for _idx_catalogo_hf61, _marcar_hf61 in _hf61_mudancas:
+                            _registro_hf61 = dict(_catalogo_hf61[_idx_catalogo_hf61] or {})
+                            _cats_reg_hf61 = _site_categorias_produto(_registro_hf61)
+                            _principal_reg_hf61 = _cats_reg_hf61[0] if _cats_reg_hf61 else str(_registro_hf61.get("Categoria") or "").strip()
+                            _extras_reg_hf61 = [str(x).strip() for x in _cats_reg_hf61[1:] if str(x).strip()]
+                            _extras_sem_alvo_hf61 = [x for x in _extras_reg_hf61 if x.casefold() != _hf61_alvo_norm]
+                            if _marcar_hf61 and str(_principal_reg_hf61 or "").strip().casefold() != _hf61_alvo_norm:
+                                _extras_sem_alvo_hf61.append(str(_hf61_alvo).strip())
+                            _vistos_hf61 = set()
+                            _extras_limpas_hf61 = []
+                            for _cat_extra_hf61 in _extras_sem_alvo_hf61:
+                                _chave_hf61 = _cat_extra_hf61.casefold()
+                                if _cat_extra_hf61 and _chave_hf61 not in _vistos_hf61 and _chave_hf61 != str(_principal_reg_hf61 or "").strip().casefold():
+                                    _vistos_hf61.add(_chave_hf61)
+                                    _extras_limpas_hf61.append(_cat_extra_hf61)
+                            _registro_hf61["CategoriasExtrasSite"] = _extras_limpas_hf61
+                            _registro_hf61["AtualizadoEm"] = _agora_hf61
+                            _registro_hf61["EdicaoRapidaCategoriasSiteHF61"] = {
+                                "quando": _agora_hf61,
+                                "categoria": str(_hf61_alvo),
+                                "origem": "Produtos · categorias extras do site · marcação rápida",
+                            }
+                            _catalogo_hf61[_idx_catalogo_hf61] = _registro_hf61
+                        salvar_catalogo(_catalogo_hf61)
+                        catalogo[:] = _catalogo_hf61
+                        st.toast(
+                            f"✅ Auto-save: {len(_hf61_mudancas)} produto(s) atualizado(s) em {_hf61_alvo}. Site ainda não publicado.",
+                            icon="🏷️",
+                        )
+                else:
+                    st.info(
+                        f"Nenhum produto disponível para marcar em {_hf61_alvo} com estes filtros. "
+                        "Produtos cuja categoria principal já é esta entram automaticamente e não são listados aqui."
+                    )
+            else:
+                st.info("Cadastre pelo menos uma categoria principal para usar a marcação rápida.")
+
             st.divider()
             st.markdown("#### 🖨️ Revisão de categorias e subcategorias")
             st.caption(

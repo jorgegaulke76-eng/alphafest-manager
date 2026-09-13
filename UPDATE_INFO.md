@@ -1,23 +1,23 @@
-# AlphaFest Manager — HF60
+# AlphaFest Manager — HF53.3-HF8-HF61
 
-## Correção da conexão Cloudflare na Central do Site
+## Catálogo — marcação rápida de categorias extras do site
 
-Atualização incremental sobre a HF59. Corrige somente o fluxo de publicação do site após a simplificação da Central.
+Atualização incremental sobre a HF60. Mantém a lógica de multicategorias da HF59 e acrescenta uma forma mais rápida de trabalhar direto na grade de Produtos.
 
-### Correção
-- a HF59 podia considerar a Cloudflare “pronta” apenas porque havia valores não vazios em Secrets/ambiente, mesmo quando o **Account ID** estava malformado;
-- o botão de publicação agora só é liberado quando o Account ID tem formato válido;
-- adiciona o expander compacto **Ajustar conexão Cloudflare**, sem voltar com a confusão das telas antigas;
-- o **Account ID** pode ser corrigido diretamente na tela;
-- se o API Token já estiver em configuração segura, ele continua oculto e não precisa ser digitado novamente;
-- mantém o botão **Testar conexão sem publicar**;
-- a publicação continua apontando somente para o Worker `alphafest-novo` e não altera DNS, domínio, MX ou webmail.
+### Entregas
+- nova seção **Categorias extras do site · marcação rápida** na aba Produtos;
+- escolha uma categoria-alvo e marque/desmarque produtos por checkbox, no mesmo padrão da edição rápida já usada para Publicar/Preço/Destaque/Carrossel;
+- filtro por nome/categoria/subcategoria e opção **Só produtos do site**;
+- produtos cuja categoria principal já é a categoria-alvo não aparecem na grade, porque já pertencem a ela automaticamente;
+- auto-save em `CategoriasExtrasSite`, sem duplicar produto e sem mudar categoria principal;
+- contadores, cartões **Explore por categoria** e filtros do site continuam usando a mesma lógica de multicategorias já homologada;
+- nenhuma publicação automática: o site só muda pelo fluxo seguro de publicação assistida.
 
 ### Preservado
-- HF59 — Central do Site simplificada + produtos em múltiplas categorias;
-- HF58 — Galeria em múltiplas categorias;
-- HF57 — categorias do site sem limite;
-- HF56 — lightbox da Galeria pública;
-- HF55 — exclusão individual de foto;
-- HF54 e demais funções homologadas;
-- Template Mestre HF7 congelado e Template Anna homologado.
+- HF60 — correção de conexão/publicação Cloudflare;
+- HF59 — site simplificado e multicategorias de produtos;
+- HF58 — multicategorias da Galeria;
+- HF57 — categorias sem limite;
+- HF56 — lightbox da Galeria;
+- HF55 — exclusão individual de fotos da Galeria interna;
+- Template Mestre Comercial HF7 congelado e Template Anna homologado.

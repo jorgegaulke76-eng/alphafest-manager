@@ -1413,3 +1413,10 @@ hangelog
 - Reintroduz somente um expander compacto para ajustar/testar a conexão Cloudflare, sem restaurar as telas antigas removidas na HF59.
 - Mantém API Token seguro e oculto quando já configurado em Secrets/ambiente.
 - Preserva HF59, HF58, HF57, HF56, HF55, HF54, motor HF44, Template Mestre HF7 e Template Anna.
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF61 — marcação rápida de multicategorias no Catálogo
+- Adiciona grade de checkbox para marcar rapidamente produtos em uma categoria extra do site.
+- Mantém categoria principal, evita duplicação e salva automaticamente em `CategoriasExtrasSite`.
+- Reaproveita a mesma lógica da HF59; contadores, Explore por categoria e filtros continuam sincronizados.
+- Preserva HF60, HF58, HF57, HF56, HF55, HF7 e Template Anna.
+
