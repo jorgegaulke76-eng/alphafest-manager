@@ -1048,7 +1048,7 @@ CAMPANHAS_PRODUTO_OPCOES = [
 
 PERMISSOES_PADRAO_ANNA = {
     "central", "atendimento", "crm", "jornada", "projeto", "novo_orcamento",
-    "historico", "fluxo", "catalogo", "site", "relacionamentos"
+    "historico", "fluxo", "catalogo", "site", "relacionamentos", "faturamento_mensal"
 }
 
 ACOES_PADRAO = ["visualizar", "criar", "editar", "aprovar", "exportar", "excluir", "configurar", "publicar"]
@@ -1102,7 +1102,10 @@ def obter_perfil_configurado(usuario=None):
         # usuários veio de uma base/cloud antiga com ações vazias.
         nome_cfg = str(cfg.get("nome") or usuario.get("nome") or "").strip().casefold()
         if nome_cfg == "anna":
-            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"catalogo", "site"})
+            # HF64 — Fechamentos Recorrentes fazem parte da rotina operacional/comercial.
+            # Liberação explícita também corrige bases antigas em que usuarios_config.json
+            # foi salvo antes da existência do módulo HF62.
+            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"catalogo", "site", "faturamento_mensal"})
             acoes = dict(cfg.get("acoes") or {})
             acoes["catalogo"] = sorted(
                 set(acoes.get("catalogo") or [])
@@ -1111,6 +1114,10 @@ def obter_perfil_configurado(usuario=None):
             acoes["site"] = sorted(
                 set(acoes.get("site") or [])
                 | {"visualizar", "editar", "exportar"}
+            )
+            acoes["faturamento_mensal"] = sorted(
+                set(acoes.get("faturamento_mensal") or [])
+                | {"visualizar", "criar", "editar", "aprovar", "exportar"}
             )
             cfg["acoes"] = acoes
         elif nome_cfg == "jorge":
@@ -30289,8 +30296,8 @@ if pagina_atual == "faturamento_mensal":
     )
 
     usuario_fin_i8111 = obter_usuario_atual()
-    if str(usuario_fin_i8111.get("nome") or "").strip().casefold() != "jorge":
-        st.info("Esta rotina permanece em homologação no perfil Jorge. A lógica financeira e as permissões atuais não foram alteradas.")
+    if not usuario_pode_ver_aba("faturamento_mensal", usuario_fin_i8111):
+        st.warning("Seu perfil não possui acesso a Fechamentos Recorrentes.")
     else:
         clientes_fin_i8111 = carregar_clientes()
         historico_fin_hf62 = carregar_historico()
@@ -36685,6 +36692,13 @@ if pagina_atual == "catalogo":
 if pagina_atual == "relacionamentos":
     st.header("🌐 Relacionamentos")
     st.caption("Um único cadastro para clientes, fornecedores, parceiros e contatos que exigem regras especiais de atendimento.")
+
+    # HF64 — atalho operacional visível: o fechamento recorrente não fica mais
+    # escondido na navegação principal, especialmente no perfil operacional.
+    if usuario_pode_ver_aba("faturamento_mensal"):
+        atalho_fech_hf64, _ = st.columns([1.4, 3])
+        if atalho_fech_hf64.button("💳 Fechamentos Recorrentes", type="primary", use_container_width=True, key="hf64_atalho_fechamentos_rel"):
+            rerun_na_aba("faturamento_mensal")
 
     clientes = sincronizar_clientes_do_historico()
     # HF43 — Relacionamentos: o Histórico é lido uma única vez nesta tela e

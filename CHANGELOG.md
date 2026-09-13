@@ -1439,3 +1439,12 @@ hangelog
 - Mantém o Perfil Comercial HF62, fechamento periódico e todas as regras financeiras sem alterações.
 - Sem migração de dados e sem mudança em produção, catálogo, site ou templates.
 
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF64 — Fechamentos Recorrentes visíveis e acessíveis
+- corrige a ausência do módulo **💳 Fechamentos Recorrentes** no perfil operacional/Anna;
+- libera o módulo para a rotina operacional com visualizar, criar, editar, aprovar e exportar;
+- corrige também bases antigas de `usuarios_config` por sobreposição segura de permissão em runtime;
+- adiciona botão direto **💳 Fechamentos Recorrentes** no topo de **Relacionamentos**;
+- remove a trava interna que mantinha a tela HF62 exclusiva do perfil Jorge;
+- preserva regras financeiras, critérios de fechamento, PDF/WhatsApp, HF63 e todas as funções anteriores;
+- sem migração de banco e sem alteração de produção, catálogo, site ou templates.

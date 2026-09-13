@@ -1,24 +1,26 @@
-# AlphaFest Manager — HF63
+# AlphaFest Manager — HF64
 
-## Correção — Editar cliente abre diretamente
+## Correção — Fechamentos Recorrentes visíveis na operação
 
-Correção isolada em **Relacionamentos**, baseada na HF62.
+Correção isolada sobre a HF63.
 
 ### Problema corrigido
-- o botão **✏️ Editar cliente** selecionava corretamente o cliente, porém após o rerun o Streamlit voltava visualmente para a aba **Consultar relacionamentos**;
-- isso dava a impressão de que a edição não havia aberto.
+O módulo HF62 existia no código, porém estava liberado apenas para o perfil Jorge. No perfil operacional/Anna, a navegação principal também é propositalmente mais enxuta, então **Fechamentos Recorrentes não aparecia** para uso diário.
 
 ### Novo comportamento
-- ao clicar em **✏️ Editar cliente**, a tela reabre automaticamente com **✏️ Editar cliente** como primeira aba ativa;
-- o cadastro completo do cliente já aparece preenchido;
-- o bloco **💼 Perfil Comercial do Cliente · HF62** fica acessível imediatamente para marcar **Fechamento periódico** e escolher **Semanal / Quinzenal / Mensal**;
-- ao salvar ou cancelar, a tela volta para a consulta normal.
+- **Relacionamentos** passa a mostrar no topo o botão **💳 Fechamentos Recorrentes**;
+- o perfil Anna/operacional passa a ter acesso ao módulo;
+- bases antigas de permissões são corrigidas em runtime, sem exigir alteração manual de usuários;
+- a tela permite a rotina já definida no HF62: Semanal, Quinzenal e Mensal, boletim, WhatsApp, PDF e registro de recebimento;
+- Jorge continua com acesso normalmente.
+
+### Caminho rápido
+**Relacionamentos → 💳 Fechamentos Recorrentes**
 
 ### Preservado
-- HF62 — clientes recorrentes e fechamento periódico;
-- HF61 — categorias rápidas;
-- HF60 — publicação Cloudflare;
-- HF59/HF58/HF57/HF56/HF55 e regras homologadas anteriores;
+- HF63 — edição de cliente;
+- HF62 — regras e documentos de fechamento periódico;
+- HF61 a HF55 e base homologada anterior;
 - Template Mestre Comercial HF7 e Template Anna.
 
 Sem migração de banco e sem alteração nas regras de negócio.
