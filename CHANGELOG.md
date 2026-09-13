@@ -1380,3 +1380,10 @@ hangelog
 - Adiciona fundo escurecido, X, fechamento pelo fundo e navegação entre fotos do mesmo trabalho.
 - Mantém filtros, vínculo Produto → Galeria, WhatsApp, métricas e publicação HF44 sem mudanças.
 - Preserva HF55, HF54, Template Mestre HF7 e Template Anna.
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF57 — categorias públicas sem limite
+- Remove o corte de 12 categorias da seção “Explore por categoria”.
+- Exibe todas as categorias com produtos publicados, criando novas linhas automaticamente.
+- Preserva HF56, HF55, filtros, busca, métricas, WhatsApp, HF44, Template Mestre HF7 e Template Anna.
+- Sem alteração de banco de dados ou regras de negócio.
+

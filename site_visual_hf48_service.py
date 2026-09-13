@@ -148,7 +148,7 @@ def _categorias_html(catalogo: Iterable[Dict[str, Any]]) -> str:
     if not categorias:
         return ""
     cards = []
-    for cat in categorias[:12]:
+    for cat in categorias:
         qtd = int(contagens.get(cat, 0) or 0)
         cards.append(
             f'''<button type="button" class="hf48-category-card" data-hf48-cat="{html.escape(_slug(cat), quote=True)}">

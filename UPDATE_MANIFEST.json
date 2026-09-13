@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF56",
-  "generated_at_utc": "2026-09-12T23:07:15.538443+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF57",
+  "generated_at_utc": "2026-09-13T00:43:24.456970+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -23,7 +23,7 @@
     }
   },
   "file_count": 384,
-  "uncompressed_bytes": 36569145,
+  "uncompressed_bytes": 36569302,
   "files": [
     {
       "path": ".gitignore",
@@ -42,8 +42,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size": 89189,
-      "sha256": "ace5a2207e147b95395b4f2bdc9624ee234549c416c6a64b3158d974f15b3074"
+      "size": 89588,
+      "sha256": "b1dab65f1f9c7e3f38c1ad94814c653e7086ffa7a5b8b015df7d6f2072188c53"
     },
     {
       "path": "EDGE_FUNCTION_CATALOGO_PUBLICO.md",
@@ -102,18 +102,18 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 1103,
-      "sha256": "89df3f6186d3e87b2fd8824b28f81c70b860bd11375f50a47f6e59ed047588fd"
+      "size": 866,
+      "sha256": "cd7954ffc4a7573cf11d33cea2eff93fb76cccbcef847751cb277b6d733786fd"
     },
     {
       "path": "VERSAO",
       "size": 31,
-      "sha256": "15ef39763f931ce324f552662a68952169a6ef9a941b7ce246384ca04f0e3065"
+      "sha256": "cd88e8dedd28963d3252c563bfc382e9b4ddd8917cfbcd9126f8101521964cff"
     },
     {
       "path": "VERSAO.txt",
       "size": 31,
-      "sha256": "15ef39763f931ce324f552662a68952169a6ef9a941b7ce246384ca04f0e3065"
+      "sha256": "cd88e8dedd28963d3252c563bfc382e9b4ddd8917cfbcd9126f8101521964cff"
     },
     {
       "path": "__init__.py",
@@ -1827,8 +1827,8 @@
     },
     {
       "path": "site_visual_hf48_service.py",
-      "size": 46823,
-      "sha256": "0de0e0166e35fb03cc20ab96a0f7f9ee415151f5f0686812559585cf57b85191"
+      "size": 46818,
+      "sha256": "6d02961afe57e079abc2ea4032ca14dc6e0a74bef27ee6a1449513f3dcd60e4b"
     },
     {
       "path": "site_vitrine_service.py",

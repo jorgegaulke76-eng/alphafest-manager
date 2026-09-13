@@ -1,23 +1,21 @@
-# AlphaFest Manager — HF53.3-HF8-HF56
+# AlphaFest Manager — HF53.3-HF8-HF57
 
-## Site — Galeria com foto ampliada
+## Site — categorias sem limite fixo
 
-Correção visual isolada na Galeria pública do site, baseada na HF55 e sem alterar regras de negócio.
+Correção isolada da seção pública **Explore por categoria**, baseada na HF56.
 
-### Entregas
-- clicar/tocar em uma foto da Galeria abre a imagem ampliada em lightbox sobre a própria página;
-- fundo escurecido e botão **X** para fechar;
-- clique fora da imagem também fecha;
-- navegação **anterior/próxima** fica restrita às fotos do mesmo trabalho;
-- teclado suporta **Esc**, **←** e **→** no desktop;
-- no celular a foto usa praticamente toda a área disponível, mantendo proporção;
-- ao fechar, o foco retorna à foto de origem sem perder filtros nem posição de navegação;
-- as fotos continuam usando a mesma origem já renderizada pelo site, sem cadastro ou publicação paralela.
+### Entrega
+- remove o limite técnico de 12 categorias na página inicial;
+- passa a exibir **todas as categorias que possuam produtos publicados**;
+- novas categorias entram automaticamente conforme o Catálogo Oficial;
+- a grade continua responsiva: novas categorias apenas criam novas linhas;
+- não renomeia nem altera categorias existentes.
 
 ### Preservado
+- HF56 — lightbox da Galeria pública;
 - HF55 — exclusão individual de foto na Galeria interna;
-- base e otimizações do HF54;
-- Site homologado HF52.2-HF1-HF3;
+- filtros Categoria → Subcategoria;
+- busca, Catálogo, WhatsApp, métricas e publicação Cloudflare HF44;
 - Template Mestre Comercial HF7 congelado;
 - Template Anna homologado;
-- Catálogo, busca, métricas, WhatsApp, filtros e publicação Cloudflare HF44.
+- nenhuma regra de negócio ou banco de dados alterada.
