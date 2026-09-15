@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65",
-  "generated_at_utc": "2026-09-15T14:31:29.129040+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.1",
+  "generated_at_utc": "2026-09-15T16:26:07.923366+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -23,7 +23,7 @@
     }
   },
   "file_count": 387,
-  "uncompressed_bytes": 37368824,
+  "uncompressed_bytes": 37369131,
   "files": [
     {
       "path": ".gitignore",
@@ -42,8 +42,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size": 95127,
-      "sha256": "dc5f00b2b1cb19f70c7809058ba8b637d5f905bc018baa61cb778f1a3853e673"
+      "size": 95375,
+      "sha256": "c7b7008644e2ab385f33a3388a4edf87556d1c85b2e137b2fa154d6def1c97f6"
     },
     {
       "path": "EDGE_FUNCTION_CATALOGO_PUBLICO.md",
@@ -102,18 +102,18 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 1867,
-      "sha256": "3f25f216a37b6460272ddb22c081a092794dd688a35dcd85381564223075b16a"
+      "size": 1043,
+      "sha256": "8b2d2508a1f8a9cb971a2c804e7a89fad96c948516f7608f71290bd636267579"
     },
     {
       "path": "VERSAO",
-      "size": 31,
-      "sha256": "c0368368b70717b45ea2556f1f9d369f7d3ee81d43f8c0e8e525549e2f016811"
+      "size": 33,
+      "sha256": "f02a1d20543f63e6b259d41283986e001aa4d670e634463a5b31d89ce7e05c38"
     },
     {
       "path": "VERSAO.txt",
-      "size": 31,
-      "sha256": "c0368368b70717b45ea2556f1f9d369f7d3ee81d43f8c0e8e525549e2f016811"
+      "size": 33,
+      "sha256": "f02a1d20543f63e6b259d41283986e001aa4d670e634463a5b31d89ce7e05c38"
     },
     {
       "path": "__init__.py",
@@ -182,8 +182,8 @@
     },
     {
       "path": "app.py",
-      "size": 1968111,
-      "sha256": "4723500d3041edeb3102760a99cc594a1c2ed8c121472539c02a23b360456ec4"
+      "size": 1968990,
+      "sha256": "213138688f5f9ded3d8a1c5e01f0a3fd59798919e01cc45bbf44c18328451caf"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",

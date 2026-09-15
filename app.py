@@ -26555,20 +26555,36 @@ if pagina_atual == "site":
             st.caption("A arte do Dia do Cliente já vem incluída nesta atualização.")
 
         with _cform_hf65:
-            with st.form("site_campaign_hf65_form", clear_on_submit=False):
-                _hf65_enabled = st.checkbox("Exibir campanha no site", value=bool(campanha_hf65.get("enabled")))
-                _hf65_name = st.text_input("Nome interno da campanha", value=str(campanha_hf65.get("campaign_name") or "Campanha"), max_chars=120)
-                _hf65_art_mode = st.radio(
-                    "Arte",
-                    ["Usar arte Dia do Cliente incluída", "Usar arte personalizada"],
-                    index=0 if _camp_usar_padrao_hf65 else 1,
-                    horizontal=True,
-                )
+            # HF65.1 — o seletor de arte fica fora do st.form para que o Streamlit
+            # refaça a tela imediatamente e mostre o upload assim que a opção
+            # "Usar arte personalizada" for marcada. Dentro de form os widgets
+            # só disparam rerun no submit, por isso o carregador não aparecia.
+            _hf65_art_mode = st.radio(
+                "Arte",
+                ["Usar arte Dia do Cliente incluída", "Usar arte personalizada"],
+                index=0 if _camp_usar_padrao_hf65 else 1,
+                horizontal=True,
+                key="site_campaign_hf65_art_mode",
+            )
+            _hf65_upload = None
+            if _hf65_art_mode == "Usar arte personalizada":
                 _hf65_upload = st.file_uploader(
                     "Enviar nova arte (PNG, JPG ou WEBP)",
                     type=["png", "jpg", "jpeg", "webp"],
-                    help="Só é necessário escolher um arquivo ao trocar a arte personalizada.",
-                ) if _hf65_art_mode == "Usar arte personalizada" else None
+                    help="Escolha a nova arte. Ela só será gravada quando você clicar em Salvar Campanha Destaque.",
+                    key="site_campaign_hf65_custom_art",
+                )
+                if _hf65_upload is not None:
+                    try:
+                        st.image(_hf65_upload, caption="Prévia da nova arte", use_container_width=True)
+                    except Exception:
+                        pass
+                elif not _camp_usar_padrao_hf65:
+                    st.caption("A arte personalizada já salva será mantida se você não escolher outro arquivo.")
+
+            with st.form("site_campaign_hf65_form", clear_on_submit=False):
+                _hf65_enabled = st.checkbox("Exibir campanha no site", value=bool(campanha_hf65.get("enabled")))
+                _hf65_name = st.text_input("Nome interno da campanha", value=str(campanha_hf65.get("campaign_name") or "Campanha"), max_chars=120)
 
                 _h1, _h2 = st.columns(2)
                 with _h1:
@@ -26862,7 +26878,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.1",
                 )
                 return _html, _zip
 
@@ -27005,7 +27021,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.1",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59

@@ -1,3 +1,9 @@
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.1 — 2026-09-15
+- Corrigido o seletor de arte personalizada da Campanha Destaque.
+- O upload agora aparece imediatamente ao selecionar a opção personalizada.
+- Adicionada prévia da nova arte antes de salvar.
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF65 — Campanha Destaque do Site
 - Adiciona campanha temporária reutilizável com liga/desliga no Site AlphaFest.
 - Inclui arte do Dia do Cliente 2026 e aceita arte personalizada.
