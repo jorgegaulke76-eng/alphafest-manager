@@ -19,6 +19,7 @@ from site_vitrine_service import gerar_html_vitrine
 from site_galeria_service import gerar_fragmento_galeria, selecionar_trabalhos_site
 from site_visual_hf48_service import aplicar_visual_hf48
 from site_metrics_service import inject_tracking
+from site_campaign_service import inject_campaign
 
 ImagemResolver = Optional[Callable[[str], str]]
 
@@ -70,6 +71,8 @@ def gerar_html_site_completo(
     limite_fotos_galeria: Optional[int] = 24,
     visual_hf48: bool = False,
     mascotes_hf48: bool = False,
+    campaign_config: Optional[Dict[str, Any]] = None,
+    campaign_force_preview: bool = False,
 ) -> str:
     """Gera o site completo sem publicar ou persistir qualquer dado.
 
@@ -297,6 +300,15 @@ def gerar_html_site_completo(
       <div class="hf52-footer-dev">© {ano_vigente} AlphaFest · Desenvolvido por <strong>Jorge Gauke</strong></div>
     </div></footer>'''
     pagina = re.sub(r'<footer class="footer">.*?</footer>', footer_hf52, pagina, count=1, flags=re.S)
+
+    # HF65 — campanha temporária reutilizável. A injeção é isolada e não altera
+    # a estrutura homologada do site. Na produção, enabled + período são respeitados.
+    pagina = inject_campaign(
+        pagina,
+        campaign_config or {},
+        empresa,
+        force_preview=bool(modo_preview and campaign_force_preview),
+    )
 
     # HF52.1: somente a versão pública coleta métricas. Prévia interna não conta acesso.
     pagina = inject_tracking(pagina, enabled=not modo_preview)

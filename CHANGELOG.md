@@ -1,3 +1,12 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65 — Campanha Destaque do Site
+- Adiciona campanha temporária reutilizável com liga/desliga no Site AlphaFest.
+- Inclui arte do Dia do Cliente 2026 e aceita arte personalizada.
+- Thu e Fox entram com animação; duração 8/9/10 s e atraso 1/2/3 s.
+- Permite exibição uma vez por sessão, período automático e CTA para WhatsApp/link.
+- Campanha inicia desativada e só vai ao ar após salvar, pré-visualizar e publicar.
+- Configuração entra no backup; nenhum dado persistente é empacotado no update.
+- HF64, HF7, Template Anna e regras operacionais permanecem preservados.
+
 ## HF53.3-HF8-HF55 — Galeria: exclusão individual de foto
 - adiciona exclusão segura de uma foto específica no trabalho;
 - prévia e confirmação antes de apagar;

@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF64",
-  "generated_at_utc": "2026-09-13T17:59:17.385144+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65",
+  "generated_at_utc": "2026-09-15T14:31:29.129040+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -22,8 +22,8 @@
       "historical_examples": []
     }
   },
-  "file_count": 384,
-  "uncompressed_bytes": 36591598,
+  "file_count": 387,
+  "uncompressed_bytes": 37368824,
   "files": [
     {
       "path": ".gitignore",
@@ -42,8 +42,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size": 94510,
-      "sha256": "ad782e651d70e123390b0dffa97d22443ce0ea5147c2d9f80684878138f8373c"
+      "size": 95127,
+      "sha256": "dc5f00b2b1cb19f70c7809058ba8b637d5f905bc018baa61cb778f1a3853e673"
     },
     {
       "path": "EDGE_FUNCTION_CATALOGO_PUBLICO.md",
@@ -57,8 +57,8 @@
     },
     {
       "path": "LEIA_ME_ATUALIZACAO.txt",
-      "size": 530,
-      "sha256": "650c0b6885023be714b84f7dfb01694ddc26d53f0da856d7b76fa68ec7747220"
+      "size": 971,
+      "sha256": "7f19b16ddda588f5aaa51b492b4396700f51059a7604b0def801b03c4f8335be"
     },
     {
       "path": "LEIA_ME_ROLLBACK_URGENTE.txt",
@@ -102,18 +102,18 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 1179,
-      "sha256": "177f96e4150de2da47db84c12ff8300ba6e35b07ff66aba452ebe92e38944846"
+      "size": 1867,
+      "sha256": "3f25f216a37b6460272ddb22c081a092794dd688a35dcd85381564223075b16a"
     },
     {
       "path": "VERSAO",
       "size": 31,
-      "sha256": "9e07edebb6172f8481abadb8ec6a0a818dd9115b113f39dca3c93e14dc1b85af"
+      "sha256": "c0368368b70717b45ea2556f1f9d369f7d3ee81d43f8c0e8e525549e2f016811"
     },
     {
       "path": "VERSAO.txt",
       "size": 31,
-      "sha256": "9e07edebb6172f8481abadb8ec6a0a818dd9115b113f39dca3c93e14dc1b85af"
+      "sha256": "c0368368b70717b45ea2556f1f9d369f7d3ee81d43f8c0e8e525549e2f016811"
     },
     {
       "path": "__init__.py",
@@ -182,8 +182,13 @@
     },
     {
       "path": "app.py",
-      "size": 1958665,
-      "sha256": "ebf8c306126d6ca32af576954d85cbce5b38848162ed21550d0295139d563650"
+      "size": 1968111,
+      "sha256": "4723500d3041edeb3102760a99cc594a1c2ed8c121472539c02a23b360456ec4"
+    },
+    {
+      "path": "assets/campaigns/dia_cliente_2026.webp",
+      "size": 275748,
+      "sha256": "89948cd188d6a573580d478e66dc6d94cfef1c3586816382534735c4f4dee88d"
     },
     {
       "path": "assets/catalogos_legados/acervo_catalogos_legados.json",
@@ -1491,6 +1496,11 @@
       "sha256": "bd5989693ede0e0451e27d0ceee9ba281c3718796113aef820869098e3de1659"
     },
     {
+      "path": "assets/mascotes/thu_joinha.png",
+      "size": 477366,
+      "sha256": "d8e6c5ad5df504d0c74576ab035c6ab84306c677ae94436becbb7c64524626ab"
+    },
+    {
       "path": "audit_ui.py",
       "size": 7085,
       "sha256": "3962c0bfbaa2b5daa2f904e7c9650602efa2a922d90c6fe97a07c77eae0e781e"
@@ -1786,14 +1796,19 @@
       "sha256": "6b77edb6596c6973c19d771093795f55defb5eb7f49c845097bde3abe67a390d"
     },
     {
+      "path": "site_campaign_service.py",
+      "size": 12285,
+      "sha256": "a646ea0900f90306b71d531182129a6bf69623cfcd10d4417631c8b1f2bacef8"
+    },
+    {
       "path": "site_cloudflare_publish_service.py",
       "size": 11813,
       "sha256": "bff3e8cf44bc962f26a106c6b8be292e9ac40a4b9b9efa712c461a05711281e6"
     },
     {
       "path": "site_completo_service.py",
-      "size": 24418,
-      "sha256": "a652fd20129d0c680946531930b177e69b12289848d73b952e9be96995d6090a"
+      "size": 24912,
+      "sha256": "1b02024ece7ea0e13f10a5cc432b1bb9b14068553587b4bc3ade03c4d9ec8646"
     },
     {
       "path": "site_cutover_service.py",
@@ -1937,8 +1952,8 @@
     },
     {
       "path": "update_hygiene.py",
-      "size": 14846,
-      "sha256": "944931af32605c8ca55655cd78da4ffb2fe4002cf4f151fd0f6677311a42e07a"
+      "size": 14987,
+      "sha256": "c452a4dd9f4d163dc4e0caa045baedcdd30692029331881a476c33bc105dafe3"
     },
     {
       "path": "update_safe_ui.py",

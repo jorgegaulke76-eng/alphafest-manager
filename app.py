@@ -39,6 +39,7 @@ from site_manager_service import (
 )
 from site_vitrine_service import resumir_vitrine as _site_resumir_vitrine
 from site_completo_service import gerar_html_site_completo as _site_gerar_html_completo
+from site_campaign_service import DEFAULT_CAMPAIGN_CONFIG as _site_campaign_default, normalize_campaign_config as _site_campaign_normalize
 from site_metrics_service import dashboard_summary_cached as _site_metrics_summary, clear_dashboard_summary_cache as _site_metrics_clear_cache, tracking_available as _site_metrics_tracking_available, server_config as _site_metrics_server_config
 from site_galeria_service import resumir_galeria_site as _site_resumir_galeria
 from site_staging_service import gerar_pacote_staging as _site_gerar_pacote_staging, resumo_staging as _site_resumo_staging
@@ -850,6 +851,7 @@ ARQUIVO_PLANEJAMENTO_COMPRAS = "planejamento_compras_db.json"
 ARQUIVO_AGENDA_ANNA_SNAPSHOTS = "agenda_anna_snapshots_db.json"
 ARQUIVO_BIBLIOTECA_3D = "biblioteca_3d_db.json"
 ARQUIVO_GALERIA_TRABALHOS = "galeria_trabalhos_db.json"
+ARQUIVO_SITE_CAMPAIGN = "site_campaign_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -958,6 +960,15 @@ def carregar_config_empresa():
     if isinstance(dados, dict):
         config.update({k: v for k, v in dados.items() if v is not None})
     return config
+
+# HF65 — configuração isolada da Campanha Destaque do site.
+def carregar_config_campanha_site(force_refresh=False):
+    dados = load_document("site_campaign_db", ARQUIVO_SITE_CAMPAIGN, _site_campaign_default, force_refresh=force_refresh)
+    return _site_campaign_normalize(dados)
+
+def salvar_config_campanha_site(config):
+    normalizada = _site_campaign_normalize(config)
+    return bool(save_document("site_campaign_db", normalizada, ARQUIVO_SITE_CAMPAIGN))
 
 USUARIOS_ADMIN = {
     "jorgegaulke76@gmail.com": {"nome": "Jorge", "perfil": "Administrador"},
@@ -16528,6 +16539,7 @@ DOCUMENTOS_BACKUP = [
     ("historico_orcamentos", ARQUIVO_HISTORICO, []),
     ("catalogo_db", ARQUIVO_CATALOGO, []),
     ("galeria_trabalhos_db", ARQUIVO_GALERIA_TRABALHOS, []),
+    ("site_campaign_db", ARQUIVO_SITE_CAMPAIGN, _site_campaign_default),
     ("clientes_db", ARQUIVO_CLIENTES, []),
     ("producao_db", ARQUIVO_PRODUCAO, []),
     ("config_empresa", ARQUIVO_EMPRESA, CONFIG_EMPRESA_PADRAO),
@@ -16702,6 +16714,8 @@ def verificar_integridade_dados():
         problemas.append("atendimentos_db: estrutura inválida (esperado objeto).")
     if not isinstance(documentos.get("config_empresa"), dict):
         problemas.append("config_empresa: estrutura inválida (esperado objeto).")
+    if not isinstance(documentos.get("site_campaign_db"), dict):
+        problemas.append("site_campaign_db: estrutura inválida (esperado objeto).")
     return problemas, contagens
 
 def restaurar_backup_payload(payload):
@@ -26516,6 +26530,133 @@ if pagina_atual == "site":
 
     # HF59 — removidos cards/avisos redundantes do topo. A tela fica focada em métricas e atualização real do site.
 
+    # HF65 — Campanha Destaque: ferramenta curta e reutilizável, com liga/desliga.
+    campanha_hf65 = carregar_config_campanha_site()
+    _camp_status_hf65 = "ATIVA" if campanha_hf65.get("enabled") else "desativada"
+    with st.expander(f"🎯 Campanha Destaque · {_camp_status_hf65}", expanded=bool(campanha_hf65.get("enabled"))):
+        st.caption(
+            "Use para Dia do Cliente, sorteios, vouchers, lançamentos e avisos especiais. "
+            "Quando estiver desativada, nada é exibido no site."
+        )
+
+        _camp_art_atual_hf65 = str(campanha_hf65.get("image_src") or "")
+        _camp_usar_padrao_hf65 = _camp_art_atual_hf65 == "__DEFAULT_DIA_CLIENTE__"
+        _camp_preview_src_hf65 = "assets/campaigns/dia_cliente_2026.webp" if _camp_usar_padrao_hf65 else _camp_art_atual_hf65
+        _cprev_hf65, _cform_hf65 = st.columns([0.8, 1.7])
+        with _cprev_hf65:
+            st.markdown("**Arte atual**")
+            if _camp_preview_src_hf65:
+                try:
+                    st.image(_camp_preview_src_hf65, use_container_width=True)
+                except Exception:
+                    st.caption("A arte está salva e será exibida na prévia do site.")
+            else:
+                st.info("Nenhuma arte cadastrada.")
+            st.caption("A arte do Dia do Cliente já vem incluída nesta atualização.")
+
+        with _cform_hf65:
+            with st.form("site_campaign_hf65_form", clear_on_submit=False):
+                _hf65_enabled = st.checkbox("Exibir campanha no site", value=bool(campanha_hf65.get("enabled")))
+                _hf65_name = st.text_input("Nome interno da campanha", value=str(campanha_hf65.get("campaign_name") or "Campanha"), max_chars=120)
+                _hf65_art_mode = st.radio(
+                    "Arte",
+                    ["Usar arte Dia do Cliente incluída", "Usar arte personalizada"],
+                    index=0 if _camp_usar_padrao_hf65 else 1,
+                    horizontal=True,
+                )
+                _hf65_upload = st.file_uploader(
+                    "Enviar nova arte (PNG, JPG ou WEBP)",
+                    type=["png", "jpg", "jpeg", "webp"],
+                    help="Só é necessário escolher um arquivo ao trocar a arte personalizada.",
+                ) if _hf65_art_mode == "Usar arte personalizada" else None
+
+                _h1, _h2 = st.columns(2)
+                with _h1:
+                    _hf65_duration = st.selectbox("Tempo na tela", [8, 9, 10], index=[8, 9, 10].index(int(campanha_hf65.get("duration_seconds", 9))) if int(campanha_hf65.get("duration_seconds", 9)) in [8, 9, 10] else 1, format_func=lambda x: f"{x} segundos")
+                with _h2:
+                    _hf65_delay = st.selectbox("Entrar após", [1, 2, 3], index=[1, 2, 3].index(int(campanha_hf65.get("delay_seconds", 2))) if int(campanha_hf65.get("delay_seconds", 2)) in [1, 2, 3] else 1, format_func=lambda x: f"{x} segundo" if x == 1 else f"{x} segundos")
+                _hf65_show_mascots = st.checkbox("Animar Thu e Fox junto com a campanha", value=bool(campanha_hf65.get("show_mascots", True)))
+                _hf65_once = st.checkbox("Mostrar somente uma vez por visita", value=bool(campanha_hf65.get("show_once_per_session", True)))
+
+                _periodo_atual_hf65 = bool(campanha_hf65.get("start_date") or campanha_hf65.get("end_date"))
+                _hf65_use_period = st.checkbox("Usar período automático", value=_periodo_atual_hf65, help="Ao terminar o período, a campanha deixa de aparecer mesmo sem nova publicação.")
+                if _hf65_use_period:
+                    def _hf65_data(valor, padrao):
+                        try:
+                            return date.fromisoformat(str(valor or ""))
+                        except Exception:
+                            return padrao
+                    _pd1, _pd2 = st.columns(2)
+                    with _pd1:
+                        _hf65_start = st.date_input("Data inicial", value=_hf65_data(campanha_hf65.get("start_date"), hoje_local()), format="DD/MM/YYYY")
+                    with _pd2:
+                        _hf65_end = st.date_input("Data final", value=_hf65_data(campanha_hf65.get("end_date"), hoje_local()), format="DD/MM/YYYY")
+                else:
+                    _hf65_start = _hf65_end = None
+
+                _cta_labels_hf65 = {"whatsapp": "WhatsApp", "none": "Sem botão", "link": "Link personalizado"}
+                _cta_rev_hf65 = {v: k for k, v in _cta_labels_hf65.items()}
+                _hf65_cta_label = st.selectbox(
+                    "Ação do botão",
+                    ["WhatsApp", "Sem botão", "Link personalizado"],
+                    index=["WhatsApp", "Sem botão", "Link personalizado"].index(_cta_labels_hf65.get(str(campanha_hf65.get("cta_kind") or "whatsapp"), "WhatsApp")),
+                )
+                _hf65_cta_kind = _cta_rev_hf65[_hf65_cta_label]
+                _hf65_cta_text = st.text_input("Texto do botão", value=str(campanha_hf65.get("cta_text") or "Quero meu voucher"), max_chars=80, disabled=_hf65_cta_kind == "none")
+                _hf65_wa_msg = str(campanha_hf65.get("whatsapp_message") or "")
+                _hf65_link = str(campanha_hf65.get("cta_url") or "")
+                if _hf65_cta_kind == "whatsapp":
+                    _hf65_wa_msg = st.text_area("Mensagem pronta do WhatsApp", value=_hf65_wa_msg, height=86, max_chars=600)
+                elif _hf65_cta_kind == "link":
+                    _hf65_link = st.text_input("Link do botão", value=_hf65_link, placeholder="https://...")
+
+                with st.expander("Texto adicional sobre a arte (opcional)", expanded=False):
+                    _hf65_headline = st.text_input("Título adicional", value=str(campanha_hf65.get("headline") or ""), max_chars=180)
+                    _hf65_message = st.text_area("Mensagem adicional", value=str(campanha_hf65.get("message") or ""), height=80, max_chars=700)
+
+                _hf65_submit = st.form_submit_button("💾 Salvar Campanha Destaque", type="primary", use_container_width=True)
+
+            if _hf65_submit:
+                _novo_hf65 = dict(campanha_hf65)
+                _novo_hf65.update({
+                    "enabled": bool(_hf65_enabled),
+                    "campaign_name": _hf65_name.strip() or "Campanha",
+                    "show_mascots": bool(_hf65_show_mascots),
+                    "duration_seconds": int(_hf65_duration),
+                    "delay_seconds": int(_hf65_delay),
+                    "show_once_per_session": bool(_hf65_once),
+                    "start_date": _hf65_start.isoformat() if _hf65_start else "",
+                    "end_date": _hf65_end.isoformat() if _hf65_end else "",
+                    "cta_kind": _hf65_cta_kind,
+                    "cta_text": _hf65_cta_text.strip(),
+                    "cta_url": _hf65_link.strip(),
+                    "whatsapp_message": _hf65_wa_msg.strip(),
+                    "headline": _hf65_headline.strip(),
+                    "message": _hf65_message.strip(),
+                })
+                if _hf65_art_mode == "Usar arte Dia do Cliente incluída":
+                    _novo_hf65["image_src"] = "__DEFAULT_DIA_CLIENTE__"
+                elif _hf65_upload is not None:
+                    _novo_hf65["image_src"] = upload_catalog_image(_hf65_upload)
+                elif _camp_usar_padrao_hf65:
+                    _novo_hf65["image_src"] = ""
+
+                if _hf65_use_period and _hf65_start and _hf65_end and _hf65_end < _hf65_start:
+                    st.error("A data final não pode ser anterior à data inicial.")
+                elif salvar_config_campanha_site(_novo_hf65):
+                    st.session_state.pop("site_hf59_html_preview", None)
+                    _site_runtime_cache_hf45.clear()
+                    try:
+                        registrar_auditoria(
+                            "Atualizar campanha site",
+                            "Site",
+                            _novo_hf65.get("campaign_name", "Campanha"),
+                            {"ativa": bool(_novo_hf65.get("enabled")), "periodo": [_novo_hf65.get("start_date"), _novo_hf65.get("end_date")]},
+                        )
+                    except Exception:
+                        pass
+                    st.success("Campanha salva. Agora prepare a prévia do site e publique quando estiver tudo certo.")
+                    st.rerun()
 
     # HF52.1-HF3 — métricas privadas por período + funil + origem dos acessos + termos buscados.
     # Compatibilidade visual HF52.1-HF2: "Métricas privadas do Site · HF52.1-HF2".
@@ -26677,6 +26818,7 @@ if pagina_atual == "site":
                 limite_fotos_galeria=48,
                 visual_hf48=True,
                 mascotes_hf48=True,
+                campaign_config=campanha_hf65,
             )
         st.success("✅ Prévia atualizada. Confira abaixo antes de publicar.")
     col_site_hf59.link_button("🌐 Abrir site atual", "https://alphafest.com.br", use_container_width=True)
@@ -26715,11 +26857,12 @@ if pagina_atual == "site":
                     limite_fotos_galeria=48,
                     visual_hf48=True,
                     mascotes_hf48=True,
+                    campaign_config=campanha_hf65,
                 )
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF60",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65",
                 )
                 return _html, _zip
 
@@ -26732,7 +26875,8 @@ if pagina_atual == "site":
                     "logo": logo_src_hf59,
                     "galeria": galeria_site_hf59,
                     "total": resumo_vitrine_hf59.get("total", 0),
-                    "visual": "HF59",
+                    "visual": "HF65",
+                    "campaign": campanha_hf65,
                 },
                 _build_producao_hf59,
                 ttl_seconds=180,
@@ -26833,7 +26977,7 @@ if pagina_atual == "site":
                 pass
             _cf_ultimo_hf59 = str(st.session_state.get("site_hf44_ultimo_fingerprint", "") or "")
             if _cf_fingerprint_hf59 and _cf_fingerprint_hf59 == _cf_ultimo_hf59:
-                st.info("✅ Este mesmo conteúdo já foi publicado nesta sessão. Uma nova alteração no Catálogo ou Galeria gerará outra versão.")
+                st.info("✅ Este mesmo conteúdo já foi publicado nesta sessão. Uma nova alteração no Catálogo, Galeria ou Campanha Destaque gerará outra versão.")
 
             _cf_confirmar_hf59 = st.checkbox(
                 f"Conferi a prévia e quero publicar agora {resumo_vitrine_hf59.get('total', 0)} produto(s) + a Galeria selecionada.",
@@ -26861,7 +27005,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF60",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
@@ -26878,7 +27022,7 @@ if pagina_atual == "site":
                 st.download_button(
                     "⬇️ Baixar ZIP de produção",
                     data=pacote_producao_hf59,
-                    file_name="alphafest-site-producao-hf60.zip",
+                    file_name="alphafest-site-producao-hf65.zip",
                     mime="application/zip",
                     use_container_width=True,
                     key="site_hf59_download_producao",

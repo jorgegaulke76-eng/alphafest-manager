@@ -50,7 +50,10 @@ REQUIRED_RUNTIME_FILES = {
     "config.py",
     "marketing_template_engine.py",
     "marketing_anna_renderer_hf11.py",
+    "site_campaign_service.py",
     "assets/marketing/template_mestre_hf7_preview.png",
+    "assets/campaigns/dia_cliente_2026.webp",
+    "assets/mascotes/thu_joinha.png",
 }
 
 # Documentos persistentes nunca pertencem a um ZIP de atualização.
@@ -66,7 +69,7 @@ DATA_JSON_NAMES = {
     "compras_db.json", "estoque_db.json", "fichas_tecnicas_db.json",
     "consumo_pedidos_db.json", "planejamento_compras_db.json",
     "agenda_anna_snapshots_db.json", "biblioteca_3d_db.json",
-    "galeria_trabalhos_db.json", "feature_flags.json",
+    "galeria_trabalhos_db.json", "feature_flags.json", "site_campaign_db.json",
 }
 
 EXCLUDED_DIRS = {

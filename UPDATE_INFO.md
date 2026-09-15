@@ -1,26 +1,37 @@
-# AlphaFest Manager — HF64
+# AlphaFest Manager — HF65
 
-## Correção — Fechamentos Recorrentes visíveis na operação
+## Campanha Destaque reutilizável no site
 
-Correção isolada sobre a HF63.
+Atualização isolada sobre a HF64 para permitir ações temporárias no site sem alterar a estrutura homologada da vitrine.
 
-### Problema corrigido
-O módulo HF62 existia no código, porém estava liberado apenas para o perfil Jorge. No perfil operacional/Anna, a navegação principal também é propositalmente mais enxuta, então **Fechamentos Recorrentes não aparecia** para uso diário.
+### O que foi adicionado
+- bloco **Campanha Destaque** dentro de **Site AlphaFest** no Manager;
+- chave **Exibir campanha no site** para habilitar/desabilitar;
+- arte do **Dia do Cliente 2026** já incluída no pacote, sem depender de serviço externo;
+- opção de enviar uma arte personalizada para campanhas futuras;
+- entrada animada do **Thu** e da **Fox** nas laterais;
+- atraso configurável de 1, 2 ou 3 segundos;
+- permanência configurável de 8, 9 ou 10 segundos;
+- botão **X** para fechar antes;
+- opção de mostrar apenas uma vez por visita/sessão;
+- período automático opcional, com data inicial e final;
+- CTA opcional para **WhatsApp**, **link personalizado** ou **sem botão**;
+- prévia e publicação continuam usando o fluxo seguro já existente do Site AlphaFest;
+- comportamento responsivo no celular e respeito a preferência de movimento reduzido.
 
-### Novo comportamento
-- **Relacionamentos** passa a mostrar no topo o botão **💳 Fechamentos Recorrentes**;
-- o perfil Anna/operacional passa a ter acesso ao módulo;
-- bases antigas de permissões são corrigidas em runtime, sem exigir alteração manual de usuários;
-- a tela permite a rotina já definida no HF62: Semanal, Quinzenal e Mensal, boletim, WhatsApp, PDF e registro de recebimento;
-- Jorge continua com acesso normalmente.
+### Segurança operacional
+- a campanha inicia **desativada** após instalar a HF65;
+- nenhuma campanha é publicada automaticamente pela atualização;
+- para aparecer no site, é necessário habilitar, salvar, gerar a prévia e publicar;
+- a configuração da campanha entra no backup do Manager;
+- nenhum JSON de dados da empresa é incluído no ZIP de atualização;
+- não há migração de banco nem alteração nas regras comerciais/produção/estoque.
 
 ### Caminho rápido
-**Relacionamentos → 💳 Fechamentos Recorrentes**
+**Site AlphaFest → Campanha Destaque → habilitar → salvar → preparar/atualizar prévia → publicar**
 
 ### Preservado
-- HF63 — edição de cliente;
-- HF62 — regras e documentos de fechamento periódico;
-- HF61 a HF55 e base homologada anterior;
+- HF64 e todas as correções anteriores;
+- publicação Cloudflare já homologada;
+- Catálogo, Galeria, Métricas e busca do site;
 - Template Mestre Comercial HF7 e Template Anna.
-
-Sem migração de banco e sem alteração nas regras de negócio.

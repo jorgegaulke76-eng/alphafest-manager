@@ -1,11 +1,15 @@
-FESTMANAGER 9.2.0
+ALPHAFEST MANAGER — HF65 · CAMPANHA DESTAQUE DO SITE
 
-1. Faça backup no sistema.
-2. Substitua os arquivos deste pacote na raiz do repositório GitHub.
-3. Não apague seus arquivos JSON de dados existentes.
-4. Reinicie/Reboot o aplicativo no Streamlit.
-5. Confirme no rodapé: Versão 9.2.0.
-6. Abra Relacionamentos > Cadastro Mestre e clique em Sincronizar Cadastro Mestre agora.
-7. Abra Configurações > Alpha Connect e teste somente integrações marcadas como Configurado.
+1. No Manager, faça o backup/ponto de restauração antes da atualização.
+2. Instale este ZIP pelo fluxo de Atualização Segura já existente.
+3. Reinicie o aplicativo e confirme a versão 20.4.9-I8.13.5-HF53.3-HF8-HF65.
+4. Abra Site AlphaFest > Campanha Destaque.
+5. A campanha vem DESATIVADA por segurança.
+6. Para o Dia do Cliente: mantenha a arte incluída, habilite a campanha, use 2 s de atraso e 9 s de duração e salve.
+7. Prepare/atualize a prévia do site e confira a animação do Thu, Fox, arte, botão e fechamento.
+8. Só depois clique para publicar o site.
+9. Quando a ação terminar, volte em Campanha Destaque, desative, salve e publique novamente.
 
-Os testes do Alpha Connect não publicam, não enviam mensagens e não exibem chaves.
+Para futuras promoções/sorteios, basta trocar a arte e os textos, configurar o período e habilitar novamente.
+
+A atualização não substitui nem inclui os JSON persistentes da empresa. HF64, HF7 e demais rotinas permanecem preservados.
