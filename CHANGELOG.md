@@ -1,3 +1,10 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.2 — 2026-09-15
+
+- Ajusta o CTA da Galeria pública de `Quero algo parecido` para `Quero este`.
+- Atualiza a mensagem enviada ao WhatsApp para indicar que o cliente quer o modelo exibido.
+- Atualiza o texto de apoio da Galeria para manter a comunicação consistente.
+- Preserva HF65.1, Campanha Destaque, dados, catálogo, galeria, métricas e publicação Cloudflare.
+
 
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF65.1 — 2026-09-15
 - Corrigido o seletor de arte personalizada da Campanha Destaque.

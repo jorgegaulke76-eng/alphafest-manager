@@ -167,7 +167,7 @@ def gerar_fragmento_galeria(
         ocasiao = _texto(trabalho.get("ocasiao"))
         detalhes = [x for x in [tema, cor, ocasiao] if x]
         detalhe_html = " • ".join(html.escape(x) for x in detalhes)
-        mensagem = f"Olá! Vi este trabalho na Galeria da AlphaFest e gostaria de algo parecido: {produto}."
+        mensagem = f"Olá! Vi este trabalho na Galeria da AlphaFest e quero este modelo: {produto}."
         if tema:
             mensagem += f" Tema: {tema}."
         if ocasiao:
@@ -205,7 +205,7 @@ def gerar_fragmento_galeria(
                 {imagem}
                 <div class="gallery-body"><div class="gallery-tax">{html.escape(categoria)} <span>›</span> {html.escape(subcategoria)}</div>
                 <h3>{html.escape(produto)}</h3>{f'<p>{detalhe_html}</p>' if detalhe_html else '<p>Personalizado produzido pela AlphaFest.</p>'}
-                <a class="gallery-cta" href="{html.escape(href, quote=True)}" target="_blank" rel="noopener">💬 Quero algo parecido</a></div></article>'''
+                <a class="gallery-cta" href="{html.escape(href, quote=True)}" target="_blank" rel="noopener">💬 Quero este</a></div></article>'''
             )
             total_renderizado += 1
         if limite is not None and total_renderizado >= limite:

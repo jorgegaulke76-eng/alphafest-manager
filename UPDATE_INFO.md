@@ -1,23 +1,21 @@
-# AlphaFest Manager — HF65.1
+# AlphaFest Manager — HF65.2
 
-## Correção do upload de arte personalizada na Campanha Destaque
+## Ajuste de CTA da Galeria pública
 
-Correção isolada sobre a HF65 já homologada no site.
+Atualização isolada sobre a HF65.1 homologada.
 
-### Corrigido
-- ao selecionar **Usar arte personalizada**, o campo **Enviar nova arte (PNG, JPG ou WEBP)** agora aparece imediatamente;
-- o seletor de arte foi retirado de dentro do formulário do Streamlit, evitando a necessidade de salvar antes de o upload aparecer;
-- prévia da nova arte aparece assim que o arquivo é escolhido;
-- se já existir uma arte personalizada e nenhum arquivo novo for escolhido, a arte atual é preservada.
+### O que muda
+- Botão verde dos cartões da Galeria: `Quero algo parecido` → `Quero este`.
+- Mensagem do WhatsApp passa a dizer que o cliente quer o modelo exibido.
+- Texto de apoio da Galeria passa a orientar o cliente a pedir `este modelo`.
 
-### Preservado
-- campanha atual do Dia do Cliente e sua configuração salva;
-- Thu + Fox, tempo, período, CTA e regra de uma vez por visita;
-- publicação Cloudflare e toda a base HF64/HF65;
-- Catálogo, Galeria, Métricas e busca;
-- Template Mestre Comercial HF7 e Template Anna.
+### O que não muda
+- Campanha Destaque HF65/HF65.1;
+- catálogo, produtos, categorias e galeria;
+- fotos e lightbox;
+- métricas privadas;
+- publicação Cloudflare;
+- dados da empresa e Template Mestre HF7.
 
-### Segurança
-- não inclui JSON de dados da empresa;
-- não altera banco de dados nem configurações já salvas;
-- atualização apenas de código/interface.
+### Versão
+`20.4.9-I8.13.5-HF53.3-HF8-HF65.2`

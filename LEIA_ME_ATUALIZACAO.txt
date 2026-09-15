@@ -1,15 +1,9 @@
-ALPHAFEST MANAGER — HF65 · CAMPANHA DESTAQUE DO SITE
+ALPHAFEST MANAGER — HF65.2 · CTA “QUERO ESTE” NA GALERIA
 
-1. No Manager, faça o backup/ponto de restauração antes da atualização.
-2. Instale este ZIP pelo fluxo de Atualização Segura já existente.
-3. Reinicie o aplicativo e confirme a versão 20.4.9-I8.13.5-HF53.3-HF8-HF65.
-4. Abra Site AlphaFest > Campanha Destaque.
-5. A campanha vem DESATIVADA por segurança.
-6. Para o Dia do Cliente: mantenha a arte incluída, habilite a campanha, use 2 s de atraso e 9 s de duração e salve.
-7. Prepare/atualize a prévia do site e confira a animação do Thu, Fox, arte, botão e fechamento.
-8. Só depois clique para publicar o site.
-9. Quando a ação terminar, volte em Campanha Destaque, desative, salve e publique novamente.
+1. Faça o backup normal do Manager antes de atualizar.
+2. Instale este ZIP pela Atualização Segura.
+3. Reinicie o aplicativo e confirme a versão 20.4.9-I8.13.5-HF53.3-HF8-HF65.2.
+4. Use “Publicar site agora” para levar a nova frase ao site oficial.
+5. Confira na Galeria pública se os cartões exibem “Quero este” e se o WhatsApp abre com a mensagem atualizada.
 
-Para futuras promoções/sorteios, basta trocar a arte e os textos, configurar o período e habilitar novamente.
-
-A atualização não substitui nem inclui os JSON persistentes da empresa. HF64, HF7 e demais rotinas permanecem preservados.
+A atualização não contém os dados da empresa e preserva a HF65.1 homologada.

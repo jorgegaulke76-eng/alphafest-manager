@@ -316,7 +316,7 @@ body{background:var(--hf48-bg)}
             pagina = pagina[:pos] + carrossel_html + pagina[pos:]
 
     if incluir_galeria and mascotes.get("galeria"):
-        galeria_intro = f'''<div class="hf48-gallery-intro"><img src="{mascotes['galeria']}" alt="Fox, mascote da AlphaFest"><div><strong>A Fox separou inspirações reais para você.</strong><span>Use Categoria, Subcategoria e Tema para encontrar trabalhos já produzidos e pedir algo parecido pelo WhatsApp.</span></div></div>'''
+        galeria_intro = f'''<div class="hf48-gallery-intro"><img src="{mascotes['galeria']}" alt="Fox, mascote da AlphaFest"><div><strong>A Fox separou inspirações reais para você.</strong><span>Use Categoria, Subcategoria e Tema para encontrar trabalhos já produzidos e pedir este modelo pelo WhatsApp.</span></div></div>'''
         marcador_galeria = '<section class="gallery-section" id="galeria">'
         if marcador_galeria in pagina:
             pagina = pagina.replace(marcador_galeria, marcador_galeria + galeria_intro, 1)
