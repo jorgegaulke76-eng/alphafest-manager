@@ -1,25 +1,21 @@
-# AlphaFest Manager — HF65.3
+# AlphaFest Manager — HF65.5
 
-## Centrais Jorge ↔ Anna + resumo rápido + reserva de materiais
+## Correção — comandos de envio das propostas
 
-Atualização sobre a HF65.2 homologada.
+Atualização sobre a HF65.4.
 
-### O que muda
-- Central da Anna e Central do Jorge passam a expor a mesma carteira ativa, sem corte silencioso em 20 registros.
-- Entregas de hoje na Anna passam a considerar somente pedidos aprovados, abertos e com entrega prevista para hoje, igual à regra do Jorge.
-- Nas visões operacionais de propostas ficam somente os quatro marcos oficiais: Aprovado, Pago, Pronto e Entregue.
-- Ações de contato com cliente e motivos comerciais de não fechamento deixam de ocupar as linhas operacionais das Centrais.
-- O resumo de cada proposta mostra Produto, Tema e Valor para leitura e atualização mais rápidas.
-- Reserva de materiais ganha fluxo rápido dentro da própria Central: não é mais necessário trocar para Gestão → Compras, Custos & Estoque para a liberação comum.
-- A reserva rápida preserva a regra homologada Reserva ≠ Consumo: separar material não baixa estoque; a baixa física continua ocorrendo apenas no avanço real da produção.
-- Quando não há Ficha Técnica completa, a reserva rápida permite informar materiais específicos do pedido ou marcar que não existe consumo de estoque controlado.
+### O que corrige
+- Restaura os comandos **📱 Enviar** e **📄 HTML** junto das propostas na Central da Anna.
+- Coloca os mesmos comandos na lista de propostas/pedidos ativos do Jorge.
+- O envio abre o WhatsApp com a mensagem da proposta já preparada, como antes.
+- O HTML continua disponível para baixar/compartilhar.
 
-### O que não muda
-- Fonte Única dos status Aprovado → Pago → Pronto → Entregue.
-- Regras de estoque, saldo negativo, estorno, consumo real e auditoria.
-- Fechamentos recorrentes e baixa de pagamento mensal.
-- Template Mestre Comercial HF7 e Template Anna homologados.
-- Campanha Destaque HF65/HF65.1 e CTA da Galeria HF65.2.
+### O que permanece como aprovado
+- A visão operacional não mostra campo de contato do cliente.
+- Status: Aprovado → Pago → Pronto → Entregue.
+- Resumo rápido: Produto + Tema + Valor.
+- Reserva rápida de materiais na própria Central.
+- Campanha Destaque com rolagem da HF65.4.
 
 ### Versão
-`20.4.9-I8.13.5-HF53.3-HF8-HF65.3`
+`20.4.9-I8.13.5-HF53.3-HF8-HF65.5`

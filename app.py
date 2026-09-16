@@ -23702,20 +23702,38 @@ def _hf653_resumo_proposta_operacional(prop):
 def _renderizar_linha_proposta_anna(prop, prefixo, permitir_reserva_rapida=True):
     numero = str(prop.get("numero_proposta", ""))
     resumo_hf653 = _hf653_resumo_proposta_operacional(prop)
-    c1, c2, c3 = st.columns([5.4, 1.5, 1.5])
+    # HF65.5 — mantém a Central operacional enxuta, mas restaura os comandos
+    # de envio da proposta. "Sem contato cliente" significa não exibir o
+    # contato como informação operacional; não remove WhatsApp/HTML de envio.
+    c1, c2, c3, c4, c5 = st.columns([5.0, 1.25, 1.35, 1.35, 1.15])
     c1.write(f"**{numero} — {prop.get('cliente_nome','Cliente')}**")
     c1.caption(
         f"🧾 Produto: {resumo_hf653['produtos']} · 🎨 Tema: {resumo_hf653['temas']} · 💰 Valor: {resumo_hf653['valor']}"
     )
     if c2.button("✏️ Atualizar", key=f"{prefixo}_edit_{numero}", use_container_width=True):
         dialog_orcamento_anna(prop)
+    numero_wa_hf655 = _anna_numero_whatsapp(prop.get("whatsapp") or prop.get("cliente_wa"))
+    link_hf655 = (
+        f"https://wa.me/{numero_wa_hf655}?text={quote(formatar_msg_whatsapp(prop))}"
+        if numero_wa_hf655
+        else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop))}"
+    )
+    c3.link_button("📱 Enviar", link_hf655, use_container_width=True)
     estado_linha_hf653 = _status_resumo(prop)
     pode_reservar_hf653 = bool(estado_linha_hf653.get("aprovado")) and not bool(estado_linha_hf653.get("pronto")) and not bool(estado_linha_hf653.get("entregue"))
     if permitir_reserva_rapida:
-        if c3.button("🔒 Materiais", key=f"{prefixo}_mat_{numero}", use_container_width=True, disabled=not pode_reservar_hf653):
+        if c4.button("🔒 Materiais", key=f"{prefixo}_mat_{numero}", use_container_width=True, disabled=not pode_reservar_hf653):
             dialog_reserva_rapida_pedido(numero)
     else:
-        c3.button("🔒 Materiais", key=f"{prefixo}_mat_bloq_{numero}", use_container_width=True, disabled=True, help="Feche esta janela para usar a reserva rápida na Central.")
+        c4.button("🔒 Materiais", key=f"{prefixo}_mat_bloq_{numero}", use_container_width=True, disabled=True, help="Feche esta janela para usar a reserva rápida na Central.")
+    c5.download_button(
+        "📄 HTML",
+        gerar_html(prop),
+        file_name=f"{numero}.html",
+        mime="text/html",
+        key=f"{prefixo}_html_{numero}",
+        use_container_width=True,
+    )
 
     _i8124_render_status_pedido(prop, prefixo=f"{prefixo}_estoque", detalhado=False)
 
@@ -24664,7 +24682,7 @@ if pagina_atual == "central":
                     "📦 Pronto" if estado_hf653.get("pronto") else "⬜ Pronto",
                     "🚚 Entregue" if estado_hf653.get("entregue") else "⬜ Entregue",
                 ])
-                lj1_hf653, lj2_hf653, lj3_hf653 = st.columns([6, 1.4, 1.4])
+                lj1_hf653, lj2_hf653, lj3_hf653, lj4_hf653, lj5_hf653 = st.columns([5.4, 1.2, 1.25, 1.3, 1.05])
                 lj1_hf653.markdown(f"**{html.escape(numero_hf653)} — {html.escape(str(prop_hf653.get('cliente_nome') or 'Cliente'))}**")
                 lj1_hf653.caption(
                     f"Produto: {resumo_hf653['produtos']} · Tema: {resumo_hf653['temas']} · Valor: {resumo_hf653['valor']} · {badges_hf653}"
@@ -24675,9 +24693,24 @@ if pagina_atual == "central":
                     use_container_width=True,
                     on_click=lambda n=numero_hf653: st.session_state.__setitem__("alerta_proposta_numero", n),
                 )
+                numero_wa_jorge_hf655 = _anna_numero_whatsapp(prop_hf653.get("whatsapp") or prop_hf653.get("cliente_wa"))
+                link_jorge_hf655 = (
+                    f"https://wa.me/{numero_wa_jorge_hf655}?text={quote(formatar_msg_whatsapp(prop_hf653))}"
+                    if numero_wa_jorge_hf655
+                    else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop_hf653))}"
+                )
+                lj3_hf653.link_button("📱 Enviar", link_jorge_hf655, use_container_width=True)
                 pode_mat_hf653 = bool(estado_hf653.get("aprovado")) and not bool(estado_hf653.get("pronto")) and not bool(estado_hf653.get("entregue"))
-                if lj3_hf653.button("🔒 Materiais", key=f"hf653_jorge_mat_{idx_hf653}_{numero_hf653}", use_container_width=True, disabled=not pode_mat_hf653):
+                if lj4_hf653.button("🔒 Materiais", key=f"hf653_jorge_mat_{idx_hf653}_{numero_hf653}", use_container_width=True, disabled=not pode_mat_hf653):
                     dialog_reserva_rapida_pedido(numero_hf653)
+                lj5_hf653.download_button(
+                    "📄 HTML",
+                    gerar_html(prop_hf653),
+                    file_name=f"{numero_hf653}.html",
+                    mime="text/html",
+                    key=f"hf655_jorge_html_{idx_hf653}_{numero_hf653}",
+                    use_container_width=True,
+                )
     else:
         c1, c2, c3, c4, c5, c6 = st.columns(6)
         c1.metric("🚨 Atrasados", indicadores_unificados_central["atrasados_operacionais"], help="Pedidos aprovados, ainda não entregues e com data de entrega vencida.")
@@ -27090,7 +27123,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.3",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.5",
                 )
                 return _html, _zip
 
@@ -27233,7 +27266,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.3",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.5",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59

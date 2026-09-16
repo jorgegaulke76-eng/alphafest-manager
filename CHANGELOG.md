@@ -1,3 +1,19 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.5 — comandos de envio de propostas restaurados
+- Restaura **Enviar** pelo WhatsApp e **HTML** em cada proposta da Central da Anna.
+- Disponibiliza os mesmos comandos na carteira ativa da Central do Jorge.
+- Mantém produto, tema e valor no resumo rápido, status Aprovado/Pago/Pronto/Entregue e Reserva Rápida da HF65.3.
+- Mantém a mensagem rolável da Campanha Destaque da HF65.4.
+- Não volta a exibir telefone/contato do cliente como campo da visão operacional.
+- Sem alteração de dados, estoque, Fonte Única, catálogo, galeria, Cloudflare, Template Mestre HF7 ou Template Anna.
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.4 — 2026-09-16
+
+- Adiciona rolagem vertical somente ao texto longo da Campanha Destaque.
+- Mantém o título fixo e evita que a mensagem aumente demais o pop-up.
+- Ajusta a altura da área de leitura para desktop e celular.
+- Preserva integralmente a HF65.3 e toda a estrutura homologada.
+
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF65.3 — 2026-09-16
 
 - Sincroniza a visão operacional das Centrais Jorge e Anna sobre a mesma carteira ativa.

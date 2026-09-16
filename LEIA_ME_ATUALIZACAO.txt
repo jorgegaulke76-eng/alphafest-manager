@@ -1,9 +1,9 @@
-ALPHAFEST MANAGER — HF65.2 · CTA “QUERO ESTE” NA GALERIA
+ALPHAFEST MANAGER — HF65.5 · RESTAURA ENVIO DE PROPOSTAS
 
 1. Faça o backup normal do Manager antes de atualizar.
 2. Instale este ZIP pela Atualização Segura.
-3. Reinicie o aplicativo e confirme a versão 20.4.9-I8.13.5-HF53.3-HF8-HF65.2.
-4. Use “Publicar site agora” para levar a nova frase ao site oficial.
-5. Confira na Galeria pública se os cartões exibem “Quero este” e se o WhatsApp abre com a mensagem atualizada.
+3. Reinicie e confirme a versão 20.4.9-I8.13.5-HF53.3-HF8-HF65.5.
+4. Na Central da Anna, confira os botões “Enviar” e “HTML” em cada proposta.
+5. Na Central do Jorge, abra “Todas as propostas e pedidos ativos” e confira os mesmos comandos.
 
-A atualização não contém os dados da empresa e preserva a HF65.1 homologada.
+A atualização não contém dados da empresa. Mantém HF65.3 e HF65.4.
