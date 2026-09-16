@@ -191,6 +191,7 @@ from proposal_status_service import (
     status_persistidos_correspondem as _status_persistencia_confere,
     exige_consumo_material as _status_exige_consumo_material,
     aplicar_status_na_proposta as _status_aplicar_na_proposta,
+    aplicar_cancelamento_cliente as _status_aplicar_cancelamento_cliente,
 )
 from producao_operacional_service import (
     etapa_exige_consumo as _producao_etapa_exige_consumo,
@@ -2217,6 +2218,7 @@ def _hf8_render_status_proposta_jorge_inline(num_proposta, prefixo="hf8_orcament
     pago = bool(estado.get("pago"))
     pronto = bool(estado.get("pronto"))
     entregue = bool(estado.get("entregue"))
+    cancelado_cliente = bool(estado.get("cancelado_cliente"))
     mensal = proposta_faturamento_mensal(proposta)
 
     st.markdown("#### 🚦 Status oficiais do pedido")
@@ -2227,7 +2229,7 @@ def _hf8_render_status_proposta_jorge_inline(num_proposta, prefixo="hf8_orcament
 
     form_key = f"{prefixo}_form_status_{numero}"
     with st.form(form_key):
-        c1, c2, c3, c4 = st.columns(4)
+        c1, c2, c3, c4, c5 = st.columns(5)
         novo_aprovado = c1.checkbox(
             "✅ Aprovado", value=aprovado, key=f"{prefixo}_aprovado_{numero}",
             help="Confirma a aprovação comercial do orçamento e libera o pedido para a operação.",
@@ -2253,13 +2255,18 @@ def _hf8_render_status_proposta_jorge_inline(num_proposta, prefixo="hf8_orcament
             "🚚 Entregue", value=entregue, key=f"{prefixo}_entregue_{numero}",
             help="Finaliza a operação. Entregue implica Pronto automaticamente.",
         )
+        novo_cancelado_cliente = c5.checkbox(
+            "🚫 Cancelado pelo cliente", value=cancelado_cliente, key=f"{prefixo}_cancelado_cliente_{numero}",
+            disabled=entregue,
+            help="Retira a proposta das filas operacionais sem apagar os status já registrados.",
+        )
         salvar_status_hf11 = st.form_submit_button(
             "💾 Salvar status", type="primary", use_container_width=True
         )
 
     if salvar_status_hf11:
         ok_status_hf11, msg_status_hf11 = salvar_andamento_proposta(
-            numero, novo_aprovado, novo_pago, novo_pronto, novo_entregue
+            numero, novo_aprovado, novo_pago, novo_pronto, novo_entregue, novo_cancelado_cliente
         )
         # Sempre relê do banco antes de informar sucesso. Nunca deixa o estado
         # visual do widget ser tratado como fonte de verdade.
@@ -2277,6 +2284,7 @@ def _hf8_render_status_proposta_jorge_inline(num_proposta, prefixo="hf8_orcament
             "pago": bool(pago if mensal else novo_pago),
             "pronto": bool(novo_pronto or novo_entregue),
             "entregue": bool(novo_entregue),
+            "cancelado_cliente": bool(novo_cancelado_cliente),
         }
         persistiu_hf11 = isinstance(proposta_confirmada_hf11, dict) and all(
             bool(estado_confirmado_hf11.get(campo)) == valor
@@ -2288,7 +2296,7 @@ def _hf8_render_status_proposta_jorge_inline(num_proposta, prefixo="hf8_orcament
         for chave_hf11 in (
             f"{prefixo}_aprovado_{numero}", f"{prefixo}_pago_{numero}",
             f"{prefixo}_pago_mensal_{numero}", f"{prefixo}_pronto_{numero}",
-            f"{prefixo}_entregue_{numero}",
+            f"{prefixo}_entregue_{numero}", f"{prefixo}_cancelado_cliente_{numero}",
         ):
             st.session_state.pop(chave_hf11, None)
 
@@ -2311,7 +2319,7 @@ def _hf8_render_status_proposta_jorge_inline(num_proposta, prefixo="hf8_orcament
             )
 
     carimbos = []
-    for campo, rotulo in (("aprovado_em", "Aprovado"), ("pago_em", "Pago"), ("pronto_em", "Pronto"), ("entregue_em", "Entregue")):
+    for campo, rotulo in (("aprovado_em", "Aprovado"), ("pago_em", "Pago"), ("pronto_em", "Pronto"), ("entregue_em", "Entregue"), ("cancelado_cliente_em", "Cancelado pelo cliente")):
         valor = str(proposta.get(campo) or "").strip()
         if valor:
             carimbos.append(f"{rotulo}: {valor}")
@@ -17871,10 +17879,15 @@ def dialog_cliente_anna():
         st.rerun()
 
 
-def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
-    """HF2/I8.13.2: atualiza os marcos oficiais com proteção de materiais."""
+def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue, cancelado_cliente=None):
+    """HF65.6: atualiza os marcos oficiais e o encerramento "Cancelado pelo cliente".
+
+    O cancelamento não apaga Aprovado/Pago/Pronto/Entregue já registrados; ele
+    apenas encerra a proposta nas filas operacionais.
+    """
     novos = _status_normalizar_desejados(aprovado, pago, pronto, entregue)
     usuario_status = str((obter_usuario_atual() or {}).get("nome") or "Sistema")
+    cancelado_desejado_hf656 = None if cancelado_cliente is None else bool(valor_bool(cancelado_cliente))
 
     # I8.13.2 — este editor atualiza os quatro marcos de uma vez e, por isso,
     # não passa por alternar_status(). Antes de uma NOVA transição para Pronto
@@ -17886,15 +17899,17 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
             None,
         )
         estado_antes_i8132 = _status_snapshot_oficial(atual_status_i8132 or {})
+        cancelado_antes_hf656 = bool(_status_resumo(atual_status_i8132 or {}).get("cancelado_cliente"))
     except Exception:
         estado_antes_i8132 = {}
+        cancelado_antes_hf656 = False
     # CAT1-HF9: quando o usuário marca Aprovado junto com Pronto/Entregue no
     # mesmo salvamento, a aprovação precisa existir primeiro para que a Central
     # de Reserva consiga enxergar o pedido. Gravamos os marcos preliminares e
     # só depois validamos consumo/material para a conclusão da produção.
     aprovou_previamente_hf9 = False
     pagou_previamente_hf9 = False
-    if bool(novos["aprovado"]) and not bool(estado_antes_i8132.get("aprovado")) and bool(novos["pronto"] or novos["entregue"]):
+    if cancelado_desejado_hf656 is not True and bool(novos["aprovado"]) and not bool(estado_antes_i8132.get("aprovado")) and bool(novos["pronto"] or novos["entregue"]):
         aprovou_previamente_hf9 = bool(alternar_status(numero, "aprovado", True))
         if bool(novos["pago"]) and not bool(estado_antes_i8132.get("pago")):
             pagou_previamente_hf9 = bool(alternar_status(numero, "pago", True))
@@ -17907,7 +17922,7 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
         except Exception:
             pass
 
-    nova_conclusao_producao_i8132 = _status_exige_consumo_material(estado_antes_i8132, novos)
+    nova_conclusao_producao_i8132 = (cancelado_desejado_hf656 is not True) and _status_exige_consumo_material(estado_antes_i8132, novos)
     if nova_conclusao_producao_i8132:
         consumidor_i8132 = globals().get("_i8132_consumir_reserva_pedido")
         if callable(consumidor_i8132):
@@ -17920,7 +17935,7 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
                         "Libere/reserve os materiais e depois continue o pedido em 'Pedidos em andamento'."
                     )
                 return False, msg_mat_i8132
-    controle = {"anteriores": None, "nova_conclusao": False, "aprovou_agora": False, "mudancas": []}
+    controle = {"anteriores": None, "nova_conclusao": False, "aprovou_agora": False, "mudancas": [], "cancelamento": None}
 
     def _mutar(proposta):
         resultado = _status_aplicar_na_proposta(
@@ -17933,6 +17948,17 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
             ),
         )
         controle.update(resultado)
+        if cancelado_desejado_hf656 is not None:
+            cancel_ctx_hf656 = _status_aplicar_cancelamento_cliente(
+                proposta,
+                cancelado_desejado_hf656,
+                now_text=agora_local().strftime("%d/%m/%Y %H:%M"),
+                usuario=usuario_status,
+                registrar_evento=lambda p, descricao, usuario: registrar_evento_proposta(
+                    p, descricao, usuario=usuario
+                ),
+            )
+            controle["cancelamento"] = cancel_ctx_hf656
 
     ok, atualizado, motivo = atualizar_proposta_com_leitura_fresca(numero, _mutar)
     if not ok:
@@ -17945,12 +17971,15 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
     estado_confirmado = _status_resumo(confirmado)
     if not _status_persistencia_confere(confirmado, novos):
         return False, "O banco recebeu outra atualização simultânea. Reabra a proposta e confirme os status atuais."
+    if cancelado_desejado_hf656 is not None and bool(estado_confirmado.get("cancelado_cliente")) != bool(cancelado_desejado_hf656):
+        return False, "O cancelamento não foi confirmado pelo banco. Reabra a proposta e tente novamente."
 
-    if controle["mudancas"]:
+    cancel_mudou_hf656 = bool((controle.get("cancelamento") or {}).get("mudou"))
+    if controle["mudancas"] or cancel_mudou_hf656:
         cliente_evt = str(confirmado.get("cliente_nome") or confirmado.get("cliente") or "Cliente").strip()
         registrar_atividade(
             obter_usuario_atual(), "Status da proposta atualizado", "Propostas",
-            detalhe=f"{numero} · {cliente_evt} · " + " / ".join(controle["mudancas"]), evento=True,
+            detalhe=f"{numero} · {cliente_evt} · " + " / ".join(list(controle["mudancas"]) + ([str((controle.get("cancelamento") or {}).get("texto") or "")] if cancel_mudou_hf656 else [])), evento=True,
         )
         estado_depois_i8134 = _status_resumo(confirmado)
         for campo_aud in ("aprovado", "pago", "pronto", "entregue"):
@@ -17961,8 +17990,20 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue):
                 origem="salvar_andamento_proposta",
                 contexto={"cliente": cliente_evt},
             )
+        if cancel_mudou_hf656:
+            registrar_mudanca_oficial(
+                "Proposta", numero, "status.cancelado_cliente",
+                bool(cancelado_antes_hf656),
+                bool(estado_depois_i8134.get("cancelado_cliente")),
+                origem="salvar_andamento_proposta",
+                contexto={"cliente": cliente_evt},
+            )
         # A mesma fotografia fresca alimenta Fluxo/Centrais.
         sincronizar_producao_com_propostas(historico_confirmado)
+    if bool(estado_confirmado.get("cancelado_cliente")):
+        consumo_cancel_hf656 = _i8124_consumo_ativo_pedido(numero) if callable(globals().get("_i8124_consumo_ativo_pedido")) else None
+        extra_cancel_hf656 = " Há reserva/consumo de materiais ativo; revise o estoque pelo controle do pedido." if consumo_cancel_hf656 else ""
+        return True, f"{numero} cancelada pelo cliente e retirada das filas operacionais.{extra_cancel_hf656}"
     if proposta_concluida(confirmado):
         if proposta_faturamento_mensal(confirmado):
             return True, f"{numero} entregue e finalizada; pagamento segue para o Fechamento Recorrente."
@@ -17988,7 +18029,7 @@ def dialog_fluxo_anna():
     ).strip().lower()
     status = c_status.selectbox(
         "Mostrar",
-        ["Todas", "Ativas", "Aguardando aprovação", "Aprovadas", "Pagas", "Prontas", "Entregues"],
+        ["Todas", "Ativas", "Aguardando aprovação", "Aprovadas", "Pagas", "Prontas", "Entregues", "Canceladas pelo cliente"],
         key="dlg_fluxo_status",
     )
 
@@ -18005,6 +18046,7 @@ def dialog_fluxo_anna():
         pago = bool(estado_dialog.get("pago"))
         pronto = bool(estado_dialog.get("pronto"))
         entregue = bool(estado_dialog.get("entregue"))
+        cancelado_cliente = bool(estado_dialog.get("cancelado_cliente"))
         ativa = proposta_ativa_operacional(prop)
         return {
             "Todas": ativa,
@@ -18014,6 +18056,7 @@ def dialog_fluxo_anna():
             "Pagas": ativa and pago,
             "Prontas": ativa and pronto and not entregue,
             "Entregues": entregue,
+            "Canceladas pelo cliente": cancelado_cliente,
         }[status]
 
     propostas = [p for p in historico if atende_filtro(p)]
@@ -18037,7 +18080,7 @@ def dialog_fluxo_anna():
             )
             with st.form(f"dlg_fluxo_form_{chave_segura}"):
                 estado_form_fluxo = _status_resumo(prop)
-                c1, c2, c3, c4 = st.columns(4)
+                c1, c2, c3, c4, c5 = st.columns(5)
                 aprovado = c1.checkbox("Aprovado", value=bool(estado_form_fluxo.get("aprovado")))
                 mensal_fluxo = proposta_faturamento_mensal(prop)
                 pago = c2.checkbox(
@@ -18048,9 +18091,15 @@ def dialog_fluxo_anna():
                 )
                 pronto = c3.checkbox("📦 Pronto", value=bool(estado_form_fluxo.get("pronto")), disabled=bool(estado_form_fluxo.get("entregue")), help="Produção concluída; aguardando retirada/entrega.")
                 entregue = c4.checkbox("🚚 Entregue", value=bool(estado_form_fluxo.get("entregue")), help="Finaliza a operação e implica Pronto.")
+                cancelado_cliente = c5.checkbox(
+                    "🚫 Cancelado pelo cliente",
+                    value=bool(estado_form_fluxo.get("cancelado_cliente")),
+                    disabled=bool(estado_form_fluxo.get("entregue")),
+                    help="Encerra a proposta nas filas sem apagar os status anteriores.",
+                )
                 salvar = st.form_submit_button("💾 Salvar andamento", use_container_width=True)
             if salvar:
-                ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue)
+                ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue, cancelado_cliente)
                 if ok:
                     st.session_state["_mensagem_sucesso_pendente"] = mensagem
                     st.rerun()
@@ -23743,12 +23792,11 @@ def _renderizar_linha_proposta_anna(prop, prefixo, permitir_reserva_rapida=True)
         prefixo=f"{prefixo}_thu_catalogo",
     )
 
-    # HF65.3: nas Centrais o andamento operacional fica restrito aos quatro marcos
-    # oficiais. Motivos comerciais e contato com cliente permanecem nos módulos
-    # próprios, evitando ruído e divergência entre Jorge e Anna.
-    with st.expander("✅ Aprovado · Pago · Pronto · Entregue", expanded=False):
+    # HF65.6: mantém os quatro marcos operacionais e acrescenta o encerramento
+    # explícito "Cancelado pelo cliente" na mesma linha de atualização rápida.
+    with st.expander("✅ Aprovado · Pago · Pronto · Entregue · 🚫 Cancelado", expanded=False):
         with st.form(f"{prefixo}_status_form_{numero}"):
-            s1, s2, s3, s4 = st.columns(4)
+            s1, s2, s3, s4, s5 = st.columns(5)
             estado_linha = _status_resumo(prop)
             aprovado = s1.checkbox("✅ Aprovado", value=bool(estado_linha.get("aprovado")))
             mensal_linha = proposta_faturamento_mensal(prop)
@@ -23760,9 +23808,15 @@ def _renderizar_linha_proposta_anna(prop, prefixo, permitir_reserva_rapida=True)
             )
             pronto = s3.checkbox("📦 Pronto", value=bool(estado_linha.get("pronto")), disabled=bool(estado_linha.get("entregue")), help="Produção concluída; aguardando retirada/entrega.")
             entregue = s4.checkbox("🚚 Entregue", value=bool(estado_linha.get("entregue")), help="Finaliza a operação e implica Pronto.")
+            cancelado_cliente = s5.checkbox(
+                "🚫 Cancelado pelo cliente",
+                value=bool(estado_linha.get("cancelado_cliente")),
+                disabled=bool(estado_linha.get("entregue")),
+                help="Encerra a proposta nas filas sem apagar os status anteriores.",
+            )
             salvar_status = st.form_submit_button("💾 Salvar andamento", type="primary", use_container_width=True)
         if salvar_status:
-            ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue)
+            ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue, cancelado_cliente)
             if ok:
                 st.session_state["_mensagem_sucesso_pendente"] = mensagem
                 try:
@@ -25895,7 +25949,7 @@ if pagina_atual == "central":
                             dialog_reserva_rapida_pedido(numero_central_selecionado)
 
                 st.markdown("**Atualização rápida**")
-                up1, up2, up3, up4 = st.columns(4)
+                up1, up2, up3, up4, up5 = st.columns(5)
                 estado_central_sel = _status_resumo(proposta_central_selecionada)
                 aprovado_central = up1.checkbox("✅ Aprovado", value=bool(estado_central_sel.get("aprovado")), key=f"central_aprov_{numero_central_selecionado}")
                 mensal_central_sel = proposta_faturamento_mensal(proposta_central_selecionada)
@@ -25908,6 +25962,13 @@ if pagina_atual == "central":
                 )
                 pronto_central = up3.checkbox("📦 Pronto", value=bool(estado_central_sel.get("pronto")), key=f"central_pronto_{numero_central_selecionado}", disabled=bool(estado_central_sel.get("entregue")), help="Produção concluída; aguardando retirada/entrega.")
                 entregue_central = up4.checkbox("🚚 Entregue", value=bool(estado_central_sel.get("entregue")), key=f"central_entregue_{numero_central_selecionado}", help="Finaliza a operação e implica Pronto.")
+                cancelado_central = up5.checkbox(
+                    "🚫 Cancelado pelo cliente",
+                    value=bool(estado_central_sel.get("cancelado_cliente")),
+                    key=f"central_cancelado_cliente_{numero_central_selecionado}",
+                    disabled=bool(estado_central_sel.get("entregue")),
+                    help="Encerra a proposta nas filas operacionais sem apagar os status anteriores.",
+                )
                 observacao_central = st.text_area(
                     "Observação operacional",
                     value=str(proposta_central_selecionada.get("observacao_operacional", "")),
@@ -25918,7 +25979,7 @@ if pagina_atual == "central":
                 op1, op2, op3 = st.columns(3)
                 if op1.button("💾 Salvar andamento", key=f"central_salvar_{numero_central_selecionado}", type="primary", use_container_width=True):
                     ok_andamento, msg_andamento = salvar_andamento_proposta(
-                        numero_central_selecionado, aprovado_central, pago_central, pronto_central, entregue_central
+                        numero_central_selecionado, aprovado_central, pago_central, pronto_central, entregue_central, cancelado_central
                     )
                     if not ok_andamento:
                         st.error(msg_andamento)
@@ -25938,6 +25999,7 @@ if pagina_atual == "central":
                         f"central_pago_{numero_central_selecionado}",
                         f"central_pronto_{numero_central_selecionado}",
                         f"central_entregue_{numero_central_selecionado}",
+                        f"central_cancelado_cliente_{numero_central_selecionado}",
                         f"central_obs_{numero_central_selecionado}",
                     ):
                         st.session_state.pop(chave_editor, None)
@@ -27123,7 +27185,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.5",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.6",
                 )
                 return _html, _zip
 
@@ -27266,7 +27328,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.5",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.6",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59

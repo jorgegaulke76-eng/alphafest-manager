@@ -1,9 +1,10 @@
-ALPHAFEST MANAGER — HF65.5 · RESTAURA ENVIO DE PROPOSTAS
+ALPHAFEST MANAGER — HF65.6 · CANCELADO PELO CLIENTE
 
 1. Faça o backup normal do Manager antes de atualizar.
 2. Instale este ZIP pela Atualização Segura.
-3. Reinicie e confirme a versão 20.4.9-I8.13.5-HF53.3-HF8-HF65.5.
-4. Na Central da Anna, confira os botões “Enviar” e “HTML” em cada proposta.
-5. Na Central do Jorge, abra “Todas as propostas e pedidos ativos” e confira os mesmos comandos.
+3. Reinicie e confirme a versão 20.4.9-I8.13.5-HF53.3-HF8-HF65.6.
+4. Abra uma proposta na Central do Jorge e na Central da Anna.
+5. Confirme o novo controle “Cancelado pelo cliente” junto de Aprovado, Pago, Pronto e Entregue.
+6. Teste em uma proposta de teste: ao cancelar, ela deve sair das filas ativas e permanecer localizável no Histórico/Fluxo pelo filtro de canceladas.
 
-A atualização não contém dados da empresa. Mantém HF65.3 e HF65.4.
+A atualização não contém dados da empresa. Mantém HF65.3, HF65.4 e HF65.5.

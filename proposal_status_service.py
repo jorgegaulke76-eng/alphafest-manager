@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from proposal_status import resumo_status, proposta_concluida, proposta_faturamento_mensal, valor_bool
+from proposal_status import resumo_status, proposta_concluida, proposta_faturamento_mensal, status_bool, valor_bool
 
 STATUS_FIELDS = ("aprovado", "pago", "pronto", "entregue")
 STATUS_DATE_FIELDS = {
@@ -50,6 +50,52 @@ def exige_consumo_material(estado_antes: dict[str, bool] | None, desejados: dict
     estado_antes = estado_antes or {}
     return bool(desejados.get("pronto") or desejados.get("entregue")) and not bool(estado_antes.get("pronto"))
 
+
+
+def aplicar_cancelamento_cliente(
+    proposta: dict[str, Any],
+    cancelado: Any,
+    *,
+    now_text: str,
+    usuario: str,
+    registrar_evento: Callable[[dict[str, Any], str, str], Any] | None = None,
+) -> dict[str, Any]:
+    """Aplica/remover o encerramento "Cancelado pelo cliente" sem apagar marcos históricos.
+
+    Aprovado/Pago/Pronto/Entregue continuam representando fatos já ocorridos. O
+    cancelamento apenas tira a proposta das filas operacionais por meio da Fonte
+    Única de Status.
+    """
+    novo = valor_bool(cancelado)
+    anterior = status_bool(proposta, "cancelado_cliente")
+    if anterior == novo:
+        return {"anterior": anterior, "novo": novo, "mudou": False}
+
+    proposta["cancelado_cliente"] = novo
+    if novo:
+        # Guarda o estado comercial anterior para que uma eventual reabertura
+        # restaure exatamente o que existia antes do cancelamento do cliente.
+        proposta["cancelado_cliente_status_anterior"] = proposta.get("status_comercial", "")
+        proposta["cancelado_cliente_encerrado_anterior"] = bool(valor_bool(proposta.get("encerrado")))
+        proposta["cancelado_cliente_em"] = now_text
+        proposta["cancelado_cliente_por"] = usuario
+        proposta["status_comercial"] = "cancelado_cliente"
+        proposta["encerrado"] = True
+        texto = "Cancelado pelo cliente"
+    else:
+        proposta.pop("cancelado_cliente_em", None)
+        proposta.pop("cancelado_cliente_por", None)
+        status_atual = str(proposta.get("status_comercial") or "").strip().casefold()
+        status_anterior = proposta.pop("cancelado_cliente_status_anterior", "")
+        encerrado_anterior = bool(valor_bool(proposta.pop("cancelado_cliente_encerrado_anterior", False)))
+        if status_atual in {"cancelado_cliente", "cancelado pelo cliente", "cancelada pelo cliente"}:
+            proposta["status_comercial"] = status_anterior
+        proposta["encerrado"] = encerrado_anterior
+        texto = "Cancelamento pelo cliente desmarcado"
+
+    if callable(registrar_evento):
+        registrar_evento(proposta, texto, usuario)
+    return {"anterior": anterior, "novo": novo, "mudou": True, "texto": texto}
 
 def aplicar_status_na_proposta(
     proposta: dict[str, Any],

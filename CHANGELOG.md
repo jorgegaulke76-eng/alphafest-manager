@@ -1,3 +1,11 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.6 — Cancelado pelo cliente
+
+- Adiciona o status operacional **Cancelado pelo cliente** nas Centrais do Jorge e da Anna e no Fluxo de Pedidos.
+- Cancelamento fecha a proposta nas filas sem apagar Aprovado/Pago/Pronto/Entregue já registrados.
+- Registra data, usuário, timeline e auditoria.
+- Adiciona filtro de propostas canceladas no Fluxo da Anna.
+- Preserva reservas/consumos de materiais e alerta para revisão, evitando estorno automático indevido.
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF65.5 — comandos de envio de propostas restaurados
 - Restaura **Enviar** pelo WhatsApp e **HTML** em cada proposta da Central da Anna.
 - Disponibiliza os mesmos comandos na carteira ativa da Central do Jorge.

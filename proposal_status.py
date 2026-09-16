@@ -32,6 +32,7 @@ def valor_campo(record: dict[str, Any] | None, campo: str, default: Any = None) 
         "pago": ("pago", "Pago"),
         "pronto": ("pronto", "Pronto"),
         "entregue": ("entregue", "Entregue"),
+        "cancelado_cliente": ("cancelado_cliente", "CanceladoCliente", "cancelado_pelo_cliente"),
         "encerrado": ("encerrado", "Encerrado"),
         "faturamento_mensal": ("faturamento_mensal", "FaturamentoMensal"),
         "modalidade_cobranca": ("modalidade_cobranca", "ModalidadeCobranca"),
@@ -64,6 +65,9 @@ def proposta_encerrada(record: dict[str, Any] | None) -> bool:
     continuam prevalecendo.
     """
     record = record or {}
+    if status_bool(record, "cancelado_cliente"):
+        return True
+
     status = str(
         record.get("status_comercial")
         or record.get("situacao_comercial")
@@ -75,7 +79,8 @@ def proposta_encerrada(record: dict[str, Any] | None) -> bool:
     # genéricos de "encerrado" ou "não fechado" podem ser marcas comerciais
     # antigas que ficaram gravadas antes de o pedido avançar.
     hard_status = status in {
-        "cancelado", "cancelada", "recusado", "recusada",
+        "cancelado", "cancelada", "cancelado_cliente", "cancelado pelo cliente", "cancelada pelo cliente",
+        "recusado", "recusada",
         "arquivado", "arquivada", "excluído", "excluida", "excluída",
     }
     if hard_status:
@@ -144,6 +149,7 @@ def resumo_status(record: dict[str, Any] | None) -> dict[str, Any]:
     concluida = proposta_concluida(record)
     encerrada = proposta_encerrada(record)
     entregue = status_bool(record, "entregue")
+    cancelado_cliente = status_bool(record, "cancelado_cliente")
     pronto = proposta_pronta(record)
     return {
         "mensalista": mensal,
@@ -155,4 +161,5 @@ def resumo_status(record: dict[str, Any] | None) -> dict[str, Any]:
         "pago": status_bool(record, "pago"),
         "pronto": pronto,
         "entregue": entregue,
+        "cancelado_cliente": cancelado_cliente,
     }
