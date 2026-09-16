@@ -6135,6 +6135,161 @@ def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
         pass
 
 
+@st.dialog("🔒 Reserva rápida de materiais", width="large")
+def dialog_reserva_rapida_pedido(numero_proposta):
+    """HF65.3 — trata a reserva sem tirar Jorge/Anna da Central.
+
+    Reserva continua diferente de consumo: confirmar aqui só separa o saldo livre.
+    A baixa física permanece vinculada ao início/conclusão real da produção pelas
+    regras já homologadas da I8.13.2.
+    """
+    numero = str(numero_proposta or "").strip()
+    historico = carregar_historico(force_refresh=True)
+    proposta = next(
+        (p for p in historico if str((p or {}).get("numero_proposta") or "").strip() == numero),
+        None,
+    )
+    if not isinstance(proposta, dict):
+        st.error("Pedido não localizado no banco.")
+        return
+
+    estado = _status_resumo(proposta)
+    resumo_op = _hf653_resumo_proposta_operacional(proposta)
+    st.markdown(f"### {numero} — {proposta.get('cliente_nome', 'Cliente')}")
+    st.caption(
+        f"🧾 Produto: {resumo_op['produtos']} · 🎨 Tema: {resumo_op['temas']} · "
+        f"💰 Valor: {resumo_op['valor']} · Entrega: {proposta.get('data_entrega', '—')}"
+    )
+    st.info("🔒 Reservar separa o saldo livre para este pedido. Não baixa o estoque físico neste momento.")
+
+    if not estado.get("aprovado"):
+        st.warning("A reserva fica disponível após marcar Aprovado.")
+        return
+    if estado.get("entregue"):
+        st.success("Pedido já entregue; não há nova reserva a fazer.")
+        return
+    if estado.get("pronto"):
+        st.info("Pedido já está Pronto. A reserva/consumo deve ser conferida no histórico de materiais.")
+        _i8124_render_status_pedido(proposta, prefixo=f"hf653_reserva_status_{numero}", detalhado=True)
+        return
+
+    consumos = carregar_consumos_pedidos(force_refresh=True)
+    estoque = carregar_estoque(force_refresh=True)
+    consumo_ativo = _i8124_consumo_ativo_pedido(numero, consumos)
+    if consumo_ativo:
+        st.success("Este pedido já possui tratamento de materiais ativo.")
+        _i8124_render_status_pedido(proposta, prefixo=f"hf653_reserva_existente_{numero}", detalhado=True)
+        return
+
+    previa = _i8124_montar_previa_pedido(proposta, estoque=estoque)
+    if previa.get("sem_catalogo"):
+        st.error(
+            "Produto(s) do pedido sem vínculo seguro com o Catálogo Oficial: "
+            + " • ".join(previa.get("sem_catalogo") or [])
+        )
+        st.caption("Corrija o vínculo do produto antes da reserva para evitar reservar material no pedido errado.")
+        return
+
+    # Mostra a receita disponível e o saldo que será separado agora.
+    necessidades_padrao = list(previa.get("necessidades") or [])
+    if necessidades_padrao:
+        linhas = []
+        for nec in necessidades_padrao:
+            mid = str(nec.get("material_id") or "")
+            fisico = max(0.0, _i8122_saldo_material(estoque, mid))
+            reservado = max(0.0, _i8132_reservado_material(mid, consumos=consumos, estoque=estoque))
+            livre = max(0.0, fisico - reservado)
+            necessario = max(0.0, valor_float(nec.get("necessario")))
+            reservar = min(livre, necessario)
+            falta = max(0.0, necessario - reservar)
+            linhas.append({
+                "Material": nec.get("material_nome") or "Material",
+                "Necessário": f"{_i8121_quantidade(necessario)} {nec.get('unidade', '')}",
+                "Livre": f"{_i8121_quantidade(livre)} {nec.get('unidade', '')}",
+                "Reservar agora": f"{_i8121_quantidade(reservar)} {nec.get('unidade', '')}",
+                "Falta": f"{_i8121_quantidade(falta)} {nec.get('unidade', '')}",
+            })
+        st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
+
+    tem_ficha_completa = bool(necessidades_padrao) and not bool(previa.get("sem_ficha"))
+    opcoes = []
+    if tem_ficha_completa:
+        opcoes.append("📋 Usar Ficha Técnica padrão")
+    opcoes.extend([
+        "✏️ Informar materiais deste pedido",
+        "➖ Sem consumo de estoque controlado",
+    ])
+    modo_label = st.radio(
+        "Como tratar os materiais",
+        opcoes,
+        horizontal=True,
+        key=f"hf653_reserva_modo_{numero}",
+    )
+    modo = {
+        "📋 Usar Ficha Técnica padrão": "ficha_padrao",
+        "✏️ Informar materiais deste pedido": "manual_pedido",
+        "➖ Sem consumo de estoque controlado": "sem_consumo",
+    }[modo_label]
+
+    necessidades_manuais = []
+    if modo == "ficha_padrao":
+        st.caption("A receita da Ficha Técnica será usada somente para este pedido e o saldo livre será reservado automaticamente.")
+    elif modo == "manual_pedido":
+        if previa.get("sem_ficha"):
+            st.caption("Sem Ficha Técnica completa: escolha apenas os materiais realmente usados neste pedido.")
+        materiais = [m for m in (estoque.get("materiais") or []) if isinstance(m, dict) and m.get("ativo", True)]
+        mapa = {str(m.get("id") or ""): m for m in materiais if str(m.get("id") or "")}
+        ids = sorted(mapa, key=lambda mid: str(mapa[mid].get("nome") or "").casefold())
+        selecionados = st.multiselect(
+            "Materiais deste pedido",
+            ids,
+            format_func=lambda mid: f"{mapa[mid].get('nome')} · {mapa[mid].get('unidade', '')}",
+            key=f"hf653_reserva_mats_{numero}",
+        )
+        for mid in selecionados:
+            mat = mapa[mid]
+            qtd = st.number_input(
+                f"Quantidade de {mat.get('nome', 'material')} ({mat.get('unidade', '')})",
+                min_value=0.0,
+                value=1.0,
+                step=1.0,
+                format="%.3f",
+                key=f"hf653_reserva_qtd_{numero}_{mid}",
+            )
+            if float(qtd) > 0:
+                necessidades_manuais.append({
+                    "material_id": mid,
+                    "material_nome": str(mat.get("nome") or "Material"),
+                    "unidade": str(mat.get("unidade") or ""),
+                    "necessario": float(qtd),
+                    "origens": [{"produto": "Definição rápida deste pedido", "necessario": float(qtd)}],
+                })
+    else:
+        st.info("Use esta opção para serviço/produção sem insumo controlado ou quando o material não sai do estoque da AlphaFest.")
+
+    habilitado = (
+        (modo == "ficha_padrao" and bool(necessidades_padrao))
+        or (modo == "manual_pedido" and bool(necessidades_manuais))
+        or modo == "sem_consumo"
+    )
+    rotulo = "🔒 Reservar materiais agora" if modo != "sem_consumo" else "✅ Liberar sem reserva"
+    if st.button(rotulo, type="primary", use_container_width=True, disabled=not habilitado, key=f"hf653_reserva_salvar_{numero}_{modo}"):
+        ok, mensagem, _ = _i8124_confirmar_consumo_pedido(
+            proposta,
+            usuario=obter_usuario_atual(),
+            modo_consumo=modo,
+            necessidades_manuais=necessidades_manuais if modo == "manual_pedido" else None,
+        )
+        if ok:
+            st.session_state["_mensagem_sucesso_pendente"] = mensagem
+            try:
+                st.cache_data.clear()
+            except Exception:
+                pass
+            st.rerun()
+        st.error(mensagem)
+
+
 # --- 20.4.9-I8.11.1: Central de Faturamento Mensal ---
 I8111_STATUS_FECHADO = "Fechado"
 I8111_STATUS_FATURADO = "Faturado"
@@ -17875,10 +18030,10 @@ def dialog_fluxo_anna():
         chave_segura = "".join(ch if ch.isalnum() else "_" for ch in numero)
         with st.container(border=True):
             st.write(f"**{numero} — {prop.get('cliente_nome', prop.get('cliente', 'Cliente'))}**")
+            resumo_fluxo_hf653 = _hf653_resumo_proposta_operacional(prop)
             st.caption(
-                f"Entrega: {prop.get('data_entrega', '—')} · "
-                f"{_anna_fmt_moeda(prop.get('valor_total', prop.get('total', 0)))} · "
-                f"{resumo_produtos_pedido(prop)}"
+                f"Entrega: {prop.get('data_entrega', '—')} · Produto: {resumo_fluxo_hf653['produtos']} · "
+                f"Tema: {resumo_fluxo_hf653['temas']} · Valor: {resumo_fluxo_hf653['valor']}"
             )
             with st.form(f"dlg_fluxo_form_{chave_segura}"):
                 estado_form_fluxo = _status_resumo(prop)
@@ -17893,13 +18048,6 @@ def dialog_fluxo_anna():
                 )
                 pronto = c3.checkbox("📦 Pronto", value=bool(estado_form_fluxo.get("pronto")), disabled=bool(estado_form_fluxo.get("entregue")), help="Produção concluída; aguardando retirada/entrega.")
                 entregue = c4.checkbox("🚚 Entregue", value=bool(estado_form_fluxo.get("entregue")), help="Finaliza a operação e implica Pronto.")
-                nf1, nf2 = st.columns(2)
-                nao_pagto = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"nf_pag_{prop.get('numero_proposta')}")
-                nao_retorno = nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(prop.get("nao_fechado_sem_retorno")), key=f"nf_ret_{prop.get('numero_proposta')}")
-                if nao_pagto != valor_bool(prop.get("nao_fechado_pagamento")):
-                    alternar_motivo_nao_fechado(prop.get("numero_proposta"), "pagamento", nao_pagto); st.rerun()
-                if nao_retorno != valor_bool(prop.get("nao_fechado_sem_retorno")):
-                    alternar_motivo_nao_fechado(prop.get("numero_proposta"), "sem_retorno", nao_retorno); st.rerun()
                 salvar = st.form_submit_button("💾 Salvar andamento", use_container_width=True)
             if salvar:
                 ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue)
@@ -23522,18 +23670,53 @@ def _ordenar_propostas_recentes(propostas):
     return sorted(propostas, key=chave, reverse=True)
 
 
-def _renderizar_linha_proposta_anna(prop, prefixo):
-    numero = str(prop.get("numero_proposta", ""))
+def _hf653_resumo_proposta_operacional(prop):
+    """HF65.3 — resumo curto e igual para Jorge/Anna: produto, tema e valor."""
+    prop = prop or {}
+    itens = [x for x in (prop.get("itens") or []) if isinstance(x, dict)]
+    produtos = []
+    temas = []
+    for item in itens:
+        produto = str(item.get("produto") or "Produto").strip() or "Produto"
+        if produto not in produtos:
+            produtos.append(produto)
+        tema = _hf62_tema_item(item)
+        if tema and tema != "—" and tema not in temas:
+            temas.append(tema)
     _, _, total = calcular_valores_proposta(prop)
-    c1, c2, c3, c4 = st.columns([4, 1.4, 1.4, 1.2])
-    c1.write(f"**{numero} — {prop.get('cliente_nome','Cliente')}** · {_anna_fmt_moeda(total)}")
-    st.caption(f"🧾 {resumo_produtos_pedido(prop)}")
+    produtos_txt = " • ".join(produtos[:3]) if produtos else "Produto não informado"
+    if len(produtos) > 3:
+        produtos_txt += f" +{len(produtos)-3}"
+    temas_txt = " • ".join(temas[:3]) if temas else "—"
+    if len(temas) > 3:
+        temas_txt += f" +{len(temas)-3}"
+    valor_txt = _anna_fmt_moeda(total)
+    return {
+        "produtos": produtos_txt,
+        "temas": temas_txt,
+        "valor": valor_txt,
+        "total": total,
+    }
+
+
+def _renderizar_linha_proposta_anna(prop, prefixo, permitir_reserva_rapida=True):
+    numero = str(prop.get("numero_proposta", ""))
+    resumo_hf653 = _hf653_resumo_proposta_operacional(prop)
+    c1, c2, c3 = st.columns([5.4, 1.5, 1.5])
+    c1.write(f"**{numero} — {prop.get('cliente_nome','Cliente')}**")
+    c1.caption(
+        f"🧾 Produto: {resumo_hf653['produtos']} · 🎨 Tema: {resumo_hf653['temas']} · 💰 Valor: {resumo_hf653['valor']}"
+    )
     if c2.button("✏️ Atualizar", key=f"{prefixo}_edit_{numero}", use_container_width=True):
         dialog_orcamento_anna(prop)
-    numero_wa = _anna_numero_whatsapp(prop.get("whatsapp") or prop.get("cliente_wa"))
-    link = f"https://wa.me/{numero_wa}?text={quote(formatar_msg_whatsapp(prop))}" if numero_wa else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop))}"
-    c3.link_button("📱 WhatsApp", link, use_container_width=True)
-    c4.download_button("📄 HTML", gerar_html(prop), file_name=f"{numero}.html", mime="text/html", key=f"{prefixo}_html_{numero}", use_container_width=True)
+    estado_linha_hf653 = _status_resumo(prop)
+    pode_reservar_hf653 = bool(estado_linha_hf653.get("aprovado")) and not bool(estado_linha_hf653.get("pronto")) and not bool(estado_linha_hf653.get("entregue"))
+    if permitir_reserva_rapida:
+        if c3.button("🔒 Materiais", key=f"{prefixo}_mat_{numero}", use_container_width=True, disabled=not pode_reservar_hf653):
+            dialog_reserva_rapida_pedido(numero)
+    else:
+        c3.button("🔒 Materiais", key=f"{prefixo}_mat_bloq_{numero}", use_container_width=True, disabled=True, help="Feche esta janela para usar a reserva rápida na Central.")
+
     _i8124_render_status_pedido(prop, prefixo=f"{prefixo}_estoque", detalhado=False)
 
     # 20.4.9-I1 — THU avisa a Anna enquanto houver produto sem cadastro oficial.
@@ -23542,7 +23725,10 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
         prefixo=f"{prefixo}_thu_catalogo",
     )
 
-    with st.expander("✅ Atualizar aprovação, pagamento, pronto e entrega", expanded=False):
+    # HF65.3: nas Centrais o andamento operacional fica restrito aos quatro marcos
+    # oficiais. Motivos comerciais e contato com cliente permanecem nos módulos
+    # próprios, evitando ruído e divergência entre Jorge e Anna.
+    with st.expander("✅ Aprovado · Pago · Pronto · Entregue", expanded=False):
         with st.form(f"{prefixo}_status_form_{numero}"):
             s1, s2, s3, s4 = st.columns(4)
             estado_linha = _status_resumo(prop)
@@ -23556,13 +23742,6 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
             )
             pronto = s3.checkbox("📦 Pronto", value=bool(estado_linha.get("pronto")), disabled=bool(estado_linha.get("entregue")), help="Produção concluída; aguardando retirada/entrega.")
             entregue = s4.checkbox("🚚 Entregue", value=bool(estado_linha.get("entregue")), help="Finaliza a operação e implica Pronto.")
-            nf1, nf2 = st.columns(2)
-            nao_pagto = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(prop.get("nao_fechado_pagamento")), key=f"{prefixo}_nf_pag_{numero}")
-            nao_retorno = nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(prop.get("nao_fechado_sem_retorno")), key=f"{prefixo}_nf_ret_{numero}")
-            if nao_pagto != valor_bool(prop.get("nao_fechado_pagamento")):
-                alternar_motivo_nao_fechado(prop.get("numero_proposta"), "pagamento", nao_pagto); st.rerun()
-            if nao_retorno != valor_bool(prop.get("nao_fechado_sem_retorno")):
-                alternar_motivo_nao_fechado(prop.get("numero_proposta"), "sem_retorno", nao_retorno); st.rerun()
             salvar_status = st.form_submit_button("💾 Salvar andamento", type="primary", use_container_width=True)
         if salvar_status:
             ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue)
@@ -23587,7 +23766,9 @@ def _renderizar_linha_proposta_anna(prop, prefixo):
 def dialog_entregas_hoje_anna(propostas):
     entregas = [
         p for p in propostas
-        if not valor_bool(p.get("entregue"))
+        if proposta_ativa_operacional(p)
+        and bool(_status_resumo(p).get("aprovado"))
+        and not bool(_status_resumo(p).get("entregue"))
         and data_entrega_segura(p.get("data_entrega")) == hoje_local()
     ]
     entregas = _ordenar_propostas_recentes(entregas)
@@ -23608,7 +23789,7 @@ def dialog_entregas_hoje_anna(propostas):
             d2.metric("Pagamento", "Recorrente" if proposta_faturamento_mensal(prop) else ("Pago" if valor_bool(prop.get("pago")) else "Pendente"))
             estado_entrega_dialog = _status_resumo(prop)
             d3.metric("Situação", "Entregue" if estado_entrega_dialog.get("entregue") else ("Pronto" if estado_entrega_dialog.get("pronto") else "Entrega hoje"))
-            _renderizar_linha_proposta_anna(prop, f"entrega_hoje_{idx}")
+            _renderizar_linha_proposta_anna(prop, f"entrega_hoje_{idx}", permitir_reserva_rapida=False)
 
 
 @st.dialog("🗓️ Orçamentos lançados hoje", width="large")
@@ -23619,7 +23800,7 @@ def dialog_propostas_hoje_anna(propostas):
         return
     st.success(f"{len(hoje)} orçamento(s) lançado(s) hoje.")
     for idx, prop in enumerate(hoje):
-        _renderizar_linha_proposta_anna(prop, f"orc_hoje_dialog_{idx}")
+        _renderizar_linha_proposta_anna(prop, f"orc_hoje_dialog_{idx}", permitir_reserva_rapida=False)
 
 
 
@@ -23640,7 +23821,8 @@ def renderizar_workspace_anna_isolado():
     ativos = list(propostas_runtime_hf40.active)
     qtd_novos = len([x for x in fila if x.get("status") == "Novo contato"])
     qtd_aguardando = len([x for x in fila if x.get("status") == "Aguardando cliente"])
-    qtd_entregas = len(propostas_runtime_hf40.deliveries_today)
+    entregas_hoje_hf653 = [p for p in propostas_runtime_hf40.deliveries_today if bool(_status_resumo(p).get("aprovado"))]
+    qtd_entregas = len(entregas_hoje_hf653)
     resumo = f"Hoje: {qtd_novos} novo(s) atendimento(s), {qtd_aguardando} aguardando cliente, {len(ativos)} pedido(s) ativo(s) e {qtd_entregas} entrega(s)."
     renderizar_boas_vindas_anna(resumo)
 
@@ -23702,7 +23884,7 @@ def renderizar_workspace_anna_isolado():
     if k7.button("🌐 Site AlphaFest", use_container_width=True):
         rerun_na_aba("site")
 
-    entregas_hoje = list(propostas_runtime_hf40.deliveries_today)
+    entregas_hoje = list(entregas_hoje_hf653)
     propostas_hoje = list(propostas_runtime_hf40.today_recent)
 
     m1,m2,m3,m4=st.columns(4)
@@ -23952,7 +24134,8 @@ def renderizar_workspace_anna_isolado():
     busca = st.text_input("Pesquisar", placeholder="Cliente, proposta ou telefone", key="anna_busca_rapida")
     termo = busca.strip().lower()
     lista = _proposal_filter_active_recent(propostas_runtime_hf40, termo)
-    for idx, prop in enumerate(lista[:20]):
+    st.caption(f"{len(lista)} proposta(s)/pedido(s) ativo(s) nesta visão. Nenhum registro é ocultado por limite fixo.")
+    for idx, prop in enumerate(lista):
         _renderizar_linha_proposta_anna(prop, f"anna_lista_{idx}")
 
 
@@ -24467,6 +24650,34 @@ if pagina_atual == "central":
             f"Agenda de hoje: {indicadores_unificados_central['entregas_hoje_abertas']} entrega(s) ainda prevista(s) · "
             f"{_i8112_moeda(valor_previsto_hoje)} previsto(s). Estes números são uma fotografia atual, não um histórico do dia."
         )
+
+        # HF65.3 — Jorge e Anna enxergam a mesma carteira ativa, sem corte silencioso.
+        with st.expander(f"📄 Todas as propostas e pedidos ativos ({len(propostas_operacionais_central)})", expanded=False):
+            st.caption("Mesma carteira ativa usada na Central da Anna. Produto, tema e valor ficam visíveis para atualização rápida; contato com cliente permanece fora desta visão operacional.")
+            for idx_hf653, prop_hf653 in enumerate(_ordenar_propostas_recentes(propostas_operacionais_central)):
+                numero_hf653 = str(prop_hf653.get("numero_proposta") or "").strip()
+                resumo_hf653 = _hf653_resumo_proposta_operacional(prop_hf653)
+                estado_hf653 = estados_oficiais_central.get(numero_hf653) or _status_resumo(prop_hf653)
+                badges_hf653 = " · ".join([
+                    "✅ Aprovado" if estado_hf653.get("aprovado") else "⬜ Aprovado",
+                    "💰 Pago" if estado_hf653.get("pago") else "⬜ Pago",
+                    "📦 Pronto" if estado_hf653.get("pronto") else "⬜ Pronto",
+                    "🚚 Entregue" if estado_hf653.get("entregue") else "⬜ Entregue",
+                ])
+                lj1_hf653, lj2_hf653, lj3_hf653 = st.columns([6, 1.4, 1.4])
+                lj1_hf653.markdown(f"**{html.escape(numero_hf653)} — {html.escape(str(prop_hf653.get('cliente_nome') or 'Cliente'))}**")
+                lj1_hf653.caption(
+                    f"Produto: {resumo_hf653['produtos']} · Tema: {resumo_hf653['temas']} · Valor: {resumo_hf653['valor']} · {badges_hf653}"
+                )
+                lj2_hf653.button(
+                    "⚡ Atualizar",
+                    key=f"hf653_jorge_ativo_{idx_hf653}_{numero_hf653}",
+                    use_container_width=True,
+                    on_click=lambda n=numero_hf653: st.session_state.__setitem__("alerta_proposta_numero", n),
+                )
+                pode_mat_hf653 = bool(estado_hf653.get("aprovado")) and not bool(estado_hf653.get("pronto")) and not bool(estado_hf653.get("entregue"))
+                if lj3_hf653.button("🔒 Materiais", key=f"hf653_jorge_mat_{idx_hf653}_{numero_hf653}", use_container_width=True, disabled=not pode_mat_hf653):
+                    dialog_reserva_rapida_pedido(numero_hf653)
     else:
         c1, c2, c3, c4, c5, c6 = st.columns(6)
         c1.metric("🚨 Atrasados", indicadores_unificados_central["atrasados_operacionais"], help="Pedidos aprovados, ainda não entregues e com data de entrega vencida.")
@@ -25613,15 +25824,24 @@ if pagina_atual == "central":
             _, _, total_central_sel = calcular_valores_proposta(proposta_central_selecionada)
             with st.container(border=True):
                 st.markdown(f"### 📋 {html.escape(str(proposta_central_selecionada.get('numero_proposta', 'Proposta')))} — {html.escape(str(proposta_central_selecionada.get('cliente_nome', 'Cliente')))}")
-                st.caption(f"🧾 {resumo_produtos_pedido(proposta_central_selecionada)}")
+                resumo_central_hf653 = _hf653_resumo_proposta_operacional(proposta_central_selecionada)
+                st.caption(
+                    f"🧾 Produto: {resumo_central_hf653['produtos']} · 🎨 Tema: {resumo_central_hf653['temas']} · 💰 Valor: {resumo_central_hf653['valor']}"
+                )
                 det1, det2, det3 = st.columns(3)
                 det1.metric("Entrega", proposta_central_selecionada.get("data_entrega", "A combinar"))
                 det2.metric("Valor", f"R$ {total_central_sel:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-                det3.metric("WhatsApp", proposta_central_selecionada.get("whatsapp") or proposta_central_selecionada.get("cliente_wa") or "Não informado")
+                det3.metric("Tema", resumo_central_hf653["temas"])
 
                 st.write("**Itens do pedido**")
                 for item_central_sel in proposta_central_selecionada.get("itens", []) or []:
-                    st.write(f"• {item_central_sel.get('produto', 'Produto')} · Qtd.: {item_central_sel.get('quantidade', 0)}")
+                    tema_item_hf653 = _hf62_tema_item(item_central_sel)
+                    qtd_item_hf653 = valor_float(item_central_sel.get("quantidade"), 0)
+                    unit_item_hf653 = valor_float(item_central_sel.get("valor_unitario"), 0)
+                    st.write(
+                        f"• {item_central_sel.get('produto', 'Produto')} · Tema: {tema_item_hf653} · "
+                        f"Qtd.: {_i8121_quantidade(qtd_item_hf653)} · Valor: {_anna_fmt_moeda(qtd_item_hf653 * unit_item_hf653)}"
+                    )
                 _i8124_render_status_pedido(proposta_central_selecionada, prefixo=f"central_estoque_{numero_central_selecionado}", detalhado=True)
 
                 # CAT1-HF9 — mostra a mesma leitura da Central de Reserva dentro
@@ -25638,9 +25858,8 @@ if pagina_atual == "central":
                     else:
                         mc1_hf9, mc2_hf9 = st.columns([5, 2])
                         mc1_hf9.warning("📦 Materiais: aguardando tratamento/liberação.")
-                        if mc2_hf9.button("🔒 Abrir Reserva", key=f"hf9_abrir_reserva_{numero_central_selecionado}", use_container_width=True):
-                            st.session_state["_hf9_retorno_reserva_numero"] = numero_central_selecionado
-                            rerun_na_aba("compras_custos", "Pedido enviado para liberação/reserva de materiais.")
+                        if mc2_hf9.button("🔒 Reservar aqui", key=f"hf653_reserva_central_{numero_central_selecionado}", use_container_width=True):
+                            dialog_reserva_rapida_pedido(numero_central_selecionado)
 
                 st.markdown("**Atualização rápida**")
                 up1, up2, up3, up4 = st.columns(4)
@@ -25656,13 +25875,6 @@ if pagina_atual == "central":
                 )
                 pronto_central = up3.checkbox("📦 Pronto", value=bool(estado_central_sel.get("pronto")), key=f"central_pronto_{numero_central_selecionado}", disabled=bool(estado_central_sel.get("entregue")), help="Produção concluída; aguardando retirada/entrega.")
                 entregue_central = up4.checkbox("🚚 Entregue", value=bool(estado_central_sel.get("entregue")), key=f"central_entregue_{numero_central_selecionado}", help="Finaliza a operação e implica Pronto.")
-                nf1, nf2 = st.columns(2)
-                nao_pagto_central = nf1.checkbox("❌ Não fechado — falta de pagamento", value=valor_bool(proposta_central_selecionada.get("nao_fechado_pagamento")), key=f"central_nf_pag_{numero_central_selecionado}")
-                nao_retorno_central = nf2.checkbox("📵 Não fechado — sem retorno do cliente", value=valor_bool(proposta_central_selecionada.get("nao_fechado_sem_retorno")), key=f"central_nf_ret_{numero_central_selecionado}")
-                if nao_pagto_central != valor_bool(proposta_central_selecionada.get("nao_fechado_pagamento")):
-                    alternar_motivo_nao_fechado(numero_central_selecionado, "pagamento", nao_pagto_central); st.rerun()
-                if nao_retorno_central != valor_bool(proposta_central_selecionada.get("nao_fechado_sem_retorno")):
-                    alternar_motivo_nao_fechado(numero_central_selecionado, "sem_retorno", nao_retorno_central); st.rerun()
                 observacao_central = st.text_area(
                     "Observação operacional",
                     value=str(proposta_central_selecionada.get("observacao_operacional", "")),
@@ -26878,7 +27090,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.2",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.3",
                 )
                 return _html, _zip
 
@@ -27021,7 +27233,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.2",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.3",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59

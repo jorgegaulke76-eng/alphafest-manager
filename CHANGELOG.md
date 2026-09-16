@@ -1,3 +1,14 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.3 — 2026-09-16
+
+- Sincroniza a visão operacional das Centrais Jorge e Anna sobre a mesma carteira ativa.
+- Remove o limite silencioso de 20 propostas da Central da Anna.
+- Corrige Entregas hoje da Anna para considerar somente pedidos aprovados e abertos.
+- Mantém nas Centrais apenas Aprovado, Pago, Pronto e Entregue como controles de andamento.
+- Mostra Produto, Tema e Valor no resumo operacional de cada proposta.
+- Adiciona Reserva rápida de materiais dentro das Centrais, sem navegação para outra tela.
+- Preserva Reserva ≠ Consumo, auditoria, proteção de estoque e toda a base HF65.2.
+
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF65.2 — 2026-09-15
 
 - Ajusta o CTA da Galeria pública de `Quero algo parecido` para `Quero este`.
