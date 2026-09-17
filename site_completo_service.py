@@ -249,6 +249,7 @@ def gerar_html_site_completo(
             catalogo_lista,
             empresa,
             incluir_galeria=incluir_galeria,
+            galeria_trabalhos=galeria_lista,
             usar_mascotes=mascotes_hf48,
             imagem_resolver=imagem_resolver,
         )

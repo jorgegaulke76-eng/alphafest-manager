@@ -1,18 +1,20 @@
-# AlphaFest Manager — HF65.8
+# AlphaFest Manager — HF65.9
 
-## Catálogo 3D como fonte comercial única dos produtos de Impressão 3D
+Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.9`
 
-Esta atualização mantém a base HF65.7 e organiza definitivamente o fluxo dos produtos de impressão 3D:
+## Objetivo
+Transformar as fotos reais da Galeria em uma vitrine temática por **Datas & Ocasiões**, acessível diretamente pelo campo de Categorias do site através do cartão 🎈.
 
-1. **Migração automática**: todo produto já cadastrado no Catálogo Oficial com categoria **IMPRESSÃO 3D** passa a aparecer também no Catálogo 3D.
-2. **Sem quebrar propostas**: o Catálogo Oficial continua recebendo um espelho técnico porque Orçamentos, Site e demais módulos já usam essa estrutura. O cadastro mestre dos produtos 3D passa a ser o Catálogo 3D.
-3. **Mesmas configurações comerciais** no Catálogo 3D: nome, subcategoria, descrição curta/completa, preço, custo, material, tempo de produção, tempo de impressão, variações, aliases, palavras-chave, processos, campos de personalização, campanhas, publicação no site, exibição de preço, destaque, ativo e categorias extras do site.
-4. **Edição dentro do Catálogo 3D**: salvar uma alteração atualiza imediatamente o espelho do Catálogo Oficial, deixando o novo valor disponível para propostas e preparando o mesmo dado para o site.
-5. **Itens antigos sem 3MF/STL**: os produtos migrados continuam utilizáveis comercialmente e podem receber o arquivo 3D posteriormente pelo botão Editar.
-6. **Exclusão coerente**: ao excluir um produto 3D, o espelho vinculado no Catálogo Oficial também é removido para evitar que o item volte na migração automática. Propostas antigas não são alteradas.
-7. **Catálogo A–Z** e integração com o site preservados.
-8. O catálogo 3D para cliente pode agora **mostrar os preços cadastrados**.
+## O que muda
+- Galeria interna ganha seleção múltipla **🎈 Datas & Ocasiões** no registro de novos trabalhos.
+- Trabalhos já existentes ganham editor próprio de Datas & Ocasiões.
+- O acervo interno pode ser filtrado por Data/Ocasião.
+- A Galeria pública ganha o filtro **🎈 Datas & Ocasiões**.
+- O site passa a exibir, junto aos cartões de Categorias, o cartão **🎈 Datas & Ocasiões**.
+- Ao escolher uma ocasião, o visitante vê as fotos reais da Galeria marcadas com aquela ocasião.
 
-Na base atual foram detectados **17 produtos** na categoria IMPRESSÃO 3D; **6 já estavam vinculados** ao Catálogo 3D e **11 serão incorporados** na primeira abertura da tela após a atualização.
+## Compatibilidade
+O campo antigo `ocasiao` continua válido e é lido junto com o novo campo `datas_ocasioes`. Não há migração destrutiva nem duplicação de cadastro.
 
-Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.8`
+## Segurança
+Nenhum arquivo privado da Galeria é exposto diretamente. A publicação continua usando o fluxo já homologado de resolução das imagens autorizadas.

@@ -11854,6 +11854,40 @@ def _galeria_categorias_extras(item, principal=None):
     return saida
 
 
+def _galeria_datas_ocasioes(item):
+    """HF65.9: datas/ocasiões normalizadas, preservando o campo legado ``ocasiao``."""
+    bruto = (item or {}).get("datas_ocasioes") or []
+    if isinstance(bruto, str):
+        bruto = [bruto]
+    if not isinstance(bruto, (list, tuple, set)):
+        bruto = []
+    legado = str((item or {}).get("ocasiao") or "").strip()
+    valores = list(bruto) + ([legado] if legado else [])
+    vistos = set()
+    saida = []
+    for valor in valores:
+        texto = str(valor or "").strip()
+        chave = texto.casefold()
+        if not texto or chave in vistos or texto == "Permanente / Todas as épocas":
+            continue
+        vistos.add(chave)
+        saida.append(texto)
+    return saida
+
+
+def _galeria_datas_ocasioes_disponiveis(galeria=None):
+    """HF65.9: opções padronizadas + valores já usados em trabalhos antigos."""
+    por_chave = {
+        str(x).casefold(): str(x)
+        for x in CAMPANHAS_PRODUTO_OPCOES
+        if str(x).strip() and str(x) != "Permanente / Todas as épocas"
+    }
+    for trabalho in galeria or []:
+        for valor in _galeria_datas_ocasioes(trabalho):
+            por_chave.setdefault(valor.casefold(), valor)
+    return sorted(por_chave.values(), key=lambda x: x.casefold())
+
+
 def _galeria_categorias_disponiveis(catalogo, galeria=None):
     """HF58: lista única de categorias existentes no Catálogo/Galeria."""
     por_chave = {}
@@ -11983,7 +12017,17 @@ def renderizar_galeria_trabalhos(catalogo):
         d1, d2, d3 = st.columns(3)
         tema_gal = d1.text_input("Tema", key="hf461_tema", placeholder="Ex.: Jardim encantado")
         cor_gal = d2.text_input("Cor / estilo", key="hf461_cor", placeholder="Ex.: Rosa e dourado")
-        ocasiao_gal = d3.text_input("Ocasião", key="hf461_ocasiao", placeholder="Ex.: Aniversário")
+        ocasiao_gal = d3.text_input("Ocasião livre (opcional)", key="hf461_ocasiao", placeholder="Ex.: Festa da escola")
+        datas_ocasioes_gal = st.multiselect(
+            "🎈 Datas & Ocasiões",
+            _galeria_datas_ocasioes_disponiveis(galeria),
+            default=[],
+            key="hf659_galeria_datas_ocasioes_novo",
+            help=(
+                "Marque uma ou mais ocasiões para esta foto aparecer na vitrine temática do site. "
+                "Ex.: Setembro Amarelo, Outubro Rosa, Batizado, Chá Revelação ou Dia dos Professores."
+            ),
+        )
 
         fotos = st.file_uploader(
             "Fotos do trabalho",
@@ -12058,6 +12102,7 @@ def renderizar_galeria_trabalhos(catalogo):
                         "tema": str(tema_gal or "").strip(),
                         "cor": str(cor_gal or "").strip(),
                         "ocasiao": str(ocasiao_gal or "").strip(),
+                        "datas_ocasioes": list(dict.fromkeys(str(x).strip() for x in datas_ocasioes_gal if str(x).strip())),
                         "observacao": str(observacao_gal or "").strip(),
                         "fotos": caminhos,
                         "autorizado_publicacao": bool(autorizado_gal),
@@ -12083,14 +12128,16 @@ def renderizar_galeria_trabalhos(catalogo):
         return
 
     categorias_gal = _galeria_categorias_disponiveis([], galeria)
-    f1, f2, f3 = st.columns([2, 2, 1])
+    datas_ocasioes_gal_filtro = _galeria_datas_ocasioes_disponiveis(galeria)
+    f1, f2, f3, f4 = st.columns([2, 2, 2, 1])
     filtro_cat = f1.selectbox("Filtrar categoria", ["Todas"] + categorias_gal, key="hf461_filtro_cat")
-    filtro_status = f2.selectbox(
+    filtro_ocasiao = f2.selectbox("🎈 Data / Ocasião", ["Todas"] + datas_ocasioes_gal_filtro, key="hf659_filtro_ocasiao")
+    filtro_status = f3.selectbox(
         "Filtrar situação",
         ["Todos", "Uso interno", "Autorizado — aguardando seleção", "Selecionado para futura exposição", "Arquivado"],
         key="hf461_filtro_status",
     )
-    mostrar_arquivados = f3.checkbox("Arquivados", value=False, key="hf461_mostrar_arquivados")
+    mostrar_arquivados = f4.checkbox("Arquivados", value=False, key="hf461_mostrar_arquivados")
 
     filtrados = []
     for g in reversed(galeria):
@@ -12100,6 +12147,9 @@ def renderizar_galeria_trabalhos(catalogo):
             principal_filtro = str((g or {}).get("categoria") or "").strip()
             categorias_item_filtro = [principal_filtro] + _galeria_categorias_extras(g, principal_filtro)
             if filtro_cat.casefold() not in {cat.casefold() for cat in categorias_item_filtro if cat}:
+                continue
+        if filtro_ocasiao != "Todas":
+            if filtro_ocasiao.casefold() not in {x.casefold() for x in _galeria_datas_ocasioes(g)}:
                 continue
         if filtro_status != "Todos" and _galeria_status_registro(g) != filtro_status:
             continue
@@ -12153,11 +12203,14 @@ def renderizar_galeria_trabalhos(catalogo):
             detalhes = [
                 f"Tema: {item.get('tema')}" if item.get("tema") else "",
                 f"Cor/estilo: {item.get('cor')}" if item.get("cor") else "",
-                f"Ocasião: {item.get('ocasiao')}" if item.get("ocasiao") else "",
+                f"Ocasião livre: {item.get('ocasiao')}" if item.get("ocasiao") else "",
             ]
             detalhes = [x for x in detalhes if x]
             if detalhes:
                 c_info.write(" • ".join(detalhes))
+            datas_ocasioes_item = _galeria_datas_ocasioes(item)
+            if datas_ocasioes_item:
+                c_info.caption("🎈 Datas & Ocasiões: " + " · ".join(datas_ocasioes_item))
             c_info.caption(
                 f"{len(foto_paths)} foto(s) • {_galeria_status_registro(item)} • {item.get('criado_em','')} • {item.get('criado_por','Equipe')}"
             )
@@ -12207,6 +12260,43 @@ def renderizar_galeria_trabalhos(catalogo):
                             st.rerun()
                         else:
                             st.error("O banco não confirmou a atualização das categorias. Nada foi alterado.")
+
+                with st.expander("🎈 Datas & Ocasiões", expanded=False):
+                    st.caption(
+                        "Essas marcações alimentam a entrada 🎈 Datas & Ocasiões no campo de Categorias do site. "
+                        "O site mostra as fotos reais desta Galeria, sem duplicar o produto."
+                    )
+                    _datas_atuais_hf659 = _galeria_datas_ocasioes(item)
+                    _opcoes_datas_hf659 = sorted(
+                        set(_galeria_datas_ocasioes_disponiveis(galeria) + _datas_atuais_hf659),
+                        key=str.casefold,
+                    )
+                    _datas_escolhidas_hf659 = st.multiselect(
+                        "Datas / ocasiões deste trabalho",
+                        _opcoes_datas_hf659,
+                        default=[x for x in _datas_atuais_hf659 if x in _opcoes_datas_hf659],
+                        key=f"hf659_datas_{gid}",
+                    )
+                    if st.button(
+                        "💾 Salvar Datas & Ocasiões",
+                        key=f"hf659_datas_save_{gid}",
+                        use_container_width=True,
+                    ):
+                        _atualizou_hf659 = False
+                        _datas_limpas_hf659 = list(dict.fromkeys(
+                            str(x).strip() for x in _datas_escolhidas_hf659 if str(x).strip()
+                        ))
+                        for reg in galeria:
+                            if str((reg or {}).get("id") or "") == gid:
+                                reg["datas_ocasioes"] = _datas_limpas_hf659
+                                reg["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                                _atualizou_hf659 = True
+                                break
+                        if _atualizou_hf659 and salvar_galeria_trabalhos(galeria):
+                            st.success("Datas & Ocasiões atualizadas. O site usará as fotos reais deste trabalho.")
+                            st.rerun()
+                        else:
+                            st.error("O banco não confirmou a atualização. Nada foi alterado.")
 
                 with st.expander("🖼️ Gerenciar fotos deste trabalho", expanded=False):
                     st.markdown("**➕ Adicionar mais fotos**")
@@ -27195,7 +27285,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.8",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.9",
                 )
                 return _html, _zip
 
@@ -27338,7 +27428,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.8",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.9",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59

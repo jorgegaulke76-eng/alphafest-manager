@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
 from site_vitrine_service import ImagemResolver, resumir_vitrine
+from site_galeria_service import resumir_galeria_site
 
 
 ICONES_CATEGORIA = {
@@ -141,26 +142,56 @@ def _carrossel_html(
         f'<div class="hf50-carousel-dots">{"".join(dots)}</div></div></section>'
     )
 
-def _categorias_html(catalogo: Iterable[Dict[str, Any]]) -> str:
+def _categorias_html(catalogo: Iterable[Dict[str, Any]], galeria: Iterable[Dict[str, Any]] | None = None) -> str:
     resumo = resumir_vitrine(catalogo, usar_taxonomia_catalogo=True)
     categorias: List[str] = list(resumo.get("categorias") or [])
     contagens = dict(resumo.get("contagem_por_categoria") or {})
-    if not categorias:
+    mostrar_ocasioes = galeria is not None
+    resumo_galeria = resumir_galeria_site(list(galeria or [])) if mostrar_ocasioes else {"ocasioes": []}
+    ocasioes: List[str] = list(resumo_galeria.get("ocasioes") or [])
+    if not categorias and not mostrar_ocasioes:
         return ""
-    cards = []
+
+    cards: List[str] = []
+    if mostrar_ocasioes:
+        cards.append(
+            '<button type="button" class="hf48-category-card hf48-occasion-card" data-hf48-occasions-toggle="1">'
+            '<span class="hf48-cat-icon">🎈</span>'
+            f'<span class="hf48-cat-copy"><strong>Datas &amp; Ocasiões</strong><small>{len(ocasioes)} opção(ões)</small></span>'
+            '<span class="hf48-cat-arrow">›</span></button>'
+        )
     for cat in categorias:
         qtd = int(contagens.get(cat, 0) or 0)
         cards.append(
-            f'''<button type="button" class="hf48-category-card" data-hf48-cat="{html.escape(_slug(cat), quote=True)}">
-              <span class="hf48-cat-icon">{_icone_categoria(cat)}</span>
-              <span class="hf48-cat-copy"><strong>{html.escape(cat)}</strong><small>{qtd} produto(s)</small></span>
-              <span class="hf48-cat-arrow">›</span>
-            </button>'''
+            f'<button type="button" class="hf48-category-card" data-hf48-cat="{html.escape(_slug(cat), quote=True)}">'
+            f'<span class="hf48-cat-icon">{_icone_categoria(cat)}</span>'
+            f'<span class="hf48-cat-copy"><strong>{html.escape(cat)}</strong><small>{qtd} produto(s)</small></span>'
+            '<span class="hf48-cat-arrow">›</span></button>'
         )
-    return f'''<section class="hf48-categories" id="categorias"><div class="hf48-wrap">
-      <div class="hf48-section-heading"><div><span class="hf48-kicker">Encontre mais rápido</span><h2>Explore por categoria</h2><p>Escolha o tipo de produto e vá direto às opções disponíveis na vitrine.</p></div><button type="button" class="hf48-text-link" data-site-scroll="produtos">Ver todos os produtos →</button></div>
-      <div class="hf48-category-grid">{''.join(cards)}</div>
-    </div></section>'''
+
+    painel_ocasioes = ""
+    if mostrar_ocasioes:
+        botoes = "".join(
+            f'<button type="button" class="hf48-occasion-chip" data-hf48-occasion="{html.escape(_slug(o), quote=True)}">{html.escape(o)}</button>'
+            for o in ocasioes
+        )
+        if not botoes:
+            botoes = '<span class="hf48-occasion-empty">Novas fotos marcadas em Datas &amp; Ocasiões aparecerão aqui.</span>'
+        painel_ocasioes = (
+            '<div class="hf48-occasion-panel" id="hf48-occasion-panel" hidden>'
+            '<div class="hf48-occasion-panel-head"><div><span class="hf48-kicker">🎈 Datas &amp; Ocasiões</span>'
+            '<strong>Veja trabalhos reais por data ou ocasião</strong></div>'
+            '<button type="button" class="hf48-occasion-close" data-hf48-occasions-close="1" aria-label="Fechar">×</button></div>'
+            f'<div class="hf48-occasion-chips">{botoes}</div></div>'
+        )
+
+    return (
+        '<section class="hf48-categories" id="categorias"><div class="hf48-wrap">'
+        '<div class="hf48-section-heading"><div><span class="hf48-kicker">Encontre mais rápido</span>'
+        '<h2>Explore por categoria</h2><p>Escolha o tipo de produto ou abra 🎈 Datas &amp; Ocasiões para ver fotos reais da Galeria.</p></div>'
+        '<button type="button" class="hf48-text-link" data-site-scroll="produtos">Ver todos os produtos →</button></div>'
+        f'<div class="hf48-category-grid">{"".join(cards)}</div>{painel_ocasioes}</div></section>'
+    )
 
 
 def aplicar_visual_hf48(
@@ -169,6 +200,7 @@ def aplicar_visual_hf48(
     empresa: Dict[str, Any],
     *,
     incluir_galeria: bool = False,
+    galeria_trabalhos: Iterable[Dict[str, Any]] | None = None,
     usar_mascotes: bool = False,
     imagem_resolver: ImagemResolver = None,
 ) -> str:
@@ -199,7 +231,7 @@ body{background:var(--hf48-bg)}
 .site-nav{top:87px;background:#fff;border-bottom:1px solid var(--hf48-border)}.site-nav-in{max-width:1320px;justify-content:flex-start;padding:0 24px}.site-nav a,.site-nav button{font-size:13px;padding:13px 14px}.site-nav a:hover,.site-nav button:hover{background:#eef7ff}
 .hero{position:relative;overflow:hidden;background:linear-gradient(135deg,#eaf8ff 0%,#fff 48%,#fff0fa 100%);border-bottom:0}.hero:before{content:'';position:absolute;left:-95px;top:34px;width:230px;height:230px;border-radius:48% 52% 58% 42%;background:linear-gradient(145deg,rgba(20,185,244,.32),rgba(6,120,223,.08));transform:rotate(18deg)}.hero:after{content:'';position:absolute;right:-80px;bottom:-80px;width:230px;height:230px;border-radius:50%;background:linear-gradient(145deg,rgba(255,47,145,.22),rgba(255,210,31,.10))}.hero-in{max-width:1320px;padding:64px 24px 58px;grid-template-columns:1.08fr .92fr;gap:46px}.hero.hf48-hero-branded:before,.hero.hf48-hero-branded:after{display:none}.hero.hf48-hero-branded .hero-in{position:relative;z-index:2}.hf48-real-balloons{position:absolute;left:-18px;top:76px;width:150px;height:auto;z-index:1;pointer-events:none;filter:drop-shadow(0 12px 18px rgba(17,72,126,.10))}.hero h1{font-size:clamp(42px,5.6vw,76px);line-height:.98}.hero h1 span{background:linear-gradient(90deg,#0876d8 0%,#14b9f4 32%,#ff2f91 70%,#ff8b1f 100%);-webkit-background-clip:text;background-clip:text;color:transparent}.hero p{max-width:650px}.hero-card{border:1px solid rgba(255,255,255,.85);border-radius:28px;background:rgba(255,255,255,.88);backdrop-filter:blur(4px);box-shadow:0 28px 70px rgba(18,35,61,.13);padding:30px;position:relative;overflow:hidden}.hero-card:after{content:'';position:absolute;width:160px;height:160px;border-radius:50%;background:linear-gradient(135deg,rgba(8,118,216,.13),rgba(255,79,145,.14));right:-42px;top:-48px}.hero-card h2{font-size:28px;margin:8px 0 10px}.hero-stat{position:relative;z-index:2}.stat{background:#f4f9fe;border:1px solid #e8f0f7}.stat strong{font-size:32px}.secondary{border-color:#d8e3ee;border-radius:13px}
 .hf48-trust{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}.hf48-trust span{background:rgba(255,255,255,.82);border:1px solid #dce8f3;border-radius:999px;padding:8px 11px;font-size:12px;font-weight:800;color:#526a83}
-.hf48-wrap{max-width:1320px;margin:auto}.hf48-categories{background:#fff;padding:48px 24px}.hf48-section-heading{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:22px}.hf48-section-heading h2{font-size:34px;margin:4px 0 6px}.hf48-section-heading p{margin:0;color:#657a92}.hf48-kicker{color:var(--hf48-blue);font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:.09em}.hf48-text-link{border:0;background:transparent;color:var(--hf48-blue);font-weight:900;cursor:pointer;white-space:nowrap}.hf48-category-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.hf48-category-card{border:1px solid var(--hf48-border);background:#fff;border-radius:18px;padding:16px;display:flex;align-items:center;gap:12px;text-align:left;cursor:pointer;transition:.18s;box-shadow:0 6px 20px rgba(18,35,61,.035)}.hf48-category-card:nth-child(7n+1){background:linear-gradient(135deg,#bfe2ff,#8fcaf7);border-color:#76b9ea}.hf48-category-card:nth-child(7n+2){background:linear-gradient(135deg,#ffc6e0,#f59ac8);border-color:#ed83b8}.hf48-category-card:nth-child(7n+3){background:linear-gradient(135deg,#ffe899,#ffd467);border-color:#efbd42}.hf48-category-card:nth-child(7n+4){background:linear-gradient(135deg,#ddc9ff,#b89af0);border-color:#a381e6}.hf48-category-card:nth-child(7n+5){background:linear-gradient(135deg,#bdf3d8,#82deb3);border-color:#67cc9b}.hf48-category-card:nth-child(7n+6){background:linear-gradient(135deg,#ffc7b8,#ff9e86);border-color:#ef836c}.hf48-category-card:nth-child(7n){background:linear-gradient(135deg,#c4dcff,#8ebcf3);border-color:#78a9e6}.hf48-category-card:hover{transform:translateY(-2px);border-color:#8fcff3;box-shadow:0 12px 28px rgba(18,35,61,.10)}.hf48-cat-icon{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.78);display:flex;align-items:center;justify-content:center;font-size:23px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.9)}.hf48-hero-benefits{position:relative;z-index:3;display:grid;gap:8px;margin-top:14px;max-width:275px}.hf48-hero-benefit{display:flex;align-items:center;gap:10px;border:1px solid #e2ecf6;border-radius:999px;background:rgba(255,255,255,.90);padding:9px 12px;font-size:12px;font-weight:850;color:#173d66}.hf48-hero-benefit b{display:flex;width:28px;height:28px;border-radius:50%;align-items:center;justify-content:center;font-size:15px}.hf48-hero-benefit:nth-child(1) b{background:#ffe7f2}.hf48-hero-benefit:nth-child(2) b{background:#fff5c7}.hf48-hero-benefit:nth-child(3) b{background:#e4f7ff}.hf48-cat-copy{min-width:0;flex:1}.hf48-cat-copy strong{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hf48-cat-copy small{display:block;margin-top:4px;color:#75889e}.hf48-cat-arrow{font-size:24px;color:#9db1c5}
+.hf48-wrap{max-width:1320px;margin:auto}.hf48-categories{background:#fff;padding:48px 24px}.hf48-section-heading{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:22px}.hf48-section-heading h2{font-size:34px;margin:4px 0 6px}.hf48-section-heading p{margin:0;color:#657a92}.hf48-kicker{color:var(--hf48-blue);font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:.09em}.hf48-text-link{border:0;background:transparent;color:var(--hf48-blue);font-weight:900;cursor:pointer;white-space:nowrap}.hf48-category-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.hf48-category-card{border:1px solid var(--hf48-border);background:#fff;border-radius:18px;padding:16px;display:flex;align-items:center;gap:12px;text-align:left;cursor:pointer;transition:.18s;box-shadow:0 6px 20px rgba(18,35,61,.035)}.hf48-category-card:nth-child(7n+1){background:linear-gradient(135deg,#bfe2ff,#8fcaf7);border-color:#76b9ea}.hf48-category-card:nth-child(7n+2){background:linear-gradient(135deg,#ffc6e0,#f59ac8);border-color:#ed83b8}.hf48-category-card:nth-child(7n+3){background:linear-gradient(135deg,#ffe899,#ffd467);border-color:#efbd42}.hf48-category-card:nth-child(7n+4){background:linear-gradient(135deg,#ddc9ff,#b89af0);border-color:#a381e6}.hf48-category-card:nth-child(7n+5){background:linear-gradient(135deg,#bdf3d8,#82deb3);border-color:#67cc9b}.hf48-category-card:nth-child(7n+6){background:linear-gradient(135deg,#ffc7b8,#ff9e86);border-color:#ef836c}.hf48-category-card:nth-child(7n){background:linear-gradient(135deg,#c4dcff,#8ebcf3);border-color:#78a9e6}.hf48-category-card:hover{transform:translateY(-2px);border-color:#8fcff3;box-shadow:0 12px 28px rgba(18,35,61,.10)}.hf48-cat-icon{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.78);display:flex;align-items:center;justify-content:center;font-size:23px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.9)}.hf48-hero-benefits{position:relative;z-index:3;display:grid;gap:8px;margin-top:14px;max-width:275px}.hf48-hero-benefit{display:flex;align-items:center;gap:10px;border:1px solid #e2ecf6;border-radius:999px;background:rgba(255,255,255,.90);padding:9px 12px;font-size:12px;font-weight:850;color:#173d66}.hf48-hero-benefit b{display:flex;width:28px;height:28px;border-radius:50%;align-items:center;justify-content:center;font-size:15px}.hf48-hero-benefit:nth-child(1) b{background:#ffe7f2}.hf48-hero-benefit:nth-child(2) b{background:#fff5c7}.hf48-hero-benefit:nth-child(3) b{background:#e4f7ff}.hf48-cat-copy{min-width:0;flex:1}.hf48-cat-copy strong{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hf48-cat-copy small{display:block;margin-top:4px;color:#75889e}.hf48-cat-arrow{font-size:24px;color:#9db1c5}.hf48-occasion-card{background:linear-gradient(135deg,#d9f3ff,#a9ddff)!important;border-color:#7bc7f3!important}.hf48-occasion-panel{margin-top:16px;border:1px solid #b9dcf8;border-radius:18px;background:linear-gradient(135deg,#f4fbff,#fff8fc);padding:18px;box-shadow:0 10px 28px rgba(18,35,61,.07)}.hf48-occasion-panel[hidden]{display:none}.hf48-occasion-panel-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:13px}.hf48-occasion-panel-head strong{display:block;margin-top:4px;color:#173d66;font-size:17px}.hf48-occasion-close{border:0;background:#fff;color:#56718c;border-radius:999px;width:36px;height:36px;font-size:24px;cursor:pointer;box-shadow:0 2px 10px rgba(18,35,61,.08)}.hf48-occasion-chips{display:flex;flex-wrap:wrap;gap:9px}.hf48-occasion-chip{border:1px solid #b8d8ef;background:#fff;color:#0a65ae;border-radius:999px;padding:9px 13px;font-weight:900;font-size:12px;cursor:pointer}.hf48-occasion-chip:hover{background:#eaf7ff;border-color:#79c3ef}.hf48-occasion-empty{font-size:12px;color:#657a92;padding:8px 2px}
 .main{max-width:1320px;padding:48px 24px 76px}.section-head{margin-top:0}.section-head h2{font-size:34px}.toolbar{background:#fff;border:1px solid var(--hf48-border);padding:10px;border-radius:18px;box-shadow:0 8px 26px rgba(18,35,61,.04)}.search input{border:0;background:#f8fbfd;border-radius:12px}.taxonomy-step{border-color:var(--hf48-border);box-shadow:0 6px 20px rgba(18,35,61,.025)}
 /* HF51.4-HF1 — categorias já ficam na seção superior; evita repetição e overflow na vitrine. */
 .taxonomy-cats{display:none!important}
@@ -230,7 +262,7 @@ body{background:var(--hf48-bg)}
 .hf48-brand-cta{max-width:1320px;margin:0 auto;padding:0 24px 58px}.hf48-brand-cta-in{display:grid;grid-template-columns:1fr 220px;align-items:center;gap:22px;border-radius:28px;padding:28px 30px;background:linear-gradient(120deg,#e5f8ff,#fff 45%,#fff0f7 75%,#fff8d8);border:1px solid #e0e9f3;overflow:hidden}.hf48-brand-cta h2{margin:4px 0 8px;font-size:30px}.hf48-brand-cta p{margin:0 0 16px;color:#61778f}.hf48-brand-cta img{width:100%;max-height:185px;object-fit:contain}.hf48-brand-cta .cta{display:inline-flex}
 @media(max-width:1050px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.hf48-process-grid{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:900px){.hf48-real-balloons{width:110px;left:-28px;top:94px}.hf48-header-search{display:none}.site-nav{top:87px}.hero-in{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hf48-category-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:620px){.preview-bar{font-size:7px!important;line-height:1.15!important;padding:3px 6px!important;letter-spacing:.035em!important}.hf48-real-balloons{display:none}.hf48-topline{font-size:9px;padding:5px 8px}.header-in{padding:8px 12px}.site-nav{top:69px}.hero-in{padding:32px 14px 38px;row-gap:28px}.hero h1{font-size:38px}.hf48-categories{padding:34px 14px}.hf48-section-heading{align-items:flex-start;flex-direction:column}.hf48-section-heading h2{font-size:28px}.hf48-category-grid{grid-template-columns:1fr 1fr;gap:9px}.hf48-category-card{padding:11px;gap:8px}.hf48-cat-icon{width:38px;height:38px;font-size:19px}.hf48-cat-copy strong{font-size:12px}.hf48-cat-copy small{font-size:10px}.main{padding:34px 12px 52px}.grid{grid-template-columns:1fr}.hf48-process{padding:42px 14px}.hf48-process-grid{grid-template-columns:1fr}.photo{aspect-ratio:4/3}.hero-card.hf48-mascot-hero{min-height:455px;padding:26px 16px 245px;margin-top:4px}.hf48-hero-mascot-img{width:82%;right:7%;bottom:6px;max-height:250px}.hf48-mascot-hero .hf48-mascot-copy{max-width:none}.hf48-gallery-intro{margin:0 14px 18px;padding:12px}.hf48-gallery-intro img{width:80px;height:66px}.hf48-brand-cta{padding:0 14px 42px}.hf48-brand-cta-in{grid-template-columns:1fr;padding:22px}.hf48-brand-cta img{max-height:180px;order:-1}}
+@media(max-width:620px){.preview-bar{font-size:7px!important;line-height:1.15!important;padding:3px 6px!important;letter-spacing:.035em!important}.hf48-real-balloons{display:none}.hf48-topline{font-size:9px;padding:5px 8px}.header-in{padding:8px 12px}.site-nav{top:69px}.hero-in{padding:32px 14px 38px;row-gap:28px}.hero h1{font-size:38px}.hf48-categories{padding:34px 14px}.hf48-section-heading{align-items:flex-start;flex-direction:column}.hf48-section-heading h2{font-size:28px}.hf48-category-grid{grid-template-columns:1fr 1fr;gap:9px}.hf48-category-card{padding:11px;gap:8px}.hf48-cat-icon{width:38px;height:38px;font-size:19px}.hf48-cat-copy strong{font-size:12px}.hf48-cat-copy small{font-size:10px}.hf48-occasion-panel{padding:14px}.hf48-occasion-panel-head{align-items:flex-start}.hf48-occasion-chip{font-size:11px;padding:9px 11px}.main{padding:34px 12px 52px}.grid{grid-template-columns:1fr}.hf48-process{padding:42px 14px}.hf48-process-grid{grid-template-columns:1fr}.photo{aspect-ratio:4/3}.hero-card.hf48-mascot-hero{min-height:455px;padding:26px 16px 245px;margin-top:4px}.hf48-hero-mascot-img{width:82%;right:7%;bottom:6px;max-height:250px}.hf48-mascot-hero .hf48-mascot-copy{max-width:none}.hf48-gallery-intro{margin:0 14px 18px;padding:12px}.hf48-gallery-intro img{width:80px;height:66px}.hf48-brand-cta{padding:0 14px 42px}.hf48-brand-cta-in{grid-template-columns:1fr;padding:22px}.hf48-brand-cta img{max-height:180px;order:-1}}
 /* HF51.4-HF1 — acabamento profissional: um único cabeçalho azul, sem efeito de banner empilhado */
 .header{background:#0b8fdf;border:0;box-shadow:none;overflow:visible}
 .header-in{max-width:1320px;padding:8px 24px 6px;gap:24px;min-height:100px;overflow:visible}.brand{gap:0;min-height:84px;overflow:visible;flex:0 0 420px;display:flex;align-items:center}.brand-logo{width:410px;height:84px;object-fit:contain;object-position:left center;display:block;overflow:visible;filter:drop-shadow(0 3px 7px rgba(0,0,0,.12));border-radius:0}.brand-copy{display:none!important}
@@ -276,7 +308,7 @@ body{background:var(--hf48-bg)}
     search_header = '''<form class="hf48-header-search" id="hf48-header-search"><input id="hf48-header-search-input" type="search" placeholder="O que você está procurando?"><button type="submit">Buscar</button></form>'''
     pagina = pagina.replace('<div class="header-actions">', search_header + '<div class="header-actions">', 1)
 
-    categorias_html = _categorias_html(catalogo)
+    categorias_html = _categorias_html(catalogo, galeria_trabalhos if incluir_galeria else None)
 
     # Hero mais comercial: preserva estatísticas e CTAs, só reorganiza a linguagem.
     if mascotes.get("hero"):
@@ -316,7 +348,7 @@ body{background:var(--hf48-bg)}
             pagina = pagina[:pos] + carrossel_html + pagina[pos:]
 
     if incluir_galeria and mascotes.get("galeria"):
-        galeria_intro = f'''<div class="hf48-gallery-intro"><img src="{mascotes['galeria']}" alt="Fox, mascote da AlphaFest"><div><strong>A Fox separou inspirações reais para você.</strong><span>Use Categoria, Subcategoria e Tema para encontrar trabalhos já produzidos e pedir este modelo pelo WhatsApp.</span></div></div>'''
+        galeria_intro = f'''<div class="hf48-gallery-intro"><img src="{mascotes['galeria']}" alt="Fox, mascote da AlphaFest"><div><strong>A Fox separou inspirações reais para você.</strong><span>Use Categoria, Subcategoria, Tema ou 🎈 Datas & Ocasiões para encontrar trabalhos já produzidos e pedir este modelo pelo WhatsApp.</span></div></div>'''
         marcador_galeria = '<section class="gallery-section" id="galeria">'
         if marcador_galeria in pagina:
             pagina = pagina.replace(marcador_galeria, marcador_galeria + galeria_intro, 1)
@@ -374,6 +406,19 @@ body{background:var(--hf48-bg)}
       const filtro=document.querySelector('.category-filter[data-cat="'+slug+'"]');
       if(filtro) filtro.click();
       const alvo=document.getElementById('produtos'); if(alvo) alvo.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+  });
+  const occasionPanel=document.getElementById('hf48-occasion-panel');
+  document.querySelectorAll('[data-hf48-occasions-toggle]').forEach(function(btn){
+    btn.addEventListener('click',function(){if(occasionPanel){occasionPanel.hidden=!occasionPanel.hidden;if(!occasionPanel.hidden)occasionPanel.scrollIntoView({behavior:'smooth',block:'nearest'});}});
+  });
+  document.querySelectorAll('[data-hf48-occasions-close]').forEach(function(btn){btn.addEventListener('click',function(){if(occasionPanel)occasionPanel.hidden=true;});});
+  document.querySelectorAll('[data-hf48-occasion]').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      const slug=btn.getAttribute('data-hf48-occasion')||'todos';
+      const label=(btn.textContent||'Data / Ocasião').trim();
+      if(typeof window.alphaFestGalleryShowOccasion==='function'){window.alphaFestGalleryShowOccasion(slug,label);}
+      else{const alvo=document.getElementById('galeria');if(alvo)alvo.scrollIntoView({behavior:'smooth',block:'start'});}
     });
   });
 

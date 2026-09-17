@@ -1,4 +1,4 @@
-## 20.4.9-I8.13.5-HF53.3-HF8-HF65.8 — Catálogo 3D A–Z + exclusão + site
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.9 — Catálogo 3D A–Z + exclusão + site
 
 - Catálogo 3D passa a ser persistido e exibido em ordem alfabética (A–Z).
 - Cada modelo ganha botão `🗑️ Excluir`, com confirmação antes de remover o registro e os arquivos privados.

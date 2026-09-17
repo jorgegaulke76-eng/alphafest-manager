@@ -1,14 +1,10 @@
-ALPHAFEST MANAGER — HF65.8 · CATÁLOGO 3D COMO FONTE COMERCIAL
+ALPHAFEST MANAGER — HF65.9 · DATAS & OCASIÕES
 
-1. Instale pela Atualização Segura sobre a HF65.7.
-2. Abra Catálogo 3D com o perfil Jorge.
-3. Na primeira abertura, os produtos do Catálogo Oficial cuja categoria é IMPRESSÃO 3D serão incorporados automaticamente ao Catálogo 3D.
-4. Confirme a versão 20.4.9-I8.13.5-HF53.3-HF8-HF65.8.
-5. Edite preço e configurações pelo botão Editar de cada produto 3D.
-6. As alterações são espelhadas no Catálogo Oficial para continuar liberando propostas e o site.
-7. Para refletir mudanças no site público, use Site AlphaFest → Publicar site agora.
+1. Instale este ZIP pela Atualização Segura.
+2. Abra Galeria de Trabalhos.
+3. Em uma foto/trabalho, marque 🎈 Datas & Ocasiões (ex.: Setembro Amarelo, Outubro Rosa, Batizado, Chá Revelação, Dia dos Professores).
+4. Marque o trabalho como autorizado/pré-selecionado para o site conforme o fluxo atual.
+5. Gere a prévia ou publique o site.
+6. Em Categorias, use o cartão 🎈 Datas & Ocasiões e confirme que a escolha leva à Galeria filtrada.
 
-IMPORTANTE:
-- Arquivos 3MF/STL continuam privados.
-- Produtos antigos migrados sem arquivo 3D permanecem comerciais e podem receber o arquivo depois.
-- Excluir um produto 3D remove também o espelho vinculado do Catálogo Oficial; propostas antigas são preservadas.
+Versão esperada: 20.4.9-I8.13.5-HF53.3-HF8-HF65.9
