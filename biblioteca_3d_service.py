@@ -81,6 +81,34 @@ def ordenar_modelos(modelos: Iterable[dict]) -> list[dict]:
     )
 
 
+def chave_nome_modelo(modelo: dict) -> str:
+    """Chave estável para ordenar/detectar nomes repetidos no acervo 3D."""
+    return sanitizar_texto((modelo or {}).get("nome"), 180).casefold()
+
+
+def contagem_nomes(modelos: Iterable[dict]) -> dict[str, int]:
+    """Conta modelos por nome normalizado, sem excluir nada automaticamente."""
+    contagem: dict[str, int] = {}
+    for item in (modelos or []):
+        if not isinstance(item, dict):
+            continue
+        chave = chave_nome_modelo(item)
+        if chave:
+            contagem[chave] = contagem.get(chave, 0) + 1
+    return contagem
+
+
+def ids_duplicados_por_nome(modelos: Iterable[dict]) -> set[str]:
+    """IDs pertencentes a grupos com o mesmo nome (apenas sinalização visual)."""
+    itens = [dict(x) for x in (modelos or []) if isinstance(x, dict)]
+    contagem = contagem_nomes(itens)
+    return {
+        str(item.get("id") or "").strip()
+        for item in itens
+        if contagem.get(chave_nome_modelo(item), 0) > 1 and str(item.get("id") or "").strip()
+    }
+
+
 def filtrar_modelos(modelos: Iterable[dict], termo: str = "") -> list[dict]:
     termo_limpo = sanitizar_texto(termo, 200).casefold()
     itens = ordenar_modelos(modelos)

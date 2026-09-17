@@ -1,3 +1,13 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.7 — Catálogo 3D A–Z + exclusão + site
+
+- Catálogo 3D passa a ser persistido e exibido em ordem alfabética (A–Z).
+- Cada modelo ganha botão `🗑️ Excluir`, com confirmação antes de remover o registro e os arquivos privados.
+- Nomes repetidos são sinalizados visualmente para facilitar a limpeza de duplicados.
+- Cada modelo ganha `🌐 Enviar ao site`; também existe sincronização em lote do Catálogo 3D.
+- A sincronização cria/atualiza o item no Catálogo Oficial com `Categoria = IMPRESSÃO 3D` e `PublicarSite = True`.
+- O arquivo 3MF/STL continua privado: somente imagem, nome, descrição e tempo de impressão seguem para a vitrine.
+- Sincronização em lote ignora repetições pelo mesmo nome para não duplicar produtos no site.
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF65.6 — Cancelado pelo cliente
 
 - Adiciona o status operacional **Cancelado pelo cliente** nas Centrais do Jorge e da Anna e no Fluxo de Pedidos.

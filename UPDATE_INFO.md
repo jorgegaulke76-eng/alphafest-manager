@@ -1,25 +1,15 @@
-# AlphaFest Manager — HF65.6
+# AlphaFest Manager — HF65.7
 
-## Novo status — Cancelado pelo cliente
+## Catálogo 3D → Site + ordem alfabética
 
-Atualização sobre a HF65.5.
+Esta atualização mantém a base HF65.6 e acrescenta três melhorias ao Catálogo 3D do Jorge:
 
-### O que acrescenta
-- Novo controle **🚫 Cancelado pelo cliente** junto de **Aprovado, Pago, Pronto e Entregue**.
-- Disponível nas telas operacionais do Jorge e da Anna, incluindo atualização rápida e Fluxo de Pedidos.
-- Não pede confirmação extra: marque/desmarque e use **Salvar andamento**.
-- Ao cancelar, a proposta sai imediatamente das filas ativas, produção e entregas, mas permanece no histórico.
-- Os marcos já registrados (Aprovado/Pago/Pronto/Entregue) não são apagados.
-- O cancelamento recebe data, usuário, linha do tempo e auditoria.
-- O Fluxo da Anna ganha filtro **Canceladas pelo cliente** para localização rápida.
-- Se houver reserva/consumo de materiais ativo, o sistema preserva o controle e alerta para revisão/estorno; não devolve material automaticamente para evitar correção indevida de consumo físico.
+1. **Ordem alfabética A–Z** em toda a listagem e ao salvar novos modelos.
+2. **Exclusão de itens/duplicados** por botão individual, com confirmação.
+3. **Integração com o site**: enviar um modelo ou sincronizar todo o Catálogo 3D com o Catálogo Oficial na categoria **IMPRESSÃO 3D**.
 
-### O que permanece
-- Comandos **Enviar** e **HTML** restaurados pela HF65.5.
-- Resumo **Produto + Tema + Valor**.
-- Reserva rápida de materiais nas Centrais.
-- Central Jorge e Central Anna usando a mesma Fonte Única.
-- Campanha Destaque com barra de rolagem da HF65.4.
+O arquivo de produção 3MF/STL permanece privado. Apenas os dados comerciais e uma cópia pública da imagem entram no Catálogo Oficial. O preço não é inventado: modelos novos entram com preço sob consulta e podem ser revisados no Catálogo Oficial.
 
-### Versão
-`20.4.9-I8.13.5-HF53.3-HF8-HF65.6`
+Após sincronizar, use **Site AlphaFest → Publicar site agora** para atualizar alphafest.com.br.
+
+Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.7`

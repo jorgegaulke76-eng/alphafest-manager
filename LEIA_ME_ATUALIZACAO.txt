@@ -1,10 +1,11 @@
-ALPHAFEST MANAGER — HF65.6 · CANCELADO PELO CLIENTE
+ALPHAFEST MANAGER — HF65.7 · CATÁLOGO 3D A–Z + SITE
 
-1. Faça o backup normal do Manager antes de atualizar.
-2. Instale este ZIP pela Atualização Segura.
-3. Reinicie e confirme a versão 20.4.9-I8.13.5-HF53.3-HF8-HF65.6.
-4. Abra uma proposta na Central do Jorge e na Central da Anna.
-5. Confirme o novo controle “Cancelado pelo cliente” junto de Aprovado, Pago, Pronto e Entregue.
-6. Teste em uma proposta de teste: ao cancelar, ela deve sair das filas ativas e permanecer localizável no Histórico/Fluxo pelo filtro de canceladas.
+1. Instale este ZIP pela Atualização Segura.
+2. Reinicie o Manager.
+3. Confirme a versão 20.4.9-I8.13.5-HF53.3-HF8-HF65.7.
+4. Abra Catálogo 3D: a listagem deve aparecer em ordem alfabética.
+5. Use Excluir para limpar duplicados ou Enviar ao site para um item específico.
+6. Para levar todos os modelos, use Sincronizar Catálogo 3D com a categoria Impressão 3D do site.
+7. Depois use Site AlphaFest → Publicar site agora.
 
-A atualização não contém dados da empresa. Mantém HF65.3, HF65.4 e HF65.5.
+IMPORTANTE: arquivos 3MF/STL permanecem privados e não são enviados ao site.
