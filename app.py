@@ -718,15 +718,21 @@ def _biblioteca3d_bytes_cache(object_path):
 
 
 def _biblioteca3d_imagem_data_uri(modelo):
-    """Carrega a imagem privada do modelo e a embute com segurança no catálogo HTML."""
+    """Retorna imagem segura do modelo; usa a cópia privada e cai para a imagem pública migrada."""
     modelo = dict(modelo or {})
     object_path = str(modelo.get("imagem_path") or "").strip()
     bruto = _biblioteca3d_bytes_cache(object_path) if object_path else None
-    if not bruto:
-        return ""
-    ext = Path(object_path).suffix.lower()
-    mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}.get(ext, "image/jpeg")
-    return f"data:{mime};base64,{base64.b64encode(bruto).decode('ascii')}"
+    if bruto:
+        ext = Path(object_path).suffix.lower()
+        mime = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}.get(ext, "image/jpeg")
+        return f"data:{mime};base64,{base64.b64encode(bruto).decode('ascii')}"
+    comercial = dict(modelo.get("catalogo_comercial") or {})
+    candidatos = [modelo.get("imagem_publica"), *((comercial.get("Imagens") or []))]
+    for ref in candidatos:
+        ref = str(ref or "").strip()
+        if ref.startswith(("https://", "http://", "data:image/")):
+            return ref
+    return ""
 
 def catalog_public_url(object_path):
     func = getattr(_cloud_db, "catalog_public_url", None) if _cloud_db else None
@@ -27189,7 +27195,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.7",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.8",
                 )
                 return _html, _zip
 
@@ -27332,7 +27338,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.7",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.8",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
@@ -29754,9 +29760,9 @@ if pagina_atual == "novo_orcamento":
             rerun_na_aba("novo_orcamento", mensagem_salva_i811)
 
 
-# HF65.7 — Catálogo 3D como origem da vitrine pública de Impressão 3D.
-# O arquivo 3MF/STL continua privado. Somente a imagem e os dados comerciais
-# são copiados para o Catálogo Oficial, que permanece como Fonte Única do site.
+# HF65.8 — Catálogo 3D como fonte comercial dos produtos de Impressão 3D.
+# Os produtos continuam espelhados no Catálogo Oficial porque Orçamentos/Site usam
+# essa estrutura, mas preço, descrição e configurações 3D passam a ser mantidos aqui.
 class _Biblioteca3DUploadMemoria:
     def __init__(self, dados, nome, mime):
         self._dados = bytes(dados or b"")
@@ -29777,20 +29783,95 @@ def _biblioteca3d_mime_imagem(nome):
     }.get(ext, "image/webp")
 
 
+def _biblioteca3d_produto_eh_3d(produto):
+    """Somente a categoria comercial 3D entra na migração automática."""
+    cat = normalizar_identidade_produto((produto or {}).get("Categoria"))
+    return cat in {"impressao 3d", "impressao3d", "3d"} or ("impress" in cat and "3d" in cat)
+
+
+def _biblioteca3d_extrair_comercial(produto):
+    produto = dict(produto or {})
+    return {
+        "Categoria": "IMPRESSÃO 3D",
+        "Subcategoria": str(produto.get("Subcategoria") or "MODELOS 3D").strip() or "MODELOS 3D",
+        "CodigoInterno": str(produto.get("CodigoInterno") or "").strip(),
+        "Descricao": str(produto.get("Descricao") or "").strip(),
+        "DescricaoCurta": str(produto.get("DescricaoCurta") or produto.get("Descricao") or "").strip(),
+        "DescricaoCompleta": str(produto.get("DescricaoCompleta") or produto.get("Descricao") or "").strip(),
+        "Preco": str(produto.get("Preco") or "").strip(),
+        "Custo": str(produto.get("Custo") or "").strip(),
+        "Material": str(produto.get("Material") or "").strip(),
+        "TempoProducao": str(produto.get("TempoProducao") or "").strip(),
+        "Variacoes": [str(x).strip() for x in (produto.get("Variacoes") or []) if str(x).strip()],
+        "Aliases": [str(x).strip() for x in (produto.get("Aliases") or []) if str(x).strip()],
+        "CampanhasPermitidas": [str(x).strip() for x in (produto.get("CampanhasPermitidas") or []) if str(x).strip()],
+        "Processos": [str(x).strip() for x in (produto.get("Processos") or ["Impressão 3D"]) if str(x).strip()],
+        "CamposPersonalizacao": [str(x).strip() for x in (produto.get("CamposPersonalizacao") or []) if str(x).strip()],
+        "ObservacaoInterna": str(produto.get("ObservacaoInterna") or "").strip(),
+        "PalavrasChave": str(produto.get("PalavrasChave") or "").strip() if not isinstance(produto.get("PalavrasChave"), list) else ", ".join(str(x).strip() for x in produto.get("PalavrasChave") if str(x).strip()),
+        "PublicarSite": bool(produto.get("PublicarSite", True)),
+        "ExibirPrecoSite": bool(produto.get("ExibirPrecoSite", False)),
+        "Destaque": bool(produto.get("Destaque", False)),
+        "CarrosselSite": bool(produto.get("CarrosselSite", False)),
+        "CategoriasExtrasSite": [str(x).strip() for x in (produto.get("CategoriasExtrasSite") or []) if str(x).strip()],
+        "Imagens": [str(x).strip() for x in (produto.get("Imagens") or []) if str(x).strip()],
+        "VideoCatalogo": str(produto.get("VideoCatalogo") or "").strip(),
+        "Ativo": bool(produto.get("Ativo", True)),
+    }
+
+
+def _biblioteca3d_comercial(modelo):
+    modelo = dict(modelo or {})
+    comercial = dict(modelo.get("catalogo_comercial") or {})
+    comercial.setdefault("Categoria", "IMPRESSÃO 3D")
+    comercial.setdefault("Subcategoria", "MODELOS 3D")
+    comercial.setdefault("Descricao", str(modelo.get("descricao") or "").strip())
+    comercial.setdefault("DescricaoCurta", str(modelo.get("descricao") or "").strip())
+    comercial.setdefault("DescricaoCompleta", str(modelo.get("descricao") or "").strip())
+    comercial.setdefault("Preco", "")
+    comercial.setdefault("Custo", "")
+    comercial.setdefault("Material", "")
+    comercial.setdefault("TempoProducao", "")
+    comercial.setdefault("Variacoes", [])
+    comercial.setdefault("Aliases", [])
+    comercial.setdefault("CampanhasPermitidas", [])
+    comercial.setdefault("Processos", ["Impressão 3D"])
+    comercial.setdefault("CamposPersonalizacao", [])
+    comercial.setdefault("ObservacaoInterna", "")
+    comercial.setdefault("PalavrasChave", "")
+    comercial.setdefault("PublicarSite", True)
+    comercial.setdefault("ExibirPrecoSite", False)
+    comercial.setdefault("Destaque", False)
+    comercial.setdefault("CarrosselSite", False)
+    comercial.setdefault("CategoriasExtrasSite", [])
+    comercial.setdefault("Imagens", [])
+    comercial.setdefault("VideoCatalogo", "")
+    comercial.setdefault("Ativo", True)
+    return comercial
+
+
 def _biblioteca3d_imagem_publica(modelo, produto_existente=None):
+    modelo = dict(modelo or {})
     produto_existente = produto_existente or {}
-    imagens_existentes = [str(x).strip() for x in (produto_existente.get("Imagens") or []) if str(x).strip()]
+    comercial = _biblioteca3d_comercial(modelo)
+    imagens_existentes = [
+        str(x).strip() for x in [
+            modelo.get("imagem_publica"),
+            *((comercial.get("Imagens") or [])),
+            *((produto_existente.get("Imagens") or [])),
+        ] if str(x or "").strip()
+    ]
     for ref in imagens_existentes:
         if ref.startswith(("https://", "http://", "data:image/")):
             return ref
 
-    caminho = str((modelo or {}).get("imagem_path") or "").strip()
+    caminho = str(modelo.get("imagem_path") or "").strip()
     if not caminho:
         return ""
     dados = read_private_3d_file(caminho)
     if not dados:
         return ""
-    nome = Path(caminho).name or f"modelo_3d_{str((modelo or {}).get('id') or '')[:8]}.webp"
+    nome = Path(caminho).name or f"modelo_3d_{str(modelo.get('id') or '')[:8]}.webp"
     upload_mem = _Biblioteca3DUploadMemoria(dados, nome, _biblioteca3d_mime_imagem(nome))
     return str(upload_catalog_image(upload_mem) or "").strip()
 
@@ -29799,22 +29880,86 @@ def _biblioteca3d_indice_produto_catalogo(catalogo, modelo):
     modelo = modelo or {}
     modelo_id = str(modelo.get("id") or "").strip()
     nome_chave = normalizar_identidade_produto(modelo.get("nome"))
-    # Vínculo explícito vence o nome.
     for i, produto in enumerate(catalogo or []):
         if str((produto or {}).get("biblioteca_3d_id") or "").strip() == modelo_id and modelo_id:
             return i
-    # Reaproveita um cadastro 3D de mesmo nome para não duplicar a vitrine.
     for i, produto in enumerate(catalogo or []):
-        if normalizar_identidade_produto((produto or {}).get("Nome")) != nome_chave or not nome_chave:
-            continue
-        texto_cat = " ".join([
-            str((produto or {}).get("Categoria") or ""),
-            str((produto or {}).get("Subcategoria") or ""),
-            " ".join(str(x) for x in ((produto or {}).get("Processos") or [])),
-        ]).casefold()
-        if "3d" in texto_cat:
+        if normalizar_identidade_produto((produto or {}).get("Nome")) == nome_chave and nome_chave and _biblioteca3d_produto_eh_3d(produto):
             return i
     return None
+
+
+def _biblioteca3d_migrar_catalogo_oficial(biblioteca, catalogo):
+    """Incorpora ao Catálogo 3D todos os produtos já classificados como IMPRESSÃO 3D.
+
+    É idempotente: após a primeira migração, o bloco comercial do Catálogo 3D vira
+    a fonte de edição. O Catálogo Oficial fica como espelho necessário para
+    orçamento, site e demais módulos.
+    """
+    biblioteca = [dict(x) for x in (biblioteca or []) if isinstance(x, dict)]
+    catalogo = [dict(x) if isinstance(x, dict) else x for x in (catalogo or [])]
+    por_id = {str(x.get("id") or "").strip(): i for i, x in enumerate(biblioteca) if str(x.get("id") or "").strip()}
+    por_nome = {normalizar_identidade_produto(x.get("nome")): i for i, x in enumerate(biblioteca) if normalizar_identidade_produto(x.get("nome"))}
+    migrados = vinculados = 0
+    alterou_bib = alterou_cat = False
+
+    for pi, produto in enumerate(catalogo):
+        if not isinstance(produto, dict) or not _biblioteca3d_produto_eh_3d(produto):
+            continue
+        pid = str(produto.get("biblioteca_3d_id") or "").strip()
+        nome = str(produto.get("Nome") or "Modelo 3D").strip() or "Modelo 3D"
+        chave_nome = normalizar_identidade_produto(nome)
+        bi = por_id.get(pid) if pid else None
+        if bi is None:
+            bi = por_nome.get(chave_nome)
+        if bi is None:
+            novo_id = pid or secrets.token_hex(12)
+            imagens = [str(x).strip() for x in (produto.get("Imagens") or []) if str(x).strip()]
+            novo = {
+                "id": novo_id,
+                "nome": nome,
+                "descricao": str(produto.get("DescricaoCompleta") or produto.get("DescricaoCurta") or produto.get("Descricao") or "").strip(),
+                "tempo_impressao": str(produto.get("TempoProducao") or "").strip(),
+                "imagem_path": "",
+                "imagem_publica": imagens[0] if imagens else "",
+                "arquivo_path": "",
+                "arquivo_nome": "",
+                "arquivo_tamanho": 0,
+                "criado_em": str(produto.get("CriadoEm") or agora_local().isoformat(timespec="seconds")),
+                "atualizado_em": agora_local().isoformat(timespec="seconds"),
+                "catalogo_comercial": _biblioteca3d_extrair_comercial(produto),
+                "migrado_catalogo_oficial": True,
+            }
+            biblioteca.append(novo)
+            bi = len(biblioteca) - 1
+            por_id[novo_id] = bi
+            por_nome[chave_nome] = bi
+            pid = novo_id
+            migrados += 1
+            alterou_bib = True
+        else:
+            item = dict(biblioteca[bi])
+            if not isinstance(item.get("catalogo_comercial"), dict) or not item.get("catalogo_comercial"):
+                item["catalogo_comercial"] = _biblioteca3d_extrair_comercial(produto)
+                item["descricao"] = str(item.get("descricao") or produto.get("DescricaoCompleta") or produto.get("DescricaoCurta") or produto.get("Descricao") or "").strip()
+                item["imagem_publica"] = str(item.get("imagem_publica") or ((produto.get("Imagens") or [""])[0] if (produto.get("Imagens") or []) else "")).strip()
+                item["migrado_catalogo_oficial"] = True
+                item["atualizado_em"] = agora_local().isoformat(timespec="seconds")
+                biblioteca[bi] = item
+                alterou_bib = True
+            pid = str(biblioteca[bi].get("id") or pid).strip()
+
+        if pid and str(produto.get("biblioteca_3d_id") or "").strip() != pid:
+            produto["biblioteca_3d_id"] = pid
+            produto["OrigemCatalogo3D"] = True
+            produto["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+            catalogo[pi] = produto
+            vinculados += 1
+            alterou_cat = True
+
+    if _b3d_ordenar_modelos:
+        biblioteca = _b3d_ordenar_modelos(biblioteca)
+    return biblioteca, catalogo, migrados, vinculados, alterou_bib, alterou_cat
 
 
 def _biblioteca3d_aplicar_no_catalogo(catalogo, modelo):
@@ -29822,47 +29967,54 @@ def _biblioteca3d_aplicar_no_catalogo(catalogo, modelo):
     modelo = dict(modelo or {})
     idx = _biblioteca3d_indice_produto_catalogo(catalogo, modelo)
     existente = dict(catalogo[idx]) if idx is not None and isinstance(catalogo[idx], dict) else {}
+    comercial = _biblioteca3d_comercial(modelo)
     imagem_publica = _biblioteca3d_imagem_publica(modelo, existente)
-    if not imagem_publica:
+    imagens_comerciais = [str(x).strip() for x in (comercial.get("Imagens") or []) if str(x).strip()]
+    if imagem_publica:
+        imagens = [imagem_publica] + [x for x in imagens_comerciais if x != imagem_publica]
+    else:
+        imagens = imagens_comerciais or [str(x).strip() for x in (existente.get("Imagens") or []) if str(x).strip()]
+    if not imagens:
         return catalogo, False, "imagem"
 
-    descricao = str(modelo.get("descricao") or "").strip()
-    tempo = str(modelo.get("tempo_impressao") or "").strip()
-    imagens = [imagem_publica] + [
-        str(x).strip() for x in (existente.get("Imagens") or [])
-        if str(x).strip() and str(x).strip() != imagem_publica
-    ]
     registro = existente
     registro.update({
-        "Nome": str(modelo.get("nome") or "Modelo 3D").strip() or "Modelo 3D",
+        "Nome": str(modelo.get("nome") or existente.get("Nome") or "Modelo 3D").strip() or "Modelo 3D",
         "Categoria": "IMPRESSÃO 3D",
-        "Subcategoria": str(existente.get("Subcategoria") or "MODELOS 3D").strip() or "MODELOS 3D",
-        "Imagens": imagens[:5],
-        "Descricao": descricao or str(existente.get("Descricao") or "").strip(),
-        "DescricaoCurta": descricao or str(existente.get("DescricaoCurta") or "").strip(),
-        "Material": (f"Tempo de impressão: {tempo}" if tempo else str(existente.get("Material") or "").strip()),
-        "Ativo": True,
-        "PublicarSite": True,
-        "ExibirPrecoSite": bool(existente.get("ExibirPrecoSite", False)),
-        "Destaque": bool(existente.get("Destaque", False)),
-        "CarrosselSite": bool(existente.get("CarrosselSite", False)),
+        "Subcategoria": str(comercial.get("Subcategoria") or "MODELOS 3D").strip() or "MODELOS 3D",
+        "CodigoInterno": str(comercial.get("CodigoInterno") or existente.get("CodigoInterno") or "").strip(),
+        "Imagens": list(dict.fromkeys(imagens))[:5],
+        "VideoCatalogo": str(comercial.get("VideoCatalogo") or existente.get("VideoCatalogo") or "").strip(),
+        "Descricao": str(comercial.get("DescricaoCurta") or comercial.get("Descricao") or modelo.get("descricao") or "").strip(),
+        "DescricaoCurta": str(comercial.get("DescricaoCurta") or modelo.get("descricao") or "").strip(),
+        "DescricaoCompleta": str(comercial.get("DescricaoCompleta") or comercial.get("Descricao") or modelo.get("descricao") or "").strip(),
+        "Preco": str(comercial.get("Preco") or "").strip(),
+        "Custo": str(comercial.get("Custo") or "").strip(),
+        "Material": str(comercial.get("Material") or "").strip(),
+        "TempoProducao": str(comercial.get("TempoProducao") or modelo.get("tempo_impressao") or "").strip(),
+        "Variacoes": [str(x).strip() for x in (comercial.get("Variacoes") or []) if str(x).strip()],
+        "Aliases": [str(x).strip() for x in (comercial.get("Aliases") or []) if str(x).strip()],
+        "CampanhasPermitidas": [str(x).strip() for x in (comercial.get("CampanhasPermitidas") or []) if str(x).strip()],
+        "Processos": [str(x).strip() for x in (comercial.get("Processos") or ["Impressão 3D"]) if str(x).strip()],
+        "CamposPersonalizacao": [str(x).strip() for x in (comercial.get("CamposPersonalizacao") or []) if str(x).strip()],
+        "ObservacaoInterna": str(comercial.get("ObservacaoInterna") or "").strip(),
+        "PalavrasChave": str(comercial.get("PalavrasChave") or "").strip(),
+        "Ativo": bool(comercial.get("Ativo", True)),
+        "PublicarSite": bool(comercial.get("PublicarSite", True)),
+        "ExibirPrecoSite": bool(comercial.get("ExibirPrecoSite", False)),
+        "Destaque": bool(comercial.get("Destaque", False)),
+        "CarrosselSite": bool(comercial.get("CarrosselSite", False)),
         "CategoriasExtrasSite": [
-            str(x).strip() for x in (existente.get("CategoriasExtrasSite") or [])
-            if str(x).strip() and str(x).strip().casefold() != "impressão 3d"
+            str(x).strip() for x in (comercial.get("CategoriasExtrasSite") or [])
+            if str(x).strip() and normalizar_identidade_produto(x) != normalizar_identidade_produto("IMPRESSÃO 3D")
         ],
         "biblioteca_3d_id": str(modelo.get("id") or "").strip(),
         "OrigemCatalogo3D": True,
         "AtualizadoEm": agora_local().isoformat(timespec="seconds"),
     })
-    # O Catálogo 3D não possui preço comercial; ao atualizar, preserva o preço
-    # já revisado no Catálogo Oficial. Novo item entra como sob consulta.
+    registro.setdefault("ArquivosBiblioteca", list(existente.get("ArquivosBiblioteca", []) or []))
+    registro.setdefault("MidiasCatalogoVersao", 1)
     if idx is None:
-        registro.setdefault("Preco", "")
-        registro.setdefault("Processos", ["Impressão 3D"])
-        registro.setdefault("Variacoes", [])
-        registro.setdefault("Aliases", [])
-        registro.setdefault("CampanhasPermitidas", [])
-        registro.setdefault("ArquivosBiblioteca", [])
         catalogo.append(registro)
         return catalogo, True, "criado"
     catalogo[idx] = registro
@@ -29887,8 +30039,8 @@ if pagina_atual == "biblioteca_3d":
 
     st.markdown("# 🧊 Catálogo 3D")
     st.caption(
-        "Acervo interno + gerador de catálogo para os modelos de impressão 3D. "
-        "O arquivo de produção permanece privado no Manager; o catálogo compartilha somente nome, descrição, tempo e uma imagem."
+        "Fonte comercial dos produtos de impressão 3D: preço, descrições, configurações, arquivo e publicação ficam centralizados aqui. "
+        "O Catálogo Oficial recebe um espelho para continuar alimentando propostas e o site; 3MF/STL permanece privado."
     )
 
     if BIBLIOTECA_3D_IMPORT_ERROR:
@@ -29900,21 +30052,43 @@ if pagina_atual == "biblioteca_3d":
             biblioteca_b3d = []
         biblioteca_b3d = _b3d_ordenar_modelos(biblioteca_b3d) if _b3d_ordenar_modelos else list(biblioteca_b3d)
 
+        # HF65.8 — migração automática e idempotente dos produtos comerciais 3D.
+        # O Catálogo Oficial continua existindo como espelho para Orçamentos/Site,
+        # mas a manutenção comercial passa a acontecer no Catálogo 3D.
+        _catalogo_oficial_b3d = carregar_catalogo()
+        (
+            biblioteca_b3d,
+            _catalogo_oficial_b3d,
+            _migrados_b3d,
+            _vinculados_b3d,
+            _alterou_bib_b3d,
+            _alterou_cat_b3d,
+        ) = _biblioteca3d_migrar_catalogo_oficial(biblioteca_b3d, _catalogo_oficial_b3d)
+        _salvou_migracao_b3d = True
+        if _alterou_bib_b3d:
+            _salvou_migracao_b3d = bool(save_document("biblioteca_3d_db", biblioteca_b3d, ARQUIVO_BIBLIOTECA_3D))
+        if _alterou_cat_b3d:
+            _salvou_migracao_b3d = bool(salvar_catalogo(_catalogo_oficial_b3d)) and _salvou_migracao_b3d
+        if (_migrados_b3d or _vinculados_b3d) and _salvou_migracao_b3d:
+            st.success(
+                f"🔄 Migração 3D concluída: {_migrados_b3d} produto(s) do Catálogo Oficial incorporado(s) "
+                f"e {_vinculados_b3d} vínculo(s) comercial(is) ajustado(s)."
+            )
+
         total_bytes_b3d = sum(max(0, int((x or {}).get("arquivo_tamanho") or 0)) for x in biblioteca_b3d if isinstance(x, dict))
         _contagem_nomes_b3d = _b3d_contagem_nomes(biblioteca_b3d) if _b3d_contagem_nomes else {}
         _ids_duplicados_b3d = _b3d_ids_duplicados(biblioteca_b3d) if _b3d_ids_duplicados else set()
         _grupos_duplicados_b3d = sum(1 for qtd in _contagem_nomes_b3d.values() if qtd > 1)
-        _catalogo_oficial_b3d = carregar_catalogo()
         _ids_publicados_b3d = _biblioteca3d_ids_publicados(_catalogo_oficial_b3d)
         bm1, bm2, bm3, bm4 = st.columns(4)
         bm1.metric("Modelos salvos", len(biblioteca_b3d))
         bm2.metric("No site", sum(1 for x in biblioteca_b3d if str((x or {}).get("id") or "").strip() in _ids_publicados_b3d))
         bm3.metric("Nomes duplicados", _grupos_duplicados_b3d)
         bm4.metric("Arquivos preservados", _b3d_tamanho_legivel(total_bytes_b3d) if _b3d_tamanho_legivel else "—")
-        st.caption("🔤 Catálogo 3D exibido e salvo em ordem alfabética (A–Z).")
+        st.caption("🔤 Catálogo 3D em ordem A–Z · produtos 3D do Catálogo Oficial são incorporados automaticamente · alterações comerciais são espelhadas para propostas e site.")
 
         if biblioteca_b3d:
-            if st.button("🌐 Sincronizar Catálogo 3D com a categoria Impressão 3D do site", type="primary", use_container_width=True, key="biblioteca3d_sync_site_hf657"):
+            if st.button("🔄 Sincronizar Catálogo 3D → Propostas e Site", type="primary", use_container_width=True, key="biblioteca3d_sync_site_hf657"):
                 catalogo_sync_b3d = carregar_catalogo()
                 criados_b3d = atualizados_b3d = falhas_b3d = pulados_dup_b3d = 0
                 vistos_nome_b3d = set()
@@ -29970,10 +30144,16 @@ if pagina_atual == "biblioteca_3d":
                     format_func=lambda item_id: str((mapa_c3d.get(str(item_id)) or {}).get("nome") or "Modelo 3D"),
                     key="catalogo3d_modelos_hf23",
                 )
-                mostrar_wpp_c3d = st.checkbox(
+                gc1_c3d, gc2_c3d = st.columns(2)
+                mostrar_wpp_c3d = gc1_c3d.checkbox(
                     "Mostrar botão de consulta pelo WhatsApp",
                     value=True,
                     key="catalogo3d_whatsapp_hf23",
+                )
+                mostrar_precos_c3d = gc2_c3d.checkbox(
+                    "Mostrar preços cadastrados",
+                    value=True,
+                    key="catalogo3d_precos_hf658",
                 )
                 st.caption(f"Seleção atual: {len(selecionados_c3d)} de {len(ids_c3d)} modelo(s).")
 
@@ -29983,6 +30163,7 @@ if pagina_atual == "biblioteca_3d":
                         "titulo": str(titulo_c3d or "").strip(),
                         "subtitulo": str(subtitulo_c3d or "").strip(),
                         "whatsapp": bool(mostrar_wpp_c3d),
+                        "precos": bool(mostrar_precos_c3d),
                     },
                     ensure_ascii=False,
                     sort_keys=True,
@@ -30010,7 +30191,7 @@ if pagina_atual == "biblioteca_3d":
                             produtos_c3d,
                             titulo=str(titulo_c3d or "Catálogo 3D AlphaFest").strip() or "Catálogo 3D AlphaFest",
                             subtitulo=str(subtitulo_c3d or "").strip(),
-                            mostrar_precos=False,
+                            mostrar_precos=bool(mostrar_precos_c3d),
                             mostrar_material=True,
                             mostrar_descricao=True,
                             mostrar_whatsapp=bool(mostrar_wpp_c3d),
@@ -30057,14 +30238,49 @@ if pagina_atual == "biblioteca_3d":
 
         with st.expander("➕ Salvar novo modelo 3D", expanded=not bool(biblioteca_b3d)):
             st.caption("Cadastre somente o essencial. A imagem é uma referência visual e o arquivo 3D é a cópia preservada.")
+            _cats_site_b3d = sorted({
+                str(cat).strip()
+                for _p_b3d in (_catalogo_oficial_b3d or []) if isinstance(_p_b3d, dict)
+                for cat in _site_categorias_produto(_p_b3d)
+                if str(cat).strip() and normalizar_identidade_produto(cat) != normalizar_identidade_produto("IMPRESSÃO 3D")
+            }, key=str.casefold)
             with st.form("biblioteca_3d_novo_form", clear_on_submit=False):
-                nome_b3d = st.text_input("Nome *", placeholder="Ex.: Zebra tricotada")
-                descricao_b3d = st.text_area(
-                    "Descrição",
+                st.markdown("#### Dados comerciais")
+                nc1_b3d, nc2_b3d = st.columns(2)
+                nome_b3d = nc1_b3d.text_input("Nome *", placeholder="Ex.: Zebra tricotada")
+                subcategoria_b3d = nc1_b3d.text_input("Subcategoria", value="MODELOS 3D")
+                preco_b3d = nc1_b3d.text_input("Preço sugerido", placeholder="Ex.: 25,00")
+                custo_b3d = nc1_b3d.text_input("Custo (opcional)")
+                material_b3d = nc1_b3d.text_input("Material / composição", placeholder="Ex.: PLA")
+                tempo_producao_b3d = nc1_b3d.text_input("Tempo médio de produção", placeholder="Ex.: 2 horas")
+                descricao_curta_b3d = nc2_b3d.text_area("Descrição curta", height=95)
+                descricao_b3d = nc2_b3d.text_area(
+                    "Descrição completa",
                     placeholder="Ex.: Zebra estilo tricô, ideal para lembrancinha ou decoração.",
-                    height=110,
+                    height=145,
                 )
+                variacoes_b3d = nc2_b3d.text_area("Variações / opções (uma por linha)", height=80)
+                aliases_b3d = nc2_b3d.text_area("Nomes alternativos / aliases (um por linha)", height=80)
+                palavras_b3d = nc2_b3d.text_input("Palavras-chave", placeholder="Ex.: lembrancinha, chaveiro, animal")
                 tempo_b3d = st.text_input("Tempo de impressão", placeholder="Ex.: 3h 20min")
+                campanhas_b3d = st.multiselect(
+                    "Campanhas / datas permitidas",
+                    CAMPANHAS_PRODUTO_OPCOES,
+                    default=[],
+                    key="biblioteca3d_campanhas_novo_hf658",
+                )
+                extras_b3d = st.multiselect(
+                    "Exibir também nestas categorias do site",
+                    _cats_site_b3d,
+                    default=[],
+                    key="biblioteca3d_extras_novo_hf658",
+                )
+                sn1_b3d, sn2_b3d, sn3_b3d = st.columns(3)
+                publicar_site_b3d = sn1_b3d.checkbox("Publicar no site", value=True)
+                exibir_preco_b3d = sn2_b3d.checkbox("Mostrar preço no site", value=False)
+                destaque_b3d = sn3_b3d.checkbox("Destaque", value=False)
+
+                st.markdown("#### Arquivos 3D")
                 bc1, bc2 = st.columns(2)
                 imagem_b3d = bc1.file_uploader(
                     "1 imagem *",
@@ -30140,10 +30356,40 @@ if pagina_atual == "biblioteca_3d":
                             delete_private_3d_file(arquivo_path_b3d)
                             st.error(f"Não foi possível validar o cadastro: {exc}")
                         else:
+                            novo_b3d["catalogo_comercial"] = {
+                                "Categoria": "IMPRESSÃO 3D",
+                                "Subcategoria": str(subcategoria_b3d or "MODELOS 3D").strip() or "MODELOS 3D",
+                                "Descricao": str(descricao_curta_b3d or descricao_b3d or "").strip(),
+                                "DescricaoCurta": str(descricao_curta_b3d or "").strip(),
+                                "DescricaoCompleta": str(descricao_b3d or "").strip(),
+                                "Preco": str(preco_b3d or "").strip(),
+                                "Custo": str(custo_b3d or "").strip(),
+                                "Material": str(material_b3d or "").strip(),
+                                "TempoProducao": str(tempo_producao_b3d or tempo_b3d or "").strip(),
+                                "Variacoes": [x.strip() for x in str(variacoes_b3d or "").splitlines() if x.strip()],
+                                "Aliases": [x.strip() for x in str(aliases_b3d or "").splitlines() if x.strip()],
+                                "CampanhasPermitidas": list(dict.fromkeys(campanhas_b3d)),
+                                "Processos": ["Impressão 3D"],
+                                "CamposPersonalizacao": [],
+                                "ObservacaoInterna": "",
+                                "PalavrasChave": str(palavras_b3d or "").strip(),
+                                "PublicarSite": bool(publicar_site_b3d),
+                                "ExibirPrecoSite": bool(exibir_preco_b3d),
+                                "Destaque": bool(destaque_b3d),
+                                "CarrosselSite": False,
+                                "CategoriasExtrasSite": list(dict.fromkeys(str(x).strip() for x in extras_b3d if str(x).strip())),
+                                "Imagens": [],
+                                "VideoCatalogo": "",
+                                "Ativo": True,
+                            }
                             nova_biblioteca_b3d = [novo_b3d] + [x for x in biblioteca_b3d if isinstance(x, dict)]
                             nova_biblioteca_b3d = _b3d_ordenar_modelos(nova_biblioteca_b3d) if _b3d_ordenar_modelos else nova_biblioteca_b3d
                             if save_document("biblioteca_3d_db", nova_biblioteca_b3d, ARQUIVO_BIBLIOTECA_3D):
-                                st.success(f"Modelo **{novo_b3d['nome']}** salvo com o arquivo 3D preservado.")
+                                catalogo_novo_b3d = carregar_catalogo()
+                                catalogo_novo_b3d, ok_cat_novo_b3d, _acao_cat_novo_b3d = _biblioteca3d_aplicar_no_catalogo(catalogo_novo_b3d, novo_b3d)
+                                if ok_cat_novo_b3d:
+                                    salvar_catalogo(catalogo_novo_b3d)
+                                st.success(f"Modelo **{novo_b3d['nome']}** salvo e espelhado no Catálogo Oficial para orçamentos e site.")
                                 st.session_state.pop("_biblioteca3d_download_id", None)
                                 st.session_state.pop("_biblioteca3d_download_bytes", None)
                                 st.rerun()
@@ -30168,6 +30414,7 @@ if pagina_atual == "biblioteca_3d":
             st.caption(f"{len(modelos_b3d)} modelo(s) encontrado(s).")
             for _idx_b3d, modelo_b3d in enumerate(modelos_b3d[:100]):
                 _id_b3d = str(modelo_b3d.get("id") or f"item{_idx_b3d}")
+                _com_b3d = _biblioteca3d_comercial(modelo_b3d)
                 with st.container(border=True):
                     bi1, bi2 = st.columns([1.15, 3.85])
                     imagem_bytes_b3d = _biblioteca3d_bytes_cache(str(modelo_b3d.get("imagem_path") or ""))
@@ -30177,42 +30424,219 @@ if pagina_atual == "biblioteca_3d":
                         except Exception:
                             bi1.caption("🖼️ Imagem salva")
                     else:
-                        bi1.caption("🖼️ Imagem indisponível no momento")
+                        _img_publica_b3d = str(modelo_b3d.get("imagem_publica") or "").strip()
+                        if not _img_publica_b3d:
+                            _imgs_com_b3d = [str(x).strip() for x in (_com_b3d.get("Imagens") or []) if str(x).strip()]
+                            _img_publica_b3d = _imgs_com_b3d[0] if _imgs_com_b3d else ""
+                        if _img_publica_b3d:
+                            try:
+                                bi1.image(_img_publica_b3d, use_container_width=True)
+                                bi1.caption("Imagem do Catálogo Oficial")
+                            except Exception:
+                                bi1.caption("🖼️ Imagem cadastrada")
+                        else:
+                            bi1.caption("🖼️ Sem imagem")
 
                     bi2.markdown(f"#### {html.escape(str(modelo_b3d.get('nome') or 'Modelo 3D'))}")
-                    if str(modelo_b3d.get("descricao") or "").strip():
-                        bi2.write(str(modelo_b3d.get("descricao") or ""))
-                    tempo_txt_b3d = str(modelo_b3d.get("tempo_impressao") or "").strip() or "Não informado"
-                    arq_nome_b3d = str(modelo_b3d.get("arquivo_nome") or "arquivo 3D")
-                    arq_tam_b3d = _b3d_tamanho_legivel(modelo_b3d.get("arquivo_tamanho") or 0) if _b3d_tamanho_legivel else ""
-                    bi2.caption(f"⏱️ Tempo de impressão: {tempo_txt_b3d} · 📦 {arq_nome_b3d} · {arq_tam_b3d}")
+                    _desc_lista_b3d = str(_com_b3d.get("DescricaoCurta") or modelo_b3d.get("descricao") or "").strip()
+                    if _desc_lista_b3d:
+                        bi2.write(_desc_lista_b3d)
+                    _preco_lista_b3d = str(_com_b3d.get("Preco") or "").strip()
+                    _subcat_lista_b3d = str(_com_b3d.get("Subcategoria") or "MODELOS 3D").strip()
+                    bi2.caption(
+                        f"💰 {formatar_preco_catalogo(_preco_lista_b3d) if _preco_lista_b3d else 'Preço sob consulta'}"
+                        f" · 🗂️ {_subcat_lista_b3d}"
+                        f" · 🌐 {'Site' if _com_b3d.get('PublicarSite') else 'Fora do site'}"
+                        f" · {'Preço visível' if _com_b3d.get('ExibirPrecoSite') else 'Preço oculto'}"
+                    )
+                    tempo_txt_b3d = str(modelo_b3d.get("tempo_impressao") or "").strip() or str(_com_b3d.get("TempoProducao") or "").strip() or "Não informado"
+                    _tem_arquivo_b3d = bool(str(modelo_b3d.get("arquivo_path") or "").strip())
+                    arq_nome_b3d = str(modelo_b3d.get("arquivo_nome") or "").strip() or "arquivo 3D ainda não anexado"
+                    arq_tam_b3d = _b3d_tamanho_legivel(modelo_b3d.get("arquivo_tamanho") or 0) if (_b3d_tamanho_legivel and _tem_arquivo_b3d) else ""
+                    bi2.caption(f"⏱️ Tempo de impressão: {tempo_txt_b3d} · 📦 {arq_nome_b3d}" + (f" · {arq_tam_b3d}" if arq_tam_b3d else ""))
                     if _id_b3d in _ids_duplicados_b3d:
                         bi2.warning("⚠️ Existe outro item com este mesmo nome no Catálogo 3D.")
                     if _id_b3d in _ids_publicados_b3d:
-                        bi2.success("🌐 Já vinculado à categoria Impressão 3D do site.")
+                        bi2.success("🌐 Vinculado ao Catálogo Oficial e à categoria Impressão 3D do site.")
+                    elif bool(_com_b3d.get("PublicarSite")):
+                        bi2.info("🌐 Marcado para o site; sincronize/publice para atualizar a vitrine.")
 
-                    ba1_b3d, ba2_b3d, ba3_b3d = bi2.columns(3)
+                    ba1_b3d, ba2_b3d, ba3_b3d, ba4_b3d = bi2.columns(4)
                     preparar_b3d = ba1_b3d.button(
-                        "⬇️ Preparar arquivo",
+                        "⬇️ Arquivo",
                         key=f"biblioteca3d_preparar_{_id_b3d}",
                         use_container_width=True,
+                        disabled=not _tem_arquivo_b3d,
                     )
-                    publicar_b3d = ba2_b3d.button(
-                        "🌐 Enviar ao site",
+                    editar_b3d = ba2_b3d.button(
+                        "✏️ Editar",
+                        key=f"biblioteca3d_editar_{_id_b3d}",
+                        use_container_width=True,
+                    )
+                    publicar_b3d = ba3_b3d.button(
+                        "🔄 Sincronizar",
                         key=f"biblioteca3d_site_{_id_b3d}",
                         use_container_width=True,
                     )
-                    excluir_b3d = ba3_b3d.button(
+                    excluir_b3d = ba4_b3d.button(
                         "🗑️ Excluir",
                         key=f"biblioteca3d_excluir_{_id_b3d}",
                         use_container_width=True,
                     )
 
+                    if editar_b3d:
+                        st.session_state["_biblioteca3d_editar_id"] = _id_b3d
+
+                    if st.session_state.get("_biblioteca3d_editar_id") == _id_b3d:
+                        st.markdown("##### ✏️ Configurações do produto 3D")
+                        _catalogo_ed_b3d = carregar_catalogo()
+                        _cats_ed_b3d = sorted({
+                            str(cat).strip()
+                            for _p_ed_b3d in (_catalogo_ed_b3d or []) if isinstance(_p_ed_b3d, dict)
+                            for cat in _site_categorias_produto(_p_ed_b3d)
+                            if str(cat).strip() and normalizar_identidade_produto(cat) != normalizar_identidade_produto("IMPRESSÃO 3D")
+                        } | {str(x).strip() for x in (_com_b3d.get("CategoriasExtrasSite") or []) if str(x).strip()}, key=str.casefold)
+                        with st.form(f"biblioteca3d_editar_form_{_id_b3d}", clear_on_submit=False):
+                            ec1_b3d, ec2_b3d = st.columns(2)
+                            ed_nome_b3d = ec1_b3d.text_input("Nome", value=str(modelo_b3d.get("nome") or ""))
+                            ed_subcat_b3d = ec1_b3d.text_input("Subcategoria", value=str(_com_b3d.get("Subcategoria") or "MODELOS 3D"))
+                            ed_preco_b3d = ec1_b3d.text_input("Preço sugerido", value=str(_com_b3d.get("Preco") or ""))
+                            ed_custo_b3d = ec1_b3d.text_input("Custo (opcional)", value=str(_com_b3d.get("Custo") or ""))
+                            ed_material_b3d = ec1_b3d.text_input("Material / composição", value=str(_com_b3d.get("Material") or ""))
+                            ed_tempo_prod_b3d = ec1_b3d.text_input("Tempo médio de produção", value=str(_com_b3d.get("TempoProducao") or ""))
+                            ed_tempo_imp_b3d = ec1_b3d.text_input("Tempo de impressão", value=str(modelo_b3d.get("tempo_impressao") or ""))
+                            ed_desc_curta_b3d = ec2_b3d.text_area("Descrição curta", value=str(_com_b3d.get("DescricaoCurta") or modelo_b3d.get("descricao") or ""), height=90)
+                            ed_desc_b3d = ec2_b3d.text_area("Descrição completa", value=str(_com_b3d.get("DescricaoCompleta") or modelo_b3d.get("descricao") or ""), height=145)
+                            ed_variacoes_b3d = ec2_b3d.text_area("Variações / opções", value="\n".join(str(x) for x in (_com_b3d.get("Variacoes") or []) if str(x).strip()), height=80)
+                            ed_aliases_b3d = ec2_b3d.text_area("Aliases", value="\n".join(str(x) for x in (_com_b3d.get("Aliases") or []) if str(x).strip()), height=80)
+                            ed_palavras_b3d = ec2_b3d.text_input("Palavras-chave", value=str(_com_b3d.get("PalavrasChave") or ""))
+                            ed_processos_b3d = st.text_area("Processos (um por linha)", value="\n".join(str(x) for x in (_com_b3d.get("Processos") or ["Impressão 3D"]) if str(x).strip()), height=75)
+                            ed_personalizacao_b3d = st.text_area("Campos de personalização (um por linha)", value="\n".join(str(x) for x in (_com_b3d.get("CamposPersonalizacao") or []) if str(x).strip()), height=75)
+                            ed_obs_b3d = st.text_area("Observação interna", value=str(_com_b3d.get("ObservacaoInterna") or ""), height=70)
+                            ed_campanhas_b3d = st.multiselect(
+                                "Campanhas / datas permitidas",
+                                CAMPANHAS_PRODUTO_OPCOES,
+                                default=[x for x in (_com_b3d.get("CampanhasPermitidas") or []) if x in CAMPANHAS_PRODUTO_OPCOES],
+                                key=f"biblioteca3d_ed_camp_{_id_b3d}",
+                            )
+                            ed_extras_b3d = st.multiselect(
+                                "Exibir também nestas categorias do site",
+                                _cats_ed_b3d,
+                                default=[x for x in (_com_b3d.get("CategoriasExtrasSite") or []) if x in _cats_ed_b3d],
+                                key=f"biblioteca3d_ed_extras_{_id_b3d}",
+                            )
+                            et1_b3d, et2_b3d, et3_b3d, et4_b3d = st.columns(4)
+                            ed_publicar_b3d = et1_b3d.checkbox("Publicar no site", value=bool(_com_b3d.get("PublicarSite", True)))
+                            ed_exibir_preco_b3d = et2_b3d.checkbox("Mostrar preço", value=bool(_com_b3d.get("ExibirPrecoSite", False)))
+                            ed_destaque_b3d = et3_b3d.checkbox("Destaque", value=bool(_com_b3d.get("Destaque", False)))
+                            ed_ativo_b3d = et4_b3d.checkbox("Ativo", value=bool(_com_b3d.get("Ativo", True)))
+                            ef1_b3d, ef2_b3d = st.columns(2)
+                            ed_imagem_b3d = ef1_b3d.file_uploader(
+                                "Trocar/adicionar imagem (opcional)", type=["png", "jpg", "jpeg", "webp"], key=f"biblioteca3d_ed_img_{_id_b3d}"
+                            )
+                            ed_arquivo_b3d = ef2_b3d.file_uploader(
+                                "Trocar/adicionar arquivo 3D (opcional)",
+                                type=["3mf", "stl", "obj", "step", "stp", "amf", "zip", "rar", "7z", "gcode", "bgcode"],
+                                key=f"biblioteca3d_ed_arq_{_id_b3d}",
+                            )
+                            es1_b3d, es2_b3d = st.columns(2)
+                            salvar_ed_b3d = es1_b3d.form_submit_button("💾 Salvar alterações", type="primary", use_container_width=True)
+                            cancelar_ed_b3d = es2_b3d.form_submit_button("↩️ Fechar", use_container_width=True)
+
+                        if cancelar_ed_b3d:
+                            st.session_state.pop("_biblioteca3d_editar_id", None)
+                            st.rerun()
+
+                        if salvar_ed_b3d:
+                            if not str(ed_nome_b3d or "").strip():
+                                st.error("Informe o nome do produto 3D.")
+                            elif ed_imagem_b3d is not None and not _b3d_imagem_valida(getattr(ed_imagem_b3d, "name", "")):
+                                st.error("A imagem precisa ser PNG, JPG, JPEG ou WEBP.")
+                            elif ed_arquivo_b3d is not None and not _b3d_arquivo_valido(getattr(ed_arquivo_b3d, "name", "")):
+                                st.error("Formato de arquivo 3D não suportado.")
+                            else:
+                                _atual_b3d = dict(modelo_b3d)
+                                _novo_img_path_b3d = ""
+                                _novo_arq_path_b3d = ""
+                                if ed_imagem_b3d is not None:
+                                    _novo_img_path_b3d = upload_private_3d_file(ed_imagem_b3d, folder=f"modelos/{_id_b3d}/imagem")
+                                    if not _novo_img_path_b3d:
+                                        st.error("Não foi possível salvar a nova imagem.")
+                                        st.stop()
+                                if ed_arquivo_b3d is not None:
+                                    _novo_arq_path_b3d = upload_private_3d_file(ed_arquivo_b3d, folder=f"modelos/{_id_b3d}/arquivo")
+                                    if not _novo_arq_path_b3d:
+                                        if _novo_img_path_b3d:
+                                            delete_private_3d_file(_novo_img_path_b3d)
+                                        st.error("Não foi possível salvar o novo arquivo 3D.")
+                                        st.stop()
+
+                                _atual_b3d["nome"] = str(ed_nome_b3d).strip()
+                                _atual_b3d["descricao"] = str(ed_desc_b3d or ed_desc_curta_b3d or "").strip()
+                                _atual_b3d["tempo_impressao"] = str(ed_tempo_imp_b3d or "").strip()
+                                _atual_b3d["atualizado_em"] = agora_local().isoformat(timespec="seconds")
+                                if _novo_img_path_b3d:
+                                    _atual_b3d["imagem_path"] = _novo_img_path_b3d
+                                if _novo_arq_path_b3d:
+                                    _atual_b3d["arquivo_path"] = _novo_arq_path_b3d
+                                    _atual_b3d["arquivo_nome"] = Path(str(getattr(ed_arquivo_b3d, "name", "modelo.3mf"))).name
+                                    _atual_b3d["arquivo_tamanho"] = len(bytes(ed_arquivo_b3d.getbuffer()))
+                                _atual_b3d["catalogo_comercial"] = {
+                                    **_com_b3d,
+                                    "Categoria": "IMPRESSÃO 3D",
+                                    "Subcategoria": str(ed_subcat_b3d or "MODELOS 3D").strip() or "MODELOS 3D",
+                                    "Descricao": str(ed_desc_curta_b3d or ed_desc_b3d or "").strip(),
+                                    "DescricaoCurta": str(ed_desc_curta_b3d or "").strip(),
+                                    "DescricaoCompleta": str(ed_desc_b3d or "").strip(),
+                                    "Preco": str(ed_preco_b3d or "").strip(),
+                                    "Custo": str(ed_custo_b3d or "").strip(),
+                                    "Material": str(ed_material_b3d or "").strip(),
+                                    "TempoProducao": str(ed_tempo_prod_b3d or "").strip(),
+                                    "Variacoes": [x.strip() for x in str(ed_variacoes_b3d or "").splitlines() if x.strip()],
+                                    "Aliases": [x.strip() for x in str(ed_aliases_b3d or "").splitlines() if x.strip()],
+                                    "CampanhasPermitidas": list(dict.fromkeys(ed_campanhas_b3d)),
+                                    "Processos": list(dict.fromkeys(x.strip() for x in str(ed_processos_b3d or "").splitlines() if x.strip())) or ["Impressão 3D"],
+                                    "CamposPersonalizacao": list(dict.fromkeys(x.strip() for x in str(ed_personalizacao_b3d or "").splitlines() if x.strip())),
+                                    "ObservacaoInterna": str(ed_obs_b3d or "").strip(),
+                                    "PalavrasChave": str(ed_palavras_b3d or "").strip(),
+                                    "PublicarSite": bool(ed_publicar_b3d),
+                                    "ExibirPrecoSite": bool(ed_exibir_preco_b3d),
+                                    "Destaque": bool(ed_destaque_b3d),
+                                    "Ativo": bool(ed_ativo_b3d),
+                                    "CategoriasExtrasSite": list(dict.fromkeys(str(x).strip() for x in ed_extras_b3d if str(x).strip())),
+                                }
+                                _lista_ed_b3d = []
+                                for _x_ed_b3d in biblioteca_b3d:
+                                    if isinstance(_x_ed_b3d, dict) and str(_x_ed_b3d.get("id") or "").strip() == _id_b3d:
+                                        _lista_ed_b3d.append(_atual_b3d)
+                                    elif isinstance(_x_ed_b3d, dict):
+                                        _lista_ed_b3d.append(dict(_x_ed_b3d))
+                                _lista_ed_b3d = _b3d_ordenar_modelos(_lista_ed_b3d) if _b3d_ordenar_modelos else _lista_ed_b3d
+                                if save_document("biblioteca_3d_db", _lista_ed_b3d, ARQUIVO_BIBLIOTECA_3D):
+                                    _cat_ed_b3d = carregar_catalogo()
+                                    _cat_ed_b3d, _ok_cat_ed_b3d, _acao_cat_ed_b3d = _biblioteca3d_aplicar_no_catalogo(_cat_ed_b3d, _atual_b3d)
+                                    if _ok_cat_ed_b3d and salvar_catalogo(_cat_ed_b3d):
+                                        if _novo_img_path_b3d and str(modelo_b3d.get("imagem_path") or "").strip():
+                                            delete_private_3d_file(str(modelo_b3d.get("imagem_path") or ""))
+                                        if _novo_arq_path_b3d and str(modelo_b3d.get("arquivo_path") or "").strip():
+                                            delete_private_3d_file(str(modelo_b3d.get("arquivo_path") or ""))
+                                        st.session_state.pop("_biblioteca3d_editar_id", None)
+                                        st.success("Produto 3D atualizado. O mesmo preço e configurações já foram espelhados para as propostas e para o site.")
+                                        st.rerun()
+                                    else:
+                                        st.error("O Catálogo 3D foi salvo, mas o espelho comercial não pôde ser atualizado. Tente sincronizar novamente.")
+                                else:
+                                    if _novo_img_path_b3d:
+                                        delete_private_3d_file(_novo_img_path_b3d)
+                                    if _novo_arq_path_b3d:
+                                        delete_private_3d_file(_novo_arq_path_b3d)
+                                    st.error("Não foi possível salvar as alterações do Catálogo 3D.")
+
                     if publicar_b3d:
                         catalogo_um_b3d = carregar_catalogo()
                         catalogo_um_b3d, ok_um_b3d, acao_um_b3d = _biblioteca3d_aplicar_no_catalogo(catalogo_um_b3d, modelo_b3d)
                         if ok_um_b3d and salvar_catalogo(catalogo_um_b3d):
-                            st.success("Modelo enviado ao Catálogo Oficial em **IMPRESSÃO 3D**. Publique o site para colocar no ar.")
+                            st.success("Produto 3D sincronizado com o Catálogo Oficial. Para refletir no site público, use **Publicar site agora**.")
                             st.rerun()
                         elif not ok_um_b3d:
                             st.error("Não foi possível preparar a imagem pública deste modelo.")
@@ -30221,7 +30645,7 @@ if pagina_atual == "biblioteca_3d":
                         st.session_state["_biblioteca3d_confirmar_exclusao"] = _id_b3d
 
                     if st.session_state.get("_biblioteca3d_confirmar_exclusao") == _id_b3d:
-                        st.warning("Excluir este item do Catálogo 3D e apagar a cópia privada do arquivo? Se já estiver no site, o produto do Catálogo Oficial não será apagado automaticamente.")
+                        st.warning("Excluir este produto 3D? O item vinculado também será retirado do Catálogo Oficial para não voltar pela migração automática. Propostas antigas não são alteradas.")
                         bx1_b3d, bx2_b3d = st.columns(2)
                         if bx1_b3d.button("✅ Confirmar exclusão", key=f"biblioteca3d_confirmar_{_id_b3d}", use_container_width=True):
                             nova_lista_b3d = [
@@ -30229,14 +30653,19 @@ if pagina_atual == "biblioteca_3d":
                                 if isinstance(x, dict) and str(x.get("id") or "").strip() != _id_b3d
                             ]
                             nova_lista_b3d = _b3d_ordenar_modelos(nova_lista_b3d) if _b3d_ordenar_modelos else nova_lista_b3d
-                            if save_document("biblioteca_3d_db", nova_lista_b3d, ARQUIVO_BIBLIOTECA_3D):
+                            _cat_del_b3d = [
+                                dict(x) if isinstance(x, dict) else x
+                                for x in carregar_catalogo()
+                                if not (isinstance(x, dict) and str(x.get("biblioteca_3d_id") or "").strip() == _id_b3d)
+                            ]
+                            if save_document("biblioteca_3d_db", nova_lista_b3d, ARQUIVO_BIBLIOTECA_3D) and salvar_catalogo(_cat_del_b3d):
                                 delete_private_3d_file(str(modelo_b3d.get("imagem_path") or ""))
                                 delete_private_3d_file(str(modelo_b3d.get("arquivo_path") or ""))
                                 if st.session_state.get("_biblioteca3d_download_id") == _id_b3d:
                                     st.session_state.pop("_biblioteca3d_download_id", None)
                                     st.session_state.pop("_biblioteca3d_download_bytes", None)
                                 st.session_state.pop("_biblioteca3d_confirmar_exclusao", None)
-                                st.success("Item removido do Catálogo 3D.")
+                                st.success("Produto removido do Catálogo 3D e do espelho comercial.")
                                 st.rerun()
                         if bx2_b3d.button("↩️ Cancelar", key=f"biblioteca3d_cancelar_exclusao_{_id_b3d}", use_container_width=True):
                             st.session_state.pop("_biblioteca3d_confirmar_exclusao", None)
@@ -33923,6 +34352,14 @@ if pagina_atual == "catalogo":
         st.subheader(titulo_form)
         if item_edicao:
             st.info(f"Editando: {item_edicao.get('Nome', 'Produto')}")
+            if _biblioteca3d_produto_eh_3d(item_edicao) and str(item_edicao.get("biblioteca_3d_id") or "").strip():
+                st.warning(
+                    "🧊 Este produto é gerenciado pelo Catálogo 3D. O registro daqui é o espelho usado por propostas e site. "
+                    "Para evitar divergência de preço/configuração, prefira editar pelo Catálogo 3D."
+                )
+                if st.button("🧊 Abrir este produto no Catálogo 3D", key=f"cat_abrir_3d_{sufixo}", use_container_width=True):
+                    st.session_state["_biblioteca3d_editar_id"] = str(item_edicao.get("biblioteca_3d_id") or "").strip()
+                    rerun_na_aba("biblioteca_3d")
         elif prefill_i8:
             st.success(
                 "✅ **PASSO 2/2 — Cadastro preparado.** Confira os dados abaixo, informe/atualize o "

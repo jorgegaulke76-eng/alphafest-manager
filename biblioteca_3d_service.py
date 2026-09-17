@@ -133,23 +133,40 @@ def selecionar_modelos(modelos: Iterable[dict], ids_selecionados: Iterable[str])
 
 
 def modelo_para_produto_catalogo(modelo: dict, imagem_data_uri: str = "") -> dict:
-    """Projeta um registro privado em um item seguro para o Catálogo 3D.
+    """Projeta um registro 3D em produto seguro para catálogo de cliente.
 
-    Deliberadamente não copia ``arquivo_path``, ``arquivo_nome`` nem tamanho do
-    arquivo. O catálogo para cliente recebe somente os dados visuais/comerciais
-    combinados com o Jorge: nome, descrição, tempo e uma imagem.
+    Mantém o arquivo 3D privado, mas reaproveita as configurações comerciais
+    que também alimentam Orçamentos e Site.
     """
     modelo = dict(modelo or {})
+    comercial = dict(modelo.get("catalogo_comercial") or {})
     tempo = sanitizar_texto(modelo.get("tempo_impressao"), 120)
+    descricao_curta = sanitizar_texto(
+        comercial.get("DescricaoCurta") or modelo.get("descricao"), 2500
+    )
+    descricao_completa = sanitizar_texto(
+        comercial.get("DescricaoCompleta") or comercial.get("Descricao") or modelo.get("descricao"), 4000
+    )
+    imagens = []
+    if str(imagem_data_uri or "").strip():
+        imagens.append(str(imagem_data_uri).strip())
+    for ref in comercial.get("Imagens") or []:
+        ref = str(ref or "").strip()
+        if ref and ref not in imagens:
+            imagens.append(ref)
     produto = {
         "Nome": sanitizar_texto(modelo.get("nome"), 180) or "Modelo 3D",
-        "Categoria": "Modelos 3D",
-        "Subcategoria": "Impressão 3D",
-        "DescricaoCurta": sanitizar_texto(modelo.get("descricao"), 2500),
-        "Descricao": sanitizar_texto(modelo.get("descricao"), 2500),
-        "Material": f"Tempo de impressão: {tempo}" if tempo else "Tempo de impressão: consultar",
-        "Imagens": [str(imagem_data_uri).strip()] if str(imagem_data_uri or "").strip() else [],
-        "Ativo": True,
+        "Categoria": "IMPRESSÃO 3D",
+        "Subcategoria": sanitizar_texto(comercial.get("Subcategoria") or "MODELOS 3D", 180),
+        "DescricaoCurta": descricao_curta,
+        "Descricao": descricao_curta or descricao_completa,
+        "DescricaoCompleta": descricao_completa,
+        "Preco": sanitizar_texto(comercial.get("Preco"), 80),
+        "Material": sanitizar_texto(comercial.get("Material"), 500) or (f"Tempo de impressão: {tempo}" if tempo else ""),
+        "TempoProducao": sanitizar_texto(comercial.get("TempoProducao"), 120),
+        "Variacoes": [sanitizar_texto(x, 180) for x in (comercial.get("Variacoes") or []) if sanitizar_texto(x, 180)],
+        "Imagens": imagens[:5],
+        "Ativo": bool(comercial.get("Ativo", True)),
         "biblioteca_3d_id": str(modelo.get("id") or "").strip(),
     }
     return produto
