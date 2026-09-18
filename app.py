@@ -11977,26 +11977,33 @@ def renderizar_galeria_trabalhos(catalogo):
     )
     categorias_disponiveis_gal = _galeria_categorias_disponiveis(catalogo, galeria)
 
+    # HF65.10 — cada salvamento inaugura uma nova geração de chaves dos widgets.
+    # Isso força o Streamlit a abrir um formulário realmente limpo após guardar um trabalho,
+    # inclusive selectbox, campos de texto, multiselects, checkboxes e uploader.
+    galeria_form_rev = int(st.session_state.get("_hf6510_galeria_form_rev", 0) or 0)
+    def _galeria_form_key(base):
+        return f"{base}_{galeria_form_rev}"
+
     with st.expander("➕ Registrar fotos do trabalho do dia", expanded=not bool(ativos)):
         st.caption("Você pode vincular ao Catálogo Oficial para herdar Categoria e Subcategoria automaticamente.")
         produto_escolhido = st.selectbox(
             "Produto do Catálogo (opcional)",
             ["— selecionar / trabalho avulso —"] + nomes_produtos,
-            key="hf461_galeria_produto",
+            key=_galeria_form_key("hf461_galeria_produto"),
         )
         produto_ref = _galeria_produto_por_nome(catalogo, produto_escolhido) if not produto_escolhido.startswith("—") else {}
         if produto_ref:
             categoria_auto = str(produto_ref.get("Categoria") or "").strip()
             subcategoria_auto = str(produto_ref.get("Subcategoria") or "").strip()
             c1, c2 = st.columns(2)
-            c1.text_input("Categoria", value=categoria_auto, disabled=True, key="hf461_categoria_auto")
-            c2.text_input("Subcategoria", value=subcategoria_auto or "Sem subcategoria", disabled=True, key="hf461_subcategoria_auto")
+            c1.text_input("Categoria", value=categoria_auto, disabled=True, key=_galeria_form_key("hf461_categoria_auto"))
+            c2.text_input("Subcategoria", value=subcategoria_auto or "Sem subcategoria", disabled=True, key=_galeria_form_key("hf461_subcategoria_auto"))
             categoria_gal = categoria_auto
             subcategoria_gal = subcategoria_auto
         else:
             c1, c2 = st.columns(2)
-            categoria_gal = c1.text_input("Categoria", key="hf461_categoria_manual", placeholder="Ex.: Festas & Personalizados")
-            subcategoria_gal = c2.text_input("Subcategoria", key="hf461_subcategoria_manual", placeholder="Ex.: Topos de bolo")
+            categoria_gal = c1.text_input("Categoria", key=_galeria_form_key("hf461_categoria_manual"), placeholder="Ex.: Festas & Personalizados")
+            subcategoria_gal = c2.text_input("Subcategoria", key=_galeria_form_key("hf461_subcategoria_manual"), placeholder="Ex.: Topos de bolo")
 
         categoria_principal_gal = str(categoria_gal or "").strip()
         opcoes_extras_novo = [
@@ -12007,7 +12014,7 @@ def renderizar_galeria_trabalhos(catalogo):
             "Exibir também em outras categorias do site (opcional)",
             opcoes_extras_novo,
             default=[],
-            key="hf58_galeria_categorias_extras_novo",
+            key=_galeria_form_key("hf58_galeria_categorias_extras_novo"),
             help=(
                 "A categoria acima continua sendo a principal. Marque aqui somente categorias adicionais "
                 "em que este mesmo trabalho também deve aparecer na Galeria do site. O trabalho não é duplicado."
@@ -12015,14 +12022,14 @@ def renderizar_galeria_trabalhos(catalogo):
         )
 
         d1, d2, d3 = st.columns(3)
-        tema_gal = d1.text_input("Tema", key="hf461_tema", placeholder="Ex.: Jardim encantado")
-        cor_gal = d2.text_input("Cor / estilo", key="hf461_cor", placeholder="Ex.: Rosa e dourado")
-        ocasiao_gal = d3.text_input("Ocasião livre (opcional)", key="hf461_ocasiao", placeholder="Ex.: Festa da escola")
+        tema_gal = d1.text_input("Tema", key=_galeria_form_key("hf461_tema"), placeholder="Ex.: Jardim encantado")
+        cor_gal = d2.text_input("Cor / estilo", key=_galeria_form_key("hf461_cor"), placeholder="Ex.: Rosa e dourado")
+        ocasiao_gal = d3.text_input("Ocasião livre (opcional)", key=_galeria_form_key("hf461_ocasiao"), placeholder="Ex.: Festa da escola")
         datas_ocasioes_gal = st.multiselect(
             "🎈 Datas & Ocasiões",
             _galeria_datas_ocasioes_disponiveis(galeria),
             default=[],
-            key="hf659_galeria_datas_ocasioes_novo",
+            key=_galeria_form_key("hf659_galeria_datas_ocasioes_novo"),
             help=(
                 "Marque uma ou mais ocasiões para esta foto aparecer na vitrine temática do site. "
                 "Ex.: Setembro Amarelo, Outubro Rosa, Batizado, Chá Revelação ou Dia dos Professores."
@@ -12033,7 +12040,7 @@ def renderizar_galeria_trabalhos(catalogo):
             "Fotos do trabalho",
             type=["png", "jpg", "jpeg", "webp"],
             accept_multiple_files=True,
-            key="hf461_fotos",
+            key=_galeria_form_key("hf461_fotos"),
             help="Até 20 fotos por envio. O mesmo trabalho pode receber novos lotes depois, sem limite total fixo no acervo.",
         )
         if fotos and len(fotos) > 20:
@@ -12041,30 +12048,30 @@ def renderizar_galeria_trabalhos(catalogo):
 
         observacao_gal = st.text_area(
             "Observação interna (opcional)",
-            key="hf461_observacao",
+            key=_galeria_form_key("hf461_observacao"),
             placeholder="Ex.: foto final antes da embalagem; cliente pediu tons mais claros.",
         )
         autorizado_gal = st.checkbox(
             "✅ Autorizado para futura exposição no site",
             value=False,
-            key="hf461_autorizado",
+            key=_galeria_form_key("hf461_autorizado"),
             help="Marque somente quando não houver impedimento de privacidade/uso da imagem.",
         )
         selecionado_gal = st.checkbox(
             "⭐ Pré-selecionar para a futura Galeria do site",
             value=False,
             disabled=not autorizado_gal,
-            key="hf461_selecionado_site",
+            key=_galeria_form_key("hf461_selecionado_site"),
             help="Ainda não publica. Apenas coloca o trabalho na fila de curadoria da futura galeria.",
         )
         destaque_gal = st.checkbox(
             "✨ Candidato a destaque",
             value=False,
             disabled=not autorizado_gal,
-            key="hf461_destaque",
+            key=_galeria_form_key("hf461_destaque"),
         )
 
-        if st.button("💾 Guardar fotos na Galeria interna", type="primary", use_container_width=True, key="hf461_salvar"):
+        if st.button("💾 Guardar fotos na Galeria interna", type="primary", use_container_width=True, key=_galeria_form_key("hf461_salvar")):
             fotos_validas = list(fotos or [])[:20]
             if not fotos_validas:
                 st.warning("Selecione pelo menos uma foto.")
@@ -12114,8 +12121,11 @@ def renderizar_galeria_trabalhos(catalogo):
                     }
                     galeria_nova = list(galeria) + [novo]
                     if salvar_galeria_trabalhos(galeria_nova):
-                        st.success(f"Fotos guardadas com segurança. Registro {novo['id']} criado; nada foi publicado no site.")
-                        st.session_state.pop("hf461_fotos", None)
+                        st.session_state["_hf55_galeria_flash"] = {
+                            "tipo": "success",
+                            "mensagem": f"Fotos guardadas com segurança. Registro {novo['id']} criado; nada foi publicado no site.",
+                        }
+                        st.session_state["_hf6510_galeria_form_rev"] = galeria_form_rev + 1
                         st.rerun()
                     else:
                         for caminho in caminhos:
@@ -27285,7 +27295,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.9",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.10",
                 )
                 return _html, _zip
 
@@ -27428,7 +27438,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.9",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.10",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59

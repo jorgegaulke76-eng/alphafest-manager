@@ -1,10 +1,7 @@
-ALPHAFEST MANAGER — HF65.9 · DATAS & OCASIÕES
+HF65.10 — RESET AUTOMÁTICO DA GALERIA
 
-1. Instale este ZIP pela Atualização Segura.
+1. Instale pela Atualização Segura.
 2. Abra Galeria de Trabalhos.
-3. Em uma foto/trabalho, marque 🎈 Datas & Ocasiões (ex.: Setembro Amarelo, Outubro Rosa, Batizado, Chá Revelação, Dia dos Professores).
-4. Marque o trabalho como autorizado/pré-selecionado para o site conforme o fluxo atual.
-5. Gere a prévia ou publique o site.
-6. Em Categorias, use o cartão 🎈 Datas & Ocasiões e confirme que a escolha leva à Galeria filtrada.
-
-Versão esperada: 20.4.9-I8.13.5-HF53.3-HF8-HF65.9
+3. Cadastre e salve uma foto/trabalho normalmente.
+4. Após salvar, o formulário deverá reaparecer totalmente limpo para o próximo trabalho.
+5. Os trabalhos já guardados permanecem preservados.

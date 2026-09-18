@@ -1,3 +1,8 @@
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.10
+- Corrige o formulário da Galeria de Trabalhos para resetar completamente após um salvamento confirmado.
+- Usa geração de chaves dos widgets para limpar inclusive uploader, seleção de produto, tema, Datas & Ocasiões e checkboxes.
+- Preserva os dados já salvos e o feedback de sucesso.
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF65.9 — Catálogo 3D A–Z + exclusão + site
 
 - Catálogo 3D passa a ser persistido e exibido em ordem alfabética (A–Z).
