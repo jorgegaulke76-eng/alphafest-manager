@@ -11888,6 +11888,105 @@ def _galeria_datas_ocasioes_disponiveis(galeria=None):
     return sorted(por_chave.values(), key=lambda x: x.casefold())
 
 
+def _hf6511_galeria_externa_para_catalogo(galeria):
+    """HF65.11: trabalhos da Galeria aptos a compor um catálogo externo para cliente."""
+    saida = []
+    for trabalho in galeria or []:
+        if not isinstance(trabalho, dict):
+            continue
+        if bool(trabalho.get("arquivado")):
+            continue
+        if not bool(trabalho.get("autorizado_publicacao")):
+            continue
+        fotos = trabalho.get("fotos") or []
+        if isinstance(fotos, str):
+            fotos = [fotos]
+        if not [x for x in fotos if str(x or "").strip()]:
+            continue
+        saida.append(trabalho)
+    return saida
+
+
+def _hf6511_datas_ocasioes_catalogo_cliente(galeria):
+    """HF65.11: mostra somente datas/ocasiões que já possuem fotos autorizadas."""
+    por_chave = {}
+    for trabalho in _hf6511_galeria_externa_para_catalogo(galeria):
+        for valor in _galeria_datas_ocasioes(trabalho):
+            texto = str(valor or "").strip()
+            if texto:
+                por_chave.setdefault(texto.casefold(), texto)
+    return sorted(por_chave.values(), key=lambda x: normalizar_identidade_produto(x))
+
+
+def _hf6511_fotos_trabalho_catalogo(trabalho):
+    """HF65.11: embute fotos privadas autorizadas no HTML sem tornar o bucket público."""
+    saida = []
+    for origem in (trabalho or {}).get("fotos") or []:
+        origem = str(origem or "").strip()
+        if not origem:
+            continue
+        if origem.startswith(("http://", "https://", "data:image/")):
+            src = origem
+        else:
+            src = _galeria_trabalho_imagem_data_uri(origem)
+        if src and src not in saida:
+            saida.append(src)
+    return saida
+
+
+def _hf6511_produto_catalogo_por_nome(catalogo, nome):
+    """HF65.11: vínculo tolerante a caixa/acentos para reaproveitar preço e descrição comercial."""
+    alvo = normalizar_identidade_produto(nome)
+    if not alvo:
+        return {}
+    for produto in catalogo or []:
+        if normalizar_identidade_produto((produto or {}).get("Nome", "")) == alvo:
+            return dict(produto or {})
+    return {}
+
+
+def _hf6511_item_catalogo_da_galeria(trabalho, catalogo):
+    """HF65.11: transforma um trabalho autorizado em item comercial, priorizando a foto real."""
+    trabalho = dict(trabalho or {})
+    nome_vinculado = str(trabalho.get("produto") or "").strip()
+    produto = _hf6511_produto_catalogo_por_nome(catalogo, nome_vinculado)
+    fotos_reais = _hf6511_fotos_trabalho_catalogo(trabalho)
+
+    if produto:
+        item = dict(produto)
+        imagens_catalogo = [str(x).strip() for x in (produto.get("Imagens") or []) if str(x).strip()]
+        item["Imagens"] = list(dict.fromkeys(fotos_reais + imagens_catalogo))
+        chave = "produto::" + normalizar_identidade_produto(item.get("Nome", ""))
+        return chave, item, len(fotos_reais)
+
+    tema = str(trabalho.get("tema") or "").strip()
+    categoria = str(trabalho.get("categoria") or "").strip() or "Datas & Ocasiões"
+    nome = nome_vinculado or (f"{categoria} — {tema}" if tema else "Trabalho realizado AlphaFest")
+    detalhes = []
+    if tema:
+        detalhes.append(f"Tema: {tema}")
+    cor = str(trabalho.get("cor") or "").strip()
+    if cor:
+        detalhes.append(f"Estilo: {cor}")
+    datas = _galeria_datas_ocasioes(trabalho)
+    if datas:
+        detalhes.append("Ocasião: " + " • ".join(datas))
+    descricao = "Trabalho realizado pela AlphaFest." + (" " + ". ".join(detalhes) + "." if detalhes else "")
+    item = {
+        "Nome": nome,
+        "Categoria": categoria,
+        "Subcategoria": str(trabalho.get("subcategoria") or "").strip(),
+        "Descricao": descricao,
+        "DescricaoCurta": descricao,
+        "Preco": "",
+        "Imagens": fotos_reais,
+        "Variacoes": [],
+        "Ativo": True,
+    }
+    chave = "galeria::" + str(trabalho.get("id") or hashlib.sha256(repr(sorted(trabalho.items())).encode("utf-8")).hexdigest()[:16])
+    return chave, item, len(fotos_reais)
+
+
 def _galeria_categorias_disponiveis(catalogo, galeria=None):
     """HF58: lista única de categorias existentes no Catálogo/Galeria."""
     por_chave = {}
@@ -27094,7 +27193,7 @@ if pagina_atual == "site":
     # HF52.1-HF3 — métricas privadas por período + funil + origem dos acessos + termos buscados.
     # Compatibilidade visual HF52.1-HF2: "Métricas privadas do Site · HF52.1-HF2".
     if pode_executar_acoes_tecnicas(obter_usuario_atual()):
-        with st.expander("📊 Métricas privadas do Site · HF52.1-HF3", expanded=False):
+        with st.expander("📊 Métricas privadas do Site · Inteligência HF65.12", expanded=False):
             st.caption("Somente usuários autorizados do Manager veem este painel. A prévia interna não é contabilizada.")
 
             def _renderizar_metricas_site_hf52_1_hf3():
@@ -27164,6 +27263,54 @@ if pagina_atual == "site":
                         "Conversões calculadas por sessão para evitar distorção por vários cliques da mesma pessoa."
                     )
 
+                    st.markdown("**Evolução dos acessos**")
+                    _tab_dia, _tab_mes, _tab_ano = st.tabs(["📅 Dia a dia", "🗓️ Mês a mês", "📈 Ano"])
+                    with _tab_dia:
+                        _df_dia = pd.DataFrame(_m.get("daily_series") or [])
+                        if not _df_dia.empty:
+                            st.line_chart(_df_dia.set_index("Período")[["Acessos", "Produtos", "WhatsApp"]], height=280)
+                            st.caption("Últimos 30 dias · acessos, produtos abertos e cliques no WhatsApp.")
+                        else:
+                            st.caption("Ainda não há dados suficientes para o gráfico diário.")
+                    with _tab_mes:
+                        _df_mes = pd.DataFrame(_m.get("monthly_series") or [])
+                        if not _df_mes.empty:
+                            st.bar_chart(_df_mes.set_index("Período")[["Acessos", "Produtos", "WhatsApp"]], height=300)
+                            st.caption("Últimos 12 meses, agrupados por mês.")
+                        else:
+                            st.caption("Ainda não há dados suficientes para o gráfico mensal.")
+                    with _tab_ano:
+                        _df_ano = pd.DataFrame(_m.get("yearly_series") or [])
+                        if not _df_ano.empty:
+                            st.bar_chart(_df_ano.set_index("Período")[["Acessos", "Produtos", "WhatsApp"]], height=280)
+                            st.caption("Comparativo anual. Os anos anteriores aparecerão automaticamente conforme o histórico crescer.")
+                        else:
+                            st.caption("Ainda não há dados suficientes para o gráfico anual.")
+
+                    st.markdown("**Quem está acessando · últimos 30 dias**")
+                    _geo1, _geo2, _geo3, _geo4 = st.columns(4)
+                    with _geo1:
+                        st.markdown("**Cidades**")
+                        if _m.get("top_cities"):
+                            for _nome, _qtd in _m["top_cities"][:6]: st.write(f"{_nome} — **{_qtd}**")
+                        else: st.caption("Cidade começa a ser registrada após publicar esta versão do site.")
+                    with _geo2:
+                        st.markdown("**Regiões / estados**")
+                        if _m.get("top_regions"):
+                            for _nome, _qtd in _m["top_regions"][:6]: st.write(f"{_nome} — **{_qtd}**")
+                        else: st.caption("Sem localização aproximada registrada ainda.")
+                    with _geo3:
+                        st.markdown("**Dispositivos**")
+                        if _m.get("devices"):
+                            for _nome, _qtd in _m["devices"][:6]: st.write(f"{_nome} — **{_qtd}**")
+                        else: st.caption("Dispositivo começa a ser registrado após publicar esta versão.")
+                    with _geo4:
+                        st.markdown("**Navegadores**")
+                        if _m.get("browsers"):
+                            for _nome, _qtd in _m["browsers"][:6]: st.write(f"{_nome} — **{_qtd}**")
+                        else: st.caption("Navegador começa a ser registrado após publicar esta versão.")
+                    st.caption("Cidade/região são aproximações fornecidas pela rede Cloudflare; não representam endereço exato. Não coletamos faixa etária por inferência.")
+
                     _ta, _tb = st.columns(2)
                     with _ta:
                         st.markdown("**Produtos mais abertos · 30 dias**")
@@ -27197,6 +27344,24 @@ if pagina_atual == "site":
                             st.caption(f"Buscas registradas · 30 dias: {_m.get('searches_30d', 0)}")
                         else:
                             st.caption("As buscas aparecerão aqui após a publicação desta versão do site.")
+
+                    st.divider()
+                    _g1, _g2, _g3 = st.columns(3)
+                    with _g1:
+                        st.markdown("**Galeria mais aberta · 30 dias**")
+                        if _m.get("top_gallery"):
+                            for _nome, _qtd in _m["top_gallery"][:6]: st.write(f"{_nome} — **{_qtd}**")
+                        else: st.caption("Os cliques nas fotos da Galeria começarão a aparecer após publicar esta versão.")
+                    with _g2:
+                        st.markdown("**Datas & Ocasiões mais usadas · 30 dias**")
+                        if _m.get("top_occasions"):
+                            for _nome, _qtd in _m["top_occasions"][:6]: st.write(f"{_nome} — **{_qtd}**")
+                        else: st.caption("Os filtros sazonais utilizados pelos visitantes aparecerão aqui.")
+                    with _g3:
+                        st.markdown("**Campanhas identificadas · 30 dias**")
+                        if _m.get("top_campaigns"):
+                            for _nome, _qtd in _m["top_campaigns"][:6]: st.write(f"{_nome} — **{_qtd}**")
+                        else: st.caption("Use links com UTM para identificar campanhas de Instagram, Google, WhatsApp e outras origens.")
                 except LookupError:
                     st.info("A estrutura de métricas ainda precisa ser criada uma única vez no Supabase. Use o arquivo SUPABASE_SITE_METRICS_HF52_1.sql incluído na atualização.")
                 except Exception as _metrics_exc:
@@ -27295,7 +27460,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.10",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.12",
                 )
                 return _html, _zip
 
@@ -27438,7 +27603,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.10",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.12",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
@@ -37852,36 +38017,62 @@ if pagina_atual == "catalogo":
             if not catalogo:
                 st.info("Cadastre produtos para gerar um catálogo.")
             else:
-                categorias_disponiveis = sorted({
-                    str(p.get("Categoria", "Sem categoria")).strip() or "Sem categoria"
-                    for p in catalogo
-                })
+                # HF65.11 — seleção comercial por Categoria E/OU Data & Ocasião E/OU Produto.
+                # Datas & Ocasiões vêm da Galeria de Trabalhos e usam somente fotos autorizadas
+                # para exposição externa. A união é deduplicada por produto e mantém as fotos
+                # reais da Galeria como prioridade quando o item também veio de outro filtro.
+                galeria_cliente_hf6511 = carregar_galeria_trabalhos()
+                galeria_externa_hf6511 = _hf6511_galeria_externa_para_catalogo(galeria_cliente_hf6511)
+
+                categorias_disponiveis = sorted(
+                    {
+                        str(p.get("Categoria", "Sem categoria")).strip() or "Sem categoria"
+                        for p in catalogo
+                        if (p or {}).get("Ativo", True)
+                    },
+                    key=normalizar_identidade_produto,
+                )
+                datas_disponiveis_hf6511 = _hf6511_datas_ocasioes_catalogo_cliente(galeria_cliente_hf6511)
+                nomes_disponiveis = sorted(
+                    {
+                        str(p.get("Nome", "Produto")).strip()
+                        for p in catalogo
+                        if (p or {}).get("Ativo", True) and str(p.get("Nome", "")).strip()
+                    },
+                    key=normalizar_identidade_produto,
+                )
+
                 titulo_cliente = st.text_input(
                     "Título do catálogo",
                     value="Seleção Alphafest",
                     key="titulo_catalogo_cliente",
                 )
-                categorias_cliente = st.multiselect(
+                st.caption(
+                    "Monte a seleção por categoria e/ou data sazonal/ocasião e/ou produto. "
+                    "Os filtros são somados e o mesmo produto entra uma única vez."
+                )
+
+                f_cat_hf6511, f_data_hf6511 = st.columns(2)
+                categorias_cliente = f_cat_hf6511.multiselect(
                     "Categorias",
                     categorias_disponiveis,
-                    default=categorias_disponiveis[:1],
+                    default=[],
                     key="categorias_catalogo_cliente",
                 )
-                produtos_base = sorted(
-                    [
-                        p for p in catalogo
-                        if (str(p.get("Categoria", "Sem categoria")).strip() or "Sem categoria")
-                        in categorias_cliente
-                    ],
-                    key=lambda p: normalizar_identidade_produto(
-                        (p or {}).get("Nome", "")
+                datas_cliente_hf6511 = f_data_hf6511.multiselect(
+                    "🎈 Datas sazonais / ocasiões",
+                    datas_disponiveis_hf6511,
+                    default=[],
+                    key="hf6511_datas_catalogo_cliente",
+                    help=(
+                        "Estas opções vêm das fotos reais cadastradas na Galeria de Trabalhos. "
+                        "Somente trabalhos autorizados para exposição externa entram no catálogo do cliente."
                     ),
                 )
-                nomes_disponiveis = [str(p.get("Nome", "Produto")) for p in produtos_base]
                 nomes_selecionados = st.multiselect(
                     "Produtos específicos",
                     nomes_disponiveis,
-                    default=nomes_disponiveis,
+                    default=[],
                     key="produtos_catalogo_cliente",
                 )
                 mostrar_precos = st.checkbox(
@@ -37889,11 +38080,88 @@ if pagina_atual == "catalogo":
                     value=True,
                     key="mostrar_precos_catalogo",
                 )
-                selecao_cliente = [
-                    p for p in produtos_base
-                    if str(p.get("Nome", "Produto")) in nomes_selecionados
-                ]
-                st.caption(f"O catálogo do cliente terá {len(selecao_cliente)} produto(s).")
+
+                mapa_final_hf6511 = {}
+                origens_final_hf6511 = {}
+
+                def _hf6511_adicionar_item(chave, item, origem, priorizar_imagens=False):
+                    chave = str(chave or "").strip()
+                    if not chave or not isinstance(item, dict):
+                        return
+                    novo = dict(item)
+                    novas_imagens = [str(x).strip() for x in (novo.get("Imagens") or []) if str(x).strip()]
+                    if chave not in mapa_final_hf6511:
+                        novo["Imagens"] = list(dict.fromkeys(novas_imagens))
+                        mapa_final_hf6511[chave] = novo
+                    else:
+                        atual = mapa_final_hf6511[chave]
+                        imagens_atuais = [str(x).strip() for x in (atual.get("Imagens") or []) if str(x).strip()]
+                        combinadas = (novas_imagens + imagens_atuais) if priorizar_imagens else (imagens_atuais + novas_imagens)
+                        atual["Imagens"] = list(dict.fromkeys(combinadas))
+                        for campo in ("Categoria", "Subcategoria", "Descricao", "DescricaoCurta", "Preco", "Variacoes"):
+                            if not atual.get(campo) and novo.get(campo):
+                                atual[campo] = novo.get(campo)
+                    origens_final_hf6511.setdefault(chave, set()).add(origem)
+
+                chaves_categoria_hf6511 = set()
+                categorias_cf_hf6511 = {str(x).casefold() for x in categorias_cliente}
+                for produto in catalogo:
+                    if not (produto or {}).get("Ativo", True):
+                        continue
+                    categoria = str((produto or {}).get("Categoria", "Sem categoria")).strip() or "Sem categoria"
+                    if categoria.casefold() in categorias_cf_hf6511:
+                        chave = "produto::" + normalizar_identidade_produto((produto or {}).get("Nome", ""))
+                        _hf6511_adicionar_item(chave, produto, "categoria")
+                        chaves_categoria_hf6511.add(chave)
+
+                chaves_produto_hf6511 = set()
+                nomes_cf_hf6511 = {normalizar_identidade_produto(x) for x in nomes_selecionados}
+                for produto in catalogo:
+                    if not (produto or {}).get("Ativo", True):
+                        continue
+                    nome_norm = normalizar_identidade_produto((produto or {}).get("Nome", ""))
+                    if nome_norm and nome_norm in nomes_cf_hf6511:
+                        chave = "produto::" + nome_norm
+                        _hf6511_adicionar_item(chave, produto, "produto")
+                        chaves_produto_hf6511.add(chave)
+
+                chaves_datas_hf6511 = set()
+                fotos_datas_hf6511 = 0
+                datas_cf_hf6511 = {str(x).casefold() for x in datas_cliente_hf6511}
+                if datas_cf_hf6511:
+                    for trabalho in galeria_externa_hf6511:
+                        tags_trabalho = {str(x).casefold() for x in _galeria_datas_ocasioes(trabalho)}
+                        if not (tags_trabalho & datas_cf_hf6511):
+                            continue
+                        chave, item_galeria, qtd_fotos = _hf6511_item_catalogo_da_galeria(trabalho, catalogo)
+                        if not (item_galeria.get("Imagens") or []):
+                            continue
+                        _hf6511_adicionar_item(chave, item_galeria, "data", priorizar_imagens=True)
+                        chaves_datas_hf6511.add(chave)
+                        fotos_datas_hf6511 += int(qtd_fotos or 0)
+
+                selecao_cliente = sorted(
+                    mapa_final_hf6511.values(),
+                    key=lambda p: (
+                        normalizar_identidade_produto((p or {}).get("Categoria", "")),
+                        normalizar_identidade_produto((p or {}).get("Nome", "")),
+                    ),
+                )
+
+                m1_hf6511, m2_hf6511, m3_hf6511, m4_hf6511 = st.columns(4)
+                m1_hf6511.metric("Por categorias", len(chaves_categoria_hf6511))
+                m2_hf6511.metric("Por datas/ocasiões", len(chaves_datas_hf6511))
+                m3_hf6511.metric("Produtos avulsos", len(chaves_produto_hf6511))
+                m4_hf6511.metric("Total sem duplicados", len(selecao_cliente))
+                if datas_cliente_hf6511:
+                    st.caption(
+                        f"🎈 A seleção sazonal está usando {fotos_datas_hf6511} foto(s) real(is) autorizada(s) da Galeria de Trabalhos. "
+                        "Quando a foto está vinculada a um produto, preço e descrição comercial são herdados do Catálogo Oficial."
+                    )
+
+                if not selecao_cliente:
+                    st.info("Escolha pelo menos uma Categoria, uma Data/Ocasião ou um Produto específico para montar o catálogo.")
+
                 html_cliente = gerar_html_catalogo(
                     selecao_cliente,
                     titulo_cliente or "Seleção Alphafest",
@@ -37906,9 +38174,10 @@ if pagina_atual == "catalogo":
                     mime="text/html",
                     type="primary",
                     use_container_width=True,
+                    disabled=not bool(selecao_cliente),
                 )
                 st.download_button(
-                    "📚 Gerar catálogo completo",
+                    "📚 Gerar catálogo completo (todos os produtos)",
                     data=gerar_html_catalogo(catalogo, "Catálogo Completo Alphafest", True),
                     file_name="catalogo_completo_alphafest.html",
                     mime="text/html",

@@ -1,7 +1,14 @@
-HF65.10 — RESET AUTOMÁTICO DA GALERIA
+HF65.12 — INTELIGÊNCIA DE ACESSO DO SITE + GRÁFICOS
 
-1. Instale pela Atualização Segura.
-2. Abra Galeria de Trabalhos.
-3. Cadastre e salve uma foto/trabalho normalmente.
-4. Após salvar, o formulário deverá reaparecer totalmente limpo para o próximo trabalho.
-5. Os trabalhos já guardados permanecem preservados.
+O que muda:
+- Métricas ganham gráficos Dia a dia, Mês a mês e Ano.
+- Novos dados: cidade/região aproximada, dispositivo, navegador, origem, campanhas UTM e página de entrada.
+- Galeria passa a registrar fotos abertas e uso de Datas & Ocasiões.
+- Cliques no WhatsApp passam a guardar o contexto (produto/site/galeria).
+- Dados antigos continuam válidos; os novos campos começam a preencher após publicar o site com esta versão.
+- Não há coleta de endereço exato nem inferência de idade.
+
+IMPORTANTE:
+Depois de instalar, use "Preparar / atualizar prévia do site" e "Publicar site agora" para ativar a coleta nova no site público e o endpoint geográfico do Worker.
+
+Instale pela Atualização Segura sobre a HF65.11.

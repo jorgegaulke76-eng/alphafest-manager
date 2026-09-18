@@ -1,3 +1,21 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.12
+
+- Inteligência de Acesso do Site com localização aproximada por cidade/região/país via Cloudflare.
+- Captura dispositivo, navegador, origem, UTMs, página de entrada e contexto do clique no WhatsApp.
+- Passa a medir fotos abertas da Galeria e filtros de Datas & Ocasiões.
+- Painel privado ganha gráficos Dia a dia (30 dias), Mês a mês (12 meses) e comparativo por Ano.
+- Novos rankings: cidades, regiões, dispositivos, navegadores, Galeria, Datas & Ocasiões e campanhas UTM.
+- Mantém leitura histórica compatível; dados geográficos e de dispositivo começam a partir da publicação desta versão.
+- Não coleta endereço exato nem infere faixa etária.
+
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.11
+
+- HF65.11 — Catálogo para cliente com seleção por Categoria e/ou Datas & Ocasiões e/ou Produtos específicos.
+- Datas sazonais usam fotos reais autorizadas da Galeria de Trabalhos sem abrir o bucket privado.
+- União dos filtros com deduplicação automática e prioridade para fotos reais da Galeria.
+- Produtos vinculados preservam preço e descrição do Catálogo Oficial; trabalhos sem vínculo ficam sob consulta.
+- Contadores de origem e total final antes da geração.
+
 
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF65.10
 - Corrige o formulário da Galeria de Trabalhos para resetar completamente após um salvamento confirmado.

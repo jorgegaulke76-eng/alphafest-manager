@@ -1,13 +1,27 @@
-# HF65.10 — Galeria pronta para o próximo trabalho
+# HF65.12 — Inteligência de Acesso do Site + Gráficos
 
 ## Objetivo
-Depois de guardar um novo trabalho na Galeria interna, abrir imediatamente um formulário limpo para o próximo cadastro.
+Transformar a tela de métricas em um painel comercial para acompanhar o site diariamente, mês a mês e ao longo dos anos.
 
-## Alterações
-- O formulário `Registrar fotos do trabalho do dia` passa a usar uma nova geração de chaves a cada salvamento confirmado.
-- Após salvar, são limpos: produto, categoria/subcategoria manual, categorias extras, tema, cor/estilo, ocasião livre, Datas & Ocasiões, fotos, observação e checkboxes de publicação/destaque.
-- A mensagem de sucesso continua visível após o recarregamento.
-- Nenhum registro já salvo é alterado ou removido.
-- Mantém integralmente a HF65.9 (Datas & Ocasiões no Manager e no site).
+## O que entra
+- Gráfico **Dia a dia** dos últimos 30 dias: acessos, produtos abertos e cliques no WhatsApp.
+- Gráfico **Mês a mês** dos últimos 12 meses.
+- Gráfico **Ano** para comparação anual conforme o histórico crescer.
+- Cidade, região/estado e país aproximados, obtidos pela infraestrutura Cloudflare.
+- Dispositivo e navegador.
+- Origem do acesso e parâmetros UTM de campanhas.
+- Página de entrada da sessão.
+- Cliques nas fotos da Galeria.
+- Uso do filtro **Datas & Ocasiões**.
+- Contexto do clique no WhatsApp, inclusive Galeria.
 
-Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.10
+## Privacidade
+- Não registra endereço exato.
+- Localização por cidade/região é aproximada e pode variar em redes móveis ou VPN.
+- Não tenta inferir faixa etária.
+- O painel continua privado no Manager.
+
+## Infraestrutura
+A migração `hf65_12_site_intelligence_metrics` já foi aplicada no Supabase AlphaFest. O arquivo `SUPABASE_SITE_METRICS_HF65_12.sql` segue no pacote para auditoria/recuperação.
+
+Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.12`

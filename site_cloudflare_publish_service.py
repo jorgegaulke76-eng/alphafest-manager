@@ -253,6 +253,10 @@ def publicar_pacote(
     # 3. Criar nova versão do Worker e já enviar 100% do tráfego para ela.
     script = (
         "export default { async fetch(request, env) { "
+        "const url=new URL(request.url); "
+        "if(url.pathname==='/__af_geo'){ const cf=request.cf||{}; "
+        "return new Response(JSON.stringify({city:cf.city||'',region:cf.region||'',country:cf.country||''}),"
+        "{headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}}); } "
         "return env.ASSETS.fetch(request); } };"
     ).encode("utf-8")
     modules = [
