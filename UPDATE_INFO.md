@@ -1,27 +1,20 @@
-# HF65.12 — Inteligência de Acesso do Site + Gráficos
+# HF65.13 — Datas & Ocasiões em massa
 
-## Objetivo
-Transformar a tela de métricas em um painel comercial para acompanhar o site diariamente, mês a mês e ao longo dos anos.
+Atualização operacional para acelerar a manutenção sazonal dos produtos já cadastrados no Catálogo Oficial.
 
-## O que entra
-- Gráfico **Dia a dia** dos últimos 30 dias: acessos, produtos abertos e cliques no WhatsApp.
-- Gráfico **Mês a mês** dos últimos 12 meses.
-- Gráfico **Ano** para comparação anual conforme o histórico crescer.
-- Cidade, região/estado e país aproximados, obtidos pela infraestrutura Cloudflare.
-- Dispositivo e navegador.
-- Origem do acesso e parâmetros UTM de campanhas.
-- Página de entrada da sessão.
-- Cliques nas fotos da Galeria.
-- Uso do filtro **Datas & Ocasiões**.
-- Contexto do clique no WhatsApp, inclusive Galeria.
+## O que muda
+- Nova área **📅 Datas & Ocasiões em massa** na aba **Catálogo → Produtos**.
+- Use a busca e a categoria para reduzir a lista.
+- Escolha uma ou várias Datas & Ocasiões.
+- Atualize produtos específicos ou todos os produtos filtrados.
+- **Adicionar** mantém as marcações existentes.
+- **Remover** apaga apenas as opções escolhidas.
+- O sistema mostra quantos produtos serão afetados e quantos já possuem cada marcação.
 
-## Privacidade
-- Não registra endereço exato.
-- Localização por cidade/região é aproximada e pode variar em redes móveis ou VPN.
-- Não tenta inferir faixa etária.
-- O painel continua privado no Manager.
+## Segurança
+- Não exclui produtos.
+- Não substitui outras Datas & Ocasiões por engano.
+- Não publica o site automaticamente.
+- Continua usando `CampanhasPermitidas` como fonte oficial.
 
-## Infraestrutura
-A migração `hf65_12_site_intelligence_metrics` já foi aplicada no Supabase AlphaFest. O arquivo `SUPABASE_SITE_METRICS_HF65_12.sql` segue no pacote para auditoria/recuperação.
-
-Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.12`
+Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.13`

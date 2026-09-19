@@ -1,3 +1,15 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.13
+
+### HF65.13 — Datas & Ocasiões em massa no Catálogo
+- Adiciona editor em lote na aba Produtos do Catálogo Oficial.
+- Reaproveita os filtros de busca e categoria já existentes.
+- Permite escolher várias Datas & Ocasiões e vários produtos de uma vez.
+- Opção para aplicar em todos os produtos filtrados.
+- Ação de adicionar preserva campanhas já existentes.
+- Ação de remover tira somente as Datas & Ocasiões escolhidas.
+- Mostra quantidade de produtos-alvo e quantos já estão marcados.
+- Não publica o site automaticamente; mantém o fluxo seguro HF44.
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF65.12
 
 - Inteligência de Acesso do Site com localização aproximada por cidade/região/país via Cloudflare.

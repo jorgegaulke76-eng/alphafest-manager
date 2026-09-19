@@ -1,14 +1,9 @@
-HF65.12 — INTELIGÊNCIA DE ACESSO DO SITE + GRÁFICOS
+HF65.13 — DATAS & OCASIÕES EM MASSA
 
-O que muda:
-- Métricas ganham gráficos Dia a dia, Mês a mês e Ano.
-- Novos dados: cidade/região aproximada, dispositivo, navegador, origem, campanhas UTM e página de entrada.
-- Galeria passa a registrar fotos abertas e uso de Datas & Ocasiões.
-- Cliques no WhatsApp passam a guardar o contexto (produto/site/galeria).
-- Dados antigos continuam válidos; os novos campos começam a preencher após publicar o site com esta versão.
-- Não há coleta de endereço exato nem inferência de idade.
-
-IMPORTANTE:
-Depois de instalar, use "Preparar / atualizar prévia do site" e "Publicar site agora" para ativar a coleta nova no site público e o endpoint geográfico do Worker.
-
-Instale pela Atualização Segura sobre a HF65.11.
+1. Instale pela Atualização Segura.
+2. Abra Catálogo > Produtos.
+3. Use busca/categoria para filtrar.
+4. Abra “Datas & Ocasiões em massa”.
+5. Escolha as épocas e os produtos.
+6. Use Adicionar ou Remover.
+7. Publique o site somente quando desejar pelo fluxo normal.

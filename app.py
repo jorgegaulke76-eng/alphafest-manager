@@ -27460,7 +27460,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.12",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.13",
                 )
                 return _html, _zip
 
@@ -27603,7 +27603,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.12",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.13",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
@@ -35561,6 +35561,133 @@ if pagina_atual == "catalogo":
                 search=_hf492_busca,
                 category=_hf492_categoria,
             )
+
+            # HF65.13 — Datas & Ocasiões em massa.
+            # Permite atualizar vários produtos de uma vez usando os mesmos
+            # filtros da edição rápida, sem abrir produto por produto.
+            with st.expander("📅 Datas & Ocasiões em massa", expanded=False):
+                st.caption(
+                    "Use o filtro de busca/categoria acima, escolha uma ou mais Datas & Ocasiões e aplique em lote. "
+                    "Adicionar preserva as marcações já existentes; remover tira apenas as opções escolhidas. "
+                    "Nada é publicado no site automaticamente."
+                )
+
+                _hf6513_campanhas = st.multiselect(
+                    "Datas & Ocasiões para atualizar",
+                    CAMPANHAS_PRODUTO_OPCOES,
+                    key="hf6513_campanhas_lote",
+                    placeholder="Ex.: Setembro Amarelo, Dia dos Professores…",
+                )
+
+                _hf6513_todos = st.checkbox(
+                    "Aplicar a todos os produtos filtrados acima",
+                    value=False,
+                    key="hf6513_aplicar_todos_filtrados",
+                    help="Quando marcado, todos os produtos que passaram pelo filtro de busca/categoria serão atualizados.",
+                )
+
+                _hf6513_indices_ordenados = sorted(
+                    list(_hf492_indices),
+                    key=lambda i: normalizar_identidade_produto((catalogo[i] or {}).get("Nome") or ""),
+                )
+                if _hf6513_todos:
+                    _hf6513_alvos = list(_hf6513_indices_ordenados)
+                    if _hf6513_alvos:
+                        st.info(f"⚡ {_hf6513_alvos.__len__()} produto(s) filtrado(s) serão atualizados em lote.")
+                    else:
+                        st.warning("Nenhum produto corresponde aos filtros atuais.")
+                else:
+                    _hf6513_alvos = st.multiselect(
+                        "Produtos que receberão a atualização",
+                        _hf6513_indices_ordenados,
+                        default=[],
+                        format_func=lambda i: f"{(catalogo[i] or {}).get('Nome') or 'Produto'} · {(catalogo[i] or {}).get('Categoria') or 'Sem categoria'}",
+                        key="hf6513_produtos_lote",
+                        placeholder="Escolha um ou vários produtos…",
+                    )
+
+                _hf6513_m1, _hf6513_m2, _hf6513_m3 = st.columns(3)
+                _hf6513_m1.metric("Produtos-alvo", len(_hf6513_alvos))
+                _hf6513_m2.metric("Datas/Ocasiões", len(_hf6513_campanhas))
+                _hf6513_m3.metric("Produtos filtrados", len(_hf492_indices))
+
+                if _hf6513_campanhas and _hf6513_alvos:
+                    _hf6513_resumo = []
+                    for _camp_hf6513 in _hf6513_campanhas:
+                        _alvo_norm_hf6513 = normalizar_identidade_produto(_camp_hf6513)
+                        _ja_hf6513 = sum(
+                            1 for _idx_hf6513 in _hf6513_alvos
+                            if _alvo_norm_hf6513 in {
+                                normalizar_identidade_produto(x)
+                                for x in ((catalogo[_idx_hf6513] or {}).get("CampanhasPermitidas") or [])
+                            }
+                        )
+                        _hf6513_resumo.append(f"{_camp_hf6513}: {_ja_hf6513}/{len(_hf6513_alvos)} já marcados")
+                    st.caption(" • ".join(_hf6513_resumo))
+
+                _hf6513_b1, _hf6513_b2 = st.columns(2)
+                _hf6513_adicionar = _hf6513_b1.button(
+                    "➕ Adicionar às épocas atuais",
+                    key="hf6513_adicionar_lote",
+                    use_container_width=True,
+                    type="primary",
+                )
+                _hf6513_remover = _hf6513_b2.button(
+                    "➖ Remover destas épocas",
+                    key="hf6513_remover_lote",
+                    use_container_width=True,
+                )
+
+                if _hf6513_adicionar or _hf6513_remover:
+                    if not _hf6513_campanhas:
+                        st.warning("Escolha pelo menos uma Data & Ocasião.")
+                    elif not _hf6513_alvos:
+                        st.warning("Escolha pelo menos um produto ou marque 'Aplicar a todos os produtos filtrados acima'.")
+                    else:
+                        _catalogo_hf6513 = [dict(p or {}) for p in (catalogo or [])]
+                        _camp_norm_hf6513 = {normalizar_identidade_produto(x) for x in _hf6513_campanhas}
+                        _alterados_hf6513 = 0
+                        _agora_hf6513 = agora_local().isoformat(timespec="seconds")
+
+                        for _idx_hf6513 in _hf6513_alvos:
+                            _registro_hf6513 = _catalogo_hf6513[_idx_hf6513]
+                            _atuais_hf6513 = [
+                                str(x).strip() for x in (_registro_hf6513.get("CampanhasPermitidas") or [])
+                                if str(x).strip()
+                            ]
+                            if _hf6513_adicionar:
+                                _novas_hf6513 = list(dict.fromkeys(_atuais_hf6513 + list(_hf6513_campanhas)))
+                            else:
+                                _novas_hf6513 = [
+                                    x for x in _atuais_hf6513
+                                    if normalizar_identidade_produto(x) not in _camp_norm_hf6513
+                                ]
+
+                            if _novas_hf6513 == _atuais_hf6513:
+                                continue
+
+                            _registro_hf6513["CampanhasPermitidas"] = _novas_hf6513
+                            _registro_hf6513["AtualizadoEm"] = _agora_hf6513
+                            _registro_hf6513["DatasOcasioesLoteHF65_13"] = {
+                                "acao": "adicionar" if _hf6513_adicionar else "remover",
+                                "itens": list(_hf6513_campanhas),
+                                "quando": _agora_hf6513,
+                                "origem": "Produtos · Datas & Ocasiões em massa",
+                            }
+                            _alterados_hf6513 += 1
+
+                        if not _alterados_hf6513:
+                            st.info("Nenhum produto precisou ser alterado; as marcações já estavam nesse estado.")
+                        elif salvar_catalogo(_catalogo_hf6513):
+                            catalogo[:] = _catalogo_hf6513
+                            _acao_txt_hf6513 = "adicionada(s)" if _hf6513_adicionar else "removida(s)"
+                            st.success(
+                                f"✅ {len(_hf6513_campanhas)} Data(s)/Ocasião(ões) {_acao_txt_hf6513} em "
+                                f"{_alterados_hf6513} produto(s). Site ainda não publicado."
+                            )
+                            st.rerun()
+                        else:
+                            st.error("Não foi possível salvar a atualização em lote no Catálogo Oficial.")
 
             _hf492_linhas = []
             for _idx_hf492 in _hf492_indices:
