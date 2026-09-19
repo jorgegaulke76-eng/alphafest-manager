@@ -1,12 +1,9 @@
-HF65.14 — HOME COMERCIAL: CANAL + BANNERS + PROVA SOCIAL
+HF65.14.1 — REDES SOCIAIS COM DESTAQUE DE MARCA
 
-1. Instale pela Atualização Segura.
-2. Abra Site AlphaFest > Conteúdo da Home.
-3. O botão principal já vem configurado como “Entre para nosso canal”.
-4. Cadastre banners informativos em 1600 x 480 px.
-5. Cadastre depoimentos e empresas/projetos quando desejar.
-6. No Catálogo > Produtos, o carrossel comercial agora aceita até 10 itens.
-7. Prepare/atualize a prévia do site.
-8. Confira e use Publicar site agora somente quando estiver tudo certo.
+Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.14.1
 
-O conteúdo da Home é salvo no Manager, mas nunca publica automaticamente.
+1. Instale este ZIP pela Atualização Segura.
+2. Abra a prévia do site e confira a área "Redes da AlphaFest".
+3. Publique o site novamente.
+
+A atualização altera somente a apresentação visual dos cartões das redes sociais.

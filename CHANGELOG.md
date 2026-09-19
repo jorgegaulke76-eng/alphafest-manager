@@ -1,3 +1,12 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.14.1
+
+### HF65.14.1 — Redes sociais com destaque de marca
+- Mantém a estrutura da HF65.14 e melhora somente a área **Redes da AlphaFest**.
+- Ícones vetoriais das marcas recebem efeito visual 3D por profundidade/sombra, sem imagens pesadas.
+- Caixas passam a usar tons suaves das cores de Instagram, Facebook, TikTok e YouTube.
+- Hover discreto no desktop e layout preservado no celular.
+- Nenhuma alteração em catálogo, pedidos, métricas, galeria, banners ou conteúdo da Home.
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF65.14
 
 ### HF65.14 — Home comercial: Canal, banners, depoimentos e clientes

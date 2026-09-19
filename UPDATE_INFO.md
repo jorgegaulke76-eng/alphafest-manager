@@ -1,21 +1,19 @@
-# HF65.14 — Home comercial: Canal + Banners + Prova Social
+# HF65.14.1 — Redes sociais com identidade visual destacada
 
-Atualização visual/comercial do site AlphaFest, mantendo Catálogo, Galeria, métricas, publicação Cloudflare e regras operacionais já homologadas.
+Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.14.1`
 
-## O que muda
-- O botão principal do Hero passa a **Entre para nosso canal** e abre o canal oficial do WhatsApp informado pelo Jorge.
-- O carrossel de produtos em destaque desce para **logo abaixo de Explore por categoria**.
-- O carrossel de produtos passa de 5 para **até 10 itens**.
-- O espaço antigo do carrossel recebe um novo **carrossel de banners informativos** administrável pelo Manager.
-- Medida recomendada dos banners: **1600 × 480 px** (proporção 10:3).
-- Ícones de Instagram, Facebook, TikTok, YouTube e WhatsApp passam a usar SVGs de marca em vez de emojis.
-- Nova área administrável de **Depoimentos de clientes**.
-- Nova faixa central com rolagem automática para **Empresas / clientes / projetos**, inspirada na referência comercial enviada.
-- Todo o conteúdo novo é editado em **Site AlphaFest → Conteúdo da Home** e não é publicado automaticamente.
+Atualização visual incremental sobre a HF65.14.
 
-## Segurança
-- Novo documento isolado `site_home_content_db`, incluído no backup oficial.
-- Nenhuma alteração nos pedidos, estoque, propostas, Catálogo 3D, Galeria ou Fonte Única.
-- A publicação continua exigindo prévia + confirmação no fluxo Cloudflare existente.
+## Alterações
+- Instagram: caixa em tons suaves rosa/laranja e ícone com gradiente da marca + profundidade.
+- Facebook: caixa azul suave e ícone azul com efeito 3D.
+- TikTok: caixa neutra clara e ícone escuro com realces ciano/rosa.
+- YouTube: caixa vermelho suave e ícone vermelho com efeito 3D.
+- Todos os links mantêm nome da rede, clique externo seguro e comportamento responsivo.
+- Efeito hover discreto para reforçar que os cartões são clicáveis.
 
-Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.14`
+## Escopo preservado
+Não altera dados da empresa, catálogo, galeria, campanhas, pedidos, estoque, métricas ou conteúdo cadastrado da Home.
+
+## Instalação
+Instalar pela Atualização Segura sobre a HF65.14 e publicar o site novamente.
