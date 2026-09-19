@@ -14,6 +14,7 @@ from typing import Any, Dict, Iterable, List
 
 from site_vitrine_service import ImagemResolver, resumir_vitrine
 from site_galeria_service import resumir_galeria_site
+from site_home_content_service import normalize_home_content_config
 
 
 ICONES_CATEGORIA = {
@@ -105,7 +106,7 @@ def _carrossel_html(
     if not escolhidos:
         escolhidos = [p for p in produtos if bool(p.get("destaque"))]
         origem = "destaques"
-    escolhidos = escolhidos[:5]
+    escolhidos = escolhidos[:10]
     if not escolhidos:
         return ""
 
@@ -203,6 +204,7 @@ def aplicar_visual_hf48(
     galeria_trabalhos: Iterable[Dict[str, Any]] | None = None,
     usar_mascotes: bool = False,
     imagem_resolver: ImagemResolver = None,
+    home_content_config: Dict[str, Any] | None = None,
 ) -> str:
     """Retorna uma cópia visualmente reestilizada do site já gerado.
 
@@ -217,6 +219,10 @@ def aplicar_visual_hf48(
     nome = str(empresa.get("nome") or "AlphaFest").strip() or "AlphaFest"
     slogan = str(empresa.get("slogan") or "O poder de estar presente em cada presente!").strip()
     mascotes = _mascotes_hf48() if usar_mascotes else {"hero": "", "galeria": "", "cta": "", "baloes": "", "logo_wordmark": ""}
+    home_cfg = normalize_home_content_config(home_content_config or {})
+    hero_cta_text = str(home_cfg.get("hero_cta_text") or "Entre para nosso canal").strip()
+    hero_cta_url = str(home_cfg.get("hero_cta_url") or "https://whatsapp.com/channel/0029VbDLvQQLI8YOtOO2lG3I").strip()
+    _wa_svg = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5A11.8 11.8 0 0 0 12.08 0C5.54 0 .23 5.3.23 11.84c0 2.09.55 4.13 1.6 5.92L.13 24l6.4-1.68a11.84 11.84 0 0 0 5.54 1.41h.01c6.53 0 11.85-5.31 11.85-11.85 0-3.17-1.22-6.15-3.43-8.38Zm-8.42 18.23h-.01a9.83 9.83 0 0 1-5.02-1.38l-.36-.22-3.8 1 1.01-3.7-.24-.38a9.82 9.82 0 0 1-1.5-5.21c0-5.43 4.42-9.84 9.86-9.84a9.78 9.78 0 0 1 6.96 2.89 9.78 9.78 0 0 1 2.88 6.97c0 5.43-4.42 9.86-9.78 9.87Zm5.4-7.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.25-.46-2.38-1.47a8.92 8.92 0 0 1-1.65-2.05c-.17-.3-.02-.46.13-.61.13-.13.3-.35.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.91-2.21-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.08-.79.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.87 1.21 3.07.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.23 1.36.2 1.87.12.57-.09 1.76-.72 2.01-1.41.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35Z"/></svg>'
 
     css = r'''
 /* HF48.1 — nova linguagem visual comercial (somente opt-in) */
@@ -230,6 +236,7 @@ body{background:var(--hf48-bg)}
 .header-actions .ghost{display:none}.header-actions .cta{border-radius:14px;padding:13px 18px}
 .site-nav{top:87px;background:#fff;border-bottom:1px solid var(--hf48-border)}.site-nav-in{max-width:1320px;justify-content:flex-start;padding:0 24px}.site-nav a,.site-nav button{font-size:13px;padding:13px 14px}.site-nav a:hover,.site-nav button:hover{background:#eef7ff}
 .hero{position:relative;overflow:hidden;background:linear-gradient(135deg,#eaf8ff 0%,#fff 48%,#fff0fa 100%);border-bottom:0}.hero:before{content:'';position:absolute;left:-95px;top:34px;width:230px;height:230px;border-radius:48% 52% 58% 42%;background:linear-gradient(145deg,rgba(20,185,244,.32),rgba(6,120,223,.08));transform:rotate(18deg)}.hero:after{content:'';position:absolute;right:-80px;bottom:-80px;width:230px;height:230px;border-radius:50%;background:linear-gradient(145deg,rgba(255,47,145,.22),rgba(255,210,31,.10))}.hero-in{max-width:1320px;padding:64px 24px 58px;grid-template-columns:1.08fr .92fr;gap:46px}.hero.hf48-hero-branded:before,.hero.hf48-hero-branded:after{display:none}.hero.hf48-hero-branded .hero-in{position:relative;z-index:2}.hf48-real-balloons{position:absolute;left:-18px;top:76px;width:150px;height:auto;z-index:1;pointer-events:none;filter:drop-shadow(0 12px 18px rgba(17,72,126,.10))}.hero h1{font-size:clamp(42px,5.6vw,76px);line-height:.98}.hero h1 span{background:linear-gradient(90deg,#0876d8 0%,#14b9f4 32%,#ff2f91 70%,#ff8b1f 100%);-webkit-background-clip:text;background-clip:text;color:transparent}.hero p{max-width:650px}.hero-card{border:1px solid rgba(255,255,255,.85);border-radius:28px;background:rgba(255,255,255,.88);backdrop-filter:blur(4px);box-shadow:0 28px 70px rgba(18,35,61,.13);padding:30px;position:relative;overflow:hidden}.hero-card:after{content:'';position:absolute;width:160px;height:160px;border-radius:50%;background:linear-gradient(135deg,rgba(8,118,216,.13),rgba(255,79,145,.14));right:-42px;top:-48px}.hero-card h2{font-size:28px;margin:8px 0 10px}.hero-stat{position:relative;z-index:2}.stat{background:#f4f9fe;border:1px solid #e8f0f7}.stat strong{font-size:32px}.secondary{border-color:#d8e3ee;border-radius:13px}
+.hf6514-channel-cta{display:inline-flex!important;align-items:center;gap:9px}.hf6514-channel-cta svg{width:20px;height:20px;fill:currentColor;flex:0 0 auto}
 .hf48-trust{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}.hf48-trust span{background:rgba(255,255,255,.82);border:1px solid #dce8f3;border-radius:999px;padding:8px 11px;font-size:12px;font-weight:800;color:#526a83}
 .hf48-wrap{max-width:1320px;margin:auto}.hf48-categories{background:#fff;padding:48px 24px}.hf48-section-heading{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:22px}.hf48-section-heading h2{font-size:34px;margin:4px 0 6px}.hf48-section-heading p{margin:0;color:#657a92}.hf48-kicker{color:var(--hf48-blue);font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:.09em}.hf48-text-link{border:0;background:transparent;color:var(--hf48-blue);font-weight:900;cursor:pointer;white-space:nowrap}.hf48-category-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.hf48-category-card{border:1px solid var(--hf48-border);background:#fff;border-radius:18px;padding:16px;display:flex;align-items:center;gap:12px;text-align:left;cursor:pointer;transition:.18s;box-shadow:0 6px 20px rgba(18,35,61,.035)}.hf48-category-card:nth-child(7n+1){background:linear-gradient(135deg,#bfe2ff,#8fcaf7);border-color:#76b9ea}.hf48-category-card:nth-child(7n+2){background:linear-gradient(135deg,#ffc6e0,#f59ac8);border-color:#ed83b8}.hf48-category-card:nth-child(7n+3){background:linear-gradient(135deg,#ffe899,#ffd467);border-color:#efbd42}.hf48-category-card:nth-child(7n+4){background:linear-gradient(135deg,#ddc9ff,#b89af0);border-color:#a381e6}.hf48-category-card:nth-child(7n+5){background:linear-gradient(135deg,#bdf3d8,#82deb3);border-color:#67cc9b}.hf48-category-card:nth-child(7n+6){background:linear-gradient(135deg,#ffc7b8,#ff9e86);border-color:#ef836c}.hf48-category-card:nth-child(7n){background:linear-gradient(135deg,#c4dcff,#8ebcf3);border-color:#78a9e6}.hf48-category-card:hover{transform:translateY(-2px);border-color:#8fcff3;box-shadow:0 12px 28px rgba(18,35,61,.10)}.hf48-cat-icon{width:46px;height:46px;border-radius:14px;background:rgba(255,255,255,.78);display:flex;align-items:center;justify-content:center;font-size:23px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.9)}.hf48-hero-benefits{position:relative;z-index:3;display:grid;gap:8px;margin-top:14px;max-width:275px}.hf48-hero-benefit{display:flex;align-items:center;gap:10px;border:1px solid #e2ecf6;border-radius:999px;background:rgba(255,255,255,.90);padding:9px 12px;font-size:12px;font-weight:850;color:#173d66}.hf48-hero-benefit b{display:flex;width:28px;height:28px;border-radius:50%;align-items:center;justify-content:center;font-size:15px}.hf48-hero-benefit:nth-child(1) b{background:#ffe7f2}.hf48-hero-benefit:nth-child(2) b{background:#fff5c7}.hf48-hero-benefit:nth-child(3) b{background:#e4f7ff}.hf48-cat-copy{min-width:0;flex:1}.hf48-cat-copy strong{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hf48-cat-copy small{display:block;margin-top:4px;color:#75889e}.hf48-cat-arrow{font-size:24px;color:#9db1c5}.hf48-occasion-card{background:linear-gradient(135deg,#d9f3ff,#a9ddff)!important;border-color:#7bc7f3!important}.hf48-occasion-panel{margin-top:16px;border:1px solid #b9dcf8;border-radius:18px;background:linear-gradient(135deg,#f4fbff,#fff8fc);padding:18px;box-shadow:0 10px 28px rgba(18,35,61,.07)}.hf48-occasion-panel[hidden]{display:none}.hf48-occasion-panel-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:13px}.hf48-occasion-panel-head strong{display:block;margin-top:4px;color:#173d66;font-size:17px}.hf48-occasion-close{border:0;background:#fff;color:#56718c;border-radius:999px;width:36px;height:36px;font-size:24px;cursor:pointer;box-shadow:0 2px 10px rgba(18,35,61,.08)}.hf48-occasion-chips{display:flex;flex-wrap:wrap;gap:9px}.hf48-occasion-chip{border:1px solid #b8d8ef;background:#fff;color:#0a65ae;border-radius:999px;padding:9px 13px;font-weight:900;font-size:12px;cursor:pointer}.hf48-occasion-chip:hover{background:#eaf7ff;border-color:#79c3ef}.hf48-occasion-empty{font-size:12px;color:#657a92;padding:8px 2px}
 .main{max-width:1320px;padding:48px 24px 76px}.section-head{margin-top:0}.section-head h2{font-size:34px}.toolbar{background:#fff;border:1px solid var(--hf48-border);padding:10px;border-radius:18px;box-shadow:0 8px 26px rgba(18,35,61,.04)}.search input{border:0;background:#f8fbfd;border-radius:12px}.taxonomy-step{border-color:var(--hf48-border);box-shadow:0 6px 20px rgba(18,35,61,.025)}
@@ -274,8 +281,8 @@ body{background:var(--hf48-bg)}
 @media(max-width:900px){.brand{flex-basis:260px}.brand-logo{width:252px;height:64px}.header-in{min-height:78px}.site-nav{top:78px}.hf48-header-search{display:none}.hf50-carousel-slide{flex-basis:calc((100% - 14px)/2);min-height:220px}}
 @media(max-width:620px){.hf48-topline{display:none!important}.header{background:#0b8fdf}.header-in{padding:5px 8px 4px;min-height:66px;gap:6px}.brand{flex:1 1 auto;min-width:0;min-height:56px}.brand-logo{width:min(190px,58vw);height:56px;object-fit:contain;object-position:left center}.header-actions{flex:0 0 auto}.header-actions .cta{padding:10px 11px;font-size:11px;white-space:nowrap}.site-nav{top:66px;background:#0b8fdf;border-top:1px solid rgba(255,255,255,.12);box-shadow:0 5px 12px rgba(5,62,117,.10)}.site-nav-in{background:transparent;overflow-x:auto;justify-content:flex-start;padding:0 6px;gap:0}.site-nav a,.site-nav button{font-size:11px;padding:10px 11px;white-space:nowrap}.hf50-carousel{padding:0 10px 20px;margin:0}.hf50-carousel-shell{border-radius:18px;padding:12px 42px 16px}.hf50-carousel-slide{flex-basis:100%;min-height:185px}.hf50-carousel-copy{padding:16px}.hf50-carousel-copy h2{font-size:22px}.hf50-carousel-arrow{width:34px;height:34px}.hf50-carousel-arrow.prev{left:5px}.hf50-carousel-arrow.next{right:5px}}
 /* HF51.4-HF1 — carrossel fixado exatamente entre o Hero e “Explore por categoria”. */
-.hf48-hero-branded + .hf50-carousel{margin-top:0!important;padding-top:0!important}
-.hf50-carousel + .hf48-categories{margin-top:0!important}
+.hf48-categories + .hf50-carousel{margin-top:0!important;padding-top:8px!important}
+.hf50-carousel + .site-section{margin-top:0!important}
 /* HF51.4-HF1 — cabeçalho final aprovado: marca transparente sobre um único azul, sem emendas */
 .hf48-topline{display:none!important}
 .header{background:linear-gradient(90deg,#0878d7 0%,#079de5 58%,#10b4e8 100%)!important;border:0!important;box-shadow:none!important}
@@ -315,7 +322,7 @@ body{background:var(--hf48-bg)}
         hero_novo = f'''<section class="hero hf48-hero-branded" id="inicio">{f'<img class="hf48-real-balloons" src="{mascotes.get("baloes", "")}" alt="Balões decorativos AlphaFest">' if mascotes.get("baloes") else ""}<div class="hero-in"><div>
           <h1>Ideias presentes em suas festas e em sua empresa, <span>destacando sua MARCA!</span></h1>
           <p>{html.escape(slogan)} Explore produtos, veja trabalhos reais e peça uma personalização do seu jeito — quantidade, cor, material e prazo combinados com a AlphaFest.</p>
-          <div class="hero-actions"><a class="cta" href="#contato">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Ver produtos</a></div>
+          <div class="hero-actions"><a class="cta hf6514-channel-cta" href="{html.escape(hero_cta_url, quote=True)}" target="_blank" rel="noopener">{_wa_svg}{html.escape(hero_cta_text)}</a><a class="secondary" href="#produtos">Ver produtos</a></div>
           <div class="hf48-trust"><span>✓ Sem pedido mínimo</span><span>✓ Personalização sob medida</span><span>✓ Atendimento pelo WhatsApp</span></div>
           </div><aside class="hero-card hf48-mascot-hero"><div class="hf48-mascot-copy"><h2>Uma marca feita para ficar na memória.</h2><p>Produtos, ideias e trabalhos reais com o jeito AlphaFest de transformar cada detalhe em presença.</p><div class="hf48-hero-benefits"><div class="hf48-hero-benefit"><b>💗</b><span>Personalização que conta sua história</span></div><div class="hf48-hero-benefit"><b>⭐</b><span>Qualidade em cada detalhe</span></div><div class="hf48-hero-benefit"><b>🎁</b><span>Ideias para todas as ocasiões</span></div></div><div class="hf48-mascot-note">💙 Thu e Fox dão as boas-vindas</div></div><img class="hf48-hero-mascot-img" src="{mascotes['hero']}" alt="Thu e Fox, mascotes da AlphaFest"></aside></div></section>'''
     else:
@@ -323,7 +330,7 @@ body{background:var(--hf48-bg)}
           <div class="eyebrow">AlphaFest · Personalizados & Balões</div>
           <h1>Ideias presentes em suas festas e em sua empresa, <span>destacando sua MARCA!</span></h1>
           <p>{html.escape(slogan)} Explore produtos, veja trabalhos reais e peça uma personalização do seu jeito — quantidade, cor, material e prazo combinados com a AlphaFest.</p>
-          <div class="hero-actions"><a class="cta" href="#contato">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Ver produtos</a></div>
+          <div class="hero-actions"><a class="cta hf6514-channel-cta" href="{html.escape(hero_cta_url, quote=True)}" target="_blank" rel="noopener">{_wa_svg}{html.escape(hero_cta_text)}</a><a class="secondary" href="#produtos">Ver produtos</a></div>
           <div class="hf48-trust"><span>✓ Sem pedido mínimo</span><span>✓ Personalização sob medida</span><span>✓ Atendimento pelo WhatsApp</span></div>
           </div><aside class="hero-card"><div class="eyebrow">Explore a AlphaFest</div><h2>Encontre uma referência e transforme em algo seu.</h2><p>Use categorias e subcategorias para chegar rápido ao que procura. Na Galeria, veja trabalhos reais já produzidos.</p>
           <div class="hero-stat"><div class="stat"><strong>{total}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{total_categorias}</strong><span>categorias atuais</span></div></div></aside></div></section>'''
@@ -337,12 +344,13 @@ body{background:var(--hf48-bg)}
             pos += len('</section>')
             pagina = pagina[:pos] + categorias_html + pagina[pos:]
 
-    # HF50.1 — carrossel comercial no espaço entre Hero e Categorias.
-    # A seleção vem do mesmo Catálogo: CarrosselSite (preferencial) ou Destaque
-    # como fallback visual. Nada é publicado/salvo por esta função.
+    # HF65.14 — carrossel de produtos desce para logo abaixo de Explore por categoria.
+    # O espaço antigo, logo após o Hero, fica reservado ao novo carrossel de banners
+    # informativos administrável no Manager.
     carrossel_html = _carrossel_html(catalogo, imagem_resolver=imagem_resolver, mascotes=mascotes)
     if carrossel_html:
-        pos = pagina.find('</section>', pagina.find('id="inicio"'))
+        cat_ini = pagina.find('id="categorias"')
+        pos = pagina.find('</section>', cat_ini) if cat_ini >= 0 else -1
         if pos >= 0:
             pos += len('</section>')
             pagina = pagina[:pos] + carrossel_html + pagina[pos:]
@@ -382,7 +390,7 @@ body{background:var(--hf48-bg)}
     )
 
     # Identifica a prévia corretamente sem alterar a produção.
-    preview_rotulo = 'PRÉVIA INTERNA HF51.4-HF3 · CABEÇALHO FINAL TRANSPARENTE + CARROSSEL PROMOCIONAL · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
+    preview_rotulo = 'PRÉVIA INTERNA HF65.14 · HOME COM BANNERS + CARROSSEL 10 ITENS · NÃO PUBLICADA' if usar_mascotes else 'PRÉVIA INTERNA HF48.1 · NOVO VISUAL COMERCIAL · NÃO PUBLICADA'
     pagina = re.sub(r"<div\s+class=['\"]preview-bar['\"]>.*?</div>", f'<div class="preview-bar">{preview_rotulo}</div>', pagina, count=1, flags=re.S)
 
     js = r'''

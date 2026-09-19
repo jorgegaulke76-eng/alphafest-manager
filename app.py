@@ -40,6 +40,7 @@ from site_manager_service import (
 from site_vitrine_service import resumir_vitrine as _site_resumir_vitrine
 from site_completo_service import gerar_html_site_completo as _site_gerar_html_completo
 from site_campaign_service import DEFAULT_CAMPAIGN_CONFIG as _site_campaign_default, normalize_campaign_config as _site_campaign_normalize
+from site_home_content_service import DEFAULT_HOME_CONTENT_CONFIG as _site_home_default, normalize_home_content_config as _site_home_normalize
 from site_metrics_service import dashboard_summary_cached as _site_metrics_summary, clear_dashboard_summary_cache as _site_metrics_clear_cache, tracking_available as _site_metrics_tracking_available, server_config as _site_metrics_server_config
 from site_galeria_service import resumir_galeria_site as _site_resumir_galeria
 from site_staging_service import gerar_pacote_staging as _site_gerar_pacote_staging, resumo_staging as _site_resumo_staging
@@ -863,6 +864,7 @@ ARQUIVO_AGENDA_ANNA_SNAPSHOTS = "agenda_anna_snapshots_db.json"
 ARQUIVO_BIBLIOTECA_3D = "biblioteca_3d_db.json"
 ARQUIVO_GALERIA_TRABALHOS = "galeria_trabalhos_db.json"
 ARQUIVO_SITE_CAMPAIGN = "site_campaign_db.json"
+ARQUIVO_SITE_HOME_CONTENT = "site_home_content_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -980,6 +982,15 @@ def carregar_config_campanha_site(force_refresh=False):
 def salvar_config_campanha_site(config):
     normalizada = _site_campaign_normalize(config)
     return bool(save_document("site_campaign_db", normalizada, ARQUIVO_SITE_CAMPAIGN))
+
+# HF65.14 — conteúdo administrável da Home (CTA, banners, depoimentos e clientes).
+def carregar_config_home_site(force_refresh=False):
+    dados = load_document("site_home_content_db", ARQUIVO_SITE_HOME_CONTENT, _site_home_default, force_refresh=force_refresh)
+    return _site_home_normalize(dados)
+
+def salvar_config_home_site(config):
+    normalizada = _site_home_normalize(config)
+    return bool(save_document("site_home_content_db", normalizada, ARQUIVO_SITE_HOME_CONTENT))
 
 USUARIOS_ADMIN = {
     "jorgegaulke76@gmail.com": {"nome": "Jorge", "perfil": "Administrador"},
@@ -16912,6 +16923,7 @@ DOCUMENTOS_BACKUP = [
     ("catalogo_db", ARQUIVO_CATALOGO, []),
     ("galeria_trabalhos_db", ARQUIVO_GALERIA_TRABALHOS, []),
     ("site_campaign_db", ARQUIVO_SITE_CAMPAIGN, _site_campaign_default),
+    ("site_home_content_db", ARQUIVO_SITE_HOME_CONTENT, _site_home_default),
     ("clientes_db", ARQUIVO_CLIENTES, []),
     ("producao_db", ARQUIVO_PRODUCAO, []),
     ("config_empresa", ARQUIVO_EMPRESA, CONFIG_EMPRESA_PADRAO),
@@ -17088,6 +17100,8 @@ def verificar_integridade_dados():
         problemas.append("config_empresa: estrutura inválida (esperado objeto).")
     if not isinstance(documentos.get("site_campaign_db"), dict):
         problemas.append("site_campaign_db: estrutura inválida (esperado objeto).")
+    if not isinstance(documentos.get("site_home_content_db"), dict):
+        problemas.append("site_home_content_db: estrutura inválida (esperado objeto).")
     return problemas, contagens
 
 def restaurar_backup_payload(payload):
@@ -27048,6 +27062,7 @@ if pagina_atual == "site":
 
     # HF65 — Campanha Destaque: ferramenta curta e reutilizável, com liga/desliga.
     campanha_hf65 = carregar_config_campanha_site()
+    home_hf6514 = carregar_config_home_site()
     _camp_status_hf65 = "ATIVA" if campanha_hf65.get("enabled") else "desativada"
     with st.expander(f"🎯 Campanha Destaque · {_camp_status_hf65}", expanded=bool(campanha_hf65.get("enabled"))):
         st.caption(
@@ -27189,6 +27204,184 @@ if pagina_atual == "site":
                         pass
                     st.success("Campanha salva. Agora prepare a prévia do site e publique quando estiver tudo certo.")
                     st.rerun()
+
+    # HF65.14 — conteúdo administrável da Home: CTA do canal, banners, depoimentos e clientes.
+    with st.expander("🏠 Conteúdo da Home · banners, depoimentos e clientes", expanded=False):
+        st.caption(
+            "Edite os conteúdos novos da página inicial sem mexer no Catálogo. "
+            "Banner recomendado: **1600 × 480 px** (proporção 10:3). No celular o site adapta automaticamente."
+        )
+
+        def _salvar_home_hf6514(novo, mensagem):
+            if salvar_config_home_site(novo):
+                st.session_state.pop("site_hf59_html_preview", None)
+                _site_runtime_cache_hf45.clear()
+                try:
+                    registrar_auditoria("Atualizar conteúdo da Home", "Site", "HF65.14", {"resumo": mensagem})
+                except Exception:
+                    pass
+                st.success(mensagem)
+                st.rerun()
+            else:
+                st.error("O banco não confirmou a atualização da Home. Nada foi publicado.")
+
+        st.markdown("#### 🔗 Botão principal")
+        with st.form("hf6514_home_cta_form"):
+            _home_cta_text_hf6514 = st.text_input(
+                "Texto do botão",
+                value=str(home_hf6514.get("hero_cta_text") or "Entre para nosso canal"),
+                max_chars=80,
+            )
+            _home_cta_url_hf6514 = st.text_input(
+                "Link do botão",
+                value=str(home_hf6514.get("hero_cta_url") or "https://whatsapp.com/channel/0029VbDLvQQLI8YOtOO2lG3I"),
+                placeholder="https://...",
+            )
+            _home_cta_save_hf6514 = st.form_submit_button("💾 Salvar botão principal", use_container_width=True)
+        if _home_cta_save_hf6514:
+            _novo_home_hf6514 = dict(home_hf6514)
+            _novo_home_hf6514["hero_cta_text"] = _home_cta_text_hf6514.strip() or "Entre para nosso canal"
+            _novo_home_hf6514["hero_cta_url"] = _home_cta_url_hf6514.strip()
+            _salvar_home_hf6514(_novo_home_hf6514, "Botão principal atualizado. Prepare a prévia antes de publicar.")
+
+        _tab_banners_hf6514, _tab_depo_hf6514, _tab_clientes_hf6514 = st.tabs([
+            "🖼️ Banners informativos", "💬 Depoimentos", "🏢 Empresas / clientes"
+        ])
+
+        with _tab_banners_hf6514:
+            st.caption("Os banners rodam automaticamente no espaço abaixo do topo do site. Você pode cadastrar até 12.")
+            _banner_upload_hf6514 = st.file_uploader(
+                "Imagem do banner",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="hf6514_banner_upload",
+                help="Recomendado: 1600 × 480 px. Evite textos importantes muito perto das bordas.",
+            )
+            _bc1_hf6514, _bc2_hf6514 = st.columns(2)
+            _banner_title_hf6514 = _bc1_hf6514.text_input("Descrição interna / acessibilidade", key="hf6514_banner_title", placeholder="Ex.: Outubro Rosa 2026")
+            _banner_link_hf6514 = _bc2_hf6514.text_input("Link ao clicar (opcional)", key="hf6514_banner_link", placeholder="https://...")
+            if st.button("➕ Adicionar banner", key="hf6514_banner_add", type="primary", use_container_width=True):
+                if _banner_upload_hf6514 is None:
+                    st.warning("Escolha a imagem do banner primeiro.")
+                elif len(home_hf6514.get("banners") or []) >= 12:
+                    st.warning("O limite é 12 banners. Exclua um antigo antes de adicionar outro.")
+                else:
+                    _banner_src_hf6514 = upload_catalog_image(_banner_upload_hf6514)
+                    if not _banner_src_hf6514:
+                        st.error("Não foi possível gravar a imagem do banner.")
+                    else:
+                        _novo_home_hf6514 = dict(home_hf6514)
+                        _lista_hf6514 = [dict(x) for x in (_novo_home_hf6514.get("banners") or [])]
+                        _lista_hf6514.append({
+                            "id": f"banner-{int(time.time()*1000)}-{secrets.token_hex(2)}",
+                            "image_src": _banner_src_hf6514,
+                            "title": _banner_title_hf6514.strip(),
+                            "link": _banner_link_hf6514.strip(),
+                            "active": True,
+                        })
+                        _novo_home_hf6514["banners"] = _lista_hf6514
+                        _salvar_home_hf6514(_novo_home_hf6514, "Banner adicionado à Home. Site ainda não publicado.")
+
+            for _i_hf6514, _item_hf6514 in enumerate(home_hf6514.get("banners") or []):
+                with st.container(border=True):
+                    _bi1_hf6514, _bi2_hf6514, _bi3_hf6514, _bi4_hf6514 = st.columns([1.2, 2.6, 1, 1])
+                    with _bi1_hf6514:
+                        try:
+                            st.image(str(_item_hf6514.get("image_src") or ""), use_container_width=True)
+                        except Exception:
+                            st.caption("Imagem salva")
+                    _bi2_hf6514.markdown(f"**{_item_hf6514.get('title') or 'Banner informativo'}**")
+                    if _item_hf6514.get("link"):
+                        _bi2_hf6514.caption(str(_item_hf6514.get("link")))
+                    _ativo_hf6514 = bool(_item_hf6514.get("active", True))
+                    if _bi3_hf6514.button("⏸️ Pausar" if _ativo_hf6514 else "▶️ Ativar", key=f"hf6514_banner_toggle_{_item_hf6514.get('id')}", use_container_width=True):
+                        _novo_home_hf6514 = dict(home_hf6514)
+                        _lista_hf6514 = [dict(x) for x in (_novo_home_hf6514.get("banners") or [])]
+                        if _i_hf6514 < len(_lista_hf6514):
+                            _lista_hf6514[_i_hf6514]["active"] = not _ativo_hf6514
+                        _novo_home_hf6514["banners"] = _lista_hf6514
+                        _salvar_home_hf6514(_novo_home_hf6514, "Status do banner atualizado.")
+                    if _bi4_hf6514.button("🗑️ Excluir", key=f"hf6514_banner_del_{_item_hf6514.get('id')}", use_container_width=True):
+                        _novo_home_hf6514 = dict(home_hf6514)
+                        _novo_home_hf6514["banners"] = [dict(x) for j, x in enumerate(_novo_home_hf6514.get("banners") or []) if j != _i_hf6514]
+                        _salvar_home_hf6514(_novo_home_hf6514, "Banner removido da Home.")
+
+        with _tab_depo_hf6514:
+            with st.form("hf6514_testimonial_form", clear_on_submit=True):
+                _td1_hf6514, _td2_hf6514 = st.columns(2)
+                _dep_nome_hf6514 = _td1_hf6514.text_input("Nome do cliente")
+                _dep_empresa_hf6514 = _td2_hf6514.text_input("Empresa / referência (opcional)")
+                _dep_texto_hf6514 = st.text_area("Depoimento", height=110, max_chars=700)
+                _dep_add_hf6514 = st.form_submit_button("➕ Adicionar depoimento", type="primary", use_container_width=True)
+            if _dep_add_hf6514:
+                if not _dep_texto_hf6514.strip():
+                    st.warning("Escreva o depoimento antes de salvar.")
+                else:
+                    _novo_home_hf6514 = dict(home_hf6514)
+                    _lista_hf6514 = [dict(x) for x in (_novo_home_hf6514.get("testimonials") or [])]
+                    _lista_hf6514.append({
+                        "id": f"depo-{int(time.time()*1000)}-{secrets.token_hex(2)}",
+                        "name": _dep_nome_hf6514.strip() or "Cliente AlphaFest",
+                        "company": _dep_empresa_hf6514.strip(),
+                        "text": _dep_texto_hf6514.strip(),
+                        "active": True,
+                    })
+                    _novo_home_hf6514["testimonials"] = _lista_hf6514
+                    _salvar_home_hf6514(_novo_home_hf6514, "Depoimento adicionado à Home.")
+            for _i_hf6514, _item_hf6514 in enumerate(home_hf6514.get("testimonials") or []):
+                with st.container(border=True):
+                    _di1_hf6514, _di2_hf6514 = st.columns([5, 1])
+                    _di1_hf6514.markdown(f"**{_item_hf6514.get('name') or 'Cliente'}**" + (f" · {_item_hf6514.get('company')}" if _item_hf6514.get('company') else ""))
+                    _di1_hf6514.caption(str(_item_hf6514.get("text") or ""))
+                    if _di2_hf6514.button("🗑️ Excluir", key=f"hf6514_depo_del_{_item_hf6514.get('id')}", use_container_width=True):
+                        _novo_home_hf6514 = dict(home_hf6514)
+                        _novo_home_hf6514["testimonials"] = [dict(x) for j, x in enumerate(_novo_home_hf6514.get("testimonials") or []) if j != _i_hf6514]
+                        _salvar_home_hf6514(_novo_home_hf6514, "Depoimento removido da Home.")
+
+        with _tab_clientes_hf6514:
+            st.caption("Cadastre projetos/empresas para a faixa central com rolagem automática, inspirada na referência enviada.")
+            _cliente_upload_hf6514 = st.file_uploader(
+                "Foto do projeto, produto ou logo do cliente (opcional)",
+                type=["png", "jpg", "jpeg", "webp"],
+                key="hf6514_client_upload",
+            )
+            _cc1_hf6514, _cc2_hf6514 = st.columns(2)
+            _cliente_empresa_hf6514 = _cc1_hf6514.text_input("Empresa / cliente", key="hf6514_client_company")
+            _cliente_headline_hf6514 = _cc2_hf6514.text_input("Título do destaque", key="hf6514_client_headline", placeholder="Ex.: Projeto especial para evento corporativo")
+            _cliente_desc_hf6514 = st.text_area("Informações do projeto", key="hf6514_client_desc", height=110, max_chars=900)
+            _cliente_link_hf6514 = st.text_input("Link opcional", key="hf6514_client_link", placeholder="https://...")
+            if st.button("➕ Adicionar empresa / projeto", key="hf6514_client_add", type="primary", use_container_width=True):
+                if not (_cliente_empresa_hf6514.strip() or _cliente_headline_hf6514.strip() or _cliente_desc_hf6514.strip() or _cliente_upload_hf6514):
+                    st.warning("Informe pelo menos a empresa, um texto ou uma imagem.")
+                else:
+                    _cliente_src_hf6514 = upload_catalog_image(_cliente_upload_hf6514) if _cliente_upload_hf6514 is not None else ""
+                    _novo_home_hf6514 = dict(home_hf6514)
+                    _lista_hf6514 = [dict(x) for x in (_novo_home_hf6514.get("clients") or [])]
+                    _lista_hf6514.append({
+                        "id": f"cliente-{int(time.time()*1000)}-{secrets.token_hex(2)}",
+                        "company": _cliente_empresa_hf6514.strip(),
+                        "headline": _cliente_headline_hf6514.strip(),
+                        "description": _cliente_desc_hf6514.strip(),
+                        "image_src": _cliente_src_hf6514,
+                        "link": _cliente_link_hf6514.strip(),
+                        "active": True,
+                    })
+                    _novo_home_hf6514["clients"] = _lista_hf6514
+                    _salvar_home_hf6514(_novo_home_hf6514, "Empresa/projeto adicionado à faixa central da Home.")
+            for _i_hf6514, _item_hf6514 in enumerate(home_hf6514.get("clients") or []):
+                with st.container(border=True):
+                    _ci1_hf6514, _ci2_hf6514, _ci3_hf6514 = st.columns([1.2, 4, 1])
+                    with _ci1_hf6514:
+                        if _item_hf6514.get("image_src"):
+                            try:
+                                st.image(str(_item_hf6514.get("image_src")), use_container_width=True)
+                            except Exception:
+                                st.caption("Imagem salva")
+                    _ci2_hf6514.markdown(f"**{_item_hf6514.get('company') or 'Cliente AlphaFest'}**")
+                    _ci2_hf6514.caption(str(_item_hf6514.get("headline") or _item_hf6514.get("description") or ""))
+                    if _ci3_hf6514.button("🗑️ Excluir", key=f"hf6514_client_del_{_item_hf6514.get('id')}", use_container_width=True):
+                        _novo_home_hf6514 = dict(home_hf6514)
+                        _novo_home_hf6514["clients"] = [dict(x) for j, x in enumerate(_novo_home_hf6514.get("clients") or []) if j != _i_hf6514]
+                        _salvar_home_hf6514(_novo_home_hf6514, "Empresa/projeto removido da Home.")
 
     # HF52.1-HF3 — métricas privadas por período + funil + origem dos acessos + termos buscados.
     # Compatibilidade visual HF52.1-HF2: "Métricas privadas do Site · HF52.1-HF2".
@@ -27417,6 +27610,7 @@ if pagina_atual == "site":
                 visual_hf48=True,
                 mascotes_hf48=True,
                 campaign_config=campanha_hf65,
+                home_content_config=home_hf6514,
             )
         st.success("✅ Prévia atualizada. Confira abaixo antes de publicar.")
     col_site_hf59.link_button("🌐 Abrir site atual", "https://alphafest.com.br", use_container_width=True)
@@ -27456,11 +27650,12 @@ if pagina_atual == "site":
                     visual_hf48=True,
                     mascotes_hf48=True,
                     campaign_config=campanha_hf65,
+                    home_content_config=home_hf6514,
                 )
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.13",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.14",
                 )
                 return _html, _zip
 
@@ -27475,6 +27670,7 @@ if pagina_atual == "site":
                     "total": resumo_vitrine_hf59.get("total", 0),
                     "visual": "HF65",
                     "campaign": campanha_hf65,
+                    "home": home_hf6514,
                 },
                 _build_producao_hf59,
                 ttl_seconds=180,
@@ -27603,7 +27799,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.13",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.14",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
@@ -35710,7 +35906,7 @@ if pagina_atual == "catalogo":
             if _hf514_campanhas:
                 st.markdown("##### 🎯 Carrossel sazonal rápido")
                 st.caption(
-                    "Escolha uma campanha já cadastrada nos produtos e preencha o carrossel com até 5 itens elegíveis em um clique. "
+                    "Escolha uma campanha já cadastrada nos produtos e preencha o carrossel com até 10 itens elegíveis em um clique. "
                     "O auto-save altera somente o Catálogo Oficial; **não publica o site**."
                 )
                 _hf514_c1, _hf514_c2, _hf514_c3 = st.columns([2, 1, 1])
@@ -35744,7 +35940,7 @@ if pagina_atual == "catalogo":
                             _idx_hf514,
                         ))
                     _candidatos_hf514.sort()
-                    _selecionados_hf514 = {idx for _, _, idx in _candidatos_hf514[:5]}
+                    _selecionados_hf514 = {idx for _, _, idx in _candidatos_hf514[:10]}
                     if not _selecionados_hf514:
                         st.warning("Nenhum produto marcado para o site está elegível para esta campanha.")
                     else:
@@ -35788,8 +35984,8 @@ if pagina_atual == "catalogo":
             _hf492_m3.metric("Preço visível", _hf492_total_preco)
             _hf492_m4.metric("Destaques", _hf492_total_destaque)
             _hf501_m5.metric("No carrossel", _hf501_total_carrossel)
-            if _hf501_total_carrossel > 5:
-                st.warning("🎠 O site exibe no máximo 5 itens no carrossel. Desmarque os excedentes para controlar exatamente os banners mostrados.")
+            if _hf501_total_carrossel > 10:
+                st.warning("🎠 O site exibe no máximo 10 itens no carrossel. Desmarque os excedentes para controlar exatamente os banners mostrados.")
 
             if _hf492_linhas:
                 _hf492_assinatura_filtro = hashlib.sha256(
@@ -35825,7 +36021,7 @@ if pagina_atual == "catalogo":
                         ),
                         "🎠 Carrossel": st.column_config.CheckboxColumn(
                             "🎠 Carrossel",
-                            help="Mostra o produto no carrossel comercial entre o banner principal e as categorias. Recomendado: 3 a 5 itens.",
+                            help="Mostra o produto no carrossel comercial logo abaixo de Explore por categoria. Recomendado: até 10 itens.",
                             width="small",
                         ),
                     },

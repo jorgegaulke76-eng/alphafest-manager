@@ -20,6 +20,10 @@ from site_galeria_service import gerar_fragmento_galeria, selecionar_trabalhos_s
 from site_visual_hf48_service import aplicar_visual_hf48
 from site_metrics_service import inject_tracking
 from site_campaign_service import inject_campaign
+from site_home_content_service import (
+    normalize_home_content_config, banner_carousel_html, testimonials_html,
+    client_showcase_html, HOME_CONTENT_CSS, HOME_CONTENT_JS,
+)
 
 ImagemResolver = Optional[Callable[[str], str]]
 
@@ -57,6 +61,19 @@ def _bloco_servicos() -> str:
     return "".join(cards)
 
 
+
+def _brand_icon(name: str) -> str:
+    """SVGs vetoriais das marcas, substituindo emojis na área de comunicação."""
+    name = str(name or "").strip().lower()
+    paths = {
+        "instagram": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.8 2h8.4A5.8 5.8 0 0 1 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8A5.8 5.8 0 0 1 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2Zm-.2 2A3.6 3.6 0 0 0 4 7.6v8.8A3.6 3.6 0 0 0 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6A3.6 3.6 0 0 0 16.4 4H7.6Zm9.65 1.5a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>',
+        "facebook": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.7 22v-8h2.7l.4-3.1h-3.1V8.9c0-.9.25-1.5 1.55-1.5H17V4.6c-.3-.04-1.3-.13-2.48-.13-2.45 0-4.13 1.5-4.13 4.25v2.17H7.6V14h2.79v8h3.31Z"/></svg>',
+        "tiktok": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.6 3c.38 2.2 1.65 3.5 3.9 3.64v2.48c-1.3.13-2.44-.3-3.85-1.16v5.15c0 6.54-7.13 8.58-10 3.9-1.84-3.02-.71-8.32 5.2-8.53v2.62c-.43.07-.9.18-1.31.32-1.27.43-1.99 1.25-1.79 2.72.38 2.81 5.55 3.64 5.12-1.85V3h2.73Z"/></svg>',
+        "youtube": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4L15.8 12 9.6 15.6Z"/></svg>',
+        "whatsapp": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5A11.8 11.8 0 0 0 12.08 0C5.54 0 .23 5.3.23 11.84c0 2.09.55 4.13 1.6 5.92L.13 24l6.4-1.68a11.84 11.84 0 0 0 5.54 1.41h.01c6.53 0 11.85-5.31 11.85-11.85 0-3.17-1.22-6.15-3.43-8.38Zm-8.42 18.23h-.01a9.83 9.83 0 0 1-5.02-1.38l-.36-.22-3.8 1 1.01-3.7-.24-.38a9.82 9.82 0 0 1-1.5-5.21c0-5.43 4.42-9.84 9.86-9.84a9.78 9.78 0 0 1 6.96 2.89 9.78 9.78 0 0 1 2.88 6.97c0 5.43-4.42 9.86-9.78 9.87Z"/></svg>',
+    }
+    return paths.get(name, "")
+
 def gerar_html_site_completo(
     catalogo: Iterable[Dict[str, Any]],
     empresa: Dict[str, Any],
@@ -73,6 +90,7 @@ def gerar_html_site_completo(
     mascotes_hf48: bool = False,
     campaign_config: Optional[Dict[str, Any]] = None,
     campaign_force_preview: bool = False,
+    home_content_config: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Gera o site completo sem publicar ou persistir qualquer dado.
 
@@ -99,6 +117,7 @@ def gerar_html_site_completo(
     )
 
     empresa = dict(empresa or {})
+    home_cfg = normalize_home_content_config(home_content_config or {})
     nome = str(empresa.get("nome") or "AlphaFest").strip() or "AlphaFest"
     subtitulo = str(empresa.get("subtitulo") or "Personalizados & Balões").strip()
     slogan = str(empresa.get("slogan") or "O poder de estar presente em cada presente!").strip()
@@ -134,7 +153,7 @@ def gerar_html_site_completo(
 .services-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:28px}.service-card{border:1px solid var(--line);border-radius:18px;background:#fff;padding:22px;box-shadow:0 8px 26px rgba(20,37,61,.05)}.service-icon{font-size:26px}.service-card h3{font-size:17px;margin:12px 0 8px}.service-card p{font-size:14px;line-height:1.55;color:#62758e;margin:0}
 .about-grid{display:grid;grid-template-columns:1.12fr .88fr;gap:28px;align-items:stretch}.about-card{border:1px solid var(--line);background:#fff;border-radius:22px;padding:28px;box-shadow:0 12px 34px rgba(20,37,61,.06)}.about-card h3{margin:0 0 14px;font-size:23px}.about-card p{color:#5d718b;line-height:1.75}.about-points{display:grid;gap:12px;margin-top:20px}.about-point{display:flex;gap:10px;align-items:flex-start;background:#f7fbff;border-radius:13px;padding:13px}.about-point strong{display:block;font-size:14px}.about-point span{font-size:13px;color:#647991}
 .contact-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;margin-top:28px}.contact-card{border:1px solid var(--line);background:#fff;border-radius:20px;padding:24px}.contact-list{display:grid;gap:12px;margin-top:18px}.contact-item{display:flex;gap:12px;align-items:flex-start}.contact-item b{display:block}.contact-item span,.contact-item a{font-size:14px;color:#60748e;text-decoration:none}.contact-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.contact-actions .secondary{display:inline-flex}
-.hf522-social{background:linear-gradient(135deg,#eef9ff 0%,#fff 48%,#fff1f8 100%)}.hf522-social-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;align-items:center;margin-top:24px}.hf522-social-card{border:1px solid var(--line);background:#fff;border-radius:22px;padding:24px;box-shadow:0 10px 30px rgba(20,37,61,.06)}.hf522-social-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.hf522-social-link{display:flex;align-items:center;gap:11px;border:1px solid #dfeaf5;border-radius:15px;padding:13px 14px;background:#fff;color:#173d66;text-decoration:none;font-weight:900;transition:.18s}.hf522-social-link:hover{transform:translateY(-2px);border-color:#a9d8f8;box-shadow:0 8px 20px rgba(18,35,61,.08)}.hf522-social-link span{font-size:21px}.hf522-social-note{font-size:13px;color:#667b92;line-height:1.55;margin-top:10px}.hf522-social-cta{display:inline-flex;margin-top:18px}
+.hf522-social{background:linear-gradient(135deg,#eef9ff 0%,#fff 48%,#fff1f8 100%)}.hf522-social-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;align-items:center;margin-top:24px}.hf522-social-card{border:1px solid var(--line);background:#fff;border-radius:22px;padding:24px;box-shadow:0 10px 30px rgba(20,37,61,.06)}.hf522-social-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.hf522-social-link{display:flex;align-items:center;gap:11px;border:1px solid #dfeaf5;border-radius:15px;padding:13px 14px;background:#fff;color:#173d66;text-decoration:none;font-weight:900;transition:.18s}.hf522-social-link:hover{transform:translateY(-2px);border-color:#a9d8f8;box-shadow:0 8px 20px rgba(18,35,61,.08)}.hf522-social-link .hf522-brand-icon{width:24px;height:24px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}.hf522-social-link svg{width:23px;height:23px;fill:currentColor}.hf522-instagram .hf522-brand-icon{color:#E4405F}.hf522-facebook .hf522-brand-icon{color:#1877F2}.hf522-tiktok .hf522-brand-icon{color:#111}.hf522-youtube .hf522-brand-icon{color:#FF0000}.hf522-whatsapp .hf522-brand-icon{color:#fff}.hf522-social-cta .hf522-brand-icon{width:21px;height:21px;display:flex}.hf522-social-cta svg{width:21px;height:21px;fill:currentColor}.hf522-social-note{font-size:13px;color:#667b92;line-height:1.55;margin-top:10px}.hf522-social-cta{display:inline-flex;margin-top:18px}
 .site-footnote{font-size:12px;color:#71849c;margin-top:18px}.legacy-note{margin-top:22px;border:1px dashed #bdd6ea;border-radius:14px;padding:14px;background:#f8fcff;color:#5b7089;font-size:13px}
 .hf52-footer-in{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;text-align:center!important;gap:18px!important;padding-top:38px!important;padding-bottom:38px!important}.hf52-footer-brand{display:grid;gap:8px;justify-items:center}.hf52-footer-brand-logo{width:min(300px,72vw);height:72px;object-fit:contain;object-position:center;background:transparent;border:0;box-shadow:none;filter:drop-shadow(0 3px 6px rgba(0,0,0,.18))}.hf52-footer-brand strong{font-size:20px}.hf52-footer-brand small{color:#bcd0e2!important}.hf52-footer-verse{max-width:780px;margin:0;padding:0 18px;font-size:16px;line-height:1.65;font-style:italic;color:#eef7ff}.hf52-footer-verse cite{display:block;margin-top:7px;font-size:13px;font-style:normal;font-weight:900;color:#8ed7ff}.hf52-footer-dev{padding-top:14px;border-top:1px solid rgba(255,255,255,.12);width:min(720px,100%);font-size:12px;color:#9fb7cb}.hf52-footer-dev strong{color:#fff}
 @media(max-width:940px){.services-grid{grid-template-columns:repeat(2,1fr)}.about-grid,.contact-grid{grid-template-columns:1fr}.site-nav{top:69px}}
@@ -205,10 +224,10 @@ def gerar_html_site_completo(
       </div></div></div>{('<div class="site-footnote">Dados de contato exibidos nesta página são lidos da configuração oficial da empresa no AlphaFest Manager.</div>' if modo_preview else '')}</div></section>'''
 
     social_links = []
-    for rotulo, icone, url in (("Instagram", "📸", instagram), ("Facebook", "📘", facebook), ("TikTok", "🎵", tiktok), ("YouTube", "▶️", youtube)):
+    for rotulo, chave_icone, url in (("Instagram", "instagram", instagram), ("Facebook", "facebook", facebook), ("TikTok", "tiktok", tiktok), ("YouTube", "youtube", youtube)):
         if url:
-            social_links.append(f'<a class="hf522-social-link" href="{html.escape(url, quote=True)}" target="_blank" rel="noopener"><span>{icone}</span>{html.escape(rotulo)}</a>')
-    fale_alphafest = f'''<section class="site-section hf522-social" id="fale-alphafest"><div class="site-wrap"><div class="section-kicker">Fale com a AlphaFest</div><h2 class="section-title">Acompanhe, converse e veja as novidades.</h2><p class="section-copy">Siga a AlphaFest nas redes sociais e fale diretamente com a equipe para orçamentos, dúvidas e projetos personalizados.</p><div class="hf522-social-grid"><div class="hf522-social-card"><h3>Redes da AlphaFest</h3><div class="hf522-social-links">{''.join(social_links) or '<div class="hf522-social-note">Cadastre os links das redes sociais no Manager para exibi-los aqui.</div>'}</div></div><div class="hf522-social-card"><h3>Prefere falar agora?</h3><p class="section-copy">Conte sua ideia pelo WhatsApp. A equipe ajuda com material, quantidade, personalização e prazo.</p><a class="cta hf522-social-cta" href="{html.escape(whatsapp, quote=True)}" target="_blank" rel="noopener">💬 Falar com a AlphaFest</a></div></div></div></section>'''
+            social_links.append(f'<a class="hf522-social-link hf522-{chave_icone}" href="{html.escape(url, quote=True)}" target="_blank" rel="noopener"><span class="hf522-brand-icon">{_brand_icon(chave_icone)}</span>{html.escape(rotulo)}</a>')
+    fale_alphafest = f'''<section class="site-section hf522-social" id="fale-alphafest"><div class="site-wrap"><div class="section-kicker">Fale com a AlphaFest</div><h2 class="section-title">Acompanhe, converse e veja as novidades.</h2><p class="section-copy">Siga a AlphaFest nas redes sociais e fale diretamente com a equipe para orçamentos, dúvidas e projetos personalizados.</p><div class="hf522-social-grid"><div class="hf522-social-card"><h3>Redes da AlphaFest</h3><div class="hf522-social-links">{''.join(social_links) or '<div class="hf522-social-note">Cadastre os links das redes sociais no Manager para exibi-los aqui.</div>'}</div></div><div class="hf522-social-card"><h3>Prefere falar agora?</h3><p class="section-copy">Conte sua ideia pelo WhatsApp. A equipe ajuda com material, quantidade, personalização e prazo.</p><a class="cta hf522-social-cta hf522-whatsapp" href="{html.escape(whatsapp, quote=True)}" target="_blank" rel="noopener"><span class="hf522-brand-icon">{_brand_icon("whatsapp")}</span>Falar com a AlphaFest</a></div></div></div></section>'''
 
     # HF52.2: jornada comercial primeiro; Galeria/fotos fica próxima ao rodapé.
     # HF52.2-HF1: ordem final é aplicada após a camada visual.
@@ -252,6 +271,7 @@ def gerar_html_site_completo(
             galeria_trabalhos=galeria_lista,
             usar_mascotes=mascotes_hf48,
             imagem_resolver=imagem_resolver,
+            home_content_config=home_cfg,
         )
 
         # HF52.2-HF1 — ordem comercial final. Hero + carrossel permanecem no topo.
@@ -264,6 +284,7 @@ def gerar_html_site_completo(
         blocos = {}
         padroes = {
             "categorias": r'<section class="hf48-categories" id="categorias">.*?</section>',
+            "carrossel": r'<section class="hf50-carousel" id="destaques">.*?</section>',
             "servicos": r'<section class="site-section pink" id="servicos">.*?</section>',
             "quem": r'<section class="site-section alt" id="quem-somos">.*?</section>',
             "contato": r'<section class="site-section" id="contato">.*?</section>',
@@ -275,13 +296,37 @@ def gerar_html_site_completo(
         }
         for chave, padrao in padroes.items():
             pagina, blocos[chave] = _retira_bloco(pagina, padrao)
-        ordem = "".join(blocos[k] for k in ("categorias", "servicos", "quem", "contato", "fale", "produtos", "galeria") if blocos.get(k))
+        ordem = "".join(blocos[k] for k in ("categorias", "carrossel", "servicos", "quem", "contato", "fale", "produtos", "galeria") if blocos.get(k))
         marcador_final = '<a class="mobile-whatsapp"'
         pos_final = pagina.find(marcador_final)
         if pos_final < 0:
             pos_final = pagina.find('<footer class="footer">')
         if pos_final >= 0:
             pagina = pagina[:pos_final] + ordem + pagina[pos_final:]
+
+        # HF65.14 — conteúdo administrável da Home. O banner ocupa o espaço logo
+        # abaixo do Hero; empresas e depoimentos entram no centro da jornada.
+        _banner_hf6514 = banner_carousel_html(home_cfg)
+        if _banner_hf6514:
+            _hero_start_hf6514 = pagina.find('id="inicio"')
+            _hero_end_hf6514 = pagina.find('</section>', _hero_start_hf6514) if _hero_start_hf6514 >= 0 else -1
+            if _hero_end_hf6514 >= 0:
+                _hero_end_hf6514 += len('</section>')
+                pagina = pagina[:_hero_end_hf6514] + _banner_hf6514 + pagina[_hero_end_hf6514:]
+
+        _clientes_hf6514 = client_showcase_html(home_cfg)
+        _depoimentos_hf6514 = testimonials_html(home_cfg)
+        _blocos_hf6514 = _clientes_hf6514 + _depoimentos_hf6514
+        if _blocos_hf6514:
+            _marcador_quem_hf6514 = '<section class="site-section alt" id="quem-somos">'
+            _pos_hf6514 = pagina.find(_marcador_quem_hf6514)
+            if _pos_hf6514 < 0:
+                _pos_hf6514 = pagina.find('<section class="site-section" id="contato">')
+            if _pos_hf6514 >= 0:
+                pagina = pagina[:_pos_hf6514] + _blocos_hf6514 + pagina[_pos_hf6514:]
+
+        pagina = pagina.replace('</head>', '<style id="hf6514-home-content-style">' + HOME_CONTENT_CSS + '</style></head>', 1)
+        pagina = pagina.replace('</body>', '<script id="hf6514-home-content-script">' + HOME_CONTENT_JS + '</script></body>', 1)
 
     # HF52.2 — rodapé institucional: recupera o versículo do site anterior e
     # identifica o desenvolvimento do site, usando sempre o ano vigente.

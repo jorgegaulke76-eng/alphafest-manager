@@ -1,3 +1,16 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.14
+
+### HF65.14 — Home comercial: Canal, banners, depoimentos e clientes
+- Troca o CTA principal do Hero para **Entre para nosso canal** com o link oficial do canal WhatsApp AlphaFest.
+- Move o carrossel de produtos para abaixo de **Explore por categoria**.
+- Amplia o carrossel comercial de 5 para até **10 produtos**.
+- Adiciona carrossel de banners informativos no espaço superior, com cadastro de até 12 artes, link opcional, ativar/pausar e excluir.
+- Define banner recomendado em **1600 × 480 px (10:3)**, responsivo no celular.
+- Substitui emojis das redes sociais por ícones SVG de Instagram, Facebook, TikTok, YouTube e WhatsApp.
+- Adiciona cadastro e seção pública de **Depoimentos de clientes**.
+- Adiciona faixa central em rolagem automática para **Empresas / clientes / projetos**, com imagem, empresa, título, descrição e link opcional.
+- Cria `site_home_content_db`, integrado ao backup e à prévia/publicação segura do site.
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF65.13
 
 ### HF65.13 — Datas & Ocasiões em massa no Catálogo
