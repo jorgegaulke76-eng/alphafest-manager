@@ -12046,6 +12046,74 @@ def _galeria_remover_foto_referencia(galeria, gid, caminho_foto):
     return nova_lista, encontrou
 
 
+
+# HF65.15 — apoio operacional para transformar trabalhos da Galeria em posts do Canal WhatsApp.
+CANAL_WHATSAPP_ALPHAFEST = "https://whatsapp.com/channel/0029VbDLvQQLI8YOtOO2lG3I"
+
+def _galeria_legenda_canal_whatsapp(item, estilo="Acabou de sair"):
+    item = item or {}
+    produto = str(item.get("produto") or "Trabalho personalizado").strip() or "Trabalho personalizado"
+    tema = str(item.get("tema") or "").strip()
+    ocasiao = str(item.get("ocasiao") or "").strip()
+    datas = _galeria_datas_ocasioes(item)
+    categoria = str(item.get("categoria") or "").strip()
+
+    cabecalhos = {
+        "Acabou de sair": "✨ Acabou de sair da AlphaFest!",
+        "Novidade": "🆕 Novidade na AlphaFest!",
+        "Data especial": "🎈 Ideia especial para a sua comemoração!",
+        "Bastidores": "💙 Um pouquinho do que saiu da nossa produção!",
+    }
+    linhas = [cabecalhos.get(estilo, cabecalhos["Acabou de sair"]), "", f"🎁 {produto}"]
+    if tema:
+        linhas.append(f"🎨 Tema: {tema}")
+    if datas:
+        linhas.append("📅 " + " · ".join(datas[:3]))
+    elif ocasiao:
+        linhas.append(f"📅 {ocasiao}")
+    if categoria and categoria.casefold() not in produto.casefold():
+        linhas.append(f"📦 {categoria}")
+
+    linhas += [
+        "",
+        "Produzido com carinho e personalizado do seu jeito.",
+        "Quer fazer algo assim para sua festa, empresa ou presente?",
+        "",
+        "🌐 alphafest.com.br",
+        "💬 Fale com a AlphaFest pelo site.",
+        "",
+        "AlphaFest — Estamos presente em cada presente!",
+    ]
+    return "\n".join(linhas)
+
+
+def _render_copiar_texto_canal(texto, chave):
+    """Botão local de cópia; não envia o conteúdo para serviços externos."""
+    import json as _json_hf6515
+    _texto_js = _json_hf6515.dumps(str(texto or ""), ensure_ascii=False)
+    _id = "copy_" + hashlib.sha256(str(chave).encode("utf-8")).hexdigest()[:12]
+    components.html(
+        f"""
+        <div style="font-family:Arial,sans-serif">
+          <button id="{_id}" style="width:100%;padding:10px 14px;border:0;border-radius:8px;cursor:pointer;font-weight:700;background:#25D366;color:white;box-shadow:0 5px 14px rgba(37,211,102,.18)">📋 Copiar texto do post</button>
+          <div id="{_id}_msg" style="font-size:12px;color:#5d6b7a;margin-top:5px;min-height:16px"></div>
+        </div>
+        <script>
+          const btn = document.getElementById('{_id}');
+          const msg = document.getElementById('{_id}_msg');
+          btn.addEventListener('click', async () => {{
+            try {{
+              await navigator.clipboard.writeText({_texto_js});
+              msg.textContent = 'Texto copiado. Agora abra o canal e cole a legenda.';
+            }} catch (e) {{
+              msg.textContent = 'Seu navegador bloqueou a cópia automática. Selecione o texto acima e copie manualmente.';
+            }}
+          }});
+        </script>
+        """,
+        height=66,
+    )
+
 def renderizar_galeria_trabalhos(catalogo):
     """HF58 — acervo da Galeria com exibição opcional em múltiplas categorias."""
     st.markdown("### 📸 Galeria de Trabalhos")
@@ -12577,6 +12645,66 @@ def renderizar_galeria_trabalhos(catalogo):
                             st.rerun()
                         else:
                             st.error("O banco não confirmou a atualização. Nada foi alterado.")
+
+                with st.expander("📢 Preparar para Canal WhatsApp", expanded=False):
+                    st.caption(
+                        "Gera uma legenda pronta usando os dados deste trabalho. "
+                        "Depois é só copiar, baixar a foto escolhida e abrir o Canal da AlphaFest."
+                    )
+                    _estilo_canal_hf6515 = st.selectbox(
+                        "Tipo de publicação",
+                        ["Acabou de sair", "Novidade", "Data especial", "Bastidores"],
+                        key=f"hf6515_estilo_canal_{gid}",
+                    )
+                    _legenda_padrao_hf6515 = _galeria_legenda_canal_whatsapp(item, _estilo_canal_hf6515)
+                    _legenda_canal_hf6515 = st.text_area(
+                        "Legenda para o canal",
+                        value=_legenda_padrao_hf6515,
+                        height=260,
+                        key=f"hf6515_legenda_canal_{gid}_{_estilo_canal_hf6515}",
+                        help="Você pode ajustar o texto antes de copiar. Nada é publicado automaticamente.",
+                    )
+                    _render_copiar_texto_canal(_legenda_canal_hf6515, f"{gid}_{_estilo_canal_hf6515}")
+
+                    if foto_paths:
+                        _foto_canal_hf6515 = st.selectbox(
+                            "Foto para usar no post",
+                            foto_paths,
+                            format_func=lambda p: f"Foto {foto_paths.index(p) + 1}",
+                            key=f"hf6515_foto_canal_{gid}",
+                        )
+                        _bytes_canal_hf6515 = _galeria_trabalho_bytes_cache(str(_foto_canal_hf6515)) if _foto_canal_hf6515 else None
+                        if _bytes_canal_hf6515:
+                            _ext_canal_hf6515 = Path(str(_foto_canal_hf6515)).suffix.lower() or ".jpg"
+                            if _ext_canal_hf6515 not in {".png", ".jpg", ".jpeg", ".webp"}:
+                                _ext_canal_hf6515 = ".jpg"
+                            _mime_canal_hf6515 = {
+                                ".png": "image/png",
+                                ".webp": "image/webp",
+                                ".jpeg": "image/jpeg",
+                                ".jpg": "image/jpeg",
+                            }.get(_ext_canal_hf6515, "image/jpeg")
+                            st.download_button(
+                                "⬇️ Baixar foto escolhida",
+                                data=_bytes_canal_hf6515,
+                                file_name=f"alphafest_{gid[:8]}{_ext_canal_hf6515}",
+                                mime=_mime_canal_hf6515,
+                                key=f"hf6515_download_canal_{gid}",
+                                use_container_width=True,
+                            )
+                        else:
+                            st.warning("A prévia/arquivo desta foto não está disponível neste momento.")
+
+                    _home_canal_hf6515 = carregar_config_home_site()
+                    _url_canal_hf6515 = str(_home_canal_hf6515.get("hero_cta_url") or CANAL_WHATSAPP_ALPHAFEST).strip()
+                    if not _url_canal_hf6515.startswith("http"):
+                        _url_canal_hf6515 = CANAL_WHATSAPP_ALPHAFEST
+                    st.link_button(
+                        "📢 Abrir Canal da AlphaFest",
+                        _url_canal_hf6515,
+                        use_container_width=True,
+                    )
+                    st.caption("Fluxo rápido: copiar texto → baixar foto → abrir canal → publicar.")
 
                 with st.expander("🖼️ Gerenciar fotos deste trabalho", expanded=False):
                     st.markdown("**➕ Adicionar mais fotos**")
@@ -27815,7 +27943,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.14.2",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.15",
                 )
                 return _html, _zip
 
@@ -27959,7 +28087,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.14.2",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.15",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59

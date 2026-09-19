@@ -1,3 +1,11 @@
+# HF65.15 — Canal WhatsApp a partir da Galeria
+
+- Adicionado preparo de post do Canal WhatsApp diretamente em cada trabalho da Galeria.
+- Legenda automática editável com produto, tema, categoria e Datas & Ocasiões.
+- Quatro estilos rápidos: Acabou de sair, Novidade, Data especial e Bastidores.
+- Botões para copiar legenda, baixar a foto escolhida e abrir o Canal da AlphaFest.
+- Nenhuma publicação automática; o usuário mantém o controle final do conteúdo.
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF65.14.2
 
 ### HF65.14.2 — Datas & Ocasiões em massa na Galeria

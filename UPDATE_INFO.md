@@ -1,33 +1,27 @@
-# HF65.14.2 — Datas & Ocasiões em massa na Galeria
+# HF65.15 — Canal WhatsApp a partir da Galeria
 
-Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.14.2`
+Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.15`
 
-Atualização incremental sobre a HF65.14.1.
+Atualização incremental sobre a HF65.14.2.
 
 ## Objetivo
-Permitir marcar rapidamente as fotos reais do dia a dia com Datas & Ocasiões sem precisar abrir trabalho por trabalho e sem depender do Catálogo Oficial.
+Acelerar a publicação de trabalhos reais no Canal WhatsApp da AlphaFest usando as fotos e dados já guardados na Galeria de Trabalhos.
 
 ## Alterações
-- Novo bloco **📅 Datas & Ocasiões em massa — Galeria** dentro de `Catálogo → Galeria de Trabalhos`.
-- Reaproveita os filtros da Galeria: categoria, Data/Ocasião, situação e arquivados.
-- Permite escolher um ou vários trabalhos ou aplicar a todos os trabalhos filtrados.
-- Mostra a quantidade de trabalhos-alvo e de fotos alcançadas.
-- **Adicionar** preserva as marcações atuais.
-- **Remover** tira somente as opções escolhidas.
-- Trabalhos avulsos, sem vínculo com produto do Catálogo Oficial, também podem ser marcados.
-- Todas as fotos de um mesmo trabalho herdam as mesmas Datas & Ocasiões.
-
-## Integrações preservadas
-As marcações seguem alimentando:
-- a entrada 🎈 Datas & Ocasiões do site;
-- os filtros da Galeria pública;
-- a geração do Catálogo para Cliente por Datas & Ocasiões.
+- Novo expander **📢 Preparar para Canal WhatsApp** em cada trabalho ativo da Galeria.
+- Geração automática de legenda em quatro estilos: **Acabou de sair**, **Novidade**, **Data especial** e **Bastidores**.
+- A legenda reaproveita produto, tema, categoria e Datas & Ocasiões quando existirem.
+- Texto continua editável antes da publicação.
+- Botão local **📋 Copiar texto do post**.
+- Seleção da foto e botão **⬇️ Baixar foto escolhida**.
+- Botão **📢 Abrir Canal da AlphaFest** usando o link configurado na Home.
+- Fluxo rápido: copiar texto → baixar foto → abrir canal → publicar.
 
 ## Segurança operacional
-- Não altera o Catálogo Oficial.
-- Não publica o site automaticamente.
-- Não apaga fotos nem arquivos.
-- Mantém a edição individual já existente em cada trabalho.
+- Nada é publicado automaticamente no WhatsApp.
+- Não altera nem apaga a Galeria.
+- Não expõe arquivos privados no site.
+- Não usa API paga nem serviço externo para gerar o texto.
 
 ## Instalação
-Instalar pela Atualização Segura sobre a HF65.14.1.
+Instalar pela Atualização Segura sobre a HF65.14.2.

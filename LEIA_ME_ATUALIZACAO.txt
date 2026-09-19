@@ -1,12 +1,11 @@
-HF65.14.2 — DATAS & OCASIÕES EM MASSA NA GALERIA
+ATUALIZAÇÃO HF65.15 — CANAL WHATSAPP A PARTIR DA GALERIA
 
-Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.14.2
+Instale pela Atualização Segura sobre a HF65.14.2.
 
-1. Instale este ZIP pela Atualização Segura sobre a HF65.14.1.
-2. Abra Catálogo → Galeria de Trabalhos.
-3. Use os filtros da Galeria e abra “Datas & Ocasiões em massa — Galeria”.
-4. Escolha as Datas/Ocasiões e os trabalhos, ou marque todos os filtrados.
-5. Use Adicionar ou Remover.
+Depois da instalação:
+1. Abra Catálogo > Galeria de Trabalhos.
+2. Em um trabalho, abra “Preparar para Canal WhatsApp”.
+3. Escolha o tipo de publicação.
+4. Ajuste/copie a legenda, baixe a foto e abra o Canal.
 
-A marcação é feita nos trabalhos/fotos da Galeria e não depende de produto no Catálogo Oficial.
-Nada é publicado no site automaticamente.
+Nada é publicado automaticamente.
