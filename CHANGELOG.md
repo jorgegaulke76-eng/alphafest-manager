@@ -1,3 +1,15 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.14.2
+
+### HF65.14.2 — Datas & Ocasiões em massa na Galeria
+- Adiciona atualização em lote diretamente em **Catálogo → Galeria de Trabalhos**.
+- Usa os filtros atuais da Galeria para trabalhar com fotos reais do dia a dia, mesmo quando não há produto vinculado ao Catálogo Oficial.
+- Permite selecionar vários trabalhos ou aplicar a todos os trabalhos filtrados.
+- A marcação é por trabalho; todas as fotos do mesmo registro herdam as mesmas Datas & Ocasiões.
+- Mostra trabalhos-alvo, quantidade de fotos alcançadas, Datas/Ocasiões selecionadas e total filtrado.
+- Ação **Adicionar** preserva marcações existentes; ação **Remover** tira somente as Datas & Ocasiões escolhidas.
+- As marcações continuam alimentando a vitrine 🎈 Datas & Ocasiões do site e o Catálogo para Cliente.
+- Não publica o site automaticamente e não altera o Catálogo Oficial.
+
 ## 20.4.9-I8.13.5-HF53.3-HF8-HF65.14.1
 
 ### HF65.14.1 — Redes sociais com destaque de marca

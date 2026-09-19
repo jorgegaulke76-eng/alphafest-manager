@@ -1,19 +1,33 @@
-# HF65.14.1 — Redes sociais com identidade visual destacada
+# HF65.14.2 — Datas & Ocasiões em massa na Galeria
 
-Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.14.1`
+Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.14.2`
 
-Atualização visual incremental sobre a HF65.14.
+Atualização incremental sobre a HF65.14.1.
+
+## Objetivo
+Permitir marcar rapidamente as fotos reais do dia a dia com Datas & Ocasiões sem precisar abrir trabalho por trabalho e sem depender do Catálogo Oficial.
 
 ## Alterações
-- Instagram: caixa em tons suaves rosa/laranja e ícone com gradiente da marca + profundidade.
-- Facebook: caixa azul suave e ícone azul com efeito 3D.
-- TikTok: caixa neutra clara e ícone escuro com realces ciano/rosa.
-- YouTube: caixa vermelho suave e ícone vermelho com efeito 3D.
-- Todos os links mantêm nome da rede, clique externo seguro e comportamento responsivo.
-- Efeito hover discreto para reforçar que os cartões são clicáveis.
+- Novo bloco **📅 Datas & Ocasiões em massa — Galeria** dentro de `Catálogo → Galeria de Trabalhos`.
+- Reaproveita os filtros da Galeria: categoria, Data/Ocasião, situação e arquivados.
+- Permite escolher um ou vários trabalhos ou aplicar a todos os trabalhos filtrados.
+- Mostra a quantidade de trabalhos-alvo e de fotos alcançadas.
+- **Adicionar** preserva as marcações atuais.
+- **Remover** tira somente as opções escolhidas.
+- Trabalhos avulsos, sem vínculo com produto do Catálogo Oficial, também podem ser marcados.
+- Todas as fotos de um mesmo trabalho herdam as mesmas Datas & Ocasiões.
 
-## Escopo preservado
-Não altera dados da empresa, catálogo, galeria, campanhas, pedidos, estoque, métricas ou conteúdo cadastrado da Home.
+## Integrações preservadas
+As marcações seguem alimentando:
+- a entrada 🎈 Datas & Ocasiões do site;
+- os filtros da Galeria pública;
+- a geração do Catálogo para Cliente por Datas & Ocasiões.
+
+## Segurança operacional
+- Não altera o Catálogo Oficial.
+- Não publica o site automaticamente.
+- Não apaga fotos nem arquivos.
+- Mantém a edição individual já existente em cada trabalho.
 
 ## Instalação
-Instalar pela Atualização Segura sobre a HF65.14 e publicar o site novamente.
+Instalar pela Atualização Segura sobre a HF65.14.1.

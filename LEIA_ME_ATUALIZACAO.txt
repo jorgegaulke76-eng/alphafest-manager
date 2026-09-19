@@ -1,9 +1,12 @@
-HF65.14.1 — REDES SOCIAIS COM DESTAQUE DE MARCA
+HF65.14.2 — DATAS & OCASIÕES EM MASSA NA GALERIA
 
-Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.14.1
+Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.14.2
 
-1. Instale este ZIP pela Atualização Segura.
-2. Abra a prévia do site e confira a área "Redes da AlphaFest".
-3. Publique o site novamente.
+1. Instale este ZIP pela Atualização Segura sobre a HF65.14.1.
+2. Abra Catálogo → Galeria de Trabalhos.
+3. Use os filtros da Galeria e abra “Datas & Ocasiões em massa — Galeria”.
+4. Escolha as Datas/Ocasiões e os trabalhos, ou marque todos os filtrados.
+5. Use Adicionar ou Remover.
 
-A atualização altera somente a apresentação visual dos cartões das redes sociais.
+A marcação é feita nos trabalhos/fotos da Galeria e não depende de produto no Catálogo Oficial.
+Nada é publicado no site automaticamente.

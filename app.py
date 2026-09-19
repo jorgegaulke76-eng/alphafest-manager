@@ -12275,6 +12275,166 @@ def renderizar_galeria_trabalhos(catalogo):
             continue
         filtrados.append(g)
 
+    # HF65.14.2 — Datas & Ocasiões em massa diretamente na Galeria de Trabalhos.
+    # A marcação pertence ao trabalho; todas as fotos daquele registro herdam as mesmas
+    # Datas & Ocasiões para a vitrine temática do site e para o Catálogo do Cliente.
+    with st.expander("📅 Datas & Ocasiões em massa — Galeria", expanded=False):
+        st.caption(
+            "Use os filtros da Galeria acima para localizar os trabalhos do dia a dia. "
+            "A atualização é feita nos registros da Galeria — não depende de o trabalho estar no Catálogo Oficial. "
+            "Quando um trabalho possui várias fotos, todas elas herdam as mesmas Datas & Ocasiões."
+        )
+
+        _hf65142_datas = st.multiselect(
+            "Datas & Ocasiões para atualizar nas fotos da Galeria",
+            _galeria_datas_ocasioes_disponiveis(galeria),
+            key="hf65142_galeria_datas_lote",
+            placeholder="Ex.: Setembro Amarelo, Outubro Rosa, Dia dos Professores…",
+        )
+
+        _hf65142_filtrados_ids = [
+            str((g or {}).get("id") or "").strip()
+            for g in filtrados
+            if str((g or {}).get("id") or "").strip()
+        ]
+        _hf65142_por_id = {
+            str((g or {}).get("id") or "").strip(): g
+            for g in filtrados
+            if str((g or {}).get("id") or "").strip()
+        }
+
+        _hf65142_todos = st.checkbox(
+            "Aplicar a todos os trabalhos filtrados acima",
+            value=False,
+            key="hf65142_galeria_aplicar_todos",
+            help="Usa exatamente os filtros atuais de categoria, Data/Ocasião, situação e arquivados.",
+        )
+
+        def _hf65142_rotulo_trabalho(gid):
+            _reg = _hf65142_por_id.get(str(gid), {}) or {}
+            _nome = str(_reg.get("produto") or "Trabalho avulso").strip() or "Trabalho avulso"
+            _tema = str(_reg.get("tema") or "").strip()
+            _cat = str(_reg.get("categoria") or "").strip()
+            _quando = str(_reg.get("criado_em") or "").strip()
+            _qtd = len(_reg.get("fotos") or [])
+            _partes = [_nome]
+            if _tema:
+                _partes.append(f"Tema: {_tema}")
+            if _cat:
+                _partes.append(_cat)
+            if _quando:
+                _partes.append(_quando)
+            _partes.append(f"{_qtd} foto(s)")
+            return " · ".join(_partes)
+
+        if _hf65142_todos:
+            _hf65142_alvos = list(_hf65142_filtrados_ids)
+            if _hf65142_alvos:
+                st.info(f"⚡ {len(_hf65142_alvos)} trabalho(s) filtrado(s) serão atualizados em lote.")
+            else:
+                st.warning("Nenhum trabalho corresponde aos filtros atuais.")
+        else:
+            _hf65142_alvos = st.multiselect(
+                "Trabalhos / fotos que receberão a atualização",
+                _hf65142_filtrados_ids,
+                default=[],
+                format_func=_hf65142_rotulo_trabalho,
+                key="hf65142_galeria_trabalhos_lote",
+                placeholder="Escolha um ou vários trabalhos da Galeria…",
+            )
+
+        _hf65142_total_fotos = sum(
+            len((_hf65142_por_id.get(gid) or {}).get("fotos") or [])
+            for gid in _hf65142_alvos
+        )
+        _hf65142_m1, _hf65142_m2, _hf65142_m3, _hf65142_m4 = st.columns(4)
+        _hf65142_m1.metric("Trabalhos-alvo", len(_hf65142_alvos))
+        _hf65142_m2.metric("Fotos alcançadas", _hf65142_total_fotos)
+        _hf65142_m3.metric("Datas/Ocasiões", len(_hf65142_datas))
+        _hf65142_m4.metric("Trabalhos filtrados", len(_hf65142_filtrados_ids))
+
+        if _hf65142_datas and _hf65142_alvos:
+            _hf65142_resumo = []
+            for _data in _hf65142_datas:
+                _data_cf = str(_data).casefold()
+                _ja = sum(
+                    1 for _gid in _hf65142_alvos
+                    if _data_cf in {x.casefold() for x in _galeria_datas_ocasioes(_hf65142_por_id.get(_gid) or {})}
+                )
+                _hf65142_resumo.append(f"{_data}: {_ja}/{len(_hf65142_alvos)} já marcados")
+            st.caption(" • ".join(_hf65142_resumo))
+
+        _hf65142_b1, _hf65142_b2 = st.columns(2)
+        _hf65142_add = _hf65142_b1.button(
+            "➕ Adicionar às Datas & Ocasiões",
+            key="hf65142_galeria_adicionar",
+            use_container_width=True,
+            type="primary",
+        )
+        _hf65142_del = _hf65142_b2.button(
+            "➖ Remover destas Datas & Ocasiões",
+            key="hf65142_galeria_remover",
+            use_container_width=True,
+        )
+
+        if _hf65142_add or _hf65142_del:
+            if not _hf65142_datas:
+                st.warning("Escolha pelo menos uma Data & Ocasião.")
+            elif not _hf65142_alvos:
+                st.warning("Escolha pelo menos um trabalho ou marque 'Aplicar a todos os trabalhos filtrados acima'.")
+            else:
+                _hf65142_alvos_set = set(_hf65142_alvos)
+                _hf65142_datas_cf = {str(x).casefold() for x in _hf65142_datas}
+                _hf65142_nova_galeria = [dict(reg or {}) for reg in (galeria or [])]
+                _hf65142_alterados = 0
+                _hf65142_fotos_alteradas = 0
+                _hf65142_agora = agora_local().strftime("%d/%m/%Y %H:%M")
+
+                for _reg in _hf65142_nova_galeria:
+                    _gid = str((_reg or {}).get("id") or "").strip()
+                    if _gid not in _hf65142_alvos_set:
+                        continue
+
+                    _atuais = [
+                        str(x).strip()
+                        for x in ((_reg or {}).get("datas_ocasioes") or [])
+                        if str(x).strip()
+                    ]
+                    if _hf65142_add:
+                        _novas = list(dict.fromkeys(_atuais + [str(x).strip() for x in _hf65142_datas if str(x).strip()]))
+                    else:
+                        _novas = [x for x in _atuais if x.casefold() not in _hf65142_datas_cf]
+
+                    if _novas == _atuais:
+                        continue
+
+                    _reg["datas_ocasioes"] = _novas
+                    _reg["atualizado_em"] = _hf65142_agora
+                    _reg["DatasOcasioesLoteHF65_14_2"] = {
+                        "acao": "adicionar" if _hf65142_add else "remover",
+                        "itens": list(_hf65142_datas),
+                        "quando": _hf65142_agora,
+                        "origem": "Galeria de Trabalhos · Datas & Ocasiões em massa",
+                    }
+                    _hf65142_alterados += 1
+                    _hf65142_fotos_alteradas += len((_reg or {}).get("fotos") or [])
+
+                if not _hf65142_alterados:
+                    st.info("Nenhum trabalho precisou ser alterado; as marcações já estavam nesse estado.")
+                elif salvar_galeria_trabalhos(_hf65142_nova_galeria):
+                    galeria[:] = _hf65142_nova_galeria
+                    _acao = "adicionada(s)" if _hf65142_add else "removida(s)"
+                    st.session_state["_hf55_galeria_flash"] = {
+                        "tipo": "success",
+                        "mensagem": (
+                            f"{len(_hf65142_datas)} Data(s)/Ocasião(ões) {_acao} em "
+                            f"{_hf65142_alterados} trabalho(s), alcançando {_hf65142_fotos_alteradas} foto(s) da Galeria."
+                        ),
+                    }
+                    st.rerun()
+                else:
+                    st.error("O banco não confirmou a atualização em massa da Galeria. Nada foi alterado.")
+
     if not filtrados:
         st.info("Nenhum trabalho encontrado com esses filtros.")
         return
@@ -27655,7 +27815,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.14.1",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.14.2",
                 )
                 return _html, _zip
 
@@ -27799,7 +27959,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.14.1",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.14.2",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
