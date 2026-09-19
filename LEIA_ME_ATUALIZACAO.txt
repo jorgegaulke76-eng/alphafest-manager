@@ -1,11 +1,9 @@
-ATUALIZAÇÃO HF65.15 — CANAL WHATSAPP A PARTIR DA GALERIA
+ATUALIZAÇÃO HF65.15.2 — BUSCA SEM TEMA + CTA DO CANAL LIMPO
 
-Instale pela Atualização Segura sobre a HF65.14.2.
+Instale pela Atualização Segura sobre a HF65.15.
+Esta versão já inclui a correção HF65.15.1, então não é necessário instalar a HF65.15.1 separadamente.
+Depois prepare a prévia e publique o site novamente.
 
-Depois da instalação:
-1. Abra Catálogo > Galeria de Trabalhos.
-2. Em um trabalho, abra “Preparar para Canal WhatsApp”.
-3. Escolha o tipo de publicação.
-4. Ajuste/copie a legenda, baixe a foto e abra o Canal.
-
-Nada é publicado automaticamente.
+Alterações:
+- Tema removido da busca pública.
+- Removido o botão "Ver produtos" ao lado de "Entre para nosso canal" no Hero.

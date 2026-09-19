@@ -322,7 +322,7 @@ body{background:var(--hf48-bg)}
         hero_novo = f'''<section class="hero hf48-hero-branded" id="inicio">{f'<img class="hf48-real-balloons" src="{mascotes.get("baloes", "")}" alt="Balões decorativos AlphaFest">' if mascotes.get("baloes") else ""}<div class="hero-in"><div>
           <h1>Ideias presentes em suas festas e em sua empresa, <span>destacando sua MARCA!</span></h1>
           <p>{html.escape(slogan)} Explore produtos, veja trabalhos reais e peça uma personalização do seu jeito — quantidade, cor, material e prazo combinados com a AlphaFest.</p>
-          <div class="hero-actions"><a class="cta hf6514-channel-cta" href="{html.escape(hero_cta_url, quote=True)}" target="_blank" rel="noopener">{_wa_svg}{html.escape(hero_cta_text)}</a><a class="secondary" href="#produtos">Ver produtos</a></div>
+          <div class="hero-actions"><a class="cta hf6514-channel-cta" href="{html.escape(hero_cta_url, quote=True)}" target="_blank" rel="noopener">{_wa_svg}{html.escape(hero_cta_text)}</a></div>
           <div class="hf48-trust"><span>✓ Sem pedido mínimo</span><span>✓ Personalização sob medida</span><span>✓ Atendimento pelo WhatsApp</span></div>
           </div><aside class="hero-card hf48-mascot-hero"><div class="hf48-mascot-copy"><h2>Uma marca feita para ficar na memória.</h2><p>Produtos, ideias e trabalhos reais com o jeito AlphaFest de transformar cada detalhe em presença.</p><div class="hf48-hero-benefits"><div class="hf48-hero-benefit"><b>💗</b><span>Personalização que conta sua história</span></div><div class="hf48-hero-benefit"><b>⭐</b><span>Qualidade em cada detalhe</span></div><div class="hf48-hero-benefit"><b>🎁</b><span>Ideias para todas as ocasiões</span></div></div><div class="hf48-mascot-note">💙 Thu e Fox dão as boas-vindas</div></div><img class="hf48-hero-mascot-img" src="{mascotes['hero']}" alt="Thu e Fox, mascotes da AlphaFest"></aside></div></section>'''
     else:
@@ -330,7 +330,7 @@ body{background:var(--hf48-bg)}
           <div class="eyebrow">AlphaFest · Personalizados & Balões</div>
           <h1>Ideias presentes em suas festas e em sua empresa, <span>destacando sua MARCA!</span></h1>
           <p>{html.escape(slogan)} Explore produtos, veja trabalhos reais e peça uma personalização do seu jeito — quantidade, cor, material e prazo combinados com a AlphaFest.</p>
-          <div class="hero-actions"><a class="cta hf6514-channel-cta" href="{html.escape(hero_cta_url, quote=True)}" target="_blank" rel="noopener">{_wa_svg}{html.escape(hero_cta_text)}</a><a class="secondary" href="#produtos">Ver produtos</a></div>
+          <div class="hero-actions"><a class="cta hf6514-channel-cta" href="{html.escape(hero_cta_url, quote=True)}" target="_blank" rel="noopener">{_wa_svg}{html.escape(hero_cta_text)}</a></div>
           <div class="hf48-trust"><span>✓ Sem pedido mínimo</span><span>✓ Personalização sob medida</span><span>✓ Atendimento pelo WhatsApp</span></div>
           </div><aside class="hero-card"><div class="eyebrow">Explore a AlphaFest</div><h2>Encontre uma referência e transforme em algo seu.</h2><p>Use categorias e subcategorias para chegar rápido ao que procura. Na Galeria, veja trabalhos reais já produzidos.</p>
           <div class="hero-stat"><div class="stat"><strong>{total}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{total_categorias}</strong><span>categorias atuais</span></div></div></aside></div></section>'''

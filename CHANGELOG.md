@@ -1,4 +1,17 @@
-# HF65.15 — Canal WhatsApp a partir da Galeria
+# HF65.15.2 — Busca sem Tema + CTA do canal limpo
+
+Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.15.2`
+
+- Mantém a correção HF65.15.1: Tema não participa mais da busca pública.
+- Remove o botão **Ver produtos** que ficava ao lado de **Entre para nosso canal** no Hero.
+- O CTA do canal passa a ficar sozinho, com mais destaque e sem alterar os demais atalhos do site.
+
+# HF65.15.1 — Busca do site sem Tema
+
+- Remove `Tema` do índice de busca/filtro da vitrine pública.
+- Ajusta o texto de orientação e o placeholder para: produto, material, ocasião e categoria.
+- Mantém Tema disponível no cadastro interno e na Galeria; apenas deixa de interferir na busca do site.
+- Preserva integralmente o Canal WhatsApp da HF65.15 e os demais recursos homologados.
 
 - Adicionado preparo de post do Canal WhatsApp diretamente em cada trabalho da Galeria.
 - Legenda automática editável com produto, tema, categoria e Datas & Ocasiões.
