@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.15.2",
-  "generated_at_utc": "2026-09-19T17:02:35.409360+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.16",
+  "generated_at_utc": "2026-09-20T17:09:48.080379+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -22,8 +22,8 @@
       "historical_examples": []
     }
   },
-  "file_count": 389,
-  "uncompressed_bytes": 37537210,
+  "file_count": 397,
+  "uncompressed_bytes": 37761713,
   "files": [
     {
       "path": ".gitignore",
@@ -42,8 +42,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size": 104454,
-      "sha256": "38e96c07323451a8f1e994f65928ad052f8bb69b4713d507c83c98a6e0b9b0fa"
+      "size": 104906,
+      "sha256": "a7e58f1ac66decad9f4548537a37ab572cbd3018214be0b6000e9c834d22010e"
     },
     {
       "path": "EDGE_FUNCTION_CATALOGO_PUBLICO.md",
@@ -57,8 +57,8 @@
     },
     {
       "path": "LEIA_ME_ATUALIZACAO.txt",
-      "size": 411,
-      "sha256": "9519960c7611b590a187026fd063926c3373160362ffadee18c3c183e9442fc7"
+      "size": 186,
+      "sha256": "ce9c7da3a56c29c576ad29fcaebc8c7949a4099f9f86c08ecd2a362ea0397471"
     },
     {
       "path": "LEIA_ME_ROLLBACK_URGENTE.txt",
@@ -107,18 +107,18 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 477,
-      "sha256": "29449acf31fd2ee9a4a90d7067e55dd08dbc84dc4b7ba1977523f6225dce7875"
+      "size": 419,
+      "sha256": "131a62558f4255a89b3919a9da8e3618b5f3d4c3fce87339ca9ce50bca0bb130"
     },
     {
       "path": "VERSAO",
-      "size": 36,
-      "sha256": "8ea268ab3a851deb7f4c8b57f4c4f147d2280e1700ab74ba645a9b68c95a7033"
+      "size": 34,
+      "sha256": "dea0f89e0683433bb612f2bc75c0157798201368579527cd879fcb284d65654d"
     },
     {
       "path": "VERSAO.txt",
-      "size": 36,
-      "sha256": "8ea268ab3a851deb7f4c8b57f4c4f147d2280e1700ab74ba645a9b68c95a7033"
+      "size": 34,
+      "sha256": "dea0f89e0683433bb612f2bc75c0157798201368579527cd879fcb284d65654d"
     },
     {
       "path": "__init__.py",
@@ -187,8 +187,8 @@
     },
     {
       "path": "app.py",
-      "size": 2084180,
-      "sha256": "b7c5e1b34fbeb39848b471d5e932768de19840c3d5bc18f8934a7480b52425c9"
+      "size": 2084176,
+      "sha256": "a7170b08e951dc4770a8e39a159e7a70b91db3bd9dd0222f8fa11ffd49112297"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",
@@ -1506,6 +1506,46 @@
       "sha256": "d8e6c5ad5df504d0c74576ab035c6ab84306c677ae94436becbb7c64524626ab"
     },
     {
+      "path": "assets/site/service_icons/baloes_decoracao.webp",
+      "size": 31674,
+      "sha256": "073d15b4c471633ce5ee0ba671bfef254c0a3776fb769e0056199025d38a480d"
+    },
+    {
+      "path": "assets/site/service_icons/brindes_personalizados.webp",
+      "size": 25452,
+      "sha256": "4874d1959a0009470402dde6a0da62ab0359a3673c6bdf815d703357783b0acf"
+    },
+    {
+      "path": "assets/site/service_icons/convites_papelaria.webp",
+      "size": 27278,
+      "sha256": "6a5e5d02137cfa3c00eba753415397a5739a22136a63b040421508f1d2023a64"
+    },
+    {
+      "path": "assets/site/service_icons/grafica_rapida.webp",
+      "size": 22852,
+      "sha256": "da220b88adb99427b1d698a0107ca56b02fa7542bd780d96bec0aed1efb6cb2a"
+    },
+    {
+      "path": "assets/site/service_icons/gravacao_laser.webp",
+      "size": 29596,
+      "sha256": "c1bdfff1db4880481518a68a4539fbffa0b2e15570f343ffafa87a48db4248a5"
+    },
+    {
+      "path": "assets/site/service_icons/impressao_3d.webp",
+      "size": 24836,
+      "sha256": "e40beadc12ded6b4820a1b7c4832d268f452a703649c424a17bde4a3bd50bd3a"
+    },
+    {
+      "path": "assets/site/service_icons/kits_festa.webp",
+      "size": 32912,
+      "sha256": "8dd5579898c9ee301b933c889b8db9c98ebc80a0f5bc481116f73ab75dfd5b47"
+    },
+    {
+      "path": "assets/site/service_icons/personalizados_festas.webp",
+      "size": 28534,
+      "sha256": "263a25b625811c314cc381bfcfee6cb4df8ff26e7248979587a565ee380bf6a2"
+    },
+    {
       "path": "audit_ui.py",
       "size": 7085,
       "sha256": "3962c0bfbaa2b5daa2f904e7c9650602efa2a922d90c6fe97a07c77eae0e781e"
@@ -1812,8 +1852,8 @@
     },
     {
       "path": "site_completo_service.py",
-      "size": 31317,
-      "sha256": "23b7aa05c76b7b6430128a4795982985a1757745083383f84e16fd5ce351b7c8"
+      "size": 32525,
+      "sha256": "a29680f6d25540498c686e9ba7d9a35d4af836759c4751fca53440bb883ba359"
     },
     {
       "path": "site_cutover_service.py",

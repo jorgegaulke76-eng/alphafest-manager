@@ -10,7 +10,9 @@ Este módulo é somente leitura: não persiste dados, não publica e não altera
 from __future__ import annotations
 
 from datetime import datetime
+import base64
 import html
+from pathlib import Path
 import re
 from typing import Any, Callable, Dict, Iterable, Optional
 from urllib.parse import quote
@@ -29,15 +31,25 @@ ImagemResolver = Optional[Callable[[str], str]]
 
 
 SERVICOS_PADRAO = (
-    ("🎉", "Personalizados para festas", "Topos, lembranças, papelaria, displays e peças criadas para cada tema e ocasião."),
-    ("🎈", "Balões & decoração", "Balões personalizados, bubbles e soluções decorativas para presentes, festas e eventos."),
-    ("🖨️", "Gráfica rápida", "Impressos, banners, faixas, adesivos e materiais gráficos para festas, negócios e eventos."),
-    ("🎁", "Brindes personalizados", "Canecas, copos, lembranças e brindes para empresas, equipes, escolas e comemorações."),
-    ("💌", "Convites & papelaria", "Convites e papelaria personalizada para aniversários, casamentos, batizados e eventos especiais."),
-    ("🧊", "Impressão 3D", "Peças, displays, lembranças e projetos personalizados produzidos sob medida em impressão 3D."),
-    ("✨", "Gravação a laser", "Personalização e gravação de peças e brindes com acabamento preciso para projetos especiais."),
-    ("🎂", "Kits & composição de festa", "Itens coordenados para montar uma identidade visual completa, do bolo às lembranças."),
+    ("personalizados_festas.webp", "Personalizados para festas", "Topos, lembranças, papelaria, displays e peças criadas para cada tema e ocasião."),
+    ("baloes_decoracao.webp", "Balões & decoração", "Balões personalizados, bubbles e soluções decorativas para presentes, festas e eventos."),
+    ("grafica_rapida.webp", "Gráfica rápida", "Impressos, banners, faixas, adesivos e materiais gráficos para festas, negócios e eventos."),
+    ("brindes_personalizados.webp", "Brindes personalizados", "Canecas, copos, lembranças e brindes para empresas, equipes, escolas e comemorações."),
+    ("convites_papelaria.webp", "Convites & papelaria", "Convites e papelaria personalizada para aniversários, casamentos, batizados e eventos especiais."),
+    ("impressao_3d.webp", "Impressão 3D", "Peças, displays, lembranças e projetos personalizados produzidos sob medida em impressão 3D."),
+    ("gravacao_laser.webp", "Gravação a laser", "Personalização e gravação de peças e brindes com acabamento preciso para projetos especiais."),
+    ("kits_festa.webp", "Kits & composição de festa", "Itens coordenados para montar uma identidade visual completa, do bolo às lembranças."),
 )
+
+
+def _service_icon_src(filename: str) -> str:
+    """Embute o ícone 3D no HTML publicado para não depender de arquivo externo."""
+    try:
+        icon_path = Path(__file__).resolve().parent / "assets" / "site" / "service_icons" / str(filename)
+        payload = base64.b64encode(icon_path.read_bytes()).decode("ascii")
+        return f"data:image/webp;base64,{payload}"
+    except Exception:
+        return ""
 
 
 def _numero_whatsapp(empresa: Dict[str, Any]) -> str:
@@ -53,9 +65,14 @@ def _wa(numero: str, mensagem: str) -> str:
 
 def _bloco_servicos() -> str:
     cards = []
-    for icone, titulo, texto in SERVICOS_PADRAO:
+    for icone_arquivo, titulo, texto in SERVICOS_PADRAO:
+        src = _service_icon_src(icone_arquivo)
+        icone_html = (
+            f'<img src="{html.escape(src, quote=True)}" alt="" loading="lazy" decoding="async">'
+            if src else ""
+        )
         cards.append(
-            f'''<article class="service-card"><div class="service-icon">{html.escape(icone)}</div>
+            f'''<article class="service-card"><div class="service-icon">{icone_html}</div>
             <h3>{html.escape(titulo)}</h3><p>{html.escape(texto)}</p></article>'''
         )
     return "".join(cards)
@@ -150,7 +167,7 @@ def gerar_html_site_completo(
 .site-nav a,.site-nav button{color:var(--ink);text-decoration:none;font-size:13px;font-weight:850;padding:11px 13px;border-radius:10px;white-space:nowrap}.site-nav button{border:0;background:transparent;font-family:inherit;cursor:pointer}.site-nav a:hover,.site-nav button:hover{background:#eef7ff;color:var(--blue)}
 .site-section{padding:72px 22px}.site-section.alt{background:linear-gradient(180deg,#fbfdff,#f6fbff)}.site-section.pink{background:linear-gradient(135deg,#fff,#fff6fb)}
 .site-wrap{max-width:1240px;margin:auto}.section-kicker{color:var(--blue);font-size:12px;font-weight:950;letter-spacing:.08em;text-transform:uppercase}.section-title{font-size:38px;line-height:1.08;margin:8px 0 12px}.section-copy{max-width:780px;color:#5d718b;font-size:16px;line-height:1.7;margin:0}
-.services-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:28px}.service-card{border:1px solid var(--line);border-radius:18px;background:#fff;padding:22px;box-shadow:0 8px 26px rgba(20,37,61,.05)}.service-icon{font-size:26px}.service-card h3{font-size:17px;margin:12px 0 8px}.service-card p{font-size:14px;line-height:1.55;color:#62758e;margin:0}
+.services-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:28px}.service-card{border:1px solid var(--line);border-radius:18px;background:#fff;padding:22px;box-shadow:0 8px 26px rgba(20,37,61,.05);transition:transform .18s ease,box-shadow .18s ease}.service-card:hover{transform:translateY(-3px);box-shadow:0 13px 30px rgba(20,37,61,.10)}.service-icon{width:68px;height:68px;display:flex;align-items:center;justify-content:center}.service-icon img{display:block;width:68px;height:68px;object-fit:contain;filter:drop-shadow(0 7px 9px rgba(20,37,61,.18));transition:transform .18s ease}.service-card:hover .service-icon img{transform:scale(1.06)}.service-card h3{font-size:17px;margin:12px 0 8px}.service-card p{font-size:14px;line-height:1.55;color:#62758e;margin:0}
 .about-grid{display:grid;grid-template-columns:1.12fr .88fr;gap:28px;align-items:stretch}.about-card{border:1px solid var(--line);background:#fff;border-radius:22px;padding:28px;box-shadow:0 12px 34px rgba(20,37,61,.06)}.about-card h3{margin:0 0 14px;font-size:23px}.about-card p{color:#5d718b;line-height:1.75}.about-points{display:grid;gap:12px;margin-top:20px}.about-point{display:flex;gap:10px;align-items:flex-start;background:#f7fbff;border-radius:13px;padding:13px}.about-point strong{display:block;font-size:14px}.about-point span{font-size:13px;color:#647991}
 .contact-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;margin-top:28px}.contact-card{border:1px solid var(--line);background:#fff;border-radius:20px;padding:24px}.contact-list{display:grid;gap:12px;margin-top:18px}.contact-item{display:flex;gap:12px;align-items:flex-start}.contact-item b{display:block}.contact-item span,.contact-item a{font-size:14px;color:#60748e;text-decoration:none}.contact-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.contact-actions .secondary{display:inline-flex}
 .hf522-social{background:linear-gradient(135deg,#eef9ff 0%,#fff 48%,#fff1f8 100%)}.hf522-social-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;align-items:center;margin-top:24px}.hf522-social-card{border:1px solid var(--line);background:#fff;border-radius:22px;padding:24px;box-shadow:0 10px 30px rgba(20,37,61,.06)}.hf522-social-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.hf522-social-link{position:relative;overflow:hidden;display:flex;align-items:center;gap:13px;min-height:66px;border:1px solid #dfeaf5;border-radius:17px;padding:12px 15px;color:#173d66;text-decoration:none;font-weight:950;letter-spacing:.01em;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,filter .18s ease}.hf522-social-link:after{content:'↗';margin-left:auto;font-size:14px;opacity:.38;font-weight:900}.hf522-social-link:hover{transform:translateY(-3px);filter:saturate(1.04);box-shadow:0 11px 24px rgba(18,35,61,.11)}.hf522-social-link .hf522-brand-icon{width:40px;height:40px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;color:#fff;box-shadow:0 7px 13px rgba(18,35,61,.18),inset 0 1px 0 rgba(255,255,255,.42);transition:transform .18s ease,box-shadow .18s ease}.hf522-social-link:hover .hf522-brand-icon{transform:translateY(-1px) scale(1.04)}.hf522-social-link svg{width:23px;height:23px;fill:currentColor;filter:drop-shadow(0 1px 1px rgba(0,0,0,.18))}.hf522-instagram{background:linear-gradient(135deg,#fff8fb 0%,#fff1f7 58%,#fff8ef 100%);border-color:rgba(228,64,95,.18);color:#71324c}.hf522-instagram .hf522-brand-icon{background:radial-gradient(circle at 30% 105%,#fdf497 0 7%,#fd5949 33%,#d6249f 58%,#285AEB 92%);box-shadow:0 8px 15px rgba(214,36,159,.22),inset 0 1px 0 rgba(255,255,255,.42)}.hf522-instagram:hover{border-color:rgba(214,36,159,.34)}.hf522-facebook{background:linear-gradient(135deg,#f7fbff,#edf5ff);border-color:rgba(24,119,242,.18);color:#1559aa}.hf522-facebook .hf522-brand-icon{background:linear-gradient(145deg,#2d8cff,#1468d8);box-shadow:0 8px 15px rgba(24,119,242,.25),inset 0 1px 0 rgba(255,255,255,.45)}.hf522-facebook:hover{border-color:rgba(24,119,242,.34)}.hf522-tiktok{background:linear-gradient(135deg,#fbfbfc 0%,#f2fbfb 52%,#fff5f8 100%);border-color:rgba(17,17,17,.13);color:#161616}.hf522-tiktok .hf522-brand-icon{background:linear-gradient(145deg,#191919,#050505);box-shadow:3px 3px 0 rgba(37,244,238,.42),-3px -3px 0 rgba(254,44,85,.30),0 8px 15px rgba(0,0,0,.19),inset 0 1px 0 rgba(255,255,255,.18)}.hf522-tiktok:hover{border-color:rgba(17,17,17,.28)}.hf522-youtube{background:linear-gradient(135deg,#fffafa,#fff1f1);border-color:rgba(255,0,0,.16);color:#a51616}.hf522-youtube .hf522-brand-icon{background:linear-gradient(145deg,#ff2424,#e60000);box-shadow:0 8px 15px rgba(255,0,0,.24),inset 0 1px 0 rgba(255,255,255,.42)}.hf522-youtube:hover{border-color:rgba(255,0,0,.32)}.hf522-whatsapp .hf522-brand-icon{color:#fff}.hf522-social-cta .hf522-brand-icon{width:22px;height:22px;display:flex}.hf522-social-cta svg{width:22px;height:22px;fill:currentColor}.hf522-social-note{font-size:13px;color:#667b92;line-height:1.55;margin-top:10px}.hf522-social-cta{display:inline-flex;margin-top:18px}

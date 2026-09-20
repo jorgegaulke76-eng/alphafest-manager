@@ -1,6 +1,13 @@
+# HF65.16 — Ícones 3D na seção Serviços
+
+- Substitui os emojis da seção Serviços por 8 ícones 3D próprios e leves.
+- Personalizados para festas, Balões & decoração, Gráfica rápida, Brindes personalizados, Convites & papelaria, Impressão 3D, Gravação a laser e Kits & composição de festa.
+- Ícones são embutidos no HTML publicado, sem dependência externa.
+- Mantém layout responsivo e adiciona leve efeito de profundidade/hover.
+
 # HF65.15.2 — Busca sem Tema + CTA do canal limpo
 
-Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.15.2`
+Versão: `20.4.9-I8.13.5-HF53.3-HF8-HF65.16`
 
 - Mantém a correção HF65.15.1: Tema não participa mais da busca pública.
 - Remove o botão **Ver produtos** que ficava ao lado de **Entre para nosso canal** no Hero.
