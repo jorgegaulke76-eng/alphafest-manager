@@ -1,29 +1,42 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.18",
-  "generated_at_utc": "2026-09-21T14:03:24.963500+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.18.1",
+  "generated_at_utc": "2026-09-21T19:55:06.611408+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
     "status": "OK",
     "problems": [],
-    "warnings": [],
+    "warnings": [
+      "Instalação ainda contém 367 item(ns) legado(s) 'Copia' na raiz; novos pacotes limpos não os reenviam.",
+      "Há 25 arquivo(s) local(is) de dados na raiz; eles são preservados e nunca entram no pacote de atualização.",
+      "52 arquivo(s) de teste dependem de versão histórica; eles são classificados como legado e não reprovam a release atual apenas pelo número antigo."
+    ],
     "critical_python_compile": {
       "status": "OK",
       "files_checked": 38,
       "files_ok": 38
     },
     "tests": {
-      "total_files": 0,
-      "portable_files": 0,
+      "total_files": 100,
+      "portable_files": 48,
       "current_release_files": 0,
-      "historical_version_files": 0,
-      "historical_examples": []
+      "historical_version_files": 52,
+      "historical_examples": [
+        "tests/test_anna_agenda_ui_contract.py",
+        "tests/test_hf40_site_completo.py",
+        "tests/test_hf41_pre_virada.py",
+        "tests/test_hf42_site_producao.py",
+        "tests/test_hf43_categorias_comerciais.py",
+        "tests/test_hf44_publicacao_assistida.py",
+        "tests/test_hf48_3_producao_aprovada.py",
+        "tests/test_hf49_2_edicao_rapida_site.py"
+      ]
     }
   },
   "file_count": 412,
-  "uncompressed_bytes": 38350913,
+  "uncompressed_bytes": 38353117,
   "files": [
     {
       "path": ".gitignore",
@@ -42,8 +55,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size": 106102,
-      "sha256": "1f9510710c33410744af1deb88296df61ad9fefabe15575de6a641d0f07f7a9a"
+      "size": 106666,
+      "sha256": "84d00cfaa232cd44667740c60fb64bd7cfdaf77d2bd341d0cfffba45cc1d880e"
     },
     {
       "path": "EDGE_FUNCTION_CATALOGO_PUBLICO.md",
@@ -57,8 +70,8 @@
     },
     {
       "path": "LEIA_ME_ATUALIZACAO.txt",
-      "size": 238,
-      "sha256": "1a773c4ae43190836f3879192c6343172ee94819210a989ad48856bb9430246e"
+      "size": 272,
+      "sha256": "5a4a2f43d7e686e54da5e67cbbccc1af592c21f79b09a9c75bea28c061180142"
     },
     {
       "path": "LEIA_ME_ROLLBACK_URGENTE.txt",
@@ -107,18 +120,18 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 1119,
-      "sha256": "a690173842fde2c12fd5bb28abb6b1e8b16efedac759d4dcc527d4b7dbf03d6b"
+      "size": 587,
+      "sha256": "ec4937e6cc10ed24ff029b863f50bc724784ad6d0d3d4715d3514dc0b7d265e2"
     },
     {
       "path": "VERSAO",
-      "size": 34,
-      "sha256": "cd652cba2ca90d70ac6929394bc79d41bad313840bb05a7164c9df63c5d9e6d6"
+      "size": 36,
+      "sha256": "29565a618738ad22aec750dc42cc669def82918d806af42151228607a99a992a"
     },
     {
       "path": "VERSAO.txt",
-      "size": 34,
-      "sha256": "cd652cba2ca90d70ac6929394bc79d41bad313840bb05a7164c9df63c5d9e6d6"
+      "size": 36,
+      "sha256": "29565a618738ad22aec750dc42cc669def82918d806af42151228607a99a992a"
     },
     {
       "path": "__init__.py",
@@ -187,8 +200,8 @@
     },
     {
       "path": "app.py",
-      "size": 2095829,
-      "sha256": "2762eca400033188d5b15d3bbe4684fe96ddea42084a4a68d73cc912112cc364"
+      "size": 2097963,
+      "sha256": "21d483f43e0beb00887a0e10c2b6cdd10d8effb7c1ef74c7d19064a2e56dbddc"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",

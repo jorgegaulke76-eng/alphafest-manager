@@ -11836,10 +11836,46 @@ def _galeria_produto_por_nome(catalogo, nome):
     alvo = str(nome or "").strip()
     if not alvo:
         return {}
+    alvo_norm = normalizar_identidade_produto(alvo)
     for item in catalogo or []:
-        if str((item or {}).get("Nome") or "").strip() == alvo:
+        nome_item = str((item or {}).get("Nome") or "").strip()
+        if nome_item == alvo or normalizar_identidade_produto(nome_item) == alvo_norm:
             return dict(item or {})
     return {}
+
+
+def _galeria_sincronizar_taxonomia_catalogo(catalogo, galeria, persistir=False):
+    """HF65.18.1 — mantém Galeria vinculada à taxonomia vigente do Catálogo Oficial.
+
+    Registros avulsos continuam independentes. Registros com ``produto`` vinculado herdam
+    sempre Categoria e Subcategoria atuais do Catálogo, inclusive após saneamentos posteriores.
+    """
+    alterados = 0
+    for registro in galeria or []:
+        if not isinstance(registro, dict):
+            continue
+        produto_nome = str(registro.get("produto") or "").strip()
+        if not produto_nome:
+            continue
+        produto = _galeria_produto_por_nome(catalogo, produto_nome)
+        if not produto:
+            continue
+        categoria_atual = str(produto.get("Categoria") or "").strip()
+        subcategoria_atual = str(produto.get("Subcategoria") or "").strip()
+        mudou = False
+        if str(registro.get("categoria") or "").strip() != categoria_atual:
+            registro["categoria"] = categoria_atual
+            mudou = True
+        if str(registro.get("subcategoria") or "").strip() != subcategoria_atual:
+            registro["subcategoria"] = subcategoria_atual
+            mudou = True
+        if mudou:
+            registro["taxonomia_catalogo_sincronizada_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+            registro["taxonomia_catalogo_sincronizada"] = True
+            alterados += 1
+    if alterados and persistir:
+        salvar_galeria_trabalhos(galeria)
+    return alterados
 
 
 def _galeria_categorias_extras(item, principal=None):
@@ -12374,6 +12410,9 @@ def renderizar_galeria_trabalhos(catalogo):
     )
 
     galeria = carregar_galeria_trabalhos()
+    _hf65181_sincronizados = _galeria_sincronizar_taxonomia_catalogo(catalogo, galeria, persistir=True)
+    if _hf65181_sincronizados:
+        st.info(f"🔄 {_hf65181_sincronizados} trabalho(s) da Galeria foram alinhados à Categoria/Subcategoria atuais do Catálogo Oficial.")
     # HF55 — feedback persistente após excluir uma foto e rerodar a tela.
     _flash_galeria = st.session_state.pop("_hf55_galeria_flash", None)
     if isinstance(_flash_galeria, dict):
@@ -28110,6 +28149,7 @@ if pagina_atual == "site":
     resumo_vitrine_hf59 = _site_resumir_vitrine(catalogo_site_hf35, usar_taxonomia_catalogo=True)
     empresa_vitrine_hf59 = carregar_config_empresa()
     galeria_site_hf59 = carregar_galeria_trabalhos()
+    _galeria_sincronizar_taxonomia_catalogo(catalogo_site_hf35, galeria_site_hf59, persistir=True)
     resumo_galeria_hf59 = _site_resumir_galeria(galeria_site_hf59)
     logo_b64_hf59, logo_ext_hf59 = encontrar_logo_base64()
     logo_src_hf59 = ""
@@ -28191,7 +28231,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18.1",
                 )
                 return _html, _zip
 
@@ -28335,7 +28375,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18.1",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
@@ -38881,6 +38921,7 @@ if pagina_atual == "catalogo":
                 # para exposição externa. A união é deduplicada por produto e mantém as fotos
                 # reais da Galeria como prioridade quando o item também veio de outro filtro.
                 galeria_cliente_hf6511 = carregar_galeria_trabalhos()
+                _galeria_sincronizar_taxonomia_catalogo(catalogo, galeria_cliente_hf6511, persistir=True)
                 galeria_externa_hf6511 = _hf6511_galeria_externa_para_catalogo(galeria_cliente_hf6511)
 
                 categorias_disponiveis = sorted(

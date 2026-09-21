@@ -1,3 +1,11 @@
+## HF65.18.1 — Galeria sincronizada com taxonomia do Catálogo Oficial
+
+- Corrige divergências de Categoria/Subcategoria entre produtos já saneados no Catálogo Oficial e trabalhos antigos da Galeria.
+- Trabalhos vinculados a um produto passam a herdar sempre a Categoria e Subcategoria atuais do Catálogo.
+- Trabalhos avulsos permanecem independentes.
+- A sincronização ocorre ao abrir a Galeria, ao preparar/publicar o site e ao gerar catálogo para cliente.
+- Não altera fotos, Datas & Ocasiões, autorizações, destaques ou histórico dos trabalhos.
+
 ## HF65.18 — Importação Google Fotos para Galeria
 - Galeria recebe importação em lote por ZIP baixado do Google Fotos.
 - Deduplicação por hash SHA-256, classificação do lote, armazenamento privado e fila segura sem publicação automática.

@@ -1,5 +1,4 @@
-AlphaFest Manager — HF65.17
+HF65.18.1 — Galeria sincronizada com Catálogo Oficial
 
-Atualização visual das categorias do site com ícones 3D exclusivos e relacionados a cada categoria.
-
-Instale pela Atualização Segura sobre a HF65.16 e depois prepare a prévia antes de publicar o site.
+Instale pela Atualização Segura sobre a HF65.18.
+Depois abra Catálogo > Galeria de Trabalhos. Os registros vinculados serão alinhados automaticamente às categorias e subcategorias atuais do Catálogo Oficial.
