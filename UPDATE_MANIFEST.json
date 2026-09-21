@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.16",
-  "generated_at_utc": "2026-09-20T17:09:48.080379+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.17",
+  "generated_at_utc": "2026-09-21T10:45:22.235757+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -22,8 +22,8 @@
       "historical_examples": []
     }
   },
-  "file_count": 397,
-  "uncompressed_bytes": 37761713,
+  "file_count": 412,
+  "uncompressed_bytes": 38338015,
   "files": [
     {
       "path": ".gitignore",
@@ -42,8 +42,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size": 104906,
-      "sha256": "a7e58f1ac66decad9f4548537a37ab572cbd3018214be0b6000e9c834d22010e"
+      "size": 105398,
+      "sha256": "1e1dd8b675597c919c40a369a37b4fcaec4359960e565b21fa032a4137995ab2"
     },
     {
       "path": "EDGE_FUNCTION_CATALOGO_PUBLICO.md",
@@ -57,8 +57,8 @@
     },
     {
       "path": "LEIA_ME_ATUALIZACAO.txt",
-      "size": 186,
-      "sha256": "ce9c7da3a56c29c576ad29fcaebc8c7949a4099f9f86c08ecd2a362ea0397471"
+      "size": 238,
+      "sha256": "1a773c4ae43190836f3879192c6343172ee94819210a989ad48856bb9430246e"
     },
     {
       "path": "LEIA_ME_ROLLBACK_URGENTE.txt",
@@ -107,18 +107,18 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 419,
-      "sha256": "131a62558f4255a89b3919a9da8e3618b5f3d4c3fce87339ca9ce50bca0bb130"
+      "size": 503,
+      "sha256": "2c10a183cfd1aeac29b6ffebc2ee0c512125819d927b6d93d05049983e2871cf"
     },
     {
       "path": "VERSAO",
       "size": 34,
-      "sha256": "dea0f89e0683433bb612f2bc75c0157798201368579527cd879fcb284d65654d"
+      "sha256": "0a82c88e9773736d57a882fe543c2e52b8c780a4dc5210e8e37a4689b5f151d5"
     },
     {
       "path": "VERSAO.txt",
       "size": 34,
-      "sha256": "dea0f89e0683433bb612f2bc75c0157798201368579527cd879fcb284d65654d"
+      "sha256": "0a82c88e9773736d57a882fe543c2e52b8c780a4dc5210e8e37a4689b5f151d5"
     },
     {
       "path": "__init__.py",
@@ -188,7 +188,7 @@
     {
       "path": "app.py",
       "size": 2084176,
-      "sha256": "a7170b08e951dc4770a8e39a159e7a70b91db3bd9dd0222f8fa11ffd49112297"
+      "sha256": "8ba27a909b73088cc5c1dc65f03e57cb2bd38a8f7d3036b435b1affef1dc9b9a"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",
@@ -1506,6 +1506,81 @@
       "sha256": "d8e6c5ad5df504d0c74576ab035c6ab84306c677ae94436becbb7c64524626ab"
     },
     {
+      "path": "assets/site/category_icons/balao.webp",
+      "size": 29778,
+      "sha256": "a797316ac4dfa4cd832c8aedeeb92956ecbb1e8f9aaee69dbb2b3e1fe29a5475"
+    },
+    {
+      "path": "assets/site/category_icons/bandeiras_flamulas.webp",
+      "size": 18996,
+      "sha256": "2669264b3937e1f674ffeaea674fc31d3161301a0b445602c6b4bdb86494ced5"
+    },
+    {
+      "path": "assets/site/category_icons/centro_mesa.webp",
+      "size": 41954,
+      "sha256": "2a3ec526cf544250657dc9bc3d1ff156c27ecb6b854b62d5458127dd2813dacb"
+    },
+    {
+      "path": "assets/site/category_icons/convite.webp",
+      "size": 39678,
+      "sha256": "9aef2bd7e21fa9111b3f94e2683aed2ef44f5cff27be0e143bbf1139f29ca5a0"
+    },
+    {
+      "path": "assets/site/category_icons/copos_canecas.webp",
+      "size": 37084,
+      "sha256": "3847f011ab87cf831afb304aa0ee26f3a8f8deb133ef9e43dc05362f2578916e"
+    },
+    {
+      "path": "assets/site/category_icons/datas_ocasioes.webp",
+      "size": 33890,
+      "sha256": "04346755360f0626e5d4646410bf6f70592e4838ed9857b3cad3a622634cc1dd"
+    },
+    {
+      "path": "assets/site/category_icons/embalagem.webp",
+      "size": 37884,
+      "sha256": "bd3a0440e7738cf153ef230d9531669b6662df8f5ae9c330670682f021ac182a"
+    },
+    {
+      "path": "assets/site/category_icons/grafica.webp",
+      "size": 32412,
+      "sha256": "e6a7c98bdf3929c3b8b0f32ba0484179ef35533dc60b55970646c4e56c0ade59"
+    },
+    {
+      "path": "assets/site/category_icons/gravacao_laser.webp",
+      "size": 30340,
+      "sha256": "b30d74ae2e68780bcba601d62516d152c85858bf4d05073d3336ced8f77788c9"
+    },
+    {
+      "path": "assets/site/category_icons/impressao_3d.webp",
+      "size": 35006,
+      "sha256": "991455354ad64a03b748df37fe02bdd62b98ec45030d989581dc5324796ec714"
+    },
+    {
+      "path": "assets/site/category_icons/kit_festa.webp",
+      "size": 47246,
+      "sha256": "b5bf0a1c0b750e9535dd33e26fa04cac9fd8d600b59c70989e5ba84cbf7cb3b0"
+    },
+    {
+      "path": "assets/site/category_icons/lembrancas.webp",
+      "size": 40936,
+      "sha256": "4d6e2251370c6dc7e50463994e51b523b8abe46698bf3b67ab91de9ce1bf6326"
+    },
+    {
+      "path": "assets/site/category_icons/papel_arroz.webp",
+      "size": 60464,
+      "sha256": "7cf3f983485a92d53fd61ad9a61527862e6287afc82ed2a098f6ccf91051f37b"
+    },
+    {
+      "path": "assets/site/category_icons/papelaria.webp",
+      "size": 46310,
+      "sha256": "62f86049ba40eccf084f56c63452db263d6774d10d1d6fe084d531ac63483085"
+    },
+    {
+      "path": "assets/site/category_icons/personalizados.webp",
+      "size": 42124,
+      "sha256": "393ace101400e71c8b2103d98576d6fb5a46fc4e6956a9ccf7e14e8771ad4ea9"
+    },
+    {
       "path": "assets/site/service_icons/baloes_decoracao.webp",
       "size": 31674,
       "sha256": "073d15b4c471633ce5ee0ba671bfef254c0a3776fb769e0056199025d38a480d"
@@ -1892,8 +1967,8 @@
     },
     {
       "path": "site_visual_hf48_service.py",
-      "size": 52590,
-      "sha256": "76b52bebe9fb2a29b101f0fce127c12cc3a60e8d592e39d496f200662d6dea92"
+      "size": 54162,
+      "sha256": "1498729316932581f655294f9486230d2c0479ca0b3962465aaef36d85ed75c0"
     },
     {
       "path": "site_vitrine_service.py",

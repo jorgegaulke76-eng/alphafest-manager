@@ -1,10 +1,8 @@
-# Atualização HF65.16
+# HF65.17 — Ícones 3D exclusivos por categoria
 
-Melhoria visual da seção **Serviços** do site AlphaFest.
-
-- 8 ícones 3D exclusivos em substituição aos emojis.
-- Paleta azul, amarelo, rosa e verde alinhada à identidade AlphaFest.
-- Ícones otimizados em WebP e incorporados ao HTML do site.
-- Efeito visual suave no desktop e responsividade preservada.
-
-Instalar pela Atualização Segura sobre a HF65.15.2 e publicar o site novamente.
+- Substitui emojis genéricos da seção **Explore por categoria** por ícones 3D exclusivos.
+- Cada categoria recebe um ícone coerente com seus produtos.
+- Inclui ícone próprio para **Datas & Ocasiões**.
+- Mantém categorias, filtros, contagens, publicação Cloudflare e toda a lógica já homologada.
+- Ícones são incorporados no HTML publicado como data URI, sem dependência externa.
+- Desktop e mobile ajustados para o novo tamanho visual.

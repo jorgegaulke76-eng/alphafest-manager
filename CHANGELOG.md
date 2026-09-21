@@ -1,3 +1,10 @@
+
+## HF65.17 — Ícones 3D exclusivos por categoria
+- Explore por categoria passa a usar 15 ícones 3D próprios.
+- Mapeamento visual: Datas & Ocasiões, Balão, Bandeiras e Flâmulas, Centro de Mesa, Convite, Copos e Canecas, Embalagem, Gravação Laser, Gráfica, Impressão 3D, Kit Festa, Lembranças, Papel de Arroz, Papelaria e Personalizados.
+- Remove repetição de estrela/emojis genéricos nos cards de categoria.
+- Mantém filtros, contagens e comportamento de clique inalterados.
+
 # HF65.16 — Ícones 3D na seção Serviços
 
 - Substitui os emojis da seção Serviços por 8 ícones 3D próprios e leves.

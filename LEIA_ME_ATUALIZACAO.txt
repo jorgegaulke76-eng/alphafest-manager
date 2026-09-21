@@ -1,5 +1,5 @@
-AlphaFest Manager — HF65.16
+AlphaFest Manager — HF65.17
 
-Atualização visual da seção Serviços do site.
-Instale pela Atualização Segura sobre a HF65.15.2.
-Depois gere a prévia e publique o site novamente.
+Atualização visual das categorias do site com ícones 3D exclusivos e relacionados a cada categoria.
+
+Instale pela Atualização Segura sobre a HF65.16 e depois prepare a prévia antes de publicar o site.
