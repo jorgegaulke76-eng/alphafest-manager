@@ -1,3 +1,9 @@
+## HF65.18 — Importação Google Fotos para Galeria
+- Galeria recebe importação em lote por ZIP baixado do Google Fotos.
+- Deduplicação por hash SHA-256, classificação do lote, armazenamento privado e fila segura sem publicação automática.
+- Suporta vários ZIPs, ignora JSONs/arquivos auxiliares e limita a 200 novas fotos por execução.
+- Adequação à política atual do Google Fotos: acesso a biblioteca antiga não é varrido automaticamente após as mudanças da API de 31/03/2025.
+
 ## HF65.17.1 — Ícones 3D sem fundo branco
 - Remove o fundo branco/caixa interna dos ícones das categorias.
 - Aumenta levemente os ícones e mantém sombra 3D suave.

@@ -12114,6 +12114,253 @@ def _render_copiar_texto_canal(texto, chave):
         height=66,
     )
 
+
+
+class _HF6518UploadBytes:
+    """Compatibilidade mínima com st.UploadedFile para enviar bytes ao storage privado."""
+    def __init__(self, name, data, mime="image/jpeg"):
+        self.name = str(name or "foto.jpg")
+        self.type = str(mime or "image/jpeg")
+        self._data = bytes(data or b"")
+    def getbuffer(self):
+        return memoryview(self._data)
+    def read(self):
+        return self._data
+
+
+def _hf6518_image_mime(nome):
+    ext = Path(str(nome or "")).suffix.lower()
+    return {
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
+        ".heic": "image/heic", ".heif": "image/heif",
+    }.get(ext, "application/octet-stream")
+
+
+def _hf6518_zip_images(zip_uploads):
+    """Extrai imagens de um ou mais ZIPs baixados do Google Fotos, ignorando metadados JSON."""
+    saida = []
+    erros = []
+    permitidas = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
+    for upload in zip_uploads or []:
+        try:
+            bruto = bytes(upload.getbuffer())
+            with zipfile.ZipFile(io.BytesIO(bruto)) as zf:
+                for info in zf.infolist():
+                    if info.is_dir():
+                        continue
+                    nome = Path(info.filename).name
+                    ext = Path(nome).suffix.lower()
+                    if ext not in permitidas:
+                        continue
+                    if info.file_size <= 0 or info.file_size > 40 * 1024 * 1024:
+                        continue
+                    data = zf.read(info)
+                    if not data:
+                        continue
+                    sha = hashlib.sha256(data).hexdigest()
+                    saida.append({"nome": nome, "data": data, "sha256": sha, "mime": _hf6518_image_mime(nome)})
+        except Exception as exc:
+            erros.append(f"{getattr(upload, 'name', 'arquivo.zip')}: {exc}")
+    unicos = []
+    vistos = set()
+    for item in saida:
+        if item["sha256"] in vistos:
+            continue
+        vistos.add(item["sha256"])
+        unicos.append(item)
+    return unicos, erros
+
+
+def _hf6518_hashes_existentes_galeria(galeria):
+    """Lê hashes já registrados; evita baixar fotos antigas quando não é necessário."""
+    hashes = set()
+    for trabalho in galeria or []:
+        origem = dict((trabalho or {}).get("origem_importacao") or {})
+        sha = str(origem.get("sha256") or "").strip()
+        if sha:
+            hashes.add(sha)
+        for sha_item in (origem.get("sha256_fotos") or []):
+            if str(sha_item or "").strip():
+                hashes.add(str(sha_item).strip())
+    return hashes
+
+
+def _hf6518_render_importador_google_fotos(catalogo, galeria, categorias_disponiveis_gal):
+    """HF65.18 — importação em lote do Google Fotos para a Galeria privada.
+
+    Desde 31/03/2025 o Google não permite que apps de terceiros listem automaticamente
+    toda a biblioteca/álbuns existentes via Library API. A rota estável é a Picker API
+    (seleção explícita) ou exportação/download do lote. Esta primeira versão entrega o
+    fluxo de lote sem credenciais: baixar seleção/álbum no Google Fotos -> importar ZIP.
+    """
+    with st.expander("☁️ Importar fotos do Google Fotos", expanded=False):
+        st.caption(
+            "Importe várias fotos de uma vez para a Galeria privada. No Google Fotos, selecione as fotos/álbum e use "
+            "**Fazer download**; depois envie aqui o(s) arquivo(s) ZIP. O Manager remove duplicadas pelo conteúdo da foto."
+        )
+        st.info(
+            "ℹ️ O Google mudou a API em 2025: aplicativos não podem mais varrer automaticamente álbuns antigos inteiros. "
+            "A opção oficial para acesso direto é o Google Photos Picker, que exige seleção/autorização do usuário. "
+            "Este importador em lote funciona agora, sem custo e sem credenciais Google."
+        )
+
+        zips = st.file_uploader(
+            "ZIP(s) baixado(s) do Google Fotos",
+            type=["zip"],
+            accept_multiple_files=True,
+            key="hf6518_google_photos_zips",
+            help="Você pode enviar vários ZIPs. Arquivos JSON de metadados são ignorados automaticamente.",
+        )
+        if not zips:
+            return
+
+        imagens, erros = _hf6518_zip_images(zips)
+        hashes_existentes = _hf6518_hashes_existentes_galeria(galeria)
+        novas = [x for x in imagens if x["sha256"] not in hashes_existentes]
+        repetidas = len(imagens) - len(novas)
+
+        a, b, c = st.columns(3)
+        a.metric("Fotos encontradas", len(imagens))
+        b.metric("Novas", len(novas))
+        c.metric("Já importadas", repetidas)
+        if erros:
+            st.warning("Alguns ZIPs não puderam ser lidos: " + " | ".join(erros[:3]))
+        if not novas:
+            st.success("Nenhuma foto nova neste lote. As imagens já foram importadas anteriormente.")
+            return
+
+        st.caption("Classifique o lote antes de importar. Nada é publicado no site automaticamente.")
+        nomes_produtos = sorted(
+            {str((p or {}).get("Nome") or "").strip() for p in (catalogo or []) if str((p or {}).get("Nome") or "").strip()},
+            key=str.casefold,
+        )
+        produto = st.selectbox(
+            "Produto do Catálogo para este lote (opcional)",
+            ["— trabalho avulso / classificar depois —"] + nomes_produtos,
+            key="hf6518_produto_lote",
+        )
+        pref = _galeria_produto_por_nome(catalogo, produto) if not produto.startswith("—") else {}
+        if pref:
+            categoria = str(pref.get("Categoria") or "").strip()
+            subcategoria = str(pref.get("Subcategoria") or "").strip()
+            c1, c2 = st.columns(2)
+            c1.text_input("Categoria do lote", value=categoria, disabled=True, key="hf6518_cat_auto")
+            c2.text_input("Subcategoria do lote", value=subcategoria or "Sem subcategoria", disabled=True, key="hf6518_subcat_auto")
+        else:
+            c1, c2 = st.columns(2)
+            categoria = c1.selectbox(
+                "Categoria do lote",
+                ["A CLASSIFICAR"] + [x for x in categorias_disponiveis_gal if str(x).casefold() != "a classificar"],
+                key="hf6518_categoria_lote",
+            )
+            subcategoria = c2.text_input("Subcategoria do lote (opcional)", key="hf6518_subcategoria_lote")
+
+        datas = st.multiselect(
+            "🎈 Datas & Ocasiões deste lote (opcional)",
+            _galeria_datas_ocasioes_disponiveis(galeria),
+            key="hf6518_datas_lote",
+        )
+        agrupar = st.checkbox(
+            "Agrupar todas as fotos em um único trabalho",
+            value=False,
+            key="hf6518_agrupar",
+            help="Desmarcado: cada foto vira um registro separado, facilitando classificar fotos diferentes depois. Marcado: todo o lote vira um único trabalho.",
+        )
+        autorizado = st.checkbox(
+            "✅ Autorizar este lote para futura exposição no site",
+            value=False,
+            key="hf6518_autorizado",
+        )
+        selecionado = st.checkbox(
+            "⭐ Pré-selecionar para a Galeria do site",
+            value=False,
+            disabled=not autorizado,
+            key="hf6518_selecionado",
+        )
+
+        limite_import = min(len(novas), 200)
+        st.caption(f"Prontas para importar agora: {limite_import} foto(s). Limite de segurança por execução: 200.")
+        if len(novas) > limite_import:
+            st.warning(f"Há {len(novas) - limite_import} foto(s) adicionais. Depois desta importação, envie o mesmo ZIP novamente e o sistema continuará apenas com as restantes.")
+
+        if st.button("☁️ Importar fotos novas para a Galeria", type="primary", use_container_width=True, key="hf6518_importar"):
+            lote = novas[:limite_import]
+            caminhos = []
+            falhas = []
+            with st.spinner(f"Importando {len(lote)} foto(s) para o armazenamento privado…"):
+                for item in lote:
+                    upload = _HF6518UploadBytes(item["nome"], item["data"], item["mime"])
+                    caminho = upload_private_gallery_image(upload, folder="trabalhos/google_fotos")
+                    if caminho:
+                        caminhos.append((caminho, item))
+                    else:
+                        falhas.append(item["nome"])
+
+            if not caminhos:
+                st.error("Nenhuma foto conseguiu ser gravada no armazenamento privado. Nada foi alterado.")
+                return
+
+            agora = agora_local().strftime("%d/%m/%Y %H:%M")
+            usuario = obter_usuario_atual()
+            usuario_nome = str((usuario or {}).get("nome") or "Equipe")
+            novos_registros = []
+
+            def _base_registro(fotos_paths, sha_list, nomes_originais):
+                return {
+                    "id": _galeria_id_novo(),
+                    "produto": str(pref.get("Nome") or produto if pref else "").strip(),
+                    "categoria": str(categoria or "A CLASSIFICAR").strip() or "A CLASSIFICAR",
+                    "categorias_extras": [],
+                    "subcategoria": str(subcategoria or "").strip(),
+                    "tema": "",
+                    "cor": "",
+                    "ocasiao": "",
+                    "datas_ocasioes": list(dict.fromkeys(str(x).strip() for x in datas if str(x).strip())),
+                    "observacao": "Importado em lote do Google Fotos. Revisar classificação antes da publicação.",
+                    "fotos": list(fotos_paths),
+                    "autorizado_publicacao": bool(autorizado),
+                    "selecionado_site": bool(selecionado and autorizado),
+                    "destaque": False,
+                    "arquivado": False,
+                    "criado_em": agora,
+                    "criado_por": usuario_nome,
+                    "origem_importacao": {
+                        "tipo": "google_fotos_zip",
+                        "quando": agora,
+                        "sha256_fotos": list(sha_list),
+                        "nomes_originais": list(nomes_originais),
+                        "hf": "HF65.18",
+                    },
+                }
+
+            if agrupar:
+                novos_registros.append(_base_registro(
+                    [x[0] for x in caminhos],
+                    [x[1]["sha256"] for x in caminhos],
+                    [x[1]["nome"] for x in caminhos],
+                ))
+            else:
+                for caminho, item in caminhos:
+                    reg = _base_registro([caminho], [item["sha256"]], [item["nome"]])
+                    reg["origem_importacao"]["sha256"] = item["sha256"]
+                    novos_registros.append(reg)
+
+            galeria_nova = list(galeria) + novos_registros
+            if salvar_galeria_trabalhos(galeria_nova):
+                galeria[:] = galeria_nova
+                st.session_state["_hf55_galeria_flash"] = {
+                    "tipo": "success",
+                    "mensagem": (
+                        f"Google Fotos: {len(caminhos)} foto(s) importada(s) em {len(novos_registros)} registro(s). "
+                        f"{repetidas} duplicada(s) já conhecida(s) foram ignoradas."
+                    ),
+                }
+                st.rerun()
+            else:
+                for caminho, _item in caminhos:
+                    delete_private_gallery_image(caminho)
+                st.error("O banco não confirmou os registros. As fotos deste lote foram descartadas para não deixar arquivos órfãos.")
+
 def renderizar_galeria_trabalhos(catalogo):
     """HF58 — acervo da Galeria com exibição opcional em múltiplas categorias."""
     st.markdown("### 📸 Galeria de Trabalhos")
@@ -12149,12 +12396,13 @@ def renderizar_galeria_trabalhos(catalogo):
     m3.metric("Autorizados", len(autorizados))
     m4.metric("Pré-selecionados", len(selecionados))
 
+    categorias_disponiveis_gal = _galeria_categorias_disponiveis(catalogo, galeria)
+    _hf6518_render_importador_google_fotos(catalogo, galeria, categorias_disponiveis_gal)
+
     nomes_produtos = sorted(
         {str((p or {}).get("Nome") or "").strip() for p in (catalogo or []) if str((p or {}).get("Nome") or "").strip()},
         key=lambda x: x.casefold(),
     )
-    categorias_disponiveis_gal = _galeria_categorias_disponiveis(catalogo, galeria)
-
     # HF65.10 — cada salvamento inaugura uma nova geração de chaves dos widgets.
     # Isso força o Streamlit a abrir um formulário realmente limpo após guardar um trabalho,
     # inclusive selectbox, campos de texto, multiselects, checkboxes e uploader.
@@ -27943,7 +28191,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.17.1",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18",
                 )
                 return _html, _zip
 
@@ -28087,7 +28335,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.17.1",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
