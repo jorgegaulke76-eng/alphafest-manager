@@ -1,3 +1,8 @@
+## HF65.17.1 — Ícones 3D sem fundo branco
+- Remove o fundo branco/caixa interna dos ícones das categorias.
+- Aumenta levemente os ícones e mantém sombra 3D suave.
+- Ajuste responsivo no celular.
+
 
 ## HF65.17 — Ícones 3D exclusivos por categoria
 - Explore por categoria passa a usar 15 ícones 3D próprios.

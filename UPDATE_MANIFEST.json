@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.17",
-  "generated_at_utc": "2026-09-21T10:45:22.235757+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.17.1",
+  "generated_at_utc": "2026-09-21T12:06:52.877693+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -23,7 +23,7 @@
     }
   },
   "file_count": 412,
-  "uncompressed_bytes": 38338015,
+  "uncompressed_bytes": 38338021,
   "files": [
     {
       "path": ".gitignore",
@@ -42,8 +42,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size": 105398,
-      "sha256": "1e1dd8b675597c919c40a369a37b4fcaec4359960e565b21fa032a4137995ab2"
+      "size": 105600,
+      "sha256": "caf6c23035ca30948297ec0413ad104892b60db45e87700934c1cca67a96dc77"
     },
     {
       "path": "EDGE_FUNCTION_CATALOGO_PUBLICO.md",
@@ -107,18 +107,18 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 503,
-      "sha256": "2c10a183cfd1aeac29b6ffebc2ee0c512125819d927b6d93d05049983e2871cf"
+      "size": 374,
+      "sha256": "64fe89562f444a1225acc33212ad31a52cb663a9e6142af8f06e206ab6a7f746"
     },
     {
       "path": "VERSAO",
-      "size": 34,
-      "sha256": "0a82c88e9773736d57a882fe543c2e52b8c780a4dc5210e8e37a4689b5f151d5"
+      "size": 36,
+      "sha256": "026a338b14354e104bb6b4b378a26cbf6e55791dd73dae4db6fe635d3121d9c1"
     },
     {
       "path": "VERSAO.txt",
-      "size": 34,
-      "sha256": "0a82c88e9773736d57a882fe543c2e52b8c780a4dc5210e8e37a4689b5f151d5"
+      "size": 36,
+      "sha256": "026a338b14354e104bb6b4b378a26cbf6e55791dd73dae4db6fe635d3121d9c1"
     },
     {
       "path": "__init__.py",
@@ -187,8 +187,8 @@
     },
     {
       "path": "app.py",
-      "size": 2084176,
-      "sha256": "8ba27a909b73088cc5c1dc65f03e57cb2bd38a8f7d3036b435b1affef1dc9b9a"
+      "size": 2084180,
+      "sha256": "d1318d5be7b3022f1f29388f10a29f623124b84218d62c9ac2ed8839297cf072"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",
@@ -1967,8 +1967,8 @@
     },
     {
       "path": "site_visual_hf48_service.py",
-      "size": 54162,
-      "sha256": "1498729316932581f655294f9486230d2c0479ca0b3962465aaef36d85ed75c0"
+      "size": 54087,
+      "sha256": "645991c87379dd87da0cceabc9d8064188327c80d9a1f53104f117d28f2258d0"
     },
     {
       "path": "site_vitrine_service.py",

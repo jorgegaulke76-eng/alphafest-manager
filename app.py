@@ -27943,7 +27943,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.17",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.17.1",
                 )
                 return _html, _zip
 
@@ -28087,7 +28087,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.17",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.17.1",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
