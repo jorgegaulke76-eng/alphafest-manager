@@ -3770,7 +3770,7 @@ def regra_abatimento_cliente(cliente, produto_nome, referencia=None):
         return None
     perfil = perfil_comercial_cliente(cliente)
     referencia = referencia or hoje_local()
-    catalogo = carregar_catalogo()
+    catalogo = _orcamento_catalogo_unificado_3d()
     oficial = nome_produto_oficial_catalogo(produto_nome, catalogo)
     chave = normalizar_identidade_produto(oficial)
     for regra in perfil.get("abatimentos_produto", []):
@@ -3800,7 +3800,7 @@ def calcular_preco_cliente_item(cliente, produto_nome, valor_digitado=0.0):
     regra = regra_abatimento_cliente(cliente, produto_nome)
     if not regra:
         return None
-    catalogo = carregar_catalogo()
+    catalogo = _orcamento_catalogo_unificado_3d()
     _, produto = _produto_catalogo_da_proposta(produto_nome, catalogo)
     if not produto:
         return None
@@ -13150,21 +13150,97 @@ def mapa_identidade_produtos(catalogo):
 ORCAMENTO_PRODUTO_LIVRE = _catalogo_orcamento_livre
 
 
+def _orcamento_catalogo_unificado_3d(catalogo=None):
+    """HF65.18.2 — fonte única de produtos para propostas Jorge/Anna.
+
+    O Catálogo Oficial continua sendo a base principal, mas os registros do
+    Catálogo 3D são sobrepostos em memória pelas configurações comerciais mais
+    recentes. Assim um modelo 3D novo ou recém-editado aparece imediatamente no
+    orçamento, mesmo antes de executar a sincronização/publicação do site.
+    Nenhum arquivo 3MF/STL é exposto ou copiado para a proposta.
+    """
+    base = [dict(x) for x in (carregar_catalogo() if catalogo is None else (catalogo or [])) if isinstance(x, dict)]
+    try:
+        biblioteca = load_document("biblioteca_3d_db", ARQUIVO_BIBLIOTECA_3D, [], force_refresh=False)
+    except Exception:
+        biblioteca = []
+    if not isinstance(biblioteca, list):
+        return base
+
+    por_id = {str(x.get("biblioteca_3d_id") or "").strip(): i for i, x in enumerate(base) if str(x.get("biblioteca_3d_id") or "").strip()}
+    por_nome_3d = {
+        normalizar_identidade_produto(x.get("Nome")): i
+        for i, x in enumerate(base)
+        if normalizar_identidade_produto(x.get("Nome"))
+        and normalizar_identidade_produto(x.get("Categoria")) == normalizar_identidade_produto("IMPRESSÃO 3D")
+    }
+
+    for modelo in biblioteca:
+        if not isinstance(modelo, dict):
+            continue
+        mid = str(modelo.get("id") or "").strip()
+        nome = str(modelo.get("nome") or "").strip()
+        if not mid or not nome:
+            continue
+        comercial = modelo.get("catalogo_comercial") if isinstance(modelo.get("catalogo_comercial"), dict) else {}
+        ativo = bool(comercial.get("Ativo", True))
+        idx = por_id.get(mid)
+        if idx is None:
+            idx = por_nome_3d.get(normalizar_identidade_produto(nome))
+
+        existente = dict(base[idx]) if idx is not None else {}
+        imagens = [str(x).strip() for x in (comercial.get("Imagens") or []) if str(x).strip()]
+        if not imagens:
+            imagens = [str(x).strip() for x in (existente.get("Imagens") or []) if str(x).strip()]
+        imagem_publica = str(modelo.get("imagem_publica") or "").strip()
+        if imagem_publica and imagem_publica not in imagens:
+            imagens.insert(0, imagem_publica)
+
+        registro = dict(existente)
+        registro.update({
+            "Nome": nome,
+            "Categoria": "IMPRESSÃO 3D",
+            "Subcategoria": str(comercial.get("Subcategoria") or existente.get("Subcategoria") or "MODELOS 3D").strip() or "MODELOS 3D",
+            "Descricao": str(comercial.get("DescricaoCurta") or comercial.get("Descricao") or modelo.get("descricao") or existente.get("Descricao") or "").strip(),
+            "DescricaoCurta": str(comercial.get("DescricaoCurta") or modelo.get("descricao") or existente.get("DescricaoCurta") or "").strip(),
+            "DescricaoCompleta": str(comercial.get("DescricaoCompleta") or comercial.get("Descricao") or modelo.get("descricao") or existente.get("DescricaoCompleta") or "").strip(),
+            "Preco": str(comercial.get("Preco") if "Preco" in comercial else existente.get("Preco", "")).strip(),
+            "Custo": str(comercial.get("Custo") if "Custo" in comercial else existente.get("Custo", "")).strip(),
+            "Material": str(comercial.get("Material") or existente.get("Material") or "").strip(),
+            "TempoProducao": str(comercial.get("TempoProducao") or modelo.get("tempo_impressao") or existente.get("TempoProducao") or "").strip(),
+            "Variacoes": list(comercial.get("Variacoes") or existente.get("Variacoes") or []),
+            "Aliases": list(comercial.get("Aliases") or existente.get("Aliases") or []),
+            "Imagens": imagens[:5],
+            "Ativo": ativo,
+            "biblioteca_3d_id": mid,
+            "OrigemCatalogo3D": True,
+        })
+        if idx is None:
+            base.append(registro)
+            idx = len(base) - 1
+        else:
+            base[idx] = registro
+        por_id[mid] = idx
+        por_nome_3d[normalizar_identidade_produto(nome)] = idx
+
+    return base
+
+
 def _orcamento_opcoes_produto_catalogo(catalogo=None):
-    """Opções híbridas de orçamento vindas do serviço modular de Catálogo."""
-    catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
+    """Opções híbridas de orçamento: Catálogo Oficial + Catálogo 3D em tempo real."""
+    catalogo = _orcamento_catalogo_unificado_3d(catalogo)
     return _catalogo_opcoes_orcamento(catalogo, rotulo_livre=ORCAMENTO_PRODUTO_LIVRE)
 
 def _orcamento_resolver_produto(escolha_catalogo, texto_livre, catalogo=None):
-    """Resolve Catálogo explícito -> alias/nome digitado -> texto livre."""
-    catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
+    """Resolve Catálogo/3D explícito -> alias/nome digitado -> texto livre."""
+    catalogo = _orcamento_catalogo_unificado_3d(catalogo)
     return _catalogo_resolver_orcamento(
         escolha_catalogo, texto_livre, catalogo, rotulo_livre=ORCAMENTO_PRODUTO_LIVRE
     )
 
 def _orcamento_produto_catalogo_obj(meta, catalogo=None):
-    """Retorna o cadastro explicitamente vinculado, sem adivinhação aproximada."""
-    catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
+    """Retorna o cadastro explicitamente vinculado, incluindo fonte comercial 3D."""
+    catalogo = _orcamento_catalogo_unificado_3d(catalogo)
     return _catalogo_produto_da_meta(meta, catalogo)
 
 def _orcamento_aplicar_autopreenchimento_catalogo(meta, *, marcador_key, valor_key, material_key=None, detalhes_key=None):
@@ -13194,8 +13270,8 @@ def _orcamento_resumo_dados_catalogo(produto):
     return _catalogo_resumo_dados(produto)
 
 def _orcamento_campos_produto(prefixo, *, em_form=False):
-    """Renderiza seleção pesquisável + texto livre para Jorge e Anna."""
-    catalogo = carregar_catalogo()
+    """Renderiza seleção pesquisável Catálogo Oficial + 3D para Jorge e Anna."""
+    catalogo = _orcamento_catalogo_unificado_3d()
     opcoes, _ = _orcamento_opcoes_produto_catalogo(catalogo)
     escolha = st.selectbox(
         "🔎 Produto do Catálogo Oficial (opcional)",
@@ -28231,7 +28307,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18.1",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18.2",
                 )
                 return _html, _zip
 
@@ -28375,7 +28451,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18.1",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18.2",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59

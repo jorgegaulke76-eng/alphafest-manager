@@ -1,3 +1,7 @@
+# HF65.18.2 — Propostas ↔ Catálogo 3D
+
+A tela de orçamento da Anna e a tela do Jorge agora consultam uma fonte unificada: Catálogo Oficial + Catálogo 3D. Isso elimina a dependência de apertar “Sincronizar Catálogo 3D → Propostas e Site” apenas para um modelo aparecer na proposta.
+
 # HF65.18.1 — Galeria ↔ Catálogo Oficial
 
 Esta correção elimina taxonomia antiga armazenada na Galeria quando o produto vinculado já foi corrigido no Catálogo Oficial.

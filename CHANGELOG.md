@@ -1,3 +1,12 @@
+## HF65.18.2 — Propostas Anna/Jorge sincronizadas com Catálogo 3D
+
+- Corrige a fonte de produtos da tela de propostas/orçamentos da Anna e do Jorge.
+- As opções passam a unir Catálogo Oficial + configurações comerciais atuais do Catálogo 3D em tempo real.
+- Produto 3D novo aparece na proposta mesmo antes da sincronização manual com o site.
+- Preço, aliases, material, descrição, subcategoria e status ativo vêm da fonte comercial do Catálogo 3D.
+- Arquivos 3MF/STL continuam privados e nunca entram na proposta.
+- Mantém o Catálogo Oficial como espelho para site e demais módulos.
+
 ## HF65.18.1 — Galeria sincronizada com taxonomia do Catálogo Oficial
 
 - Corrige divergências de Categoria/Subcategoria entre produtos já saneados no Catálogo Oficial e trabalhos antigos da Galeria.

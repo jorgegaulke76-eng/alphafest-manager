@@ -1,4 +1,5 @@
-HF65.18.1 — Galeria sincronizada com Catálogo Oficial
+HF65.18.2 — Propostas Anna/Jorge sincronizadas com Catálogo 3D
 
-Instale pela Atualização Segura sobre a HF65.18.
-Depois abra Catálogo > Galeria de Trabalhos. Os registros vinculados serão alinhados automaticamente às categorias e subcategorias atuais do Catálogo Oficial.
+Instale pela Atualização Segura sobre HF65.18.1.
+Após instalar, abra uma nova proposta na Anna e pesquise um item recém-cadastrado no Catálogo 3D.
+
