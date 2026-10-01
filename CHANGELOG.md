@@ -1,3 +1,10 @@
+# HF65.19 — Recibo de Pagamento
+
+- Recibo por WhatsApp e HTML/PDF para propostas pagas.
+- Usa status oficial de pagamento e valores da proposta.
+- Ações nas Centrais Jorge/Anna e no Histórico.
+- Sem mudança de schema.
+
 ## HF65.18.2 — Propostas Anna/Jorge sincronizadas com Catálogo 3D
 
 - Corrige a fonte de produtos da tela de propostas/orçamentos da Anna e do Jorge.

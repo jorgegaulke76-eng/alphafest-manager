@@ -1,14 +1,10 @@
-# HF65.18.2 — Propostas ↔ Catálogo 3D
+# HF65.19 — Recibo de Pagamento
 
-A tela de orçamento da Anna e a tela do Jorge agora consultam uma fonte unificada: Catálogo Oficial + Catálogo 3D. Isso elimina a dependência de apertar “Sincronizar Catálogo 3D → Propostas e Site” apenas para um modelo aparecer na proposta.
-
-# HF65.18.1 — Galeria ↔ Catálogo Oficial
-
-Esta correção elimina taxonomia antiga armazenada na Galeria quando o produto vinculado já foi corrigido no Catálogo Oficial.
-
-Exemplos corrigidos automaticamente após instalar:
-- CHAVEIRO 3D passa a usar a mesma Categoria/Subcategoria do Catálogo Oficial.
-- SACOLINHA PERSONALIZADA passa a usar LEMBRANÇAS / SACOLINHAS, em vez do snapshot antigo LEMBRANÇAS / PAPELARIA.
-
-A Fonte Única passa a ser o Catálogo Oficial para Categoria e Subcategoria de trabalhos vinculados.
-Trabalhos avulsos continuam com classificação própria.
+- Gera recibo somente para proposta/pedido com status oficial **Pago**.
+- **🧾 Enviar recibo** abre o WhatsApp do cliente com mensagem pronta.
+- **📄 Recibo HTML** gera documento A4 para imprimir ou salvar em PDF.
+- Usa cliente, CPF/CNPJ quando informado, número da proposta, itens, valor oficial e data `pago_em`.
+- Número do recibo: `REC-<número da proposta>`.
+- Disponível na Central da Anna, Central do Jorge e Histórico.
+- Clientes de fechamento periódico continuam com o documento próprio do fechamento, evitando duplicidade.
+- Sem alteração de schema e sem dados persistentes no pacote.

@@ -1947,6 +1947,233 @@ def formatar_msg_whatsapp(prop):
         ])
     return "\n".join(linhas)
 
+
+def _recibo_numero(prop):
+    """HF65.19 — número estável do recibo derivado da proposta/pedido."""
+    numero = str((prop or {}).get("numero_proposta") or "").strip()
+    return f"REC-{numero}" if numero else "REC-S/N"
+
+
+def _recibo_data_pagamento(prop):
+    """Prioriza o momento oficial em que o pedido foi marcado como Pago."""
+    prop = prop or {}
+    valor = str(prop.get("pago_em") or "").strip()
+    if valor:
+        return valor
+    return agora_local().strftime("%d/%m/%Y %H:%M")
+
+
+def _recibo_forma_pagamento(prop):
+    """Forma curta e legível para o comprovante, sem expor instruções de cobrança."""
+    prop = prop or {}
+    for chave in ("forma_pagamento_recebido", "forma_pagamento", "pagamento_forma"):
+        valor = str(prop.get(chave) or "").strip()
+        if valor:
+            return valor
+    if proposta_faturamento_mensal(prop):
+        return str(prop.get("modalidade_cobranca") or "Fechamento periódico")
+    pagamento = str(prop.get("pagamento") or "").strip()
+    if "pix" in pagamento.casefold():
+        return "PIX"
+    return "PIX"
+
+
+def _recibo_valor_total(prop):
+    """Valor recebido: usa a mesma matemática oficial da proposta."""
+    try:
+        _subtotal, _desconto, total = calcular_valores_proposta(prop or {})
+        return float(total or 0)
+    except Exception:
+        try:
+            return float((prop or {}).get("valor_total", (prop or {}).get("total", 0)) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+
+def _recibo_moeda(valor):
+    try:
+        numero = float(valor or 0)
+    except (TypeError, ValueError):
+        numero = 0.0
+    return f"R$ {numero:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def formatar_msg_recibo_whatsapp(prop):
+    """HF65.19 — recibo compacto para envio direto ao cliente pelo WhatsApp."""
+    prop = prop or {}
+    empresa = carregar_config_empresa()
+    cliente = str(prop.get("cliente_nome", prop.get("cliente", ""))).strip() or "Cliente"
+    documento = str(prop.get("documento", prop.get("cliente_cpf_cnpj", ""))).strip()
+    proposta = str(prop.get("numero_proposta") or "").strip() or "N/A"
+    valor = _recibo_valor_total(prop)
+    data_pagamento = _recibo_data_pagamento(prop)
+    forma = _recibo_forma_pagamento(prop)
+
+    itens_txt = []
+    for item in (prop.get("itens") or []):
+        if not isinstance(item, dict):
+            continue
+        publico = _orcamento_item_publico_cliente(item)
+        produto = str(publico.get("produto") or "Produto").strip() or "Produto"
+        qtd = publico.get("quantidade", 0)
+        try:
+            qtd_n = float(qtd or 0)
+            qtd_s = str(int(qtd_n)) if qtd_n.is_integer() else f"{qtd_n:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+        except (TypeError, ValueError):
+            qtd_s = str(qtd or "")
+        itens_txt.append(f"• {produto}" + (f" — {qtd_s} un." if qtd_s else ""))
+    if not itens_txt:
+        itens_txt.append("• Pedido conforme proposta")
+
+    linhas = [
+        f"*RECIBO DE PAGAMENTO — {_nome_publico_empresa_proposta(empresa)}*",
+        f"*Recibo:* {_recibo_numero(prop)}",
+        f"*Referente à proposta/pedido:* {proposta}",
+        "",
+        f"*Recebemos de:* {cliente}",
+    ]
+    if documento:
+        linhas.append(f"*CPF/CNPJ:* {documento}")
+    linhas.extend([
+        f"*Valor recebido:* {_recibo_moeda(valor)}",
+        f"*Forma de pagamento:* {forma}",
+        f"*Pagamento confirmado em:* {data_pagamento}",
+        "",
+        "*REFERENTE A:*",
+        *itens_txt,
+        "",
+        "✅ Pagamento recebido e confirmado.",
+        "Agradecemos pela preferência!",
+        "",
+        str(empresa.get("site") or "www.alphafest.com.br"),
+    ])
+    return "\n".join(linhas)
+
+
+def gerar_html_recibo(prop):
+    """HF65.19 — recibo A4 autocontido, pronto para imprimir ou salvar em PDF."""
+    prop = prop or {}
+    empresa = carregar_config_empresa()
+    cliente = str(prop.get("cliente_nome", prop.get("cliente", ""))).strip() or "Cliente"
+    documento = str(prop.get("documento", prop.get("cliente_cpf_cnpj", ""))).strip()
+    proposta = str(prop.get("numero_proposta") or "").strip() or "N/A"
+    recibo = _recibo_numero(prop)
+    valor = _recibo_valor_total(prop)
+    data_pagamento = _recibo_data_pagamento(prop)
+    forma = _recibo_forma_pagamento(prop)
+    nome_empresa = _nome_publico_empresa_proposta(empresa)
+    telefone = str(empresa.get("telefone") or empresa.get("whatsapp_catalogo") or "").strip()
+    site = str(empresa.get("site") or "www.alphafest.com.br").strip()
+
+    itens_html = []
+    for item in (prop.get("itens") or []):
+        if not isinstance(item, dict):
+            continue
+        publico = _orcamento_item_publico_cliente(item)
+        produto = html.escape(str(publico.get("produto") or "Produto").strip() or "Produto")
+        detalhes = html.escape(str(publico.get("especificacoes") or "").strip())
+        try:
+            qtd = float(publico.get("quantidade", 0) or 0)
+            qtd_txt = str(int(qtd)) if qtd.is_integer() else f"{qtd:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+        except (TypeError, ValueError):
+            qtd_txt = html.escape(str(publico.get("quantidade") or ""))
+        detalhe_html = f'<div class="detail">{detalhes}</div>' if detalhes else ''
+        itens_html.append(f'<div class="item"><div><strong>{produto}</strong>{detalhe_html}</div><div>{qtd_txt} un.</div></div>')
+    if not itens_html:
+        itens_html.append('<div class="item"><div><strong>Pedido conforme proposta</strong></div><div></div></div>')
+
+    logo_b64 = get_image_base64("logo.png")
+    logo_html = f'<img class="logo" src="data:image/png;base64,{logo_b64}" alt="AlphaFest">' if logo_b64 else ''
+    doc_html = f'<div><span class="label">CPF/CNPJ:</span> {html.escape(documento)}</div>' if documento else ''
+    tel_html = f' · {html.escape(telefone)}' if telefone else ''
+
+    return f'''<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{html.escape(recibo)} - {html.escape(cliente)}</title>
+<style>
+@page {{ size:A4; margin:14mm; }}
+* {{ box-sizing:border-box; }}
+body {{ margin:0; font-family:Arial,Helvetica,sans-serif; background:#f3f7ff; color:#183153; }}
+.sheet {{ max-width:820px; margin:24px auto; background:#fff; border:1px solid #d9e6ff; border-radius:22px; overflow:hidden; box-shadow:0 12px 38px rgba(25,80,170,.12); }}
+.header {{ padding:28px 34px; background:linear-gradient(135deg,#0b55d4,#49a7ff); color:#fff; display:flex; justify-content:space-between; gap:24px; align-items:center; }}
+.logo {{ width:128px; max-height:72px; object-fit:contain; background:#fff; border-radius:14px; padding:8px; }}
+.header h1 {{ margin:0 0 6px; font-size:27px; }}
+.header p {{ margin:0; opacity:.94; }}
+.content {{ padding:30px 34px 34px; }}
+.badge {{ display:inline-block; padding:7px 12px; border-radius:999px; background:#eaf3ff; color:#0b55d4; font-weight:700; font-size:13px; }}
+.grid {{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:20px 0; }}
+.card {{ border:1px solid #deebff; border-radius:14px; padding:14px 16px; background:#fbfdff; }}
+.label {{ font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:#6b7c99; font-weight:700; }}
+.value {{ margin-top:5px; font-size:16px; font-weight:700; }}
+.amount {{ margin:20px 0; border-radius:18px; padding:22px; text-align:center; background:#eff8f1; border:1px solid #cfe9d5; }}
+.amount .big {{ font-size:34px; font-weight:800; color:#16763a; margin-top:5px; }}
+.section-title {{ margin:24px 0 10px; font-size:14px; color:#0b55d4; font-weight:800; text-transform:uppercase; letter-spacing:.6px; }}
+.item {{ display:flex; justify-content:space-between; gap:18px; padding:12px 4px; border-bottom:1px solid #edf2f8; }}
+.detail {{ margin-top:4px; color:#64748b; font-size:13px; }}
+.confirm {{ margin:24px 0 8px; padding:15px 18px; border-radius:12px; background:#eef9f1; color:#176934; font-weight:700; }}
+.footer {{ margin-top:30px; padding-top:16px; border-top:1px solid #e7eef8; color:#65758b; font-size:12px; line-height:1.55; }}
+.print {{ display:block; margin:20px auto; border:0; border-radius:10px; background:#0b55d4; color:#fff; padding:11px 18px; font-weight:700; cursor:pointer; }}
+@media(max-width:650px) {{ .sheet{{margin:0;border-radius:0}} .header{{padding:22px;flex-direction:column;align-items:flex-start}} .content{{padding:22px}} .grid{{grid-template-columns:1fr}} }}
+@media print {{ body{{background:#fff}} .sheet{{margin:0;box-shadow:none;border:0;max-width:none}} .print{{display:none}} }}
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="header">
+    <div><h1>Recibo de Pagamento</h1><p>{html.escape(nome_empresa)}</p></div>
+    {logo_html}
+  </div>
+  <div class="content">
+    <span class="badge">{html.escape(recibo)}</span>
+    <div class="grid">
+      <div class="card"><div class="label">Cliente</div><div class="value">{html.escape(cliente)}</div>{doc_html}</div>
+      <div class="card"><div class="label">Proposta / Pedido</div><div class="value">{html.escape(proposta)}</div></div>
+      <div class="card"><div class="label">Pagamento confirmado em</div><div class="value">{html.escape(data_pagamento)}</div></div>
+      <div class="card"><div class="label">Forma de pagamento</div><div class="value">{html.escape(forma)}</div></div>
+    </div>
+    <div class="amount"><div class="label">Valor recebido</div><div class="big">{html.escape(_recibo_moeda(valor))}</div></div>
+    <div class="section-title">Referente a</div>
+    {''.join(itens_html)}
+    <div class="confirm">✓ Pagamento recebido e confirmado.</div>
+    <div class="footer">
+      <strong>{html.escape(nome_empresa)}</strong><br>
+      {html.escape(site)}{tel_html}<br>
+      Este recibo comprova o recebimento do valor acima e não substitui documento fiscal quando sua emissão for aplicável.
+    </div>
+  </div>
+</div>
+<button class="print" onclick="window.print()">Imprimir / Salvar como PDF</button>
+</body></html>'''
+
+
+def _renderizar_acoes_recibo_pagamento(prop, prefixo):
+    """Mostra os comandos do recibo somente após confirmação oficial do pagamento."""
+    prop = prop or {}
+    estado = _status_resumo(prop)
+    if not bool(estado.get("pago")):
+        return
+    if proposta_faturamento_mensal(prop):
+        return
+    numero = str(prop.get("numero_proposta") or "pedido").strip() or "pedido"
+    wa_numero = _anna_numero_whatsapp(prop.get("whatsapp") or prop.get("cliente_wa"))
+    mensagem = formatar_msg_recibo_whatsapp(prop)
+    link = f"https://wa.me/{wa_numero}?text={quote(mensagem)}" if wa_numero else f"https://wa.me/?text={quote(mensagem)}"
+    r1, r2, r3 = st.columns([1.5, 1.5, 4.0])
+    r1.link_button("🧾 Enviar recibo", link, use_container_width=True)
+    r2.download_button(
+        "📄 Recibo HTML",
+        gerar_html_recibo(prop),
+        file_name=f"RECIBO_{numero}.html",
+        mime="text/html",
+        key=f"{prefixo}_recibo_html_{numero}",
+        use_container_width=True,
+    )
+    r3.caption(f"Pagamento confirmado · {_recibo_moeda(_recibo_valor_total(prop))} · {_recibo_data_pagamento(prop)}")
+
+
 def _local_file_signature(path):
     try:
         stat = os.stat(path)
@@ -24701,6 +24928,9 @@ def _renderizar_linha_proposta_anna(prop, prefixo, permitir_reserva_rapida=True)
             else:
                 st.error(mensagem)
 
+    # HF65.19 — recibo disponível na própria proposta após confirmação do pagamento.
+    _renderizar_acoes_recibo_pagamento(prop, prefixo=f"{prefixo}_hf6519")
+
     # Quando a entrega já estiver concluída, o THU sugere enriquecer o banco de imagens.
     renderizar_sugestao_banco_imagens_entrega(
         prop,
@@ -25639,6 +25869,7 @@ if pagina_atual == "central":
                     key=f"hf655_jorge_html_{idx_hf653}_{numero_hf653}",
                     use_container_width=True,
                 )
+                _renderizar_acoes_recibo_pagamento(prop_hf653, prefixo=f"hf6519_jorge_{idx_hf653}")
     else:
         c1, c2, c3, c4, c5, c6 = st.columns(6)
         c1.metric("🚨 Atrasados", indicadores_unificados_central["atrasados_operacionais"], help="Pedidos aprovados, ainda não entregues e com data de entrega vencida.")
@@ -28307,7 +28538,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18.2",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.19",
                 )
                 return _html, _zip
 
@@ -28451,7 +28682,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18.2",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.19",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
@@ -31945,6 +32176,8 @@ if pagina_atual == "historico":
             if cfluxo.button("🎯 Abrir no Fluxo", key=f"abrir_fluxo_historico_{num_p}", use_container_width=True):
                 st.session_state["_fluxo_pedido_foco"] = str(num_p)
                 rerun_na_aba("fluxo", f"Pedido {num_p} aberto a partir do Histórico.")
+
+            _renderizar_acoes_recibo_pagamento(prop_atual, prefixo=f"hf6519_hist_{num_p}")
 
             usuario_historico_jorge_hf1 = str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold() == "jorge"
             if usuario_historico_jorge_hf1 and not aprovado_p and not bool(estado_hist_p.get("encerrada")):
