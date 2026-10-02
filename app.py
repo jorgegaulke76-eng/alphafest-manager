@@ -13466,7 +13466,16 @@ def _orcamento_resolver_produto(escolha_catalogo, texto_livre, catalogo=None):
     )
 
 def _orcamento_produto_catalogo_obj(meta, catalogo=None):
-    """Retorna o cadastro explicitamente vinculado, incluindo fonte comercial 3D."""
+    """Retorna o cadastro explicitamente vinculado, incluindo fonte comercial 3D.
+
+    HF65.19.1: quando a seleção acabou de ser resolvida, reaproveita o snapshot
+    do produto já carregado naquele rerun. Isso evita reconstruir Catálogo Oficial
+    + Catálogo 3D várias vezes a cada tecla/campo alterado no orçamento.
+    """
+    meta = meta or {}
+    snapshot = meta.get("_produto_obj") if isinstance(meta, dict) else None
+    if isinstance(snapshot, dict):
+        return snapshot
     catalogo = _orcamento_catalogo_unificado_3d(catalogo)
     return _catalogo_produto_da_meta(meta, catalogo)
 
@@ -13497,9 +13506,14 @@ def _orcamento_resumo_dados_catalogo(produto):
     return _catalogo_resumo_dados(produto)
 
 def _orcamento_campos_produto(prefixo, *, em_form=False):
-    """Renderiza seleção pesquisável Catálogo Oficial + 3D para Jorge e Anna."""
+    """Renderiza seleção pesquisável Catálogo Oficial + 3D para Jorge e Anna.
+
+    HF65.19.1: o catálogo unificado é montado uma única vez neste fluxo. Antes,
+    os wrappers voltavam a unificar a mesma lista durante opções, resolução e
+    autopreenchimento, multiplicando cópias/leitura do Catálogo 3D em cada rerun.
+    """
     catalogo = _orcamento_catalogo_unificado_3d()
-    opcoes, _ = _orcamento_opcoes_produto_catalogo(catalogo)
+    opcoes, _ = _catalogo_opcoes_orcamento(catalogo, rotulo_livre=ORCAMENTO_PRODUTO_LIVRE)
     escolha = st.selectbox(
         "🔎 Produto do Catálogo Oficial (opcional)",
         opcoes,
@@ -13516,7 +13530,14 @@ def _orcamento_campos_produto(prefixo, *, em_form=False):
         placeholder="Digite somente se não encontrou no Catálogo Oficial",
         help="Se você escolher um produto acima, esta digitação é ignorada. Nomes/aliases exatos já conhecidos são normalizados automaticamente.",
     )
-    produto, meta = _orcamento_resolver_produto(escolha, digitado, catalogo)
+    produto, meta = _catalogo_resolver_orcamento(
+        escolha, digitado, catalogo, rotulo_livre=ORCAMENTO_PRODUTO_LIVRE
+    )
+    if isinstance(meta, dict) and str(meta.get("origem") or "") != "livre":
+        produto_obj = _catalogo_produto_da_meta(meta, catalogo)
+        if isinstance(produto_obj, dict):
+            # Snapshot somente em memória/UI; não é persistido no item da proposta.
+            meta["_produto_obj"] = produto_obj
     if produto:
         if meta.get("origem") == "catalogo_alias":
             st.caption(f"✅ Nome reconhecido no Catálogo e padronizado como: **{produto}**")
@@ -18601,16 +18622,11 @@ def dialog_orcamento_anna(proposta=None):
         st.session_state.pop(f"{cliente_prefixo_hf6}_seletor", None)
         st.session_state.pop(f"{cliente_prefixo_hf6}_token", None)
 
-    logo_b64, _ = encontrar_logo_base64()
-    if logo_b64:
-        le, lc, ld = st.columns([1, 1, 1])
-        with lc:
-            try:
-                st.image(base64.b64decode(logo_b64), use_container_width=True)
-            except Exception:
-                pass
+    # HF65.19.1 — entrada da proposta da Anna mais leve. O logotipo grande foi
+    # retirado do modal para ganhar espaço útil e evitar decodificação/renderização
+    # de imagem a cada rerun enquanto o orçamento é digitado.
     st.markdown(
-        "<p style='text-align:center; margin-top:-8px; color:#6b7280;'>"
+        "<p style='text-align:center; margin:0 0 6px; color:#6b7280;'>"
         "Personalizados • Impressão 3D • Papelaria</p>",
         unsafe_allow_html=True,
     )
@@ -18694,10 +18710,18 @@ def dialog_orcamento_anna(proposta=None):
         st.success("⚡ Produto do Catálogo reconhecido: preço oficial carregado. Tema, nome, cor/material e detalhes permanecem manuais.")
         if resumo_auto_i8113:
             st.caption(resumo_auto_i8113)
-        _orcamento_previa_visual_catalogo(
-            produto_cat_auto_i8113,
-            prefixo=f"anna_orc_prev_{chave_item_i8113}",
+        # HF65.19.1 — a foto deixa de carregar automaticamente em todo rerun do
+        # formulário. Anna abre a confirmação visual apenas quando precisar.
+        mostrar_foto_i8113 = st.checkbox(
+            "🖼️ Ver foto do produto",
+            key=f"anna_orc_mostrar_prev_{chave_item_i8113}",
+            help="Abra somente quando quiser confirmar visualmente o item. Isso mantém a digitação do orçamento mais rápida.",
         )
+        if mostrar_foto_i8113:
+            _orcamento_previa_visual_catalogo(
+                produto_cat_auto_i8113,
+                prefixo=f"anna_orc_prev_{chave_item_i8113}",
+            )
     with st.expander("🎨 Personalização & Especificações", expanded=True):
         e1, e2 = st.columns(2)
         tema = e1.text_input("Tema / Ocasião", key=f"anna_modal_tema_{chave_item_i8113}")

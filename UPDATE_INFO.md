@@ -1,10 +1,14 @@
-# HF65.19 — Recibo de Pagamento
+# HF65.19.1 — Orçamento da Anna mais rápido
 
-- Gera recibo somente para proposta/pedido com status oficial **Pago**.
-- **🧾 Enviar recibo** abre o WhatsApp do cliente com mensagem pronta.
-- **📄 Recibo HTML** gera documento A4 para imprimir ou salvar em PDF.
-- Usa cliente, CPF/CNPJ quando informado, número da proposta, itens, valor oficial e data `pago_em`.
-- Número do recibo: `REC-<número da proposta>`.
-- Disponível na Central da Anna, Central do Jorge e Histórico.
-- Clientes de fechamento periódico continuam com o documento próprio do fechamento, evitando duplicidade.
-- Sem alteração de schema e sem dados persistentes no pacote.
+Base: `20.4.9-I8.13.5-HF53.3-HF8-HF65.19`
+
+## Ajustes
+
+1. Remove o logo AlphaFest exibido na entrada do diálogo de propostas da Anna.
+2. Reduz processamento repetido do Catálogo Oficial + Catálogo 3D durante a digitação.
+3. Mantém um snapshot em memória do produto selecionado durante o rerun para evitar novas resoluções desnecessárias.
+4. A prévia da foto do produto deixa de abrir automaticamente; Anna usa `🖼️ Ver foto do produto` quando desejar confirmar visualmente.
+
+## Compatibilidade
+
+Sem migração de banco e sem alteração no formato das propostas existentes. Jorge continua com o fluxo visual atual.

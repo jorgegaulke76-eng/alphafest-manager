@@ -1,3 +1,10 @@
+# HF65.19.1 — Orçamento da Anna mais rápido
+
+- Remove o logotipo grande da entrada/modal de propostas da Anna.
+- Evita reconstruir repetidamente o Catálogo Oficial + Catálogo 3D no mesmo rerun do formulário.
+- Reaproveita em memória o produto já resolvido para preço e dados comerciais.
+- A foto de confirmação do produto passa a ser carregada somente quando Anna marcar “Ver foto do produto”.
+- Não altera cálculo, preço, cliente, itens, WhatsApp, status, recibos nem persistência das propostas.
 # HF65.19 — Recibo de Pagamento
 
 - Recibo por WhatsApp e HTML/PDF para propostas pagas.
