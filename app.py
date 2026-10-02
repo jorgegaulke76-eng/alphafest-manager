@@ -18649,25 +18649,39 @@ def dialog_orcamento_anna(proposta=None):
                 st.session_state.pop("_ultima_proposta_salva_anna", None)
                 st.rerun()
 
-    # HF2 — extensão do fluxo homologado no Jorge para a Anna.
-    # A identificação do cliente fica fora do form de item para permitir o callback
-    # do WhatsApp sem recalcular tema, personalização e demais campos do produto.
+    # HF65.19.2 — WhatsApp passa a ser a primeira chave de identificação da Anna.
+    # O reconhecimento ocorre antes de renderizar o seletor/Nome/Documento, evitando
+    # que o Streamlit já tenha criado esses widgets quando o autopreenchimento tenta
+    # atualizar o session_state. Isso torna o preenchimento de cliente cadastrado
+    # confiável ao confirmar o número (Enter/Tab ou saída do campo).
     st.markdown("#### 👤 Cliente")
+    wa = st.text_input(
+        "WhatsApp",
+        key="anna_modal_whatsapp",
+        help="Digite/cole o número e confirme com Enter/Tab. Se já estiver cadastrado, Nome e CPF/CNPJ serão preenchidos automaticamente.",
+    )
+    _anna_wa_chave_hf65192 = _telefone_chave(wa)
+    _anna_wa_check_key_hf65192 = f"{cliente_prefixo_hf6}_whatsapp_ultima_verificacao"
+    if st.session_state.get(_anna_wa_check_key_hf65192) != _anna_wa_chave_hf65192:
+        _orcamento_autopreencher_cliente_por_whatsapp(
+            prefixo=cliente_prefixo_hf6,
+            nome_key="anna_modal_cliente",
+            documento_key="anna_modal_documento",
+            whatsapp_key="anna_modal_whatsapp",
+            reconhecido_id_key="_i811hf2_anna_cliente_reconhecido_id",
+            mensagem_key="_i811hf2_anna_cliente_reconhecido_msg",
+        )
+        st.session_state[_anna_wa_check_key_hf65192] = _anna_wa_chave_hf65192
+
     cliente_selecionado_hf6 = _orcamento_campos_cliente(
         cliente_prefixo_hf6,
         nome_key="anna_modal_cliente",
         documento_key="anna_modal_documento",
         whatsapp_key="anna_modal_whatsapp",
     )
-    nome = st.text_input("Nome / Razão Social", key="anna_modal_cliente")
-    c1, c2 = st.columns(2)
-    doc = c1.text_input("CPF / CNPJ", key="anna_modal_documento")
-    wa = c2.text_input(
-        "WhatsApp",
-        key="anna_modal_whatsapp",
-        on_change=autopreencher_cliente_whatsapp_anna_i811hf2,
-        help="Ao confirmar um número já cadastrado, os dados e o Perfil Comercial do cliente são carregados automaticamente.",
-    )
+    c1, c2 = st.columns([2, 1.4])
+    nome = c1.text_input("Nome / Razão Social", key="anna_modal_cliente")
+    doc = c2.text_input("CPF / CNPJ", key="anna_modal_documento")
     evento = st.text_input(
         "🎉 Evento",
         key="anna_modal_evento",
@@ -30831,25 +30845,37 @@ if pagina_atual == "novo_orcamento":
     if aviso_perfil_i811:
         st.info(aviso_perfil_i811)
 
-    # I8.11.1 — identificação do cliente fica fora do form de itens para o Jorge.
-    # Assim, ao informar/confirmar um WhatsApp já cadastrado, o Streamlit pode
-    # reconhecer o relacionamento e preencher os demais dados antes do item.
+    # HF65.19.2 — mesmo reconhecimento robusto por WhatsApp também no Jorge.
+    # A busca acontece antes de Nome/Documento e do seletor de cliente serem
+    # renderizados, evitando conflito de session_state e mantendo uma única regra.
     st.markdown("#### 👤 Cliente")
+    wa = st.text_input(
+        "WhatsApp",
+        key="form_whatsapp",
+        help="Digite/cole o número e confirme com Enter/Tab. Se já estiver cadastrado, Nome e CPF/CNPJ serão preenchidos automaticamente.",
+    )
+    _jorge_wa_chave_hf65192 = _telefone_chave(wa)
+    _jorge_wa_check_key_hf65192 = "jorge_orc_cliente_whatsapp_ultima_verificacao"
+    if st.session_state.get(_jorge_wa_check_key_hf65192) != _jorge_wa_chave_hf65192:
+        _orcamento_autopreencher_cliente_por_whatsapp(
+            prefixo="jorge_orc_cliente",
+            nome_key="form_cliente",
+            documento_key="form_documento",
+            whatsapp_key="form_whatsapp",
+            reconhecido_id_key="_i8111_cliente_reconhecido_id",
+            mensagem_key="_i8111_cliente_reconhecido_msg",
+        )
+        st.session_state[_jorge_wa_check_key_hf65192] = _jorge_wa_chave_hf65192
+
     cliente_selecionado_hf6 = _orcamento_campos_cliente(
         "jorge_orc_cliente",
         nome_key="form_cliente",
         documento_key="form_documento",
         whatsapp_key="form_whatsapp",
     )
-    cli1, cli2, cli3 = st.columns([2.2, 1.5, 1.5])
+    cli1, cli2 = st.columns([2.2, 1.5])
     nome = cli1.text_input("Nome / Razão Social", key="form_cliente")
     doc = cli2.text_input("CPF / CNPJ", key="form_documento")
-    wa = cli3.text_input(
-        "WhatsApp",
-        key="form_whatsapp",
-        on_change=autopreencher_cliente_whatsapp_i8111,
-        help="Ao confirmar um número já cadastrado, os dados e o Perfil Comercial do cliente são carregados automaticamente.",
-    )
     evento = st.text_input(
         "🎉 Evento",
         key="form_evento",

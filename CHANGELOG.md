@@ -1,3 +1,12 @@
+## 20.4.9-I8.13.5-HF53.3-HF8-HF65.19.2 — Autopreenchimento por WhatsApp no orçamento
+
+- Corrige o reconhecimento de cliente cadastrado ao informar o WhatsApp na proposta da Anna.
+- WhatsApp passa a ser processado antes de Nome/CPF-CNPJ e do seletor, evitando conflito do Streamlit com `session_state`.
+- Ao confirmar o número com Enter/Tab ou sair do campo, Nome e CPF/CNPJ são preenchidos automaticamente quando houver cadastro correspondente.
+- A mesma correção foi aplicada ao fluxo do Jorge para manter uma única regra de comportamento.
+- Número não cadastrado continua livre para novo cliente, sem apagar o WhatsApp digitado.
+- Não altera produtos, preços, itens, status, WhatsApp de envio, recibos ou dados existentes.
+
 # HF65.19.1 — Orçamento da Anna mais rápido
 
 - Remove o logotipo grande da entrada/modal de propostas da Anna.
