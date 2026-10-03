@@ -1947,233 +1947,6 @@ def formatar_msg_whatsapp(prop):
         ])
     return "\n".join(linhas)
 
-
-def _recibo_numero(prop):
-    """HF65.19 — número estável do recibo derivado da proposta/pedido."""
-    numero = str((prop or {}).get("numero_proposta") or "").strip()
-    return f"REC-{numero}" if numero else "REC-S/N"
-
-
-def _recibo_data_pagamento(prop):
-    """Prioriza o momento oficial em que o pedido foi marcado como Pago."""
-    prop = prop or {}
-    valor = str(prop.get("pago_em") or "").strip()
-    if valor:
-        return valor
-    return agora_local().strftime("%d/%m/%Y %H:%M")
-
-
-def _recibo_forma_pagamento(prop):
-    """Forma curta e legível para o comprovante, sem expor instruções de cobrança."""
-    prop = prop or {}
-    for chave in ("forma_pagamento_recebido", "forma_pagamento", "pagamento_forma"):
-        valor = str(prop.get(chave) or "").strip()
-        if valor:
-            return valor
-    if proposta_faturamento_mensal(prop):
-        return str(prop.get("modalidade_cobranca") or "Fechamento periódico")
-    pagamento = str(prop.get("pagamento") or "").strip()
-    if "pix" in pagamento.casefold():
-        return "PIX"
-    return "PIX"
-
-
-def _recibo_valor_total(prop):
-    """Valor recebido: usa a mesma matemática oficial da proposta."""
-    try:
-        _subtotal, _desconto, total = calcular_valores_proposta(prop or {})
-        return float(total or 0)
-    except Exception:
-        try:
-            return float((prop or {}).get("valor_total", (prop or {}).get("total", 0)) or 0)
-        except (TypeError, ValueError):
-            return 0.0
-
-
-def _recibo_moeda(valor):
-    try:
-        numero = float(valor or 0)
-    except (TypeError, ValueError):
-        numero = 0.0
-    return f"R$ {numero:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-
-def formatar_msg_recibo_whatsapp(prop):
-    """HF65.19 — recibo compacto para envio direto ao cliente pelo WhatsApp."""
-    prop = prop or {}
-    empresa = carregar_config_empresa()
-    cliente = str(prop.get("cliente_nome", prop.get("cliente", ""))).strip() or "Cliente"
-    documento = str(prop.get("documento", prop.get("cliente_cpf_cnpj", ""))).strip()
-    proposta = str(prop.get("numero_proposta") or "").strip() or "N/A"
-    valor = _recibo_valor_total(prop)
-    data_pagamento = _recibo_data_pagamento(prop)
-    forma = _recibo_forma_pagamento(prop)
-
-    itens_txt = []
-    for item in (prop.get("itens") or []):
-        if not isinstance(item, dict):
-            continue
-        publico = _orcamento_item_publico_cliente(item)
-        produto = str(publico.get("produto") or "Produto").strip() or "Produto"
-        qtd = publico.get("quantidade", 0)
-        try:
-            qtd_n = float(qtd or 0)
-            qtd_s = str(int(qtd_n)) if qtd_n.is_integer() else f"{qtd_n:.2f}".rstrip("0").rstrip(".").replace(".", ",")
-        except (TypeError, ValueError):
-            qtd_s = str(qtd or "")
-        itens_txt.append(f"• {produto}" + (f" — {qtd_s} un." if qtd_s else ""))
-    if not itens_txt:
-        itens_txt.append("• Pedido conforme proposta")
-
-    linhas = [
-        f"*RECIBO DE PAGAMENTO — {_nome_publico_empresa_proposta(empresa)}*",
-        f"*Recibo:* {_recibo_numero(prop)}",
-        f"*Referente à proposta/pedido:* {proposta}",
-        "",
-        f"*Recebemos de:* {cliente}",
-    ]
-    if documento:
-        linhas.append(f"*CPF/CNPJ:* {documento}")
-    linhas.extend([
-        f"*Valor recebido:* {_recibo_moeda(valor)}",
-        f"*Forma de pagamento:* {forma}",
-        f"*Pagamento confirmado em:* {data_pagamento}",
-        "",
-        "*REFERENTE A:*",
-        *itens_txt,
-        "",
-        "✅ Pagamento recebido e confirmado.",
-        "Agradecemos pela preferência!",
-        "",
-        str(empresa.get("site") or "www.alphafest.com.br"),
-    ])
-    return "\n".join(linhas)
-
-
-def gerar_html_recibo(prop):
-    """HF65.19 — recibo A4 autocontido, pronto para imprimir ou salvar em PDF."""
-    prop = prop or {}
-    empresa = carregar_config_empresa()
-    cliente = str(prop.get("cliente_nome", prop.get("cliente", ""))).strip() or "Cliente"
-    documento = str(prop.get("documento", prop.get("cliente_cpf_cnpj", ""))).strip()
-    proposta = str(prop.get("numero_proposta") or "").strip() or "N/A"
-    recibo = _recibo_numero(prop)
-    valor = _recibo_valor_total(prop)
-    data_pagamento = _recibo_data_pagamento(prop)
-    forma = _recibo_forma_pagamento(prop)
-    nome_empresa = _nome_publico_empresa_proposta(empresa)
-    telefone = str(empresa.get("telefone") or empresa.get("whatsapp_catalogo") or "").strip()
-    site = str(empresa.get("site") or "www.alphafest.com.br").strip()
-
-    itens_html = []
-    for item in (prop.get("itens") or []):
-        if not isinstance(item, dict):
-            continue
-        publico = _orcamento_item_publico_cliente(item)
-        produto = html.escape(str(publico.get("produto") or "Produto").strip() or "Produto")
-        detalhes = html.escape(str(publico.get("especificacoes") or "").strip())
-        try:
-            qtd = float(publico.get("quantidade", 0) or 0)
-            qtd_txt = str(int(qtd)) if qtd.is_integer() else f"{qtd:.2f}".rstrip("0").rstrip(".").replace(".", ",")
-        except (TypeError, ValueError):
-            qtd_txt = html.escape(str(publico.get("quantidade") or ""))
-        detalhe_html = f'<div class="detail">{detalhes}</div>' if detalhes else ''
-        itens_html.append(f'<div class="item"><div><strong>{produto}</strong>{detalhe_html}</div><div>{qtd_txt} un.</div></div>')
-    if not itens_html:
-        itens_html.append('<div class="item"><div><strong>Pedido conforme proposta</strong></div><div></div></div>')
-
-    logo_b64 = get_image_base64("logo.png")
-    logo_html = f'<img class="logo" src="data:image/png;base64,{logo_b64}" alt="AlphaFest">' if logo_b64 else ''
-    doc_html = f'<div><span class="label">CPF/CNPJ:</span> {html.escape(documento)}</div>' if documento else ''
-    tel_html = f' · {html.escape(telefone)}' if telefone else ''
-
-    return f'''<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{html.escape(recibo)} - {html.escape(cliente)}</title>
-<style>
-@page {{ size:A4; margin:14mm; }}
-* {{ box-sizing:border-box; }}
-body {{ margin:0; font-family:Arial,Helvetica,sans-serif; background:#f3f7ff; color:#183153; }}
-.sheet {{ max-width:820px; margin:24px auto; background:#fff; border:1px solid #d9e6ff; border-radius:22px; overflow:hidden; box-shadow:0 12px 38px rgba(25,80,170,.12); }}
-.header {{ padding:28px 34px; background:linear-gradient(135deg,#0b55d4,#49a7ff); color:#fff; display:flex; justify-content:space-between; gap:24px; align-items:center; }}
-.logo {{ width:128px; max-height:72px; object-fit:contain; background:#fff; border-radius:14px; padding:8px; }}
-.header h1 {{ margin:0 0 6px; font-size:27px; }}
-.header p {{ margin:0; opacity:.94; }}
-.content {{ padding:30px 34px 34px; }}
-.badge {{ display:inline-block; padding:7px 12px; border-radius:999px; background:#eaf3ff; color:#0b55d4; font-weight:700; font-size:13px; }}
-.grid {{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:20px 0; }}
-.card {{ border:1px solid #deebff; border-radius:14px; padding:14px 16px; background:#fbfdff; }}
-.label {{ font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:#6b7c99; font-weight:700; }}
-.value {{ margin-top:5px; font-size:16px; font-weight:700; }}
-.amount {{ margin:20px 0; border-radius:18px; padding:22px; text-align:center; background:#eff8f1; border:1px solid #cfe9d5; }}
-.amount .big {{ font-size:34px; font-weight:800; color:#16763a; margin-top:5px; }}
-.section-title {{ margin:24px 0 10px; font-size:14px; color:#0b55d4; font-weight:800; text-transform:uppercase; letter-spacing:.6px; }}
-.item {{ display:flex; justify-content:space-between; gap:18px; padding:12px 4px; border-bottom:1px solid #edf2f8; }}
-.detail {{ margin-top:4px; color:#64748b; font-size:13px; }}
-.confirm {{ margin:24px 0 8px; padding:15px 18px; border-radius:12px; background:#eef9f1; color:#176934; font-weight:700; }}
-.footer {{ margin-top:30px; padding-top:16px; border-top:1px solid #e7eef8; color:#65758b; font-size:12px; line-height:1.55; }}
-.print {{ display:block; margin:20px auto; border:0; border-radius:10px; background:#0b55d4; color:#fff; padding:11px 18px; font-weight:700; cursor:pointer; }}
-@media(max-width:650px) {{ .sheet{{margin:0;border-radius:0}} .header{{padding:22px;flex-direction:column;align-items:flex-start}} .content{{padding:22px}} .grid{{grid-template-columns:1fr}} }}
-@media print {{ body{{background:#fff}} .sheet{{margin:0;box-shadow:none;border:0;max-width:none}} .print{{display:none}} }}
-</style>
-</head>
-<body>
-<div class="sheet">
-  <div class="header">
-    <div><h1>Recibo de Pagamento</h1><p>{html.escape(nome_empresa)}</p></div>
-    {logo_html}
-  </div>
-  <div class="content">
-    <span class="badge">{html.escape(recibo)}</span>
-    <div class="grid">
-      <div class="card"><div class="label">Cliente</div><div class="value">{html.escape(cliente)}</div>{doc_html}</div>
-      <div class="card"><div class="label">Proposta / Pedido</div><div class="value">{html.escape(proposta)}</div></div>
-      <div class="card"><div class="label">Pagamento confirmado em</div><div class="value">{html.escape(data_pagamento)}</div></div>
-      <div class="card"><div class="label">Forma de pagamento</div><div class="value">{html.escape(forma)}</div></div>
-    </div>
-    <div class="amount"><div class="label">Valor recebido</div><div class="big">{html.escape(_recibo_moeda(valor))}</div></div>
-    <div class="section-title">Referente a</div>
-    {''.join(itens_html)}
-    <div class="confirm">✓ Pagamento recebido e confirmado.</div>
-    <div class="footer">
-      <strong>{html.escape(nome_empresa)}</strong><br>
-      {html.escape(site)}{tel_html}<br>
-      Este recibo comprova o recebimento do valor acima e não substitui documento fiscal quando sua emissão for aplicável.
-    </div>
-  </div>
-</div>
-<button class="print" onclick="window.print()">Imprimir / Salvar como PDF</button>
-</body></html>'''
-
-
-def _renderizar_acoes_recibo_pagamento(prop, prefixo):
-    """Mostra os comandos do recibo somente após confirmação oficial do pagamento."""
-    prop = prop or {}
-    estado = _status_resumo(prop)
-    if not bool(estado.get("pago")):
-        return
-    if proposta_faturamento_mensal(prop):
-        return
-    numero = str(prop.get("numero_proposta") or "pedido").strip() or "pedido"
-    wa_numero = _anna_numero_whatsapp(prop.get("whatsapp") or prop.get("cliente_wa"))
-    mensagem = formatar_msg_recibo_whatsapp(prop)
-    link = f"https://wa.me/{wa_numero}?text={quote(mensagem)}" if wa_numero else f"https://wa.me/?text={quote(mensagem)}"
-    r1, r2, r3 = st.columns([1.5, 1.5, 4.0])
-    r1.link_button("🧾 Enviar recibo", link, use_container_width=True)
-    r2.download_button(
-        "📄 Recibo HTML",
-        gerar_html_recibo(prop),
-        file_name=f"RECIBO_{numero}.html",
-        mime="text/html",
-        key=f"{prefixo}_recibo_html_{numero}",
-        use_container_width=True,
-    )
-    r3.caption(f"Pagamento confirmado · {_recibo_moeda(_recibo_valor_total(prop))} · {_recibo_data_pagamento(prop)}")
-
-
 def _local_file_signature(path):
     try:
         stat = os.stat(path)
@@ -3821,6 +3594,99 @@ def autopreencher_cliente_whatsapp_anna_i811hf2():
     )
 
 
+def _orcamento_cliente_por_nome_digitado_unico(nome, clientes=None):
+    """HF65.17: resolve nome exato ou busca parcial única no cadastro mestre.
+
+    A busca parcial só entra com 3+ caracteres e somente quando existe um único
+    relacionamento possível. Assim, digitar um nome conhecido pode preencher o
+    orçamento sem criar associação errada quando há homônimos.
+    """
+    busca = normalizar_texto_cliente(nome).casefold()
+    if len(busca) < 2:
+        return None
+    clientes = carregar_clientes() if clientes is None else (clientes or [])
+    validos = [
+        c for c in clientes
+        if isinstance(c, dict) and normalizar_texto_cliente(c.get("nome") or "").strip()
+    ]
+    exatos = [
+        c for c in validos
+        if normalizar_texto_cliente(c.get("nome") or "").casefold() == busca
+    ]
+    if len(exatos) == 1:
+        return exatos[0]
+    if len(busca) < 3:
+        return None
+    prefixos = [
+        c for c in validos
+        if normalizar_texto_cliente(c.get("nome") or "").casefold().startswith(busca)
+    ]
+    if len(prefixos) == 1:
+        return prefixos[0]
+    parciais = [
+        c for c in validos
+        if busca in normalizar_texto_cliente(c.get("nome") or "").casefold()
+    ]
+    return parciais[0] if len(parciais) == 1 else None
+
+
+def _orcamento_autopreencher_cliente_por_nome(
+    *, prefixo, nome_key, documento_key, whatsapp_key, reconhecido_id_key, mensagem_key
+):
+    """HF65.17: ao confirmar nome conhecido, carrega WhatsApp/CPF do cadastro mestre."""
+    nome_digitado = str(st.session_state.get(nome_key, "") or "").strip()
+    cliente = _orcamento_cliente_por_nome_digitado_unico(nome_digitado)
+    if not cliente:
+        return
+
+    token = _orcamento_cliente_ref(cliente)
+    nome_cliente = str(cliente.get("nome") or "").strip()
+    documento_cliente = str(cliente.get("documento") or "").strip()
+    whatsapp_cliente = str(cliente.get("whatsapp") or "").strip()
+
+    st.session_state[nome_key] = nome_cliente
+    st.session_state[documento_key] = documento_cliente
+    st.session_state[whatsapp_key] = whatsapp_cliente
+    st.session_state[reconhecido_id_key] = cliente.get("id", "")
+    st.session_state[mensagem_key] = "encontrado"
+
+    seletor_key = f"{prefixo}_seletor"
+    marcador_key = f"{prefixo}_token"
+    opcoes, mapa = _orcamento_opcoes_cliente()
+    rotulo_cliente = next(
+        (rotulo for rotulo in opcoes[1:] if _orcamento_cliente_ref(mapa.get(rotulo)) == token),
+        None,
+    )
+    if rotulo_cliente:
+        st.session_state[seletor_key] = rotulo_cliente
+        st.session_state[marcador_key] = token
+
+
+def autopreencher_cliente_nome_i8111():
+    """HF65.17: reconhecimento por Nome/Razão Social no Novo Orçamento do Jorge."""
+    _orcamento_autopreencher_cliente_por_nome(
+        prefixo="jorge_orc_cliente",
+        nome_key="form_cliente",
+        documento_key="form_documento",
+        whatsapp_key="form_whatsapp",
+        reconhecido_id_key="_i8111_cliente_reconhecido_id",
+        mensagem_key="_i8111_cliente_reconhecido_msg",
+    )
+
+
+def autopreencher_cliente_nome_anna_i811hf2():
+    """HF65.17: reconhecimento por Nome/Razão Social no modal da Anna."""
+    numero_original = str(st.session_state.get("anna_modal_numero_original", "") or "").strip()
+    _orcamento_autopreencher_cliente_por_nome(
+        prefixo=f"anna_orc_cliente_{numero_original or 'novo'}",
+        nome_key="anna_modal_cliente",
+        documento_key="anna_modal_documento",
+        whatsapp_key="anna_modal_whatsapp",
+        reconhecido_id_key="_i811hf2_anna_cliente_reconhecido_id",
+        mensagem_key="_i811hf2_anna_cliente_reconhecido_msg",
+    )
+
+
 def resumo_cliente_reconhecido_i8111(cliente):
     if not cliente:
         return ""
@@ -3956,11 +3822,24 @@ def _orcamento_campos_cliente(prefixo, *, nome_key, documento_key, whatsapp_key)
     if not cliente:
         return None
     token = _orcamento_cliente_ref(cliente)
+    nome_cliente = str(cliente.get("nome") or "").strip()
+    documento_cliente = str(cliente.get("documento") or "").strip()
+    whatsapp_cliente = str(cliente.get("whatsapp") or "").strip()
     if st.session_state.get(marcador_key) != token:
-        st.session_state[nome_key] = str(cliente.get("nome") or "").strip()
-        st.session_state[documento_key] = str(cliente.get("documento") or "").strip()
-        st.session_state[whatsapp_key] = str(cliente.get("whatsapp") or "").strip()
+        st.session_state[nome_key] = nome_cliente
+        st.session_state[documento_key] = documento_cliente
+        st.session_state[whatsapp_key] = whatsapp_cliente
         st.session_state[marcador_key] = token
+    else:
+        # HF65.17: se o marcador ficou preservado entre reruns, mas algum widget
+        # veio vazio, recompõe somente os campos vazios. Não sobrescreve ajustes
+        # manuais já digitados naquela proposta.
+        if not str(st.session_state.get(nome_key, "") or "").strip():
+            st.session_state[nome_key] = nome_cliente
+        if not str(st.session_state.get(documento_key, "") or "").strip() and documento_cliente:
+            st.session_state[documento_key] = documento_cliente
+        if not str(st.session_state.get(whatsapp_key, "") or "").strip() and whatsapp_cliente:
+            st.session_state[whatsapp_key] = whatsapp_cliente
 
     st.caption(f"✅ Cliente selecionado: **{cliente.get('nome') or 'Cliente'}** — dados carregados do cadastro mestre.")
     resumo = _orcamento_resumo_cliente_selecionado(cliente)
@@ -3997,7 +3876,7 @@ def regra_abatimento_cliente(cliente, produto_nome, referencia=None):
         return None
     perfil = perfil_comercial_cliente(cliente)
     referencia = referencia or hoje_local()
-    catalogo = _orcamento_catalogo_unificado_3d()
+    catalogo = carregar_catalogo()
     oficial = nome_produto_oficial_catalogo(produto_nome, catalogo)
     chave = normalizar_identidade_produto(oficial)
     for regra in perfil.get("abatimentos_produto", []):
@@ -4027,7 +3906,7 @@ def calcular_preco_cliente_item(cliente, produto_nome, valor_digitado=0.0):
     regra = regra_abatimento_cliente(cliente, produto_nome)
     if not regra:
         return None
-    catalogo = _orcamento_catalogo_unificado_3d()
+    catalogo = carregar_catalogo()
     _, produto = _produto_catalogo_da_proposta(produto_nome, catalogo)
     if not produto:
         return None
@@ -12063,46 +11942,10 @@ def _galeria_produto_por_nome(catalogo, nome):
     alvo = str(nome or "").strip()
     if not alvo:
         return {}
-    alvo_norm = normalizar_identidade_produto(alvo)
     for item in catalogo or []:
-        nome_item = str((item or {}).get("Nome") or "").strip()
-        if nome_item == alvo or normalizar_identidade_produto(nome_item) == alvo_norm:
+        if str((item or {}).get("Nome") or "").strip() == alvo:
             return dict(item or {})
     return {}
-
-
-def _galeria_sincronizar_taxonomia_catalogo(catalogo, galeria, persistir=False):
-    """HF65.18.1 — mantém Galeria vinculada à taxonomia vigente do Catálogo Oficial.
-
-    Registros avulsos continuam independentes. Registros com ``produto`` vinculado herdam
-    sempre Categoria e Subcategoria atuais do Catálogo, inclusive após saneamentos posteriores.
-    """
-    alterados = 0
-    for registro in galeria or []:
-        if not isinstance(registro, dict):
-            continue
-        produto_nome = str(registro.get("produto") or "").strip()
-        if not produto_nome:
-            continue
-        produto = _galeria_produto_por_nome(catalogo, produto_nome)
-        if not produto:
-            continue
-        categoria_atual = str(produto.get("Categoria") or "").strip()
-        subcategoria_atual = str(produto.get("Subcategoria") or "").strip()
-        mudou = False
-        if str(registro.get("categoria") or "").strip() != categoria_atual:
-            registro["categoria"] = categoria_atual
-            mudou = True
-        if str(registro.get("subcategoria") or "").strip() != subcategoria_atual:
-            registro["subcategoria"] = subcategoria_atual
-            mudou = True
-        if mudou:
-            registro["taxonomia_catalogo_sincronizada_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
-            registro["taxonomia_catalogo_sincronizada"] = True
-            alterados += 1
-    if alterados and persistir:
-        salvar_galeria_trabalhos(galeria)
-    return alterados
 
 
 def _galeria_categorias_extras(item, principal=None):
@@ -12377,253 +12220,6 @@ def _render_copiar_texto_canal(texto, chave):
         height=66,
     )
 
-
-
-class _HF6518UploadBytes:
-    """Compatibilidade mínima com st.UploadedFile para enviar bytes ao storage privado."""
-    def __init__(self, name, data, mime="image/jpeg"):
-        self.name = str(name or "foto.jpg")
-        self.type = str(mime or "image/jpeg")
-        self._data = bytes(data or b"")
-    def getbuffer(self):
-        return memoryview(self._data)
-    def read(self):
-        return self._data
-
-
-def _hf6518_image_mime(nome):
-    ext = Path(str(nome or "")).suffix.lower()
-    return {
-        ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp",
-        ".heic": "image/heic", ".heif": "image/heif",
-    }.get(ext, "application/octet-stream")
-
-
-def _hf6518_zip_images(zip_uploads):
-    """Extrai imagens de um ou mais ZIPs baixados do Google Fotos, ignorando metadados JSON."""
-    saida = []
-    erros = []
-    permitidas = {".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"}
-    for upload in zip_uploads or []:
-        try:
-            bruto = bytes(upload.getbuffer())
-            with zipfile.ZipFile(io.BytesIO(bruto)) as zf:
-                for info in zf.infolist():
-                    if info.is_dir():
-                        continue
-                    nome = Path(info.filename).name
-                    ext = Path(nome).suffix.lower()
-                    if ext not in permitidas:
-                        continue
-                    if info.file_size <= 0 or info.file_size > 40 * 1024 * 1024:
-                        continue
-                    data = zf.read(info)
-                    if not data:
-                        continue
-                    sha = hashlib.sha256(data).hexdigest()
-                    saida.append({"nome": nome, "data": data, "sha256": sha, "mime": _hf6518_image_mime(nome)})
-        except Exception as exc:
-            erros.append(f"{getattr(upload, 'name', 'arquivo.zip')}: {exc}")
-    unicos = []
-    vistos = set()
-    for item in saida:
-        if item["sha256"] in vistos:
-            continue
-        vistos.add(item["sha256"])
-        unicos.append(item)
-    return unicos, erros
-
-
-def _hf6518_hashes_existentes_galeria(galeria):
-    """Lê hashes já registrados; evita baixar fotos antigas quando não é necessário."""
-    hashes = set()
-    for trabalho in galeria or []:
-        origem = dict((trabalho or {}).get("origem_importacao") or {})
-        sha = str(origem.get("sha256") or "").strip()
-        if sha:
-            hashes.add(sha)
-        for sha_item in (origem.get("sha256_fotos") or []):
-            if str(sha_item or "").strip():
-                hashes.add(str(sha_item).strip())
-    return hashes
-
-
-def _hf6518_render_importador_google_fotos(catalogo, galeria, categorias_disponiveis_gal):
-    """HF65.18 — importação em lote do Google Fotos para a Galeria privada.
-
-    Desde 31/03/2025 o Google não permite que apps de terceiros listem automaticamente
-    toda a biblioteca/álbuns existentes via Library API. A rota estável é a Picker API
-    (seleção explícita) ou exportação/download do lote. Esta primeira versão entrega o
-    fluxo de lote sem credenciais: baixar seleção/álbum no Google Fotos -> importar ZIP.
-    """
-    with st.expander("☁️ Importar fotos do Google Fotos", expanded=False):
-        st.caption(
-            "Importe várias fotos de uma vez para a Galeria privada. No Google Fotos, selecione as fotos/álbum e use "
-            "**Fazer download**; depois envie aqui o(s) arquivo(s) ZIP. O Manager remove duplicadas pelo conteúdo da foto."
-        )
-        st.info(
-            "ℹ️ O Google mudou a API em 2025: aplicativos não podem mais varrer automaticamente álbuns antigos inteiros. "
-            "A opção oficial para acesso direto é o Google Photos Picker, que exige seleção/autorização do usuário. "
-            "Este importador em lote funciona agora, sem custo e sem credenciais Google."
-        )
-
-        zips = st.file_uploader(
-            "ZIP(s) baixado(s) do Google Fotos",
-            type=["zip"],
-            accept_multiple_files=True,
-            key="hf6518_google_photos_zips",
-            help="Você pode enviar vários ZIPs. Arquivos JSON de metadados são ignorados automaticamente.",
-        )
-        if not zips:
-            return
-
-        imagens, erros = _hf6518_zip_images(zips)
-        hashes_existentes = _hf6518_hashes_existentes_galeria(galeria)
-        novas = [x for x in imagens if x["sha256"] not in hashes_existentes]
-        repetidas = len(imagens) - len(novas)
-
-        a, b, c = st.columns(3)
-        a.metric("Fotos encontradas", len(imagens))
-        b.metric("Novas", len(novas))
-        c.metric("Já importadas", repetidas)
-        if erros:
-            st.warning("Alguns ZIPs não puderam ser lidos: " + " | ".join(erros[:3]))
-        if not novas:
-            st.success("Nenhuma foto nova neste lote. As imagens já foram importadas anteriormente.")
-            return
-
-        st.caption("Classifique o lote antes de importar. Nada é publicado no site automaticamente.")
-        nomes_produtos = sorted(
-            {str((p or {}).get("Nome") or "").strip() for p in (catalogo or []) if str((p or {}).get("Nome") or "").strip()},
-            key=str.casefold,
-        )
-        produto = st.selectbox(
-            "Produto do Catálogo para este lote (opcional)",
-            ["— trabalho avulso / classificar depois —"] + nomes_produtos,
-            key="hf6518_produto_lote",
-        )
-        pref = _galeria_produto_por_nome(catalogo, produto) if not produto.startswith("—") else {}
-        if pref:
-            categoria = str(pref.get("Categoria") or "").strip()
-            subcategoria = str(pref.get("Subcategoria") or "").strip()
-            c1, c2 = st.columns(2)
-            c1.text_input("Categoria do lote", value=categoria, disabled=True, key="hf6518_cat_auto")
-            c2.text_input("Subcategoria do lote", value=subcategoria or "Sem subcategoria", disabled=True, key="hf6518_subcat_auto")
-        else:
-            c1, c2 = st.columns(2)
-            categoria = c1.selectbox(
-                "Categoria do lote",
-                ["A CLASSIFICAR"] + [x for x in categorias_disponiveis_gal if str(x).casefold() != "a classificar"],
-                key="hf6518_categoria_lote",
-            )
-            subcategoria = c2.text_input("Subcategoria do lote (opcional)", key="hf6518_subcategoria_lote")
-
-        datas = st.multiselect(
-            "🎈 Datas & Ocasiões deste lote (opcional)",
-            _galeria_datas_ocasioes_disponiveis(galeria),
-            key="hf6518_datas_lote",
-        )
-        agrupar = st.checkbox(
-            "Agrupar todas as fotos em um único trabalho",
-            value=False,
-            key="hf6518_agrupar",
-            help="Desmarcado: cada foto vira um registro separado, facilitando classificar fotos diferentes depois. Marcado: todo o lote vira um único trabalho.",
-        )
-        autorizado = st.checkbox(
-            "✅ Autorizar este lote para futura exposição no site",
-            value=False,
-            key="hf6518_autorizado",
-        )
-        selecionado = st.checkbox(
-            "⭐ Pré-selecionar para a Galeria do site",
-            value=False,
-            disabled=not autorizado,
-            key="hf6518_selecionado",
-        )
-
-        limite_import = min(len(novas), 200)
-        st.caption(f"Prontas para importar agora: {limite_import} foto(s). Limite de segurança por execução: 200.")
-        if len(novas) > limite_import:
-            st.warning(f"Há {len(novas) - limite_import} foto(s) adicionais. Depois desta importação, envie o mesmo ZIP novamente e o sistema continuará apenas com as restantes.")
-
-        if st.button("☁️ Importar fotos novas para a Galeria", type="primary", use_container_width=True, key="hf6518_importar"):
-            lote = novas[:limite_import]
-            caminhos = []
-            falhas = []
-            with st.spinner(f"Importando {len(lote)} foto(s) para o armazenamento privado…"):
-                for item in lote:
-                    upload = _HF6518UploadBytes(item["nome"], item["data"], item["mime"])
-                    caminho = upload_private_gallery_image(upload, folder="trabalhos/google_fotos")
-                    if caminho:
-                        caminhos.append((caminho, item))
-                    else:
-                        falhas.append(item["nome"])
-
-            if not caminhos:
-                st.error("Nenhuma foto conseguiu ser gravada no armazenamento privado. Nada foi alterado.")
-                return
-
-            agora = agora_local().strftime("%d/%m/%Y %H:%M")
-            usuario = obter_usuario_atual()
-            usuario_nome = str((usuario or {}).get("nome") or "Equipe")
-            novos_registros = []
-
-            def _base_registro(fotos_paths, sha_list, nomes_originais):
-                return {
-                    "id": _galeria_id_novo(),
-                    "produto": str(pref.get("Nome") or produto if pref else "").strip(),
-                    "categoria": str(categoria or "A CLASSIFICAR").strip() or "A CLASSIFICAR",
-                    "categorias_extras": [],
-                    "subcategoria": str(subcategoria or "").strip(),
-                    "tema": "",
-                    "cor": "",
-                    "ocasiao": "",
-                    "datas_ocasioes": list(dict.fromkeys(str(x).strip() for x in datas if str(x).strip())),
-                    "observacao": "Importado em lote do Google Fotos. Revisar classificação antes da publicação.",
-                    "fotos": list(fotos_paths),
-                    "autorizado_publicacao": bool(autorizado),
-                    "selecionado_site": bool(selecionado and autorizado),
-                    "destaque": False,
-                    "arquivado": False,
-                    "criado_em": agora,
-                    "criado_por": usuario_nome,
-                    "origem_importacao": {
-                        "tipo": "google_fotos_zip",
-                        "quando": agora,
-                        "sha256_fotos": list(sha_list),
-                        "nomes_originais": list(nomes_originais),
-                        "hf": "HF65.18",
-                    },
-                }
-
-            if agrupar:
-                novos_registros.append(_base_registro(
-                    [x[0] for x in caminhos],
-                    [x[1]["sha256"] for x in caminhos],
-                    [x[1]["nome"] for x in caminhos],
-                ))
-            else:
-                for caminho, item in caminhos:
-                    reg = _base_registro([caminho], [item["sha256"]], [item["nome"]])
-                    reg["origem_importacao"]["sha256"] = item["sha256"]
-                    novos_registros.append(reg)
-
-            galeria_nova = list(galeria) + novos_registros
-            if salvar_galeria_trabalhos(galeria_nova):
-                galeria[:] = galeria_nova
-                st.session_state["_hf55_galeria_flash"] = {
-                    "tipo": "success",
-                    "mensagem": (
-                        f"Google Fotos: {len(caminhos)} foto(s) importada(s) em {len(novos_registros)} registro(s). "
-                        f"{repetidas} duplicada(s) já conhecida(s) foram ignoradas."
-                    ),
-                }
-                st.rerun()
-            else:
-                for caminho, _item in caminhos:
-                    delete_private_gallery_image(caminho)
-                st.error("O banco não confirmou os registros. As fotos deste lote foram descartadas para não deixar arquivos órfãos.")
-
 def renderizar_galeria_trabalhos(catalogo):
     """HF58 — acervo da Galeria com exibição opcional em múltiplas categorias."""
     st.markdown("### 📸 Galeria de Trabalhos")
@@ -12637,9 +12233,6 @@ def renderizar_galeria_trabalhos(catalogo):
     )
 
     galeria = carregar_galeria_trabalhos()
-    _hf65181_sincronizados = _galeria_sincronizar_taxonomia_catalogo(catalogo, galeria, persistir=True)
-    if _hf65181_sincronizados:
-        st.info(f"🔄 {_hf65181_sincronizados} trabalho(s) da Galeria foram alinhados à Categoria/Subcategoria atuais do Catálogo Oficial.")
     # HF55 — feedback persistente após excluir uma foto e rerodar a tela.
     _flash_galeria = st.session_state.pop("_hf55_galeria_flash", None)
     if isinstance(_flash_galeria, dict):
@@ -12662,13 +12255,12 @@ def renderizar_galeria_trabalhos(catalogo):
     m3.metric("Autorizados", len(autorizados))
     m4.metric("Pré-selecionados", len(selecionados))
 
-    categorias_disponiveis_gal = _galeria_categorias_disponiveis(catalogo, galeria)
-    _hf6518_render_importador_google_fotos(catalogo, galeria, categorias_disponiveis_gal)
-
     nomes_produtos = sorted(
         {str((p or {}).get("Nome") or "").strip() for p in (catalogo or []) if str((p or {}).get("Nome") or "").strip()},
         key=lambda x: x.casefold(),
     )
+    categorias_disponiveis_gal = _galeria_categorias_disponiveis(catalogo, galeria)
+
     # HF65.10 — cada salvamento inaugura uma nova geração de chaves dos widgets.
     # Isso força o Streamlit a abrir um formulário realmente limpo após guardar um trabalho,
     # inclusive selectbox, campos de texto, multiselects, checkboxes e uploader.
@@ -13377,106 +12969,53 @@ def mapa_identidade_produtos(catalogo):
 ORCAMENTO_PRODUTO_LIVRE = _catalogo_orcamento_livre
 
 
-def _orcamento_catalogo_unificado_3d(catalogo=None):
-    """HF65.18.2 — fonte única de produtos para propostas Jorge/Anna.
-
-    O Catálogo Oficial continua sendo a base principal, mas os registros do
-    Catálogo 3D são sobrepostos em memória pelas configurações comerciais mais
-    recentes. Assim um modelo 3D novo ou recém-editado aparece imediatamente no
-    orçamento, mesmo antes de executar a sincronização/publicação do site.
-    Nenhum arquivo 3MF/STL é exposto ou copiado para a proposta.
-    """
-    base = [dict(x) for x in (carregar_catalogo() if catalogo is None else (catalogo or [])) if isinstance(x, dict)]
-    try:
-        biblioteca = load_document("biblioteca_3d_db", ARQUIVO_BIBLIOTECA_3D, [], force_refresh=False)
-    except Exception:
-        biblioteca = []
-    if not isinstance(biblioteca, list):
-        return base
-
-    por_id = {str(x.get("biblioteca_3d_id") or "").strip(): i for i, x in enumerate(base) if str(x.get("biblioteca_3d_id") or "").strip()}
-    por_nome_3d = {
-        normalizar_identidade_produto(x.get("Nome")): i
-        for i, x in enumerate(base)
-        if normalizar_identidade_produto(x.get("Nome"))
-        and normalizar_identidade_produto(x.get("Categoria")) == normalizar_identidade_produto("IMPRESSÃO 3D")
-    }
-
-    for modelo in biblioteca:
-        if not isinstance(modelo, dict):
-            continue
-        mid = str(modelo.get("id") or "").strip()
-        nome = str(modelo.get("nome") or "").strip()
-        if not mid or not nome:
-            continue
-        comercial = modelo.get("catalogo_comercial") if isinstance(modelo.get("catalogo_comercial"), dict) else {}
-        ativo = bool(comercial.get("Ativo", True))
-        idx = por_id.get(mid)
-        if idx is None:
-            idx = por_nome_3d.get(normalizar_identidade_produto(nome))
-
-        existente = dict(base[idx]) if idx is not None else {}
-        imagens = [str(x).strip() for x in (comercial.get("Imagens") or []) if str(x).strip()]
-        if not imagens:
-            imagens = [str(x).strip() for x in (existente.get("Imagens") or []) if str(x).strip()]
-        imagem_publica = str(modelo.get("imagem_publica") or "").strip()
-        if imagem_publica and imagem_publica not in imagens:
-            imagens.insert(0, imagem_publica)
-
-        registro = dict(existente)
-        registro.update({
-            "Nome": nome,
-            "Categoria": "IMPRESSÃO 3D",
-            "Subcategoria": str(comercial.get("Subcategoria") or existente.get("Subcategoria") or "MODELOS 3D").strip() or "MODELOS 3D",
-            "Descricao": str(comercial.get("DescricaoCurta") or comercial.get("Descricao") or modelo.get("descricao") or existente.get("Descricao") or "").strip(),
-            "DescricaoCurta": str(comercial.get("DescricaoCurta") or modelo.get("descricao") or existente.get("DescricaoCurta") or "").strip(),
-            "DescricaoCompleta": str(comercial.get("DescricaoCompleta") or comercial.get("Descricao") or modelo.get("descricao") or existente.get("DescricaoCompleta") or "").strip(),
-            "Preco": str(comercial.get("Preco") if "Preco" in comercial else existente.get("Preco", "")).strip(),
-            "Custo": str(comercial.get("Custo") if "Custo" in comercial else existente.get("Custo", "")).strip(),
-            "Material": str(comercial.get("Material") or existente.get("Material") or "").strip(),
-            "TempoProducao": str(comercial.get("TempoProducao") or modelo.get("tempo_impressao") or existente.get("TempoProducao") or "").strip(),
-            "Variacoes": list(comercial.get("Variacoes") or existente.get("Variacoes") or []),
-            "Aliases": list(comercial.get("Aliases") or existente.get("Aliases") or []),
-            "Imagens": imagens[:5],
-            "Ativo": ativo,
-            "biblioteca_3d_id": mid,
-            "OrigemCatalogo3D": True,
-        })
-        if idx is None:
-            base.append(registro)
-            idx = len(base) - 1
-        else:
-            base[idx] = registro
-        por_id[mid] = idx
-        por_nome_3d[normalizar_identidade_produto(nome)] = idx
-
-    return base
-
-
 def _orcamento_opcoes_produto_catalogo(catalogo=None):
-    """Opções híbridas de orçamento: Catálogo Oficial + Catálogo 3D em tempo real."""
-    catalogo = _orcamento_catalogo_unificado_3d(catalogo)
+    """Opções híbridas de orçamento vindas do serviço modular de Catálogo."""
+    catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
     return _catalogo_opcoes_orcamento(catalogo, rotulo_livre=ORCAMENTO_PRODUTO_LIVRE)
 
 def _orcamento_resolver_produto(escolha_catalogo, texto_livre, catalogo=None):
-    """Resolve Catálogo/3D explícito -> alias/nome digitado -> texto livre."""
-    catalogo = _orcamento_catalogo_unificado_3d(catalogo)
+    """Resolve Catálogo explícito -> alias/nome digitado -> texto livre."""
+    catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
     return _catalogo_resolver_orcamento(
         escolha_catalogo, texto_livre, catalogo, rotulo_livre=ORCAMENTO_PRODUTO_LIVRE
     )
 
-def _orcamento_produto_catalogo_obj(meta, catalogo=None):
-    """Retorna o cadastro explicitamente vinculado, incluindo fonte comercial 3D.
 
-    HF65.19.1: quando a seleção acabou de ser resolvida, reaproveita o snapshot
-    do produto já carregado naquele rerun. Isso evita reconstruir Catálogo Oficial
-    + Catálogo 3D várias vezes a cada tecla/campo alterado no orçamento.
+def _orcamento_produto_digitado_unico(texto, catalogo=None):
+    """HF65.17: encontra produto por digitação exata ou parcial única.
+
+    Nome oficial e aliases participam. Uma busca parcial só vira vínculo automático
+    quando aponta para um único produto, evitando preencher preço do item errado.
     """
-    meta = meta or {}
-    snapshot = meta.get("_produto_obj") if isinstance(meta, dict) else None
-    if isinstance(snapshot, dict):
-        return snapshot
-    catalogo = _orcamento_catalogo_unificado_3d(catalogo)
+    catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
+    busca = normalizar_identidade_produto(texto)
+    if len(busca) < 3:
+        return None, []
+    candidatos = []
+    for produto in catalogo:
+        if not isinstance(produto, dict) or produto.get("Ativo") is False:
+            continue
+        oficial = str(produto.get("Nome") or "").strip()
+        if not oficial:
+            continue
+        identidades = [normalizar_identidade_produto(oficial)]
+        identidades.extend(normalizar_identidade_produto(a) for a in _aliases_catalogo_atomicos(produto))
+        if any(busca in ident for ident in identidades if ident):
+            candidatos.append(produto)
+    unicos = []
+    vistos = set()
+    for produto in candidatos:
+        chave = str(produto.get("CatalogoId") or produto.get("id") or normalizar_identidade_produto(produto.get("Nome")) or "")
+        if chave and chave not in vistos:
+            vistos.add(chave)
+            unicos.append(produto)
+    return (unicos[0] if len(unicos) == 1 else None), unicos
+
+
+def _orcamento_produto_catalogo_obj(meta, catalogo=None):
+    """Retorna o cadastro explicitamente vinculado, sem adivinhação aproximada."""
+    catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
     return _catalogo_produto_da_meta(meta, catalogo)
 
 def _orcamento_aplicar_autopreenchimento_catalogo(meta, *, marcador_key, valor_key, material_key=None, detalhes_key=None):
@@ -13499,6 +13038,12 @@ def _orcamento_aplicar_autopreenchimento_catalogo(meta, *, marcador_key, valor_k
 
     st.session_state[marcador_key] = token
     st.session_state[valor_key] = float(_i811_preco_catalogo_float(produto))
+    # HF65.17: Material é dado cadastral seguro do produto. Preenche somente se
+    # o campo do item ainda estiver vazio, preservando qualquer ajuste manual.
+    if material_key:
+        material_catalogo = str(produto.get("Material") or "").strip()
+        if material_catalogo and not str(st.session_state.get(material_key, "") or "").strip():
+            st.session_state[material_key] = material_catalogo
     return produto
 
 
@@ -13506,14 +13051,9 @@ def _orcamento_resumo_dados_catalogo(produto):
     return _catalogo_resumo_dados(produto)
 
 def _orcamento_campos_produto(prefixo, *, em_form=False):
-    """Renderiza seleção pesquisável Catálogo Oficial + 3D para Jorge e Anna.
-
-    HF65.19.1: o catálogo unificado é montado uma única vez neste fluxo. Antes,
-    os wrappers voltavam a unificar a mesma lista durante opções, resolução e
-    autopreenchimento, multiplicando cópias/leitura do Catálogo 3D em cada rerun.
-    """
-    catalogo = _orcamento_catalogo_unificado_3d()
-    opcoes, _ = _catalogo_opcoes_orcamento(catalogo, rotulo_livre=ORCAMENTO_PRODUTO_LIVRE)
+    """Renderiza seleção pesquisável + texto livre para Jorge e Anna."""
+    catalogo = carregar_catalogo()
+    opcoes, _ = _orcamento_opcoes_produto_catalogo(catalogo)
     escolha = st.selectbox(
         "🔎 Produto do Catálogo Oficial (opcional)",
         opcoes,
@@ -13530,21 +13070,37 @@ def _orcamento_campos_produto(prefixo, *, em_form=False):
         placeholder="Digite somente se não encontrou no Catálogo Oficial",
         help="Se você escolher um produto acima, esta digitação é ignorada. Nomes/aliases exatos já conhecidos são normalizados automaticamente.",
     )
-    produto, meta = _catalogo_resolver_orcamento(
-        escolha, digitado, catalogo, rotulo_livre=ORCAMENTO_PRODUTO_LIVRE
-    )
-    if isinstance(meta, dict) and str(meta.get("origem") or "") != "livre":
-        produto_obj = _catalogo_produto_da_meta(meta, catalogo)
-        if isinstance(produto_obj, dict):
-            # Snapshot somente em memória/UI; não é persistido no item da proposta.
-            meta["_produto_obj"] = produto_obj
+    produto, meta = _orcamento_resolver_produto(escolha, digitado, catalogo)
+
+    # HF65.17: se o operador digitou no campo livre um nome parcial que aponta
+    # para um único cadastro, usa o produto oficial e permite preencher preço e
+    # material sem obrigar a voltar ao seletor.
+    sugestoes_parciais = []
+    if escolha == ORCAMENTO_PRODUTO_LIVRE and digitado and meta.get("origem") == "livre":
+        produto_unico, sugestoes_parciais = _orcamento_produto_digitado_unico(digitado, catalogo)
+        if produto_unico:
+            oficial = str(produto_unico.get("Nome") or "").strip()
+            produto = oficial
+            meta = {
+                "origem": "catalogo_busca",
+                "digitado": digitado,
+                "catalogo_id": str(produto_unico.get("CatalogoId") or produto_unico.get("id") or ""),
+                "produto_oficial": oficial,
+            }
+
     if produto:
         if meta.get("origem") == "catalogo_alias":
             st.caption(f"✅ Nome reconhecido no Catálogo e padronizado como: **{produto}**")
+        elif meta.get("origem") == "catalogo_busca":
+            st.caption(f"✅ Produto encontrado no Catálogo pela digitação: **{produto}**")
         elif meta.get("origem") == "catalogo":
             st.caption(f"✅ Produto oficial selecionado: **{produto}**")
         else:
             st.caption(f"✍️ Produto livre: **{produto}** — poderá ser saneado/cadastrado depois, sem bloquear o orçamento.")
+            if len(sugestoes_parciais) > 1:
+                nomes_sug = [str(x.get("Nome") or "").strip() for x in sugestoes_parciais[:5] if str(x.get("Nome") or "").strip()]
+                if nomes_sug:
+                    st.info("🔎 Encontrei mais de um produto parecido: " + " • ".join(nomes_sug) + ". Escolha no Catálogo Oficial acima para carregar os dados corretos.")
     else:
         st.caption("💡 Pesquise no Catálogo acima ou digite um produto livre abaixo.")
     return produto, meta
@@ -18622,11 +18178,16 @@ def dialog_orcamento_anna(proposta=None):
         st.session_state.pop(f"{cliente_prefixo_hf6}_seletor", None)
         st.session_state.pop(f"{cliente_prefixo_hf6}_token", None)
 
-    # HF65.19.1 — entrada da proposta da Anna mais leve. O logotipo grande foi
-    # retirado do modal para ganhar espaço útil e evitar decodificação/renderização
-    # de imagem a cada rerun enquanto o orçamento é digitado.
+    logo_b64, _ = encontrar_logo_base64()
+    if logo_b64:
+        le, lc, ld = st.columns([1, 1, 1])
+        with lc:
+            try:
+                st.image(base64.b64decode(logo_b64), use_container_width=True)
+            except Exception:
+                pass
     st.markdown(
-        "<p style='text-align:center; margin:0 0 6px; color:#6b7280;'>"
+        "<p style='text-align:center; margin-top:-8px; color:#6b7280;'>"
         "Personalizados • Impressão 3D • Papelaria</p>",
         unsafe_allow_html=True,
     )
@@ -18649,39 +18210,30 @@ def dialog_orcamento_anna(proposta=None):
                 st.session_state.pop("_ultima_proposta_salva_anna", None)
                 st.rerun()
 
-    # HF65.19.2 — WhatsApp passa a ser a primeira chave de identificação da Anna.
-    # O reconhecimento ocorre antes de renderizar o seletor/Nome/Documento, evitando
-    # que o Streamlit já tenha criado esses widgets quando o autopreenchimento tenta
-    # atualizar o session_state. Isso torna o preenchimento de cliente cadastrado
-    # confiável ao confirmar o número (Enter/Tab ou saída do campo).
+    # HF2 — extensão do fluxo homologado no Jorge para a Anna.
+    # A identificação do cliente fica fora do form de item para permitir o callback
+    # do WhatsApp sem recalcular tema, personalização e demais campos do produto.
     st.markdown("#### 👤 Cliente")
-    wa = st.text_input(
-        "WhatsApp",
-        key="anna_modal_whatsapp",
-        help="Digite/cole o número e confirme com Enter/Tab. Se já estiver cadastrado, Nome e CPF/CNPJ serão preenchidos automaticamente.",
-    )
-    _anna_wa_chave_hf65192 = _telefone_chave(wa)
-    _anna_wa_check_key_hf65192 = f"{cliente_prefixo_hf6}_whatsapp_ultima_verificacao"
-    if st.session_state.get(_anna_wa_check_key_hf65192) != _anna_wa_chave_hf65192:
-        _orcamento_autopreencher_cliente_por_whatsapp(
-            prefixo=cliente_prefixo_hf6,
-            nome_key="anna_modal_cliente",
-            documento_key="anna_modal_documento",
-            whatsapp_key="anna_modal_whatsapp",
-            reconhecido_id_key="_i811hf2_anna_cliente_reconhecido_id",
-            mensagem_key="_i811hf2_anna_cliente_reconhecido_msg",
-        )
-        st.session_state[_anna_wa_check_key_hf65192] = _anna_wa_chave_hf65192
-
     cliente_selecionado_hf6 = _orcamento_campos_cliente(
         cliente_prefixo_hf6,
         nome_key="anna_modal_cliente",
         documento_key="anna_modal_documento",
         whatsapp_key="anna_modal_whatsapp",
     )
-    c1, c2 = st.columns([2, 1.4])
-    nome = c1.text_input("Nome / Razão Social", key="anna_modal_cliente")
-    doc = c2.text_input("CPF / CNPJ", key="anna_modal_documento")
+    nome = st.text_input(
+        "Nome / Razão Social",
+        key="anna_modal_cliente",
+        on_change=autopreencher_cliente_nome_anna_i811hf2,
+        help="Digite/confirmar um nome já cadastrado para carregar WhatsApp e CPF/CNPJ automaticamente.",
+    )
+    c1, c2 = st.columns(2)
+    doc = c1.text_input("CPF / CNPJ", key="anna_modal_documento")
+    wa = c2.text_input(
+        "WhatsApp",
+        key="anna_modal_whatsapp",
+        on_change=autopreencher_cliente_whatsapp_anna_i811hf2,
+        help="Ao confirmar um número já cadastrado, os dados e o Perfil Comercial do cliente são carregados automaticamente.",
+    )
     evento = st.text_input(
         "🎉 Evento",
         key="anna_modal_evento",
@@ -18724,18 +18276,10 @@ def dialog_orcamento_anna(proposta=None):
         st.success("⚡ Produto do Catálogo reconhecido: preço oficial carregado. Tema, nome, cor/material e detalhes permanecem manuais.")
         if resumo_auto_i8113:
             st.caption(resumo_auto_i8113)
-        # HF65.19.1 — a foto deixa de carregar automaticamente em todo rerun do
-        # formulário. Anna abre a confirmação visual apenas quando precisar.
-        mostrar_foto_i8113 = st.checkbox(
-            "🖼️ Ver foto do produto",
-            key=f"anna_orc_mostrar_prev_{chave_item_i8113}",
-            help="Abra somente quando quiser confirmar visualmente o item. Isso mantém a digitação do orçamento mais rápida.",
+        _orcamento_previa_visual_catalogo(
+            produto_cat_auto_i8113,
+            prefixo=f"anna_orc_prev_{chave_item_i8113}",
         )
-        if mostrar_foto_i8113:
-            _orcamento_previa_visual_catalogo(
-                produto_cat_auto_i8113,
-                prefixo=f"anna_orc_prev_{chave_item_i8113}",
-            )
     with st.expander("🎨 Personalização & Especificações", expanded=True):
         e1, e2 = st.columns(2)
         tema = e1.text_input("Tema / Ocasião", key=f"anna_modal_tema_{chave_item_i8113}")
@@ -24966,9 +24510,6 @@ def _renderizar_linha_proposta_anna(prop, prefixo, permitir_reserva_rapida=True)
             else:
                 st.error(mensagem)
 
-    # HF65.19 — recibo disponível na própria proposta após confirmação do pagamento.
-    _renderizar_acoes_recibo_pagamento(prop, prefixo=f"{prefixo}_hf6519")
-
     # Quando a entrega já estiver concluída, o THU sugere enriquecer o banco de imagens.
     renderizar_sugestao_banco_imagens_entrega(
         prop,
@@ -25907,7 +25448,6 @@ if pagina_atual == "central":
                     key=f"hf655_jorge_html_{idx_hf653}_{numero_hf653}",
                     use_container_width=True,
                 )
-                _renderizar_acoes_recibo_pagamento(prop_hf653, prefixo=f"hf6519_jorge_{idx_hf653}")
     else:
         c1, c2, c3, c4, c5, c6 = st.columns(6)
         c1.metric("🚨 Atrasados", indicadores_unificados_central["atrasados_operacionais"], help="Pedidos aprovados, ainda não entregues e com data de entrega vencida.")
@@ -28494,7 +28034,6 @@ if pagina_atual == "site":
     resumo_vitrine_hf59 = _site_resumir_vitrine(catalogo_site_hf35, usar_taxonomia_catalogo=True)
     empresa_vitrine_hf59 = carregar_config_empresa()
     galeria_site_hf59 = carregar_galeria_trabalhos()
-    _galeria_sincronizar_taxonomia_catalogo(catalogo_site_hf35, galeria_site_hf59, persistir=True)
     resumo_galeria_hf59 = _site_resumir_galeria(galeria_site_hf59)
     logo_b64_hf59, logo_ext_hf59 = encontrar_logo_base64()
     logo_src_hf59 = ""
@@ -28576,7 +28115,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.19",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.17",
                 )
                 return _html, _zip
 
@@ -28720,7 +28259,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.19",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.17",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
@@ -30845,37 +30384,30 @@ if pagina_atual == "novo_orcamento":
     if aviso_perfil_i811:
         st.info(aviso_perfil_i811)
 
-    # HF65.19.2 — mesmo reconhecimento robusto por WhatsApp também no Jorge.
-    # A busca acontece antes de Nome/Documento e do seletor de cliente serem
-    # renderizados, evitando conflito de session_state e mantendo uma única regra.
+    # I8.11.1 — identificação do cliente fica fora do form de itens para o Jorge.
+    # Assim, ao informar/confirmar um WhatsApp já cadastrado, o Streamlit pode
+    # reconhecer o relacionamento e preencher os demais dados antes do item.
     st.markdown("#### 👤 Cliente")
-    wa = st.text_input(
-        "WhatsApp",
-        key="form_whatsapp",
-        help="Digite/cole o número e confirme com Enter/Tab. Se já estiver cadastrado, Nome e CPF/CNPJ serão preenchidos automaticamente.",
-    )
-    _jorge_wa_chave_hf65192 = _telefone_chave(wa)
-    _jorge_wa_check_key_hf65192 = "jorge_orc_cliente_whatsapp_ultima_verificacao"
-    if st.session_state.get(_jorge_wa_check_key_hf65192) != _jorge_wa_chave_hf65192:
-        _orcamento_autopreencher_cliente_por_whatsapp(
-            prefixo="jorge_orc_cliente",
-            nome_key="form_cliente",
-            documento_key="form_documento",
-            whatsapp_key="form_whatsapp",
-            reconhecido_id_key="_i8111_cliente_reconhecido_id",
-            mensagem_key="_i8111_cliente_reconhecido_msg",
-        )
-        st.session_state[_jorge_wa_check_key_hf65192] = _jorge_wa_chave_hf65192
-
     cliente_selecionado_hf6 = _orcamento_campos_cliente(
         "jorge_orc_cliente",
         nome_key="form_cliente",
         documento_key="form_documento",
         whatsapp_key="form_whatsapp",
     )
-    cli1, cli2 = st.columns([2.2, 1.5])
-    nome = cli1.text_input("Nome / Razão Social", key="form_cliente")
+    cli1, cli2, cli3 = st.columns([2.2, 1.5, 1.5])
+    nome = cli1.text_input(
+        "Nome / Razão Social",
+        key="form_cliente",
+        on_change=autopreencher_cliente_nome_i8111,
+        help="Digite/confirmar um nome já cadastrado para carregar WhatsApp e CPF/CNPJ automaticamente.",
+    )
     doc = cli2.text_input("CPF / CNPJ", key="form_documento")
+    wa = cli3.text_input(
+        "WhatsApp",
+        key="form_whatsapp",
+        on_change=autopreencher_cliente_whatsapp_i8111,
+        help="Ao confirmar um número já cadastrado, os dados e o Perfil Comercial do cliente são carregados automaticamente.",
+    )
     evento = st.text_input(
         "🎉 Evento",
         key="form_evento",
@@ -32226,8 +31758,6 @@ if pagina_atual == "historico":
             if cfluxo.button("🎯 Abrir no Fluxo", key=f"abrir_fluxo_historico_{num_p}", use_container_width=True):
                 st.session_state["_fluxo_pedido_foco"] = str(num_p)
                 rerun_na_aba("fluxo", f"Pedido {num_p} aberto a partir do Histórico.")
-
-            _renderizar_acoes_recibo_pagamento(prop_atual, prefixo=f"hf6519_hist_{num_p}")
 
             usuario_historico_jorge_hf1 = str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold() == "jorge"
             if usuario_historico_jorge_hf1 and not aprovado_p and not bool(estado_hist_p.get("encerrada")):
@@ -39280,7 +38810,6 @@ if pagina_atual == "catalogo":
                 # para exposição externa. A união é deduplicada por produto e mantém as fotos
                 # reais da Galeria como prioridade quando o item também veio de outro filtro.
                 galeria_cliente_hf6511 = carregar_galeria_trabalhos()
-                _galeria_sincronizar_taxonomia_catalogo(catalogo, galeria_cliente_hf6511, persistir=True)
                 galeria_externa_hf6511 = _hf6511_galeria_externa_para_catalogo(galeria_cliente_hf6511)
 
                 categorias_disponiveis = sorted(

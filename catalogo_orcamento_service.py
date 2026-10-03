@@ -218,11 +218,14 @@ def resumo_dados_catalogo(produto: Optional[Mapping[str, Any]]) -> str:
     categoria = str(produto.get("Categoria") or "").strip()
     sub = str(produto.get("Subcategoria") or "").strip()
     material = str(produto.get("Material") or "").strip()
+    descricao = str(produto.get("Descricao") or produto.get("Descrição") or produto.get("descricao") or "").strip()
     variacoes = [str(x).strip() for x in (produto.get("Variacoes", []) or []) if str(x).strip()]
     if categoria:
         partes.append(categoria + (f" / {sub}" if sub else ""))
     if material:
         partes.append(f"Material: {material}")
+    if descricao:
+        partes.append("Descrição: " + (descricao[:180] + ("…" if len(descricao) > 180 else "")))
     if variacoes:
         partes.append("Opções: " + " • ".join(variacoes[:5]))
     return " · ".join(partes)

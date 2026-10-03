@@ -1,5 +1,8 @@
-HF65.18.2 — Propostas Anna/Jorge sincronizadas com Catálogo 3D
+AlphaFest Manager — HF65.17
 
-Instale pela Atualização Segura sobre HF65.18.1.
-Após instalar, abra uma nova proposta na Anna e pesquise um item recém-cadastrado no Catálogo 3D.
+Correção do autopreenchimento em Orçamentos (Jorge e Anna).
+- Cliente existente: busca/seleção por nome ou WhatsApp recompõe Nome, CPF/CNPJ e WhatsApp.
+- Produto existente: digitação exata ou parcial única reconhece o Catálogo Oficial, carrega preço e material e mostra os dados cadastrados.
+- Não altera cadastro mestre, produção, financeiro, site ou regras de preço especial.
 
+Instale pela Atualização Segura sobre a HF65.16.

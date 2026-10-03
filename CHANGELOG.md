@@ -1,60 +1,12 @@
-## 20.4.9-I8.13.5-HF53.3-HF8-HF65.19.2 — Autopreenchimento por WhatsApp no orçamento
+# HF65.17 — Autopreenchimento de cliente e produto no Orçamento
 
-- Corrige o reconhecimento de cliente cadastrado ao informar o WhatsApp na proposta da Anna.
-- WhatsApp passa a ser processado antes de Nome/CPF-CNPJ e do seletor, evitando conflito do Streamlit com `session_state`.
-- Ao confirmar o número com Enter/Tab ou sair do campo, Nome e CPF/CNPJ são preenchidos automaticamente quando houver cadastro correspondente.
-- A mesma correção foi aplicada ao fluxo do Jorge para manter uma única regra de comportamento.
-- Número não cadastrado continua livre para novo cliente, sem apagar o WhatsApp digitado.
-- Não altera produtos, preços, itens, status, WhatsApp de envio, recibos ou dados existentes.
-
-# HF65.19.1 — Orçamento da Anna mais rápido
-
-- Remove o logotipo grande da entrada/modal de propostas da Anna.
-- Evita reconstruir repetidamente o Catálogo Oficial + Catálogo 3D no mesmo rerun do formulário.
-- Reaproveita em memória o produto já resolvido para preço e dados comerciais.
-- A foto de confirmação do produto passa a ser carregada somente quando Anna marcar “Ver foto do produto”.
-- Não altera cálculo, preço, cliente, itens, WhatsApp, status, recibos nem persistência das propostas.
-# HF65.19 — Recibo de Pagamento
-
-- Recibo por WhatsApp e HTML/PDF para propostas pagas.
-- Usa status oficial de pagamento e valores da proposta.
-- Ações nas Centrais Jorge/Anna e no Histórico.
-- Sem mudança de schema.
-
-## HF65.18.2 — Propostas Anna/Jorge sincronizadas com Catálogo 3D
-
-- Corrige a fonte de produtos da tela de propostas/orçamentos da Anna e do Jorge.
-- As opções passam a unir Catálogo Oficial + configurações comerciais atuais do Catálogo 3D em tempo real.
-- Produto 3D novo aparece na proposta mesmo antes da sincronização manual com o site.
-- Preço, aliases, material, descrição, subcategoria e status ativo vêm da fonte comercial do Catálogo 3D.
-- Arquivos 3MF/STL continuam privados e nunca entram na proposta.
-- Mantém o Catálogo Oficial como espelho para site e demais módulos.
-
-## HF65.18.1 — Galeria sincronizada com taxonomia do Catálogo Oficial
-
-- Corrige divergências de Categoria/Subcategoria entre produtos já saneados no Catálogo Oficial e trabalhos antigos da Galeria.
-- Trabalhos vinculados a um produto passam a herdar sempre a Categoria e Subcategoria atuais do Catálogo.
-- Trabalhos avulsos permanecem independentes.
-- A sincronização ocorre ao abrir a Galeria, ao preparar/publicar o site e ao gerar catálogo para cliente.
-- Não altera fotos, Datas & Ocasiões, autorizações, destaques ou histórico dos trabalhos.
-
-## HF65.18 — Importação Google Fotos para Galeria
-- Galeria recebe importação em lote por ZIP baixado do Google Fotos.
-- Deduplicação por hash SHA-256, classificação do lote, armazenamento privado e fila segura sem publicação automática.
-- Suporta vários ZIPs, ignora JSONs/arquivos auxiliares e limita a 200 novas fotos por execução.
-- Adequação à política atual do Google Fotos: acesso a biblioteca antiga não é varrido automaticamente após as mudanças da API de 31/03/2025.
-
-## HF65.17.1 — Ícones 3D sem fundo branco
-- Remove o fundo branco/caixa interna dos ícones das categorias.
-- Aumenta levemente os ícones e mantém sombra 3D suave.
-- Ajuste responsivo no celular.
-
-
-## HF65.17 — Ícones 3D exclusivos por categoria
-- Explore por categoria passa a usar 15 ícones 3D próprios.
-- Mapeamento visual: Datas & Ocasiões, Balão, Bandeiras e Flâmulas, Centro de Mesa, Convite, Copos e Canecas, Embalagem, Gravação Laser, Gráfica, Impressão 3D, Kit Festa, Lembranças, Papel de Arroz, Papelaria e Personalizados.
-- Remove repetição de estrela/emojis genéricos nos cards de categoria.
-- Mantém filtros, contagens e comportamento de clique inalterados.
+- Corrige Orçamentos de Jorge e Anna quando o cliente selecionado já existia, mas os campos de Nome/CPF-CNPJ/WhatsApp ficavam vazios por estado de sessão preservado.
+- Nome/Razão Social passa a reconhecer cadastro exato ou busca parcial única, além do reconhecimento já existente por WhatsApp.
+- Produto digitado reconhece nome/alias exato e, com 3+ caracteres, busca parcial única no Catálogo Oficial.
+- Produto reconhecido carrega preço oficial e material quando vazio e mostra categoria, descrição e opções cadastradas.
+- Busca ambígua não escolhe produto sozinha; orienta a selecionar no Catálogo Oficial.
+- Preserva campos de personalização manuais, regras de preço especial, fechamento recorrente, produção, financeiro e site.
+- Sem migração de dados.
 
 # HF65.16 — Ícones 3D na seção Serviços
 
