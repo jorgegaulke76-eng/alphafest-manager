@@ -1622,3 +1622,8 @@ hangelog
 - remove a trava interna que mantinha a tela HF62 exclusiva do perfil Jorge;
 - preserva regras financeiras, critérios de fechamento, PDF/WhatsApp, HF63 e todas as funções anteriores;
 - sem migração de banco e sem alteração de produção, catálogo, site ou templates.
+
+
+## HF65.19 — Orçamentos sem logo pesado
+- Removido o logo grande da interface de cadastro de propostas (Anna e Jorge) para reduzir custo de renderização e acelerar abertura/reruns.
+- Mantidos Thu + Fox globais e todas as regras de negócio.

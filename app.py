@@ -18252,16 +18252,12 @@ def dialog_orcamento_anna(proposta=None):
         st.session_state.pop(f"{cliente_prefixo_hf6}_seletor", None)
         st.session_state.pop(f"{cliente_prefixo_hf6}_token", None)
 
-    logo_b64, _ = encontrar_logo_base64()
-    if logo_b64:
-        le, lc, ld = st.columns([1, 1, 1])
-        with lc:
-            try:
-                st.image(base64.b64decode(logo_b64), use_container_width=True)
-            except Exception:
-                pass
+    # HF65.19 — otimização do cadastro de propostas:
+    # o logo grande foi removido do modal para evitar decodificação/base64 e
+    # renderização pesada a cada rerun do formulário. A identidade Thu + Fox
+    # continua disponível no cabeçalho/barra lateral global (HF65.18).
     st.markdown(
-        "<p style='text-align:center; margin-top:-8px; color:#6b7280;'>"
+        "<p style='text-align:center; margin-top:0; color:#6b7280;'>"
         "Personalizados • Impressão 3D • Papelaria</p>",
         unsafe_allow_html=True,
     )
@@ -28197,7 +28193,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.19",
                 )
                 return _html, _zip
 
@@ -28341,7 +28337,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.19",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
@@ -30346,15 +30342,9 @@ if pagina_atual == "projeto":
 
 
 if pagina_atual == "novo_orcamento":
-    # Cabeçalho centralizado da área de orçamento.
-    logo_aba1_b64, _ = encontrar_logo_base64()
-    if logo_aba1_b64:
-        col_logo_esq, col_logo_centro, col_logo_dir = st.columns([1, 1, 1])
-        with col_logo_centro:
-            try:
-                st.image(base64.b64decode(logo_aba1_b64), use_container_width=True)
-            except Exception:
-                pass
+    # HF65.19 — cabeçalho leve da área de orçamento.
+    # Remove o logo grande para reduzir o tempo de abertura e rerenderização
+    # do cadastro de propostas. O padrão Thu + Fox global permanece ativo.
     st.markdown(
         "<h1 style='text-align:center; margin-bottom:0;'>📄 ORÇAMENTOS ALPHAFEST</h1>"
         "<p style='text-align:center; margin-top:4px; color:#6b7280;'>"
