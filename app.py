@@ -1445,6 +1445,77 @@ def frase_motivacional_anna():
     return frases[indice]
 
 
+@st.cache_data(show_spinner=False)
+def _hf6518_mascotes_globais_b64():
+    """Carrega Thu + Fox oficiais uma única vez por processo para uso visual global."""
+    caminho = Path(__file__).resolve().parent / "assets" / "mascotes" / "thu_fox_hero.webp"
+    try:
+        if caminho.exists():
+            return base64.b64encode(caminho.read_bytes()).decode("ascii")
+    except Exception:
+        pass
+    return ""
+
+
+def _hf6518_renderizar_mascotes_sidebar():
+    """Identidade compacta Thu + Fox persistente em todos os perfis/páginas."""
+    imagem_b64 = _hf6518_mascotes_globais_b64()
+    if not imagem_b64:
+        return
+    st.markdown(
+        f"""
+        <div style="margin:10px 0 4px 0;padding:10px 10px 9px;border-radius:16px;
+                    background:linear-gradient(145deg,rgba(7,43,91,.96),rgba(8,93,171,.88));
+                    border:1px solid rgba(72,188,255,.30);box-shadow:0 8px 22px rgba(0,0,0,.18);text-align:center;overflow:hidden;">
+          <img src="data:image/webp;base64,{imagem_b64}" alt="Thu e Fox — mascotes AlphaFest"
+               style="display:block;width:118px;max-width:72%;height:auto;object-fit:contain;margin:-2px auto 2px;filter:drop-shadow(0 8px 10px rgba(0,0,0,.22));">
+          <div style="font-size:.78rem;font-weight:800;color:#ffffff;letter-spacing:.2px;">THU &amp; FOX</div>
+          <div style="font-size:.70rem;line-height:1.25;color:#bde9ff;margin-top:2px;">Estamos presente em cada presente!</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _hf6518_renderizar_cabecalho_mascotes(titulo, area="", usuario=None):
+    """Cabeçalho visual único para todos os módulos e perfis, sem alterar regra de negócio."""
+    imagem_b64 = _hf6518_mascotes_globais_b64()
+    usuario = usuario if isinstance(usuario, dict) else obter_usuario_atual()
+    nome = str((usuario or {}).get("nome") or "Equipe")
+    perfil = str((usuario or {}).get("perfil") or obter_perfil_configurado(usuario).get("perfil") or "AlphaFest")
+    titulo_html = html.escape(str(titulo or "AlphaFest Manager"))
+    area_html = html.escape(str(area or "AlphaFest Manager"))
+    nome_html = html.escape(nome)
+    perfil_html = html.escape(perfil)
+    imagem_html = (
+        f'<img src="data:image/webp;base64,{imagem_b64}" alt="Thu e Fox — mascotes AlphaFest" '
+        'style="width:122px;max-width:26vw;height:auto;object-fit:contain;display:block;filter:drop-shadow(0 10px 14px rgba(0,0,0,.22));">'
+        if imagem_b64 else '<div style="font-size:2rem">💙🦊</div>'
+    )
+    st.markdown(
+        f"""
+        <div class="hf6518-mascotes-global" style="position:relative;overflow:hidden;margin:0 0 14px 0;padding:14px 18px;
+                    border-radius:20px;background:linear-gradient(120deg,#071a36 0%,#073d78 56%,#087fc5 100%);
+                    border:1px solid rgba(72,188,255,.34);box-shadow:0 10px 28px rgba(1,20,45,.18);">
+          <div style="position:absolute;right:-38px;top:-58px;width:180px;height:180px;border-radius:50%;background:rgba(54,199,255,.12);"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;position:relative;z-index:1;">
+            <div style="min-width:0;flex:1;">
+              <div style="font-size:.72rem;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:#70d8ff;">{area_html}</div>
+              <div style="font-size:1.32rem;font-weight:900;line-height:1.15;color:#ffffff;margin-top:3px;">{titulo_html}</div>
+              <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:8px;align-items:center;">
+                <span style="font-size:.72rem;font-weight:800;color:#ffffff;background:rgba(255,255,255,.12);padding:5px 9px;border-radius:999px;border:1px solid rgba(255,255,255,.16);">👤 {nome_html} · {perfil_html}</span>
+                <span style="font-size:.72rem;font-weight:700;color:#d8f5ff;">💙 Thu &amp; Fox acompanham este módulo</span>
+              </div>
+              <div style="font-size:.73rem;color:#aee8ff;margin-top:7px;font-style:italic;">Estamos presente em cada presente!</div>
+            </div>
+            <div style="flex:0 0 auto;align-self:flex-end;">{imagem_html}</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def renderizar_boas_vindas_anna(resumo=None):
     """Cabeçalho leve e motivador da Central da Anna."""
     agora = agora_local()
@@ -17700,6 +17771,9 @@ with st.sidebar:
         )
         st.caption("Ambiente personalizado conforme as permissões do usuário")
 
+    # HF65.18 — Thu e Fox passam a compor a identidade visual de todos os perfis.
+    _hf6518_renderizar_mascotes_sidebar()
+
     _usuario_sidebar_atual = obter_usuario_atual()
 
     # Health Monitor 14.2.5: imediatamente visível para Jorge, sem consultas extras.
@@ -24562,6 +24636,8 @@ def dialog_propostas_hoje_anna(propostas):
 def renderizar_workspace_anna_isolado():
     registrar_atividade(obter_usuario_atual(), "Na Central Operacional", "Central da Anna")
     usuario = obter_usuario_atual()
+    # HF65.18 — mesmo padrão Thu + Fox do restante do Manager, também no perfil operacional.
+    _hf6518_renderizar_cabecalho_mascotes("Central Operacional da Anna", "Operação", usuario)
 
     # Os indicadores são carregados uma única vez e também alimentam a recepção.
     atendimentos = carregar_atendimentos()
@@ -24967,6 +25043,12 @@ if pagina_atual != st.session_state.get("_pagina_principal"):
 
 st.caption(f"📍 {grupo_escolhido} › {ROTULOS_ABAS.get(pagina_atual, pagina_atual)}")
 
+# HF65.18 — identidade Thu + Fox aplicada a todos os módulos e perfis.
+_hf6518_renderizar_cabecalho_mascotes(
+    ROTULOS_ABAS.get(pagina_atual, pagina_atual),
+    grupo_escolhido,
+    obter_usuario_atual(),
+)
 
 # A Central da Anna já foi encerrada acima com st.stop(); nenhuma alteração visual nela.
 
@@ -28115,7 +28197,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.17",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18",
                 )
                 return _html, _zip
 
@@ -28259,7 +28341,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.17",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.18",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
