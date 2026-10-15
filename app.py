@@ -32,6 +32,7 @@ alt = LazyModule("altair")
 _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
+from catalogo_modalidade_preco_service import modalidade_atual as _cat_modalidade_atual, aplicar_modalidade as _cat_aplicar_modalidade
 from site_manager_service import (
     resumir_catalogo_site as _site_resumir_catalogo,
     ordenar_produtos_site as _site_ordenar_produtos,
@@ -35885,15 +35886,26 @@ if pagina_atual == "catalogo":
                 "Publicar no site/catálogo online", value=bool(item_edicao.get("PublicarSite", False)),
                 key=f"cat_publicar_{sufixo}"
             )
-            exibir_preco_site = st.checkbox(
-                "Exibir preço no site",
-                value=bool(item_edicao.get("ExibirPrecoSite", False)),
-                key=f"cat_exibir_preco_site_{sufixo}",
+            _modalidades_preco_cat = {
+                "sob_orcamento": "Sob orçamento — Consultar valores",
+                "fixo": "Preço fixo",
+                "a_partir": "A partir de",
+            }
+            _modo_preco_atual_cat = _cat_modalidade_atual(item_edicao)
+            modalidade_preco_site = st.selectbox(
+                "Como mostrar o preço no site",
+                options=list(_modalidades_preco_cat),
+                index=list(_modalidades_preco_cat).index(_modo_preco_atual_cat),
+                format_func=lambda modo: _modalidades_preco_cat[modo],
+                key=f"cat_modalidade_preco_site_{sufixo}",
                 help=(
-                    "Desativado por padrão. Quando desligado, a vitrine mostra apenas o botão de orçamento. "
-                    "Ative somente quando o valor cadastrado puder ser divulgado como preço público deste produto."
+                    "Sob orçamento: não exibe valor. Preço fixo: mostra o preço cadastrado. "
+                    "A partir de: mostra o menor preço real disponível, usando o valor cadastrado. "
+                    "Essa escolha não altera o preço interno."
                 ),
             )
+            if modalidade_preco_site in ("fixo", "a_partir") and not str(preco_cat or "").strip():
+                st.warning("Para anunciar um preço público, informe o valor do produto.")
             destaque_cat = st.checkbox(
                 "Produto em destaque", value=bool(item_edicao.get("Destaque", False)),
                 key=f"cat_destaque_{sufixo}"
@@ -36049,7 +36061,8 @@ if pagina_atual == "catalogo":
                     "ObservacaoInterna": observacao_interna.strip(), "PalavrasChave": palavras_chave.strip(),
                     "LegendaSocial": legenda_instagram.strip(), "Hashtags": hashtags.strip(),
                     "DescricaoMercadoLivre": texto_ml.strip(), "DescricaoShopee": texto_shopee.strip(),
-                    "PublicarSite": publicar_site, "ExibirPrecoSite": bool(exibir_preco_site), "Destaque": destaque_cat,
+                    "PublicarSite": publicar_site, "ModalidadePrecoSite": modalidade_preco_site,
+                    "ExibirPrecoSite": modalidade_preco_site != "sob_orcamento", "Destaque": destaque_cat,
                     "CategoriasExtrasSite": [
                         str(cat).strip() for cat in categorias_extras_site_cat
                         if str(cat).strip() and str(cat).strip().casefold() != categoria_cat.strip().casefold()
@@ -36431,7 +36444,7 @@ if pagina_atual == "catalogo":
                     "Subcategoria": str(_prod_hf492.get("Subcategoria") or ""),
                     "Preço atual": formatar_preco_catalogo(_prod_hf492.get("Preco")),
                     "🌐 Publicar": bool(_prod_hf492.get("PublicarSite", False)),
-                    "💰 Mostrar preço": bool(_prod_hf492.get("ExibirPrecoSite", False)),
+                    "💰 Preço no site": {"sob_orcamento": "Sob orçamento", "fixo": "Preço fixo", "a_partir": "A partir de"}[_cat_modalidade_atual(_prod_hf492)],
                     "⭐ Destaque": bool(_prod_hf492.get("Destaque", False)),
                     "🎠 Carrossel": bool(_prod_hf492.get("CarrosselSite", False)),
                 })
@@ -36546,10 +36559,12 @@ if pagina_atual == "catalogo":
                             help="Inclui o produto na próxima publicação do site.",
                             width="small",
                         ),
-                        "💰 Mostrar preço": st.column_config.CheckboxColumn(
-                            "💰 Mostrar preço",
-                            help="Quando marcado, o preço é exibido no site. Desmarcado = orçamento pelo WhatsApp.",
-                            width="small",
+                        "💰 Preço no site": st.column_config.SelectboxColumn(
+                            "💰 Preço no site",
+                            options=["Sob orçamento", "Preço fixo", "A partir de"],
+                            required=True,
+                            help="Define o que será exibido no site, sem alterar o preço interno.",
+                            width="medium",
                         ),
                         "⭐ Destaque": st.column_config.CheckboxColumn(
                             "⭐ Destaque",
@@ -36572,19 +36587,24 @@ if pagina_atual == "catalogo":
                         _linha_hf492 = _hf492_editado.iloc[_pos_hf492]
                         _produto_hf492 = catalogo[_idx_catalogo_hf492] or {}
                         _novo_publicar_hf492 = bool(_linha_hf492.get("🌐 Publicar", False))
-                        _novo_preco_hf492 = bool(_linha_hf492.get("💰 Mostrar preço", False))
+                        _novo_modo_hf492 = {
+                            "Sob orçamento": "sob_orcamento",
+                            "Preço fixo": "fixo",
+                            "A partir de": "a_partir",
+                        }.get(str(_linha_hf492.get("💰 Preço no site") or ""), "sob_orcamento")
+                        _novo_preco_hf492 = _novo_modo_hf492 != "sob_orcamento"
                         _novo_destaque_hf492 = bool(_linha_hf492.get("⭐ Destaque", False))
                         _novo_carrossel_hf501 = bool(_linha_hf492.get("🎠 Carrossel", False))
                         if (
                             _novo_publicar_hf492 != bool(_produto_hf492.get("PublicarSite", False))
-                            or _novo_preco_hf492 != bool(_produto_hf492.get("ExibirPrecoSite", False))
+                            or _novo_modo_hf492 != _cat_modalidade_atual(_produto_hf492)
                             or _novo_destaque_hf492 != bool(_produto_hf492.get("Destaque", False))
                             or _novo_carrossel_hf501 != bool(_produto_hf492.get("CarrosselSite", False))
                         ):
                             _hf492_mudancas.append((
                                 _idx_catalogo_hf492,
                                 _novo_publicar_hf492,
-                                _novo_preco_hf492,
+                                _novo_modo_hf492,
                                 _novo_destaque_hf492,
                                 _novo_carrossel_hf501,
                             ))
@@ -36592,10 +36612,10 @@ if pagina_atual == "catalogo":
                 if _hf492_mudancas:
                     _catalogo_hf492 = [dict(p or {}) for p in (catalogo or [])]
                     _agora_hf492 = agora_local().isoformat(timespec="seconds")
-                    for _idx_catalogo_hf492, _pub_hf492, _preco_hf492, _dest_hf492, _car_hf501 in _hf492_mudancas:
+                    for _idx_catalogo_hf492, _pub_hf492, _modo_hf492, _dest_hf492, _car_hf501 in _hf492_mudancas:
                         _registro_hf492 = dict(_catalogo_hf492[_idx_catalogo_hf492] or {})
                         _registro_hf492["PublicarSite"] = bool(_pub_hf492)
-                        _registro_hf492["ExibirPrecoSite"] = bool(_preco_hf492)
+                        _cat_aplicar_modalidade(_registro_hf492, _modo_hf492)
                         _registro_hf492["Destaque"] = bool(_dest_hf492)
                         _registro_hf492["CarrosselSite"] = bool(_car_hf501)
                         _registro_hf492["AtualizadoEm"] = _agora_hf492
