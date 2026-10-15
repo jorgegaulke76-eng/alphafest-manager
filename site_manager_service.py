@@ -103,7 +103,10 @@ def avaliar_produto_site(produto: Dict[str, Any]) -> Dict[str, Any]:
     ativo = produto.get("Ativo") is not False
     publicar = bool(produto.get("PublicarSite"))
     destaque = bool(produto.get("Destaque"))
-    modalidade_preco_site = str(produto.get("ModalidadePrecoSite") or "").strip().lower()\n    if modalidade_preco_site not in ("fixo", "a_partir", "sob_orcamento"):\n        modalidade_preco_site = "fixo" if produto.get("ExibirPrecoSite") is True else "sob_orcamento"\n    exibir_preco_site = modalidade_preco_site in ("fixo", "a_partir") and bool(preco)
+    modalidade_preco_site = str(produto.get("ModalidadePrecoSite") or "").strip().lower()
+    if modalidade_preco_site not in ("fixo", "a_partir", "sob_orcamento"):
+        modalidade_preco_site = "fixo" if produto.get("ExibirPrecoSite") is True else "sob_orcamento"
+    exibir_preco_site = modalidade_preco_site in ("fixo", "a_partir") and bool(preco)
 
     faltas: List[str] = []
     if not nome:
@@ -132,7 +135,8 @@ def avaliar_produto_site(produto: Dict[str, Any]) -> Dict[str, Any]:
         "ativo": ativo,
         "publicar_site": publicar,
         "destaque": destaque,
-        "exibir_preco_site": exibir_preco_site,\n        "modalidade_preco_site": modalidade_preco_site,
+        "exibir_preco_site": exibir_preco_site,
+        "modalidade_preco_site": modalidade_preco_site,
         "faltas": faltas,
         "avisos": avisos,
         "pronto": pronto,
