@@ -6,6 +6,7 @@ Persistência, permissões e navegação continuam sob responsabilidade do app.
 """
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, Iterable, List
 
 
@@ -103,7 +104,10 @@ def avaliar_produto_site(produto: Dict[str, Any]) -> Dict[str, Any]:
     ativo = produto.get("Ativo") is not False
     publicar = bool(produto.get("PublicarSite"))
     destaque = bool(produto.get("Destaque"))
-    exibir_preco_site = bool(produto.get("ExibirPrecoSite", False))
+    modalidade_preco_site = str(produto.get("ModalidadePrecoSite") or "").strip().lower()
+    if modalidade_preco_site not in ("fixo", "a_partir", "sob_orcamento"):
+        modalidade_preco_site = "fixo" if produto.get("ExibirPrecoSite") is True else "sob_orcamento"
+    exibir_preco_site = modalidade_preco_site in ("fixo", "a_partir") and bool(re.fullmatch(r"(?:R\$\s*)?\d+(?:[.,]\d+)*", preco.strip()))
 
     faltas: List[str] = []
     if not nome:
@@ -133,6 +137,7 @@ def avaliar_produto_site(produto: Dict[str, Any]) -> Dict[str, Any]:
         "publicar_site": publicar,
         "destaque": destaque,
         "exibir_preco_site": exibir_preco_site,
+        "modalidade_preco_site": modalidade_preco_site,
         "faltas": faltas,
         "avisos": avisos,
         "pronto": pronto,
