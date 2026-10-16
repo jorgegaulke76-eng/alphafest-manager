@@ -15,9 +15,9 @@ class TestInterfaceCadastroIsolado(unittest.TestCase):
         self.assertFalse(app.exception, str(app.exception))
         self.assertIn("Cadastrar produto", [t.label for t in app.tabs])
 
-        app.text_input(key="cadastro_ficticio-Nome do produto").set_value("Produto fictício UI")
-        app.text_input(key="cadastro_ficticio-Valor interno").set_value("38,00")
-        app.button(key="cadastro_ficticio-Salvar produto fictício").click().run()
+        app.text_input[0].set_value("Produto fictício UI")
+        app.text_input[1].set_value("38,00")
+        app.button[0].click().run()
         self.assertFalse(app.exception, str(app.exception))
         self.assertTrue(any("Produto fictício salvo" in x.message for x in app.success))
 
