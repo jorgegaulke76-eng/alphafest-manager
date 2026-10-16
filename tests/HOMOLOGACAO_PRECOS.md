@@ -29,3 +29,18 @@ que a gravação do Manager oficial está pronta.
 Não usar a instância de produção do Supabase para estes testes.
 Não copiar dados reais de clientes, pedidos, produtos ou credenciais.
 Não mesclar nem publicar o PR antes dos critérios obrigatórios.
+
+## Revisão do risco de implantação (16/10/2026)
+
+- PR #1 está **em rascunho e não mesclado**.
+- Arquivos alterados estão limitados a `app.py`, serviços do catálogo/vitrine,
+  testes, documento de homologação e workflow CI.
+- Não foram alterados os módulos `site_cloudflare_publish_service.py`,
+  `site_production_service.py`, `site_staging_service.py` ou `cloud_db.py`
+  no PR. Isso **não garante ausência de efeitos** se a aplicação já chama
+  publicação automaticamente.
+- **Bloqueio para merge:** verificar em Streamlit Community Cloud se o Manager
+  aponta para `main`; se apontar, o merge pode disparar atualização automática.
+- Antes de merge, confirmar backup consistente, janela de publicação, reversão
+  por commit e teste completo do fluxo de persistência. Não alterar settings
+  nem Secrets de produção durante a homologação.
