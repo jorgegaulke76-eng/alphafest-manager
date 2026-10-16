@@ -11,6 +11,7 @@ on:
       - "catalogo_modalidade_preco_service.py"
       - "tests/test_modalidades_preco_site.py"
       - "tests/test_integracao_formulario_preco.py"
+      - "tests/test_persistencia_preco_local.py"
       - ".github/workflows/test-modalidades-preco.yml"
 
 permissions:
@@ -29,4 +30,4 @@ jobs:
           python-version: "3.12"
       - name: Executar testes sem banco
         run: |
-          python -m unittest tests.test_modalidades_preco_site tests.test_integracao_formulario_preco -v
+          python -m unittest tests.test_modalidades_preco_site tests.test_integracao_formulario_preco tests.test_persistencia_preco_local -v
