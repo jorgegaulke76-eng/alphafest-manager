@@ -1,0 +1,32 @@
+name: Testes de modalidades de preco
+
+on:
+  push:
+    branches: [feature/modalidades-preco-site]
+  pull_request:
+    paths:
+      - "app.py"
+      - "site_manager_service.py"
+      - "site_vitrine_service.py"
+      - "catalogo_modalidade_preco_service.py"
+      - "tests/test_modalidades_preco_site.py"
+      - "tests/test_integracao_formulario_preco.py"
+      - ".github/workflows/test-modalidades-preco.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Baixar codigo da branch
+        uses: actions/checkout@v4
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Executar testes sem banco
+        run: |
+          python -m unittest tests.test_modalidades_preco_site tests.test_integracao_formulario_preco -v
