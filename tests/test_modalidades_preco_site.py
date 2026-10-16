@@ -38,6 +38,17 @@ class TestModalidadesPreco(unittest.TestCase):
         self.assertEqual(produto["Preco"], "38,00")
         self.assertFalse(produto["ExibirPrecoSite"])
 
+    def test_preco_textual_sob_consulta_nunca_e_publicado_como_valor(self):
+        for modo in ("fixo", "a_partir"):
+            with self.subTest(modo=modo):
+                p = self.produto(modo)
+                p["Preco"] = "SOB/CONSULTA"
+                item = avaliar_produto_site(p)
+                self.assertFalse(item["exibir_preco_site"])
+                html = gerar_html_vitrine([p], {})
+                self.assertIn("Consultar valores", html)
+                self.assertNotIn("R$ SOB/CONSULTA", html)
+
     def test_sem_preco_nao_exibe_valor(self):
         for modo in ("fixo", "a_partir", "sob_orcamento"):
             with self.subTest(modo=modo):
