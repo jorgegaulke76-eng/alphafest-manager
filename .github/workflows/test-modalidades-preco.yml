@@ -13,6 +13,7 @@ on:
       - "tests/test_integracao_formulario_preco.py"
       - "tests/test_persistencia_preco_local.py"
       - "tests/test_interface_cadastro_isolado.py"
+      - "tests/test_campos_gravacao_oficial.py"
       - "tests/demo_cadastro_preco_isolado.py"
       - ".github/workflows/test-modalidades-preco.yml"
 
@@ -34,4 +35,4 @@ jobs:
         run: python -m pip install "streamlit>=1.40,<2"
       - name: Executar testes sem banco
         run: |
-          python -m unittest tests.test_modalidades_preco_site tests.test_integracao_formulario_preco tests.test_persistencia_preco_local tests.test_interface_cadastro_isolado -v
+          python -m unittest tests.test_modalidades_preco_site tests.test_integracao_formulario_preco tests.test_persistencia_preco_local tests.test_interface_cadastro_isolado tests.test_campos_gravacao_oficial -v
