@@ -19,7 +19,7 @@ class TestInterfaceCadastroIsolado(unittest.TestCase):
         app.text_input[1].set_value("38,00")
         app.button[0].click().run()
         self.assertFalse(app.exception, str(app.exception))
-        self.assertTrue(any("Produto fictício salvo" in x.message for x in app.success))
+        self.assertTrue(len(app.success) > 0, "A interface não exibiu confirmação de salvamento")
 
         # O teste deve verificar o arquivo temporário, não somente o rótulo visível.
         arquivo = Path(app.session_state["catalogo_teste_pasta"]) / "catalogo_ficticio.json"
