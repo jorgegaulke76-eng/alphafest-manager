@@ -27,6 +27,7 @@ ARQUIVOS_PUBLICOS_PERMITIDOS = {
     "404.html",
     "robots.txt",
     "sitemap.xml",
+    "ads.txt",
 }
 MODULOS_STATIC_ASSETS = {"_headers", "_redirects"}
 

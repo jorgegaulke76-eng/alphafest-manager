@@ -1,3 +1,10 @@
+## HF65.20 — Integração de verificação AdSense (2026-11-12)
+- Campo persistente opcional para ID `ca-pub-` na Central do Site.
+- Metatag `google-adsense-account` e `ads.txt` no pacote gerado para Cloudflare.
+- Pipeline Cloudflare atualizado para aceitar/publicar `ads.txt`.
+- Não injeta scripts de anúncios, não modifica DNS, dados, galeria nem produtos.
+- Testes offline de regressão da geração e publicação de assets.
+
 # HF65.17 — Autopreenchimento de cliente e produto no Orçamento
 
 - Corrige Orçamentos de Jorge e Anna quando o cliente selecionado já existia, mas os campos de Nome/CPF-CNPJ/WhatsApp ficavam vazios por estado de sessão preservado.
