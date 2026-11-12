@@ -1,8 +1,17 @@
-AlphaFest Manager — HF65.17
+AlphaFest Manager — HF65.20 — Google AdSense (verificação opcional)
 
-Correção do autopreenchimento em Orçamentos (Jorge e Anna).
-- Cliente existente: busca/seleção por nome ou WhatsApp recompõe Nome, CPF/CNPJ e WhatsApp.
-- Produto existente: digitação exata ou parcial única reconhece o Catálogo Oficial, carrega preço e material e mostra os dados cadastrados.
-- Não altera cadastro mestre, produção, financeiro, site ou regras de preço especial.
+Esta atualização foi preparada sobre a HF65.19 enviada pelo usuário.
+Instalar pela Atualização Segura, preservando todos os dados e backups.
 
-Instale pela Atualização Segura sobre a HF65.16.
+Novo recurso:
+Central do Site > Preparar / atualizar prévia do site > Publicar site >
+Google AdSense · Verificação do site.
+
+Informe o ID real ca-pub-... do painel Google AdSense e salve.
+O Manager mantém a metatag e o ads.txt em novas publicações.
+NÃO publica automaticamente e NÃO ativa anúncios antes da aprovação.
+
+Primeiro gere backup; atualize o Manager; confira a prévia; só então
+clique em Publicar site agora se desejar enviar a versão à Cloudflare.
+
+Detalhes: UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF65_20.md
