@@ -1,9 +1,13 @@
-## HF65.20 — Integração de verificação AdSense (2026-11-12)
-- Campo persistente opcional para ID `ca-pub-` na Central do Site.
-- Metatag `google-adsense-account` e `ads.txt` no pacote gerado para Cloudflare.
-- Pipeline Cloudflare atualizado para aceitar/publicar `ads.txt`.
-- Não injeta scripts de anúncios, não modifica DNS, dados, galeria nem produtos.
-- Testes offline de regressão da geração e publicação de assets.
+## HF65.21 — AdSense em local visível e correção dos painéis (2026-11-12)
+- Atualização completa baseada na HF65.19 do usuário, com integrações da HF65.20.
+- Configuração AdSense diretamente em Atualizar o site, acessível sem gerar prévia.
+- Remoção dos expanders aninhados na área de publicação; salvamento não publica.
+- Sem mudanças em pedidos, estoque, financeiro ou DNS.
+- Mantida a necessidade de homologação funcional no Streamlit Cloud.
+
+## HF65.20 — Google AdSense: metatag e ads.txt (consolidada na HF65.21)
+- ID ca-pub opcional, metatag de verificação e arquivo ads.txt.
+- Inclusão nas próximas publicações pelo próprio Manager, sem anúncios automáticos.
 
 # HF65.17 — Autopreenchimento de cliente e produto no Orçamento
 

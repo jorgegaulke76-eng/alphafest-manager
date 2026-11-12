@@ -28121,6 +28121,46 @@ if pagina_atual == "site":
         "Fluxo único: confira a prévia atual → publique. As prévias antigas, staging histórico, comparações e listas auxiliares foram retirados desta tela para reduzir confusão."
     )
 
+    # HF65.21 — configuração do Google AdSense sempre visível, independente da prévia.
+    # O código é embutido SOMENTE no HTML de produção. Salvar não publica.
+    _adsense_config_hf6520 = carregar_config_adsense_site()
+    _adsense_id_hf6520 = str(_adsense_config_hf6520.get("publisher_id") or "")
+    with st.container(border=True):
+        st.markdown("#### 🔎 Google AdSense · Verificação do site")
+        st.caption(
+            "Cole o ID ca-pub-... ou a metatag fornecida pelo AdSense. "
+            "O Manager incluirá a metatag e o arquivo ads.txt nas próximas publicações. "
+            "Isso NÃO ativa anúncios e não muda o visual da loja."
+        )
+        with st.form("site_adsense_hf6520_form"):
+            _adsense_digitado_hf6520 = st.text_input(
+                "ID do editor Google AdSense",
+                value=_adsense_id_hf6520,
+                placeholder="ca-pub-1234567890123456",
+                key="site_adsense_hf6520_input",
+                help="Use o código real da AlphaFest. Deixe vazio para não publicar verificação.",
+            )
+            _adsense_salvar_hf6520 = st.form_submit_button(
+                "💾 Salvar código do AdSense (sem publicar)",
+                use_container_width=True,
+            )
+        if _adsense_salvar_hf6520:
+            try:
+                _adsense_novo_hf6520 = _site_adsense_normalizar_id(_adsense_digitado_hf6520)
+            except ValueError as _adsense_exc_hf6520:
+                st.error(str(_adsense_exc_hf6520))
+            else:
+                if salvar_config_adsense_site({"publisher_id": _adsense_novo_hf6520}):
+                    _site_runtime_cache_hf45.clear()
+                    st.rerun()
+                else:
+                    st.error("O banco não confirmou o salvamento. Nenhuma publicação foi feita.")
+        if _adsense_id_hf6520:
+            st.success("Código salvo. O próximo pacote de produção incluirá a verificação do AdSense e o ads.txt.")
+        else:
+            st.info("AdSense não configurado. O site será gerado como antes, sem metatag nem anúncios.")
+
+
     resumo_vitrine_hf59 = _site_resumir_vitrine(catalogo_site_hf35, usar_taxonomia_catalogo=True)
     empresa_vitrine_hf59 = carregar_config_empresa()
     galeria_site_hf59 = carregar_galeria_trabalhos()
@@ -28180,48 +28220,11 @@ if pagina_atual == "site":
         else:
             components.html(html_preview_hf59, height=1080, scrolling=True)
 
-        with st.expander("🚀 Publicar site", expanded=True):
+        with st.container(border=True):
+            st.markdown("#### 🚀 Publicar site")
             st.caption(
                 "A publicação envia ao Worker `alphafest-novo` somente depois da sua confirmação. Catálogo, categorias, Galeria, lightbox, carrossel e demais funções homologadas usam a mesma Fonte Única do Manager."
             )
-
-            # HF65.20 — configuração persistente de verificação do Google AdSense.
-            # O código é embutido SOMENTE no HTML de produção. Salvar não publica.
-            _adsense_config_hf6520 = carregar_config_adsense_site()
-            _adsense_id_hf6520 = str(_adsense_config_hf6520.get("publisher_id") or "")
-            with st.expander("🔎 Google AdSense · Verificação do site", expanded=False):
-                st.caption(
-                    "Cole o ID ca-pub-... ou a metatag fornecida pelo AdSense. "
-                    "O Manager incluirá a metatag e o arquivo ads.txt nas próximas publicações. "
-                    "Isso NÃO ativa anúncios e não muda o visual da loja."
-                )
-                with st.form("site_adsense_hf6520_form"):
-                    _adsense_digitado_hf6520 = st.text_input(
-                        "ID do editor Google AdSense",
-                        value=_adsense_id_hf6520,
-                        placeholder="ca-pub-1234567890123456",
-                        key="site_adsense_hf6520_input",
-                        help="Use o código real da AlphaFest. Deixe vazio para não publicar verificação.",
-                    )
-                    _adsense_salvar_hf6520 = st.form_submit_button(
-                        "💾 Salvar código do AdSense (sem publicar)",
-                        use_container_width=True,
-                    )
-                if _adsense_salvar_hf6520:
-                    try:
-                        _adsense_novo_hf6520 = _site_adsense_normalizar_id(_adsense_digitado_hf6520)
-                    except ValueError as _adsense_exc_hf6520:
-                        st.error(str(_adsense_exc_hf6520))
-                    else:
-                        if salvar_config_adsense_site({"publisher_id": _adsense_novo_hf6520}):
-                            _site_runtime_cache_hf45.clear()
-                            st.rerun()
-                        else:
-                            st.error("O banco não confirmou o salvamento. Nenhuma publicação foi feita.")
-                if _adsense_id_hf6520:
-                    st.success("Código salvo. O próximo pacote de produção incluirá a verificação do AdSense e o ads.txt.")
-                else:
-                    st.info("AdSense não configurado. O site será gerado como antes, sem metatag nem anúncios.")
 
             def _build_producao_hf59():
                 _html = _site_gerar_html_completo(
@@ -28243,7 +28246,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.20",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.21",
                     adsense_publisher_id=_adsense_id_hf6520,
                 )
                 return _html, _zip
@@ -28389,7 +28392,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.20",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.21",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59

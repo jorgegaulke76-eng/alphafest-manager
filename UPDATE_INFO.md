@@ -1,13 +1,25 @@
-# Atualização HF65.19 — Orçamentos sem logo pesado
+# HF65.21 — Interface AdSense e estabilidade de painéis (12/11/2026)
 
-Otimização específica do cadastro de propostas/orçamentos.
+## Base preservada
+- Pacote completo reconstruído a partir do ZIP HF65.19 fornecido pelo usuário.
+- Mantidas as correções de orçamentos e demais recursos anteriores da HF65.19.
+- Incorporados os serviços AdSense da HF65.20 (metatag, ads.txt e publicação via Manager).
 
-- Remove o **logo grande AlphaFest** do modal de orçamento da Anna.
-- Remove o mesmo logo grande da página principal **Novo Orçamento** do Jorge.
-- Evita a leitura, conversão base64 e renderização da imagem a cada rerun do formulário.
-- Mantém o título **ORÇAMENTOS ALPHAFEST** e a assinatura “Personalizados • Impressão 3D • Papelaria”.
-- Mantém o padrão visual **Thu + Fox** global da HF65.18 na barra lateral e nos cabeçalhos do Manager.
-- Não altera o logo utilizado em propostas/HTMLs gerados, catálogo, site ou materiais de marketing.
-- Não altera banco de dados, cálculos, clientes, itens, descontos, frete, WhatsApp ou persistência.
+## Correções desta versão
+- **AdSense sempre acessível** em Site AlphaFest → Central do Site → Atualizar o site, antes de qualquer prévia.
+- O formulário e a ação de salvar código funcionam sem depender de Preparar prévia.
+- Painel AdSense usa contêiner, em vez de expander aninhado.
+- Painel Publicar site usa contêiner, preservando apenas o expansor de configurações Cloudflare.
+- Continua sendo necessário confirmar manualmente a publicação, que não ocorre ao salvar o código.
+- Nenhum script publicitário é ativado; apenas verificação e ads.txt com publisher ID real.
 
-Instalar pela Atualização Segura sobre a HF65.18.
+## Diagnósticos e limitações
+- Sintaxe Python e integridade do pacote conferidas localmente.
+- O erro de navegador `NotFoundError: removeChild` pode ter outras causas (por exemplo tradução automática/extensões ou estado de sessão do Streamlit). A reorganização corrige os painéis aninhados, mas **não garante** eliminar qualquer erro de navegador.
+- Ainda é necessária homologação funcional no Streamlit Cloud em uso antes de declarar a interface totalmente validada.
+
+## Instalação
+- Primeiro faça backup da versão online e dos dados.
+- Para Streamlit Cloud, publique os arquivos alterados na branch `main` do GitHub por processo de PR/revisão.
+- O ZIP completo serve como pacote para restauração e comparação, não é publicado automaticamente.
+- A publicação do site Cloudflare é uma ação separada dentro da Central do Site.
