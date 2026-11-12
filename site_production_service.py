@@ -11,6 +11,8 @@ import zipfile
 from datetime import datetime, timezone
 from typing import Any, Dict
 
+from site_adsense_service import inserir_meta_adsense, gerar_ads_txt, normalizar_publisher_id
+
 DOMINIO_FINAL = "alphafest.com.br"
 PROJETO_WORKER = "alphafest-novo"
 HOSPEDAGEM = "Cloudflare Workers · Static Assets"
@@ -119,13 +121,18 @@ def gerar_pacote_producao(
     *,
     total_produtos: int = 0,
     versao_manager: str = "20.4.9-I8.13.5-HF51.4",
+    adsense_publisher_id: str = "",
 ) -> bytes:
     """Gera ZIP para New deployment no Worker alphafest-novo.
 
     O ZIP não contém comandos de DNS. A conexão do domínio é externa e manual.
     """
     html_publico = preparar_html_producao(html_site)
+    adsense_id = normalizar_publisher_id(adsense_publisher_id)
+    html_publico = inserir_meta_adsense(html_publico, adsense_id)
     status = resumo_producao(total_produtos=total_produtos)
+    status["adsense_metatag_incluida"] = bool(adsense_id)
+    status["adsense_anuncios_ativados"] = False
     status.update({
         "versao_manager": versao_manager,
         "gerado_em_utc": datetime.now(timezone.utc).isoformat(),
@@ -176,6 +183,8 @@ O rollback do DNS anterior continua documentado no kit HF41.
         zf.writestr("404.html", html_publico)
         zf.writestr("robots.txt", robots)
         zf.writestr("sitemap.xml", sitemap)
+        if adsense_id:
+            zf.writestr("ads.txt", gerar_ads_txt(adsense_id))
         zf.writestr("_headers", headers)
         zf.writestr("README-PRODUCAO.txt", readme)
         zf.writestr("STATUS-PRODUCAO.json", json.dumps(status, ensure_ascii=False, indent=2))

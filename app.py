@@ -46,6 +46,7 @@ from site_galeria_service import resumir_galeria_site as _site_resumir_galeria
 from site_staging_service import gerar_pacote_staging as _site_gerar_pacote_staging, resumo_staging as _site_resumo_staging
 from site_cutover_service import gerar_kit_pre_virada as _site_gerar_kit_pre_virada, resumo_pre_virada as _site_resumo_pre_virada
 from site_production_service import gerar_pacote_producao as _site_gerar_pacote_producao, resumo_producao as _site_resumo_producao
+from site_adsense_service import DEFAULT_ADSENSE_CONFIG as _site_adsense_default, normalize_adsense_config as _site_adsense_normalize, normalizar_publisher_id as _site_adsense_normalizar_id
 try:
     from site_cloudflare_publish_service import (
         publicar_pacote as _site_cf_publicar_pacote,
@@ -865,6 +866,7 @@ ARQUIVO_BIBLIOTECA_3D = "biblioteca_3d_db.json"
 ARQUIVO_GALERIA_TRABALHOS = "galeria_trabalhos_db.json"
 ARQUIVO_SITE_CAMPAIGN = "site_campaign_db.json"
 ARQUIVO_SITE_HOME_CONTENT = "site_home_content_db.json"
+ARQUIVO_SITE_ADSENSE = "site_adsense_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -991,6 +993,15 @@ def carregar_config_home_site(force_refresh=False):
 def salvar_config_home_site(config):
     normalizada = _site_home_normalize(config)
     return bool(save_document("site_home_content_db", normalizada, ARQUIVO_SITE_HOME_CONTENT))
+
+# HF65.20 — identificação do AdSense guardada separadamente na Fonte Única.
+def carregar_config_adsense_site(force_refresh=False):
+    dados = load_document("site_adsense_db", ARQUIVO_SITE_ADSENSE, _site_adsense_default, force_refresh=force_refresh)
+    return _site_adsense_normalize(dados)
+
+def salvar_config_adsense_site(config):
+    normalizada = _site_adsense_normalize(config)
+    return bool(save_document("site_adsense_db", normalizada, ARQUIVO_SITE_ADSENSE))
 
 USUARIOS_ADMIN = {
     "jorgegaulke76@gmail.com": {"nome": "Jorge", "perfil": "Administrador"},
@@ -17450,6 +17461,7 @@ DOCUMENTOS_BACKUP = [
     ("galeria_trabalhos_db", ARQUIVO_GALERIA_TRABALHOS, []),
     ("site_campaign_db", ARQUIVO_SITE_CAMPAIGN, _site_campaign_default),
     ("site_home_content_db", ARQUIVO_SITE_HOME_CONTENT, _site_home_default),
+    ("site_adsense_db", ARQUIVO_SITE_ADSENSE, _site_adsense_default),
     ("clientes_db", ARQUIVO_CLIENTES, []),
     ("producao_db", ARQUIVO_PRODUCAO, []),
     ("config_empresa", ARQUIVO_EMPRESA, CONFIG_EMPRESA_PADRAO),
@@ -28173,6 +28185,44 @@ if pagina_atual == "site":
                 "A publicação envia ao Worker `alphafest-novo` somente depois da sua confirmação. Catálogo, categorias, Galeria, lightbox, carrossel e demais funções homologadas usam a mesma Fonte Única do Manager."
             )
 
+            # HF65.20 — configuração persistente de verificação do Google AdSense.
+            # O código é embutido SOMENTE no HTML de produção. Salvar não publica.
+            _adsense_config_hf6520 = carregar_config_adsense_site()
+            _adsense_id_hf6520 = str(_adsense_config_hf6520.get("publisher_id") or "")
+            with st.expander("🔎 Google AdSense · Verificação do site", expanded=False):
+                st.caption(
+                    "Cole o ID ca-pub-... ou a metatag fornecida pelo AdSense. "
+                    "O Manager incluirá a metatag e o arquivo ads.txt nas próximas publicações. "
+                    "Isso NÃO ativa anúncios e não muda o visual da loja."
+                )
+                with st.form("site_adsense_hf6520_form"):
+                    _adsense_digitado_hf6520 = st.text_input(
+                        "ID do editor Google AdSense",
+                        value=_adsense_id_hf6520,
+                        placeholder="ca-pub-1234567890123456",
+                        key="site_adsense_hf6520_input",
+                        help="Use o código real da AlphaFest. Deixe vazio para não publicar verificação.",
+                    )
+                    _adsense_salvar_hf6520 = st.form_submit_button(
+                        "💾 Salvar código do AdSense (sem publicar)",
+                        use_container_width=True,
+                    )
+                if _adsense_salvar_hf6520:
+                    try:
+                        _adsense_novo_hf6520 = _site_adsense_normalizar_id(_adsense_digitado_hf6520)
+                    except ValueError as _adsense_exc_hf6520:
+                        st.error(str(_adsense_exc_hf6520))
+                    else:
+                        if salvar_config_adsense_site({"publisher_id": _adsense_novo_hf6520}):
+                            _site_runtime_cache_hf45.clear()
+                            st.rerun()
+                        else:
+                            st.error("O banco não confirmou o salvamento. Nenhuma publicação foi feita.")
+                if _adsense_id_hf6520:
+                    st.success("Código salvo. O próximo pacote de produção incluirá a verificação do AdSense e o ads.txt.")
+                else:
+                    st.info("AdSense não configurado. O site será gerado como antes, sem metatag nem anúncios.")
+
             def _build_producao_hf59():
                 _html = _site_gerar_html_completo(
                     catalogo_site_hf35,
@@ -28193,7 +28243,8 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.19",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.20",
+                    adsense_publisher_id=_adsense_id_hf6520,
                 )
                 return _html, _zip
 
@@ -28209,6 +28260,7 @@ if pagina_atual == "site":
                     "visual": "HF65",
                     "campaign": campanha_hf65,
                     "home": home_hf6514,
+                    "adsense": _adsense_id_hf6520,
                 },
                 _build_producao_hf59,
                 ttl_seconds=180,
@@ -28337,7 +28389,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.19",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.20",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
