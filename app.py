@@ -28292,6 +28292,8 @@ if pagina_atual == "site":
                 'Confirmo que o vídeo já está PÚBLICO no YouTube e pode aparecer na página da dica',
                 value=bool(_item_hf6522.get('youtube_status')=='publicado'),
             )
+            _arte_hf6524 = st.file_uploader('Arte finalizada do artigo (JPG, PNG ou WEBP)',type=['jpg','jpeg','png','webp'],key='hf6524_arte_'+str(_sel_slug_hf6522))
+            _remover_arte_hf6524 = st.checkbox('Remover a arte atual deste artigo',key='hf6524_remover_'+str(_sel_slug_hf6522))
             _salvar_dica_hf6522 = st.form_submit_button('💾 Salvar dica e roteiro (sem publicar)',use_container_width=True)
         if _salvar_dica_hf6522:
             _nome_slug_hf6522 = _sel_slug_hf6522 if _sel_slug_hf6522!='__novo__' else re.sub(
@@ -28300,9 +28302,17 @@ if pagina_atual == "site":
             if not _titulo_hf6522.strip() or not _corpo_hf6522.strip() or not _nome_slug_hf6522:
                 st.warning('Informe ao menos título e conteúdo para salvar.')
             else:
+                _imagem_final_hf6524 = '' if _remover_arte_hf6524 else _item_hf6522.get('image_data_uri','')
+                if _arte_hf6524 is not None:
+                    try:
+                        from site_dicas_media_hf6524 import preparar_arte
+                        _imagem_final_hf6524 = preparar_arte(_arte_hf6524.getvalue())
+                    except Exception as _arte_erro_hf6524:
+                        st.error('Arte não aceita: '+str(_arte_erro_hf6524)[:200])
+                        st.stop()
                 _novo_item_hf6522 = {
                     'slug':_nome_slug_hf6522,'title':_titulo_hf6522,'summary':_resumo_hf6522,
-                    'body':_corpo_hf6522,'script':_roteiro_hf6522,
+                    'body':_corpo_hf6522,'script':_roteiro_hf6522,'image_data_uri':_imagem_final_hf6524,
                     'status':_status_hf6522,'video_id':_video_id_hf6522.strip(),
                     'youtube_status':('publicado' if _youtube_publico_hf6522 else ('privado' if _item_hf6522.get('youtube_status')=='privado' and _video_id_hf6522.strip()==_item_hf6522.get('video_id','') else 'nao_enviado')),
                 }
@@ -28320,12 +28330,21 @@ if pagina_atual == "site":
             st.download_button('📦 Baixar roteiro + título + descrição para YouTube',
                 data=_pacote_yt_hf6522,file_name='AlphaFest_YouTube_'+_sel_slug_hf6522+'.zip',
                 mime='application/zip',key='hf6522_download_yt')
-            if st.button('🎬 Gerar Short MP4 para revisão',key='hf6522_gerar_video'):
+            if _item_hf6522.get('image_data_uri'):
+                st.image(_item_hf6522['image_data_uri'],caption='Arte vinculada a este artigo')
+            st.markdown('##### 🎬 Vídeo finalizado (montagem manual)')
+            st.caption('Envie um MP4 já editado e aprovado. O Manager não altera formato, bordas, áudio ou duração. '
+                       'O vídeo é mantido apenas nesta sessão até o envio ao YouTube; não há publicação automática.')
+            _video_pronto_hf6524 = st.file_uploader('Selecionar vídeo MP4 pronto (até 80 MB)',type=['mp4'],key='hf6524_video_'+_sel_slug_hf6522)
+            if _video_pronto_hf6524 is not None:
                 try:
-                    with st.spinner('Gerando vídeo vertical original para prévia...'):
-                        st.session_state['hf6522_mp4_'+_sel_slug_hf6522] = _site_youtube_gerar_mp4(_item_hf6522)
-                except Exception as _video_exc_hf6522:
-                    st.error('Geração de vídeo indisponível: '+str(_video_exc_hf6522)[:200])
+                    from site_dicas_media_hf6524 import validar_video
+                    _bytes_video_hf6524 = _video_pronto_hf6524.getvalue()
+                    validar_video(_bytes_video_hf6524)
+                    st.session_state['hf6522_mp4_'+_sel_slug_hf6522] = _bytes_video_hf6524
+                except Exception as _video_erro_hf6524:
+                    st.session_state.pop('hf6522_mp4_'+_sel_slug_hf6522,None)
+                    st.error('Vídeo não aceito: '+str(_video_erro_hf6524)[:200])
             _short_hf6522=st.session_state.get('hf6522_mp4_'+_sel_slug_hf6522,b'')
             if _short_hf6522:
                 st.video(_short_hf6522)
@@ -28369,6 +28388,7 @@ if pagina_atual == "site":
                 else:
                     st.caption('O envio privado exige conexão Google válida nesta sessão. '
                                'Você já pode baixar o MP4 para publicação manual.')
+        st.caption('A arte do artigo aparece no site após aprovação e publicação. O vídeo aparece incorporado no artigo somente quando seu ID for marcado como público no YouTube.')
         st.caption('Esta seção fica fora da página pública até que a dica seja aprovada e o site publicado pelo fluxo atual.')
 
     resumo_vitrine_hf59 = _site_resumir_vitrine(catalogo_site_hf35, usar_taxonomia_catalogo=True)
@@ -28458,7 +28478,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.23",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.24",
                     adsense_publisher_id=_adsense_id_hf6520,
                     dicas_content=_dicas_hf6522,
                     dicas_whatsapp=empresa_vitrine_hf59.get("whatsapp_catalogo") or empresa_vitrine_hf59.get("celular") or "",
@@ -28607,7 +28627,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.23",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.24",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59

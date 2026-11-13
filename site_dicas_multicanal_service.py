@@ -6,6 +6,7 @@ A secao permanece desligada ate a aprovacao individual de cada guia.
 from __future__ import annotations
 
 import html
+import base64
 import json
 import re
 import unicodedata
@@ -132,6 +133,19 @@ A AlphaFest pode ajudar na escolha de brindes e materiais gráficos personalizad
 ]
 
 
+def _validated_image_uri(value: Any) -> str:
+    """Accept only bounded raster data URIs uploaded through the Manager."""
+    v = str(value or "")
+    m = re.fullmatch(r"data:image/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)", v)
+    if not m or len(v) > 430000:
+        return ""
+    try:
+        blob = base64.b64decode(m.group(2), validate=True)
+    except (ValueError, base64.binascii.Error):
+        return ""
+    return v if len(blob) <= 320000 else ""
+
+
 def normalize_dicas(data: Any) -> List[Dict[str, str]]:
     """Retorna dados simples, sem aceitar HTML ou scripts do editor."""
     if not isinstance(data, list):
@@ -157,6 +171,7 @@ def normalize_dicas(data: Any) -> List[Dict[str, str]]:
             "body": str(item.get("body") or "").strip()[:16000],
             "script": str(item.get("script") or "").strip()[:3000],
             "status": "publicado" if item.get("status") == "publicado" else "rascunho",
+            "image_data_uri": _validated_image_uri(item.get("image_data_uri", "")),
             "video_id": vid if m else "",
             "youtube_status": (str(item.get("youtube_status")) if str(item.get("youtube_status")) in ("publicado", "privado") else "nao_enviado") if m else "nao_enviado",
         })
@@ -193,7 +208,7 @@ h1{font-size:clamp(2rem,4vw,2.8rem);line-height:1.2;color:#053f7a}h2{margin-top:
 .lead{font-size:1.15rem;color:#41657c}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:20px;margin-top:30px}
 .card{border:1px solid #d7e9f6;background:#f8fcff;border-radius:18px;padding:24px;box-shadow:0 4px 14px #0a589214}
 .card h2{font-size:1.23rem;margin:0 0 10px}.card p{margin-top:0}.card a,.cta{display:inline-block;color:#005cae;font-weight:bold}
-article{max-width:800px}article p{margin:15px 0}aside{padding:22px;background:#f0faff;border-left:4px solid #0d87cc;margin:30px 0}
+article img.article-art{width:100%;max-height:560px;object-fit:contain;border-radius:14px;margin:18px 0}article{max-width:800px}article p{margin:15px 0}aside{padding:22px;background:#f0faff;border-left:4px solid #0d87cc;margin:30px 0}
 .video{position:relative;padding-top:56.25%;background:#041f33;border-radius:16px;overflow:hidden;margin:25px 0}
 .video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
 .whatsapp{background:#0a6cb4;color:white!important;padding:12px 18px;border-radius:12px;text-decoration:none}
@@ -237,8 +252,9 @@ def paginas_dicas(data: Any, whatsapp: str = "") -> Dict[str, str]:
                   "description":p["summary"],"inLanguage":"pt-BR","mainEntityOfPage":url,
                   "author":{"@type":"Organization","name":"AlphaFest"},
                   "publisher":{"@type":"Organization","name":"AlphaFest","url":DOMINIO}}
+        article_image = (f'<img class="article-art" src="{_safe(p["image_data_uri"])}" alt="Arte ilustrativa: {_safe(p["title"])}">' if p.get("image_data_uri") else "")
         content = (f'<article><p><a href="/dicas/">← Todos os guias</a></p><h1>{_safe(p["title"])}</h1>'
-                   f'<p class="lead">{_safe(p["summary"])}</p>{_body_to_html(p["body"])}{video_html}'
+                   f'<p class="lead">{_safe(p["summary"])}</p>{article_image}{_body_to_html(p["body"])}{video_html}'
                    f'<aside><strong>Personalize com a AlphaFest</strong><p>Confira nossos produtos ou peça uma ideia para o seu evento.</p>'
                    f'<a class="whatsapp" href="{_safe(wa_link)}" rel="noopener">Falar com a AlphaFest</a></aside></article>')
         output[f'dicas/{p["slug"]}/index.html'] = _page(p["title"],p["summary"],url,content,schema)
