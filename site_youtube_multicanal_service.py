@@ -138,7 +138,8 @@ def _youtube_access_token(credentials: Dict[str, str], timeout: int = 18) -> str
 
 
 def publicar_video_privado_youtube(
-    video_mp4: bytes, artigo: Dict[str,str], credentials: Dict[str,str], timeout: int = 120
+    video_mp4: bytes, artigo: Dict[str,str], credentials: Dict[str,str], timeout: int = 120,
+    *, expected_channel_id: str = "",
 ) -> str:
     """Envia MP4 somente em modo PRIVADO e somente quando o usuario clicar em enviar.
 
@@ -148,6 +149,10 @@ def publicar_video_privado_youtube(
     if len(video_mp4)>80_000_000: raise ValueError("Video maior que o limite seguro de 80MB.")
     if not video_mp4: raise ValueError("Nenhum video foi enviado.")
     token=_youtube_access_token(credentials)
+    if expected_channel_id:
+        from site_youtube_oauth_service import conferir_canal_no_token
+        if not conferir_canal_no_token(token, expected_channel_id):
+            raise RuntimeError("O token atual não pertence ao canal AlphaFest confirmado. Upload bloqueado.")
     data=youtube_export_text(artigo)
     req={"snippet":{"title":data["title"],"description":data["description"],"categoryId":"26"},
          "status":{"privacyStatus":"private","selfDeclaredMadeForKids":False}}

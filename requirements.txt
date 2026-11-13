@@ -16,3 +16,6 @@ matplotlib>=3.8
 
 qrcode[pil]>=7.4
 reportlab>=4.0
+
+# HF65.23 — cifragem dos tokens OAuth do YouTube
+cryptography>=43.0

@@ -1,3 +1,10 @@
+# HF65.23 — Conexão OAuth Google/YouTube (2026-11-13)
+
+- Conectar canal oficial @AlphafestItatiba2026 com OAuth pelo próprio Streamlit.
+- Confirmar conta Google e canal antes de salvar autorização.
+- Guardar refresh token cifrado; upload apenas privado e mediante confirmação.
+- Nenhuma publicação do site, vídeo ou mudança operacional automática.
+
 # HF65.22 — Conteúdo multicanal para site e YouTube
 
 - Nova seção **Dicas & Inspirações** no Manager, com 4 guias originais em RASCUNHO.

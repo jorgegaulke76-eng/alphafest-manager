@@ -1,34 +1,29 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.22",
-  "generated_at_utc": "2026-11-12T23:07:13.204926+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.23",
+  "generated_at_utc": "2026-11-13T11:41:27.149604+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
     "status": "OK",
     "problems": [],
-    "warnings": [
-      "Conteudos editoriais entram como rascunho; nenhuma publicacao automatica por padrao.",
-      "Upload de video exige OAuth e confirmacao do proprietario; sem credenciais salvas no repositorio.",
-      "Interface Streamlit e upload remoto precisam homologacao na conta de producao."
-    ],
+    "warnings": [],
     "critical_python_compile": {
       "status": "OK",
-      "files_checked": 98,
-      "files_ok": 98
+      "files_checked": 38,
+      "files_ok": 38
     },
-    "custom_tests": {
-      "site_pages": "OK",
-      "sitemap": "OK",
-      "cloudflare_assets": "OK",
-      "adsense": "OK",
-      "video_mp4": "OK",
-      "youtube_qa": "OK"
+    "tests": {
+      "total_files": 0,
+      "portable_files": 0,
+      "current_release_files": 0,
+      "historical_version_files": 0,
+      "historical_examples": []
     }
   },
-  "file_count": 419,
-  "uncompressed_bytes": 38397831,
+  "file_count": 418,
+  "uncompressed_bytes": 38417031,
   "files": [
     {
       "path": ".gitignore",
@@ -47,8 +42,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "size": 107058,
-      "sha256": "acd748acb1441cf683eb09fbded87d356c5b224451e8943b3b74fd851f4c6209"
+      "size": 107420,
+      "sha256": "eddbd941d10cbb953955f34c1b75934c67f5d24cb66cd2ede2b6e4d32731c1eb"
     },
     {
       "path": "EDGE_FUNCTION_CATALOGO_PUBLICO.md",
@@ -62,8 +57,8 @@
     },
     {
       "path": "LEIA_ME_ATUALIZACAO.txt",
-      "size": 374,
-      "sha256": "b01e37a0c506c899e093175914012a97993f9416e6bea72873b6342fc6966232"
+      "size": 639,
+      "sha256": "eedd56a9e64682973d6866ea890e82c2d6627c5f083ccff449e83cbb83e8e68f"
     },
     {
       "path": "LEIA_ME_ROLLBACK_URGENTE.txt",
@@ -112,33 +107,23 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 1236,
-      "sha256": "ca9ea838dfb969d3e7c38b462c6f2d2cf16b4b4dc7fdf88aa2fbee71921e97d7"
+      "size": 1598,
+      "sha256": "3fd8806bfaabf13f128e46d669f37376f3373a6b5bae73d9614605ba709ab175"
     },
     {
-      "path": "UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF65_19.md",
-      "size": 842,
-      "sha256": "e788617afcce00947e5966c1f49e2d604267eb4024a2d4fb1183e8a2ee27da00"
-    },
-    {
-      "path": "UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF65_21.md",
-      "size": 1808,
-      "sha256": "654a1e0dd3dff25349fbc6a40d7e4116a409a76e9466a9b42d4ae5807901ec05"
-    },
-    {
-      "path": "UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF65_22.md",
-      "size": 1236,
-      "sha256": "ca9ea838dfb969d3e7c38b462c6f2d2cf16b4b4dc7fdf88aa2fbee71921e97d7"
+      "path": "UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF65_23.md",
+      "size": 3378,
+      "sha256": "77ec44ffc29e428e9232ccc62f7736f04de5fdbf213269caf3cd63b2d66c26d6"
     },
     {
       "path": "VERSAO",
       "size": 34,
-      "sha256": "0fc957404598907e0f1f7cd3c1cc963c97c447eb7a50ddd81a1e78fa64d4727b"
+      "sha256": "62efff1787cb950081aae95fd3caf7a0015e68f76659f79906355ebdba7cec2e"
     },
     {
       "path": "VERSAO.txt",
       "size": 34,
-      "sha256": "0fc957404598907e0f1f7cd3c1cc963c97c447eb7a50ddd81a1e78fa64d4727b"
+      "sha256": "62efff1787cb950081aae95fd3caf7a0015e68f76659f79906355ebdba7cec2e"
     },
     {
       "path": "__init__.py",
@@ -207,8 +192,8 @@
     },
     {
       "path": "app.py",
-      "size": 2108438,
-      "sha256": "3463c490f83b13bb58835823ec3a2d72728e49fd3b9863720cc386a521d9b66a"
+      "size": 2114026,
+      "sha256": "aa2aba5613c740769d8d5b786c11cf4699ce8d3e1dd3191ca60e6eef64f6311e"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",
@@ -1922,8 +1907,8 @@
     },
     {
       "path": "requirements.txt",
-      "size": 244,
-      "sha256": "0370ebd33d937166391864d939481f28b2beb76783b306546863497d7686fdb7"
+      "size": 315,
+      "sha256": "036644b9e17748a137c4551075314ed35615d54c1f53cb82a968c4b4c0b9159a"
     },
     {
       "path": "resultados_runtime_service.py",
@@ -1962,8 +1947,8 @@
     },
     {
       "path": "site_dicas_multicanal_service.py",
-      "size": 19032,
-      "sha256": "1cc019e05060c7376f38c06a05b062dcda7e4d78c6035a2d7f844562b8a0705d"
+      "size": 19307,
+      "sha256": "0ae6502513ea00ee564868dd67350af33936b09dc37a8ec3a08f3709e99b8ffb"
     },
     {
       "path": "site_galeria_service.py",
@@ -2007,8 +1992,13 @@
     },
     {
       "path": "site_youtube_multicanal_service.py",
-      "size": 7734,
-      "sha256": "a23f16ec003054f15d2cd390df0e4200fe11dfc3a93f9a988ed387194eb7a47a"
+      "size": 8221,
+      "sha256": "88953519eba26769460a63393db8250fad5c9a111a12a343781a1554cf83b01a"
+    },
+    {
+      "path": "site_youtube_oauth_service.py",
+      "size": 8199,
+      "sha256": "ce64a1205a454f8781947f3a26a29284c16e70d2157d2db9250e8140cb629ae7"
     },
     {
       "path": "status_diagnostics_service.py",
@@ -2069,6 +2059,11 @@
       "path": "tempo_ciclo_producao_service.py",
       "size": 29493,
       "sha256": "3edd6cc540bfe9110b67879e259353009be787926dcd5e2a22e1e692739c7e54"
+    },
+    {
+      "path": "test_youtube_oauth_hf6523.py",
+      "size": 4099,
+      "sha256": "1b86140e717e46597a94cc7185708d40034b4327b72989cd398d480d9e38ffc2"
     },
     {
       "path": "thu_comercial_service.py",

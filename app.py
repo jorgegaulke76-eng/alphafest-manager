@@ -50,6 +50,12 @@ from site_production_service import gerar_pacote_producao as _site_gerar_pacote_
 from site_adsense_service import DEFAULT_ADSENSE_CONFIG as _site_adsense_default, normalize_adsense_config as _site_adsense_normalize, normalizar_publisher_id as _site_adsense_normalizar_id
 from site_dicas_multicanal_service import DEFAULT_DICAS as _site_dicas_default, normalize_dicas as _site_dicas_normalize, youtube_export_text as _site_youtube_export_text
 from site_youtube_multicanal_service import exportar_pacote_youtube as _site_youtube_gerar_pacote, gerar_short_mp4 as _site_youtube_gerar_mp4, publicar_video_privado_youtube as _site_youtube_publicar_privado
+from site_youtube_oauth_service import (
+    config_oauth as _yt23_config, configurado as _yt23_configurado,
+    url_autorizacao as _yt23_url_autorizacao, trocar_codigo_e_validar as _yt23_validar_callback,
+    credenciais_upload as _yt23_credenciais_upload, ErroYoutubeOAuth as _yt23_erro,
+    REDIRECT_URI_OFICIAL as _yt23_redirect,
+)
 try:
     from site_cloudflare_publish_service import (
         publicar_pacote as _site_cf_publicar_pacote,
@@ -565,7 +571,7 @@ def save_document(document_key, value, local_path):
         "catalogo_db", "clientes_db", "atendimentos_db", "marketing_db", "projetos_db",
         # HF55: a Galeria também recebe proteção CAS porque adicionar/remover fotos
         # altera uma lista compartilhada e não pode sobrescrever outra sessão.
-        "galeria_trabalhos_db",
+        "galeria_trabalhos_db", "site_youtube_oauth_db",
     }
 
     confirmado = False
@@ -871,6 +877,7 @@ ARQUIVO_SITE_CAMPAIGN = "site_campaign_db.json"
 ARQUIVO_SITE_HOME_CONTENT = "site_home_content_db.json"
 ARQUIVO_SITE_ADSENSE = "site_adsense_db.json"
 ARQUIVO_SITE_DICAS = "site_dicas_multicanal_db.json"
+ARQUIVO_YOUTUBE_OAUTH = "site_youtube_oauth_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -1005,6 +1012,52 @@ def carregar_dicas_multicanal(force_refresh=False):
 
 def salvar_dicas_multicanal(conteudos):
     return bool(save_document("site_dicas_multicanal_db", _site_dicas_normalize(conteudos), ARQUIVO_SITE_DICAS))
+
+
+# HF65.23 — somente credencial Google CIFRADA na Fonte Única, nunca em texto claro.
+def carregar_youtube_oauth(force_refresh=False):
+    return load_document("site_youtube_oauth_db", ARQUIVO_YOUTUBE_OAUTH, {}, force_refresh=force_refresh)
+
+
+def salvar_youtube_oauth(registro):
+    permitidos = {"refresh_token_cifrado", "channel_id", "channel_title", "email", "connected_at"}
+    filtrado = {k: str(v) for k, v in registro.items() if k in permitidos}
+    return bool(save_document("site_youtube_oauth_db", filtrado, ARQUIVO_YOUTUBE_OAUTH))
+
+
+def _youtube_secrets_hf6523():
+    try:
+        return _yt23_config(dict(st.secrets.get("youtube", {})))
+    except Exception:
+        return _yt23_config({})
+
+
+def _processar_retorno_youtube_hf6523():
+    """Executado no boot, mesmo se o Google voltar na página inicial."""
+    state = str(st.query_params.get("state", "") or "")
+    if not state.startswith("afyt1."):
+        return
+    codigo = str(st.query_params.get("code", "") or "")
+    erro_google = str(st.query_params.get("error", "") or "")
+    # Código de autorização de uso único não deve permanecer na URL do navegador.
+    st.query_params.clear()
+    if erro_google:
+        st.session_state["hf6523_youtube_oauth_mensagem"] = "A autorização foi cancelada ou recusada pelo Google."
+        return
+    try:
+        conf = _youtube_secrets_hf6523()
+        registro = _yt23_validar_callback(codigo, state, conf)
+        carregar_youtube_oauth(force_refresh=True)  # Base CAS atual, se disponível.
+        if not salvar_youtube_oauth(registro):
+            raise _yt23_erro("O banco não confirmou o salvamento da autorização. Reconecte o canal.")
+        st.session_state["hf6523_youtube_autorizado_sessao"] = registro["channel_id"]
+        st.session_state["hf6523_youtube_oauth_mensagem"] = (
+            "Canal conectado e verificado: " + registro["channel_title"] + ". "
+            "A autorização foi armazenada cifrada."
+        )
+    except Exception as exc:
+        st.session_state["hf6523_youtube_autorizado_sessao"] = ""
+        st.session_state["hf6523_youtube_oauth_mensagem"] = "Falha ao conectar YouTube: " + str(exc)[:200]
 
 # HF65.20 — identificação do AdSense guardada separadamente na Fonte Única.
 def carregar_config_adsense_site(force_refresh=False):
@@ -1307,6 +1360,9 @@ def pode_executar_acoes_tecnicas(usuario=None):
     """Ações de conexão, diagnóstico e atualização ficam reservadas ao Jorge."""
     usuario = usuario or obter_usuario_atual()
     return str(usuario.get("nome", "")).strip().casefold() == "jorge"
+
+# OAuth do YouTube retorna à raiz do Streamlit (não necessariamente à Central do Site).
+_processar_retorno_youtube_hf6523()
 
 def saudacao_por_hora(nome):
     hora = agora_local().hour
@@ -17475,6 +17531,7 @@ DOCUMENTOS_BACKUP = [
     ("site_home_content_db", ARQUIVO_SITE_HOME_CONTENT, _site_home_default),
     ("site_adsense_db", ARQUIVO_SITE_ADSENSE, _site_adsense_default),
     ("site_dicas_multicanal_db", ARQUIVO_SITE_DICAS, _site_dicas_default),
+    ("site_youtube_oauth_db", ARQUIVO_YOUTUBE_OAUTH, {}),
     ("clientes_db", ARQUIVO_CLIENTES, []),
     ("producao_db", ARQUIVO_PRODUCAO, []),
     ("config_empresa", ARQUIVO_EMPRESA, CONFIG_EMPRESA_PADRAO),
@@ -28179,6 +28236,31 @@ if pagina_atual == "site":
     with st.container(border=True):
         st.markdown("#### 📝 Dicas & Inspirações · Site + YouTube")
         st.link_button("▶️ Canal oficial: @AlphafestItatiba2026", "https://www.youtube.com/@AlphafestItatiba2026")
+        # HF65.23 — autenticação Google OAuth, sem tokens públicos ou upload automático.
+        _yt_conf_hf6523 = _youtube_secrets_hf6523()
+        _yt_reg_hf6523 = carregar_youtube_oauth()
+        with st.container(border=True):
+            st.markdown("##### 🔐 Conectar canal do YouTube")
+            _yt_msg_hf6523 = st.session_state.pop("hf6523_youtube_oauth_mensagem", "")
+            if _yt_msg_hf6523:
+                st.info(_yt_msg_hf6523)
+            if _yt_reg_hf6523.get("channel_id"):
+                st.success("Autorização armazenada para: " + str(_yt_reg_hf6523.get("channel_title") or "AlphaFest"))
+                st.caption("Conta Google autorizada: " + str(_yt_reg_hf6523.get("email") or ""))
+            else:
+                st.caption("Canal ainda não conectado. Os artigos e Shorts continuam disponíveis para revisão.")
+            if _yt23_configurado(_yt_conf_hf6523):
+                st.link_button("🔐 Conectar / renovar autorização Google", _yt23_url_autorizacao(_yt_conf_hf6523),
+                               use_container_width=True)
+                if st.session_state.get("hf6523_youtube_autorizado_sessao") == _yt_reg_hf6523.get("channel_id") and _yt_reg_hf6523.get("channel_id"):
+                    st.caption("Sessão Google confirmada para envios privados. Cada vídeo exige confirmação.")
+                else:
+                    st.caption("Para enviar vídeos nesta sessão, autorize o canal pelo botão acima.")
+            else:
+                st.warning("Conexão ainda não ativada. Configure [youtube] em Streamlit Secrets com "
+                           "client_id, client_secret e fernet_key. "
+                           "O URI de retorno autorizado deve ser: " + _yt23_redirect)
+                st.caption("Nunca cole Client Secret ou chave de cifragem no código, no GitHub ou aqui no chat.")
         st.caption(
             "Uma única dica alimenta a página do site e o roteiro para o canal YouTube. "
             "Nenhuma dica vai ao ar enquanto estiver em Rascunho. O vídeo só é enviado "
@@ -28249,16 +28331,28 @@ if pagina_atual == "site":
                 st.video(_short_hf6522)
                 st.download_button('⬇️ Baixar Short MP4',data=_short_hf6522,
                     file_name='AlphaFest_Short_'+_sel_slug_hf6522+'.mp4',mime='video/mp4',key='hf6522_down_mp4')
-                try:
-                    _youtube_secrets_hf6522=dict(st.secrets.get('youtube',{}))
-                except Exception:
-                    _youtube_secrets_hf6522={}
-                if all(_youtube_secrets_hf6522.get(x) for x in ('client_id','client_secret','refresh_token')):
-                    st.info('Canal configurado com OAuth. Envio disponível apenas em modo PRIVADO.')
-                    _confirma_envio_hf6522=st.checkbox('Autorizo enviar este vídeo ao meu canal como PRIVADO',key='hf6522_yt_confirm')
-                    if st.button('📤 Enviar vídeo privado para YouTube',disabled=not _confirma_envio_hf6522,key='hf6522_yt_upload'):
+                _yt_reg_envio_hf6523 = carregar_youtube_oauth()
+                _yt_conf_envio_hf6523 = _youtube_secrets_hf6523()
+                _yt_sessao_ok_hf6523 = bool(
+                    _yt_reg_envio_hf6523.get('channel_id') and
+                    st.session_state.get('hf6523_youtube_autorizado_sessao') == _yt_reg_envio_hf6523.get('channel_id')
+                )
+                if _yt_sessao_ok_hf6523 and _yt23_configurado(_yt_conf_envio_hf6523):
+                    st.info('Canal verificado. Upload disponível somente como PRIVADO.')
+                    _enviado_antes_hf6523 = bool(_item_hf6522.get('video_id') and _item_hf6522.get('youtube_status') in ('privado', 'publicado'))
+                    if _enviado_antes_hf6523:
+                        st.info('Esta dica já possui um vídeo registrado. Para evitar duplicidade, não será reenviada automaticamente.')
+                    _confirma_envio_hf6522=st.checkbox(
+                        'Autorizo enviar ESTE vídeo ao canal AlphaFest como PRIVADO',
+                        disabled=_enviado_antes_hf6523,key='hf6522_yt_confirm')
+                    if st.button('📤 Enviar vídeo privado para YouTube',
+                                 disabled=not _confirma_envio_hf6522 or _enviado_antes_hf6523,key='hf6522_yt_upload'):
                         try:
-                            _yt_id_hf6522=_site_youtube_publicar_privado(_short_hf6522,_item_hf6522,_youtube_secrets_hf6522)
+                            _yt_creds_hf6523 = _yt23_credenciais_upload(_yt_reg_envio_hf6523, _yt_conf_envio_hf6523)
+                            _yt_id_hf6522=_site_youtube_publicar_privado(
+                                _short_hf6522,_item_hf6522,_yt_creds_hf6523,
+                                expected_channel_id=_yt_reg_envio_hf6523['channel_id'],
+                            )
                             _atualizados_hf6522=[]
                             for _a in _dicas_hf6522:
                                 _b=dict(_a)
@@ -28273,8 +28367,8 @@ if pagina_atual == "site":
                         except Exception as _upload_exc_hf6522:
                             st.error('YouTube não confirmou o envio: '+str(_upload_exc_hf6522)[:220])
                 else:
-                    st.caption('Publicação direta no canal indisponível: falta conectar o YouTube por OAuth. '
-                               'Nunca informe senha do Google no Manager. Você já pode baixar o MP4 para publicação manual.')
+                    st.caption('O envio privado exige conexão Google válida nesta sessão. '
+                               'Você já pode baixar o MP4 para publicação manual.')
         st.caption('Esta seção fica fora da página pública até que a dica seja aprovada e o site publicado pelo fluxo atual.')
 
     resumo_vitrine_hf59 = _site_resumir_vitrine(catalogo_site_hf35, usar_taxonomia_catalogo=True)
@@ -28364,7 +28458,7 @@ if pagina_atual == "site":
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.22",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.23",
                     adsense_publisher_id=_adsense_id_hf6520,
                     dicas_content=_dicas_hf6522,
                     dicas_whatsapp=empresa_vitrine_hf59.get("whatsapp_catalogo") or empresa_vitrine_hf59.get("celular") or "",
@@ -28513,7 +28607,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.22",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.23",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
