@@ -16,13 +16,13 @@ A imagem enviada pelo cliente é a referência visual aprovada. Não transformar
 - Slogan conforme contexto: “Estamos presente em cada presente!”.
 
 ## Shorts YouTube — @AlphafestItatiba2026
-- 9:16, vídeo como **propaganda animada**, não slideshow.
-- Partir de artes promocionais aprovadas e animar a composição sem recortar textos, mascotes ou logo; movimentos sutis, ênfase na peça comercial, no produto e na mensagem.
+- Preferir 9:16 com composição realmente vertical. Se a arte original é quadrada e não pode ser recortada, criar Short **1:1 preenchendo todo o quadro**; o YouTube aceita Shorts quadrados. Jamais centralizar a arte quadrada em 9:16 com margens lisas.
+- Partir de artes promocionais aprovadas e animar a composição sem recortar textos, mascotes ou logo; movimentos sutis, ênfase na peça comercial, no produto e na mensagem. **Proibidas margens azuis vazias na parte superior/inferior e laterais; caso corrigido a pedido do cliente em 13/11/2026.**
 - O conteúdo só sai do rascunho após prévia aprovada. Publicação no YouTube depende de OAuth, canal confirmado e ação explícita; upload inicial privado.
 
 ## Erros a não repetir
 - Vídeo de painéis chapados da HF65.24: rejeitado.
-- Vídeo de cards com fundo azul-claro: rejeitado.
+- Vídeo de cards com fundo azul-claro: rejeitado.\n- Vídeo 9:16 com imagem quadrada pequena central e largas faixas azuis: rejeitado.
 - Não utilizar essas prévias rejeitadas como base para arte futura.
 
 ## Validação antes de integrar ao gerador
