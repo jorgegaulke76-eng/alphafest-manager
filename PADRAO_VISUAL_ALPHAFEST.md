@@ -27,3 +27,10 @@ A imagem enviada pelo cliente é a referência visual aprovada. Não transformar
 
 ## Validação antes de integrar ao gerador
 Exibir uma prévia fiel à imagem-matriz e obter aprovação. Registrar o padrão no módulo/editor de campanhas antes de habilitar a publicação multicanal.
+
+## Regra obrigatória — fidelidade ao assunto do conteúdo
+- Cada Short precisa usar foto/arte aprovada **do tema específico daquela dica**; não reaproveitar automaticamente uma propaganda de outro produto.
+- Título, resumo, roteiro, foto e chamada devem se referir ao mesmo assunto.
+- No Manager, exigir imagem do assunto + confirmação editorial antes de gerar MP4. A escolha da foto fica em memória na prévia, sem publicação automática.
+- Se o tema ou a foto mudar, invalidar a prévia anterior; produzir e revisar um novo vídeo.
+- Não inventar preço, produto, promoção ou cenário. A aprovação visual precede qualquer publicação.
