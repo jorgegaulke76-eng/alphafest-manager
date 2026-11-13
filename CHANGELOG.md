@@ -1,3 +1,10 @@
+# HF65.22 — Dicas & Inspirações / YouTube
+
+- Conteúdos em rascunho por padrão; uma fonte alimenta site e roteiros YouTube.
+- Artigos com URLs próprios, sitemap e conteúdo sem scripts editáveis.
+- Geração de Short MP4 original; upload privado por OAuth opcional com confirmação.
+- AdSense, site atual e módulos operacionais preservados.
+
 ## HF65.21 — AdSense em local visível e correção dos painéis (2026-11-12)
 - Atualização completa baseada na HF65.19 do usuário, com integrações da HF65.20.
 - Configuração AdSense diretamente em Atualizar o site, acessível sem gerar prévia.

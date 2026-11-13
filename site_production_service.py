@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict
 
 from site_adsense_service import inserir_meta_adsense, gerar_ads_txt, normalizar_publisher_id
+from site_dicas_multicanal_service import paginas_dicas
 
 DOMINIO_FINAL = "alphafest.com.br"
 PROJETO_WORKER = "alphafest-novo"
@@ -122,6 +123,8 @@ def gerar_pacote_producao(
     total_produtos: int = 0,
     versao_manager: str = "20.4.9-I8.13.5-HF51.4",
     adsense_publisher_id: str = "",
+    dicas_content: Any = None,
+    dicas_whatsapp: str = "",
 ) -> bytes:
     """Gera ZIP para New deployment no Worker alphafest-novo.
 
@@ -140,7 +143,12 @@ def gerar_pacote_producao(
 
     robots = f"User-agent: *\nAllow: /\nSitemap: https://{DOMINIO_FINAL}/sitemap.xml\n"
     hoje = datetime.now(timezone.utc).date().isoformat()
-    sitemap = f'''<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://{DOMINIO_FINAL}/</loc>\n    <lastmod>{hoje}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n</urlset>\n'''
+    paginas = paginas_dicas(dicas_content or [], whatsapp=dicas_whatsapp)
+    urls_dicas = ''.join(
+        f'  <url><loc>https://{DOMINIO_FINAL}/{url[:-10] if url.endswith("index.html") else url}</loc></url>\n'
+        for url in sorted(paginas)
+    )
+    sitemap = f'''<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://{DOMINIO_FINAL}/</loc>\n    <lastmod>{hoje}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n{urls_dicas}</urlset>\n'''
     headers = """/*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
@@ -183,6 +191,10 @@ O rollback do DNS anterior continua documentado no kit HF41.
         zf.writestr("404.html", html_publico)
         zf.writestr("robots.txt", robots)
         zf.writestr("sitemap.xml", sitemap)
+        # HF65.22 — publicacoes editoriais sao paginas estaticas opcionais.
+        paginas = paginas_dicas(dicas_content or [], whatsapp=dicas_whatsapp)
+        for caminho, conteudo in sorted(paginas.items()):
+            zf.writestr(caminho, conteudo)
         if adsense_id:
             zf.writestr("ads.txt", gerar_ads_txt(adsense_id))
         zf.writestr("_headers", headers)

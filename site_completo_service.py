@@ -17,6 +17,7 @@ import re
 from typing import Any, Callable, Dict, Iterable, Optional
 from urllib.parse import quote
 
+from site_dicas_multicanal_service import inserir_chamada_dicas
 from site_vitrine_service import gerar_html_vitrine
 from site_galeria_service import gerar_fragmento_galeria, selecionar_trabalhos_site
 from site_visual_hf48_service import aplicar_visual_hf48
@@ -108,6 +109,7 @@ def gerar_html_site_completo(
     campaign_config: Optional[Dict[str, Any]] = None,
     campaign_force_preview: bool = False,
     home_content_config: Optional[Dict[str, Any]] = None,
+    dicas_content: Optional[Iterable[Dict[str, Any]]] = None,
 ) -> str:
     """Gera o site completo sem publicar ou persistir qualquer dado.
 
@@ -374,5 +376,6 @@ def gerar_html_site_completo(
     )
 
     # HF52.1: somente a versão pública coleta métricas. Prévia interna não conta acesso.
+    pagina = inserir_chamada_dicas(pagina, list(dicas_content or []))
     pagina = inject_tracking(pagina, enabled=not modo_preview)
     return pagina

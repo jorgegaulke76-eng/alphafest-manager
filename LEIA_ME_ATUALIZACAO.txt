@@ -1,13 +1,5 @@
-AlphaFest Manager — HF65.21 COMPLETA — Google AdSense corrigido
-
-Base: pacote HF65.19 do usuário + implementação HF65.20 + correções HF65.21.
-
-1. Acesse Site AlphaFest > Central do Site > Atualizar o site.
-2. O bloco "Google AdSense · Verificação do site" agora aparece SEM clicar em prévia.
-3. Cole o ca-pub-... real ou metatag oficial do AdSense e salve.
-4. Para enviar ao site público: prepare prévia, confira e use Publicar site.
-5. Só depois de confirmar a publicação na Cloudflare, retorne ao AdSense para verificar.
-
-Corrigidos os painéis expander aninhados na região de publicação.
-Nada é publicado automaticamente; anúncios continuam desativados.
-A validação funcional no Streamlit Cloud ainda deve ser realizada.
+HF65.22 — Dicas & Inspirações + YouTube da AlphaFest.
+Quatro guias originais em rascunho; nova área de edição na Central do Site.
+Gera páginas, roteiro, descrição e Short MP4 original.
+Envio ao YouTube requer OAuth e ação explícita; por padrão nada é publicado.
+Instalação recomendada: backup, branch de revisão, homologação, merge e teste no Streamlit.

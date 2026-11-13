@@ -92,7 +92,9 @@ def extrair_pacote_publico(pacote_zip: bytes) -> Tuple[Dict[str, bytes], Dict[st
                     continue
                 if seguro in MODULOS_STATIC_ASSETS:
                     modulos[seguro] = zf.read(nome)
-                elif seguro in ARQUIVOS_PUBLICOS_PERMITIDOS:
+                elif seguro in ARQUIVOS_PUBLICOS_PERMITIDOS or re.fullmatch(
+                    r"dicas/(?:[a-z0-9-]+/)?index\.html", seguro
+                ):
                     assets[f"/{seguro}"] = zf.read(nome)
             if "/index.html" not in assets:
                 raise CloudflarePublishError("index.html não pôde ser extraído do pacote.")

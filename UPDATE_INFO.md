@@ -1,25 +1,19 @@
-# HF65.21 — Interface AdSense e estabilidade de painéis (12/11/2026)
+# HF65.22 — Conteúdo multicanal para site e YouTube
 
-## Base preservada
-- Pacote completo reconstruído a partir do ZIP HF65.19 fornecido pelo usuário.
-- Mantidas as correções de orçamentos e demais recursos anteriores da HF65.19.
-- Incorporados os serviços AdSense da HF65.20 (metatag, ads.txt e publicação via Manager).
+- Nova seção **Dicas & Inspirações** no Manager, com 4 guias originais em RASCUNHO.
+- Mesma fonte para texto do site, roteiro, descrição, URL e vídeo Short vertical sem áudio.
+- Páginas estáticas por guia e lista /dicas/ geradas apenas após aprovação editorial.
+- Novo arquivo de dados `site_dicas_multicanal_db.json`; não modifica outros bancos.
+- Prévia e produção usam a mesma lista, e publicação continua exigindo o botão existente.
+- Pacote de vídeo/roteiro e MP4 podem ser baixados para YouTube Studio.
+- Envio direto por API é OPCIONAL, depende de OAuth no Streamlit Secrets e de clique explícito.
+- Upload por API é sempre PRIVADO, com revisão antes de colocar público no canal.
+- Não conecta o YouTube nem ativa vídeos ou artigos de forma automática sem autorização.
+- AdSense, pedidos, estoque, financeiro, produtos e imagens seguem preservados.
 
-## Correções desta versão
-- **AdSense sempre acessível** em Site AlphaFest → Central do Site → Atualizar o site, antes de qualquer prévia.
-- O formulário e a ação de salvar código funcionam sem depender de Preparar prévia.
-- Painel AdSense usa contêiner, em vez de expander aninhado.
-- Painel Publicar site usa contêiner, preservando apenas o expansor de configurações Cloudflare.
-- Continua sendo necessário confirmar manualmente a publicação, que não ocorre ao salvar o código.
-- Nenhum script publicitário é ativado; apenas verificação e ads.txt com publisher ID real.
+## Atenção
 
-## Diagnósticos e limitações
-- Sintaxe Python e integridade do pacote conferidas localmente.
-- O erro de navegador `NotFoundError: removeChild` pode ter outras causas (por exemplo tradução automática/extensões ou estado de sessão do Streamlit). A reorganização corrige os painéis aninhados, mas **não garante** eliminar qualquer erro de navegador.
-- Ainda é necessária homologação funcional no Streamlit Cloud em uso antes de declarar a interface totalmente validada.
-
-## Instalação
-- Primeiro faça backup da versão online e dos dados.
-- Para Streamlit Cloud, publique os arquivos alterados na branch `main` do GitHub por processo de PR/revisão.
-- O ZIP completo serve como pacote para restauração e comparação, não é publicado automaticamente.
-- A publicação do site Cloudflare é uma ação separada dentro da Central do Site.
+Em produção, a conexão do YouTube requer configurar um cliente OAuth da Google Cloud
+com escopo youtube.upload e um refresh_token autorizado pelo proprietário. Nunca
+adicione senhas ou tokens ao GitHub nem ao cadastro de dicas. O primeiro teste deve
+ser com vídeo PRIVADO.

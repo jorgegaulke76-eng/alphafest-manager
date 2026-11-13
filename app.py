@@ -5,6 +5,7 @@ import json
 import os
 import html
 import re
+import unicodedata
 import secrets
 import urllib.parse
 from urllib.parse import quote
@@ -47,6 +48,8 @@ from site_staging_service import gerar_pacote_staging as _site_gerar_pacote_stag
 from site_cutover_service import gerar_kit_pre_virada as _site_gerar_kit_pre_virada, resumo_pre_virada as _site_resumo_pre_virada
 from site_production_service import gerar_pacote_producao as _site_gerar_pacote_producao, resumo_producao as _site_resumo_producao
 from site_adsense_service import DEFAULT_ADSENSE_CONFIG as _site_adsense_default, normalize_adsense_config as _site_adsense_normalize, normalizar_publisher_id as _site_adsense_normalizar_id
+from site_dicas_multicanal_service import DEFAULT_DICAS as _site_dicas_default, normalize_dicas as _site_dicas_normalize, youtube_export_text as _site_youtube_export_text
+from site_youtube_multicanal_service import exportar_pacote_youtube as _site_youtube_gerar_pacote, gerar_short_mp4 as _site_youtube_gerar_mp4, publicar_video_privado_youtube as _site_youtube_publicar_privado
 try:
     from site_cloudflare_publish_service import (
         publicar_pacote as _site_cf_publicar_pacote,
@@ -867,6 +870,7 @@ ARQUIVO_GALERIA_TRABALHOS = "galeria_trabalhos_db.json"
 ARQUIVO_SITE_CAMPAIGN = "site_campaign_db.json"
 ARQUIVO_SITE_HOME_CONTENT = "site_home_content_db.json"
 ARQUIVO_SITE_ADSENSE = "site_adsense_db.json"
+ARQUIVO_SITE_DICAS = "site_dicas_multicanal_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
 VERSAO_DADOS = DATA_VERSION
@@ -993,6 +997,14 @@ def carregar_config_home_site(force_refresh=False):
 def salvar_config_home_site(config):
     normalizada = _site_home_normalize(config)
     return bool(save_document("site_home_content_db", normalizada, ARQUIVO_SITE_HOME_CONTENT))
+
+# HF65.22 — Base editorial unica do site e pacote YouTube.
+def carregar_dicas_multicanal(force_refresh=False):
+    dados = load_document("site_dicas_multicanal_db", ARQUIVO_SITE_DICAS, _site_dicas_default, force_refresh=force_refresh)
+    return _site_dicas_normalize(dados)
+
+def salvar_dicas_multicanal(conteudos):
+    return bool(save_document("site_dicas_multicanal_db", _site_dicas_normalize(conteudos), ARQUIVO_SITE_DICAS))
 
 # HF65.20 — identificação do AdSense guardada separadamente na Fonte Única.
 def carregar_config_adsense_site(force_refresh=False):
@@ -17462,6 +17474,7 @@ DOCUMENTOS_BACKUP = [
     ("site_campaign_db", ARQUIVO_SITE_CAMPAIGN, _site_campaign_default),
     ("site_home_content_db", ARQUIVO_SITE_HOME_CONTENT, _site_home_default),
     ("site_adsense_db", ARQUIVO_SITE_ADSENSE, _site_adsense_default),
+    ("site_dicas_multicanal_db", ARQUIVO_SITE_DICAS, _site_dicas_default),
     ("clientes_db", ARQUIVO_CLIENTES, []),
     ("producao_db", ARQUIVO_PRODUCAO, []),
     ("config_empresa", ARQUIVO_EMPRESA, CONFIG_EMPRESA_PADRAO),
@@ -28161,6 +28174,109 @@ if pagina_atual == "site":
             st.info("AdSense não configurado. O site será gerado como antes, sem metatag nem anúncios.")
 
 
+    # HF65.22 — Produzir uma vez para site + YouTube, sem publicacao silenciosa.
+    _dicas_hf6522 = carregar_dicas_multicanal()
+    with st.container(border=True):
+        st.markdown("#### 📝 Dicas & Inspirações · Site + YouTube")
+        st.link_button("▶️ Canal oficial: @AlphafestItatiba2026", "https://www.youtube.com/@AlphafestItatiba2026")
+        st.caption(
+            "Uma única dica alimenta a página do site e o roteiro para o canal YouTube. "
+            "Nenhuma dica vai ao ar enquanto estiver em Rascunho. O vídeo só é enviado "
+            "ao YouTube após autorizar a conta e confirmar o upload."
+        )
+        _dicas_options_hf6522 = {d['slug']: d['title'] for d in _dicas_hf6522}
+        _dicas_options_hf6522['__novo__'] = '➕ Criar nova dica'
+        _sel_slug_hf6522 = st.selectbox(
+            'Selecionar conteúdo', list(_dicas_options_hf6522),
+            format_func=lambda k: _dicas_options_hf6522[k],
+            key='hf6522_dica_selecionada',
+        )
+        _item_hf6522 = next((dict(x) for x in _dicas_hf6522 if x['slug']==_sel_slug_hf6522), {})
+        with st.form('hf6522_form_conteudo'):
+            _titulo_hf6522 = st.text_input('Título',value=_item_hf6522.get('title',''))
+            _resumo_hf6522 = st.text_area('Resumo para o site e para o YouTube',value=_item_hf6522.get('summary',''),height=85)
+            _corpo_hf6522 = st.text_area('Texto do artigo (use ## para subtítulos)',value=_item_hf6522.get('body',''),height=210)
+            _roteiro_hf6522 = st.text_area('Roteiro original do YouTube Short',value=_item_hf6522.get('script',''),height=130)
+            _status_hf6522 = st.selectbox(
+                'Situação no site', ['rascunho','publicado'],
+                index=1 if _item_hf6522.get('status')=='publicado' else 0,
+                format_func=lambda x:'✅ Aprovado para a próxima publicação' if x=='publicado' else '📝 Rascunho (não aparece no site)',
+            )
+            _video_id_hf6522 = st.text_input(
+                'ID do vídeo no YouTube (opcional)',value=_item_hf6522.get('video_id',''),
+                help='Somente o ID de 11 caracteres do vídeo; nunca cole tokens ou credenciais aqui.',
+            )
+            _youtube_publico_hf6522 = st.checkbox(
+                'Confirmo que o vídeo já está PÚBLICO no YouTube e pode aparecer na página da dica',
+                value=bool(_item_hf6522.get('youtube_status')=='publicado'),
+            )
+            _salvar_dica_hf6522 = st.form_submit_button('💾 Salvar dica e roteiro (sem publicar)',use_container_width=True)
+        if _salvar_dica_hf6522:
+            _nome_slug_hf6522 = _sel_slug_hf6522 if _sel_slug_hf6522!='__novo__' else re.sub(
+                r'[^a-z0-9-]+','-',unicodedata.normalize('NFKD',_titulo_hf6522).encode('ascii','ignore').decode().lower()
+            ).strip('-')[:72]
+            if not _titulo_hf6522.strip() or not _corpo_hf6522.strip() or not _nome_slug_hf6522:
+                st.warning('Informe ao menos título e conteúdo para salvar.')
+            else:
+                _novo_item_hf6522 = {
+                    'slug':_nome_slug_hf6522,'title':_titulo_hf6522,'summary':_resumo_hf6522,
+                    'body':_corpo_hf6522,'script':_roteiro_hf6522,
+                    'status':_status_hf6522,'video_id':_video_id_hf6522.strip(),
+                    'youtube_status':('publicado' if _youtube_publico_hf6522 else ('privado' if _item_hf6522.get('youtube_status')=='privado' and _video_id_hf6522.strip()==_item_hf6522.get('video_id','') else 'nao_enviado')),
+                }
+                _nova_lista_hf6522 = [d for d in _dicas_hf6522 if d['slug']!=_nome_slug_hf6522]
+                _nova_lista_hf6522.append(_novo_item_hf6522)
+                if salvar_dicas_multicanal(_nova_lista_hf6522):
+                    _site_runtime_cache_hf45.clear()
+                    st.success('Conteúdo salvo. Nada foi publicado no site ou YouTube.')
+                    st.rerun()
+                else:
+                    st.error('Não foi possível confirmar o salvamento. Nenhuma publicação foi feita.')
+        if _item_hf6522:
+            st.caption('Link previsto: https://alphafest.com.br/dicas/'+_item_hf6522['slug']+'/')
+            _pacote_yt_hf6522 = _site_youtube_gerar_pacote(_item_hf6522)
+            st.download_button('📦 Baixar roteiro + título + descrição para YouTube',
+                data=_pacote_yt_hf6522,file_name='AlphaFest_YouTube_'+_sel_slug_hf6522+'.zip',
+                mime='application/zip',key='hf6522_download_yt')
+            if st.button('🎬 Gerar Short MP4 para revisão',key='hf6522_gerar_video'):
+                try:
+                    with st.spinner('Gerando vídeo vertical original para prévia...'):
+                        st.session_state['hf6522_mp4_'+_sel_slug_hf6522] = _site_youtube_gerar_mp4(_item_hf6522)
+                except Exception as _video_exc_hf6522:
+                    st.error('Geração de vídeo indisponível: '+str(_video_exc_hf6522)[:200])
+            _short_hf6522=st.session_state.get('hf6522_mp4_'+_sel_slug_hf6522,b'')
+            if _short_hf6522:
+                st.video(_short_hf6522)
+                st.download_button('⬇️ Baixar Short MP4',data=_short_hf6522,
+                    file_name='AlphaFest_Short_'+_sel_slug_hf6522+'.mp4',mime='video/mp4',key='hf6522_down_mp4')
+                try:
+                    _youtube_secrets_hf6522=dict(st.secrets.get('youtube',{}))
+                except Exception:
+                    _youtube_secrets_hf6522={}
+                if all(_youtube_secrets_hf6522.get(x) for x in ('client_id','client_secret','refresh_token')):
+                    st.info('Canal configurado com OAuth. Envio disponível apenas em modo PRIVADO.')
+                    _confirma_envio_hf6522=st.checkbox('Autorizo enviar este vídeo ao meu canal como PRIVADO',key='hf6522_yt_confirm')
+                    if st.button('📤 Enviar vídeo privado para YouTube',disabled=not _confirma_envio_hf6522,key='hf6522_yt_upload'):
+                        try:
+                            _yt_id_hf6522=_site_youtube_publicar_privado(_short_hf6522,_item_hf6522,_youtube_secrets_hf6522)
+                            _atualizados_hf6522=[]
+                            for _a in _dicas_hf6522:
+                                _b=dict(_a)
+                                if _b['slug']==_sel_slug_hf6522:
+                                    _b['video_id']=_yt_id_hf6522
+                                    _b['youtube_status']='privado'
+                                _atualizados_hf6522.append(_b)
+                            if salvar_dicas_multicanal(_atualizados_hf6522):
+                                st.success('Vídeo enviado como PRIVADO. ID: '+_yt_id_hf6522)
+                            else:
+                                st.warning('Vídeo enviado, mas o banco não registrou o ID: '+_yt_id_hf6522)
+                        except Exception as _upload_exc_hf6522:
+                            st.error('YouTube não confirmou o envio: '+str(_upload_exc_hf6522)[:220])
+                else:
+                    st.caption('Publicação direta no canal indisponível: falta conectar o YouTube por OAuth. '
+                               'Nunca informe senha do Google no Manager. Você já pode baixar o MP4 para publicação manual.')
+        st.caption('Esta seção fica fora da página pública até que a dica seja aprovada e o site publicado pelo fluxo atual.')
+
     resumo_vitrine_hf59 = _site_resumir_vitrine(catalogo_site_hf35, usar_taxonomia_catalogo=True)
     empresa_vitrine_hf59 = carregar_config_empresa()
     galeria_site_hf59 = carregar_galeria_trabalhos()
@@ -28201,6 +28317,7 @@ if pagina_atual == "site":
                 mascotes_hf48=True,
                 campaign_config=campanha_hf65,
                 home_content_config=home_hf6514,
+                dicas_content=_dicas_hf6522,
             )
         st.success("✅ Prévia atualizada. Confira abaixo antes de publicar.")
     col_site_hf59.link_button("🌐 Abrir site atual", "https://alphafest.com.br", use_container_width=True)
@@ -28242,12 +28359,15 @@ if pagina_atual == "site":
                     mascotes_hf48=True,
                     campaign_config=campanha_hf65,
                     home_content_config=home_hf6514,
+                    dicas_content=_dicas_hf6522,
                 )
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.21",
+                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.22",
                     adsense_publisher_id=_adsense_id_hf6520,
+                    dicas_content=_dicas_hf6522,
+                    dicas_whatsapp=empresa_vitrine_hf59.get("whatsapp_catalogo") or empresa_vitrine_hf59.get("celular") or "",
                 )
                 return _html, _zip
 
@@ -28264,6 +28384,7 @@ if pagina_atual == "site":
                     "campaign": campanha_hf65,
                     "home": home_hf6514,
                     "adsense": _adsense_id_hf6520,
+                    "dicas": _dicas_hf6522,
                 },
                 _build_producao_hf59,
                 ttl_seconds=180,
@@ -28392,7 +28513,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.21",
+                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.22",
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
