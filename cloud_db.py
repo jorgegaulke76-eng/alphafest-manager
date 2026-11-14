@@ -235,6 +235,25 @@ def delete_document(document_key: str, local_path: str) -> bool:
 
 
 
+def _safe_http_failure(exc: Exception) -> str:
+    """Retorna status HTTP e código público PostgREST, sem expor URL ou tokens."""
+    if isinstance(exc, requests.HTTPError):
+        response = exc.response
+        if response is not None:
+            status = response.status_code
+            code = ""
+            try:
+                payload = response.json()
+                if isinstance(payload, dict):
+                    value = str(payload.get("code") or "")
+                    if re.fullmatch(r"[A-Za-z0-9_]{1,24}", value):
+                        code = f", código {value}"
+            except (ValueError, TypeError):
+                pass
+            return f"erro:HTTPError (HTTP {status}{code})"
+    return f"erro:{type(exc).__name__}"
+
+
 def save_document_cas(document_key: str, expected_value: Any, value: Any, local_path: str, retries: int = 2):
     """Grava um documento somente se ele ainda for a versão que a sessão leu.
 
@@ -299,7 +318,7 @@ def save_document_cas(document_key: str, expected_value: Any, value: Any, local_
                 pass
             return True, "online"
         except (requests.RequestException, ValueError, TypeError) as exc:
-            ultimo_erro = f"erro:{exc.__class__.__name__}"
+            ultimo_erro = _safe_http_failure(exc)
     return False, ultimo_erro
 
 

@@ -609,6 +609,10 @@ def save_document(document_key, value, local_path, *, stop_on_error=True):
     # Uma tentativa não confirmada jamais pode virar a nova verdade da sessão.
     invalidate_document_cache(document_key)
     if key in protected_keys:
+        # HF65.24.2: manutenção de boot nunca pode ocultar o painel com st.stop.
+        # Propaga falha à migração para que ela NÃO avance schema_version.
+        if st.session_state.get("_hf65242_boot_migration"):
+            raise RuntimeError(f"Gravação de migração não confirmada: {key} ({str(motivo or 'desconhecido')[:100]})")
         texto_motivo = str(motivo or "").casefold()
         if "conflito" in texto_motivo:
             st.error(
@@ -17479,8 +17483,12 @@ def executar_migracoes_seguras():
         meta.update({"schema_version": atual, "ultima_migracao_em": agora_local().isoformat(), "migracoes_aplicadas": aplicadas})
         save_document("system_meta", meta, ARQUIVO_SYSTEM_META)
     except Exception as exc:
-        registrar_auditoria("Migração de dados", "Banco", f"v{atual + 1}", {"erro": str(exc)}, resultado="ERRO")
-        st.session_state._erro_migracao = f"Migração pendente: {exc}"
+        # Não grava auditoria aqui: se o banco está recusando o marketing_db,
+        # tentar outra gravação pode repetir o erro e interromper o boot.
+        st.session_state._erro_migracao = (
+            "Migração pendente (nenhuma etapa não confirmada foi considerada concluída): "
+            f"{type(exc).__name__}: {str(exc)[:180]}"
+        )
 
 
 def diagnostico_sistema():
@@ -17798,7 +17806,12 @@ def executar_backup_automatico_se_necessario():
 
 # Manutenções isoladas: se uma delas falhar, a tela continua disponível.
 if not st.session_state.get("_manutencao_boot_1424_concluida"):
-    executar_etapa_segura("Migrações seguras", executar_migracoes_seguras)
+    # Migrações são manutenção: falha remota deve gerar aviso, não tela preta.
+    st.session_state["_hf65242_boot_migration"] = True
+    try:
+        executar_etapa_segura("Migrações seguras", executar_migracoes_seguras)
+    finally:
+        st.session_state.pop("_hf65242_boot_migration", None)
     st.session_state["_manutencao_boot_1424_concluida"] = True
 # HF22: a sessão pode permanecer aberta antes/depois do horário do backup. A
 # própria função é barata e se limita a uma verificação a cada cinco minutos.
