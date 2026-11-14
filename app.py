@@ -553,7 +553,7 @@ def load_document(document_key, local_path, default, force_refresh=False):
     cache[key] = {"time": now, "value": copy.deepcopy(value)}
     return copy.deepcopy(value)
 
-def save_document(document_key, value, local_path):
+def save_document(document_key, value, local_path, *, stop_on_error=True):
     """Grava e confirma documentos do Manager.
 
     HF19 — documentos com uso concorrente (Catálogo, Clientes, Atendimentos,
@@ -616,11 +616,14 @@ def save_document(document_key, value, local_path):
                 "Nada foi sobrescrito. Atualize a tela, confira a versão mais recente e salve novamente."
             )
         else:
+            # Identificador da gravação e motivo seguro (sem tokens/chaves) para
+            # separar falha OAuth de falhas de outros módulos.
             st.error(
                 "🔴 O banco não confirmou esta gravação. Nada foi considerado salvo. "
-                "Verifique a conexão e tente novamente."
+                f"Documento: {key}. Motivo: {str(motivo or 'não informado')[:120]}."
             )
-        st.stop()
+        if stop_on_error:
+            st.stop()
     return False
 
 
@@ -1022,7 +1025,7 @@ def carregar_youtube_oauth(force_refresh=False):
 def salvar_youtube_oauth(registro):
     permitidos = {"refresh_token_cifrado", "channel_id", "channel_title", "email", "connected_at"}
     filtrado = {k: str(v) for k, v in registro.items() if k in permitidos}
-    return bool(save_document("site_youtube_oauth_db", filtrado, ARQUIVO_YOUTUBE_OAUTH))
+    return bool(save_document("site_youtube_oauth_db", filtrado, ARQUIVO_YOUTUBE_OAUTH, stop_on_error=False))
 
 
 def _youtube_secrets_hf6523():
