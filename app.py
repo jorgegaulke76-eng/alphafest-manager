@@ -27943,19 +27943,35 @@ if pagina_atual == "site":
 
         with _tab_depo_hf6514:
             st.caption("Aceita depoimento por escrito, imagem do depoimento ou vídeo curto. Os formatos podem ser misturados na mesma seção do site.")
+            # HF65.24.5: seletor FORA do form para atualizar o uploader imediatamente.
+            # Em forms do Streamlit, a seleção só é transmitida ao servidor no submit.
+            _dep_tipo_hf6514 = st.selectbox(
+                "Formato do depoimento", ["Texto", "Imagem", "Vídeo"],
+                index=0, key="hf65245_dep_formato",
+            )
+            _dep_imagem_hf6514 = None
+            _dep_video_hf6514 = None
+            if _dep_tipo_hf6514 == "Imagem":
+                _dep_imagem_hf6514 = st.file_uploader(
+                    "Enviar imagem do depoimento (PNG, JPG ou WEBP)",
+                    type=["png", "jpg", "jpeg", "webp"], key="hf65245_dep_imagem",
+                )
+                if _dep_imagem_hf6514 is not None:
+                    st.image(_dep_imagem_hf6514, caption="Prévia da arte antes de salvar", width=360)
+            elif _dep_tipo_hf6514 == "Vídeo":
+                _dep_video_hf6514 = st.file_uploader(
+                    "Enviar vídeo do depoimento (MP4)", type=["mp4"], key="hf65245_dep_video",
+                )
+                if _dep_video_hf6514 is not None:
+                    st.video(_dep_video_hf6514)
             with st.form("hf6514_testimonial_form", clear_on_submit=True):
                 _td1_hf6514, _td2_hf6514 = st.columns(2)
                 _dep_nome_hf6514 = _td1_hf6514.text_input("Nome do cliente")
                 _dep_empresa_hf6514 = _td2_hf6514.text_input("Empresa / referência (opcional)")
-                _dep_tipo_hf6514 = st.selectbox("Formato do depoimento", ["Texto", "Imagem", "Vídeo"], index=0)
-                _dep_texto_hf6514 = st.text_area("Texto / legenda do depoimento", height=110, max_chars=700, help="Obrigatório para depoimento por texto. Nos formatos imagem e vídeo, este campo é opcional e pode ser usado como legenda.")
-                _dep_imagem_hf6514 = None
-                _dep_video_hf6514 = None
-                if _dep_tipo_hf6514 == "Imagem":
-                    _dep_imagem_hf6514 = st.file_uploader("Imagem do depoimento", type=["png", "jpg", "jpeg", "webp"], key="hf6514_dep_img_upload")
-                elif _dep_tipo_hf6514 == "Vídeo":
-                    _dep_video_hf6514 = st.file_uploader("Vídeo do depoimento", type=["mp4", "webm", "mov", "m4v"], key="hf6514_dep_video_upload")
-                    st.caption("O vídeo será enviado para o bucket público do site e poderá aparecer na seção de depoimentos.")
+                _dep_texto_hf6514 = st.text_area(
+                    "Texto / legenda do depoimento", height=110, max_chars=700,
+                    help="Obrigatório apenas em depoimentos por escrito. Imagem e vídeo podem ter legenda opcional.",
+                )
                 _dep_add_hf6514 = st.form_submit_button("➕ Adicionar depoimento", type="primary", use_container_width=True)
             if _dep_add_hf6514:
                 _dep_kind_hf6514 = {"Texto": "text", "Imagem": "image", "Vídeo": "video"}.get(_dep_tipo_hf6514, "text")
