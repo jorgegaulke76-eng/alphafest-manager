@@ -280,7 +280,7 @@ def inserir_chamada_dicas(html_site: str, data: Any, *, modo_preview: bool = Fal
                     'Prepare as dicas no Manager e atualize esta prévia.</p>')
     else:
         cards = []
-        for p in posts[:8 if modo_preview else 4]:
+        for p in posts[:12]:
             aprovado = p["status"] == "publicado"
             is_draft = modo_preview and not aprovado
             badge = '<small class="alpha-dicas-draft">Rascunho · visível somente nesta prévia</small>' if is_draft else ''
@@ -310,13 +310,17 @@ def inserir_chamada_dicas(html_site: str, data: Any, *, modo_preview: bool = Fal
 .alpha-dicas-wrap{padding:48px 20px;background:#f4fbff;color:#154267}
 .alpha-dicas-inner{max-width:1140px;margin:auto}
 .alpha-dicas-wrap h2{font-size:clamp(1.6rem,2vw,2.2rem);color:#0763a9;margin:0 0 12px}
-.alpha-dicas-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:17px;margin:22px 0}
-.alpha-dicas-card{border:1px solid #d6e9f5;border-radius:14px;padding:19px;background:#fff;display:flex;flex-direction:column;gap:10px;text-decoration:none;color:#184462}
-.alpha-dicas-card img{width:100%;height:150px;object-fit:contain;border-radius:10px;background:#f8fcff}
-.alpha-dicas-card span{font-size:.92rem}.alpha-dicas-card b,.alpha-dicas-all{color:#0067ae}
+.alpha-dicas-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:20px 0}
+.alpha-dicas-card{min-width:0;border:1px solid #d6e9f5;border-radius:14px;padding:12px;background:#fff;display:flex;flex-direction:column;gap:8px;text-decoration:none;color:#184462;box-shadow:0 5px 16px rgba(7,94,157,.06);transition:transform .2s,box-shadow .2s}.alpha-dicas-card:hover{transform:translateY(-3px);box-shadow:0 10px 24px rgba(7,94,157,.13)}.alpha-dicas-card strong{font-size:14px;line-height:1.28;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}.alpha-dicas-card b{margin-top:auto;font-size:12px}
+.alpha-dicas-card img{width:100%;height:118px;object-fit:contain;border-radius:10px;background:#f8fcff}
+.alpha-dicas-card span{font-size:12px;line-height:1.4;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}.alpha-dicas-card b,.alpha-dicas-all{color:#0067ae}
 .alpha-dicas-preview-note{border-left:3px solid #0878c3;padding:8px 12px;background:#e7f4fc}
 .alpha-dicas-draft{display:inline-block;color:#80540b;font-weight:700}
 .alpha-dicas-empty{padding:20px;background:#fff;border:1px dashed #8cbfda;border-radius:12px}
+@media(max-width:1120px){.alpha-dicas-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:850px){.alpha-dicas-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:620px){.alpha-dicas-wrap{padding:32px 14px}.alpha-dicas-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.alpha-dicas-card{padding:10px}.alpha-dicas-card img{height:98px}.alpha-dicas-card strong{font-size:13px}}
+@media(max-width:360px){.alpha-dicas-grid{grid-template-columns:1fr}}
 </style>"""
     if "</head>" in pagina:
         pagina = pagina.replace("</head>", style+"</head>", 1)
