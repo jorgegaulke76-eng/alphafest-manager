@@ -261,28 +261,66 @@ def paginas_dicas(data: Any, whatsapp: str = "") -> Dict[str, str]:
     return output
 
 
-def inserir_chamada_dicas(html_site: str, data: Any) -> str:
-    posts = dicas_publicadas(data)
+def inserir_chamada_dicas(html_site: str, data: Any, *, modo_preview: bool = False) -> str:
+    """Seção editorial dedicada na home.
+
+    Na prévia interna, exibe rascunhos claramente identificados sem links
+    públicos; na produção, apenas itens aprovados e com texto são exibidos.
+    """
     pagina = str(html_site or "")
-    if not posts:
+    if 'id="dicas-alphafest"' in pagina:
         return pagina
-    cards = "".join(f'<a href="/dicas/{x["slug"]}/" class="alpha-dicas-card"><strong>{_safe(x["title"])}</strong>'
-                    f'<span>{_safe(x["summary"])}</span><b>Ler dica →</b></a>' for x in posts[:4])
+    todos = normalize_dicas(data)
+    publicados = dicas_publicadas(todos)
+    posts = [p for p in todos if p.get("body")] if modo_preview else publicados
+    if not posts:
+        if not modo_preview:
+            return pagina
+        conteudo = ('<p class="alpha-dicas-empty">Nenhum artigo cadastrado para a prévia. '
+                    'Prepare as dicas no Manager e atualize esta prévia.</p>')
+    else:
+        cards = []
+        for p in posts[:8 if modo_preview else 4]:
+            aprovado = p["status"] == "publicado"
+            is_draft = modo_preview and not aprovado
+            badge = '<small class="alpha-dicas-draft">Rascunho · visível somente nesta prévia</small>' if is_draft else ''
+            imagem = (f'<img loading="lazy" alt="Arte do artigo: {_safe(p["title"])}" '
+                      f'src="{_safe(p["image_data_uri"])}">') if p.get("image_data_uri") else ''
+            resumo = f'<span>{_safe(p["summary"])}</span>'
+            if is_draft:
+                # Jamais publicar um link para uma página de rascunho inexistente.
+                card = (f'<div class="alpha-dicas-card">{imagem}{badge}'
+                        f'<strong>{_safe(p["title"])}</strong>{resumo}'
+                        '<b>Conteúdo em revisão</b></div>')
+            else:
+                card = (f'<a href="/dicas/{p["slug"]}/" class="alpha-dicas-card">'
+                        f'{imagem}{badge}<strong>{_safe(p["title"])}</strong>{resumo}'
+                        '<b>Ler dica completa →</b></a>')
+            cards.append(card)
+        conteudo = '<div class="alpha-dicas-grid">'+''.join(cards)+'</div>'
+        if publicados:
+            conteudo += '<a class="alpha-dicas-all" href="/dicas/">Ver todas as dicas</a>'
+    nota = ('<p class="alpha-dicas-preview-note">Prévia interna: os rascunhos são exibidos '
+            'somente para conferência e não serão publicados.</p>' if modo_preview else '')
     bloco = ('<section id="dicas-alphafest" class="alpha-dicas-wrap" aria-label="Dicas e Inspirações">'
-             f'<div class="alpha-dicas-inner"><h2>{TITULO_SECAO}</h2><p>Ideias para festas, lembranças e presentes.</p>'
-             f'<div class="alpha-dicas-grid">{cards}</div><a class="alpha-dicas-all" href="/dicas/">Ver todas as dicas</a></div></section>')
-    style = '''<style id="alphafest-dicas-style">.alpha-dicas-wrap{padding:48px 20px;background:#f4fbff;color:#154267}.alpha-dicas-inner{max-width:1140px;margin:auto}.alpha-dicas-wrap h2{font-size:clamp(1.6rem,2vw,2.2rem);color:#0763a9}.alpha-dicas-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:17px;margin:22px 0}.alpha-dicas-card{border:1px solid #d6e9f5;border-radius:14px;padding:19px;background:white;display:flex;flex-direction:column;gap:10px;text-decoration:none;color:#184462}.alpha-dicas-card span{font-size:.92rem}.alpha-dicas-card b,.alpha-dicas-all{color:#0067ae}</style>'''
+             '<div class="alpha-dicas-inner"><h2>Dicas &amp; Inspirações</h2>'
+             '<p>Ideias, tutoriais e sugestões AlphaFest para festas, presentes e personalizados.</p>'
+             f'{nota}{conteudo}</div></section>')
+    style = """<style id="alphafest-dicas-style">
+.alpha-dicas-wrap{padding:48px 20px;background:#f4fbff;color:#154267}
+.alpha-dicas-inner{max-width:1140px;margin:auto}
+.alpha-dicas-wrap h2{font-size:clamp(1.6rem,2vw,2.2rem);color:#0763a9;margin:0 0 12px}
+.alpha-dicas-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:17px;margin:22px 0}
+.alpha-dicas-card{border:1px solid #d6e9f5;border-radius:14px;padding:19px;background:#fff;display:flex;flex-direction:column;gap:10px;text-decoration:none;color:#184462}
+.alpha-dicas-card img{width:100%;height:150px;object-fit:contain;border-radius:10px;background:#f8fcff}
+.alpha-dicas-card span{font-size:.92rem}.alpha-dicas-card b,.alpha-dicas-all{color:#0067ae}
+.alpha-dicas-preview-note{border-left:3px solid #0878c3;padding:8px 12px;background:#e7f4fc}
+.alpha-dicas-draft{display:inline-block;color:#80540b;font-weight:700}
+.alpha-dicas-empty{padding:20px;background:#fff;border:1px dashed #8cbfda;border-radius:12px}
+</style>"""
     if "</head>" in pagina:
-        pagina=pagina.replace("</head>",style+"</head>",1)
-    pos=pagina.find('<footer class="footer"')
-    if pos < 0: pos=pagina.find("</body>")
-    return pagina[:pos]+bloco+pagina[pos:] if pos>=0 else pagina
-
-
-def youtube_export_text(data: Dict[str, str]) -> Dict[str, str]:
-    url = f'{DOMINIO}/dicas/{data["slug"]}/'
-    title = data["title"][:100]
-    description = (f'{data["summary"]}\n\nLeia o guia completo: {url}\n'
-                   f'Conheça a AlphaFest: {DOMINIO}/\n'
-                   f'Canal oficial: {CANAL_YOUTUBE_OFICIAL}\n\n#AlphaFest #FestasPersonalizadas #DicasDeFesta #Shorts')
-    return {"title":title,"description":description,"script":data["script"],"source_url":url}
+        pagina = pagina.replace("</head>", style+"</head>", 1)
+    pos = pagina.find('<footer class="footer"')
+    if pos < 0:
+        pos = pagina.find("</body>")
+    return pagina[:pos]+bloco+pagina[pos:] if pos >= 0 else pagina+bloco

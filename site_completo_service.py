@@ -376,6 +376,6 @@ def gerar_html_site_completo(
     )
 
     # HF52.1: somente a versão pública coleta métricas. Prévia interna não conta acesso.
-    pagina = inserir_chamada_dicas(pagina, list(dicas_content or []))
+    pagina = inserir_chamada_dicas(pagina, list(dicas_content or []), modo_preview=bool(modo_preview))
     pagina = inject_tracking(pagina, enabled=not modo_preview)
     return pagina

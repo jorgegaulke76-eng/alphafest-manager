@@ -30,6 +30,13 @@ def _clean_image(value: Any) -> str:
     return ""
 
 
+def _clean_video(value: Any) -> str:
+    src = str(value or "").strip()
+    if src.startswith(("https://", "http://", "data:video/")):
+        return src
+    return ""
+
+
 def normalize_home_content_config(value: Any) -> Dict[str, Any]:
     cfg = dict(DEFAULT_HOME_CONTENT_CONFIG)
     if isinstance(value, dict):
@@ -57,14 +64,26 @@ def normalize_home_content_config(value: Any) -> Dict[str, Any]:
     for i, item in enumerate(cfg.get("testimonials") or []):
         if not isinstance(item, dict):
             continue
-        text = str(item.get("text") or "").strip()
-        if not text:
+        kind = str(item.get("kind") or "text").strip().lower()
+        if kind not in {"text", "image", "video"}:
+            kind = "text"
+        text_value = str(item.get("text") or "").strip()
+        image_src = _clean_image(item.get("image_src"))
+        video_src = _clean_video(item.get("video_src") or item.get("media_src"))
+        if kind == "text" and not text_value:
+            continue
+        if kind == "image" and not image_src:
+            continue
+        if kind == "video" and not video_src:
             continue
         testimonials.append({
             "id": str(item.get("id") or f"testimonial-{i+1}")[:80],
+            "kind": kind,
             "name": str(item.get("name") or "Cliente AlphaFest").strip()[:100],
             "company": str(item.get("company") or "").strip()[:120],
-            "text": text[:700],
+            "text": text_value[:700],
+            "image_src": image_src,
+            "video_src": video_src,
             "active": bool(item.get("active", True)),
         })
     cfg["testimonials"] = testimonials[:30]
@@ -129,10 +148,22 @@ def testimonials_html(config: Any) -> str:
     for item in items:
         company = str(item.get("company") or "").strip()
         meta = f'<span>{html.escape(company)}</span>' if company else ""
+        text_value = str(item.get("text") or "").strip()
+        kind = str(item.get("kind") or "text").strip().lower()
+        media_html = ""
+        if kind == "image":
+            image_src = html.escape(str(item.get("image_src") or ""), quote=True)
+            media_html = f'<div class="hf6514-testimonial-media"><img src="{image_src}" alt="Depoimento de {html.escape(str(item.get("name") or "Cliente AlphaFest"), quote=True)}" loading="lazy"></div>'
+        elif kind == "video":
+            video_src = html.escape(str(item.get("video_src") or ""), quote=True)
+            media_html = f'<div class="hf6514-testimonial-media"><video controls preload="metadata" playsinline><source src="{video_src}"></video></div>'
+        badge_map = {"text": "Depoimento por escrito", "image": "Depoimento em imagem", "video": "Depoimento em vídeo"}
+        badge = f'<div class="hf6514-testimonial-kind">{html.escape(badge_map.get(kind, "Depoimento"))}</div>'
+        body_html = f'<p>“{html.escape(text_value)}”</p>' if text_value else '<p class="hf6514-testimonial-empty">Depoimento enviado pela AlphaFest.</p>'
         cards.append(
             '<article class="hf6514-testimonial">'
-            '<div class="hf6514-stars" aria-label="5 estrelas">★★★★★</div>'
-            f'<p>“{html.escape(str(item.get("text") or ""))}”</p>'
+            f'{badge}<div class="hf6514-stars" aria-label="5 estrelas">★★★★★</div>{media_html}'
+            f'{body_html}'
             f'<strong>{html.escape(str(item.get("name") or "Cliente AlphaFest"))}</strong>{meta}'
             '</article>'
         )
@@ -184,7 +215,7 @@ def client_showcase_html(config: Any) -> str:
 
 HOME_CONTENT_CSS = r'''
 .hf6514-banner{background:#fff;padding:24px 24px 10px}.hf6514-banner-shell{position:relative;max-width:1480px;margin:auto;overflow:hidden;border-radius:22px;background:#eef5fb;box-shadow:0 12px 32px rgba(18,35,61,.08);aspect-ratio:10/3}.hf6514-banner-track{display:flex;height:100%;transition:transform .55s cubic-bezier(.2,.75,.25,1)}.hf6514-banner-slide{flex:0 0 100%;height:100%;min-width:0}.hf6514-banner-slide a,.hf6514-banner-slide img{display:block;width:100%;height:100%}.hf6514-banner-slide img{object-fit:cover}.hf6514-banner-arrow,.hf6514-client-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:4;width:42px;height:42px;border:1px solid rgba(255,255,255,.75);border-radius:50%;background:rgba(255,255,255,.92);color:#0875d4;font-size:28px;cursor:pointer;box-shadow:0 6px 18px rgba(18,35,61,.15)}.hf6514-banner-arrow.prev,.hf6514-client-arrow.prev{left:12px}.hf6514-banner-arrow.next,.hf6514-client-arrow.next{right:12px}.hf6514-banner-dots,.hf6514-client-dots{position:absolute;z-index:5;left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:7px}.hf6514-banner-dot,.hf6514-client-dot{width:9px;height:9px;border:0;border-radius:999px;background:rgba(255,255,255,.68);padding:0;cursor:pointer;box-shadow:0 0 0 1px rgba(13,63,107,.18)}.hf6514-banner-dot.active,.hf6514-client-dot.active{width:27px;background:#0875d4}
-.hf6514-testimonials{padding:64px 24px;background:linear-gradient(135deg,#f5fbff,#fff,#fff3f9)}.hf6514-testimonials-track{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(290px,1fr);gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 14px;scrollbar-width:thin}.hf6514-testimonial{scroll-snap-align:start;border:1px solid #dfeaf5;border-radius:20px;background:#fff;padding:22px;box-shadow:0 8px 24px rgba(18,35,61,.055)}.hf6514-stars{letter-spacing:2px;color:#f4b400;font-size:16px}.hf6514-testimonial p{font-size:15px;line-height:1.65;color:#526a83;min-height:72px}.hf6514-testimonial strong{display:block;color:#173d66}.hf6514-testimonial span{display:block;margin-top:3px;font-size:12px;color:#7a8fa5}
+.hf6514-testimonials{padding:64px 24px;background:linear-gradient(135deg,#f5fbff,#fff,#fff3f9)}.hf6514-testimonials-track{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(290px,1fr);gap:14px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 14px;scrollbar-width:thin}.hf6514-testimonial{scroll-snap-align:start;border:1px solid #dfeaf5;border-radius:20px;background:#fff;padding:22px;box-shadow:0 8px 24px rgba(18,35,61,.055)}.hf6514-testimonial-kind{display:inline-flex;align-items:center;min-height:24px;padding:4px 10px;border-radius:999px;background:#eaf4ff;color:#0875d4;font-size:11px;font-weight:900;letter-spacing:.03em;text-transform:uppercase;margin-bottom:10px}.hf6514-testimonial-media{margin:10px 0 14px;border-radius:16px;overflow:hidden;background:#eef5fb;border:1px solid #dce8f4}.hf6514-testimonial-media img,.hf6514-testimonial-media video{display:block;width:100%;max-height:360px;object-fit:cover;background:#000}.hf6514-testimonial-empty{font-style:italic;color:#6f8599}.hf6514-stars{letter-spacing:2px;color:#f4b400;font-size:16px}.hf6514-testimonial p{font-size:15px;line-height:1.65;color:#526a83;min-height:72px}.hf6514-testimonial strong{display:block;color:#173d66}.hf6514-testimonial span{display:block;margin-top:3px;font-size:12px;color:#7a8fa5}
 .hf6514-clients{padding:68px 24px;background:#fff}.hf6514-client-shell{position:relative;max-width:1120px;margin:auto;overflow:hidden;border-radius:28px}.hf6514-client-track{display:flex;transition:transform .55s cubic-bezier(.2,.75,.25,1)}.hf6514-client-slide{flex:0 0 100%;min-width:0;display:grid;grid-template-columns:.72fr 1.28fr;gap:0;min-height:350px;background:#0d1320;color:#fff}.hf6514-client-slide:nth-child(even){background:#fff0fa;color:#11233d}.hf6514-client-media{min-height:350px;overflow:hidden;background:#eaf4fb}.hf6514-client-media img{width:100%;height:100%;object-fit:cover;display:block}.hf6514-client-placeholder{display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:950;color:#0875d4}.hf6514-client-copy{padding:48px 56px;display:flex;flex-direction:column;justify-content:center}.hf6514-client-copy>span{font-size:13px;font-weight:950;letter-spacing:.08em;text-transform:uppercase;color:#70c8ff}.hf6514-client-slide:nth-child(even) .hf6514-client-copy>span{color:#0875d4}.hf6514-client-copy h3{font-size:clamp(28px,3.2vw,46px);line-height:1.08;margin:10px 0 16px}.hf6514-client-copy p{font-size:16px;line-height:1.65;opacity:.84;margin:0}.hf6514-client-copy a{margin-top:20px;color:inherit;font-weight:900}.hf6514-client-dots{bottom:15px}.hf6514-client-dot{background:rgba(255,255,255,.52)}
 .hf6514-channel-cta{display:inline-flex!important;align-items:center;gap:9px}.hf6514-channel-cta svg{width:20px;height:20px;fill:currentColor}
 @media(max-width:900px){.hf6514-banner{padding:16px 14px 6px}.hf6514-banner-shell{border-radius:16px}.hf6514-client-slide{grid-template-columns:1fr}.hf6514-client-media{min-height:260px;max-height:330px}.hf6514-client-copy{padding:30px 28px 54px}.hf6514-client-copy h3{font-size:30px}}

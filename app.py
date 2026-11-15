@@ -27942,23 +27942,56 @@ if pagina_atual == "site":
                         _salvar_home_hf6514(_novo_home_hf6514, "Banner removido da Home.")
 
         with _tab_depo_hf6514:
+            st.caption("Aceita depoimento por escrito, imagem do depoimento ou vídeo curto. Os formatos podem ser misturados na mesma seção do site.")
             with st.form("hf6514_testimonial_form", clear_on_submit=True):
                 _td1_hf6514, _td2_hf6514 = st.columns(2)
                 _dep_nome_hf6514 = _td1_hf6514.text_input("Nome do cliente")
                 _dep_empresa_hf6514 = _td2_hf6514.text_input("Empresa / referência (opcional)")
-                _dep_texto_hf6514 = st.text_area("Depoimento", height=110, max_chars=700)
+                _dep_tipo_hf6514 = st.selectbox("Formato do depoimento", ["Texto", "Imagem", "Vídeo"], index=0)
+                _dep_texto_hf6514 = st.text_area("Texto / legenda do depoimento", height=110, max_chars=700, help="Obrigatório para depoimento por texto. Nos formatos imagem e vídeo, este campo é opcional e pode ser usado como legenda.")
+                _dep_imagem_hf6514 = None
+                _dep_video_hf6514 = None
+                if _dep_tipo_hf6514 == "Imagem":
+                    _dep_imagem_hf6514 = st.file_uploader("Imagem do depoimento", type=["png", "jpg", "jpeg", "webp"], key="hf6514_dep_img_upload")
+                elif _dep_tipo_hf6514 == "Vídeo":
+                    _dep_video_hf6514 = st.file_uploader("Vídeo do depoimento", type=["mp4", "webm", "mov", "m4v"], key="hf6514_dep_video_upload")
+                    st.caption("O vídeo será enviado para o bucket público do site e poderá aparecer na seção de depoimentos.")
                 _dep_add_hf6514 = st.form_submit_button("➕ Adicionar depoimento", type="primary", use_container_width=True)
             if _dep_add_hf6514:
-                if not _dep_texto_hf6514.strip():
-                    st.warning("Escreva o depoimento antes de salvar.")
+                _dep_kind_hf6514 = {"Texto": "text", "Imagem": "image", "Vídeo": "video"}.get(_dep_tipo_hf6514, "text")
+                _dep_image_src_hf6514 = ""
+                _dep_video_src_hf6514 = ""
+                _erro_dep_hf6514 = ""
+                if _dep_kind_hf6514 == "text":
+                    if not _dep_texto_hf6514.strip():
+                        _erro_dep_hf6514 = "Escreva o depoimento antes de salvar."
+                elif _dep_kind_hf6514 == "image":
+                    if _dep_imagem_hf6514 is None:
+                        _erro_dep_hf6514 = "Escolha a imagem do depoimento antes de salvar."
+                    else:
+                        _dep_image_src_hf6514 = str(upload_catalog_image(_dep_imagem_hf6514) or "").strip()
+                        if not _dep_image_src_hf6514:
+                            _erro_dep_hf6514 = "Não foi possível gravar a imagem do depoimento."
+                elif _dep_kind_hf6514 == "video":
+                    if _dep_video_hf6514 is None:
+                        _erro_dep_hf6514 = "Escolha o vídeo do depoimento antes de salvar."
+                    else:
+                        _dep_video_src_hf6514 = str(upload_library_file(_dep_video_hf6514, produto_nome="depoimentos_home") or "").strip()
+                        if not _dep_video_src_hf6514:
+                            _erro_dep_hf6514 = "Não foi possível gravar o vídeo do depoimento."
+                if _erro_dep_hf6514:
+                    st.warning(_erro_dep_hf6514)
                 else:
                     _novo_home_hf6514 = dict(home_hf6514)
                     _lista_hf6514 = [dict(x) for x in (_novo_home_hf6514.get("testimonials") or [])]
                     _lista_hf6514.append({
                         "id": f"depo-{int(time.time()*1000)}-{secrets.token_hex(2)}",
+                        "kind": _dep_kind_hf6514,
                         "name": _dep_nome_hf6514.strip() or "Cliente AlphaFest",
                         "company": _dep_empresa_hf6514.strip(),
                         "text": _dep_texto_hf6514.strip(),
+                        "image_src": _dep_image_src_hf6514,
+                        "video_src": _dep_video_src_hf6514,
                         "active": True,
                     })
                     _novo_home_hf6514["testimonials"] = _lista_hf6514
@@ -27966,8 +27999,21 @@ if pagina_atual == "site":
             for _i_hf6514, _item_hf6514 in enumerate(home_hf6514.get("testimonials") or []):
                 with st.container(border=True):
                     _di1_hf6514, _di2_hf6514 = st.columns([5, 1])
-                    _di1_hf6514.markdown(f"**{_item_hf6514.get('name') or 'Cliente'}**" + (f" · {_item_hf6514.get('company')}" if _item_hf6514.get('company') else ""))
-                    _di1_hf6514.caption(str(_item_hf6514.get("text") or ""))
+                    _tipo_dep_hf6514 = str(_item_hf6514.get("kind") or ("text" if _item_hf6514.get("text") else "image")).lower()
+                    _rotulo_dep_hf6514 = {"text": "Texto", "image": "Imagem", "video": "Vídeo"}.get(_tipo_dep_hf6514, "Texto")
+                    _di1_hf6514.markdown(f"**{_item_hf6514.get('name') or 'Cliente'}** · {_rotulo_dep_hf6514}" + (f" · {_item_hf6514.get('company')}" if _item_hf6514.get('company') else ""))
+                    if _tipo_dep_hf6514 == "image" and _item_hf6514.get("image_src"):
+                        try:
+                            _di1_hf6514.image(str(_item_hf6514.get("image_src")), use_container_width=True)
+                        except Exception:
+                            _di1_hf6514.caption("Imagem salva")
+                    elif _tipo_dep_hf6514 == "video" and _item_hf6514.get("video_src"):
+                        try:
+                            _di1_hf6514.video(str(_item_hf6514.get("video_src")))
+                        except Exception:
+                            _di1_hf6514.caption("Vídeo salvo")
+                    if _item_hf6514.get("text"):
+                        _di1_hf6514.caption(str(_item_hf6514.get("text") or ""))
                     if _di2_hf6514.button("🗑️ Excluir", key=f"hf6514_depo_del_{_item_hf6514.get('id')}", use_container_width=True):
                         _novo_home_hf6514 = dict(home_hf6514)
                         _novo_home_hf6514["testimonials"] = [dict(x) for j, x in enumerate(_novo_home_hf6514.get("testimonials") or []) if j != _i_hf6514]
