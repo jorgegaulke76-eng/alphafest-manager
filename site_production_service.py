@@ -14,6 +14,7 @@ from typing import Any, Dict
 from site_adsense_service import inserir_meta_adsense, gerar_ads_txt, normalizar_publisher_id
 from site_dicas_multicanal_service import paginas_dicas
 from site_favicon_service import favicon_assets, with_favicon
+from site_whatsapp_context_service import inject_whatsapp_context
 
 DOMINIO_FINAL = "alphafest.com.br"
 PROJETO_WORKER = "alphafest-novo"
@@ -131,7 +132,7 @@ def gerar_pacote_producao(
 
     O ZIP não contém comandos de DNS. A conexão do domínio é externa e manual.
     """
-    html_publico = with_favicon(preparar_html_producao(html_site))
+    html_publico = inject_whatsapp_context(with_favicon(preparar_html_producao(html_site)))
     adsense_id = normalizar_publisher_id(adsense_publisher_id)
     html_publico = inserir_meta_adsense(html_publico, adsense_id)
     status = resumo_producao(total_produtos=total_produtos)
@@ -197,7 +198,7 @@ O rollback do DNS anterior continua documentado no kit HF41.
         # HF65.22 — publicacoes editoriais sao paginas estaticas opcionais.
         paginas = paginas_dicas(dicas_content or [], whatsapp=dicas_whatsapp)
         for caminho, conteudo in sorted(paginas.items()):
-            zf.writestr(caminho, conteudo)
+            zf.writestr(caminho, inject_whatsapp_context(conteudo))
         if adsense_id:
             zf.writestr("ads.txt", gerar_ads_txt(adsense_id))
         zf.writestr("_headers", headers)
