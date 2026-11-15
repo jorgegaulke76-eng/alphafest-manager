@@ -324,3 +324,12 @@ def inserir_chamada_dicas(html_site: str, data: Any, *, modo_preview: bool = Fal
     if pos < 0:
         pos = pagina.find("</body>")
     return pagina[:pos]+bloco+pagina[pos:] if pos >= 0 else pagina+bloco
+
+
+def youtube_export_text(data: Dict[str, str]) -> Dict[str, str]:
+    url = f'{DOMINIO}/dicas/{data["slug"]}/'
+    title = data["title"][:100]
+    description = (f'{data["summary"]}\n\nLeia o guia completo: {url}\n'
+                   f'Conheça a AlphaFest: {DOMINIO}/\n'
+                   f'Canal oficial: {CANAL_YOUTUBE_OFICIAL}\n\n#AlphaFest #FestasPersonalizadas #DicasDeFesta #Shorts')
+    return {"title":title,"description":description,"script":data["script"],"source_url":url}
