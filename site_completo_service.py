@@ -377,5 +377,32 @@ def gerar_html_site_completo(
 
     # HF52.1: somente a versão pública coleta métricas. Prévia interna não conta acesso.
     pagina = inserir_chamada_dicas(pagina, list(dicas_content or []), modo_preview=bool(modo_preview))
+
+    # HF65.24.8 — links no menu superior para as seções multimídia e editorial.
+    # Só exibir o destino quando a seção existir neste HTML: rascunhos não
+    # geram links vazios no site público, mas aparecem na prévia interna.
+    # O site homologado usa botões de scroll em sua navegação com Galeria.
+    novos_destinos = []
+    if 'id="depoimentos"' in pagina:
+        novos_destinos.append(("depoimentos", "Depoimentos"))
+    if 'id="dicas-alphafest"' in pagina:
+        novos_destinos.append(("dicas-alphafest", "Dicas & Inspirações"))
+    if novos_destinos:
+        nav_match = re.search(r'(<nav class="site-nav"[^>]*>\s*<div class="site-nav-in"[^>]*>)(.*?)(</div>\s*</nav>)', pagina, flags=re.S)
+        if nav_match:
+            nav_body = nav_match.group(2)
+            usa_botoes = 'data-site-scroll=' in nav_body
+            novos_links = []
+            for destino, rotulo in novos_destinos:
+                if f'data-site-scroll="{destino}"' in nav_body or f'href="#{destino}"' in nav_body:
+                    continue
+                if usa_botoes:
+                    novos_links.append(f'<button type="button" data-site-scroll="{destino}">{rotulo}</button>')
+                else:
+                    novos_links.append(f'<a href="#{destino}">{rotulo}</a>')
+            if novos_links:
+                pagina = (pagina[:nav_match.start(3)] + ''.join(novos_links) + pagina[nav_match.start(3):])
+        pagina = pagina.replace('</head>', '<style id="hf65248-nav-style">#depoimentos,#dicas-alphafest{scroll-margin-top:170px}@media(max-width:620px){#depoimentos,#dicas-alphafest{scroll-margin-top:125px}}</style></head>', 1)
+
     pagina = inject_tracking(pagina, enabled=not modo_preview)
     return pagina

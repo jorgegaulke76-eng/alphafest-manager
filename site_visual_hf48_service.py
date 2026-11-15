@@ -510,7 +510,7 @@ body{background:var(--hf48-bg)}
   // HF51.4-HF1 — menu mobile enxuto: 4 destinos principais + “Mais”.
   const mobileNav=document.querySelector('.site-nav-in');
   if(mobileNav && !mobileNav.querySelector('.hf50-mobile-more')){
-    const hiddenLabels=new Set(['Serviços','Quem Somos','Contato','Galeria']);
+    const hiddenLabels=new Set(['Serviços','Quem Somos','Contato','Galeria','Depoimentos','Dicas & Inspirações']);
     const originals=[...mobileNav.children].filter(function(el){return el.matches && el.matches('a,button');});
     const moreWrap=document.createElement('div'); moreWrap.className='hf50-mobile-more';
     const moreBtn=document.createElement('button'); moreBtn.type='button'; moreBtn.setAttribute('aria-expanded','false'); moreBtn.innerHTML='☰ <span>Mais</span>';
