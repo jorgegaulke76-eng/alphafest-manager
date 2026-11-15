@@ -28,6 +28,13 @@ ARQUIVOS_PUBLICOS_PERMITIDOS = {
     "robots.txt",
     "sitemap.xml",
     "ads.txt",
+    "favicon.ico",
+    "favicon.png",
+    "favicon-16x16.png",
+    "favicon-32x32.png",
+    "apple-touch-icon.png",
+    "android-chrome-192x192.png",
+    "android-chrome-512x512.png",
 }
 MODULOS_STATIC_ASSETS = {"_headers", "_redirects"}
 

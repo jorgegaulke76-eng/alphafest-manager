@@ -5,6 +5,8 @@ e pela configuração oficial do Manager. Não publica, não altera DNS e não c
 """
 from __future__ import annotations
 
+from site_favicon_service import favicon_assets, with_favicon
+
 import io
 import json
 import zipfile
@@ -62,7 +64,7 @@ def gerar_pacote_staging(
     O pacote propositalmente NÃO contém CNAME nem instruções executáveis de DNS.
     A troca de alphafest.com.br fica para a etapa final, manual e reversível.
     """
-    html_staging = preparar_html_staging(html_site, versao="HF40")
+    html_staging = with_favicon(preparar_html_staging(html_site, versao="HF40"))
     status = resumo_staging(total_produtos=total_produtos)
     status.update({
         "versao_manager": versao_manager,
@@ -126,6 +128,8 @@ O projeto de homologação já pode ser atualizado por New deployment sem tocar 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("index.html", html_staging)
+        for _favicon_path, _favicon_bytes in favicon_assets().items():
+            zf.writestr(_favicon_path, _favicon_bytes)
         zf.writestr("404.html", html_staging)
         zf.writestr("robots.txt", robots)
         zf.writestr("_headers", headers)

@@ -222,6 +222,7 @@ def _page(title: str, description: str, url: str, content: str, schema: Dict[str
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<title>{_safe(title)} | AlphaFest</title><meta name="description" content="{_safe(description)}">'
             f'<link rel="canonical" href="{_safe(url)}"><meta name="robots" content="index,follow">'
+            f'<link rel="icon" href="/favicon.ico" sizes="any"><link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png"><link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">'
             f'<style>{CSS}</style>{structured}</head><body><header><a href="/">AlphaFest</a>　/　'
             f'<a href="/dicas/">Dicas & Inspirações</a></header><main>{content}</main>'
             f'<footer>AlphaFest · Itatiba, SP · <a href="/">Voltar à loja</a> · '

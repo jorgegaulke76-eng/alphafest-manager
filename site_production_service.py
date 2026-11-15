@@ -13,6 +13,7 @@ from typing import Any, Dict
 
 from site_adsense_service import inserir_meta_adsense, gerar_ads_txt, normalizar_publisher_id
 from site_dicas_multicanal_service import paginas_dicas
+from site_favicon_service import favicon_assets, with_favicon
 
 DOMINIO_FINAL = "alphafest.com.br"
 PROJETO_WORKER = "alphafest-novo"
@@ -130,7 +131,7 @@ def gerar_pacote_producao(
 
     O ZIP não contém comandos de DNS. A conexão do domínio é externa e manual.
     """
-    html_publico = preparar_html_producao(html_site)
+    html_publico = with_favicon(preparar_html_producao(html_site))
     adsense_id = normalizar_publisher_id(adsense_publisher_id)
     html_publico = inserir_meta_adsense(html_publico, adsense_id)
     status = resumo_producao(total_produtos=total_produtos)
@@ -188,6 +189,8 @@ O rollback do DNS anterior continua documentado no kit HF41.
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("index.html", html_publico)
+        for _favicon_path, _favicon_bytes in favicon_assets().items():
+            zf.writestr(_favicon_path, _favicon_bytes)
         zf.writestr("404.html", html_publico)
         zf.writestr("robots.txt", robots)
         zf.writestr("sitemap.xml", sitemap)
