@@ -138,6 +138,37 @@ def resumir_galeria_site(galeria: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _intercalar_fotos_por_trabalho(
+    trabalhos: List[Dict[str, Any]], limite: Optional[int],
+) -> List[Dict[str, Any]]:
+    """Intercala fotos por trabalho para não ocultar categorias após o corte.
+
+    Cada trabalho autorizado fornece uma foto por rodada. Assim, mesmo quando
+    o primeiro trabalho contém dezenas de imagens, os demais entram na amostra.
+    Não modifica nem reclassifica os dados originais da Galeria.
+    """
+    filas = [(trabalho, list(trabalho.get("fotos") or [])) for trabalho in trabalhos]
+    total = sum(len(fotos) for _, fotos in filas)
+    maximo = total if limite is None else min(total, max(1, int(limite)))
+    resultado: List[Dict[str, Any]] = []
+    rodada = 0
+    while len(resultado) < maximo:
+        encontrou = False
+        for trabalho, fotos in filas:
+            if rodada >= len(fotos):
+                continue
+            encontrou = True
+            item = dict(trabalho)
+            item["fotos"] = [fotos[rodada]]
+            resultado.append(item)
+            if len(resultado) >= maximo:
+                break
+        if not encontrou:
+            break
+        rodada += 1
+    return resultado
+
+
 def gerar_fragmento_galeria(
     galeria: Iterable[Dict[str, Any]],
     empresa: Dict[str, Any],
@@ -152,10 +183,15 @@ def gerar_fragmento_galeria(
     intactas; o limite só afeta o que é renderizado nesta prévia.
     """
     resumo = resumir_galeria_site(galeria)
-    trabalhos = resumo["trabalhos"]
+    # Distribuição justa: não deixar um trabalho com 70 fotos consumir sozinho
+    # o limite da prévia e produzir resultados falsamente vazios nos filtros.
+    trabalhos = _intercalar_fotos_por_trabalho(resumo["trabalhos"], limite_fotos)
     numero = _numero_whatsapp(empresa)
 
-    categorias = resumo["categorias"]
+    categorias = sorted(
+        {categoria for trabalho in trabalhos for categoria in _todas_categorias(trabalho)},
+        key=str.casefold,
+    )
     options_categoria = ['<option value="todos">Todas as categorias</option>'] + [
         f'<option value="{html.escape(_slug(cat), quote=True)}">{html.escape(cat)}</option>' for cat in categorias
     ]
@@ -163,8 +199,8 @@ def gerar_fragmento_galeria(
     # As opções de subcategoria carregam o pai para o filtro em cascata.
     pares_sub = sorted(
         {
-            (_texto(t.get("categoria")) or "Sem categoria", _texto(t.get("subcategoria")) or "Sem subcategoria")
-            for t in trabalhos
+            (categoria, _texto(t.get("subcategoria")) or "Sem subcategoria")
+            for t in trabalhos for categoria in _todas_categorias(t)
         },
         key=lambda x: (x[0].casefold(), x[1].casefold()),
     )
@@ -174,11 +210,11 @@ def gerar_fragmento_galeria(
             f'<option value="{html.escape(_slug(sub), quote=True)}" data-parent="{html.escape(_slug(categoria), quote=True)}">{html.escape(sub)}</option>'
         )
 
-    temas = resumo["temas"]
+    temas = sorted({_texto(x.get("tema")) for x in trabalhos if _texto(x.get("tema"))}, key=str.casefold)
     options_tema = ['<option value="todos">Todos os temas</option>'] + [
         f'<option value="{html.escape(_slug(tema), quote=True)}">{html.escape(tema)}</option>' for tema in temas
     ]
-    ocasioes = resumo.get("ocasioes") or []
+    ocasioes = sorted({o for t in trabalhos for o in _datas_ocasioes(t)}, key=str.casefold)
     options_ocasiao = ['<option value="todos">Todas as datas & ocasiões</option>'] + [
         f'<option value="{html.escape(_slug(ocasiao), quote=True)}">{html.escape(ocasiao)}</option>' for ocasiao in ocasioes
     ]
@@ -247,7 +283,7 @@ def gerar_fragmento_galeria(
 
     restante = max(0, int(resumo["total_fotos"]) - total_renderizado)
     aviso_limite = (
-        f'<div class="gallery-preview-note">Prévia interna mostrando {total_renderizado} de {resumo["total_fotos"]} foto(s) selecionadas. O acervo original não foi alterado.</div>'
+        f'<div class="gallery-preview-note">Exibindo {total_renderizado} de {resumo["total_fotos"]} fotos selecionadas, distribuídas entre os trabalhos disponíveis.</div>'
         if restante else ""
     )
     vazio = '<div class="gallery-empty">A Galeria está pronta. Assim que um trabalho autorizado for pré-selecionado no Manager, ele aparecerá aqui.</div>'

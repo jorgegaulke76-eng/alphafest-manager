@@ -32,7 +32,7 @@ alt = LazyModule("altair")
 
 _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 
-from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS
+from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS, APP_RELEASE_DISPLAY
 from site_manager_service import (
     resumir_catalogo_site as _site_resumir_catalogo,
     ordenar_produtos_site as _site_ordenar_produtos,
@@ -18019,6 +18019,7 @@ with st.sidebar:
     st.divider()
     st.caption("📌 Sistema de Orçamentos e Catálogo")
     st.caption(f"Versão {VERSAO_APP}")
+    st.caption(f"📅 Pacote gerado em: {APP_RELEASE_DISPLAY} (Brasília)")
 
     st.caption(str(empresa_sidebar.get("slogan", "")))
 
@@ -40484,3 +40485,4 @@ if pagina_atual == "configuracoes":
 
 
         st.caption(f"Versão do aplicativo: {VERSAO_APP} • Versão dos dados: {VERSAO_DADOS}")
+        st.caption(f"Pacote gerado em: {APP_RELEASE_DISPLAY} (horário de Brasília)")
