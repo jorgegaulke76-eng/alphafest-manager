@@ -14,6 +14,7 @@ from typing import Any, Dict
 from site_adsense_service import inserir_meta_adsense, gerar_ads_txt, normalizar_publisher_id
 from site_dicas_multicanal_service import paginas_dicas
 from site_favicon_service import favicon_assets, with_favicon
+from site_pwa_service import inject_pwa, pwa_assets
 from site_whatsapp_context_service import inject_whatsapp_context
 
 DOMINIO_FINAL = "alphafest.com.br"
@@ -132,7 +133,7 @@ def gerar_pacote_producao(
 
     O ZIP não contém comandos de DNS. A conexão do domínio é externa e manual.
     """
-    html_publico = inject_whatsapp_context(with_favicon(preparar_html_producao(html_site)))
+    html_publico = inject_pwa(inject_whatsapp_context(with_favicon(preparar_html_producao(html_site))))
     adsense_id = normalizar_publisher_id(adsense_publisher_id)
     html_publico = inserir_meta_adsense(html_publico, adsense_id)
     status = resumo_producao(total_produtos=total_produtos)
@@ -151,7 +152,11 @@ def gerar_pacote_producao(
         for url in sorted(paginas)
     )
     sitemap = f'''<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://{DOMINIO_FINAL}/</loc>\n    <lastmod>{hoje}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n{urls_dicas}</urlset>\n'''
-    headers = """/*
+    headers = """/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+/manifest.webmanifest
+  Cache-Control: no-cache, no-store, must-revalidate
+/*
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=()
@@ -192,13 +197,15 @@ O rollback do DNS anterior continua documentado no kit HF41.
         zf.writestr("index.html", html_publico)
         for _favicon_path, _favicon_bytes in favicon_assets().items():
             zf.writestr(_favicon_path, _favicon_bytes)
+        for _pwa_path, _pwa_bytes in pwa_assets().items():
+            zf.writestr(_pwa_path, _pwa_bytes)
         zf.writestr("404.html", html_publico)
         zf.writestr("robots.txt", robots)
         zf.writestr("sitemap.xml", sitemap)
         # HF65.22 — publicacoes editoriais sao paginas estaticas opcionais.
         paginas = paginas_dicas(dicas_content or [], whatsapp=dicas_whatsapp)
         for caminho, conteudo in sorted(paginas.items()):
-            zf.writestr(caminho, inject_whatsapp_context(conteudo))
+            zf.writestr(caminho, inject_pwa(inject_whatsapp_context(with_favicon(conteudo))))
         if adsense_id:
             zf.writestr("ads.txt", gerar_ads_txt(adsense_id))
         zf.writestr("_headers", headers)
