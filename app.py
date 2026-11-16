@@ -78,6 +78,8 @@ from system_health_ui import render_system_health_tab as _render_system_health_t
 from trash_ui import render_trash_tab as _render_trash_tab
 from alpha_connect_ui import render_alpha_connect as _render_alpha_connect
 from audit_ui import render_audit_tab as _render_audit_tab
+from das_mei_ui import render as render_das_mei
+from das_mei_service import normalize as _das_mei_normalize, status_of as _das_mei_status
 from backup_schedule_service import backup_due as _backup_due, slot_id as _backup_slot_id, reservation_is_active as _backup_reservation_active
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
@@ -571,7 +573,7 @@ def save_document(document_key, value, local_path, *, stop_on_error=True):
         "catalogo_db", "clientes_db", "atendimentos_db", "marketing_db", "projetos_db",
         # HF55: a Galeria também recebe proteção CAS porque adicionar/remover fotos
         # altera uma lista compartilhada e não pode sobrescrever outra sessão.
-        "galeria_trabalhos_db", "site_youtube_oauth_db",
+        "galeria_trabalhos_db", "site_youtube_oauth_db", "das_mei_controle_db",
     }
 
     confirmado = False
@@ -872,6 +874,7 @@ ARQUIVO_INTELIGENCIA = "alpha_intelligence_db.json"
 ARQUIVO_USUARIOS = "usuarios_config.json"
 ARQUIVO_ORIENTACOES_THU = "orientacoes_thu.json"
 ARQUIVO_FATURAMENTO_MENSAL = "faturamento_mensal_db.json"
+ARQUIVO_DAS_MEI = "das_mei_controle_db.json"
 ARQUIVO_COMPRAS = "compras_db.json"
 ARQUIVO_ESTOQUE = "estoque_db.json"
 ARQUIVO_FICHAS_TECNICAS = "fichas_tecnicas_db.json"
@@ -1103,6 +1106,7 @@ ABAS_SISTEMA = [
     ("biblioteca_3d", "🧊 Catálogo 3D"),
     ("relacionamentos", "🌐 Relacionamentos"),
     ("faturamento_mensal", "💳 Fechamentos Recorrentes"),
+    ("das_mei", "🧾 Controle DAS-MEI"),
     ("compras_custos", "🧾 Compras, Custos & Estoque"),
     ("memoria", "🧠 Memória"),
     ("conhecimento", "🧩 Conhecimento"),
@@ -1240,13 +1244,14 @@ def obter_perfil_configurado(usuario=None):
             # I8.11.1 / I8.12.1 nascem primeiro no perfil Jorge. A sobreposição
             # garante acesso mesmo quando usuarios_config.json veio de uma base
             # antiga, sem liberar os módulos de gestão no perfil operacional.
-            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"faturamento_mensal", "compras_custos", "entregas_retiradas", "biblioteca_3d", "site"})
+            cfg["abas"] = sorted(set(cfg.get("abas") or []) | {"faturamento_mensal", "compras_custos", "entregas_retiradas", "biblioteca_3d", "site", "das_mei"})
             acoes = dict(cfg.get("acoes") or {})
             acoes["faturamento_mensal"] = list(ACOES_PADRAO)
             acoes["compras_custos"] = list(ACOES_PADRAO)
             acoes["entregas_retiradas"] = list(ACOES_PADRAO)
             acoes["biblioteca_3d"] = list(ACOES_PADRAO)
             acoes["site"] = list(ACOES_PADRAO)
+            acoes["das_mei"] = ["visualizar", "criar", "editar", "exportar"]
             cfg["acoes"] = acoes
         return cfg
     nome = str(usuario.get("nome", "")).casefold()
@@ -25082,7 +25087,7 @@ GRUPOS_NAVEGACAO = {
     "📋 Operação": ["novo_orcamento", "historico", "fluxo", "entregas_retiradas", "catalogo", "biblioteca_3d", "projeto", "jornada"],
     "👥 Clientes": ["atendimento", "crm", "clientes_360", "relacionamentos"],
     "🧠 Inteligência": ["alpha", "intelligence", "memoria", "conhecimento"],
-    "📈 Gestão": ["executivo", "relatorios", "faturamento_mensal", "compras_custos"],
+    "📈 Gestão": ["executivo", "relatorios", "faturamento_mensal", "compras_custos", "das_mei"],
     "📢 Marketing": ["site", "crescimento", "calendario"],
     "⚙️ Administração": ["configuracoes"],
 }
@@ -25169,6 +25174,25 @@ if pagina_atual == "central":
         st.info("👩‍💼 **Central Operacional da Anna** — Atendimento multicanal, orçamentos, artes/projetos, controle de pedidos, entregas, pagamentos e catálogo. O canal de origem permanece identificado em cada atendimento.")
     else:
         st.info("👨‍💼 **Central de Gestão do Jorge** — visão completa da operação, inteligência, conexões, marketing, indicadores e configurações.")
+        # HF65.24.15 — lembrete de DAS na Central, sem gravar dados ou assumir pagamento.
+        _das_central = (_das_mei_normalize(load_document("das_mei_controle_db", ARQUIVO_DAS_MEI, {"registros": {}}))["registros"]
+                        if st.session_state.get("_das_mei_authorized") is True else {})
+        _das_alertas = []
+        for _competencia, _item in sorted(_das_central.items()):
+            if not isinstance(_item, dict) or _das_mei_status(_item, hoje_central) == "Paga":
+                continue
+            try:
+                _vencimento = date.fromisoformat(str(_item.get("vencimento") or ""))
+            except ValueError:
+                continue
+            _dias = (_vencimento - hoje_central).days
+            if _dias <= 10:
+                _texto = "VENCIDA" if _dias < 0 else ("vence hoje" if _dias == 0 else f"vence em {_dias} dia(s)")
+                _das_alertas.append(f"{_competencia}: {_texto}")
+        if _das_alertas:
+            st.warning("🧾 **DAS-MEI — atenção:** " + " · ".join(_das_alertas[:5]) + (" · ..." if len(_das_alertas) > 5 else ""))
+            if st.button("Abrir Controle DAS-MEI", key="das_atalho_central"):
+                rerun_na_aba("das_mei")
         # Um rerun completo significa que os indicadores desta tela acabaram de ser recalculados.
         # O fragmento do Radar roda sozinho depois e NÃO altera esta referência.
         st.session_state["_hf4_painel_atualizado_em"] = agora_local().isoformat()
@@ -33135,6 +33159,13 @@ if pagina_atual == "faturamento_mensal":
                     "- Ao registrar o recebimento, os pedidos são marcados como pagos automaticamente usando o mesmo Financeiro já existente."
                 )
 
+
+if pagina_atual == "das_mei":
+    _usuario_das = obter_usuario_atual()
+    if str(_usuario_das.get("nome") or "").strip().casefold() != "jorge":
+        st.error("Acesso restrito ao responsável financeiro autorizado.")
+        st.stop()
+    render_das_mei(load_document, save_document, str(_usuario_das.get("nome") or "Jorge"), agora_local())
 
 if pagina_atual == "compras_custos":
     st.header("📦 I8.12.8-HF2 · Compras, Custos, Estoque, Ficha Técnica, Pedidos & Produção")
