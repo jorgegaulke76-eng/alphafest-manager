@@ -39,8 +39,8 @@ def render(load_document,save_document,actor,now):
     base=normalize(load_document(DOC_KEY,LOCAL_PATH,{'registros':{}}))
     records=base['registros']
     stats=totals(records,year,today)
-    cols=st.columns(5)
-    for c,name,key in zip(cols,['A emitir','A pagar','Vencidas','Pagas','Total pago'],['a_emitir','a_pagar','vencidas','pagas','total_pago']):
+    cols=st.columns(6)
+    for c,name,key in zip(cols,['A emitir','A pagar','Vencidas','Informados','Pagas','Total pago'],['a_emitir','a_pagar','vencidas','informadas','pagas','total_pago']):
         c.metric(name, f"R$ {stats[key]:,.2f}" if key=='total_pago' else stats[key])
     if st.button('📅 Criar competências do ano (sem emitir ou pagar)',key='das_create_year'):
         added={f'{year}-{m:02d}':new_record(year,m) for m in range(1,13) if f'{year}-{m:02d}' not in records}
@@ -53,6 +53,27 @@ def render(load_document,save_document,actor,now):
             if save_document(DOC_KEY,fresh,LOCAL_PATH):
                 st.success(f'{len(updates)} competência(s) cadastrada(s). Nenhuma guia foi emitida ou marcada como paga.')
                 st.rerun()
+
+    # HF65.24.16 — regularização sem inventar valores e datas nem declarar quitação verificada.
+    if year == 2026:
+        eligible=[f"2026-{m:02d}" for m in range(1,10)
+                  if isinstance(records.get(f"2026-{m:02d}"),dict)
+                  and records[f"2026-{m:02d}"].get("status") not in ("Paga","Pagamento informado")]
+        if eligible:
+            with st.expander(f"📘 Registrar {len(eligible)} competência(s) de janeiro a setembro como pagamento informado",expanded=False):
+                st.info('Você informou que janeiro a setembro de 2026 foram pagos. O registro ficará como informado, aguardando conferência. Valores, datas e comprovantes permanecerão vazios.')
+                acknowledged=st.checkbox('Confirmo que essas competências foram pagas e desejo registrar apenas a informação, sem comprovantes por enquanto.',key='das_mei_bulk_ack')
+                if st.button('Registrar pagamento informado nas competências selecionadas',disabled=not acknowledged,key='das_mei_bulk_confirm'):
+                    fresh=normalize(load_document(DOC_KEY,LOCAL_PATH,{'registros':{}},force_refresh=True))
+                    changed=0
+                    for comp in eligible:
+                        old=fresh['registros'].get(comp)
+                        if isinstance(old,dict) and old.get('status') not in ('Paga','Pagamento informado'):
+                            fresh['registros'][comp]=change(old,{'status':'Pagamento informado'},actor,now)
+                            changed+=1
+                    if changed and save_document(DOC_KEY,fresh,LOCAL_PATH):
+                        st.success(f'{changed} competência(s) registradas como pagamento informado; aguardando documentação.');st.rerun()
+                    elif not changed: st.info('As competências já foram atualizadas em outra sessão.')
 
     keys=sorted((k for k in records if k.startswith(f'{year}-')),reverse=True)
     if keys:
@@ -71,13 +92,14 @@ def render(load_document,save_document,actor,now):
     if not keys: return
     key=st.selectbox('Competência para consultar / atualizar',keys,format_func=lambda k:k[5:]+'/'+k[:4],key='das_current')
     row=records[key]
+    st.caption('Pagamento informado = cliente confirma quitação anterior, aguardando conferência de guia/comprovante. Não contabiliza no total efetivamente conferido.')
     st.caption('Documentos privados: somente pessoal autorizado no Manager. Anexar PDF não confirma pagamento.')
     with st.form('das_edit_form'):
         a,b=st.columns(2)
         emitida=a.date_input('Data de emissão (opcional)',value=date.fromisoformat(row['emitido_em']) if row.get('emitido_em') else None,format='DD/MM/YYYY')
         due=b.date_input('Vencimento da guia',value=date.fromisoformat(row['vencimento']),format='DD/MM/YYYY',help='Altere se o PGMEI indicar outro vencimento.')
         valor=st.number_input('Valor conforme DAS oficial (R$)',min_value=0.0,step=0.01,format='%.2f',value=float(row.get('valor') or 0))
-        option=st.selectbox('Situação', ['A emitir','Emitida / a pagar','Paga'],index=['A emitir','Emitida / a pagar','Paga'].index(row.get('status','A emitir')))
+        option=st.selectbox('Situação', ['A emitir','Emitida / a pagar','Pagamento informado','Paga'],index=['A emitir','Emitida / a pagar','Pagamento informado','Paga'].index(row.get('status','A emitir')))
         payment=st.date_input('Data do pagamento (se pago)',value=date.fromisoformat(row['pago_em']) if row.get('pago_em') else None,format='DD/MM/YYYY')
         notes=st.text_area('Observações',value=row.get('observacoes') or '',max_chars=1000)
         pdf_guide=st.file_uploader('Guia DAS em PDF (até 8 MB)',type=['pdf'],key=f'das_guia_{key}')
@@ -95,7 +117,7 @@ def render(load_document,save_document,actor,now):
             if option == 'A emitir' and emitida:
                 raise ValueError('Após emitir a guia, selecione Emitida / a pagar.')
             upd={'status':option,'emitido_em':emitida.isoformat() if emitida else '',
-                 'vencimento':due.isoformat(),'valor':money(valor) if (valor>0 or option!='A emitir') else None,
+                 'vencimento':due.isoformat(),'valor':money(valor) if valor>0 else None,
                  'pago_em':payment.isoformat() if payment else '', 'observacoes':notes.strip()}
             if option=='Paga' and (not upd['valor'] or upd['valor']<=0):
                 raise ValueError('Informe o valor efetivamente pago conforme a guia.')

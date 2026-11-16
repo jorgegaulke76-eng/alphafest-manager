@@ -79,7 +79,7 @@ from trash_ui import render_trash_tab as _render_trash_tab
 from alpha_connect_ui import render_alpha_connect as _render_alpha_connect
 from audit_ui import render_audit_tab as _render_audit_tab
 from das_mei_ui import render as render_das_mei
-from das_mei_service import normalize as _das_mei_normalize, status_of as _das_mei_status
+from das_mei_service import normalize as _das_mei_normalize, status_of as _das_mei_status, due_alerts as _das_mei_due_alerts
 from backup_schedule_service import backup_due as _backup_due, slot_id as _backup_slot_id, reservation_is_active as _backup_reservation_active
 
 # HF33 — Marketing/Design Intelligence ficam sob demanda. O valor do template
@@ -24733,6 +24733,26 @@ def dialog_propostas_hoje_anna(propostas):
 
 
 
+def _das_mei_banner_operacional(prefixo="central"):
+    """Alerta compartilhado entre Anna e Jorge; não revela valores, PDFs ou credenciais."""
+    try:
+        dados = _das_mei_normalize(load_document("das_mei_controle_db", ARQUIVO_DAS_MEI, {"registros": {}}))
+        alertas = _das_mei_due_alerts(dados["registros"], hoje_local(), days_ahead=10, limit=3)
+    except Exception:
+        return  # Falha do lembrete nunca pode interromper operação.
+    if not alertas:
+        return
+    linhas=[]
+    for item in alertas:
+        competencia=item["competencia"][5:]+"/"+item["competencia"][:4]
+        dias=item["dias"]
+        frase=("prazo passado (conferir pagamento)" if dias<0 else
+               "vence HOJE" if dias==0 else f"vence em {dias} dia(s)")
+        linhas.append(f"**{competencia}** — {frase}")
+    st.warning("🧾 **Lembrete DAS-MEI:** " + " · ".join(linhas) +
+               ". Confira a situação; a ausência de lançamento não comprova atraso.")
+
+
 def renderizar_workspace_anna_isolado():
     registrar_atividade(obter_usuario_atual(), "Na Central Operacional", "Central da Anna")
     usuario = obter_usuario_atual()
@@ -24756,6 +24776,7 @@ def renderizar_workspace_anna_isolado():
     qtd_entregas = len(entregas_hoje_hf653)
     resumo = f"Hoje: {qtd_novos} novo(s) atendimento(s), {qtd_aguardando} aguardando cliente, {len(ativos)} pedido(s) ativo(s) e {qtd_entregas} entrega(s)."
     renderizar_boas_vindas_anna(resumo)
+    _das_mei_banner_operacional("anna")
 
     st.markdown("## 🚀 Central Operacional da Anna")
     st.caption("Atendimento, orçamento, clientes e pedidos em janelas rápidas — sem sair desta tela.")
@@ -25174,25 +25195,10 @@ if pagina_atual == "central":
         st.info("👩‍💼 **Central Operacional da Anna** — Atendimento multicanal, orçamentos, artes/projetos, controle de pedidos, entregas, pagamentos e catálogo. O canal de origem permanece identificado em cada atendimento.")
     else:
         st.info("👨‍💼 **Central de Gestão do Jorge** — visão completa da operação, inteligência, conexões, marketing, indicadores e configurações.")
-        # HF65.24.15 — lembrete de DAS na Central, sem gravar dados ou assumir pagamento.
-        _das_central = (_das_mei_normalize(load_document("das_mei_controle_db", ARQUIVO_DAS_MEI, {"registros": {}}))["registros"]
-                        if st.session_state.get("_das_mei_authorized") is True else {})
-        _das_alertas = []
-        for _competencia, _item in sorted(_das_central.items()):
-            if not isinstance(_item, dict) or _das_mei_status(_item, hoje_central) == "Paga":
-                continue
-            try:
-                _vencimento = date.fromisoformat(str(_item.get("vencimento") or ""))
-            except ValueError:
-                continue
-            _dias = (_vencimento - hoje_central).days
-            if _dias <= 10:
-                _texto = "VENCIDA" if _dias < 0 else ("vence hoje" if _dias == 0 else f"vence em {_dias} dia(s)")
-                _das_alertas.append(f"{_competencia}: {_texto}")
-        if _das_alertas:
-            st.warning("🧾 **DAS-MEI — atenção:** " + " · ".join(_das_alertas[:5]) + (" · ..." if len(_das_alertas) > 5 else ""))
-            if st.button("Abrir Controle DAS-MEI", key="das_atalho_central"):
-                rerun_na_aba("das_mei")
+        # HF65.24.16 — alerta operacional também visível sem desbloquear documentos fiscais.
+        _das_mei_banner_operacional("jorge")
+        if st.button("Abrir Controle DAS-MEI", key="das_atalho_central"):
+            rerun_na_aba("das_mei")
         # Um rerun completo significa que os indicadores desta tela acabaram de ser recalculados.
         # O fragmento do Radar roda sozinho depois e NÃO altera esta referência.
         st.session_state["_hf4_painel_atualizado_em"] = agora_local().isoformat()

@@ -9,7 +9,7 @@ from typing import Any
 DOC_KEY = "das_mei_controle_db"
 LOCAL_PATH = "das_mei_controle_db.json"
 PGMEI_URL = "https://www.gov.br/pt-br/servicos/emitir-das-para-pagamento-de-tributos-do-mei"
-STATUSES = ("A emitir", "Emitida / a pagar", "Paga")
+STATUSES = ("A emitir", "Emitida / a pagar", "Pagamento informado", "Paga")
 
 
 def date_due(year: int, month: int) -> date:
@@ -47,7 +47,7 @@ def money(value: Any) -> float | None:
 
 
 def status_of(record: dict, today: date) -> str:
-    if record.get("status") == "Paga": return "Paga"
+    if record.get("status") in ("Paga", "Pagamento informado"): return record["status"]
     try:
         due=date.fromisoformat(record.get("vencimento",""))
     except ValueError:
@@ -79,4 +79,22 @@ def totals(records: dict, year: int, today: date) -> dict:
             "a_pagar":sum(status_of(x,today)=="Emitida / a pagar" for x in values),
             "vencidas":sum(status_of(x,today)=="Vencida" for x in values),
             "pagas":sum(status_of(x,today)=="Paga" for x in values),
+            "informadas":sum(status_of(x,today)=="Pagamento informado" for x in values),
             "total_pago":round(sum(float(x.get("valor") or 0) for x in values if status_of(x,today)=="Paga"),2)}
+
+
+def due_alerts(records: dict, today: date, days_ahead: int = 10, limit: int = 3) -> list[dict]:
+    """Avisos operacionais sem valores, anexos ou credenciais fiscais.
+    Exclui as competências cujo pagamento já foi informado, embora não conferido.
+    """
+    results=[]
+    for key, record in sorted(records.items(), reverse=True):
+        if not isinstance(record, dict) or status_of(record,today) in ("Paga", "Pagamento informado"):
+            continue
+        try: due=date.fromisoformat(str(record.get("vencimento") or ""))
+        except (ValueError,TypeError): continue
+        delta=(due-today).days
+        if delta <= days_ahead:
+            results.append({"competencia": key, "vencimento":due.isoformat(), "dias":delta})
+    results.sort(key=lambda x:(x["dias"]>=0, abs(x["dias"]), x["competencia"]))
+    return results[:limit]
