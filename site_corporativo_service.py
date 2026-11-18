@@ -99,13 +99,13 @@ def _galeria_produtos_corporativos(produtos, imagem_resolver=None):
             '<div class="corp-photo-grid">'+''.join(cards)+'</div></div>')
 
 
-def corporate_page(empresa: dict, *, produtos=None, imagem_resolver=None, logo_src: str = '') -> str:
+def corporate_page(empresa: dict, *, produtos=None, imagem_resolver=None, logo_src: str = '', site_shell_html: str = '') -> str:
     telefone=_numero(empresa)
     safe_phone=html.escape(telefone,quote=True)
     # Form only builds a wa.me link on user click. No site-side storage or network submission.
     pagina = '''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Brindes corporativos em Itatiba | AlphaFest</title><meta name="description" content="Solicite orçamento de brindes e presentes personalizados para empresas em Itatiba. Canecas, kits, chaveiros, impressão 3D e papelaria."><link rel="canonical" href="https://alphafest.com.br/empresas/"><meta name="theme-color" content="#0796e8"><style>
-    *{box-sizing:border-box}body{margin:0;font-family:system-ui,Arial,sans-serif;color:#143455;background:#f3f9ff;line-height:1.5}header{background:linear-gradient(110deg,#0877cc,#08b1e4);color:#fff;padding:24px max(20px,calc((100% - 1120px)/2))}header a{color:#fff}header h1{font-size:clamp(25px,4vw,42px);margin:13px 0 4px}header p{max-width:700px;margin:0}main{max-width:1120px;margin:28px auto;padding:0 18px}.layout{display:grid;grid-template-columns:1fr 1.1fr;gap:24px;align-items:start}section,.panel{background:#fff;border:1px solid #dceafb;border-radius:18px;padding:24px;box-shadow:0 5px 22px #17466f0b}h2{margin:0 0 15px;color:#0863a7}ul{padding-left:22px}li{margin-bottom:12px}.note{color:#53718a;font-size:14px}label{display:block;font-weight:700;margin:14px 0 5px}input,select,textarea{width:100%;padding:12px;border:1px solid #b8d3ea;border-radius:9px;font:inherit;background:#fff;color:#183c5e}textarea{resize:vertical}button{width:100%;background:#16bd60;color:#fff;padding:15px;border:0;border-radius:11px;font-weight:800;font-size:16px;cursor:pointer;margin-top:20px}button:hover{background:#099e4b}.tiny{font-size:12px;color:#5b7188}footer{text-align:center;padding:22px;color:#426482}@media(max-width:760px){.layout{grid-template-columns:1fr}section,.panel{padding:18px}}
-    </style></head><body><header><a href="/">← Voltar ao site AlphaFest</a><h1>Brindes corporativos AlphaFest</h1><p>Personalizados para equipes, clientes, fornecedores, eventos e confraternizações. Orçamento feito sob medida para a sua empresa.</p></header><main><div class="layout"><section><h2>Ideias para sua empresa</h2><ul><li><strong>Canecas e copos:</strong> lembranças para equipes e clientes</li><li><strong>Chaveiros e brindes em 3D:</strong> formatos personalizados</li><li><strong>Etiquetas, adesivos e papelaria:</strong> identidade visual da sua marca</li><li><strong>Kits de fim de ano:</strong> combinações conforme quantidade e orçamento</li><li><strong>Itens para eventos:</strong> crachás, cordões e presentes promocionais</li></ul><p class="note">Valores e prazos dependem da arte, técnica, quantidade, materiais e agenda de produção. O orçamento não representa uma compra.</p><a href="/#produtos">Conhecer os produtos do catálogo</a></section><div class="panel"><h2>Solicitar orçamento</h2><p class="note">Preencha os detalhes e revise a mensagem no WhatsApp antes de enviar.</p><form id="corp-form"><label for="corp-item">O que deseja personalizar?</label><select id="corp-item" required><option value="">Selecione uma opção</option><option>Canecas e copos</option><option>Kits corporativos</option><option>Chaveiros e impressão 3D</option><option>Crachás e cordões</option><option>Adesivos, etiquetas e papelaria</option><option>Outros personalizados</option></select><label for="corp-qtd">Quantidade aproximada</label><input id="corp-qtd" type="number" min="1" max="100000" step="1" placeholder="Ex.: 30" required><label for="corp-faixa">Faixa de orçamento (opcional)</label><select id="corp-faixa"><option value="">Prefiro conversar</option><option>Até R$ 500</option><option>R$ 500 a R$ 1.000</option><option>R$ 1.000 a R$ 2.500</option><option>Acima de R$ 2.500</option></select><label for="corp-data">Data desejada (opcional)</label><input id="corp-data" type="date"><label for="corp-detalhes">Cores, personalização e detalhes</label><textarea id="corp-detalhes" rows="4" maxlength="1500" placeholder="Ex.: aplicar nossa logo nas canecas..."></textarea><button type="submit">Solicitar pelo WhatsApp</button><p class="tiny">Você será direcionado ao WhatsApp e poderá revisar a mensagem. Nenhum dado é armazenado neste formulário.</p></form></div></div></main><footer>AlphaFest · Estamos presentes em cada presente!</footer><script>
+    *{box-sizing:border-box}body{margin:0;font-family:system-ui,Arial,sans-serif;color:#143455;background:#f3f9ff;line-height:1.5}header.corp-hero{background:linear-gradient(110deg,#0877cc,#08b1e4);color:#fff;padding:24px max(20px,calc((100% - 1120px)/2))}header.corp-hero a{color:#fff}header.corp-hero h1{font-size:clamp(25px,4vw,42px);margin:13px 0 4px}header.corp-hero p{max-width:700px;margin:0}main{max-width:1120px;margin:28px auto;padding:0 18px}.layout{display:grid;grid-template-columns:1fr 1.1fr;gap:24px;align-items:start}section,.panel{background:#fff;border:1px solid #dceafb;border-radius:18px;padding:24px;box-shadow:0 5px 22px #17466f0b}h2{margin:0 0 15px;color:#0863a7}ul{padding-left:22px}li{margin-bottom:12px}.note{color:#53718a;font-size:14px}#corp-form label{display:block;font-weight:700;margin:14px 0 5px}#corp-form input,#corp-form select,#corp-form textarea{width:100%;padding:12px;border:1px solid #b8d3ea;border-radius:9px;font:inherit;background:#fff;color:#183c5e}#corp-form textarea{resize:vertical}#corp-form button{width:100%;background:#16bd60;color:#fff;padding:15px;border:0;border-radius:11px;font-weight:800;font-size:16px;cursor:pointer;margin-top:20px}#corp-form button:hover{background:#099e4b}.tiny{font-size:12px;color:#5b7188}footer.corp-simple-footer{text-align:center;padding:22px;color:#426482}@media(max-width:760px){.layout{grid-template-columns:1fr}section,.panel{padding:18px}}
+    </style></head><body><header class="corp-hero"><a href="/">← Voltar ao site AlphaFest</a><h1>Brindes corporativos AlphaFest</h1><p>Personalizados para equipes, clientes, fornecedores, eventos e confraternizações. Orçamento feito sob medida para a sua empresa.</p></header><main><div class="layout"><section><h2>Ideias para sua empresa</h2><ul><li><strong>Canecas e copos:</strong> lembranças para equipes e clientes</li><li><strong>Chaveiros e brindes em 3D:</strong> formatos personalizados</li><li><strong>Etiquetas, adesivos e papelaria:</strong> identidade visual da sua marca</li><li><strong>Kits de fim de ano:</strong> combinações conforme quantidade e orçamento</li><li><strong>Itens para eventos:</strong> crachás, cordões e presentes promocionais</li></ul><p class="note">Valores e prazos dependem da arte, técnica, quantidade, materiais e agenda de produção. O orçamento não representa uma compra.</p><a href="/#produtos">Conhecer os produtos do catálogo</a></section><div class="panel"><h2>Solicitar orçamento</h2><p class="note">Preencha os detalhes e revise a mensagem no WhatsApp antes de enviar.</p><form id="corp-form"><label for="corp-item">O que deseja personalizar?</label><select id="corp-item" required><option value="">Selecione uma opção</option><option>Canecas e copos</option><option>Kits corporativos</option><option>Chaveiros e impressão 3D</option><option>Crachás e cordões</option><option>Adesivos, etiquetas e papelaria</option><option>Outros personalizados</option></select><label for="corp-qtd">Quantidade aproximada</label><input id="corp-qtd" type="number" min="1" max="100000" step="1" placeholder="Ex.: 30" required><label for="corp-faixa">Faixa de orçamento (opcional)</label><select id="corp-faixa"><option value="">Prefiro conversar</option><option>Até R$ 500</option><option>R$ 500 a R$ 1.000</option><option>R$ 1.000 a R$ 2.500</option><option>Acima de R$ 2.500</option></select><label for="corp-data">Data desejada (opcional)</label><input id="corp-data" type="date"><label for="corp-detalhes">Cores, personalização e detalhes</label><textarea id="corp-detalhes" rows="4" maxlength="1500" placeholder="Ex.: aplicar nossa logo nas canecas..."></textarea><button type="submit">Solicitar pelo WhatsApp</button><p class="tiny">Você será direcionado ao WhatsApp e poderá revisar a mensagem. Nenhum dado é armazenado neste formulário.</p></form></div></div></main><footer class="corp-simple-footer">AlphaFest · Estamos presentes em cada presente!</footer><script>
     (function(){const form=document.getElementById('corp-form');form.addEventListener('submit',function(e){e.preventDefault();if(!form.reportValidity())return;const v=id=>document.getElementById(id).value.trim();const linhas=['Olá, AlphaFest! Gostaria de um orçamento empresarial.','Produto: '+v('corp-item'),'Quantidade aproximada: '+v('corp-qtd')];if(v('corp-faixa'))linhas.push('Orçamento pretendido: '+v('corp-faixa'));if(v('corp-data')){let d=v('corp-data').split('-');linhas.push('Data desejada: '+d.reverse().join('/'));}if(v('corp-detalhes'))linhas.push('Detalhes: '+v('corp-detalhes'));linhas.push('Podem confirmar as opções, valores e prazos?');const tel='''+repr(telefone)+''';if(!tel){alert('WhatsApp indisponível. Entre em contato pelo site.');return;}window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(linhas.join('\\n')),'_blank','noopener,noreferrer');});})();
     </script></body></html>'''
 
@@ -118,8 +118,8 @@ def corporate_page(empresa: dict, *, produtos=None, imagem_resolver=None, logo_s
             logo_src = ''
     logo_html = ('<a class="corp-logo-link" href="/" aria-label="Voltar à página inicial AlphaFest">'
                  '<img class="corp-logo" src="'+html.escape(logo_src,quote=True)+'" alt="AlphaFest Personalizados e Balões"></a>') if logo_src.startswith(('data:image/', 'https://')) else ''
-    pagina = pagina.replace('<header><a href="/">← Voltar ao site AlphaFest</a>',
-                            '<header><div class="corp-head">'+logo_html+'<a class="corp-back" href="/">← Voltar ao site AlphaFest</a></div>', 1)
+    pagina = pagina.replace('<header class="corp-hero"><a href="/">← Voltar ao site AlphaFest</a>',
+                            '<header class="corp-hero"><div class="corp-head">'+logo_html+'<a class="corp-back" href="/">← Voltar ao site AlphaFest</a></div>', 1)
     galeria = _galeria_produtos_corporativos(produtos, imagem_resolver=imagem_resolver)
     kits = ('''<div class="corp-kits" aria-label="Sugestões de kits corporativos"><h3>Sugestões de kits</h3>
     <p class="note">Composições ilustrativas, montadas conforme necessidade, quantidade e disponibilidade. Não são pacotes fechados.</p>
@@ -144,4 +144,52 @@ def corporate_page(empresa: dict, *, produtos=None, imagem_resolver=None, logo_s
     @media(max-width:380px){.corp-photo-grid{grid-template-columns:1fr}}
     '''
     pagina = pagina.replace('</style>',extra+'</style>',1)
+    if site_shell_html:
+        pagina = _usar_cabecalho_rodape_da_home(pagina, site_shell_html)
+    return pagina
+
+
+def _usar_cabecalho_rodape_da_home(pagina: str, home: str) -> str:
+    """Reaproveita elementos reais da Home, sem criar uma identidade paralela.
+
+    Opera só na cópia HTML publicada: não altera dados, catálogo ou formulário.
+    Se o layout principal mudar de modo incompatível, conserva a página atual.
+    """
+    cabecalho = re.search(r'<header class="header"[^>]*>.*?</header>', home, re.S)
+    navegacao = re.search(r'<nav class="site-nav"[^>]*>.*?</nav>', home, re.S)
+    rodape = re.search(r'<footer class="footer"[^>]*>.*?</footer>', home, re.S)
+    if not all((cabecalho, navegacao, rodape)):
+        return pagina
+    # O CSS vem da fonte oficial do site. Mantemos a folha corporativa por último.
+    estilos = re.findall(r'<style(?:\s[^>]*)?>.*?</style>', home, re.S | re.I)
+    if not estilos:
+        return pagina
+    # Toda navegação interna deve apontar para a Home, não para #anchors da subpágina.
+    cab = cabecalho.group(0)
+    nav = navegacao.group(0)
+    for ancora in ('inicio','produtos','servicos','quem-somos','contato','galeria','dicas-alphafest','novidades-alphafest'):
+        cab = cab.replace('href="#'+ancora+'"','href="/#'+ancora+'"')
+        nav = nav.replace('href="#'+ancora+'"','href="/#'+ancora+'"')
+    # A busca da Home é controlada pelo script da Home. Na página interna,
+    # conduza a pesquisa ao catálogo, não exiba um botão sem ação.
+    nav = re.sub(r'<button\b[^>]*data-site-scroll="([^"]+)"[^>]*>(.*?)</button>',
+                 lambda m: '<a href="/#'+html.escape(m.group(1), quote=True)+'">'+m.group(2)+'</a>',
+                 nav, flags=re.S)
+    cab = re.sub(r'<button\b[^>]*data-site-scroll="([^"]+)"[^>]*>(.*?)</button>',
+                 lambda m: '<a href="/#'+html.escape(m.group(1), quote=True)+'">'+m.group(2)+'</a>',
+                 cab, flags=re.S)
+    # Fallback para procura: campo de busca abre a seção Produtos da Home.
+    cab = re.sub(r'<form\b[^>]*class="([^"]*search[^"]*)"[^>]*>',
+                 lambda m: m.group(0) if 'action=' in m.group(0) else m.group(0)[:-1]+' action="/" method="get">', cab)
+    cab = re.sub(r'(<input\b(?=[^>]*type="search")[^>]*)(>)',
+                 lambda m: m.group(1) + (' name="busca"' if 'name=' not in m.group(1) else '') + m.group(2), cab)
+    # O logotipo já aparece na barra superior oficial. Evita duplicação na faixa interna.
+    pagina = re.sub(r'<div class="corp-head">.*?</div>', '', pagina, count=1, flags=re.S)
+    # Home shell encapsulado fora da seção interna.
+    pagina = pagina.replace('<header class="corp-hero">', cab+nav+'<header class="corp-hero">', 1)
+    pagina = pagina.replace('<footer class="corp-simple-footer">AlphaFest · Estamos presentes em cada presente!</footer>', rodape.group(0), 1)
+    # Importante: colocar CSS oficial ANTES do CSS corporativo para manter o formulário.
+    pagina = pagina.replace('<style>', '\n'.join(estilos)+'<style>', 1)
+    # Em dispositivos móveis, subpágina não deve exibir a barra de WhatsApp flutuante
+    # copiada da Home; o formulário corporativo já possui CTA próprio.
     return pagina

@@ -154,7 +154,7 @@ def gerar_pacote_producao(
     hoje = datetime.now(timezone.utc).date().isoformat()
     paginas = paginas_dicas(dicas_content or [], whatsapp=dicas_whatsapp)
     paginas.update(archive_pages(posts_content or [], number=dicas_whatsapp))
-    paginas["empresas/index.html"] = corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src)
+    paginas["empresas/index.html"] = corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico)
     urls_dicas = ''.join(
         f'  <url><loc>https://{DOMINIO_FINAL}/{url[:-10] if url.endswith("index.html") else url}</loc></url>\n'
         for url in sorted(paginas)
@@ -213,7 +213,7 @@ O rollback do DNS anterior continua documentado no kit HF41.
         # HF65.22 — publicacoes editoriais sao paginas estaticas opcionais.
         paginas = paginas_dicas(dicas_content or [], whatsapp=dicas_whatsapp)
         paginas.update(archive_pages(posts_content or [], number=dicas_whatsapp))
-        paginas["empresas/index.html"] = corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src)
+        paginas["empresas/index.html"] = corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico)
         for caminho, conteudo in sorted(paginas.items()):
             zf.writestr(caminho, inject_pwa(inject_whatsapp_context(with_favicon(conteudo))))
         if adsense_id:
