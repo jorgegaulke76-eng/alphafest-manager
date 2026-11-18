@@ -106,7 +106,7 @@ def extrair_pacote_publico(pacote_zip: bytes) -> Tuple[Dict[str, bytes], Dict[st
                     r"dicas/(?:[a-z0-9-]+/)?index\.html", seguro
                 ) or re.fullmatch(
                     r"novidades/(?:pagina-[1-9][0-9]*/)?index\.html", seguro
-                ):
+                ) or seguro == "empresas/index.html":
                     assets[f"/{seguro}"] = zf.read(nome)
             if "/index.html" not in assets:
                 raise CloudflarePublishError("index.html não pôde ser extraído do pacote.")
