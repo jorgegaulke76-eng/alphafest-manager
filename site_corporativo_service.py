@@ -146,6 +146,26 @@ def corporate_page(empresa: dict, *, produtos=None, imagem_resolver=None, logo_s
     pagina = pagina.replace('</style>',extra+'</style>',1)
     if site_shell_html:
         pagina = _usar_cabecalho_rodape_da_home(pagina, site_shell_html)
+    # Identificação de serviço local para resultados de busca; não inventar endereço nem avaliações.
+    import json as _seo_json
+    seo_meta = (
+        '<meta property="og:type" content="website">'
+        '<meta property="og:locale" content="pt_BR">'
+        '<meta property="og:url" content="https://alphafest.com.br/empresas/">'
+        '<meta property="og:title" content="Brindes corporativos em Itatiba | AlphaFest">'
+        '<meta property="og:description" content="Brindes e kits personalizados para empresas. Solicite orçamento de canecas, chaveiros, papelaria e impressão 3D em Itatiba.">'
+        '<meta name="twitter:card" content="summary">'
+    )
+    dados = {'@context':'https://schema.org','@graph':[
+        {'@type':'Service','name':'Brindes corporativos personalizados','serviceType':'Personalização de brindes para empresas',
+         'provider':{'@type':'Organization','name':'AlphaFest','url':'https://alphafest.com.br/'},
+         'areaServed':{'@type':'City','name':'Itatiba'},'url':'https://alphafest.com.br/empresas/'},
+        {'@type':'BreadcrumbList','itemListElement':[
+            {'@type':'ListItem','position':1,'name':'AlphaFest','item':'https://alphafest.com.br/'},
+            {'@type':'ListItem','position':2,'name':'Para Empresas','item':'https://alphafest.com.br/empresas/'}]}
+    ]}
+    seo_meta += '<script id="af-corporate-seo" type="application/ld+json">'+_seo_json.dumps(dados,ensure_ascii=False,separators=(',',':'))+'</script>'
+    pagina = pagina.replace('</head>',seo_meta+'</head>',1)
     return pagina
 
 

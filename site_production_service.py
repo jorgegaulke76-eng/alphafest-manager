@@ -155,9 +155,12 @@ def gerar_pacote_producao(
     paginas = paginas_dicas(dicas_content or [], whatsapp=dicas_whatsapp)
     paginas.update(archive_pages(posts_content or [], number=dicas_whatsapp))
     paginas["empresas/index.html"] = corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico)
+    # Todas as rotas realmente geradas entram no sitemap, sem URLs inventadas.
+    # Os caminhos de paginação ficam individuais para indexação independente.
+    urls_publicas = sorted({url[:-10] if url.endswith('index.html') else url for url in paginas})
     urls_dicas = ''.join(
-        f'  <url><loc>https://{DOMINIO_FINAL}/{url[:-10] if url.endswith("index.html") else url}</loc></url>\n'
-        for url in sorted(paginas)
+        f'  <url><loc>https://{DOMINIO_FINAL}/{url}</loc><lastmod>{hoje}</lastmod></url>\n'
+        for url in urls_publicas
     )
     sitemap = f'''<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://{DOMINIO_FINAL}/</loc>\n    <lastmod>{hoje}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n{urls_dicas}</urlset>\n'''
     headers = """/sw.js

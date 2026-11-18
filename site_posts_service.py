@@ -137,5 +137,27 @@ def archive_pages(posts, number=''):
         next_link = ('<a href="/novidades/pagina-' + str(i+2) + '/">Próxima →</a>' if i+1<pages else '')
         pagination = '<nav class="afposts-pages">' + prev_link + '<span>Página ' + str(i+1) + ' de ' + str(pages) + '</span>' + next_link + '</nav>'
         body = ('''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="index,follow"><title>Novidades &amp; Ofertas | AlphaFest</title><meta name="description" content="Campanhas, lançamentos e novidades da AlphaFest em Itatiba"><link rel="icon" href="/favicon.ico"><style>body{font-family:Arial,sans-serif;background:#f5fbff;margin:0;color:#123a5b}header{background:#075da5;color:white;padding:22px max(20px,calc((100vw - 1240px)/2))}header a{color:white;text-decoration:none;font-weight:800}.afposts-pages{display:flex;justify-content:space-between;gap:14px;padding:28px 0}.afposts-pages a{color:#075da5;font-weight:800}footer{padding:30px;text-align:center;background:#fff}</style><style>''' + CSS + '''</style></head><body><header><a href="/">AlphaFest</a> · Novidades &amp; Ofertas</header><main class="afposts-section"><div class="afposts-container"><div class="afposts-head"><div><h1>Novidades &amp; Ofertas</h1><p>Confira nossas artes, campanhas e produtos personalizados.</p></div><a class="afposts-all" href="/">Voltar à loja</a></div><div class="afposts-grid">''' + cards + '''</div>''' + pagination + '''</div></main><footer>AlphaFest · Itatiba/SP · <a href="/">Site oficial</a></footer></body></html>''')
+        endereco = 'https://alphafest.com.br/novidades/' + (f'pagina-{i+1}/' if i else '')
+        titulo_seo = 'Novidades e ofertas da AlphaFest em Itatiba' + (f' — página {i+1}' if i else '')
+        descricao_seo = 'Veja campanhas e artes de produtos personalizados, balões e presentes da AlphaFest em Itatiba. Consulte pelo WhatsApp.'
+        from html import escape as _escape_seo
+        from json import dumps as _dumps_seo
+        complemento = (
+            f'<link rel="canonical" href="{_escape_seo(endereco, quote=True)}">'
+            f'<meta property="og:type" content="website">'
+            f'<meta property="og:locale" content="pt_BR">'
+            f'<meta property="og:title" content="{_escape_seo(titulo_seo, quote=True)}">'
+            f'<meta property="og:description" content="{_escape_seo(descricao_seo, quote=True)}">'
+            f'<meta property="og:url" content="{_escape_seo(endereco, quote=True)}">'
+            f'<meta name="twitter:card" content="summary">'
+        )
+        trilha = {'@context':'https://schema.org','@type':'BreadcrumbList','itemListElement':[
+            {'@type':'ListItem','position':1,'name':'AlphaFest','item':'https://alphafest.com.br/'},
+            {'@type':'ListItem','position':2,'name':'Novidades e Ofertas','item':'https://alphafest.com.br/novidades/'},
+        ]}
+        complemento += '<script type="application/ld+json">'+_dumps_seo(trilha,ensure_ascii=False,separators=(',',':'))+'</script>'
+        body = body.replace('</head>', complemento+'</head>', 1)
+        body = body.replace('<title>Novidades &amp; Ofertas | AlphaFest</title>',
+                            '<title>'+_escape_seo(titulo_seo)+'</title>', 1)
         result['novidades/index.html' if i==0 else f'novidades/pagina-{i+1}/index.html'] = body
     return result
