@@ -1,4 +1,4 @@
-"""HF65.24.21 — Detecção e remoção segura de artes repetidas."""
+"""HF65.24.22 — Correção da seleção reativa de artes duplicadas."""
 from __future__ import annotations
 from datetime import date, datetime
 from uuid import uuid4
@@ -58,16 +58,29 @@ def render_duplicates(posts, save, clear_cache):
                         st.caption(f'↳ Cópia: {copy.get("title") or "Sem título"} · {copy.get("status", "rascunho")} · ID {copy["id"][-6:]}')
         st.divider()
         names = {p['id']: f'{p.get("title") or "Sem título"} · {p.get("category") or "Outros"} · ID {p["id"][-6:]}' for group in groups for p in group[1:]}
-        with st.form('afposts_remove_duplicates', clear_on_submit=False):
-            remove_all = st.checkbox(f'Selecionar todas as {len(extra_ids)} cópias idênticas', value=False)
-            selected = st.multiselect('Ou selecione apenas as cópias que deseja excluir', extra_ids,
-                                      default=extra_ids if remove_all else [],
-                                      format_func=lambda k: names.get(k,k), disabled=remove_all)
-            ids = set(extra_ids if remove_all else selected)
-            st.caption(f'{len(ids)} cópia(s) serão excluídas do cadastro. {len(posts)-len(ids)} registros serão mantidos.')
-            confirmation = st.checkbox('Confirmo que revisei as cópias e autorizo a exclusão definitiva dos registros selecionados', value=False)
-            clicked = st.form_submit_button('🗑️ Excluir cópias selecionadas do Manager',
-                                            disabled=not ids or not confirmation, use_container_width=True)
+        # Streamlit forms do not rerun on checkbox changes. A submit button whose
+        # disabled state depends on form values can therefore never be enabled.
+        # Keep these controls outside a form so selection and confirmation rerun the UI.
+        remove_all = st.checkbox(
+            f'Selecionar todas as {len(extra_ids)} cópias idênticas',
+            value=False, key='afposts_duplicate_remove_all',
+        )
+        selected = st.multiselect(
+            'Ou selecione apenas as cópias que deseja excluir', extra_ids,
+            format_func=lambda k: names.get(k, k),
+            disabled=remove_all, key='afposts_duplicate_selected',
+        )
+        ids = set(extra_ids if remove_all else selected)
+        st.caption(f'{len(ids)} cópia(s) serão excluídas do cadastro. {len(posts)-len(ids)} registros serão mantidos.')
+        confirmation = st.checkbox(
+            'Confirmo que revisei as cópias e autorizo a exclusão definitiva dos registros selecionados',
+            value=False, key='afposts_duplicate_confirm',
+        )
+        clicked = st.button(
+            '🗑️ Excluir cópias selecionadas do Manager',
+            disabled=not ids or not confirmation,
+            use_container_width=True, key='afposts_duplicate_delete',
+        )
         if clicked:
             # Always retain the keeper, even if a form state is malformed.
             removable = {p['id'] for group in groups for p in group[1:]}
