@@ -28608,6 +28608,9 @@ if pagina_atual == "site":
                     dicas_content=_dicas_hf6522,
                     dicas_whatsapp=empresa_vitrine_hf59.get("whatsapp_catalogo") or empresa_vitrine_hf59.get("celular") or "",
                     posts_content=_posts_hf652417,
+                    corporate_products=catalogo_site_hf35,
+                    corporate_logo_src=logo_src_hf59,
+                    corporate_image_resolver=_catalogo_html_src_imagem,
                 )
                 return _html, _zip
 

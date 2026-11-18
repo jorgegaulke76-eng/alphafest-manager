@@ -2,6 +2,10 @@
 from __future__ import annotations
 import html
 import re
+import base64
+import io
+from pathlib import Path
+from urllib.parse import quote
 
 
 def _numero(empresa):
@@ -32,12 +36,112 @@ def inject_corporate_home(pagina: str) -> str:
     return pagina
 
 
-def corporate_page(empresa: dict) -> str:
+def _foto_leve(src: str) -> str:
+    """Miniatura derivada para a vitrine, nunca modifica a imagem original."""
+    if not src.startswith('data:image/'):
+        return src if src.startswith(('https://', 'http://')) else ''
+    try:
+        from PIL import Image
+        cabecalho, dados = src.split(',', 1)
+        if 'base64' not in cabecalho:
+            return ''
+        foto = Image.open(io.BytesIO(base64.b64decode(dados)))
+        foto.thumbnail((480, 420))
+        if foto.mode not in ('RGB', 'RGBA'):
+            foto = foto.convert('RGB')
+        arquivo = io.BytesIO()
+        foto.save(arquivo, format='WEBP', quality=76, method=3)
+        return 'data:image/webp;base64,' + base64.b64encode(arquivo.getvalue()).decode('ascii')
+    except Exception:
+        return ''
+
+
+def _galeria_produtos_corporativos(produtos, imagem_resolver=None):
+    """Somente itens publicados no Catálogo oficial; nenhuma imagem de banco paralela."""
+    try:
+        from site_vitrine_service import selecionar_produtos_vitrine
+        selecionados = selecionar_produtos_vitrine(produtos or [], usar_taxonomia_catalogo=False)
+    except Exception:
+        return ''
+    grupos = (
+        ('Canecas e copos', ('caneca', 'copo', 'taça', 'squeeze', 'garrafa')),
+        ('Brindes e chaveiros', ('chaveiro', 'brinde', '3d', 'troféu')),
+        ('Papelaria e etiquetas', ('etiqueta', 'adesivo', 'papelaria', 'tag', 'cartão')),
+        ('Eventos e equipes', ('crachá', 'cordão', 'ecobag', 'camiseta', 'sacola')),
+    )
+    cards = []
+    usados = set()
+    for rotulo, termos in grupos:
+        for item in selecionados:
+            nome = str(item.get('nome') or '').strip()
+            src = str(item.get('imagem_principal') or '').strip()
+            chave = (nome.casefold(), src)
+            if not nome or not src or chave in usados:
+                continue
+            corpus = ' '.join([nome, str(item.get('categoria') or ''), str(item.get('subcategoria') or '')]).casefold()
+            if not any(t in corpus for t in termos):
+                continue
+            if imagem_resolver:
+                try:
+                    src = str(imagem_resolver(src) or '')
+                except Exception:
+                    continue
+            thumb = _foto_leve(src)
+            if not thumb:
+                continue
+            usados.add(chave)
+            cards.append('<figure class="corp-prod"><img src="'+html.escape(thumb,quote=True)+'" loading="lazy" decoding="async" alt="'+html.escape(nome,quote=True)+'"><figcaption>'+html.escape(nome)+'</figcaption></figure>')
+            break
+    if not cards:
+        return ''
+    return ('<div class="corp-real-gallery"><h3>Alguns dos nossos produtos</h3>'
+            '<p class="note">Fotos de produtos do Catálogo AlphaFest. Modelos e personalizações sob consulta.</p>'
+            '<div class="corp-photo-grid">'+''.join(cards)+'</div></div>')
+
+
+def corporate_page(empresa: dict, *, produtos=None, imagem_resolver=None, logo_src: str = '') -> str:
     telefone=_numero(empresa)
     safe_phone=html.escape(telefone,quote=True)
     # Form only builds a wa.me link on user click. No site-side storage or network submission.
-    return '''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Brindes corporativos em Itatiba | AlphaFest</title><meta name="description" content="Solicite orçamento de brindes e presentes personalizados para empresas em Itatiba. Canecas, kits, chaveiros, impressão 3D e papelaria."><link rel="canonical" href="https://alphafest.com.br/empresas/"><meta name="theme-color" content="#0796e8"><style>
+    pagina = '''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Brindes corporativos em Itatiba | AlphaFest</title><meta name="description" content="Solicite orçamento de brindes e presentes personalizados para empresas em Itatiba. Canecas, kits, chaveiros, impressão 3D e papelaria."><link rel="canonical" href="https://alphafest.com.br/empresas/"><meta name="theme-color" content="#0796e8"><style>
     *{box-sizing:border-box}body{margin:0;font-family:system-ui,Arial,sans-serif;color:#143455;background:#f3f9ff;line-height:1.5}header{background:linear-gradient(110deg,#0877cc,#08b1e4);color:#fff;padding:24px max(20px,calc((100% - 1120px)/2))}header a{color:#fff}header h1{font-size:clamp(25px,4vw,42px);margin:13px 0 4px}header p{max-width:700px;margin:0}main{max-width:1120px;margin:28px auto;padding:0 18px}.layout{display:grid;grid-template-columns:1fr 1.1fr;gap:24px;align-items:start}section,.panel{background:#fff;border:1px solid #dceafb;border-radius:18px;padding:24px;box-shadow:0 5px 22px #17466f0b}h2{margin:0 0 15px;color:#0863a7}ul{padding-left:22px}li{margin-bottom:12px}.note{color:#53718a;font-size:14px}label{display:block;font-weight:700;margin:14px 0 5px}input,select,textarea{width:100%;padding:12px;border:1px solid #b8d3ea;border-radius:9px;font:inherit;background:#fff;color:#183c5e}textarea{resize:vertical}button{width:100%;background:#16bd60;color:#fff;padding:15px;border:0;border-radius:11px;font-weight:800;font-size:16px;cursor:pointer;margin-top:20px}button:hover{background:#099e4b}.tiny{font-size:12px;color:#5b7188}footer{text-align:center;padding:22px;color:#426482}@media(max-width:760px){.layout{grid-template-columns:1fr}section,.panel{padding:18px}}
     </style></head><body><header><a href="/">← Voltar ao site AlphaFest</a><h1>Brindes corporativos AlphaFest</h1><p>Personalizados para equipes, clientes, fornecedores, eventos e confraternizações. Orçamento feito sob medida para a sua empresa.</p></header><main><div class="layout"><section><h2>Ideias para sua empresa</h2><ul><li><strong>Canecas e copos:</strong> lembranças para equipes e clientes</li><li><strong>Chaveiros e brindes em 3D:</strong> formatos personalizados</li><li><strong>Etiquetas, adesivos e papelaria:</strong> identidade visual da sua marca</li><li><strong>Kits de fim de ano:</strong> combinações conforme quantidade e orçamento</li><li><strong>Itens para eventos:</strong> crachás, cordões e presentes promocionais</li></ul><p class="note">Valores e prazos dependem da arte, técnica, quantidade, materiais e agenda de produção. O orçamento não representa uma compra.</p><a href="/#produtos">Conhecer os produtos do catálogo</a></section><div class="panel"><h2>Solicitar orçamento</h2><p class="note">Preencha os detalhes e revise a mensagem no WhatsApp antes de enviar.</p><form id="corp-form"><label for="corp-item">O que deseja personalizar?</label><select id="corp-item" required><option value="">Selecione uma opção</option><option>Canecas e copos</option><option>Kits corporativos</option><option>Chaveiros e impressão 3D</option><option>Crachás e cordões</option><option>Adesivos, etiquetas e papelaria</option><option>Outros personalizados</option></select><label for="corp-qtd">Quantidade aproximada</label><input id="corp-qtd" type="number" min="1" max="100000" step="1" placeholder="Ex.: 30" required><label for="corp-faixa">Faixa de orçamento (opcional)</label><select id="corp-faixa"><option value="">Prefiro conversar</option><option>Até R$ 500</option><option>R$ 500 a R$ 1.000</option><option>R$ 1.000 a R$ 2.500</option><option>Acima de R$ 2.500</option></select><label for="corp-data">Data desejada (opcional)</label><input id="corp-data" type="date"><label for="corp-detalhes">Cores, personalização e detalhes</label><textarea id="corp-detalhes" rows="4" maxlength="1500" placeholder="Ex.: aplicar nossa logo nas canecas..."></textarea><button type="submit">Solicitar pelo WhatsApp</button><p class="tiny">Você será direcionado ao WhatsApp e poderá revisar a mensagem. Nenhum dado é armazenado neste formulário.</p></form></div></div></main><footer>AlphaFest · Estamos presentes em cada presente!</footer><script>
     (function(){const form=document.getElementById('corp-form');form.addEventListener('submit',function(e){e.preventDefault();if(!form.reportValidity())return;const v=id=>document.getElementById(id).value.trim();const linhas=['Olá, AlphaFest! Gostaria de um orçamento empresarial.','Produto: '+v('corp-item'),'Quantidade aproximada: '+v('corp-qtd')];if(v('corp-faixa'))linhas.push('Orçamento pretendido: '+v('corp-faixa'));if(v('corp-data')){let d=v('corp-data').split('-');linhas.push('Data desejada: '+d.reverse().join('/'));}if(v('corp-detalhes'))linhas.push('Detalhes: '+v('corp-detalhes'));linhas.push('Podem confirmar as opções, valores e prazos?');const tel='''+repr(telefone)+''';if(!tel){alert('WhatsApp indisponível. Entre em contato pelo site.');return;}window.open('https://wa.me/'+tel+'?text='+encodeURIComponent(linhas.join('\\n')),'_blank','noopener,noreferrer');});})();
     </script></body></html>'''
+
+    # HF65.24.27 — identidade visual oficial e referências reais do catálogo.
+    if not logo_src:
+        try:
+            arquivo = Path(__file__).resolve().parent / 'assets' / 'mascotes' / 'logo_wordmark.webp'
+            logo_src = 'data:image/webp;base64,' + base64.b64encode(arquivo.read_bytes()).decode('ascii')
+        except Exception:
+            logo_src = ''
+    logo_html = ('<a class="corp-logo-link" href="/" aria-label="Voltar à página inicial AlphaFest">'
+                 '<img class="corp-logo" src="'+html.escape(logo_src,quote=True)+'" alt="AlphaFest Personalizados e Balões"></a>') if logo_src.startswith(('data:image/', 'https://')) else ''
+    pagina = pagina.replace('<header><a href="/">← Voltar ao site AlphaFest</a>',
+                            '<header><div class="corp-head">'+logo_html+'<a class="corp-back" href="/">← Voltar ao site AlphaFest</a></div>', 1)
+    galeria = _galeria_produtos_corporativos(produtos, imagem_resolver=imagem_resolver)
+    kits = ('''<div class="corp-kits" aria-label="Sugestões de kits corporativos"><h3>Sugestões de kits</h3>
+    <p class="note">Composições ilustrativas, montadas conforme necessidade, quantidade e disponibilidade. Não são pacotes fechados.</p>
+    <div class="corp-kit"><strong>Essencial</strong><span>Cartão ou tag personalizada + lembrança simples</span></div>
+    <div class="corp-kit"><strong>Intermediário</strong><span>Caneca ou copo personalizado + embalagem e mensagem</span></div>
+    <div class="corp-kit"><strong>Especial</strong><span>Combinação de brindes personalizados com apresentação para a equipe</span></div>
+    <a class="corp-kit-cta" href="#corp-form">Solicitar composição personalizada</a></div>''')
+    pagina = pagina.replace('<p class="note">Valores e prazos dependem', galeria+kits+'<p class="note">Valores e prazos dependem', 1)
+    extra = '''
+    .corp-head{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+    .corp-logo{width:min(300px,75vw);max-height:94px;object-fit:contain;object-position:left center}
+    .corp-head .corp-back{font-size:14px;font-weight:600;color:#fff}
+    .corp-real-gallery{margin:24px 0 18px}
+    .corp-real-gallery h3,.corp-kits h3{margin:0 0 8px;color:#0863a7;font-size:19px}
+    .corp-photo-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+    .corp-prod{margin:0;border:1px solid #dceafb;border-radius:13px;overflow:hidden;background:#f6fbff}
+    .corp-prod img{display:block;width:100%;height:145px;object-fit:contain;background:#fff}
+    .corp-prod figcaption{font-size:12px;font-weight:700;padding:9px;color:#143455;line-height:1.4}
+    .corp-kits{margin:22px 0 16px}.corp-kit{border:1px solid #dceafb;border-radius:12px;padding:12px;margin:9px 0;display:flex;flex-direction:column;gap:3px;background:#f8fcff}
+    .corp-kit strong{color:#075f9f}.corp-kit span{font-size:13px;color:#405e79}
+    .corp-kit-cta{display:inline-block;margin:10px 0;color:#006cb8;font-weight:700}
+    @media(max-width:380px){.corp-photo-grid{grid-template-columns:1fr}}
+    '''
+    pagina = pagina.replace('</style>',extra+'</style>',1)
+    return pagina
