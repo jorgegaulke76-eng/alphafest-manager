@@ -1,4 +1,4 @@
-"""HF65.24.18 — Administração simplificada das artes diárias no site."""
+"""HF65.24.19 — Aprovação em lote das artes comerciais."""
 from __future__ import annotations
 from datetime import date, datetime
 from uuid import uuid4
@@ -20,7 +20,7 @@ def render(load, save, clear_cache):
         with st.expander('📥 Importar várias artes de uma vez', expanded=False):
             uploads = st.file_uploader('Selecione várias imagens prontas (PNG, JPG ou WEBP)',type=['png','jpg','jpeg','webp'],accept_multiple_files=True,key='afposts_bulk')
             bulk_cat = st.selectbox('Categoria para este lote',CATEGORIES,key='afposts_bulk_cat')
-            st.caption('O lote entra como RASCUNHO; você poderá editar títulos e aprovar as artes individualmente.')
+            st.caption('O lote entra como RASCUNHO; use a aprovação em lote abaixo para liberar várias artes de uma vez.')
             if st.button('Importar lote como rascunho',disabled=not uploads,key='afposts_import'):
                 created=[]
                 try:
@@ -41,6 +41,39 @@ def render(load, save, clear_cache):
                         st.error('O banco não confirmou o salvamento; nada foi publicado.')
                 except Exception as exc:
                     st.error('Não foi possível importar: '+str(exc)[:180])
+        with st.expander('✅ Aprovar ou retirar várias artes de uma vez', expanded=bool(posts and not approved)):
+            st.caption('Selecione as artes para mudar o status. Essa ação apenas salva no Manager: a publicação no Cloudflare continua manual.')
+            drafts=[p for p in posts if p['status']!='publicado']
+            published_items=[p for p in posts if p['status']=='publicado']
+            operation=st.radio('Ação em lote', ['Aprovar rascunhos para o site','Retirar publicações do site'], horizontal=True, key='afposts_action')
+            candidates=drafts if operation.startswith('Aprovar') else published_items
+            if not candidates:
+                st.info('Não há artes para esta ação.')
+            else:
+                all_selected=st.checkbox(f'Selecionar todas ({len(candidates)} artes)',key='afposts_select_all')
+                options=[p['id'] for p in candidates]
+                title_by_id={p['id']:f"{p['title'] or 'Arte sem título'} · {p['category']} · {p['id'][-5:]}" for p in candidates}
+                selection=st.multiselect('Ou escolha artes específicas',options=options,
+                                         default=options if all_selected else [],
+                                         format_func=lambda k:title_by_id.get(k,k),key='afposts_select_ids',
+                                         disabled=all_selected)
+                targets=options if all_selected else selection
+                st.caption(f'{len(targets)} arte(s) selecionada(s) de {len(candidates)} disponíveis.')
+                confirm=st.checkbox('Conferi as artes selecionadas e confirmo a alteração',key='afposts_confirm_bulk')
+                action_label='✅ Aprovar artes selecionadas' if operation.startswith('Aprovar') else '📝 Retirar artes selecionadas'
+                if st.button(action_label,disabled=not targets or not confirm,key='afposts_apply_bulk',use_container_width=True):
+                    selected_ids=set(targets)
+                    desired='publicado' if operation.startswith('Aprovar') else 'rascunho'
+                    updated=[{**p,'status':desired} if p['id'] in selected_ids else p for p in posts]
+                    try:
+                        if save(updated):
+                            clear_cache()
+                            st.success(f'{len(selected_ids)} arte(s) atualizada(s). Prepare a prévia e publique no Cloudflare após conferir.')
+                            st.rerun()
+                        else:
+                            st.error('A gravação não foi confirmada pelo banco. Nenhum item foi publicado.')
+                    except Exception as exc:
+                        st.error('Não foi possível salvar o lote: '+str(exc)[:180])
         choices={'__new__':'➕ Nova publicação'}
         choices.update({p['id']:(p['title'] or 'Sem título')+' · '+p['status'] for p in reversed(posts)})
         selected=st.selectbox('Editar publicação',list(choices),format_func=lambda k:choices[k],key='afposts_selected')
