@@ -21,6 +21,7 @@ from site_dicas_multicanal_service import inserir_chamada_dicas
 from site_posts_service import inject_home as inject_posts_home
 from site_carrinho_orcamento_service import inject_cart
 from site_vitrine_service import gerar_html_vitrine
+from site_entrega_rapida_service import inject_fast_delivery
 from site_galeria_service import gerar_fragmento_galeria, selecionar_trabalhos_site
 from site_visual_hf48_service import aplicar_visual_hf48
 from site_metrics_service import inject_tracking
@@ -410,6 +411,8 @@ def gerar_html_site_completo(
                 pagina = (pagina[:nav_match.start(3)] + ''.join(novos_links) + pagina[nav_match.start(3):])
         pagina = pagina.replace('</head>', '<style id="hf65248-nav-style">#depoimentos,#dicas-alphafest,#novidades-alphafest{scroll-margin-top:170px}@media(max-width:620px){#depoimentos,#dicas-alphafest,#novidades-alphafest{scroll-margin-top:125px}}</style></head>', 1)
 
+    # HF65.24.25 — seção comercial derivada do Catálogo Oficial, sem duplicar produtos.
+    pagina = inject_fast_delivery(pagina, catalogo_lista)
     pagina = inject_cart(pagina, empresa)
     pagina = inject_tracking(pagina, enabled=not modo_preview)
     return pagina

@@ -36322,6 +36322,12 @@ if pagina_atual == "catalogo":
                 "Produto em destaque", value=bool(item_edicao.get("Destaque", False)),
                 key=f"cat_destaque_{sufixo}"
             )
+            entrega_rapida_cat = st.checkbox(
+                "⚡ Destacar na vitrine de entrega rápida (prazo sujeito à confirmação)",
+                value=bool(item_edicao.get("EntregaRapidaSite", False)),
+                key=f"cat_entrega_rapida_{sufixo}",
+                help="Só aparece no site se o produto estiver publicado e pronto. Não promete estoque nem entrega imediata.",
+            )
 
         b1, b2 = st.columns(2)
         if item_edicao:
@@ -36473,7 +36479,7 @@ if pagina_atual == "catalogo":
                     "ObservacaoInterna": observacao_interna.strip(), "PalavrasChave": palavras_chave.strip(),
                     "LegendaSocial": legenda_instagram.strip(), "Hashtags": hashtags.strip(),
                     "DescricaoMercadoLivre": texto_ml.strip(), "DescricaoShopee": texto_shopee.strip(),
-                    "PublicarSite": publicar_site, "ExibirPrecoSite": bool(exibir_preco_site), "Destaque": destaque_cat,
+                    "PublicarSite": publicar_site, "ExibirPrecoSite": bool(exibir_preco_site), "Destaque": destaque_cat, "EntregaRapidaSite": bool(entrega_rapida_cat),
                     "CategoriasExtrasSite": [
                         str(cat).strip() for cat in categorias_extras_site_cat
                         if str(cat).strip() and str(cat).strip().casefold() != categoria_cat.strip().casefold()
@@ -36858,6 +36864,7 @@ if pagina_atual == "catalogo":
                     "💰 Mostrar preço": bool(_prod_hf492.get("ExibirPrecoSite", False)),
                     "⭐ Destaque": bool(_prod_hf492.get("Destaque", False)),
                     "🎠 Carrossel": bool(_prod_hf492.get("CarrosselSite", False)),
+                    "⚡ Entrega rápida": bool(_prod_hf492.get("EntregaRapidaSite", False)),
                 })
 
             # HF51.4-HF3 — atalhos de carrossel sazonal sem criar cadastro paralelo.
@@ -36980,6 +36987,11 @@ if pagina_atual == "catalogo":
                             help="Dá prioridade visual ao produto na vitrine.",
                             width="small",
                         ),
+                        "⚡ Entrega rápida": st.column_config.CheckboxColumn(
+                            "⚡ Entrega rápida",
+                            help="Destaca na seção de entrega rápida. Consulte prazo e disponibilidade antes de confirmar.",
+                            width="small",
+                        ),
                         "🎠 Carrossel": st.column_config.CheckboxColumn(
                             "🎠 Carrossel",
                             help="Mostra o produto no carrossel comercial logo abaixo de Explore por categoria. Recomendado: até 10 itens.",
@@ -36999,11 +37011,13 @@ if pagina_atual == "catalogo":
                         _novo_preco_hf492 = bool(_linha_hf492.get("💰 Mostrar preço", False))
                         _novo_destaque_hf492 = bool(_linha_hf492.get("⭐ Destaque", False))
                         _novo_carrossel_hf501 = bool(_linha_hf492.get("🎠 Carrossel", False))
+                        _novo_rapida_hf6525 = bool(_linha_hf492.get("⚡ Entrega rápida", False))
                         if (
                             _novo_publicar_hf492 != bool(_produto_hf492.get("PublicarSite", False))
                             or _novo_preco_hf492 != bool(_produto_hf492.get("ExibirPrecoSite", False))
                             or _novo_destaque_hf492 != bool(_produto_hf492.get("Destaque", False))
                             or _novo_carrossel_hf501 != bool(_produto_hf492.get("CarrosselSite", False))
+                            or _novo_rapida_hf6525 != bool(_produto_hf492.get("EntregaRapidaSite", False))
                         ):
                             _hf492_mudancas.append((
                                 _idx_catalogo_hf492,
@@ -37011,17 +37025,19 @@ if pagina_atual == "catalogo":
                                 _novo_preco_hf492,
                                 _novo_destaque_hf492,
                                 _novo_carrossel_hf501,
+                                _novo_rapida_hf6525,
                             ))
 
                 if _hf492_mudancas:
                     _catalogo_hf492 = [dict(p or {}) for p in (catalogo or [])]
                     _agora_hf492 = agora_local().isoformat(timespec="seconds")
-                    for _idx_catalogo_hf492, _pub_hf492, _preco_hf492, _dest_hf492, _car_hf501 in _hf492_mudancas:
+                    for _idx_catalogo_hf492, _pub_hf492, _preco_hf492, _dest_hf492, _car_hf501, _rapida_hf6525 in _hf492_mudancas:
                         _registro_hf492 = dict(_catalogo_hf492[_idx_catalogo_hf492] or {})
                         _registro_hf492["PublicarSite"] = bool(_pub_hf492)
                         _registro_hf492["ExibirPrecoSite"] = bool(_preco_hf492)
                         _registro_hf492["Destaque"] = bool(_dest_hf492)
                         _registro_hf492["CarrosselSite"] = bool(_car_hf501)
+                        _registro_hf492["EntregaRapidaSite"] = bool(_rapida_hf6525)
                         _registro_hf492["AtualizadoEm"] = _agora_hf492
                         _registro_hf492["EdicaoRapidaSiteHF49"] = {
                             "quando": _agora_hf492,
