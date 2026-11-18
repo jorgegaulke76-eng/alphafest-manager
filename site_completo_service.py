@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, Iterable, Optional
 from urllib.parse import quote
 
 from site_dicas_multicanal_service import inserir_chamada_dicas
+from site_posts_service import inject_home as inject_posts_home
 from site_vitrine_service import gerar_html_vitrine
 from site_galeria_service import gerar_fragmento_galeria, selecionar_trabalhos_site
 from site_visual_hf48_service import aplicar_visual_hf48
@@ -110,6 +111,7 @@ def gerar_html_site_completo(
     campaign_force_preview: bool = False,
     home_content_config: Optional[Dict[str, Any]] = None,
     dicas_content: Optional[Iterable[Dict[str, Any]]] = None,
+    posts_content: Optional[Iterable[Dict[str, Any]]] = None,
 ) -> str:
     """Gera o site completo sem publicar ou persistir qualquer dado.
 
@@ -377,6 +379,7 @@ def gerar_html_site_completo(
 
     # HF52.1: somente a versão pública coleta métricas. Prévia interna não conta acesso.
     pagina = inserir_chamada_dicas(pagina, list(dicas_content or []), modo_preview=bool(modo_preview))
+    pagina = inject_posts_home(pagina, list(posts_content or []), number, preview=bool(modo_preview))
 
     # HF65.24.8 — links no menu superior para as seções multimídia e editorial.
     # Só exibir o destino quando a seção existir neste HTML: rascunhos não
@@ -387,6 +390,8 @@ def gerar_html_site_completo(
         novos_destinos.append(("depoimentos", "Depoimentos"))
     if 'id="dicas-alphafest"' in pagina:
         novos_destinos.append(("dicas-alphafest", "Dicas & Inspirações"))
+    if 'id="novidades-alphafest"' in pagina:
+        novos_destinos.append(("novidades-alphafest", "Novidades & Ofertas"))
     if novos_destinos:
         nav_match = re.search(r'(<nav class="site-nav"[^>]*>\s*<div class="site-nav-in"[^>]*>)(.*?)(</div>\s*</nav>)', pagina, flags=re.S)
         if nav_match:
@@ -402,7 +407,7 @@ def gerar_html_site_completo(
                     novos_links.append(f'<a href="#{destino}">{rotulo}</a>')
             if novos_links:
                 pagina = (pagina[:nav_match.start(3)] + ''.join(novos_links) + pagina[nav_match.start(3):])
-        pagina = pagina.replace('</head>', '<style id="hf65248-nav-style">#depoimentos,#dicas-alphafest{scroll-margin-top:170px}@media(max-width:620px){#depoimentos,#dicas-alphafest{scroll-margin-top:125px}}</style></head>', 1)
+        pagina = pagina.replace('</head>', '<style id="hf65248-nav-style">#depoimentos,#dicas-alphafest,#novidades-alphafest{scroll-margin-top:170px}@media(max-width:620px){#depoimentos,#dicas-alphafest,#novidades-alphafest{scroll-margin-top:125px}}</style></head>', 1)
 
     pagina = inject_tracking(pagina, enabled=not modo_preview)
     return pagina

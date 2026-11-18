@@ -49,6 +49,8 @@ from site_cutover_service import gerar_kit_pre_virada as _site_gerar_kit_pre_vir
 from site_production_service import gerar_pacote_producao as _site_gerar_pacote_producao, resumo_producao as _site_resumo_producao
 from site_adsense_service import DEFAULT_ADSENSE_CONFIG as _site_adsense_default, normalize_adsense_config as _site_adsense_normalize, normalizar_publisher_id as _site_adsense_normalizar_id
 from site_dicas_multicanal_service import DEFAULT_DICAS as _site_dicas_default, normalize_dicas as _site_dicas_normalize, youtube_export_text as _site_youtube_export_text
+from site_posts_service import normalize as _site_posts_normalize
+from site_posts_ui import render as _site_posts_render
 from site_youtube_multicanal_service import exportar_pacote_youtube as _site_youtube_gerar_pacote, gerar_short_mp4 as _site_youtube_gerar_mp4, publicar_video_privado_youtube as _site_youtube_publicar_privado
 from site_youtube_oauth_service import (
     config_oauth as _yt23_config, configurado as _yt23_configurado,
@@ -887,6 +889,7 @@ ARQUIVO_SITE_CAMPAIGN = "site_campaign_db.json"
 ARQUIVO_SITE_HOME_CONTENT = "site_home_content_db.json"
 ARQUIVO_SITE_ADSENSE = "site_adsense_db.json"
 ARQUIVO_SITE_DICAS = "site_dicas_multicanal_db.json"
+ARQUIVO_SITE_POSTS = "site_posts_comerciais_db.json"
 ARQUIVO_YOUTUBE_OAUTH = "site_youtube_oauth_db.json"
 CANAIS_ATENDIMENTO = ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo", "Telefone", "Balcão", "Outro"]
 VERSAO_APP = APP_VERSION
@@ -1022,6 +1025,12 @@ def carregar_dicas_multicanal(force_refresh=False):
 
 def salvar_dicas_multicanal(conteudos):
     return bool(save_document("site_dicas_multicanal_db", _site_dicas_normalize(conteudos), ARQUIVO_SITE_DICAS))
+
+def carregar_posts_site(force_refresh=False):
+    return _site_posts_normalize(load_document("site_posts_comerciais_db", ARQUIVO_SITE_POSTS, [], force_refresh=force_refresh))
+
+def salvar_posts_site(posts):
+    return bool(save_document("site_posts_comerciais_db", _site_posts_normalize(posts), ARQUIVO_SITE_POSTS))
 
 
 # HF65.23 — somente credencial Google CIFRADA na Fonte Única, nunca em texto claro.
@@ -17547,6 +17556,7 @@ DOCUMENTOS_BACKUP = [
     ("site_home_content_db", ARQUIVO_SITE_HOME_CONTENT, _site_home_default),
     ("site_adsense_db", ARQUIVO_SITE_ADSENSE, _site_adsense_default),
     ("site_dicas_multicanal_db", ARQUIVO_SITE_DICAS, _site_dicas_default),
+    ("site_posts_comerciais_db", ARQUIVO_SITE_POSTS, []),
     ("site_youtube_oauth_db", ARQUIVO_YOUTUBE_OAUTH, {}),
     ("clientes_db", ARQUIVO_CLIENTES, []),
     ("producao_db", ARQUIVO_PRODUCAO, []),
@@ -28340,6 +28350,10 @@ if pagina_atual == "site":
             st.info("AdSense não configurado. O site será gerado como antes, sem metatag nem anúncios.")
 
 
+    # HF65.24.17 — Mural comercial: upload em lote e posts avulsos com aprovação.
+    _site_posts_render(carregar_posts_site, salvar_posts_site, _site_runtime_cache_hf45.clear)
+    _posts_hf652417 = carregar_posts_site()
+
     # HF65.22 — Produzir uma vez para site + YouTube, sem publicacao silenciosa.
     _dicas_hf6522 = carregar_dicas_multicanal()
     with st.container(border=True):
@@ -28541,6 +28555,7 @@ if pagina_atual == "site":
                 campaign_config=campanha_hf65,
                 home_content_config=home_hf6514,
                 dicas_content=_dicas_hf6522,
+                posts_content=_posts_hf652417,
             )
         st.success("✅ Prévia atualizada. Confira abaixo antes de publicar.")
     col_site_hf59.link_button("🌐 Abrir site atual", "https://alphafest.com.br", use_container_width=True)
@@ -28583,14 +28598,16 @@ if pagina_atual == "site":
                     campaign_config=campanha_hf65,
                     home_content_config=home_hf6514,
                     dicas_content=_dicas_hf6522,
+                    posts_content=_posts_hf652417,
                 )
                 _zip = _site_gerar_pacote_producao(
                     _html,
                     total_produtos=resumo_vitrine_hf59.get("total", 0),
-                    versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.24",
+                    versao_manager=APP_VERSION,
                     adsense_publisher_id=_adsense_id_hf6520,
                     dicas_content=_dicas_hf6522,
                     dicas_whatsapp=empresa_vitrine_hf59.get("whatsapp_catalogo") or empresa_vitrine_hf59.get("celular") or "",
+                    posts_content=_posts_hf652417,
                 )
                 return _html, _zip
 
@@ -28608,6 +28625,7 @@ if pagina_atual == "site":
                     "home": home_hf6514,
                     "adsense": _adsense_id_hf6520,
                     "dicas": _dicas_hf6522,
+                    "posts": _posts_hf652417,
                 },
                 _build_producao_hf59,
                 ttl_seconds=180,
@@ -28736,7 +28754,7 @@ if pagina_atual == "site":
                             account_id=_cf_account_hf60,
                             api_token=_cf_token_hf60,
                             worker_name=_cf_worker_hf60,
-                            versao_manager="20.4.9-I8.13.5-HF53.3-HF8-HF65.24",
+                            versao_manager=APP_VERSION,
                         )
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
