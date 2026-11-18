@@ -379,7 +379,7 @@ def gerar_html_site_completo(
 
     # HF52.1: somente a versão pública coleta métricas. Prévia interna não conta acesso.
     pagina = inserir_chamada_dicas(pagina, list(dicas_content or []), modo_preview=bool(modo_preview))
-    pagina = inject_posts_home(pagina, list(posts_content or []), number, preview=bool(modo_preview))
+    pagina = inject_posts_home(pagina, list(posts_content or []), numero, preview=bool(modo_preview))
 
     # HF65.24.8 — links no menu superior para as seções multimídia e editorial.
     # Só exibir o destino quando a seção existir neste HTML: rascunhos não

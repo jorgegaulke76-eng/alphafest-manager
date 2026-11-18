@@ -1,4 +1,4 @@
-"""HF65.24.17 — Mural comercial AlphaFest: artes prontas, sem publicação automática.
+"""HF65.24.18 — Mural comercial AlphaFest: artes prontas, sem publicação automática.
 
 Conteúdo separado da Galeria, Dicas, Campanha Destaque e Catálogo. Apenas
 registros explicitamente aprovados são empacotados no site público.
@@ -70,11 +70,15 @@ def whatsapp(number, title):
 
 
 def _card(p, number):
-    return ('<article class="afposts-card"><a class="afposts-img" href="' + safe(whatsapp(number, p['title'])) + '" target="_blank" rel="noopener noreferrer" aria-label="Consultar ' + safe(p['title']) + '">'
-            '<img loading="lazy" decoding="async" src="' + safe(p['image_data_uri']) + '" alt="' + safe(p['title']) + '"></a>'
-            '<div class="afposts-info"><span>' + safe(p['category']) + '</span><h3>' + safe(p['title']) + '</h3>'
-            + ('<p>' + safe(p['description']) + '</p>' if p['description'] else '')
-            + '<a class="afposts-cta" target="_blank" rel="noopener noreferrer" href="' + safe(whatsapp(number, p['title'])) + '">Quero saber mais pelo WhatsApp</a></div></article>')
+    # A arte já é a publicidade: somente imagem inteira e CTA WhatsApp.
+    # Título fica exclusivamente para organização interna e texto da mensagem.
+    label = p['title'] or 'arte AlphaFest'
+    url = safe(whatsapp(number, label))
+    return ('<article class="afposts-card">'
+            '<a class="afposts-img" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="Pedir arte pelo WhatsApp">'
+            '<img loading="lazy" decoding="async" src="' + safe(p['image_data_uri']) + '" alt="' + safe(label) + '"></a>'
+            '<div class="afposts-info"><a class="afposts-cta" target="_blank" rel="noopener noreferrer" href="' + url + '">💬 Quero este</a></div>'
+            '</article>')
 
 
 CSS = '''
@@ -83,13 +87,13 @@ CSS = '''
 .afposts-head h2{color:#073d72;font-size:clamp(24px,3vw,34px);margin:7px 0}.afposts-head p{color:#526b81;margin:0}
 .afposts-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
 .afposts-card{background:#fff;border:1px solid #dceaf7;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px #143d5910;min-width:0}
-.afposts-img{display:block;padding:10px;background:white;text-align:center}.afposts-img img{width:100%;height:245px;object-fit:contain;display:block}
-.afposts-info{padding:12px 15px 17px}.afposts-info span{font-size:11px;font-weight:800;color:#087ab8;text-transform:uppercase}
+.afposts-img{display:block;padding:10px;background:white;text-align:center}.afposts-img img{width:100%;height:auto;max-height:390px;object-fit:contain;display:block;margin:auto}
+.afposts-info{padding:0 12px 14px;text-align:center}.afposts-info span{font-size:11px;font-weight:800;color:#087ab8;text-transform:uppercase}
 .afposts-info h3{font-size:16px;margin:5px 0 9px;color:#103a60}.afposts-info p{font-size:13px;color:#567085;line-height:1.5}
-.afposts-cta{display:inline-block;background:#075eaa;color:#fff!important;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:800;text-decoration:none;margin-top:6px}
+.afposts-cta{display:block;background:#075eaa;color:#fff!important;border-radius:10px;padding:10px 12px;font-size:12px;font-weight:800;text-decoration:none;margin-top:6px}
 .afposts-all{display:inline-block;padding:11px 17px;border:1px solid #087cc0;border-radius:10px;color:#06649e;font-weight:850;text-decoration:none}
 @media(max-width:900px){.afposts-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:540px){.afposts-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.afposts-img img{height:175px}.afposts-info{padding:10px}.afposts-info h3{font-size:14px}.afposts-cta{font-size:11px;padding:9px}.afposts-section{padding:34px 0}}
+@media(max-width:540px){.afposts-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.afposts-img img{max-height:250px}.afposts-info{padding:10px}.afposts-info h3{font-size:14px}.afposts-cta{font-size:11px;padding:9px}.afposts-section{padding:34px 0}}
 '''
 
 

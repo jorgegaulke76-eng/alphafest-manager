@@ -1,4 +1,4 @@
-"""HF65.24.17 — Administração das artes diárias no site."""
+"""HF65.24.18 — Administração simplificada das artes diárias no site."""
 from __future__ import annotations
 from datetime import date, datetime
 from uuid import uuid4
@@ -10,7 +10,7 @@ from site_dicas_media_hf6524 import preparar_arte
 def render(load, save, clear_cache):
     with st.container(border=True):
         st.markdown('#### 📣 Novidades & Ofertas · Mural de posts no site')
-        st.caption('Publique as artes diárias sem misturá-las à Galeria ou aos artigos. Salvar não publica o site: confira a prévia e use o fluxo de publicação existente.')
+        st.caption('Envie a arte e aprove: no site aparece somente a imagem completa e o botão Quero este do WhatsApp. Salvar não publica automaticamente.')
         posts = normalize(load())
         approved = sum(p['status']=='publicado' for p in posts)
         a,b,c=st.columns(3)
@@ -46,8 +46,7 @@ def render(load, save, clear_cache):
         selected=st.selectbox('Editar publicação',list(choices),format_func=lambda k:choices[k],key='afposts_selected')
         old=next((p for p in posts if p['id']==selected),{})
         with st.form('afposts_editor'):
-            title=st.text_input('Título para o site',value=old.get('title',''),max_chars=140)
-            description=st.text_area('Descrição curta (opcional)',value=old.get('description',''),height=70,max_chars=600)
+            title=st.text_input('Nome interno para identificar a arte (opcional)',value=old.get('title',''),max_chars=140,help='Não aparece no site; pode ser preenchido automaticamente pelo nome do arquivo.')
             category=st.selectbox('Categoria',CATEGORIES+([old['category']] if old.get('category') and old['category'] not in CATEGORIES else []),index=(CATEGORIES+([old['category']] if old.get('category') and old['category'] not in CATEGORIES else [])).index(old.get('category','Outros')))
             status=st.selectbox('Publicação',['rascunho','publicado'],index=1 if old.get('status')=='publicado' else 0,
                                 format_func=lambda v:'✅ Aprovada para a próxima publicação' if v=='publicado' else '📝 Rascunho (não aparece no site)')
@@ -60,15 +59,14 @@ def render(load, save, clear_cache):
             st.image(old['image_data_uri'],caption='Arte atual · proporção original',use_container_width=False,width=340)
         if save_clicked:
             try:
-                if not title.strip():
-                    raise ValueError('Informe um título para a arte.')
                 if expires:
                     date.fromisoformat(expires)
                 image=preparar_arte(upload.getvalue()) if upload else old.get('image_data_uri','')
                 if not image:
                     raise ValueError('Selecione uma imagem da publicação.')
                 item={**old,'id':old.get('id') or uuid4().hex[:16],
-                      'title':title.strip(),'description':description.strip(),'category':category,
+                      'title':title.strip() or ((upload.name.rsplit('.',1)[0].replace('_',' ').strip()[:140]) if upload else (old.get('title') or 'Arte AlphaFest')),
+                      'description':'','category':category,
                       'status':'rascunho' if delete else status,'featured':featured,
                       'expires_at':expires,'image_data_uri':image,
                       'created_at':old.get('created_at') or datetime.now().isoformat(timespec='seconds')}
