@@ -28195,6 +28195,31 @@ if pagina_atual == "site":
                         "Conversões calculadas por sessão para evitar distorção por vários cliques da mesma pessoa."
                     )
 
+                    st.divider()
+                    st.markdown("**📈 Resultados comerciais do site · últimos 30 dias**")
+                    st.caption("Cliques indicam abertura do WhatsApp, não comprovam envio de mensagem ou venda. A prévia não entra nos indicadores.")
+                    _cliques_comerciais = _m.get("commercial_clicks_30d") or {}
+                    _paginas_comerciais = _m.get("commercial_pages_30d") or {}
+                    _res1, _res2, _res3, _res4 = st.columns(4)
+                    with _res1: st.metric("Orçamentos do carrinho → WhatsApp", _cliques_comerciais.get("cart", 0))
+                    with _res2: st.metric("Empresas → WhatsApp", _cliques_comerciais.get("corporate", 0))
+                    with _res3: st.metric("Visitas a Para Empresas", _paginas_comerciais.get("corporate", 0))
+                    with _res4: st.metric("Visitas a Novidades & Ofertas", _paginas_comerciais.get("news", 0))
+                    _pages1, _pages2 = st.columns(2)
+                    with _pages1:
+                        st.markdown("**Páginas mais visitadas**")
+                        if _m.get("top_pages_30d"):
+                            for _path, _n in _m["top_pages_30d"][:8]:
+                                st.write(f"{_path} — **{_n}**")
+                        else: st.caption("Ainda não há dados de páginas.")
+                    with _pages2:
+                        st.markdown("**Páginas que levaram ao WhatsApp**")
+                        if _m.get("top_whatsapp_pages_30d"):
+                            for _path, _n in _m["top_whatsapp_pages_30d"][:8]:
+                                st.write(f"{_path} — **{_n}**")
+                        else: st.caption("Ainda sem cliques rastreados.")
+                    st.caption("Os indicadores específicos de Carrinho e Para Empresas passam a ser coletados após publicar esta versão no Cloudflare. Não são retroativos.")
+
                     st.markdown("**Evolução dos acessos**")
                     _tab_dia, _tab_mes, _tab_ano = st.tabs(["📅 Dia a dia", "🗓️ Mês a mês", "📈 Ano"])
                     with _tab_dia:

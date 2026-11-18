@@ -129,6 +129,11 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
     if(!CFG.key.startsWith('sb_publishable_')) headers['Authorization']='Bearer '+CFG.key;
     try{fetch(endpoint,{method:'POST',headers:headers,body:JSON.stringify(payload),keepalive:true,mode:'cors'}).catch(function(){});}catch(e){}
   }
+  // Eventos internos explicitamente identificados, sem conteúdo de mensagem ou dados pessoais.
+  window.addEventListener('alphafest:metric',function(ev){
+    const d=(ev&&ev.detail)||{};
+    if(d.type==='whatsapp_click') send('whatsapp_click',clip(d.product,180),clip(d.context,80));
+  });
   send('page_view','','page');
   let searchTimer=null, lastSearch='';
   function scheduleSearch(value){
@@ -392,7 +397,15 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
     search_terms=Counter(str(x.get("product_name") or "").strip() for x in search_30 if str(x.get("product_name") or "").strip())
     gallery_items=Counter(str(x.get("product_name") or "").strip() for x in gallery_30 if str(x.get("product_name") or "").strip())
     occasions=Counter(str(x.get("product_name") or "").strip() for x in occasion_30 if str(x.get("product_name") or "").strip())
-    traffic_sources=Counter((str(x.get("traffic_source") or "").strip() or _traffic_source(str(x.get("referrer") or ""))) for x in page_30)
+    # Atribuição por caminho e contexto sem armazenar dados preenchidos pelo cliente.
+    page_paths=Counter(str(x.get('page_path') or '/').split('?')[0].split('#')[0] or '/' for x in page_30)
+    business_page_views=sum(n for path,n in page_paths.items() if path.startswith('/empresas'))
+    news_page_views=sum(n for path,n in page_paths.items() if path.startswith('/novidades'))
+    editorial_page_views=sum(n for path,n in page_paths.items() if path.startswith('/dicas'))
+    quote_clicks=sum(1 for x in wa_30 if str(x.get('event_context') or '')=='carrinho')
+    business_clicks=sum(1 for x in wa_30 if str(x.get('event_context') or '')=='empresas')
+    wa_by_path=Counter(str(x.get('page_path') or '/').split('?')[0].split('#')[0] or '/' for x in wa_30)
+    traffic_sources=Counter((str(x.get('traffic_source') or '')).strip() or _traffic_source(str(x.get('referrer') or '')) for x in page_30)
     cities=Counter(str(x.get("city") or "").strip() for x in page_30 if str(x.get("city") or "").strip())
     regions=Counter(str(x.get("region") or "").strip() for x in page_30 if str(x.get("region") or "").strip())
     devices=Counter(str(x.get("device_type") or "").strip() for x in page_30 if str(x.get("device_type") or "").strip())
@@ -413,6 +426,7 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
       "sessions_30d":len(sessions),"visitors_30d":len(visitors),"periods":periods,"top_products":products.most_common(8),"top_whatsapp_products":wa_products.most_common(8),
       "top_search_terms":search_terms.most_common(10),"traffic_sources":traffic_sources.most_common(10),"top_cities":cities.most_common(10),"top_regions":regions.most_common(10),
       "devices":devices.most_common(10),"browsers":browsers.most_common(10),"top_campaigns":campaigns.most_common(10),"top_gallery":gallery_items.most_common(8),"top_occasions":occasions.most_common(10),
+      "commercial_clicks_30d":{"cart":quote_clicks,"corporate":business_clicks},"commercial_pages_30d":{"corporate":business_page_views,"news":news_page_views,"tips":editorial_page_views},"top_pages_30d":page_paths.most_common(12),"top_whatsapp_pages_30d":wa_by_path.most_common(10),
       "whatsapp_contexts":wa_contexts.most_common(10),"searches_30d":len(search_30),"daily_series":_timeline(all_rows,mode="day",start=d30,end=now),
       "monthly_series":_timeline(all_rows,mode="month",start=month_start,end=now),"yearly_series":_timeline(all_rows,mode="year",start=d3y,end=now),"current_year_series":_timeline(all_rows,mode="month",start=year_start,end=now)
     }

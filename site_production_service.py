@@ -4,6 +4,7 @@ Gera um snapshot estático pronto para o Worker já homologado. Não altera DNS,
 não cria Custom Domain e não modifica dados operacionais do Manager.
 """
 from __future__ import annotations
+from site_metrics_service import inject_tracking
 
 import io
 import json
@@ -154,7 +155,7 @@ def gerar_pacote_producao(
     hoje = datetime.now(timezone.utc).date().isoformat()
     paginas = paginas_dicas(dicas_content or [], whatsapp=dicas_whatsapp)
     paginas.update(archive_pages(posts_content or [], number=dicas_whatsapp))
-    paginas["empresas/index.html"] = corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico)
+    paginas["empresas/index.html"] = inject_tracking(corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico))
     # Todas as rotas realmente geradas entram no sitemap, sem URLs inventadas.
     # Os caminhos de paginação ficam individuais para indexação independente.
     urls_publicas = sorted({url[:-10] if url.endswith('index.html') else url for url in paginas})
@@ -216,7 +217,7 @@ O rollback do DNS anterior continua documentado no kit HF41.
         # HF65.22 — publicacoes editoriais sao paginas estaticas opcionais.
         paginas = paginas_dicas(dicas_content or [], whatsapp=dicas_whatsapp)
         paginas.update(archive_pages(posts_content or [], number=dicas_whatsapp))
-        paginas["empresas/index.html"] = corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico)
+        paginas["empresas/index.html"] = inject_tracking(corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico))
         for caminho, conteudo in sorted(paginas.items()):
             zf.writestr(caminho, inject_pwa(inject_whatsapp_context(with_favicon(conteudo))))
         if adsense_id:
