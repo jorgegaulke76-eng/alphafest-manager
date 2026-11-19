@@ -59,7 +59,7 @@ def tracking_available() -> bool:
 
 
 def inject_tracking(page: str, *, enabled: bool = True) -> str:
-    if not enabled or not page or not tracking_available():
+    if not enabled or not page or not tracking_available() or 'id="alphafest-site-metrics"' in page:
         return page
     cfg = public_config()
     js_cfg = json.dumps(cfg, ensure_ascii=False)
@@ -116,20 +116,27 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
     utm_source:clip(qs.get('utm_source'),120), utm_medium:clip(qs.get('utm_medium'),120), utm_campaign:clip(qs.get('utm_campaign'),180),
     entry_path:clip(entryPath,300)
   };
-  const geoPromise=fetch('/__af_geo',{cache:'no-store',credentials:'same-origin'})
-    .then(r=>r.ok?r.json():{}).then(g=>({city:clip(g.city,120),region:clip(g.region,120),country:clip(g.country,80)}))
-    .catch(()=>({city:'',region:'',country:''}));
-  async function send(type, product, context){
-    let geo={city:'',region:'',country:''};
-    try{geo=await geoPromise;}catch(e){}
-    const payload=Object.assign({},baseMeta,geo,{
+  // HF65.24.32: nunca bloquear a medição à espera de geolocalização.
+  // A consulta geográfica é opcional; os cliques para WhatsApp precisam
+  // iniciar seu POST imediatamente, antes de abrir outra janela.
+  let geoCache={city:'',region:'',country:''};
+  try{
+    fetch('/__af_geo',{cache:'no-store',credentials:'same-origin'})
+      .then(r=>r.ok?r.json():{})
+      .then(g=>{geoCache={city:clip(g.city,120),region:clip(g.region,120),country:clip(g.country,80)};})
+      .catch(function(){});
+  }catch(e){}
+  function send(type, product, context){
+    const payload=Object.assign({},baseMeta,geoCache,{
       event_type:type,product_name:clip(product,180),page_path:clip(location.pathname+location.hash,300),referrer:clip(document.referrer,500),
       client_id:clientId,session_id:sessionId,event_context:clip(context,80)
     });
     const headers={'apikey':CFG.key,'Content-Type':'application/json','Prefer':'return=minimal'};
     if(!CFG.key.startsWith('sb_publishable_')) headers['Authorization']='Bearer '+CFG.key;
+    // keepalive permite ao navegador concluir requisições mesmo após abrir WhatsApp.
     try{fetch(endpoint,{method:'POST',headers:headers,body:JSON.stringify(payload),keepalive:true,mode:'cors'}).catch(function(){});}catch(e){}
   }
+  window.__alphafestMetricsReady=true;
   // Eventos internos explicitamente identificados, sem conteúdo de mensagem ou dados pessoais.
   window.addEventListener('alphafest:metric',function(ev){
     const d=(ev&&ev.detail)||{};

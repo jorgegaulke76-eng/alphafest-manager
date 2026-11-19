@@ -8,6 +8,7 @@ from site_metrics_service import inject_tracking
 
 import io
 import json
+import re
 import zipfile
 from datetime import datetime, timezone
 from typing import Any, Dict
@@ -19,6 +20,19 @@ from site_corporativo_service import corporate_page
 from site_favicon_service import favicon_assets, with_favicon
 from site_pwa_service import inject_pwa, pwa_assets
 from site_whatsapp_context_service import inject_whatsapp_context
+
+def _rastreador_pagina_interna(pagina: str, home: str) -> str:
+    """Injeta o rastreador; se os Secrets não estiverem visíveis nessa etapa,
+    reutiliza o script público já presente na Home, sem expor chaves privadas.
+    """
+    pagina = inject_tracking(pagina)
+    if 'id="alphafest-site-metrics"' in pagina:
+        return pagina
+    existente = re.search(r'<script id="alphafest-site-metrics">.*?</script>', home, re.S)
+    if not existente:
+        return pagina
+    return pagina.replace('</body>', existente.group(0)+'</body>', 1) if '</body>' in pagina else pagina+existente.group(0)
+
 
 DOMINIO_FINAL = "alphafest.com.br"
 PROJETO_WORKER = "alphafest-novo"
@@ -155,7 +169,7 @@ def gerar_pacote_producao(
     hoje = datetime.now(timezone.utc).date().isoformat()
     paginas = paginas_dicas(dicas_content or [], whatsapp=dicas_whatsapp)
     paginas.update(archive_pages(posts_content or [], number=dicas_whatsapp))
-    paginas["empresas/index.html"] = inject_tracking(corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico))
+    paginas["empresas/index.html"] = _rastreador_pagina_interna(corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico), html_publico)
     # Todas as rotas realmente geradas entram no sitemap, sem URLs inventadas.
     # Os caminhos de paginação ficam individuais para indexação independente.
     urls_publicas = sorted({url[:-10] if url.endswith('index.html') else url for url in paginas})
@@ -217,7 +231,7 @@ O rollback do DNS anterior continua documentado no kit HF41.
         # HF65.22 — publicacoes editoriais sao paginas estaticas opcionais.
         paginas = paginas_dicas(dicas_content or [], whatsapp=dicas_whatsapp)
         paginas.update(archive_pages(posts_content or [], number=dicas_whatsapp))
-        paginas["empresas/index.html"] = inject_tracking(corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico))
+        paginas["empresas/index.html"] = _rastreador_pagina_interna(corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico), html_publico)
         for caminho, conteudo in sorted(paginas.items()):
             zf.writestr(caminho, inject_pwa(inject_whatsapp_context(with_favicon(conteudo))))
         if adsense_id:
