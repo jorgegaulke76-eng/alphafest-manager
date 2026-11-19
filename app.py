@@ -2245,6 +2245,9 @@ def registrar_evento_proposta(proposta, descricao, usuario="Sistema"):
     proposta["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
 
 
+MODO_SOB_ENCOMENDA_HF38 = True  # HF65.24.38: sem reserva/baixa automatica de estoque por pedido
+
+
 def alternar_status(num_proposta, campo, novo_valor):
     """Atualiza um marco oficial e reconcilia todas as telas dependentes.
 
@@ -2260,7 +2263,7 @@ def alternar_status(num_proposta, campo, novo_valor):
     # I8.13.2 — Pronto/Entregue novos não podem encerrar produção deixando
     # reservas sem consumo. Pedidos LEGADOS que já estavam Prontos antes desta
     # ação não recebem exigência retroativa ao serem apenas entregues.
-    if bool(novo_valor) and campo in {"pronto", "entregue"}:
+    if not MODO_SOB_ENCOMENDA_HF38 and bool(novo_valor) and campo in {"pronto", "entregue"}:
         exigir_consumo_i8132 = True
         try:
             atual_i8132 = next((p for p in carregar_historico(force_refresh=True) if str((p or {}).get("numero_proposta") or "") == str(num_proposta)), None)
@@ -2441,7 +2444,7 @@ def _hf8_render_status_proposta_jorge_inline(num_proposta, prefixo="hf8_orcament
         novo_pronto = c3.checkbox(
             "📦 Pronto", value=pronto, key=f"{prefixo}_pronto_{numero}",
             disabled=entregue,
-            help="Produção concluída; aguardando retirada ou entrega. As travas de consumo de materiais continuam valendo.",
+            help="Produção sob encomenda concluída; aguardando retirada ou entrega.",
         )
         novo_entregue = c4.checkbox(
             "🚚 Entregue", value=entregue, key=f"{prefixo}_entregue_{numero}",
@@ -5763,6 +5766,8 @@ def _i8124_valor_status_proposta(proposta, campo):
 
 
 def _i8124_proposta_na_fila_liberacao(proposta, numeros_consumo_ativos=None):
+    if MODO_SOB_ENCOMENDA_HF38:
+        return False
     """Fonte única da fila de liberação/reserva, delegada ao serviço puro HF4."""
     proposta = proposta or {}
     if numeros_consumo_ativos is None:
@@ -6004,6 +6009,46 @@ def _i8127_previsao_producao(historico=None, consumos=None, estoque=None, planej
     evitar divergência entre Central, Fluxo, Histórico e Compras.
     """
     historico = carregar_historico() if historico is None else historico
+    if MODO_SOB_ENCOMENDA_HF38:
+        from datetime import datetime as _dt_hf38
+        saida_hf38 = []
+        for proposta_hf38 in historico or []:
+            if not isinstance(proposta_hf38, dict) or not proposta_ativa_operacional(proposta_hf38):
+                continue
+            est_hf38 = _status_resumo(proposta_hf38)
+            if not est_hf38.get("aprovado") or est_hf38.get("entregue"):
+                continue
+            numero_hf38 = str(proposta_hf38.get("numero_proposta") or "").strip()
+            if not numero_hf38:
+                continue
+            raw_hf38 = proposta_hf38.get("data_entrega")
+            data_hf38 = data_entrega_segura(raw_hf38)
+            dias_hf38 = (data_hf38 - hoje_local()).days if data_hf38 else None
+            pronto_hf38 = bool(est_hf38.get("pronto"))
+            risco_hf38 = bool(dias_hf38 is not None and dias_hf38 < 0 and not pronto_hf38)
+            chave_hf38 = "pronto_aguardando_entrega" if pronto_hf38 else "liberado"
+            situacao_hf38 = "📦 Pronto — aguardando entrega" if pronto_hf38 else "🟢 Pedido aprovado — produção sob encomenda"
+            saida_hf38.append({
+                "numero_proposta": numero_hf38,
+                "cliente_nome": str(proposta_hf38.get("cliente_nome") or "Cliente"),
+                "resumo_produtos": resumo_produtos_pedido(proposta_hf38),
+                "pronto_oficial": pronto_hf38,
+                "data_entrega": data_hf38,
+                "data_entrega_original": raw_hf38,
+                "dias_ate_entrega": dias_hf38,
+                "consumo": None, "resumo_consumo": None, "pendencias": [], "materiais": [],
+                "chave_base": chave_hf38,
+                "chave": "risco_atraso" if risco_hf38 else chave_hf38,
+                "status_base": situacao_hf38,
+                "status": "🔴 Entrega atrasada" if risco_hf38 else situacao_hf38,
+                "risco_atraso": risco_hf38,
+                "motivos": ["prazo de entrega vencido"] if risco_hf38 else [],
+                "severidade": 0 if risco_hf38 else (4 if pronto_hf38 else 5),
+                "quantidade_materiais_pendentes": 0,
+                "quantidade_materiais_sem_cobertura": 0,
+            })
+        saida_hf38.sort(key=lambda x: (x["severidade"], x.get("data_entrega") or date.max, x["numero_proposta"]))
+        return saida_hf38
     consumos = carregar_consumos_pedidos() if consumos is None else consumos
     estoque = carregar_estoque() if estoque is None else estoque
     planejamentos = carregar_planejamentos_compras() if planejamentos is None else planejamentos
@@ -6333,6 +6378,8 @@ def _i8124_estornar_consumo(consumo_id, motivo, usuario=None):
 
 def _i8124_render_status_pedido(proposta, prefixo="i8124", detalhado=False):
     """Componente somente leitura reutilizado por Jorge, Anna, Histórico e Fluxo."""
+    if MODO_SOB_ENCOMENDA_HF38:
+        return  # Não carregar estoque nem exibir reserva como pré-requisito.
     if not isinstance(proposta, dict):
         return
     numero = str(proposta.get("numero_proposta") or "").strip()
@@ -10179,7 +10226,7 @@ def salvar_tarefa_producao(tarefa_id, novos_dados):
 
     # I8.13.5-HF5 — a decisão de quando uma etapa representa produção real fica
     # no serviço puro; a conversão Reserva -> Consumo continua transacional no app.
-    if numero and _producao_etapa_exige_consumo(status_novo):
+    if numero and not MODO_SOB_ENCOMENDA_HF38 and _producao_etapa_exige_consumo(status_novo):
         ok_mat_i8132, msg_mat_i8132 = _i8132_consumir_reserva_pedido(numero)
         if not ok_mat_i8132:
             return False, msg_mat_i8132
@@ -10299,7 +10346,7 @@ def _i8128_central_producao(historico=None, tarefas=None, consumos=None, estoque
         historico=historico, consumos=consumos, estoque=estoque, planejamentos=planejamentos
     )
     tarefas = sincronizar_producao_com_propostas(historico) if tarefas is None else tarefas
-    return _i8128_engine_central(previsao or [], tarefas or [], hoje=hoje_local())
+    return _i8128_engine_central(previsao or [], tarefas or [], hoje=hoje_local(), sob_encomenda=MODO_SOB_ENCOMENDA_HF38)
 
 
 def _i8128_resumo_pedido(numero_proposta, historico=None, tarefas=None):
@@ -10318,6 +10365,8 @@ def _i8132_consumir_reserva_pedido(numero_proposta, usuario=None):
     Compatibilidade: se uma versão antiga já baixou os materiais deste consumo,
     o resumo os reconhece como consumidos e nenhuma segunda baixa é criada.
     """
+    if MODO_SOB_ENCOMENDA_HF38:
+        return True, "Produção sob encomenda: sem controle de estoque por pedido."
     numero = str(numero_proposta or "").strip()
     if not numero:
         return False, "Pedido inválido para consumo de materiais."
@@ -10443,7 +10492,7 @@ def _i8128_atualizar_etapa_pedido(numero_proposta, acao, usuario=None):
 
     # I8.13.2 — somente o início REAL da produção transforma reserva em baixa física.
     # A função é idempotente para dados legados já baixados pela I8.12.4.
-    if plano_central_prod.get("exige_consumo"):
+    if plano_central_prod.get("exige_consumo") and not MODO_SOB_ENCOMENDA_HF38:
         ok_consumo_i8132, msg_consumo_i8132 = _i8132_consumir_reserva_pedido(numero, usuario=usuario)
         if not ok_consumo_i8132:
             return False, msg_consumo_i8132
@@ -13658,7 +13707,7 @@ def produtos_proposta_sem_catalogo(proposta, catalogo=None, estoque=None):
     ausente e não deve sugerir cadastro no Catálogo Oficial.
     """
     catalogo = carregar_catalogo() if catalogo is None else (catalogo or [])
-    estoque = carregar_estoque() if estoque is None else (estoque or {})
+    estoque = ({} if MODO_SOB_ENCOMENDA_HF38 else carregar_estoque()) if estoque is None else (estoque or {})
     ausentes = []
     vistos = set()
 
@@ -13672,9 +13721,10 @@ def produtos_proposta_sem_catalogo(proposta, catalogo=None, estoque=None):
         _, produto, _ = _resolver_produto_catalogo_saneado(nome, catalogo)
         if produto is not None:
             continue
-        material_estoque, _ = _i8132_material_estoque_por_nome_unico(estoque, nome)
-        if material_estoque is not None:
-            continue
+        if not MODO_SOB_ENCOMENDA_HF38:
+            material_estoque, _ = _i8132_material_estoque_por_nome_unico(estoque, nome)
+            if material_estoque is not None:
+                continue
         if chave in vistos:
             continue
         vistos.add(chave)
@@ -13686,7 +13736,7 @@ def produtos_proposta_sem_catalogo(proposta, catalogo=None, estoque=None):
 def renderizar_alerta_thu_produto_sem_catalogo(proposta, prefixo="thu_sem_catalogo"):
     """Comunica ausência real ou correlação segura do Saneamento sem duplicar produto."""
     catalogo = carregar_catalogo()
-    estoque_thu = carregar_estoque()
+    estoque_thu = {} if MODO_SOB_ENCOMENDA_HF38 else carregar_estoque()
     ausentes = produtos_proposta_sem_catalogo(proposta, catalogo=catalogo, estoque=estoque_thu)
     materiais_thu = []
     vistos_materiais_thu = set()
@@ -13704,7 +13754,7 @@ def renderizar_alerta_thu_produto_sem_catalogo(proposta, prefixo="thu_sem_catalo
         if chave_thu and chave_thu not in vistos_materiais_thu:
             vistos_materiais_thu.add(chave_thu)
             materiais_thu.append(str(mat_thu.get("nome") or nome_thu))
-    if materiais_thu:
+    if materiais_thu and not MODO_SOB_ENCOMENDA_HF38:
         st.caption("📦 THU Estoque: " + " • ".join(materiais_thu) + " — material/insumo operacional; não exige cadastro no Catálogo Oficial.")
     correlacoes = []
     vistos_corr = set()
@@ -18790,7 +18840,7 @@ def salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue, cancelad
             pass
 
     nova_conclusao_producao_i8132 = (cancelado_desejado_hf656 is not True) and _status_exige_consumo_material(estado_antes_i8132, novos)
-    if nova_conclusao_producao_i8132:
+    if nova_conclusao_producao_i8132 and not MODO_SOB_ENCOMENDA_HF38:
         consumidor_i8132 = globals().get("_i8132_consumir_reserva_pedido")
         if callable(consumidor_i8132):
             ok_mat_i8132, msg_mat_i8132 = consumidor_i8132(numero, usuario=obter_usuario_atual())
@@ -24637,10 +24687,10 @@ def _renderizar_linha_proposta_anna(prop, prefixo, permitir_reserva_rapida=True)
     c3.link_button("📱 Enviar", link_hf655, use_container_width=True)
     estado_linha_hf653 = _status_resumo(prop)
     pode_reservar_hf653 = bool(estado_linha_hf653.get("aprovado")) and not bool(estado_linha_hf653.get("pronto")) and not bool(estado_linha_hf653.get("entregue"))
-    if permitir_reserva_rapida:
+    if permitir_reserva_rapida and not MODO_SOB_ENCOMENDA_HF38:
         if c4.button("🔒 Materiais", key=f"{prefixo}_mat_{numero}", use_container_width=True, disabled=not pode_reservar_hf653):
             dialog_reserva_rapida_pedido(numero)
-    else:
+    elif not MODO_SOB_ENCOMENDA_HF38:
         c4.button("🔒 Materiais", key=f"{prefixo}_mat_bloq_{numero}", use_container_width=True, disabled=True, help="Feche esta janela para usar a reserva rápida na Central.")
     c5.download_button(
         "📄 HTML",
@@ -25118,7 +25168,7 @@ GRUPOS_NAVEGACAO = {
     "📋 Operação": ["novo_orcamento", "historico", "fluxo", "entregas_retiradas", "catalogo", "biblioteca_3d", "projeto", "jornada"],
     "👥 Clientes": ["atendimento", "crm", "clientes_360", "relacionamentos"],
     "🧠 Inteligência": ["alpha", "intelligence", "memoria", "conhecimento"],
-    "📈 Gestão": ["executivo", "relatorios", "faturamento_mensal", "compras_custos", "das_mei"],
+    "📈 Gestão": ["executivo", "relatorios", "faturamento_mensal", "das_mei"],
     "📢 Marketing": ["site", "crescimento", "calendario"],
     "⚙️ Administração": ["configuracoes"],
 }
@@ -25380,9 +25430,9 @@ if pagina_atual == "central":
     # HF36/HF38 — uma única fotografia operacional por rerun da Central.
     # Além de Produção/Prioridades/Saídas, o HF38 compartilha também a leitura
     # oficial de status e os índices de propostas/consumos usados pela própria tela.
-    _consumos_runtime_central_hf36 = carregar_consumos_pedidos()
-    _estoque_runtime_central_hf36 = carregar_estoque()
-    _planejamentos_runtime_central_hf36 = carregar_planejamentos_compras()
+    _consumos_runtime_central_hf36 = [] if MODO_SOB_ENCOMENDA_HF38 else carregar_consumos_pedidos()
+    _estoque_runtime_central_hf36 = {} if MODO_SOB_ENCOMENDA_HF38 else carregar_estoque()
+    _planejamentos_runtime_central_hf36 = [] if MODO_SOB_ENCOMENDA_HF38 else carregar_planejamentos_compras()
     _snapshot_operacional_central_hf36 = _central_runtime_snapshot(
         historico_central,
         tarefas_ativas_central,
@@ -25391,6 +25441,7 @@ if pagina_atual == "central":
         _planejamentos_runtime_central_hf36,
         hoje_central,
         resumo_produtos=resumo_produtos_pedido,
+        sob_encomenda=MODO_SOB_ENCOMENDA_HF38,
     )
     # I8.12.8-HF2 permanece como fonte única; apenas reutilizamos o cálculo já
     # feito pelo snapshot em vez de executar resumo_status várias vezes.
@@ -26485,111 +26536,123 @@ if pagina_atual == "central":
         else:
             st.success("Nenhuma prioridade crítica neste momento. Tudo em dia!")
 
-    # I8.12.4-HF3 — comunicação operacional do estoque, fila e compras pela Ficha Técnica.
-    # HF36 — fontes já lidas no início da Central; não consultar novamente.
     consumos_central_i8124 = _consumos_runtime_central_hf36
     estoque_central_i8124 = _estoque_runtime_central_hf36
-    pendentes_central_i8124 = []
-    revisar_central_i8124 = []
-    mapa_hist_central_i8124 = mapa_propostas_central_hf38
-    # HF37 — todos os consumos compartilham um único índice dos movimentos neste ciclo.
-    _resumos_consumos_central_hf37 = {
-        str(consumo.get("id") or ""): resumo
-        for consumo, resumo in _i8124_engine_resumos(
-            consumos_central_i8124, (estoque_central_i8124 or {}).get("movimentacoes") or []
-        )
-    }
-    for consumo_central_i8124 in consumos_central_i8124:
-        if not isinstance(consumo_central_i8124, dict) or consumo_central_i8124.get("estornado"):
-            continue
-        resumo_central_i8124 = _resumos_consumos_central_hf37.get(str(consumo_central_i8124.get("id") or ""))
-        if resumo_central_i8124 is None:
-            resumo_central_i8124 = _i8124_resumo_consumo(consumo_central_i8124, estoque_central_i8124)
-        numero_consumo_central_i8124 = str(consumo_central_i8124.get("numero_proposta") or "")
-        prop_consumo_central_i8124 = mapa_hist_central_i8124.get(numero_consumo_central_i8124)
-        if resumo_central_i8124.get("pendente"):
-            pendentes_central_i8124.append((consumo_central_i8124, resumo_central_i8124))
-        if prop_consumo_central_i8124 is None or proposta_encerrada(prop_consumo_central_i8124) or not valor_bool(prop_consumo_central_i8124.get("aprovado")):
-            revisar_central_i8124.append((consumo_central_i8124, "pedido não está mais aprovado/ativo"))
-        elif str(consumo_central_i8124.get("modo_consumo") or "ficha_padrao") == "ficha_padrao" and _i8124_montar_previa_pedido(prop_consumo_central_i8124).get("assinatura") != consumo_central_i8124.get("assinatura_confirmada"):
-            revisar_central_i8124.append((consumo_central_i8124, "pedido ou Ficha Técnica mudou após a confirmação"))
-    if revisar_central_i8124:
-        st.error(f"📦 **{len(revisar_central_i8124)} reserva(s)/consumo(s) de pedido precisam de revisão.** Abra Gestão → Compras, Custos & Estoque antes de produzir ou excluir o pedido.")
-    if pendentes_central_i8124:
-        st.warning(f"📦 **{len(pendentes_central_i8124)} pedido(s) aguardam material.** Novas entradas de estoque completam as reservas pendentes automaticamente, sem baixa física.")
-        with st.expander("📦 Ver necessidades de material", expanded=False):
-            for consumo_central_i8124, resumo_central_i8124 in pendentes_central_i8124[:10]:
-                faltas_txt_i8124 = []
-                for nec_central_i8124 in resumo_central_i8124.get("necessidades") or []:
-                    if valor_float(nec_central_i8124.get("pendente")) > 0.000001:
-                        faltas_txt_i8124.append(
-                            f"{nec_central_i8124.get('material_nome')}: {_i8121_quantidade(nec_central_i8124.get('pendente'))} {nec_central_i8124.get('unidade', '')}"
-                        )
-                prop_nec = mapa_hist_central_i8124.get(str(consumo_central_i8124.get("numero_proposta") or ""))
-                st.write(f"• **{consumo_central_i8124.get('numero_proposta')} — {consumo_central_i8124.get('cliente_nome', 'Cliente')}** · 🧾 {resumo_produtos_pedido(prop_nec)} · " + " · ".join(faltas_txt_i8124))
-
-    # I8.12.6 — mesma fonte de pendências + o que já foi solicitado ao fornecedor.
-    necessidades_compra_central_i8126 = _i8126_central_necessidades(
-        consumos=consumos_central_i8124, estoque=estoque_central_i8124,
-        compras=carregar_compras(), historico=historico_central, fornecedores=_i8121_fornecedores(),
-        planejamentos=_planejamentos_runtime_central_hf36,
-    )
-    planos_abertos_central_i8126 = [p for p in _planejamentos_runtime_central_hf36 if isinstance(p, dict) and _i8126_engine_aberta(p) > 0.0000001]
-    if necessidades_compra_central_i8126:
-        pedidos_compra_central_i8126 = {
-            str(p.get("numero_proposta") or "")
-            for n in necessidades_compra_central_i8126 for p in (n.get("pedidos") or [])
-            if str(p.get("numero_proposta") or "")
-        }
-        materiais_em_compra_central_i8126 = sum(1 for n in necessidades_compra_central_i8126 if valor_float(n.get("quantidade_em_compra")) > 0.0000001)
-        materiais_a_solicitar_central_i8126 = sum(1 for n in necessidades_compra_central_i8126 if valor_float(n.get("quantidade_a_solicitar")) > 0.0000001)
-        st.warning(
-            f"🛒 **Central de Compras: {len(necessidades_compra_central_i8126)} material(is) faltante(s) em {len(pedidos_compra_central_i8126)} pedido(s)** · "
-            f"{materiais_em_compra_central_i8126} material(is) já solicitado(s) · {materiais_a_solicitar_central_i8126} ainda a solicitar."
-        )
-        with st.expander("🛒 Ver materiais para comprar", expanded=False):
-            for nec_central_i8126 in necessidades_compra_central_i8126[:8]:
-                forn_central_i8126 = nec_central_i8126.get("fornecedor_nome") or "fornecedor ainda não conhecido"
-                st.write(
-                    f"• **{nec_central_i8126.get('material_nome')}** · falta {_i8121_quantidade(nec_central_i8126.get('quantidade_pendente'))} {nec_central_i8126.get('unidade', '')} "
-                    f"· já solicitado {_i8121_quantidade(nec_central_i8126.get('quantidade_em_compra'))} · ainda solicitar {_i8121_quantidade(nec_central_i8126.get('quantidade_a_solicitar'))} "
-                    f"· {nec_central_i8126.get('prioridade')} · {forn_central_i8126}"
-                )
-            st.caption("Detalhes, solicitação ao fornecedor e recebimentos: Gestão → Compras, Custos & Estoque.")
-    elif planos_abertos_central_i8126:
-        st.info(f"🛒 Não há falta real pendente, mas existem {len(planos_abertos_central_i8126)} solicitação(ões) ao fornecedor ainda em aberto. Revise recebimento/cancelamento em Gestão → Compras, Custos & Estoque.")
-
-    # I8.12.7 — a Central do Jorge usa a mesma previsão exibida no Fluxo e em Compras.
     previsao_central_i8127 = _snapshot_operacional_central_hf36["previsao"]
-    risco_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "risco_atraso"]
-    aguardando_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "aguardando_material"]
-    compra_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "compra_em_andamento"]
-    liberados_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "liberado"]
-    prontos_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave_base") == "pronto_aguardando_entrega"]
-    if risco_central_i8127:
-        st.error(
-            f"🚦 **Produção: {len(risco_central_i8127)} pedido(s) com risco de atraso** · "
-            f"{len(aguardando_central_i8127)} aguardando material · {len(compra_central_i8127)} com compra em andamento · "
-            f"{len(liberados_central_i8127)} liberado(s) para produção · {len(prontos_central_i8127)} pronto(s) aguardando retirada/entrega."
-        )
-    elif previsao_central_i8127:
+    if MODO_SOB_ENCOMENDA_HF38:
+        atrasados_hf38 = [p for p in previsao_central_i8127 if p.get("risco_atraso")]
+        prontos_hf38 = [p for p in previsao_central_i8127 if p.get("pronto_oficial")]
         st.info(
-            f"🚦 **Previsão de produção:** {len(liberados_central_i8127)} liberado(s) · "
-            f"{len(prontos_central_i8127)} pronto(s) aguardando retirada/entrega · "
-            f"{len(compra_central_i8127)} com compra em andamento · {len(aguardando_central_i8127)} aguardando material."
+            f"📦 **Produção sob encomenda:** {len(previsao_central_i8127)} pedido(s) aprovado(s) e não entregue(s) · "
+            f"{len(prontos_hf38)} pronto(s) · {len(atrasados_hf38)} com prazo vencido. "
+            "Nenhuma liberação de estoque é necessária para avançar o pedido."
         )
-    if risco_central_i8127 or aguardando_central_i8127 or compra_central_i8127:
-        with st.expander("🚦 Ver previsão de produção e prazo", expanded=False):
-            for ped_central_i8127 in previsao_central_i8127[:10]:
-                entrega_central_i8127 = ped_central_i8127.get("data_entrega")
-                entrega_txt_central_i8127 = entrega_central_i8127.strftime("%d/%m/%Y") if isinstance(entrega_central_i8127, date) else "Sem data"
-                motivo_central_i8127 = " · ".join(ped_central_i8127.get("motivos") or [])
-                st.write(
-                    f"• **{ped_central_i8127.get('numero_proposta')} — {ped_central_i8127.get('cliente_nome', 'Cliente')}** · "
-                    f"🧾 {ped_central_i8127.get('resumo_produtos', 'Sem itens informados')} · "
-                    f"{ped_central_i8127.get('status')} · entrega {entrega_txt_central_i8127}" + (f" · {motivo_central_i8127}" if motivo_central_i8127 else "")
-                )
-            st.caption("Detalhes de materiais e compras: Gestão → Compras, Custos & Estoque.")
+    else:
+        # I8.12.4-HF3 — comunicação operacional do estoque, fila e compras pela Ficha Técnica.
+        # HF36 — fontes já lidas no início da Central; não consultar novamente.
+        consumos_central_i8124 = _consumos_runtime_central_hf36
+        estoque_central_i8124 = _estoque_runtime_central_hf36
+        pendentes_central_i8124 = []
+        revisar_central_i8124 = []
+        mapa_hist_central_i8124 = mapa_propostas_central_hf38
+        # HF37 — todos os consumos compartilham um único índice dos movimentos neste ciclo.
+        _resumos_consumos_central_hf37 = {
+            str(consumo.get("id") or ""): resumo
+            for consumo, resumo in _i8124_engine_resumos(
+                consumos_central_i8124, (estoque_central_i8124 or {}).get("movimentacoes") or []
+            )
+        }
+        for consumo_central_i8124 in consumos_central_i8124:
+            if not isinstance(consumo_central_i8124, dict) or consumo_central_i8124.get("estornado"):
+                continue
+            resumo_central_i8124 = _resumos_consumos_central_hf37.get(str(consumo_central_i8124.get("id") or ""))
+            if resumo_central_i8124 is None:
+                resumo_central_i8124 = _i8124_resumo_consumo(consumo_central_i8124, estoque_central_i8124)
+            numero_consumo_central_i8124 = str(consumo_central_i8124.get("numero_proposta") or "")
+            prop_consumo_central_i8124 = mapa_hist_central_i8124.get(numero_consumo_central_i8124)
+            if resumo_central_i8124.get("pendente"):
+                pendentes_central_i8124.append((consumo_central_i8124, resumo_central_i8124))
+            if prop_consumo_central_i8124 is None or proposta_encerrada(prop_consumo_central_i8124) or not valor_bool(prop_consumo_central_i8124.get("aprovado")):
+                revisar_central_i8124.append((consumo_central_i8124, "pedido não está mais aprovado/ativo"))
+            elif str(consumo_central_i8124.get("modo_consumo") or "ficha_padrao") == "ficha_padrao" and _i8124_montar_previa_pedido(prop_consumo_central_i8124).get("assinatura") != consumo_central_i8124.get("assinatura_confirmada"):
+                revisar_central_i8124.append((consumo_central_i8124, "pedido ou Ficha Técnica mudou após a confirmação"))
+        if revisar_central_i8124:
+            st.error(f"📦 **{len(revisar_central_i8124)} reserva(s)/consumo(s) de pedido precisam de revisão.** Abra Gestão → Compras, Custos & Estoque antes de produzir ou excluir o pedido.")
+        if pendentes_central_i8124:
+            st.warning(f"📦 **{len(pendentes_central_i8124)} pedido(s) aguardam material.** Novas entradas de estoque completam as reservas pendentes automaticamente, sem baixa física.")
+            with st.expander("📦 Ver necessidades de material", expanded=False):
+                for consumo_central_i8124, resumo_central_i8124 in pendentes_central_i8124[:10]:
+                    faltas_txt_i8124 = []
+                    for nec_central_i8124 in resumo_central_i8124.get("necessidades") or []:
+                        if valor_float(nec_central_i8124.get("pendente")) > 0.000001:
+                            faltas_txt_i8124.append(
+                                f"{nec_central_i8124.get('material_nome')}: {_i8121_quantidade(nec_central_i8124.get('pendente'))} {nec_central_i8124.get('unidade', '')}"
+                            )
+                    prop_nec = mapa_hist_central_i8124.get(str(consumo_central_i8124.get("numero_proposta") or ""))
+                    st.write(f"• **{consumo_central_i8124.get('numero_proposta')} — {consumo_central_i8124.get('cliente_nome', 'Cliente')}** · 🧾 {resumo_produtos_pedido(prop_nec)} · " + " · ".join(faltas_txt_i8124))
+
+        # I8.12.6 — mesma fonte de pendências + o que já foi solicitado ao fornecedor.
+        necessidades_compra_central_i8126 = _i8126_central_necessidades(
+            consumos=consumos_central_i8124, estoque=estoque_central_i8124,
+            compras=carregar_compras(), historico=historico_central, fornecedores=_i8121_fornecedores(),
+            planejamentos=_planejamentos_runtime_central_hf36,
+        )
+        planos_abertos_central_i8126 = [p for p in _planejamentos_runtime_central_hf36 if isinstance(p, dict) and _i8126_engine_aberta(p) > 0.0000001]
+        if necessidades_compra_central_i8126:
+            pedidos_compra_central_i8126 = {
+                str(p.get("numero_proposta") or "")
+                for n in necessidades_compra_central_i8126 for p in (n.get("pedidos") or [])
+                if str(p.get("numero_proposta") or "")
+            }
+            materiais_em_compra_central_i8126 = sum(1 for n in necessidades_compra_central_i8126 if valor_float(n.get("quantidade_em_compra")) > 0.0000001)
+            materiais_a_solicitar_central_i8126 = sum(1 for n in necessidades_compra_central_i8126 if valor_float(n.get("quantidade_a_solicitar")) > 0.0000001)
+            st.warning(
+                f"🛒 **Central de Compras: {len(necessidades_compra_central_i8126)} material(is) faltante(s) em {len(pedidos_compra_central_i8126)} pedido(s)** · "
+                f"{materiais_em_compra_central_i8126} material(is) já solicitado(s) · {materiais_a_solicitar_central_i8126} ainda a solicitar."
+            )
+            with st.expander("🛒 Ver materiais para comprar", expanded=False):
+                for nec_central_i8126 in necessidades_compra_central_i8126[:8]:
+                    forn_central_i8126 = nec_central_i8126.get("fornecedor_nome") or "fornecedor ainda não conhecido"
+                    st.write(
+                        f"• **{nec_central_i8126.get('material_nome')}** · falta {_i8121_quantidade(nec_central_i8126.get('quantidade_pendente'))} {nec_central_i8126.get('unidade', '')} "
+                        f"· já solicitado {_i8121_quantidade(nec_central_i8126.get('quantidade_em_compra'))} · ainda solicitar {_i8121_quantidade(nec_central_i8126.get('quantidade_a_solicitar'))} "
+                        f"· {nec_central_i8126.get('prioridade')} · {forn_central_i8126}"
+                    )
+                st.caption("Detalhes, solicitação ao fornecedor e recebimentos: Gestão → Compras, Custos & Estoque.")
+        elif planos_abertos_central_i8126:
+            st.info(f"🛒 Não há falta real pendente, mas existem {len(planos_abertos_central_i8126)} solicitação(ões) ao fornecedor ainda em aberto. Revise recebimento/cancelamento em Gestão → Compras, Custos & Estoque.")
+
+        # I8.12.7 — a Central do Jorge usa a mesma previsão exibida no Fluxo e em Compras.
+        previsao_central_i8127 = _snapshot_operacional_central_hf36["previsao"]
+        risco_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "risco_atraso"]
+        aguardando_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "aguardando_material"]
+        compra_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "compra_em_andamento"]
+        liberados_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave") == "liberado"]
+        prontos_central_i8127 = [p for p in previsao_central_i8127 if p.get("chave_base") == "pronto_aguardando_entrega"]
+        if risco_central_i8127:
+            st.error(
+                f"🚦 **Produção: {len(risco_central_i8127)} pedido(s) com risco de atraso** · "
+                f"{len(aguardando_central_i8127)} aguardando material · {len(compra_central_i8127)} com compra em andamento · "
+                f"{len(liberados_central_i8127)} liberado(s) para produção · {len(prontos_central_i8127)} pronto(s) aguardando retirada/entrega."
+            )
+        elif previsao_central_i8127:
+            st.info(
+                f"🚦 **Previsão de produção:** {len(liberados_central_i8127)} liberado(s) · "
+                f"{len(prontos_central_i8127)} pronto(s) aguardando retirada/entrega · "
+                f"{len(compra_central_i8127)} com compra em andamento · {len(aguardando_central_i8127)} aguardando material."
+            )
+        if risco_central_i8127 or aguardando_central_i8127 or compra_central_i8127:
+            with st.expander("🚦 Ver previsão de produção e prazo", expanded=False):
+                for ped_central_i8127 in previsao_central_i8127[:10]:
+                    entrega_central_i8127 = ped_central_i8127.get("data_entrega")
+                    entrega_txt_central_i8127 = entrega_central_i8127.strftime("%d/%m/%Y") if isinstance(entrega_central_i8127, date) else "Sem data"
+                    motivo_central_i8127 = " · ".join(ped_central_i8127.get("motivos") or [])
+                    st.write(
+                        f"• **{ped_central_i8127.get('numero_proposta')} — {ped_central_i8127.get('cliente_nome', 'Cliente')}** · "
+                        f"🧾 {ped_central_i8127.get('resumo_produtos', 'Sem itens informados')} · "
+                        f"{ped_central_i8127.get('status')} · entrega {entrega_txt_central_i8127}" + (f" · {motivo_central_i8127}" if motivo_central_i8127 else "")
+                    )
+                st.caption("Detalhes de materiais e compras: Gestão → Compras, Custos & Estoque.")
 
     # I8.12.8 — Central do Jorge recebe a mesma fila operacional do Fluxo.
     central_prod_central_i8128 = _snapshot_operacional_central_hf36["central_producao"]
@@ -26698,7 +26761,7 @@ if pagina_atual == "central":
                         "Pago": "SIM" if estado_hf1.get("pago") else "NÃO",
                         "Pronto": "SIM" if estado_hf1.get("pronto") else "NÃO",
                         "Entregue": "SIM" if estado_hf1.get("entregue") else "NÃO",
-                        "Materiais": linha_hf1.get("status_base"),
+                        **({} if MODO_SOB_ENCOMENDA_HF38 else {"Materiais": linha_hf1.get("status_base")}),
                         "Produção": linha_hf1.get("etapa_manual"),
                     })
                 st.dataframe(pd.DataFrame(linhas_auditoria_central_hf1), use_container_width=True, hide_index=True)
@@ -26737,6 +26800,23 @@ if pagina_atual == "central":
     # continuar os status, mesmo depois de sair da fila de reserva ou de não
     # estar em uma faixa de alerta/prioridade.
     pedidos_em_andamento_hf9 = propostas_aprovadas_abertas_central
+    if MODO_SOB_ENCOMENDA_HF38 and pedidos_em_andamento_hf9:
+        cat_central_hf38 = carregar_catalogo()
+        itens_sem_cadastro_hf38 = []
+        for prop_hf38 in pedidos_em_andamento_hf9:
+            for nome_hf38 in produtos_proposta_sem_catalogo(prop_hf38, catalogo=cat_central_hf38, estoque={}):
+                itens_sem_cadastro_hf38.append((str(prop_hf38.get("numero_proposta") or ""), nome_hf38))
+        if itens_sem_cadastro_hf38:
+            nomes_unicos_hf38 = sorted(set(nome for _, nome in itens_sem_cadastro_hf38))
+            with st.expander(f"📚 Produtos orçados ainda não cadastrados ({len(nomes_unicos_hf38)})", expanded=False):
+                st.caption("Pedidos continuam liberados. Cadastre os produtos novos sem duplicar itens já existentes no catálogo.")
+                for idx_hf38, nome_hf38 in enumerate(nomes_unicos_hf38[:20]):
+                    col_nome_hf38, col_acao_hf38 = st.columns([5,2])
+                    col_nome_hf38.write(nome_hf38)
+                    if col_acao_hf38.button("➕ Cadastrar", key=f"hf38_central_cat_{idx_hf38}",use_container_width=True):
+                        dialog_catalogo_cadastro_anna(nome_prefill=nome_hf38)
+                if len(nomes_unicos_hf38) > 20:
+                    st.caption("Veja os demais itens nos detalhes dos orçamentos.")
     if pedidos_em_andamento_hf9:
         with st.expander(f"🔄 Pedidos em andamento — continuar atualização ({len(pedidos_em_andamento_hf9)})", expanded=False):
             consumos_idx_hf9 = _snapshot_operacional_central_hf36["consumos_ativos_por_proposta"]
@@ -26747,6 +26827,8 @@ if pagina_atual == "central":
                 cons_hf9 = consumos_idx_hf9.get(num_hf9)
                 if est_hf9.get("pronto"):
                     fase_hf9 = "📦 Pronto — aguardando saída"
+                elif MODO_SOB_ENCOMENDA_HF38:
+                    fase_hf9 = "✅ Aprovado — acompanhar produção e prazo"
                 elif cons_hf9:
                     res_hf9 = _i8124_resumo_consumo(cons_hf9, estoque_andamento_hf9)
                     fase_hf9 = "⚠️ Material pendente" if res_hf9.get("pendente") else "✅ Materiais liberados — continuar produção/status"
@@ -32280,7 +32362,7 @@ if pagina_atual == "fluxo":
 
     # I8.12.7 — camada material/prazo, derivada da mesma fonte usada em Compras e Central.
     previsao_fluxo_i8127 = _i8127_previsao_producao(historico=historico_fluxo_i8128hf1)
-    if previsao_fluxo_i8127:
+    if previsao_fluxo_i8127 and not MODO_SOB_ENCOMENDA_HF38:
         fr1_i8127, fr2_i8127, fr3_i8127, fr4_i8127 = st.columns(4)
         fr1_i8127.metric("🔴 Risco material/prazo", sum(1 for p in previsao_fluxo_i8127 if p.get("chave") == "risco_atraso"))
         fr2_i8127.metric("🟠 Aguardando material", sum(1 for p in previsao_fluxo_i8127 if p.get("chave") == "aguardando_material"))
@@ -32299,7 +32381,7 @@ if pagina_atual == "fluxo":
         renderizar_auditoria_sincronizacao_operacional(rel_sync_fluxo_hf6, expandido=True)
 
     # I8.12.8 — Central de Produção: mesma previsão + andamento manual já existente.
-    central_prod_i8128 = _i8128_engine_central(previsao_fluxo_i8127, tarefas_ativas, hoje=hoje_local())
+    central_prod_i8128 = _i8128_engine_central(previsao_fluxo_i8127, tarefas_ativas, hoje=hoje_local(), sob_encomenda=MODO_SOB_ENCOMENDA_HF38)
     resumo_prod_i8128 = _i8128_engine_resumo(central_prod_i8128)
     st.markdown("### 🏭 Central de Produção · I8.12.8-HF2")
     st.caption(
@@ -32408,7 +32490,7 @@ if pagina_atual == "fluxo":
                     else:
                         st.error(msg_i8128)
                 if not linha_sel_i8128.get("pode_iniciar_producao") and not linha_sel_i8128.get("pode_marcar_pronto"):
-                    st.info("A ação rápida fica liberada somente quando materiais e etapa manual permitem avançar com segurança. Use as abas abaixo para ajustar arte, prioridade ou etapa quando necessário.")
+                    st.info("Ação rápida indisponível nesta etapa. Confira a aprovação do pedido e a preparação da arte no Fluxo.")
     else:
         st.success("✅ Nenhum pedido aprovado e não entregue na fila de produção neste momento.")
 

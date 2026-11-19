@@ -160,6 +160,7 @@ def montar_central_producao(
     previsoes: Iterable[dict],
     tarefas: Iterable[dict],
     hoje: date | None = None,
+    sob_encomenda: bool = False,
 ) -> list[dict]:
     """Combina previsão I8.12.7 e Fluxo manual em uma fila operacional.
 
@@ -185,7 +186,7 @@ def montar_central_producao(
         etapa_chave, etapa = _etapa_manual(itens)
         prioridade, prioridade_rank = _prioridade_manual(itens)
         chave_material = str(previsao.get("chave_base") or previsao.get("chave") or "")
-        material_liberado = chave_material == "liberado"
+        material_liberado = sob_encomenda or chave_material == "liberado"
         risco = _bool(previsao.get("risco_atraso")) or str(previsao.get("chave") or "") == "risco_atraso"
 
         statuses = [_normalizar_status(t.get("status")) for t in itens]
@@ -208,15 +209,15 @@ def montar_central_producao(
             proxima_acao = "Retirar/entregar ao cliente"
             pode_iniciar = False
             pode_marcar_pronto = False
-        elif chave_material == "aguardando_liberacao":
+        elif chave_material == "aguardando_liberacao" and not sob_encomenda:
             situacao = "⚪ Aguardando liberação de materiais"
             situacao_chave = "aguardando_liberacao"
             proxima_acao = "Confirmar e reservar materiais"
-        elif chave_material == "aguardando_material":
+        elif chave_material == "aguardando_material" and not sob_encomenda:
             situacao = "🟠 Aguardando material"
             situacao_chave = "aguardando_material"
             proxima_acao = "Comprar ou receber material"
-        elif chave_material == "compra_em_andamento":
+        elif chave_material == "compra_em_andamento" and not sob_encomenda:
             situacao = "🛒 Compra em andamento"
             situacao_chave = "compra_em_andamento"
             proxima_acao = "Acompanhar recebimento do fornecedor"
