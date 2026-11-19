@@ -1,4 +1,4 @@
-"""HF65.24.36 — Painel de decisão das métricas privadas da AlphaFest.
+"""HF65.24.37 — Painel de decisão das métricas privadas da AlphaFest.
 
 Somente apresentação: não altera coleta, persistência, permissões nem
 considera cliques em WhatsApp como mensagens ou vendas efetivadas.
@@ -6,6 +6,8 @@ considera cliques em WhatsApp como mensagens ou vendas efetivadas.
 from __future__ import annotations
 
 from typing import Any, Callable
+from urllib.parse import urlencode
+import re
 
 
 def _positive_int(value: Any) -> int:
@@ -57,6 +59,20 @@ def _ranking(st, rows, *, empty: str, max_items: int = 8, labeler: Callable[[str
         a, b = st.columns([5, 1])
         a.markdown(f'**{idx:02d}. {label}**')
         b.markdown(f'**{_positive_int(qty)}**')
+
+
+def campaign_link(source: str, medium: str, campaign: str, destination: str) -> str:
+    """Gera somente URLs internas autorizadas e parâmetros UTM, sem dados pessoais."""
+    targets={'Página inicial':'https://alphafest.com.br/',
+             'Para Empresas':'https://alphafest.com.br/empresas/',
+             'Novidades & Ofertas':'https://alphafest.com.br/novidades/'}
+    base=targets.get(destination,targets['Página inicial'])
+    def safe(v, limit=80):
+        value=re.sub(r'[^a-z0-9_-]+','-',str(v or '').strip().lower().replace(' ','-'))
+        return value.strip('-')[:limit]
+    return base+'?'+urlencode({'utm_source':safe(source),
+                                'utm_medium':safe(medium),
+                                'utm_campaign':safe(campaign,120)})
 
 
 def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str]):
@@ -261,7 +277,48 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
         else:
             st.caption('Ainda não há sessões com origem identificada.')
         st.caption('Associação na mesma sessão, não comprovação de venda ou causalidade. Acesso Direto pode incluir aplicativos sem referência; testes internos também podem estar presentes. Compare períodos antes de escolher onde investir.')
-        st.markdown('#### 📣 Campanhas com identificação')
+        st.markdown('#### 📣 Inteligência de campanhas · links rastreáveis')
+        st.caption('As campanhas aparecem após a primeira visita por um link com UTM; cliques no WhatsApp são associados à mesma sessão, não a vendas.')
+        with st.container(border=True):
+            st.markdown('**Criar link para divulgação**')
+            col_a,col_b=st.columns(2)
+            with col_a:
+                origem=st.selectbox('Canal de divulgação', ['instagram','facebook','google','whatsapp','tiktok','youtube','pinterest','outro'],key='hf37_canal')
+                destino=st.selectbox('Página de destino', ['Página inicial','Para Empresas','Novidades & Ofertas'],key='hf37_destino')
+            with col_b:
+                meio=st.selectbox('Tipo de divulgação', ['social','post','stories','bio','mensagem','cpc','email'],key='hf37_meio')
+                nome=st.text_input('Nome da campanha (sem informações pessoais)',value='natal-2026',max_chars=120,key='hf37_nome')
+            if not nome.strip():
+                st.warning('Informe um nome de campanha para gerar o link.')
+            else:
+                link=campaign_link(origem,meio,nome,destino)
+                st.code(link,language=None)
+                st.caption('Copie este link e use na publicação ou no anúncio. O site já lê parâmetros UTM; não é preciso republicar no Cloudflare. Não insira dados de clientes no nome da campanha.')
+        st.markdown('**Campanhas identificadas nos acessos**')
+        periodo_camp=st.radio('Janela de análise das campanhas',['7 dias','30 dias'],horizontal=True,key='hf37_periodo')
+        suffix='7d' if periodo_camp=='7 dias' else '30d'
+        current_campaigns=m.get('campaign_opportunities_'+suffix) or []
+        previous_campaigns=m.get('campaign_opportunities_prev_'+suffix) or []
+        prior={(r['campanha'],r['canal']):r for r in previous_campaigns}
+        if current_campaigns:
+            st.dataframe(pd.DataFrame([{'Campanha':r['campanha'],'Canal':r['canal'],
+                'Sessões':r['sessoes'],'Antes':prior.get((r['campanha'],r['canal']),{}).get('sessoes',0),
+                'Diferença':r['sessoes']-prior.get((r['campanha'],r['canal']),{}).get('sessoes',0),
+                'Sessões com WhatsApp':r['sessoes_whatsapp'],
+                'Cliques no WhatsApp':r['cliques_whatsapp'],
+                'Participação':f"{r['percentual']:.1f}%"} for r in current_campaigns]),
+                hide_index=True,use_container_width=True)
+            st.caption('Antes = janela anterior de igual duração. Sessões com WhatsApp contam uma vez por sessão; múltiplos cliques podem ocorrer. Testes internos podem aparecer.')
+            leader=max(current_campaigns,key=lambda r:(r['sessoes_whatsapp'],r['sessoes']))
+            if leader['sessoes_whatsapp'] >= 3:
+                st.info(f"Campanha com mais sessões de contato: **{leader['campanha']}** ({leader['canal']}), com {leader['sessoes_whatsapp']} sessão(ões) que abriram o WhatsApp. Verifique pedidos recebidos antes de priorizar investimento.")
+            else:
+                st.info('Ainda há poucas sessões de contato por campanha para indicar uma vencedora. Continue identificando os links e comparando períodos.')
+        else:
+            st.info('Nenhuma campanha identificada nesta janela. Divulgue um link gerado acima e acompanhe as visitas após a publicação.')
+        with st.expander('Como interpretar campanha e origem'):
+            st.write('O campo utm_source identifica o canal indicado no link. utm_campaign identifica a ação. A relação com WhatsApp é observada na mesma sessão, não comprova que o cliente enviou mensagem, comprou ou veio exclusivamente por esta campanha. Se alguém chegar sem parâmetros UTM, não é possível atribuir uma campanha com segurança.')
+        st.markdown('#### 📣 Campanhas identificadas por visualizações (histórico)')
         _ranking(st,m.get('top_campaigns') or [],empty='Nenhuma campanha UTM identificada. Use links com utm_source e utm_campaign nas divulgações.',max_items=10)
         with st.expander('Sobre homem, mulher e dados demográficos'):
             st.info('O site não coleta gênero/sexo. Não é possível determinar com confiabilidade se a pessoa é homem ou mulher pela visita, localização ou aparelho. Este dado permanece **não informado**; não fazemos inferências sobre visitantes. Se houver pesquisa voluntária no futuro, ela exige finalidade clara e cuidado com privacidade.')

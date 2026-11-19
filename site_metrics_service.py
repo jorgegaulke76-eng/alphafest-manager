@@ -485,6 +485,44 @@ def _compare_periods(rows: list[dict[str, Any]], now: datetime) -> dict[str, Any
     return periods
 
 
+# HF65.24.37 — associação por sessão e campanha UTM, sem venda presumida.
+def _campaign_opportunities(rows: list[dict[str, Any]], start: datetime, end: datetime) -> list[dict[str, Any]]:
+    """Campanhas identificadas na primeira visita de cada sessão dentro da janela.
+
+    Atribuição conservadora: cliques WhatsApp na mesma sessão; não atribui
+    mensagens enviadas, compras, receita ou campanhas ausentes de UTM.
+    """
+    selected=[]
+    for r in rows:
+        try:
+            t=datetime.fromisoformat(str(r.get('created_at') or '').replace('Z','+00:00'))
+            if t.tzinfo is None: t=t.replace(tzinfo=timezone.utc)
+            t=t.astimezone(timezone.utc)
+        except (ValueError,TypeError):
+            continue
+        if start <= t < end: selected.append(r)
+    first={}
+    for r in sorted(selected,key=lambda r:str(r.get('created_at') or '')):
+        if r.get('event_type') != 'page_view' or _technical_page_path(r.get('page_path')): continue
+        sid=str(r.get('session_id') or '').strip()
+        if sid and sid not in first: first[sid]=r
+    wa_by_sid=Counter(str(r.get('session_id') or '').strip() for r in selected
+                      if r.get('event_type')=='whatsapp_click' and r.get('session_id'))
+    hits=Counter(); wa_sessions=Counter(); wa_clicks=Counter(); sources={}
+    for sid,r in first.items():
+        name=str(r.get('utm_campaign') or '').strip()[:180]
+        if not name: continue
+        src=str(r.get('utm_source') or r.get('traffic_source') or 'Não informado').strip()[:120]
+        key=(name,src)
+        hits[key]+=1
+        if wa_by_sid[sid]: wa_sessions[key]+=1; wa_clicks[key]+=wa_by_sid[sid]
+    return [{'campanha':name,'canal':source,'sessoes':qty,
+             'sessoes_whatsapp':wa_sessions[(name,source)],
+             'cliques_whatsapp':wa_clicks[(name,source)],
+             'percentual':_pct(wa_sessions[(name,source)],qty)}
+            for (name,source),qty in sorted(hits.items(), key=lambda z:(-z[1],z[0][0].casefold(),z[0][1].casefold()))]
+
+
 def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None: now = now.replace(tzinfo=timezone.utc)
@@ -608,6 +646,10 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
           "browsers":profile_browsers.most_common(12),"sources":profile_sources.most_common(12),
           "gender_available":False},
       "product_opportunities_30d":product_opportunities[:20],"channel_opportunities_30d":channel_opportunities[:20],
+      "campaign_opportunities_30d":_campaign_opportunities(all_rows,d30,now)[:50],
+      "campaign_opportunities_7d":_campaign_opportunities(all_rows,d7,now)[:50],
+      "campaign_opportunities_prev_7d":_campaign_opportunities(all_rows,d7-timedelta(days=7),d7)[:50],
+      "campaign_opportunities_prev_30d":_campaign_opportunities(all_rows,d30-timedelta(days=30),d30)[:50],
       "period_comparisons":_compare_periods(all_rows,now),
       "whatsapp_contexts":wa_contexts.most_common(10),"searches_30d":len(search_30),"daily_series":_timeline(all_rows,mode="day",start=d30,end=now),
       "monthly_series":_timeline(all_rows,mode="month",start=month_start,end=now),"yearly_series":_timeline(all_rows,mode="year",start=d3y,end=now),"current_year_series":_timeline(all_rows,mode="month",start=year_start,end=now)
