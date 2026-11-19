@@ -491,6 +491,48 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
     profile_devices=profile_counter('device_type')
     profile_browsers=profile_counter('browser')
     known_city_sessions=sum(v for k,v in profile_cities.items() if k != 'Não informado')
+    # HF65.24.35: oportunidades por interesse agregado; sem atribuir
+    # itens do carrinho a produtos nem transformar cliques em vendas.
+    generic_wa_prefixes = ('orçamento com ', 'orçamento corporativo')
+    wa_named = Counter(name for name, qty in wa_products.items()
+                       for _ in range(qty)
+                       if not name.casefold().startswith(generic_wa_prefixes))
+    product_opportunities = []
+    for name in sorted(set(products) | set(wa_named), key=str.casefold):
+        opens, direct = products[name], wa_named[name]
+        if direct >= 2 and opens >= 3:
+            status = 'Interesse recorrente'
+        elif direct:
+            status = 'Clique direto identificado'
+        elif opens >= 3:
+            status = 'Visualizações recorrentes'
+        else:
+            status = 'Amostra inicial'
+        product_opportunities.append({
+            'produto': name, 'aberturas': opens, 'cliques_diretos': direct,
+            'sinal': status
+        })
+    product_opportunities.sort(key=lambda x: (-x['cliques_diretos'], -x['aberturas'], x['produto'].casefold()))
+
+    # Origem da primeira página da sessão e presença de clique em WhatsApp
+    # na MESMA sessão; associação observada, não causalidade/atribuição.
+    # Uma sessão é contada uma vez em cada indicador.
+    wa_session_ids={str(x.get('session_id') or '').strip() for x in wa_30 if str(x.get('session_id') or '').strip()}
+    channel_opportunities=[]
+    channel_sessions=Counter()
+    channel_contacts=Counter()
+    for sid, row in first_by_session.items():
+        source=(str(row.get('traffic_source') or '').strip()
+                or _traffic_source(str(row.get('referrer') or '')) or 'Não informado')
+        channel_sessions[source] += 1
+        if sid in wa_session_ids:
+            channel_contacts[source] += 1
+    for source, total in channel_sessions.most_common():
+        contacts=channel_contacts[source]
+        channel_opportunities.append({
+            'canal':source, 'sessoes':total,'sessoes_whatsapp':contacts,
+            'percentual':_pct(contacts,total)
+        })
     sessions={str(x.get("session_id") or "") for x in page_30 if str(x.get("session_id") or "")}; visitors={str(x.get("client_id") or "") for x in page_30 if str(x.get("client_id") or "")}
     periods={}
     for key,since in (("today",dtoday),("7d",d7),("30d",d30)):
@@ -513,6 +555,7 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
           "countries":profile_countries.most_common(12),"devices":profile_devices.most_common(12),
           "browsers":profile_browsers.most_common(12),"sources":profile_sources.most_common(12),
           "gender_available":False},
+      "product_opportunities_30d":product_opportunities[:20],"channel_opportunities_30d":channel_opportunities[:20],
       "whatsapp_contexts":wa_contexts.most_common(10),"searches_30d":len(search_30),"daily_series":_timeline(all_rows,mode="day",start=d30,end=now),
       "monthly_series":_timeline(all_rows,mode="month",start=month_start,end=now),"yearly_series":_timeline(all_rows,mode="year",start=d3y,end=now),"current_year_series":_timeline(all_rows,mode="month",start=year_start,end=now)
     }

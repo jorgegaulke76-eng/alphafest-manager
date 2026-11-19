@@ -1,4 +1,4 @@
-"""HF65.24.34 — Painel de decisão das métricas privadas da AlphaFest.
+"""HF65.24.35 — Painel de decisão das métricas privadas da AlphaFest.
 
 Somente apresentação: não altera coleta, persistência, permissões nem
 considera cliques em WhatsApp como mensagens ou vendas efetivadas.
@@ -104,6 +104,26 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
             st.markdown('**Páginas que originaram cliques no WhatsApp**')
             _ranking(st, m.get('top_whatsapp_pages_30d') or [], empty='Ainda não há cliques identificados.', labeler=friendly_name)
     with tab_products:
+        st.markdown('#### 🧭 Ranking de oportunidades · últimos 30 dias')
+        st.caption('Prioriza sinais de interesse observados. Não é ranking de vendas, pedidos ou faturamento.')
+        candidates=m.get('product_opportunities_30d') or []
+        if candidates:
+            limit=st.selectbox('Produtos para analisar', [5, 10, 20], index=0, key='hf652435_limit')
+            rows=[{'Produto':v['produto'], 'Aberturas':_positive_int(v['aberturas']),
+                   'Cliques diretos':_positive_int(v['cliques_diretos']), 'Leitura':v['sinal']}
+                  for v in candidates[:limit]]
+            st.dataframe(pd.DataFrame(rows),hide_index=True,use_container_width=True)
+            st.caption('Cliques diretos são associados ao produto nomeado no botão individual. Orçamentos com múltiplos itens no carrinho NÃO são atribuídos artificialmente a produtos específicos.')
+            featured=candidates[0]
+            with st.container(border=True):
+                st.markdown('**💡 Próxima ação sugerida**')
+                if featured['cliques_diretos']:
+                    st.write(f"Verifique fotos, prazo e disponibilidade de **{featured['produto']}**, pois teve {_positive_int(featured['cliques_diretos'])} clique(s) direto(s) para WhatsApp no período. Confirme a demanda no atendimento antes de lançar uma promoção.")
+                else:
+                    st.write(f"**{featured['produto']}** está entre os mais abertos, mas ainda não tem cliques diretos associados. Revise a apresentação do produto e acompanhe novas sessões antes de investir em anúncio.")
+        else:
+            st.info('Ainda não há aberturas de produtos ou cliques diretos suficientes para montar o ranking.')
+        st.divider()
         st.markdown('#### 🎯 Interesse por produtos · últimos 30 dias')
         a, b = st.columns(2)
         with a:
@@ -190,6 +210,17 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
             profile_ranking(profile.get('browsers') or [],'Sem navegador identificado.',6)
         st.caption('Localização estimada pela rede, quando disponível no Cloudflare; pode ser aproximada ou ausente. Nunca indica endereço residencial, GPS ou identidade do visitante.')
 
+        st.markdown('#### 🎯 Canais com oportunidades de contato')
+        st.caption('Sessões com ao menos um clique no WhatsApp, agrupadas pelo canal de chegada observado na primeira visita da sessão.')
+        channel_rows=m.get('channel_opportunities_30d') or []
+        if channel_rows:
+            st.dataframe(pd.DataFrame([{'Canal':v['canal'], 'Sessões':v['sessoes'],
+                'Sessões com WhatsApp':v['sessoes_whatsapp'],
+                'Participação com clique':f"{v['percentual']:.1f}%"}
+                for v in channel_rows]),hide_index=True,use_container_width=True)
+        else:
+            st.caption('Ainda não há sessões com origem identificada.')
+        st.caption('Associação na mesma sessão, não comprovação de venda ou causalidade. Acesso Direto pode incluir aplicativos sem referência; testes internos também podem estar presentes. Compare períodos antes de escolher onde investir.')
         st.markdown('#### 📣 Campanhas com identificação')
         _ranking(st,m.get('top_campaigns') or [],empty='Nenhuma campanha UTM identificada. Use links com utm_source e utm_campaign nas divulgações.',max_items=10)
         with st.expander('Sobre homem, mulher e dados demográficos'):
