@@ -42,7 +42,7 @@ from site_vitrine_service import resumir_vitrine as _site_resumir_vitrine
 from site_completo_service import gerar_html_site_completo as _site_gerar_html_completo
 from site_campaign_service import DEFAULT_CAMPAIGN_CONFIG as _site_campaign_default, normalize_campaign_config as _site_campaign_normalize
 from site_home_content_service import DEFAULT_HOME_CONTENT_CONFIG as _site_home_default, normalize_home_content_config as _site_home_normalize
-from site_metrics_service import dashboard_summary_cached as _site_metrics_summary, clear_dashboard_summary_cache as _site_metrics_clear_cache, tracking_available as _site_metrics_tracking_available, server_config as _site_metrics_server_config
+from site_metrics_service import dashboard_summary_cached as _site_metrics_summary, clear_dashboard_summary_cache as _site_metrics_clear_cache, tracking_available as _site_metrics_tracking_available, server_config as _site_metrics_server_config, _page_friendly_name as _site_metrics_friendly_name
 from site_galeria_service import resumir_galeria_site as _site_resumir_galeria
 from site_staging_service import gerar_pacote_staging as _site_gerar_pacote_staging, resumo_staging as _site_resumo_staging
 from site_cutover_service import gerar_kit_pre_virada as _site_gerar_kit_pre_virada, resumo_pre_virada as _site_resumo_pre_virada
@@ -28205,18 +28205,23 @@ if pagina_atual == "site":
                     with _res2: st.metric("Empresas → WhatsApp", _cliques_comerciais.get("corporate", 0))
                     with _res3: st.metric("Visitas a Para Empresas", _paginas_comerciais.get("corporate", 0))
                     with _res4: st.metric("Visitas a Novidades & Ofertas", _paginas_comerciais.get("news", 0))
+                    st.caption("Separação por URL: o painel exclui arquivos técnicos (sitemaps, robots, ícones, recursos estáticos) dos rankings comerciais. Isso não equivale à identificação de robôs; o histórico bruto é preservado.")
+                    _qual1, _qual2, _qual3 = st.columns(3)
+                    with _qual1: st.metric("Visualizações comerciais · 30 dias", _m.get("commercial_pageviews_30d", 0))
+                    with _qual2: st.metric("Acessos técnicos por URL · 30 dias", _m.get("technical_pageviews_30d", 0))
+                    with _qual3: st.metric("Sessões comerciais estimadas · 30 dias", _m.get("commercial_sessions_30d", 0))
                     _pages1, _pages2 = st.columns(2)
                     with _pages1:
                         st.markdown("**Páginas mais visitadas**")
                         if _m.get("top_pages_30d"):
                             for _path, _n in _m["top_pages_30d"][:8]:
-                                st.write(f"{_path} — **{_n}**")
+                                st.write(f"{_site_metrics_friendly_name(_path)} — **{_n}**")
                         else: st.caption("Ainda não há dados de páginas.")
                     with _pages2:
                         st.markdown("**Páginas que levaram ao WhatsApp**")
                         if _m.get("top_whatsapp_pages_30d"):
                             for _path, _n in _m["top_whatsapp_pages_30d"][:8]:
-                                st.write(f"{_path} — **{_n}**")
+                                st.write(f"{_site_metrics_friendly_name(_path)} — **{_n}**")
                         else: st.caption("Ainda sem cliques rastreados.")
                     st.caption("Os indicadores específicos de Carrinho e Para Empresas passam a ser coletados após publicar esta versão no Cloudflare. Não são retroativos.")
 

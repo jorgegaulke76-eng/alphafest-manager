@@ -1,6 +1,6 @@
 {
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.30",
-  "created_at": "2026-11-18T18:37:18-03:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.31",
+  "created_at": "2026-11-18T18:59:53-03:00",
   "timezone": "America/Sao_Paulo",
-  "description": "HF65.24.30 - Painel comercial: carrinho, solicitações corporativas e páginas de interesse, preservando métricas privadas atuais."
+  "description": "HF65.24.31 - Métricas com separação de URLs técnicas, rankings amigáveis e contagens comerciais sem apagar histórico bruto."
 }

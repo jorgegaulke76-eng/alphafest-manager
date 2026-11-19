@@ -9,6 +9,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
@@ -380,6 +381,51 @@ def _timeline(rows: Iterable[dict[str, Any]], *, mode: str, start: datetime, end
     return [{"Período": label, "Acessos": counters["page_view"].get(label,0), "Produtos": counters["product_open"].get(label,0), "WhatsApp": counters["whatsapp_click"].get(label,0)} for label in labels]
 
 
+# HF65.24.31 — separação transparente de acessos técnicos por caminho.
+# Não classificar robôs por inferência: sem user-agent/identificação verificada,
+# podemos apenas separar URLs evidentemente técnicas, sem afirmar que foram bots.
+def _normalized_page_path(value: Any) -> str:
+    from urllib.parse import unquote
+    raw = str(value or '/').split('?', 1)[0].split('#', 1)[0].strip()
+    try:
+        raw = unquote(raw)
+    except Exception:
+        pass
+    path = '/' + raw.lstrip('/')
+    path = re.sub(r'/+', '/', path)
+    return path if path == '/' else path.rstrip('/') + '/'
+
+
+def _technical_page_path(value: Any) -> bool:
+    path = _normalized_page_path(value).lower()
+    basename = path.strip('/').split('/')[-1]
+    if basename in {'robots.txt', 'ads.txt', 'favicon.ico', 'manifest.webmanifest', 'site.webmanifest',
+                    'manifest.json', 'sitemap.xml', 'news-sitemap.xml', 'news_sitemap.xml',
+                    'sitemap_index.xml', 'service-worker.js', 'sw.js', 'offline.html',
+                    'apple-touch-icon.png', 'browserconfig.xml', 'security.txt'}:
+        return True
+    if basename.endswith(('.xml', '.json', '.txt', '.webmanifest', '.map', '.js', '.css', '.png', '.jpg', '.jpeg', '.webp', '.svg', '.ico')):
+        return True
+    if path.startswith(('/__af_', '/.well-known/', '/static/', '/assets/', '/_next/')):
+        return True
+    return False
+
+
+def _page_friendly_name(path: str) -> str:
+    p = _normalized_page_path(path)
+    known = {'/': 'Página inicial', '/contato/': 'Contato', '/empresas/': 'Para Empresas',
+             '/novidades/': 'Novidades & Ofertas', '/dicas/': 'Dicas & Inspirações',
+             '/produtos/': 'Produtos', '/galeria/': 'Galeria', '/quem-somos/': 'Quem Somos',
+             '/servicos/': 'Serviços', '/categorias/': 'Categorias'}
+    if p in known: return known[p]
+    if p.startswith('/novidades/pagina-'):
+        return 'Novidades & Ofertas · ' + p.strip('/').split('/')[-1].replace('pagina-', 'página ')
+    if p.startswith('/dicas/'):
+        slug = p.strip('/').split('/')[-1]
+        return 'Dicas · ' + slug.replace('-', ' ').capitalize()
+    return p
+
+
 def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None: now = now.replace(tzinfo=timezone.utc)
@@ -398,13 +444,19 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
     gallery_items=Counter(str(x.get("product_name") or "").strip() for x in gallery_30 if str(x.get("product_name") or "").strip())
     occasions=Counter(str(x.get("product_name") or "").strip() for x in occasion_30 if str(x.get("product_name") or "").strip())
     # Atribuição por caminho e contexto sem armazenar dados preenchidos pelo cliente.
-    page_paths=Counter(str(x.get('page_path') or '/').split('?')[0].split('#')[0] or '/' for x in page_30)
-    business_page_views=sum(n for path,n in page_paths.items() if path.startswith('/empresas'))
-    news_page_views=sum(n for path,n in page_paths.items() if path.startswith('/novidades'))
-    editorial_page_views=sum(n for path,n in page_paths.items() if path.startswith('/dicas'))
+    raw_page_paths=Counter(_normalized_page_path(x.get('page_path')) for x in page_30)
+    technical_pages=Counter({path:n for path,n in raw_page_paths.items() if _technical_page_path(path)})
+    page_paths=Counter({path:n for path,n in raw_page_paths.items() if not _technical_page_path(path)})
+    qualified_page_30=[x for x in page_30 if not _technical_page_path(x.get('page_path'))]
+    commercial_sessions={str(x.get('session_id') or '') for x in qualified_page_30 if str(x.get('session_id') or '')}
+    commercial_visitors={str(x.get('client_id') or '') for x in qualified_page_30 if str(x.get('client_id') or '')}
+    business_page_views=sum(n for path,n in page_paths.items() if path.startswith('/empresas/'))
+    news_page_views=sum(n for path,n in page_paths.items() if path.startswith('/novidades/'))
+    editorial_page_views=sum(n for path,n in page_paths.items() if path.startswith('/dicas/'))
     quote_clicks=sum(1 for x in wa_30 if str(x.get('event_context') or '')=='carrinho')
     business_clicks=sum(1 for x in wa_30 if str(x.get('event_context') or '')=='empresas')
-    wa_by_path=Counter(str(x.get('page_path') or '/').split('?')[0].split('#')[0] or '/' for x in wa_30)
+    wa_by_path=Counter(_normalized_page_path(x.get('page_path')) for x in wa_30 if not _technical_page_path(x.get('page_path')))
+
     traffic_sources=Counter((str(x.get('traffic_source') or '')).strip() or _traffic_source(str(x.get('referrer') or '')) for x in page_30)
     cities=Counter(str(x.get("city") or "").strip() for x in page_30 if str(x.get("city") or "").strip())
     regions=Counter(str(x.get("region") or "").strip() for x in page_30 if str(x.get("region") or "").strip())
@@ -427,6 +479,8 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
       "top_search_terms":search_terms.most_common(10),"traffic_sources":traffic_sources.most_common(10),"top_cities":cities.most_common(10),"top_regions":regions.most_common(10),
       "devices":devices.most_common(10),"browsers":browsers.most_common(10),"top_campaigns":campaigns.most_common(10),"top_gallery":gallery_items.most_common(8),"top_occasions":occasions.most_common(10),
       "commercial_clicks_30d":{"cart":quote_clicks,"corporate":business_clicks},"commercial_pages_30d":{"corporate":business_page_views,"news":news_page_views,"tips":editorial_page_views},"top_pages_30d":page_paths.most_common(12),"top_whatsapp_pages_30d":wa_by_path.most_common(10),
+      "technical_pageviews_30d":sum(technical_pages.values()),"commercial_pageviews_30d":sum(page_paths.values()),"top_technical_pages_30d":technical_pages.most_common(8),
+      "commercial_sessions_30d":len(commercial_sessions),"commercial_visitors_30d":len(commercial_visitors),
       "whatsapp_contexts":wa_contexts.most_common(10),"searches_30d":len(search_30),"daily_series":_timeline(all_rows,mode="day",start=d30,end=now),
       "monthly_series":_timeline(all_rows,mode="month",start=month_start,end=now),"yearly_series":_timeline(all_rows,mode="year",start=d3y,end=now),"current_year_series":_timeline(all_rows,mode="month",start=year_start,end=now)
     }
