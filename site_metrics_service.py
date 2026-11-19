@@ -471,6 +471,26 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
     browsers=Counter(str(x.get("browser") or "").strip() for x in page_30 if str(x.get("browser") or "").strip())
     campaigns=Counter(str(x.get("utm_campaign") or "").strip() for x in page_30 if str(x.get("utm_campaign") or "").strip())
     wa_contexts=Counter(str(x.get("event_context") or "").strip() for x in wa_30 if str(x.get("event_context") or "").strip())
+    # HF65.24.34: perfil agregado da primeira visita por sessão, não por page_view.
+    # Não identifica indivíduos e não infere sexo/gênero a partir de navegação.
+    first_by_session={}
+    for item in sorted(qualified_page_30, key=lambda x: str(x.get('created_at') or '')):
+        sid=str(item.get('session_id') or '').strip()
+        if sid and sid not in first_by_session:
+            first_by_session[sid]=item
+    profile_rows=list(first_by_session.values())
+    def profile_counter(field, fallback='Não informado'):
+        return Counter(str(row.get(field) or '').strip() or fallback for row in profile_rows)
+    profile_sources=Counter(
+        (str(row.get('traffic_source') or '').strip()
+         or _traffic_source(str(row.get('referrer') or '')) or 'Não informado')
+        for row in profile_rows)
+    profile_cities=profile_counter('city')
+    profile_regions=profile_counter('region')
+    profile_countries=profile_counter('country')
+    profile_devices=profile_counter('device_type')
+    profile_browsers=profile_counter('browser')
+    known_city_sessions=sum(v for k,v in profile_cities.items() if k != 'Não informado')
     sessions={str(x.get("session_id") or "") for x in page_30 if str(x.get("session_id") or "")}; visitors={str(x.get("client_id") or "") for x in page_30 if str(x.get("client_id") or "")}
     periods={}
     for key,since in (("today",dtoday),("7d",d7),("30d",d30)):
@@ -488,6 +508,11 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
       "commercial_clicks_30d":{"cart":quote_clicks,"corporate":business_clicks},"commercial_pages_30d":{"corporate":business_page_views,"news":news_page_views,"tips":editorial_page_views},"top_pages_30d":page_paths.most_common(12),"top_whatsapp_pages_30d":wa_by_path.most_common(10),
       "technical_pageviews_30d":sum(technical_pages.values()),"commercial_pageviews_30d":sum(page_paths.values()),"top_technical_pages_30d":technical_pages.most_common(8),
       "commercial_sessions_30d":len(commercial_sessions),"commercial_visitors_30d":len(commercial_visitors),
+      "audience_profile_30d":{"session_count":len(profile_rows),"known_city_sessions":known_city_sessions,
+          "cities":profile_cities.most_common(12),"regions":profile_regions.most_common(12),
+          "countries":profile_countries.most_common(12),"devices":profile_devices.most_common(12),
+          "browsers":profile_browsers.most_common(12),"sources":profile_sources.most_common(12),
+          "gender_available":False},
       "whatsapp_contexts":wa_contexts.most_common(10),"searches_30d":len(search_30),"daily_series":_timeline(all_rows,mode="day",start=d30,end=now),
       "monthly_series":_timeline(all_rows,mode="month",start=month_start,end=now),"yearly_series":_timeline(all_rows,mode="year",start=d3y,end=now),"current_year_series":_timeline(all_rows,mode="month",start=year_start,end=now)
     }

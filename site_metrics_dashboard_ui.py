@@ -1,4 +1,4 @@
-"""HF65.24.33 — Painel de decisão das métricas privadas da AlphaFest.
+"""HF65.24.34 — Painel de decisão das métricas privadas da AlphaFest.
 
 Somente apresentação: não altera coleta, persistência, permissões nem
 considera cliques em WhatsApp como mensagens ou vendas efetivadas.
@@ -131,26 +131,70 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
             st.markdown('**Contextos dos contatos**')
             _ranking(st, m.get('whatsapp_contexts') or [], empty='Nenhum contexto identificado.')
     with tab_public:
-        st.markdown('#### 🌍 De onde vem o interesse · últimos 30 dias')
-        a, b = st.columns(2)
-        with a:
-            st.markdown('**Origem dos acessos**')
-            _ranking(st, m.get('traffic_sources') or [], empty='Sem origens registradas.', max_items=10)
-        with b:
-            st.markdown('**Campanhas identificadas (UTM)**')
-            _ranking(st, m.get('top_campaigns') or [], empty='Nenhuma campanha UTM identificada. Use links identificados nas divulgações.')
-        a, b = st.columns(2)
-        with a:
-            st.markdown('**Cidades aproximadas**')
-            _ranking(st, m.get('top_cities') or [], empty='Sem cidades identificadas.')
-            st.markdown('**Estados / regiões**')
-            _ranking(st, m.get('top_regions') or [], empty='Sem regiões identificadas.')
-        with b:
-            st.markdown('**Dispositivos**')
-            _ranking(st, m.get('devices') or [], empty='Sem dispositivos identificados.')
-            st.markdown('**Navegadores**')
-            _ranking(st, m.get('browsers') or [], empty='Sem navegadores identificados.')
-        st.caption('Localização aproximada e origem dos acessos dependem das informações disponíveis; não representam endereços exatos ou identificação de pessoas.')
+        st.markdown('#### 🌍 Perfil de visitantes · últimos 30 dias')
+        profile=m.get('audience_profile_30d') or {}
+        n=_positive_int(profile.get('session_count'))
+        cities=profile.get('cities') or []
+        regions=profile.get('regions') or []
+        countries=profile.get('countries') or []
+        devices=profile.get('devices') or []
+        sources=profile.get('sources') or []
+        known=_positive_int(profile.get('known_city_sessions'))
+        mobile=sum(_positive_int(v) for k,v in devices if str(k).lower() in ('celular','tablet'))
+        computer=sum(_positive_int(v) for k,v in devices if str(k).lower()=='computador')
+        a,b,c,d=st.columns(4)
+        a.metric('Sessões com perfil',n, help='Uma entrada por sessão comercial identificada nos últimos 30 dias; não são pessoas únicas.')
+        b.metric('Celular / tablet',f'{mobile/n*100:.1f}%' if n else '—',help='Percentual de sessões. Inclui tablet.')
+        c.metric('Computador',f'{computer/n*100:.1f}%' if n else '—',help='Percentual de sessões.')
+        d.metric('Cidade identificada',f'{known/n*100:.1f}%' if n else '—',help='Cobertura da localização aproximada, não precisão geográfica.')
+        st.caption('Distribuição baseada na primeira página registrada de cada sessão. Sessões ≠ pessoas diferentes; dados podem faltar ou sofrer bloqueios de privacidade.')
+
+        def profile_ranking(rows, empty, limit=8):
+            if not rows:
+                st.caption(empty)
+                return
+            for key,value in rows[:limit]:
+                val=_positive_int(value)
+                pct=100*val/n if n else 0
+                x,y=st.columns([5,2])
+                x.write(str(key))
+                y.write(f'**{val}** · {pct:.1f}%')
+
+        st.markdown('#### 📱 Tipo de aparelho e canais de chegada')
+        left,right=st.columns(2)
+        with left:
+            st.markdown('**Como acessam o site**')
+            profile_ranking(devices,'Sem aparelhos identificados.')
+            if devices:
+                df=pd.DataFrame(devices,columns=['Aparelho','Sessões']).set_index('Aparelho')
+                st.bar_chart(df,height=190)
+        with right:
+            st.markdown('**De onde vieram**')
+            profile_ranking(sources,'Sem canais identificados.',10)
+            if sources:
+                df=pd.DataFrame(sources[:10],columns=['Canal','Sessões']).set_index('Canal')
+                st.bar_chart(df,height=190)
+        st.caption('Direto significa que não foi possível identificar um site de origem ou campanha. Links sem UTM podem não permitir distinguir Instagram, WhatsApp e outros aplicativos.')
+
+        st.markdown('#### 📍 Localização aproximada dos acessos')
+        left,right=st.columns(2)
+        with left:
+            st.markdown('**Cidades**')
+            profile_ranking(cities,'Nenhuma cidade disponível.')
+            st.markdown('**Estados e regiões**')
+            profile_ranking(regions,'Nenhuma região disponível.',6)
+        with right:
+            st.markdown('**Países**')
+            profile_ranking(countries,'Nenhum país disponível.',6)
+            st.markdown('**Navegador**')
+            profile_ranking(profile.get('browsers') or [],'Sem navegador identificado.',6)
+        st.caption('Localização estimada pela rede, quando disponível no Cloudflare; pode ser aproximada ou ausente. Nunca indica endereço residencial, GPS ou identidade do visitante.')
+
+        st.markdown('#### 📣 Campanhas com identificação')
+        _ranking(st,m.get('top_campaigns') or [],empty='Nenhuma campanha UTM identificada. Use links com utm_source e utm_campaign nas divulgações.',max_items=10)
+        with st.expander('Sobre homem, mulher e dados demográficos'):
+            st.info('O site não coleta gênero/sexo. Não é possível determinar com confiabilidade se a pessoa é homem ou mulher pela visita, localização ou aparelho. Este dado permanece **não informado**; não fazemos inferências sobre visitantes. Se houver pesquisa voluntária no futuro, ela exige finalidade clara e cuidado com privacidade.')
+        st.caption('Os indicadores anteriores por visualização continuam disponíveis nos relatórios históricos. Este perfil usa sessões para evitar que múltiplas páginas da mesma sessão inflem as contagens.')
     with tab_evolution:
         st.markdown('#### 📈 Evolução dos acessos')
         td, tm, ty = st.tabs(['Dia a dia', 'Mês a mês', 'Ano a ano'])

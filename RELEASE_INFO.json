@@ -1,6 +1,6 @@
 {
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.33",
-  "created_at": "2026-11-19T10:35:00-03:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.34",
+  "created_at": "2026-11-19T10:45:00-03:00",
   "timezone": "America/Sao_Paulo",
-  "description": "HF65.24.33 - Nova interface privada de métricas do site em quatro abas, KPIs comerciais, rankings e orientações para decisão; rastreamento existente preservado."
+  "description": "HF65.24.34 - Perfil agregado por sessão no painel: cidade/região/país aproximados, dispositivo, navegador, fontes e campanhas; sem inferir gênero; coleta existente preservada."
 }
