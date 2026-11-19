@@ -433,6 +433,58 @@ def _page_friendly_name(path: str) -> str:
     return p
 
 
+def _compare_window(rows: list[dict[str, Any]], start: datetime, end: datetime) -> dict[str, Any]:
+    """Métricas de uma janela [início, fim), com fim exclusivo.
+
+    Só considera URLs técnicas no contador bruto, não nas sessões comerciais.
+    Os eventos WhatsApp são associados ao canal da primeira visita naquela janela,
+    sem atribuir venda, pessoa ou conversão a produto.
+    """
+    scoped=[]
+    for row in rows:
+        raw=str(row.get('created_at') or '').strip()
+        try:
+            timestamp=datetime.fromisoformat(raw.replace('Z','+00:00'))
+            if timestamp.tzinfo is None: timestamp=timestamp.replace(tzinfo=timezone.utc)
+            timestamp=timestamp.astimezone(timezone.utc)
+        except (ValueError,TypeError):
+            continue
+        if start <= timestamp < end:
+            scoped.append(row)
+    pages=[r for r in scoped if r.get('event_type') == 'page_view' and not _technical_page_path(r.get('page_path'))]
+    products=[r for r in scoped if r.get('event_type') == 'product_open']
+    whatsapp=[r for r in scoped if r.get('event_type') == 'whatsapp_click']
+    first={}
+    for row in sorted(pages,key=lambda x: str(x.get('created_at') or '')):
+        sid=str(row.get('session_id') or '').strip()
+        if sid and sid not in first: first[sid]=row
+    wa_sids={str(r.get('session_id') or '').strip() for r in whatsapp if r.get('session_id')}
+    channel_sessions=Counter()
+    channel_wa=Counter()
+    for sid,row in first.items():
+        source=(str(row.get('traffic_source') or '').strip()
+                or _traffic_source(str(row.get('referrer') or '')) or 'Não informado')
+        channel_sessions[source]+=1
+        if sid in wa_sids: channel_wa[source]+=1
+    return {'visitas':len(pages),'produtos':len(products),'whatsapp':len(whatsapp),
+            'sessoes':len(first),'sessoes_whatsapp':len(set(first)&wa_sids),
+            'carrinho':sum(r.get('event_context')=='carrinho' for r in whatsapp),
+            'empresas':sum(r.get('event_context')=='empresas' for r in whatsapp),
+            'canais':dict(channel_sessions),'canais_whatsapp':dict(channel_wa),
+            'produtos_abertos':dict(Counter(str(r.get('product_name') or '').strip() for r in products if r.get('product_name')))}
+
+
+def _compare_periods(rows: list[dict[str, Any]], now: datetime) -> dict[str, Any]:
+    periods={}
+    for days in (7,30):
+        cut=now-timedelta(days=days)
+        past=cut-timedelta(days=days)
+        periods[f'{days}d']={'atual':_compare_window(rows,cut,now),
+                             'anterior':_compare_window(rows,past,cut),
+                             'dias':days}
+    return periods
+
+
 def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None: now = now.replace(tzinfo=timezone.utc)
@@ -556,6 +608,7 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
           "browsers":profile_browsers.most_common(12),"sources":profile_sources.most_common(12),
           "gender_available":False},
       "product_opportunities_30d":product_opportunities[:20],"channel_opportunities_30d":channel_opportunities[:20],
+      "period_comparisons":_compare_periods(all_rows,now),
       "whatsapp_contexts":wa_contexts.most_common(10),"searches_30d":len(search_30),"daily_series":_timeline(all_rows,mode="day",start=d30,end=now),
       "monthly_series":_timeline(all_rows,mode="month",start=month_start,end=now),"yearly_series":_timeline(all_rows,mode="year",start=d3y,end=now),"current_year_series":_timeline(all_rows,mode="month",start=year_start,end=now)
     }

@@ -1,4 +1,4 @@
-"""HF65.24.35 — Painel de decisão das métricas privadas da AlphaFest.
+"""HF65.24.36 — Painel de decisão das métricas privadas da AlphaFest.
 
 Somente apresentação: não altera coleta, persistência, permissões nem
 considera cliques em WhatsApp como mensagens ou vendas efetivadas.
@@ -103,6 +103,46 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
         with p2:
             st.markdown('**Páginas que originaram cliques no WhatsApp**')
             _ranking(st, m.get('top_whatsapp_pages_30d') or [], empty='Ainda não há cliques identificados.', labeler=friendly_name)
+        st.markdown('#### 📊 Comparativo de desempenho')
+        comparisons=m.get('period_comparisons') or {}
+        select=st.radio('Comparar períodos equivalentes', ['7 dias', '30 dias'],horizontal=True,key='hf652436_compare')
+        comparison=comparisons.get('7d' if select=='7 dias' else '30d') or {}
+        recent=comparison.get('atual') or {}
+        before=comparison.get('anterior') or {}
+        if not comparison:
+            st.caption('Ainda não há comparativo disponível nesta versão dos dados.')
+        else:
+            def variation(key):
+                new=_positive_int(recent.get(key)); old=_positive_int(before.get(key))
+                if old==0: return 'Novo registro' if new else 'Sem atividade'
+                return f'{(new-old)/old*100:+.1f}%'
+            st.caption('Janelas consecutivas de mesma duração. Período atual é móvel e não inclui registros futuros. A variação não demonstra aumento de vendas.')
+            a,b,c,d=st.columns(4)
+            for target,title,key in ((a,'Visitas comerciais','visitas'),(b,'Sessões identificadas','sessoes'),(c,'Produtos abertos','produtos'),(d,'Cliques no WhatsApp','whatsapp')):
+                new=_positive_int(recent.get(key));old=_positive_int(before.get(key))
+                target.metric(title,new,delta=f'{new-old:+d} em relação ao anterior',help=f'Antes: {old} · Variação: {variation(key)}. Diferença de eventos ou sessões, não vendas.')
+            st.caption('Como interpretar: amostras pequenas e testes internos podem gerar grandes variações. Se o período anterior for zero, não calculamos crescimento percentual.')
+            with st.expander('Comparação dos canais de chegada'):
+                channel_now=recent.get('canais') or {}
+                channel_past=before.get('canais') or {}
+                channels=sorted(set(channel_now)|set(channel_past),key=lambda x:(-channel_now.get(x,0),str(x)))
+                if channels:
+                    st.dataframe(pd.DataFrame([{'Canal':name,'Sessões atuais':channel_now.get(name,0),
+                        'Sessões anteriores':channel_past.get(name,0),
+                        'Sessões com WhatsApp (atual)':(recent.get('canais_whatsapp') or {}).get(name,0),
+                        'Sessões com WhatsApp (anterior)':(before.get('canais_whatsapp') or {}).get(name,0)}
+                        for name in channels]),hide_index=True,use_container_width=True)
+                else: st.caption('Sem origem de sessão identificada nas duas janelas.')
+            with st.expander('Produtos com maior movimento'):
+                now_products=recent.get('produtos_abertos') or {}
+                before_products=before.get('produtos_abertos') or {}
+                names=sorted(set(now_products)|set(before_products),key=lambda n:(-now_products.get(n,0),str(n)))[:15]
+                if names:
+                    st.dataframe(pd.DataFrame([{'Produto':name,'Aberturas atuais':now_products.get(name,0),
+                        'Aberturas anteriores':before_products.get(name,0),
+                        'Diferença':now_products.get(name,0)-before_products.get(name,0)} for name in names]),
+                        hide_index=True,use_container_width=True)
+                else: st.caption('Sem aberturas de produtos nas duas janelas.')
     with tab_products:
         st.markdown('#### 🧭 Ranking de oportunidades · últimos 30 dias')
         st.caption('Prioriza sinais de interesse observados. Não é ranking de vendas, pedidos ou faturamento.')
