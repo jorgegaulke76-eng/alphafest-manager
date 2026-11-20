@@ -26788,6 +26788,52 @@ if pagina_atual == "central":
             if ac2_hf42.button("Abrir pedido", key=f"hf42_prioridade_{pos_hf42}_{num_hf42}", width="stretch"):
                 st.session_state['alerta_proposta_numero'] = num_hf42
                 st.rerun()
+    # HF65.24.48 — planejamento da semana com a mesma fila operacional.
+    # Só leitura: não duplica a agenda nem cria outra fonte de pedidos.
+    from planejamento_semanal_hf48 import planejar as _hf48_planejar
+    semanal_hf48 = _hf48_planejar(fila_producao_hf41, hoje=hoje_local())
+    with st.expander("📅 Planejamento semanal · próximas 7 datas", expanded=False):
+        st.caption("Entregas previstas com data cadastrada. Não altera pedidos, agenda ou pagamentos.")
+        s1_hf48, s2_hf48, s3_hf48, s4_hf48 = st.columns(4)
+        s1_hf48.metric("📦 Entregas na semana", semanal_hf48['total_semana'])
+        s2_hf48.metric("📆 Dias com entregas", semanal_hf48['dias_com_entregas'])
+        s3_hf48.metric("📊 Maior carga em um dia", semanal_hf48['pico'])
+        s4_hf48.metric("🚨 Pendências vencidas", len(semanal_hf48['vencidos']))
+        if semanal_hf48['vencidos']:
+            st.warning(f"{len(semanal_hf48['vencidos'])} pedido(s) com prazo anterior a hoje: revisar a situação real antes de alterar status.")
+        agenda_linhas_hf48 = [
+            {'Data': dia['data'].strftime('%d/%m/%Y'),
+             'Dia': ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'][dia['data'].weekday()],
+             'Entregas previstas': dia['total']}
+            for dia in semanal_hf48['dias']
+        ]
+        st.dataframe(pd.DataFrame(agenda_linhas_hf48), hide_index=True, width="stretch")
+        dias_agendados_hf48 = [dia for dia in semanal_hf48['dias'] if dia['total']]
+        if dias_agendados_hf48:
+            mapa_dias_hf48 = {
+                dia['data'].strftime('%d/%m/%Y') + f" · {dia['total']} pedido(s)": dia
+                for dia in dias_agendados_hf48
+            }
+            dia_escolhido_hf48 = st.selectbox("Ver pedidos do dia", list(mapa_dias_hf48), key="hf48_dia_selecionado")
+            dia_registros_hf48 = mapa_dias_hf48[dia_escolhido_hf48]['pedidos']
+            opcoes_pedidos_hf48 = {
+                f"{p.get('numero_proposta') or 'Sem número'} · {p.get('cliente_nome') or 'Cliente'} · {p.get('fase_nome_hf41') or ''}":
+                    str(p.get('numero_proposta') or '')
+                for p in dia_registros_hf48
+            }
+            if opcoes_pedidos_hf48:
+                d1_hf48, d2_hf48 = st.columns([5, 2])
+                registro_escolhido_hf48 = d1_hf48.selectbox("Pedido previsto", list(opcoes_pedidos_hf48), key="hf48_pedido_selecionado")
+                numero_escolhido_hf48 = opcoes_pedidos_hf48[registro_escolhido_hf48]
+                if d2_hf48.button("📋 Abrir pedido", key="hf48_abrir_pedido", disabled=not numero_escolhido_hf48, width="stretch"):
+                    st.session_state['alerta_proposta_numero'] = numero_escolhido_hf48
+                    st.rerun()
+        else:
+            st.info("Nenhum pedido com entrega prevista nos próximos sete dias.")
+        if semanal_hf48['sem_data']:
+            st.caption(f"{len(semanal_hf48['sem_data'])} pedido(s) sem data prevista não entram na distribuição semanal. Revise os prazos na Central.")
+        st.caption("Capacidade diária é apenas o número de entregas previstas, não horas de trabalho nem tempo de produção. A Agenda da Anna continua sendo a agenda oficial.")
+
     with st.expander("🗓️ Agenda de entregas · próximos compromissos", expanded=False):
         # Usa a mesma fotografia já carregada: não lê novamente o banco.
         agenda_hf42 = [p for p in fila_producao_hf41 if p['entrega_hf41'] is not None][:12]
