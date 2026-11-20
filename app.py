@@ -26836,16 +26836,95 @@ if pagina_atual == "central":
                 registro_hf39["propostas"].add(numero_hf39 or str(id(prop_hf39)))
         if referencias_hf39:
             ordenados_hf39 = sorted(referencias_hf39.values(), key=lambda x: (-len(x["propostas"]), x["nome"].casefold()))
+            # HF65.24.40: lista paginada; sem carregar dezenas de botões na mesma execução.
             with st.expander(f"📚 Orçamento × Catálogo — {len(ordenados_hf39)} produto(s) para revisar", expanded=False):
-                st.caption("Inclui orçamentos e pedidos ainda abertos. Quantidade = propostas distintas; não é estoque, venda ou quantidade de unidades. O cadastro é opcional e não bloqueia a produção.")
-                for idx_hf39, reg_hf39 in enumerate(ordenados_hf39[:30]):
-                    nome_hf39 = reg_hf39["nome"]
-                    c_nome_hf39, c_acao_hf39 = st.columns([6, 2])
-                    c_nome_hf39.write(f"**{nome_hf39}** · {len(reg_hf39['propostas'])} orçamento(s)")
-                    if c_acao_hf39.button("➕ Conferir / cadastrar", key=f"hf39_central_cat_{idx_hf39}", use_container_width=True):
-                        dialog_catalogo_cadastro_anna(nome_prefill=nome_hf39)
-                if len(ordenados_hf39) > 30:
-                    st.caption("Exibindo os 30 mais recorrentes. Os demais permanecem nos orçamentos.")
+                st.caption("Produtos mencionados em propostas abertas. Revisão opcional: NÃO bloqueia produção, entrega nem pagamento. Quantidade = orçamentos distintos.")
+                ocultos_hf40 = st.session_state.setdefault("hf40_catalogo_dispensados", {})
+                if not isinstance(ocultos_hf40, dict):
+                    ocultos_hf40 = {}
+                    st.session_state["hf40_catalogo_dispensados"] = ocultos_hf40
+                col_busca_hf40, col_filtro_hf40, col_tam_hf40 = st.columns([4, 2, 2])
+                busca_hf40 = col_busca_hf40.text_input("🔎 Procurar produto", key="hf40_busca_catalogo", placeholder="Nome do produto orçado")
+                filtro_hf40 = col_filtro_hf40.selectbox("Situação", ["Pendentes", "Dispensados", "Todos"], key="hf40_filtro_catalogo")
+                tamanho_hf40 = col_tam_hf40.selectbox("Por página", [10, 20], key="hf40_tamanho_catalogo")
+                termo_hf40 = normalizar_identidade_produto(busca_hf40)
+                filtrados_hf40 = [
+                    r for r in ordenados_hf39
+                    if (not termo_hf40 or termo_hf40 in normalizar_identidade_produto(r["nome"]))
+                    and (filtro_hf40 == "Todos" or
+                         (normalizar_identidade_produto(r["nome"]) in ocultos_hf40) == (filtro_hf40 == "Dispensados"))
+                ]
+                pag_total_hf40 = max(1, (len(filtrados_hf40) + tamanho_hf40 - 1) // tamanho_hf40)
+                col_cont_hf40, col_pag_hf40 = st.columns([4, 2])
+                col_cont_hf40.caption(f"{len(filtrados_hf40)} resultado(s) · {len(ocultos_hf40)} dispensado(s) nesta sessão")
+                pagina_hf40 = col_pag_hf40.number_input("Página", min_value=1, max_value=pag_total_hf40, value=1, step=1, key="hf40_pagina_catalogo")
+                inicio_hf40 = (pagina_hf40 - 1) * tamanho_hf40
+                atuais_hf40 = filtrados_hf40[inicio_hf40:inicio_hf40 + tamanho_hf40]
+                if not atuais_hf40:
+                    st.info("Nenhum item neste filtro. Experimente outra busca ou situação.")
+                for reg_hf40 in atuais_hf40:
+                    nome_hf40 = reg_hf40["nome"]
+                    chave_hf40 = normalizar_identidade_produto(nome_hf40)
+                    id_hf40 = hashlib.sha1(chave_hf40.encode("utf-8")).hexdigest()[:12]
+                    dispensado_hf40 = chave_hf40 in ocultos_hf40
+                    titulo_hf40 = f"{nome_hf40} · {len(reg_hf40['propostas'])} orçamento(s)"
+                    with st.container(border=True):
+                        col_nome_hf40, col_action_hf40, col_disp_hf40 = st.columns([5, 2, 2])
+                        col_nome_hf40.markdown("**" + html.escape(titulo_hf40) + "**")
+                        if dispensado_hf40:
+                            if col_disp_hf40.button("↩️ Repor na lista", key=f"hf40_repor_{id_hf40}", use_container_width=True):
+                                ocultos_hf40.pop(chave_hf40, None)
+                                st.rerun()
+                        else:
+                            if col_action_hf40.button("➕ Cadastrar novo", key=f"hf40_cadastrar_{id_hf40}", use_container_width=True):
+                                dialog_catalogo_cadastro_anna(nome_prefill=nome_hf40)
+                            if col_disp_hf40.button("Não cadastrar", key=f"hf40_dispensar_{id_hf40}", use_container_width=True):
+                                ocultos_hf40[chave_hf40] = nome_hf40
+                                st.rerun()
+                            with st.expander("🔗 Vincular a produto existente", expanded=False):
+                                st.caption("Use somente quando os dois nomes significam o MESMO produto. Será salvo um alias no Catálogo; a proposta original não é modificada.")
+                                termo_existente_hf40 = st.text_input("Buscar no Catálogo Oficial", key=f"hf40_buscar_oficial_{id_hf40}", placeholder="Digite parte do nome oficial")
+                                termo_oficial_hf40 = normalizar_identidade_produto(termo_existente_hf40)
+                                candidatos_hf40 = [
+                                    (i, str(prod.get("Nome") or "").strip())
+                                    for i, prod in enumerate(cat_central_hf38)
+                                    if isinstance(prod, dict) and str(prod.get("Nome") or "").strip()
+                                    and termo_oficial_hf40 and termo_oficial_hf40 in normalizar_identidade_produto(prod.get("Nome"))
+                                ][:30]
+                                if termo_oficial_hf40 and not candidatos_hf40:
+                                    st.info("Nenhum produto correspondente. Ajuste a busca ou use Cadastrar novo.")
+                                if candidatos_hf40:
+                                    escolha_hf40 = st.selectbox("Produto oficial", candidatos_hf40, format_func=lambda x: x[1], key=f"hf40_oficial_{id_hf40}")
+                                    if st.button("Confirmar vínculo", type="primary", key=f"hf40_confirmar_{id_hf40}"):
+                                        idx_oficial_hf40, nome_oficial_hf40 = escolha_hf40
+                                        conflito_hf40 = conflito_alias_catalogo(nome_hf40, nome_oficial_hf40, cat_central_hf38)
+                                        if conflito_hf40:
+                                            st.error("Vínculo não salvo: " + str(conflito_hf40))
+                                        elif normalizar_identidade_produto(nome_hf40) == normalizar_identidade_produto(nome_oficial_hf40):
+                                            st.info("Este item já usa o nome oficial. Atualize a lista se necessário.")
+                                        else:
+                                            catalogo_atual_hf40 = carregar_catalogo()
+                                            idx_atual_hf40 = next((i for i, prod in enumerate(catalogo_atual_hf40) if normalizar_identidade_produto(prod.get("Nome")) == normalizar_identidade_produto(nome_oficial_hf40)), None)
+                                            if idx_atual_hf40 is None:
+                                                st.error("Produto não localizado após atualização do catálogo.")
+                                            else:
+                                                conflito_atual_hf40 = conflito_alias_catalogo(nome_hf40, nome_oficial_hf40, catalogo_atual_hf40)
+                                                if conflito_atual_hf40:
+                                                    st.error("Vínculo não salvo: " + str(conflito_atual_hf40))
+                                                else:
+                                                    atual_hf40 = dict(catalogo_atual_hf40[idx_atual_hf40])
+                                                    atuais_aliases_hf40 = list(atual_hf40.get("Aliases") or [])
+                                                    if chave_hf40 not in {normalizar_identidade_produto(x) for x in atuais_aliases_hf40}:
+                                                        atuais_aliases_hf40.append(nome_hf40)
+                                                    atual_hf40["Aliases"] = atuais_aliases_hf40
+                                                    atual_hf40["AtualizadoEm"] = agora_local().isoformat(timespec="seconds")
+                                                    catalogo_atual_hf40[idx_atual_hf40] = atual_hf40
+                                                    if salvar_catalogo(catalogo_atual_hf40) is not False:
+                                                        st.session_state["_mensagem_sucesso_pendente"] = f"Vínculo confirmado: {nome_hf40} → {nome_oficial_hf40}."
+                                                        st.rerun()
+                                                    else:
+                                                        st.error("Não foi possível salvar o vínculo. Tente novamente.")
+                st.caption("'Não cadastrar' oculta o item somente nesta sessão de trabalho. Não exclui dados ou pedidos e pode ser revertido em 'Dispensados'.")
     if pedidos_em_andamento_hf9:
         with st.expander(f"🔄 Pedidos em andamento — continuar atualização ({len(pedidos_em_andamento_hf9)})", expanded=False):
             consumos_idx_hf9 = _snapshot_operacional_central_hf36["consumos_ativos_por_proposta"]

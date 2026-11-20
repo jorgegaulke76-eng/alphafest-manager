@@ -1,6 +1,6 @@
 {
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.39",
-  "created_at": "2026-11-19T12:46:00-03:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.40",
+  "created_at": "2026-11-20T09:02:57-03:00",
   "timezone": "America/Sao_Paulo",
-  "description": "HF65.24.39 — Central Orçamento × Catálogo com recorrência por proposta e cadastro assistido, conferência de produtos semelhantes e bloqueio de duplicação por nome ou alias; produção sob encomenda mantida."
+  "description": "HF65.24.40 — Central Orçamento × Catálogo compacta, com busca, filtros, paginação, cadastro assistido, vínculo por alias e dispensa reversível por sessão; operação sob encomenda preservada."
 }
