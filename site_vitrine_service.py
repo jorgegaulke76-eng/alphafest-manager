@@ -557,6 +557,20 @@ def gerar_html_vitrine(
     const closeBtn=modal.querySelector('.product-detail-close'); if(closeBtn)closeBtn.focus();
   }
   function close(){modal.hidden=true;modal.setAttribute('aria-hidden','true');document.body.classList.remove('product-modal-open');if(current)current.focus();}
+  // HF65.24.52: abre a ficha diretamente quando o visitante chega por campanha.
+  // O identificador é comparado com os produtos existentes, sem HTML dinâmico.
+  try {
+    const requested=new URLSearchParams(window.location.search).get('produto');
+    if(requested && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(requested)) {
+      const match=cards.find(c=>c.dataset.product===requested);
+      if(match) {
+        open(match);
+        window.dispatchEvent(new CustomEvent('alphafest:metric',{
+          detail:{type:'product_open',product:match.dataset.detailName||'',context:'campaign_product'}
+        }));
+      }
+    }
+  } catch(e) { /* sem impacto na navegação normal */ }
   cards.forEach(function(card){
     card.addEventListener('click',function(){open(card);});
     card.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();open(card);}});
