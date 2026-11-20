@@ -61,7 +61,7 @@ def _ranking(st, rows, *, empty: str, max_items: int = 8, labeler: Callable[[str
         b.markdown(f'**{_positive_int(qty)}**')
 
 
-def campaign_link(source: str, medium: str, campaign: str, destination: str) -> str:
+def campaign_link(source: str, medium: str, campaign: str, destination: str, product_slug: str = '') -> str:
     """Gera somente URLs internas autorizadas e parâmetros UTM, sem dados pessoais."""
     targets={'Página inicial':'https://alphafest.com.br/',
              'Para Empresas':'https://alphafest.com.br/empresas/',
@@ -70,9 +70,15 @@ def campaign_link(source: str, medium: str, campaign: str, destination: str) -> 
     def safe(v, limit=80):
         value=re.sub(r'[^a-z0-9_-]+','-',str(v or '').strip().lower().replace(' ','-'))
         return value.strip('-')[:limit]
-    return base+'?'+urlencode({'utm_source':safe(source),
-                                'utm_medium':safe(medium),
-                                'utm_campaign':safe(campaign,120)})
+    params={'utm_source':safe(source), 'utm_medium':safe(medium),
+            'utm_campaign':safe(campaign,120)}
+    if destination=='Produto específico':
+        slug=safe(product_slug,120)
+        if not slug:
+            raise ValueError('Informe o identificador (slug) do produto.')
+        base=targets['Página inicial']
+        params={'produto':slug, **params}
+    return base+'?'+urlencode(params)
 
 
 def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str]):
@@ -284,16 +290,19 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
             col_a,col_b=st.columns(2)
             with col_a:
                 origem=st.selectbox('Canal de divulgação', ['instagram','facebook','google','whatsapp','tiktok','youtube','pinterest','outro'],key='hf37_canal')
-                destino=st.selectbox('Página de destino', ['Página inicial','Para Empresas','Novidades & Ofertas'],key='hf37_destino')
+                destino=st.selectbox('Página de destino', ['Página inicial','Para Empresas','Novidades & Ofertas','Produto específico'],key='hf37_destino')
+                slug_produto=st.text_input('Identificador do produto (slug)',key='hf52_produto_slug',help='Preencha quando o destino for Produto específico. Use o valor data-product do produto na vitrine.') if destino=='Produto específico' else ''
             with col_b:
                 meio=st.selectbox('Tipo de divulgação', ['social','post','stories','bio','mensagem','cpc','email'],key='hf37_meio')
                 nome=st.text_input('Nome da campanha (sem informações pessoais)',value='natal-2026',max_chars=120,key='hf37_nome')
             if not nome.strip():
                 st.warning('Informe um nome de campanha para gerar o link.')
+            elif destino=='Produto específico' and not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', slug_produto.strip()):
+                st.warning('Informe um slug válido (letras minúsculas, números e hífens) do produto já publicado.')
             else:
-                link=campaign_link(origem,meio,nome,destino)
+                link=campaign_link(origem,meio,nome,destino,slug_produto)
                 st.code(link,language=None)
-                st.caption('Copie este link e use na publicação ou no anúncio. O site já lê parâmetros UTM; não é preciso republicar no Cloudflare. Não insira dados de clientes no nome da campanha.')
+                st.caption('Copie este link para a divulgação. Para destinos de produto, publique antes o site atualizado. O produto precisa estar disponível na vitrine; não insira dados pessoais no nome da campanha.')
         st.markdown('**Campanhas identificadas nos acessos**')
         periodo_camp=st.radio('Janela de análise das campanhas',['7 dias','30 dias'],horizontal=True,key='hf37_periodo')
         suffix='7d' if periodo_camp=='7 dias' else '30d'
