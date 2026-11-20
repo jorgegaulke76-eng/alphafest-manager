@@ -8,6 +8,7 @@ from __future__ import annotations
 from typing import Any, Callable
 from urllib.parse import urlencode
 import re
+from site_vitrine_service import _slug as _slug_produto_site
 
 
 def _positive_int(value: Any) -> int:
@@ -73,9 +74,9 @@ def campaign_link(source: str, medium: str, campaign: str, destination: str, pro
     params={'utm_source':safe(source), 'utm_medium':safe(medium),
             'utm_campaign':safe(campaign,120)}
     if destination=='Produto específico':
-        slug=safe(product_slug,120)
-        if not slug:
-            raise ValueError('Informe o identificador (slug) do produto.')
+        if not str(product_slug or '').strip() or not any(ch.isalnum() for ch in str(product_slug)):
+            raise ValueError('Informe o nome ou identificador do produto.')
+        slug=_slug_produto_site(str(product_slug))[:120]
         base=targets['Página inicial']
         params={'produto':slug, **params}
     return base+'?'+urlencode(params)
@@ -291,14 +292,14 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
             with col_a:
                 origem=st.selectbox('Canal de divulgação', ['instagram','facebook','google','whatsapp','tiktok','youtube','pinterest','outro'],key='hf37_canal')
                 destino=st.selectbox('Página de destino', ['Página inicial','Para Empresas','Novidades & Ofertas','Produto específico'],key='hf37_destino')
-                slug_produto=st.text_input('Identificador do produto (slug)',key='hf52_produto_slug',help='Preencha quando o destino for Produto específico. Use o valor data-product do produto na vitrine.') if destino=='Produto específico' else ''
+                slug_produto=st.text_input('Nome do produto no catálogo ou slug',key='hf52_produto_slug',help='Digite o nome exatamente como aparece na vitrine; o link usa o mesmo slug do site. Confirme a ficha na prévia antes de divulgar.') if destino=='Produto específico' else ''
             with col_b:
                 meio=st.selectbox('Tipo de divulgação', ['social','post','stories','bio','mensagem','cpc','email'],key='hf37_meio')
                 nome=st.text_input('Nome da campanha (sem informações pessoais)',value='natal-2026',max_chars=120,key='hf37_nome')
             if not nome.strip():
                 st.warning('Informe um nome de campanha para gerar o link.')
-            elif destino=='Produto específico' and not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', slug_produto.strip()):
-                st.warning('Informe um slug válido (letras minúsculas, números e hífens) do produto já publicado.')
+            elif destino=='Produto específico' and not any(ch.isalnum() for ch in slug_produto):
+                st.warning('Informe o nome do produto publicado na vitrine.')
             else:
                 link=campaign_link(origem,meio,nome,destino,slug_produto)
                 st.code(link,language=None)
