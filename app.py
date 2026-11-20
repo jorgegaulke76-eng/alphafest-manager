@@ -26834,6 +26834,35 @@ if pagina_atual == "central":
             st.caption(f"{len(semanal_hf48['sem_data'])} pedido(s) sem data prevista não entram na distribuição semanal. Revise os prazos na Central.")
         st.caption("Capacidade diária é apenas o número de entregas previstas, não horas de trabalho nem tempo de produção. A Agenda da Anna continua sendo a agenda oficial.")
 
+    # HF65.24.49 — triagem diária, somente leitura da fila já carregada.
+    from planejamento_diario_hf49 import plano_diario as _hf49_plano, filtrar as _hf49_filtrar
+    diario_hf49 = _hf49_plano(fila_producao_hf41, hoje=hoje_local())
+    with st.expander("☀️ Planejamento diário · o que precisa de atenção", expanded=False):
+        st.caption("Resumo para organização da Anna; os status e a agenda oficial continuam nos pedidos. Nenhum registro é atualizado aqui.")
+        grupos_hf49 = diario_hf49['grupos']
+        a_hf49, b_hf49, c_hf49, d_hf49 = st.columns(4)
+        a_hf49.metric("🚨 Atrasados", len(grupos_hf49['Atrasados']))
+        b_hf49.metric("📅 Entregas hoje", len(grupos_hf49['Hoje']))
+        c_hf49.metric("⏰ Entregas amanhã", len(grupos_hf49['Amanhã']))
+        d_hf49.metric("❓ Sem prazo", diario_hf49['sem_prazo'])
+        if diario_hf49['prontos_urgentes']:
+            st.info(f"{diario_hf49['prontos_urgentes']} pedido(s) urgente(s) já pronto(s): priorize combinar retirada ou entrega com o cliente.")
+        grupo_selecionado_hf49 = st.selectbox("Ver situação", ["Atrasados", "Hoje", "Amanhã", "Sem prazo", "Depois"], key="hf49_grupo")
+        busca_diaria_hf49 = st.text_input("Buscar nesta situação", placeholder="Número, cliente ou produto", key="hf49_busca")
+        lista_diaria_hf49 = _hf49_filtrar(grupos_hf49[grupo_selecionado_hf49], busca_diaria_hf49)
+        st.caption(f"{len(lista_diaria_hf49)} pedido(s) encontrado(s) · exibindo até 8. Os demais permanecem na fila completa.")
+        if not lista_diaria_hf49:
+            st.success("Nenhum pedido nesta seleção.")
+        for idx_hf49, pedido_hf49 in enumerate(lista_diaria_hf49[:8]):
+            n_hf49 = str(pedido_hf49.get('numero_proposta') or '')
+            lado_a_hf49, lado_b_hf49 = st.columns([5, 2])
+            lado_a_hf49.markdown(f"**{html.escape(n_hf49 or 'Sem número')} · {html.escape(str(pedido_hf49.get('cliente_nome') or 'Cliente'))}**")
+            lado_a_hf49.caption(f"{pedido_hf49.get('data_texto_hf41') or 'Sem data'} · {pedido_hf49.get('fase_nome_hf41') or 'Revisar etapa'} · {pedido_hf49['acao_hf49']}")
+            if lado_b_hf49.button("Abrir pedido", key=f"hf49_abrir_{idx_hf49}_{n_hf49}", disabled=not n_hf49, width="stretch"):
+                st.session_state['alerta_proposta_numero'] = n_hf49
+                st.rerun()
+        st.caption("Atenção: contagens representam pedidos com datas previstas, não capacidade ou horas de trabalho; verifique o prazo com o cliente antes de mudar o pedido.")
+
     with st.expander("🗓️ Agenda de entregas · próximos compromissos", expanded=False):
         # Usa a mesma fotografia já carregada: não lê novamente o banco.
         agenda_hf42 = [p for p in fila_producao_hf41 if p['entrega_hf41'] is not None][:12]
