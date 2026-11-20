@@ -1,6 +1,6 @@
 {
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.44",
-  "created_at": "2026-11-20T14:27:24-03:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.45",
+  "created_at": "2026-11-20T14:44:00-03:00",
   "timezone": "America/Sao_Paulo",
-  "description": "HF65.24.44 — atalhos confirmados para Pronto/Entregue no editor e acesso direto à proposta pela agenda, preservando pagamento e operação sob encomenda."
+  "description": "HF65.24.45 — painel compacto de comunicação manual por WhatsApp no pedido aberto, com modelos editáveis para aprovação de arte, pronto e agendamento de entrega; sem envios automáticos, alterações de status, estoque ou financeiro."
 }

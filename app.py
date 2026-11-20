@@ -26970,6 +26970,34 @@ if pagina_atual == "central":
                         f"• {item_central_sel.get('produto', 'Produto')} · Tema: {tema_item_hf653} · "
                         f"Qtd.: {_i8121_quantidade(qtd_item_hf653)} · Valor: {_anna_fmt_moeda(qtd_item_hf653 * unit_item_hf653)}"
                     )
+                # HF65.24.45 — contato manual com o cliente, sem gravar nem enviar mensagens.
+                # Os avisos operacionais continuam na área oficial de logística.
+                with st.expander("📱 Comunicar cliente · WhatsApp", expanded=False):
+                    from comunicacao_pedidos_hf45 import MODELOS as _hf45_modelos, mensagem_modelo as _hf45_modelo, url_whatsapp as _hf45_url
+                    st.caption("Escolha e revise a mensagem. Abrir o WhatsApp não registra aviso nem altera status; confirme o envio no aplicativo.")
+                    _hf45_tipo = st.selectbox(
+                        "Tipo de comunicação", list(_hf45_modelos),
+                        key=f"hf45_tipo_{numero_central_selecionado}",
+                    )
+                    _hf45_texto_padrao = _hf45_modelo(
+                        _hf45_tipo,
+                        str(proposta_central_selecionada.get("numero_proposta") or ""),
+                        str(proposta_central_selecionada.get("cliente_nome") or ""),
+                    )
+                    _hf45_texto = st.text_area(
+                        "Mensagem para revisar", value=_hf45_texto_padrao,
+                        key=f"hf45_texto_{numero_central_selecionado}_{_hf45_tipo}", height=130,
+                        max_chars=1500,
+                    )
+                    _hf45_numero = proposta_central_selecionada.get("whatsapp") or proposta_central_selecionada.get("cliente_wa")
+                    _hf45_link = _hf45_url(_hf45_numero, _hf45_texto)
+                    if _hf45_link:
+                        st.link_button("📱 Abrir WhatsApp com mensagem", _hf45_link, width="stretch")
+                    else:
+                        st.info("Cadastre um WhatsApp válido do cliente neste pedido para habilitar a abertura direta. A mensagem pode ser copiada manualmente.")
+                        st.code(_hf45_texto, language=None)
+                    st.caption("Não há envio automático. A confirmação do aviso, quando necessária, permanece na Central de Entregas.")
+
                 _i8124_render_status_pedido(proposta_central_selecionada, prefixo=f"central_estoque_{numero_central_selecionado}", detalhado=True)
 
                 # CAT1-HF9 — mostra a mesma leitura da Central de Reserva dentro
