@@ -26686,6 +26686,37 @@ if pagina_atual == "central":
     # HF65.24.42 — prioridades legadas ainda são calculadas para compatibilidade,
     # mas a apresentação foi unificada na Central abaixo, evitando alertas repetidos.
 
+    # HF65.24.46 — acompanhamento resumido de pedidos, sem consultas extras ao banco.
+    from acompanhamento_pedidos_hf46 import acompanhar as _hf46_acompanhar, filtrar as _hf46_filtrar
+    agenda_status_hf46 = _anna_montar_agenda(historico_central, hoje=hoje_local()) if _anna_montar_agenda else []
+    resumo_hf46, fila_hf46 = _hf46_acompanhar(agenda_status_hf46, hoje=hoje_local())
+    with st.expander(f"📌 Acompanhamento de pedidos — {resumo_hf46['abertos']} aberto(s)", expanded=True):
+        st.caption("Uma visão rápida da agenda e dos pedidos abertos. Situações não são alteradas automaticamente.")
+        hf46_col1, hf46_col2, hf46_col3, hf46_col4 = st.columns(4)
+        hf46_col1.metric("📝 Aguardando aprovação", resumo_hf46['aguardando_aprovacao'])
+        hf46_col2.metric("🚨 Prazo vencido", resumo_hf46['prazo_vencido'])
+        hf46_col3.metric("📆 Entrega hoje", resumo_hf46['entrega_hoje'])
+        hf46_col4.metric("📦 Prontos / entrega", resumo_hf46['prontos'])
+        hf46_filtro = st.selectbox(
+            "Mostrar pedidos", ["Prioridades", "Todas", "Aguardando aprovação", "Prazo vencido", "Entrega hoje", "Pronto para entrega"],
+            key="hf46_filtro_pedidos",
+        )
+        hf46_selecionados = (
+            [p for p in fila_hf46 if p['nivel'] < 4] if hf46_filtro == "Prioridades"
+            else _hf46_filtrar(fila_hf46, hf46_filtro)
+        )
+        st.caption(f"{len(hf46_selecionados)} pedido(s) neste filtro · exibindo até 8")
+        if not hf46_selecionados:
+            st.success("Nenhum pedido nesta situação.")
+        for hf46_idx, hf46_pedido in enumerate(hf46_selecionados[:8]):
+            hf46_l, hf46_r = st.columns([6, 2])
+            hf46_l.markdown(f"**{html.escape(hf46_pedido['numero'] or 'Sem número')} — {html.escape(hf46_pedido['cliente'])}**")
+            hf46_l.caption(f"{hf46_pedido['grupo']} · {hf46_pedido['entrega_texto']} · {html.escape(hf46_pedido['status'])}")
+            if hf46_pedido['numero'] and hf46_r.button("Abrir pedido", key=f"hf46_abrir_{hf46_idx}_{hf46_pedido['numero']}", width="stretch"):
+                st.session_state['alerta_proposta_numero'] = hf46_pedido['numero']
+                st.rerun()
+        st.caption("Aguardando aprovação usa o status oficial da proposta; não representa uma confirmação de arte separada.")
+
     # HF65.24.41 — painel enxuto de produção sob encomenda, sem travas de materiais.
     from central_producao_painel_hf41 import FASES as _hf41_fases, preparar_fila as _hf41_preparar, resumo_fila as _hf41_resumo, filtrar_fila as _hf41_filtrar
     fila_producao_hf41 = _hf41_preparar(central_prod_central_i8128, hoje=date.today())
