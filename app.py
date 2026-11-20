@@ -26844,6 +26844,16 @@ if pagina_atual == "central":
         if semanal_hf48['sem_data']:
             st.caption(f"{len(semanal_hf48['sem_data'])} pedido(s) sem data prevista não entram na distribuição semanal. Revise os prazos na Central.")
         st.caption("Capacidade diária é apenas o número de entregas previstas, não horas de trabalho nem tempo de produção. A Agenda da Anna continua sendo a agenda oficial.")
+        # HF65.24.51: exportação da mesma agenda já calculada, sem consultar banco.
+        from roteiro_producao_hf51 import agenda_semanal_csv as _hf51_csv_semana
+        st.download_button(
+            "📥 Baixar agenda da semana (.csv)",
+            data=_hf51_csv_semana(semanal_hf48),
+            file_name=f"alphafest_agenda_semanal_{hoje_local():%Y%m%d}.csv",
+            mime="text/csv",
+            key="hf51_baixar_agenda_semanal",
+            help="Inclui entregas previstas, vencidas e sem data, sem telefone nem valores. Não altera pedidos.",
+        )
 
     # HF65.24.49 — triagem diária, somente leitura da fila já carregada.
     from planejamento_diario_hf49 import plano_diario as _hf49_plano, filtrar as _hf49_filtrar
@@ -26873,6 +26883,28 @@ if pagina_atual == "central":
                 st.session_state['alerta_proposta_numero'] = n_hf49
                 st.rerun()
         st.caption("Atenção: contagens representam pedidos com datas previstas, não capacidade ou horas de trabalho; verifique o prazo com o cliente antes de mudar o pedido.")
+        # HF65.24.51: roteiro local de execução, sem novas consultas, ações ou mensagens.
+        from roteiro_producao_hf51 import roteiro_diario as _hf51_roteiro
+        if usuario_eh_jorge_i8112hf1:
+            incluir_comercial_hf51 = st.checkbox(
+                "Incluir retornos comerciais registrados no roteiro (somente Jorge)",
+                value=False, key="hf51_incluir_retornos",
+                help="Não inclui valores, telefones ou mensagens; apenas propostas com acompanhamento já iniciado.",
+            )
+        else:
+            incluir_comercial_hf51 = False
+        st.download_button(
+            "📥 Baixar roteiro do dia (.txt)",
+            data=_hf51_roteiro(
+                diario_hf49,
+                retornos=retornos_comerciais_hf14 if incluir_comercial_hf51 else None,
+                incluir_retornos=incluir_comercial_hf51,
+            ).encode("utf-8"),
+            file_name=f"alphafest_roteiro_do_dia_{hoje_local():%Y%m%d}.txt",
+            mime="text/plain",
+            key="hf51_baixar_roteiro_diario",
+            help="Resumo para consulta, impressão ou compartilhamento interno. Não envia mensagens nem modifica status.",
+        )
 
     with st.expander("🗓️ Agenda de entregas · próximos compromissos", expanded=False):
         # Usa a mesma fotografia já carregada: não lê novamente o banco.

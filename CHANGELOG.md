@@ -1,3 +1,9 @@
+## HF65.24.51 — Roteiro do dia e agenda exportável
+
+- Botões TXT e CSV nas telas diárias e semanais existentes.
+- Somente Jorge pode incluir retornos comerciais, desativados por padrão.
+- Sem novas consultas, bloqueios de estoque, alterações de pedido ou publicação do site.
+
 # HF65.23 — Conexão OAuth Google/YouTube (2026-11-13)
 
 - Conectar canal oficial @AlphafestItatiba2026 com OAuth pelo próprio Streamlit.
