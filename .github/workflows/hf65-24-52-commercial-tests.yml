@@ -1,0 +1,37 @@
+name: HF65.24.52 - Validacao comercial
+
+on:
+  push:
+    branches:
+      - hf65-24-52-integracao-comercial
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'site_metrics_dashboard_ui.py'
+      - 'site_metrics_service.py'
+      - 'site_vitrine_service.py'
+      - 'tests/test_hf65_24_52_commercial_links.py'
+      - '.github/workflows/hf65-24-52-commercial-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  commercial-links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validar sintaxe Python
+        run: |
+          python -m py_compile site_metrics_dashboard_ui.py site_metrics_service.py site_vitrine_service.py
+      - name: Instalar pytest
+        run: python -m pip install pytest
+      - name: Executar regressao de links comerciais
+        run: python -m pytest -q tests/test_hf65_24_52_commercial_links.py
