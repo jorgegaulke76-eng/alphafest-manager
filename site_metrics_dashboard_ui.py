@@ -284,7 +284,7 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
             st.caption('Ainda não há sessões com origem identificada.')
         st.caption('Associação na mesma sessão, não comprovação de venda ou causalidade. Acesso Direto pode incluir aplicativos sem referência; testes internos também podem estar presentes. Compare períodos antes de escolher onde investir.')
         st.markdown('#### 📣 Inteligência de campanhas · links rastreáveis')
-        st.caption('As campanhas aparecem após a primeira visita por um link com UTM; cliques no WhatsApp são associados à mesma sessão, não a vendas.')
+        st.caption('O painel considera a primeira campanha UTM identificada em cada sessão e somente cliques posteriores no WhatsApp. Isso representa intenção de contato, não mensagens enviadas ou vendas.')
         with st.container(border=True):
             st.markdown('**Criar link para divulgação**')
             col_a,col_b=st.columns(2)
