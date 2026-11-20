@@ -307,3 +307,40 @@ def snapshot_item_catalogo(
         "produto_digitado": str(meta.get("digitado") or ""),
         "produto_catalogo_id": str(meta.get("catalogo_id") or ""),
     }
+
+
+def produto_existente_ou_alias(nome: Any, catalogo: Optional[Sequence[Mapping[str, Any]]], *, ignorar_indice: Optional[int] = None) -> Optional[Dict[str, str]]:
+    """Impede duplicar nome oficial ou alias confirmado; sem associação aproximada."""
+    chave = normalizar_identidade_produto(nome)
+    if not chave:
+        return None
+    for idx, produto in enumerate(catalogo or []):
+        if idx == ignorar_indice or not isinstance(produto, Mapping):
+            continue
+        oficial = str(produto.get('Nome') or '').strip()
+        if normalizar_identidade_produto(oficial) == chave:
+            return {'nome': oficial, 'motivo': 'nome oficial'}
+        if any(normalizar_identidade_produto(alias) == chave for alias in aliases_catalogo_atomicos(produto)):
+            return {'nome': oficial, 'motivo': 'nome alternativo já cadastrado'}
+    return None
+
+
+def sugestoes_produtos_parecidos(nome: Any, catalogo: Optional[Sequence[Mapping[str, Any]]], *, limite: int = 5) -> List[Tuple[str, float]]:
+    """Somente apresenta sugestões para revisão humana; nunca vincula por similaridade."""
+    from difflib import SequenceMatcher
+    chave = normalizar_identidade_produto(nome)
+    if len(chave) < 4:
+        return []
+    candidatos = []
+    for produto in catalogo or []:
+        if not isinstance(produto, Mapping):
+            continue
+        oficial = str(produto.get('Nome') or '').strip()
+        if not oficial:
+            continue
+        chaves = [normalizar_identidade_produto(oficial)]
+        chaves.extend(normalizar_identidade_produto(a) for a in aliases_catalogo_atomicos(produto))
+        score = max((SequenceMatcher(None, chave, x).ratio() for x in chaves if x), default=0.0)
+        if score >= 0.68:
+            candidatos.append((oficial, round(score, 3)))
+    return sorted(candidatos, key=lambda x: (-x[1], x[0].casefold()))[:max(0, limite)]

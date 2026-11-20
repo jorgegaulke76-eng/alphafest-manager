@@ -265,6 +265,8 @@ from catalogo_orcamento_service import (
     produto_catalogo_da_meta as _catalogo_produto_da_meta,
     resumo_dados_catalogo as _catalogo_resumo_dados,
     snapshot_item_catalogo as _catalogo_snapshot_item,
+    produto_existente_ou_alias as _catalogo_produto_duplicado,
+    sugestoes_produtos_parecidos as _catalogo_sugestoes_parecidos,
 )
 from relacionamentos_service import (
     normalizar_texto_cliente as _rel_normalizar_texto_cliente,
@@ -23880,6 +23882,15 @@ def dialog_catalogo_cadastro_anna(
     )
     catalogo = carregar_catalogo()
     produto = dict(catalogo[produto_indice]) if produto_indice is not None and 0 <= produto_indice < len(catalogo) else {}
+    # HF65.24.39: conferir correspondências ANTES de cadastrar, sem alterar pedido.
+    if produto_indice is None and str(nome_prefill or '').strip():
+        coincidencia_hf39 = _catalogo_produto_duplicado(nome_prefill, catalogo)
+        if coincidencia_hf39:
+            st.warning(f"📚 Este item já corresponde a **{coincidencia_hf39['nome']}** ({coincidencia_hf39['motivo']}). Use o cadastro existente; não crie duplicata.")
+        else:
+            sugestoes_hf39 = _catalogo_sugestoes_parecidos(nome_prefill, catalogo, limite=4)
+            if sugestoes_hf39:
+                st.info("🔎 Antes de cadastrar, confira produtos semelhantes: " + " • ".join(nome for nome, _ in sugestoes_hf39) + ". São sugestões para revisão, não vínculos automáticos.")
     _sufixo_prefill = abs(hash(str(nome_prefill or ""))) if nome_prefill else "padrao"
     chave = f"anna_cat_{produto_indice if produto_indice is not None else 'novo'}_{_sufixo_prefill}"
     with st.form(chave, clear_on_submit=False):
@@ -23939,6 +23950,12 @@ def dialog_catalogo_cadastro_anna(
     if salvar:
         if not nome.strip() or not categoria.strip():
             st.error("Informe o nome e o grupo/categoria.")
+            return
+        # A validação é repetida no salvar: outro cadastro pode ter sido incluído
+        # desde que o formulário abriu. Não persistir duplicidade por nome/alias.
+        ja_existe_hf39 = _catalogo_produto_duplicado(nome, carregar_catalogo(), ignorar_indice=produto_indice)
+        if ja_existe_hf39:
+            st.error(f"Produto já cadastrado como **{ja_existe_hf39['nome']}** ({ja_existe_hf39['motivo']}). Consulte ou edite esse produto no Catálogo Oficial.")
             return
         imagens = [u.strip() for u in imagens_urls.splitlines() if u.strip()]
         imagens.extend([x for x in (produto.get("Imagens", []) or []) if not str(x).startswith("http")])
@@ -26800,23 +26817,35 @@ if pagina_atual == "central":
     # continuar os status, mesmo depois de sair da fila de reserva ou de não
     # estar em uma faixa de alerta/prioridade.
     pedidos_em_andamento_hf9 = propostas_aprovadas_abertas_central
-    if MODO_SOB_ENCOMENDA_HF38 and pedidos_em_andamento_hf9:
+    if MODO_SOB_ENCOMENDA_HF38 and historico_central:
         cat_central_hf38 = carregar_catalogo()
-        itens_sem_cadastro_hf38 = []
-        for prop_hf38 in pedidos_em_andamento_hf9:
-            for nome_hf38 in produtos_proposta_sem_catalogo(prop_hf38, catalogo=cat_central_hf38, estoque={}):
-                itens_sem_cadastro_hf38.append((str(prop_hf38.get("numero_proposta") or ""), nome_hf38))
-        if itens_sem_cadastro_hf38:
-            nomes_unicos_hf38 = sorted(set(nome for _, nome in itens_sem_cadastro_hf38))
-            with st.expander(f"📚 Produtos orçados ainda não cadastrados ({len(nomes_unicos_hf38)})", expanded=False):
-                st.caption("Pedidos continuam liberados. Cadastre os produtos novos sem duplicar itens já existentes no catálogo.")
-                for idx_hf38, nome_hf38 in enumerate(nomes_unicos_hf38[:20]):
-                    col_nome_hf38, col_acao_hf38 = st.columns([5,2])
-                    col_nome_hf38.write(nome_hf38)
-                    if col_acao_hf38.button("➕ Cadastrar", key=f"hf38_central_cat_{idx_hf38}",use_container_width=True):
-                        dialog_catalogo_cadastro_anna(nome_prefill=nome_hf38)
-                if len(nomes_unicos_hf38) > 20:
-                    st.caption("Veja os demais itens nos detalhes dos orçamentos.")
+        # HF65.24.39 — cadastro assistido: contar orçamentos, não linhas de itens.
+        # Inclui também orçamentos ainda não aprovados; não cria obrigações
+        # de estoque e não altera os pedidos nem cria produtos automaticamente.
+        referencias_hf39 = {}
+        for prop_hf39 in historico_central:
+            numero_hf39 = str(prop_hf39.get("numero_proposta") or "").strip()
+            estado_hf39 = estados_oficiais_central.get(numero_hf39) or _status_resumo(prop_hf39)
+            if estado_hf39.get("entregue") or estado_hf39.get("cancelado"):
+                continue
+            for nome_hf39 in produtos_proposta_sem_catalogo(prop_hf39, catalogo=cat_central_hf38, estoque={}):
+                chave_hf39 = normalizar_identidade_produto(nome_hf39)
+                if not chave_hf39:
+                    continue
+                registro_hf39 = referencias_hf39.setdefault(chave_hf39, {"nome": nome_hf39, "propostas": set()})
+                registro_hf39["propostas"].add(numero_hf39 or str(id(prop_hf39)))
+        if referencias_hf39:
+            ordenados_hf39 = sorted(referencias_hf39.values(), key=lambda x: (-len(x["propostas"]), x["nome"].casefold()))
+            with st.expander(f"📚 Orçamento × Catálogo — {len(ordenados_hf39)} produto(s) para revisar", expanded=False):
+                st.caption("Inclui orçamentos e pedidos ainda abertos. Quantidade = propostas distintas; não é estoque, venda ou quantidade de unidades. O cadastro é opcional e não bloqueia a produção.")
+                for idx_hf39, reg_hf39 in enumerate(ordenados_hf39[:30]):
+                    nome_hf39 = reg_hf39["nome"]
+                    c_nome_hf39, c_acao_hf39 = st.columns([6, 2])
+                    c_nome_hf39.write(f"**{nome_hf39}** · {len(reg_hf39['propostas'])} orçamento(s)")
+                    if c_acao_hf39.button("➕ Conferir / cadastrar", key=f"hf39_central_cat_{idx_hf39}", use_container_width=True):
+                        dialog_catalogo_cadastro_anna(nome_prefill=nome_hf39)
+                if len(ordenados_hf39) > 30:
+                    st.caption("Exibindo os 30 mais recorrentes. Os demais permanecem nos orçamentos.")
     if pedidos_em_andamento_hf9:
         with st.expander(f"🔄 Pedidos em andamento — continuar atualização ({len(pedidos_em_andamento_hf9)})", expanded=False):
             consumos_idx_hf9 = _snapshot_operacional_central_hf36["consumos_ativos_por_proposta"]
