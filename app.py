@@ -18072,17 +18072,28 @@ with st.sidebar:
         if urgentes_sidebar:
             st.error(f"{urgentes_sidebar} atendimento(s) urgente(s)")
 
-    backup_enviado = st.file_uploader("💾 RESTAURAR BACKUP", type=["json"], key="restaurar_historico")
-    if backup_enviado is not None and st.button("Restaurar agora", width="stretch"):
-        try:
-            restaurado = json.load(backup_enviado)
-            if not isinstance(restaurado, list):
-                raise ValueError("O backup precisa conter uma lista de propostas.")
-            salvar_historico_completo(restaurado)
-            st.success("Backup restaurado.")
-            st.rerun()
-        except Exception as erro:
-            st.error(f"Não foi possível restaurar: {erro}")
+    # HF65.24.50: ferramenta raramente usada fica sob demanda. Evita manter
+    # uploader ativo em toda a navegação e reduz o risco de restauração casual.
+    if st.toggle("🧰 Abrir restauração de backup", key="hf50_mostrar_restauracao", value=False):
+        st.warning("Restaure somente um backup do histórico conferido. Esta ação substitui registros: faça um backup atualizado antes.")
+        backup_enviado = st.file_uploader("💾 RESTAURAR BACKUP", type=["json"], key="restaurar_historico")
+        if backup_enviado is not None:
+            confirmar_restauracao_hf50 = st.checkbox(
+                "Confirmo que revisei o arquivo e desejo restaurar o histórico",
+                key="hf50_confirmar_restauracao",
+            )
+            if st.button("Restaurar agora", width="stretch", disabled=not confirmar_restauracao_hf50):
+                try:
+                    restaurado = json.load(backup_enviado)
+                    if not isinstance(restaurado, list):
+                        raise ValueError("O backup precisa conter uma lista de propostas.")
+                    if salvar_historico_completo(restaurado) is False:
+                        st.error("O banco não confirmou a restauração. Confira a conexão e tente novamente.")
+                    else:
+                        st.success("Backup restaurado.")
+                        st.rerun()
+                except Exception as erro:
+                    st.error(f"Não foi possível restaurar: {erro}")
     st.divider()
     st.caption("📌 Sistema de Orçamentos e Catálogo")
     st.caption(f"Versão {VERSAO_APP}")
@@ -26939,41 +26950,56 @@ if pagina_atual == "central":
                     })
                 st.dataframe(pd.DataFrame(linhas_auditoria_central_hf1), width="stretch", hide_index=True)
 
-    numeros_consumo_ativos_central_i8124 = {
-        str(c.get("numero_proposta") or "").strip()
-        for c in consumos_central_i8124
-        if isinstance(c, dict) and not c.get("estornado") and str(c.get("numero_proposta") or "").strip()
-    }
-    fila_liberacao_central_i8124 = [
-        p for p in historico_central
-        if _i8124_proposta_na_fila_liberacao(p, numeros_consumo_ativos_central_i8124)
-    ]
-    if fila_liberacao_central_i8124:
-        st.info(
-            f"📋 **{len(fila_liberacao_central_i8124)} proposta(s) aprovada(s) aguardam liberação/reserva de materiais.** "
-            "Ao confirmar a reserva, marcar Pronto ou marcar Entregue, a proposta sai automaticamente dessa fila."
-        )
-        with st.expander("📋 Ver propostas aguardando liberação", expanded=False):
-            for prop_fila_central_i8124 in _ordenar_propostas_recentes(fila_liberacao_central_i8124)[:10]:
-                previa_fila_central_i8124 = _i8124_montar_previa_pedido(prop_fila_central_i8124)
-                if previa_fila_central_i8124.get("sem_catalogo"):
-                    situacao_fila_central_i8124 = "🔴 vínculo com Catálogo/Saneamento pendente"
-                elif previa_fila_central_i8124.get("sem_ficha"):
-                    situacao_fila_central_i8124 = "🟡 Ficha Técnica pendente"
-                elif previa_fila_central_i8124.get("necessidades"):
-                    situacao_fila_central_i8124 = "🟢 pronta para liberação"
-                else:
-                    situacao_fila_central_i8124 = "🟡 sem necessidade de material calculada"
-                st.write(
-                    f"• **{prop_fila_central_i8124.get('numero_proposta')} — {prop_fila_central_i8124.get('cliente_nome', 'Cliente')}** · "
-                    f"🧾 {resumo_produtos_pedido(prop_fila_central_i8124)} · {situacao_fila_central_i8124}"
-                )
+    # HF65.24.50: operação sob encomenda não avalia nem apresenta fila legada
+    # de reserva. Os registros históricos permanecem disponíveis em módulos
+    # administrativos, mas não consomem trabalho na Central a cada rerun.
+    if not MODO_SOB_ENCOMENDA_HF38:
+        numeros_consumo_ativos_central_i8124 = {
+            str(c.get("numero_proposta") or "").strip()
+            for c in consumos_central_i8124
+            if isinstance(c, dict) and not c.get("estornado") and str(c.get("numero_proposta") or "").strip()
+        }
+        fila_liberacao_central_i8124 = [
+            p for p in historico_central
+            if _i8124_proposta_na_fila_liberacao(p, numeros_consumo_ativos_central_i8124)
+        ]
+        if fila_liberacao_central_i8124:
+            st.info(
+                f"📋 **{len(fila_liberacao_central_i8124)} proposta(s) aprovada(s) aguardam liberação/reserva de materiais.** "
+                "Ao confirmar a reserva, marcar Pronto ou marcar Entregue, a proposta sai automaticamente dessa fila."
+            )
+            with st.expander("📋 Ver propostas aguardando liberação", expanded=False):
+                for prop_fila_central_i8124 in _ordenar_propostas_recentes(fila_liberacao_central_i8124)[:10]:
+                    previa_fila_central_i8124 = _i8124_montar_previa_pedido(prop_fila_central_i8124)
+                    if previa_fila_central_i8124.get("sem_catalogo"):
+                        situacao_fila_central_i8124 = "🔴 vínculo com Catálogo/Saneamento pendente"
+                    elif previa_fila_central_i8124.get("sem_ficha"):
+                        situacao_fila_central_i8124 = "🟡 Ficha Técnica pendente"
+                    elif previa_fila_central_i8124.get("necessidades"):
+                        situacao_fila_central_i8124 = "🟢 pronta para liberação"
+                    else:
+                        situacao_fila_central_i8124 = "🟡 sem necessidade de material calculada"
+                    st.write(
+                        f"• **{prop_fila_central_i8124.get('numero_proposta')} — {prop_fila_central_i8124.get('cliente_nome', 'Cliente')}** · "
+                        f"🧾 {resumo_produtos_pedido(prop_fila_central_i8124)} · {situacao_fila_central_i8124}"
+                    )
 
     # CAT1-HF9 — todo pedido aprovado e ainda aberto permanece acessível para
     # continuar os status, mesmo depois de sair da fila de reserva ou de não
     # estar em uma faixa de alerta/prioridade.
     pedidos_em_andamento_hf9 = propostas_aprovadas_abertas_central
+    # HF65.24.50: a revisão é administrativa e opcional; só cruzar
+    # propostas com o catálogo quando o usuário realmente pedir.
+    # Um expander fechado ainda executa seu corpo no Streamlit, por isso
+    # o toggle fica ANTES de carregar o catálogo e montar as pendências.
+    mostrar_catalogo_hf50 = False
     if MODO_SOB_ENCOMENDA_HF38 and historico_central:
+        mostrar_catalogo_hf50 = st.toggle(
+            "📚 Revisar Orçamento × Catálogo",
+            key="hf50_abrir_revisao_catalogo",
+            help="Carrega produtos orçados sem cadastro somente quando a revisão for aberta. Não bloqueia os pedidos.",
+        )
+    if MODO_SOB_ENCOMENDA_HF38 and historico_central and mostrar_catalogo_hf50:
         cat_central_hf38 = carregar_catalogo()
         # HF65.24.39 — cadastro assistido: contar orçamentos, não linhas de itens.
         # Inclui também orçamentos ainda não aprovados; não cria obrigações
@@ -26993,7 +27019,8 @@ if pagina_atual == "central":
         if referencias_hf39:
             ordenados_hf39 = sorted(referencias_hf39.values(), key=lambda x: (-len(x["propostas"]), x["nome"].casefold()))
             # HF65.24.40: lista paginada; sem carregar dezenas de botões na mesma execução.
-            with st.expander(f"📚 Orçamento × Catálogo — {len(ordenados_hf39)} produto(s) para revisar", expanded=False):
+            with st.container(border=True):
+                st.markdown(f"**📚 Orçamento × Catálogo — {len(ordenados_hf39)} produto(s) para revisar**")
                 st.caption("Produtos mencionados em propostas abertas. Revisão opcional: NÃO bloqueia produção, entrega nem pagamento. Quantidade = orçamentos distintos.")
                 ocultos_hf40 = st.session_state.setdefault("hf40_catalogo_dispensados", {})
                 if not isinstance(ocultos_hf40, dict):
