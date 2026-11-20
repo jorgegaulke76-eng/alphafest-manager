@@ -113,3 +113,34 @@ def test_campanha_identificada_apos_acesso_direto_conta_apenas_cliques_posterior
     assert row["sessoes"] == 1
     assert row["sessoes_whatsapp"] == 1
     assert row["cliques_whatsapp"] == 2
+
+
+def test_nome_real_do_catalogo_usa_slug_correto_com_acentos():
+    from site_vitrine_service import _slug
+
+    nome = "Bubble Personalizado com Confetes e Balões Metalizado"
+    url = campaign_link("instagram", "stories", "natal-2026", "Produto específico", nome)
+    slug = parse_qs(urlparse(url).query)["produto"][0]
+    assert slug == _slug(nome)
+    assert slug == "bubble-personalizado-com-confetes-e-baloes-metalizado"
+
+
+def test_geracao_da_vitrine_mantem_identificador_e_nao_publica_produto_desmarcado():
+    from site_vitrine_service import gerar_html_vitrine
+
+    produtos = [
+        {"Nome": "Bubble Personalizado com Confetes e Balões Metalizado",
+         "Descricao": "Bubble de festa", "Imagens": ["https://example.com/bubble.webp"],
+         "PublicarSite": True, "Ativo": True, "Categoria": "BALÃO"},
+        {"Nome": "ARCO DE BALÃO TRADICIONAL",
+         "Descricao": "Arco decorativo", "Imagens": ["https://example.com/arco.webp"],
+         "PublicarSite": True, "Ativo": True, "Categoria": "BALÃO"},
+        {"Nome": "Produto Interno",
+         "Descricao": "Reservado", "Imagens": ["https://example.com/interno.webp"],
+         "PublicarSite": False, "Ativo": True, "Categoria": "OUTROS"},
+    ]
+    html = gerar_html_vitrine(produtos, {"nome": "AlphaFest", "celular": "11972949533"}, modo_preview=True)
+    assert 'data-product="bubble-personalizado-com-confetes-e-baloes-metalizado"' in html
+    assert 'data-product="arco-de-balao-tradicional"' in html
+    assert 'data-product="produto-interno"' not in html
+    assert 'class="product-card product-card-compact"' in html
