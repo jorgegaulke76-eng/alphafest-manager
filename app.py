@@ -26729,6 +26729,20 @@ if pagina_atual == "central":
                 'Cliente': p.get('cliente_nome') or 'Cliente',
                 'Etapa': p['fase_nome_hf41'], 'Situação': p['prazo_hf41']
             } for p in agenda_hf42]), width="stretch", hide_index=True)
+            # HF65.24.44: abrir diretamente um compromisso da agenda sem localizar o pedido na fila.
+            opcoes_agenda_hf44 = {
+                f"{p['data_texto_hf41']} · {p.get('cliente_nome') or 'Cliente'} · {p.get('numero_proposta')}": str(p.get('numero_proposta') or '')
+                for p in agenda_hf42 if p.get('numero_proposta')
+            }
+            if opcoes_agenda_hf44:
+                ca_agenda_hf44, cb_agenda_hf44 = st.columns([5, 2])
+                escolha_agenda_hf44 = ca_agenda_hf44.selectbox(
+                    "Selecionar entrega para atendimento", list(opcoes_agenda_hf44),
+                    key="hf44_agenda_selecionada"
+                )
+                if cb_agenda_hf44.button("📋 Abrir pedido", key="hf44_abrir_agenda", width="stretch"):
+                    st.session_state['alerta_proposta_numero'] = opcoes_agenda_hf44[escolha_agenda_hf44]
+                    st.rerun()
             st.caption("Consulta rápida da produção. A Agenda da Anna completa e seus PDFs continuam disponíveis na área própria.")
         else:
             st.info("Nenhuma entrega com data cadastrada nesta fila.")
@@ -26975,6 +26989,42 @@ if pagina_atual == "central":
                         if mc2_hf9.button("🔒 Reservar aqui", key=f"hf653_reserva_central_{numero_central_selecionado}", width="stretch"):
                             dialog_reserva_rapida_pedido(numero_central_selecionado)
 
+                # HF65.24.44: atalho confirmado, sem alterar pagamento ou status prévios.
+                estado_atalho_hf44 = _status_resumo(proposta_central_selecionada)
+                if (estado_atalho_hf44.get("aprovado") and not estado_atalho_hf44.get("entregue")
+                        and not estado_atalho_hf44.get("cancelado") and not estado_atalho_hf44.get("cancelado_cliente")):
+                    with st.expander("⚡ Concluir etapa rapidamente", expanded=False):
+                        st.caption("Use apenas após confirmar que o trabalho está realmente pronto ou foi entregue. Não altera o pagamento.")
+                        opcoes_atalho_hf44 = (["Marcar Pronto", "Marcar Entregue"]
+                                            if not estado_atalho_hf44.get("pronto") else ["Marcar Entregue"])
+                        with st.form(key=f"hf44_atalho_form_{numero_central_selecionado}"):
+                            acao_atalho_hf44 = st.selectbox("Etapa concluída", opcoes_atalho_hf44)
+                            confirmar_atalho_hf44 = st.checkbox("Confirmo que esta etapa foi concluída na realidade")
+                            enviar_atalho_hf44 = st.form_submit_button(
+                                "💾 Confirmar etapa", type="primary", width="stretch"
+                            )
+                        if enviar_atalho_hf44 and confirmar_atalho_hf44:
+                            entregar_atalho_hf44 = acao_atalho_hf44 == "Marcar Entregue"
+                            pronto_atalho_hf44 = True
+                            ok_atalho_hf44, mensagem_atalho_hf44 = salvar_andamento_proposta(
+                                numero_central_selecionado,
+                                True,
+                                bool(estado_atalho_hf44.get("pago")),
+                                pronto_atalho_hf44,
+                                entregar_atalho_hf44,
+                                False,
+                            )
+                            if ok_atalho_hf44:
+                                st.session_state['alerta_proposta_numero'] = None
+                                st.session_state['_central_atualizada_em'] = agora_local().isoformat()
+                                st.session_state['_mensagem_sucesso_pendente'] = mensagem_atalho_hf44
+                                try:
+                                    st.cache_data.clear()
+                                except Exception:
+                                    pass
+                                st.rerun()
+                            else:
+                                st.error(mensagem_atalho_hf44)
                 st.markdown("**Atualização rápida**")
                 up1, up2, up3, up4, up5 = st.columns(5)
                 estado_central_sel = _status_resumo(proposta_central_selecionada)
