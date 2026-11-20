@@ -26738,28 +26738,51 @@ if pagina_atual == "central":
         else:
             st.success("🟢 Nenhum pedido nas faixas críticas, de hoje ou dos próximos 5 dias.")
 
-    if central_prod_central_i8128:
-        st.info(
-            f"🏭 **Produção operacional:** {resumo_prod_central_i8128.get('prontos_iniciar', 0)} pronto(s) para iniciar · "
-            f"{resumo_prod_central_i8128.get('em_producao', 0)} em produção · "
-            f"{resumo_prod_central_i8128.get('prontos_entrega', 0)} pronto(s) para entrega · "
-            f"{resumo_prod_central_i8128.get('preparacao', 0)} em preparação/arte · "
-            f"{resumo_prod_central_i8128.get('bloqueados_material', 0)} bloqueado(s) por liberação/material."
-        )
-        with st.expander(f"📋 Ver fila completa de produção ({len(central_prod_central_i8128)})", expanded=False):
-            for linha_central_i8128 in central_prod_central_i8128:
-                entrega_central_i8128 = linha_central_i8128.get("data_entrega")
-                entrega_txt_central_i8128 = entrega_central_i8128.strftime("%d/%m/%Y") if isinstance(entrega_central_i8128, date) else "Sem data"
-                prioridade_linha_i8131 = mapa_prioridades_central_i8131.get(str(linha_central_i8128.get("numero_proposta") or ""), {})
-                prioridade_txt_i8131 = prioridade_linha_i8131.get("prioridade_rotulo") or "📌 PRIORIDADE NÃO CALCULADA"
-                st.write(
-                    f"• **{prioridade_txt_i8131} · {linha_central_i8128.get('numero_proposta')} — {linha_central_i8128.get('cliente_nome', 'Cliente')}** · "
-                    f"🧾 {linha_central_i8128.get('resumo_produtos', 'Sem itens informados')} · "
-                    f"{linha_central_i8128.get('situacao_operacional')} · entrega {entrega_txt_central_i8128} · "
-                    f"{linha_central_i8128.get('proxima_acao_producao')}"
-                )
-            st.caption("Todos os pedidos aprovados e não entregues aparecem aqui, identificados pela prioridade calculada.")
+    # HF65.24.41 — painel enxuto de produção sob encomenda, sem travas de materiais.
+    from central_producao_painel_hf41 import FASES as _hf41_fases, preparar_fila as _hf41_preparar, resumo_fila as _hf41_resumo, filtrar_fila as _hf41_filtrar
+    fila_producao_hf41 = _hf41_preparar(central_prod_central_i8128, hoje=date.today())
+    resumo_producao_hf41 = _hf41_resumo(fila_producao_hf41)
+    st.markdown("#### 🏭 Central de Produção · AlphaFest")
+    st.caption("Produção sob encomenda · Pedidos por prazo e etapa · Nenhuma liberação de estoque é exigida.")
+    cp1, cp2, cp3, cp4, cp5 = st.columns(5)
+    cp1.metric("🎨 Preparação / arte", resumo_producao_hf41['preparacao'])
+    cp2.metric("🟢 Para iniciar", resumo_producao_hf41['iniciar'])
+    cp3.metric("🔵 Em produção", resumo_producao_hf41['producao'])
+    cp4.metric("📦 Prontos / entrega", resumo_producao_hf41['prontos'])
+    cp5.metric("📅 Atrasados", resumo_producao_hf41['atrasados'])
+    if resumo_producao_hf41['atrasados']:
+        st.warning(f"{resumo_producao_hf41['atrasados']} pedido(s) com data de entrega vencida. Confira os prazos antes de agir.")
+    elif resumo_producao_hf41['hoje']:
+        st.info(f"{resumo_producao_hf41['hoje']} pedido(s) com entrega prevista para hoje.")
+    if resumo_producao_hf41['revisar']:
+        st.caption(f"{resumo_producao_hf41['revisar']} pedido(s) sem etapa manual definida no Fluxo.")
+    with st.expander(f"📋 Fila de produção — {resumo_producao_hf41['total']} pedido(s)", expanded=False):
+        col_b_hf41, col_f_hf41, col_p_hf41, col_q_hf41 = st.columns([3, 2, 2, 1])
+        busca_hf41 = col_b_hf41.text_input("Buscar pedido", placeholder="Número, cliente ou produto", key="hf41_busca_fila")
+        etapa_hf41 = col_f_hf41.selectbox("Etapa", ["Todas", *_hf41_fases.values()], key="hf41_etapa")
+        prazo_hf41 = col_p_hf41.selectbox("Prazo", ["Todos", "Atrasados", "Hoje", "Próximos 2 dias", "Sem data"], key="hf41_prazo")
+        por_pagina_hf41 = col_q_hf41.selectbox("Por página", [10, 20], key="hf41_paginacao")
+        visiveis_hf41 = _hf41_filtrar(fila_producao_hf41, busca_hf41, etapa_hf41, prazo_hf41)
+        paginas_hf41 = max(1, (len(visiveis_hf41) + por_pagina_hf41 - 1) // por_pagina_hf41)
+        pagina_hf41 = st.number_input("Página", min_value=1, max_value=paginas_hf41, value=1, step=1, key="hf41_pagina")
+        st.caption(f"{len(visiveis_hf41)} pedido(s) neste filtro · página {pagina_hf41} de {paginas_hf41}")
+        for pos_hf41, ped_hf41 in enumerate(visiveis_hf41[(pagina_hf41-1)*por_pagina_hf41:pagina_hf41*por_pagina_hf41]):
+            numero_hf41 = str(ped_hf41.get('numero_proposta') or '')
+            cliente_hf41 = html.escape(str(ped_hf41.get('cliente_nome') or 'Cliente'))
+            produtos_hf41 = html.escape(str(ped_hf41.get('resumo_produtos') or 'Itens não informados'))
+            with st.container(border=True):
+                pcol_hf41, btn_hf41 = st.columns([5, 1])
+                pcol_hf41.markdown(f"**{html.escape(numero_hf41)} — {cliente_hf41}**")
+                pcol_hf41.caption(f"{ped_hf41['fase_nome_hf41']} · Entrega: {ped_hf41['data_texto_hf41']} · {ped_hf41['prazo_hf41']}")
+                pcol_hf41.write(f"🧾 {produtos_hf41}")
+                if btn_hf41.button("📋 Abrir pedido", key=f"hf41_abrir_{numero_hf41}_{pos_hf41}", use_container_width=True):
+                    st.session_state['alerta_proposta_numero'] = numero_hf41
+                    st.rerun()
+        if not visiveis_hf41:
+            st.info("Nenhum pedido encontrado neste filtro.")
+        st.caption("Atualize Aprovado, Pronto e Entregue nos controles oficiais do pedido. Esta fila é somente leitura e não grava status.")
 
+    if central_prod_central_i8128:
         if str(usuario_atual.get("nome", "")).strip().casefold() == "jorge":
             with st.expander("🔎 Auditoria operacional da Central · I8.12.8-HF2", expanded=False):
                 st.caption(
