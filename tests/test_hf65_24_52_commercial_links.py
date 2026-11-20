@@ -76,3 +76,40 @@ def test_campanhas_contam_sessoes_e_cliques_sem_presumir_vendas():
     assert facebook["sessoes_whatsapp"] == 1
     assert facebook["cliques_whatsapp"] == 1
     assert len(indexed) == 2
+
+
+def test_campanha_identificada_apos_acesso_direto_conta_apenas_cliques_posteriores():
+    from datetime import datetime, timedelta, timezone
+    from site_metrics_service import _campaign_opportunities
+
+    now = datetime(2026, 11, 20, 15, 0, tzinfo=timezone.utc)
+
+    def event(minute, kind, campaign="", source=""):
+        return {
+            "created_at": (now + timedelta(minutes=minute)).isoformat(),
+            "event_type": kind,
+            "session_id": "sessao-de-teste",
+            "page_path": "/",
+            "utm_campaign": campaign,
+            "utm_source": source,
+        }
+
+    events = [
+        event(0, "page_view"),                    # entrada direta
+        event(1, "whatsapp_click"),               # ANTES da campanha
+        event(2, "page_view", "natal-2026", "instagram"),
+        event(3, "product_open"),
+        event(4, "whatsapp_click"),
+        event(5, "page_view", "outra-campanha", "facebook"),
+        event(6, "whatsapp_click"),
+    ]
+    summary = _campaign_opportunities(
+        events, now - timedelta(seconds=1), now + timedelta(minutes=10)
+    )
+    assert len(summary) == 1
+    row = summary[0]
+    assert row["campanha"] == "natal-2026"
+    assert row["canal"] == "instagram"
+    assert row["sessoes"] == 1
+    assert row["sessoes_whatsapp"] == 1
+    assert row["cliques_whatsapp"] == 2
