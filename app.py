@@ -26557,13 +26557,8 @@ if pagina_atual == "central":
     estoque_central_i8124 = _estoque_runtime_central_hf36
     previsao_central_i8127 = _snapshot_operacional_central_hf36["previsao"]
     if MODO_SOB_ENCOMENDA_HF38:
-        atrasados_hf38 = [p for p in previsao_central_i8127 if p.get("risco_atraso")]
-        prontos_hf38 = [p for p in previsao_central_i8127 if p.get("pronto_oficial")]
-        st.info(
-            f"📦 **Produção sob encomenda:** {len(previsao_central_i8127)} pedido(s) aprovado(s) e não entregue(s) · "
-            f"{len(prontos_hf38)} pronto(s) · {len(atrasados_hf38)} com prazo vencido. "
-            "Nenhuma liberação de estoque é necessária para avançar o pedido."
-        )
+        # O resumo e alertas sob encomenda aparecem em uma única Central abaixo.
+        pass
     else:
         # I8.12.4-HF3 — comunicação operacional do estoque, fila e compras pela Ficha Técnica.
         # HF36 — fontes já lidas no início da Central; não consultar novamente.
@@ -26688,74 +26683,55 @@ if pagina_atual == "central":
     resumo_prioridades_central_i8131 = _snapshot_operacional_central_hf36["resumo_prioridades"]
     mapa_prioridades_central_i8131 = _snapshot_operacional_central_hf36["mapa_prioridades"]
 
-    if str(usuario_atual.get("nome", "")).strip().casefold() == "jorge" and prioridades_central_i8131:
-        st.markdown("#### 🧠 Prioridades operacionais · I8.13.1")
-        ip1, ip2, ip3, ip4, ip5 = st.columns(5)
-        ip1.metric(
-            "🚨 Críticos",
-            resumo_prioridades_central_i8131.get("criticos", 0),
-            help="Atrasos de produção e saídas vencidas. Pedido Pronto nunca é contado como atraso de produção.",
-        )
-        ip2.metric("🔴 Para hoje", resumo_prioridades_central_i8131.get("vence_hoje", 0), help="Produções ou saídas previstas para hoje.")
-        ip3.metric("🟠 Próx. 2 dias", resumo_prioridades_central_i8131.get("proximos_2_dias", 0), help="Pedidos ainda não Prontos com entrega em 1 ou 2 dias.")
-        ip4.metric("📦 Prontos saída", resumo_prioridades_central_i8131.get("prontos_saida", 0), help="Produção concluída aguardando retirada/entrega.")
-        ip5.metric("⚪ Sem data", resumo_prioridades_central_i8131.get("sem_data", 0), help="Pedidos aprovados ainda abertos sem data de entrega registrada.")
-        st.caption(
-            "A prioridade é recalculada automaticamente por prazo + status oficial + produção/material + saída. "
-            "Ela não cria novo status e não substitui Aprovado/Pago/Pronto/Entregue."
-        )
-
-        top_prioridades_central_i8131 = [
-            x for x in prioridades_central_i8131
-            if int(x.get("prioridade_rank", 9)) <= 3
-        ][:10]
-        if top_prioridades_central_i8131:
-            with st.expander(
-                f"🎯 Ver o que precisa de atenção primeiro ({len(top_prioridades_central_i8131)})",
-                expanded=bool(resumo_prioridades_central_i8131.get("criticos")),
-            ):
-                for idx_prio_i8131, linha_prio_i8131 in enumerate(top_prioridades_central_i8131):
-                    entrega_prio_i8131 = linha_prio_i8131.get("data_entrega")
-                    entrega_txt_prio_i8131 = entrega_prio_i8131.strftime("%d/%m/%Y") if isinstance(entrega_prio_i8131, date) else "Sem data"
-                    pcol1, pcol2 = st.columns([7, 2])
-                    pcol1.markdown(
-                        f"**{linha_prio_i8131.get('prioridade_rotulo')} · "
-                        f"{html.escape(str(linha_prio_i8131.get('numero_proposta')))} — "
-                        f"{html.escape(str(linha_prio_i8131.get('cliente_nome') or 'Cliente'))}**"
-                    )
-                    pcol1.caption(
-                        f"🧾 {linha_prio_i8131.get('resumo_produtos') or 'Sem itens informados'} · "
-                        f"Entrega {entrega_txt_prio_i8131} · Área: {linha_prio_i8131.get('area')}"
-                    )
-                    pcol1.write(f"**Por quê:** {linha_prio_i8131.get('motivo_prioridade')}")
-                    pcol1.write(f"**Próxima ação:** {linha_prio_i8131.get('proxima_acao')}")
-                    pcol2.button(
-                        "📋 Abrir pedido",
-                        key=f"i8131_abrir_{idx_prio_i8131}_{linha_prio_i8131.get('numero_proposta')}",
-                        use_container_width=True,
-                        on_click=lambda n=linha_prio_i8131.get("numero_proposta"): st.session_state.__setitem__("alerta_proposta_numero", n),
-                    )
-        else:
-            st.success("🟢 Nenhum pedido nas faixas críticas, de hoje ou dos próximos 5 dias.")
+    # HF65.24.42 — prioridades legadas ainda são calculadas para compatibilidade,
+    # mas a apresentação foi unificada na Central abaixo, evitando alertas repetidos.
 
     # HF65.24.41 — painel enxuto de produção sob encomenda, sem travas de materiais.
     from central_producao_painel_hf41 import FASES as _hf41_fases, preparar_fila as _hf41_preparar, resumo_fila as _hf41_resumo, filtrar_fila as _hf41_filtrar
     fila_producao_hf41 = _hf41_preparar(central_prod_central_i8128, hoje=date.today())
     resumo_producao_hf41 = _hf41_resumo(fila_producao_hf41)
-    st.markdown("#### 🏭 Central de Produção · AlphaFest")
-    st.caption("Produção sob encomenda · Pedidos por prazo e etapa · Nenhuma liberação de estoque é exigida.")
+    st.markdown("#### 🏭 Produção e entregas · Central unificada")
+    st.caption("Uma única fila por prazo e etapa · Pedidos sob encomenda · Nenhum bloqueio por estoque.")
     cp1, cp2, cp3, cp4, cp5 = st.columns(5)
     cp1.metric("🎨 Preparação / arte", resumo_producao_hf41['preparacao'])
     cp2.metric("🟢 Para iniciar", resumo_producao_hf41['iniciar'])
     cp3.metric("🔵 Em produção", resumo_producao_hf41['producao'])
     cp4.metric("📦 Prontos / entrega", resumo_producao_hf41['prontos'])
     cp5.metric("📅 Atrasados", resumo_producao_hf41['atrasados'])
-    if resumo_producao_hf41['atrasados']:
-        st.warning(f"{resumo_producao_hf41['atrasados']} pedido(s) com data de entrega vencida. Confira os prazos antes de agir.")
-    elif resumo_producao_hf41['hoje']:
-        st.info(f"{resumo_producao_hf41['hoje']} pedido(s) com entrega prevista para hoje.")
+    # Uma visão de urgências, sem repetir a mesma lista em Prioridades e Atenção.
+    vencidos_hf42 = [p for p in fila_producao_hf41 if p['prioridade_hf41'] == 0]
+    hoje_hf42 = [p for p in fila_producao_hf41 if p['prioridade_hf41'] == 1]
+    proximos_hf42 = [p for p in fila_producao_hf41 if p['prioridade_hf41'] == 2]
+    if vencidos_hf42:
+        st.warning(f"{len(vencidos_hf42)} pedido(s) com prazo vencido — confira as datas e os status reais antes de atualizar.")
+    elif hoje_hf42:
+        st.info(f"{len(hoje_hf42)} pedido(s) previsto(s) para hoje.")
     if resumo_producao_hf41['revisar']:
-        st.caption(f"{resumo_producao_hf41['revisar']} pedido(s) sem etapa manual definida no Fluxo.")
+        st.caption(f"{resumo_producao_hf41['revisar']} pedido(s) aguardando revisão da etapa manual.")
+    with st.expander(f"🚨 Prioridades por prazo — {len(vencidos_hf42)+len(hoje_hf42)+len(proximos_hf42)} pedido(s)", expanded=False):
+        prioritarios_hf42 = (vencidos_hf42 + hoje_hf42 + proximos_hf42)[:10]
+        if not prioritarios_hf42:
+            st.success("Nenhuma entrega vencida ou prevista para os próximos dois dias.")
+        for pos_hf42, ped_hf42 in enumerate(prioritarios_hf42):
+            num_hf42 = str(ped_hf42.get('numero_proposta') or '')
+            ac1_hf42, ac2_hf42 = st.columns([6, 2])
+            ac1_hf42.markdown(f"**{html.escape(num_hf42)} — {html.escape(str(ped_hf42.get('cliente_nome') or 'Cliente'))}**")
+            ac1_hf42.caption(f"{ped_hf42['prazo_hf41']} · {ped_hf42['fase_nome_hf41']} · {html.escape(str(ped_hf42.get('resumo_produtos') or ''))}")
+            if ac2_hf42.button("Abrir pedido", key=f"hf42_prioridade_{pos_hf42}_{num_hf42}", use_container_width=True):
+                st.session_state['alerta_proposta_numero'] = num_hf42
+                st.rerun()
+    with st.expander("🗓️ Agenda de entregas · próximos compromissos", expanded=False):
+        # Usa a mesma fotografia já carregada: não lê novamente o banco.
+        agenda_hf42 = [p for p in fila_producao_hf41 if p['entrega_hf41'] is not None][:12]
+        if agenda_hf42:
+            st.dataframe(pd.DataFrame([{
+                'Entrega': p['data_texto_hf41'], 'Pedido': p.get('numero_proposta'),
+                'Cliente': p.get('cliente_nome') or 'Cliente',
+                'Etapa': p['fase_nome_hf41'], 'Situação': p['prazo_hf41']
+            } for p in agenda_hf42]), use_container_width=True, hide_index=True)
+            st.caption("Consulta rápida da produção. A Agenda da Anna completa e seus PDFs continuam disponíveis na área própria.")
+        else:
+            st.info("Nenhuma entrega com data cadastrada nesta fila.")
     with st.expander(f"📋 Fila de produção — {resumo_producao_hf41['total']} pedido(s)", expanded=False):
         col_b_hf41, col_f_hf41, col_p_hf41, col_q_hf41 = st.columns([3, 2, 2, 1])
         busca_hf41 = col_b_hf41.text_input("Buscar pedido", placeholder="Número, cliente ou produto", key="hf41_busca_fila")
@@ -26948,70 +26924,8 @@ if pagina_atual == "central":
                                                     else:
                                                         st.error("Não foi possível salvar o vínculo. Tente novamente.")
                 st.caption("'Não cadastrar' oculta o item somente nesta sessão de trabalho. Não exclui dados ou pedidos e pode ser revertido em 'Dispensados'.")
-    if pedidos_em_andamento_hf9:
-        with st.expander(f"🔄 Pedidos em andamento — continuar atualização ({len(pedidos_em_andamento_hf9)})", expanded=False):
-            consumos_idx_hf9 = _snapshot_operacional_central_hf36["consumos_ativos_por_proposta"]
-            estoque_andamento_hf9 = estoque_central_i8124
-            for idx_hf9, prop_hf9 in enumerate(_ordenar_propostas_recentes(pedidos_em_andamento_hf9)[:20]):
-                num_hf9 = str(prop_hf9.get("numero_proposta") or "").strip()
-                est_hf9 = estados_oficiais_central.get(num_hf9) or _status_resumo(prop_hf9)
-                cons_hf9 = consumos_idx_hf9.get(num_hf9)
-                if est_hf9.get("pronto"):
-                    fase_hf9 = "📦 Pronto — aguardando saída"
-                elif MODO_SOB_ENCOMENDA_HF38:
-                    fase_hf9 = "✅ Aprovado — acompanhar produção e prazo"
-                elif cons_hf9:
-                    res_hf9 = _i8124_resumo_consumo(cons_hf9, estoque_andamento_hf9)
-                    fase_hf9 = "⚠️ Material pendente" if res_hf9.get("pendente") else "✅ Materiais liberados — continuar produção/status"
-                else:
-                    fase_hf9 = "🧾 Aguardando decisão/liberação de materiais"
-                col_hf9a, col_hf9b = st.columns([7, 2])
-                col_hf9a.markdown(
-                    f"**{html.escape(num_hf9)} — {html.escape(str(prop_hf9.get('cliente_nome') or 'Cliente'))}** · "
-                    f"🧾 {html.escape(resumo_produtos_pedido(prop_hf9))} · {fase_hf9}"
-                )
-                col_hf9b.button(
-                    "Abrir e atualizar",
-                    key=f"hf9_andamento_{idx_hf9}_{num_hf9}",
-                    use_container_width=True,
-                    on_click=lambda n=num_hf9: st.session_state.__setitem__("alerta_proposta_numero", n),
-                )
-            if len(pedidos_em_andamento_hf9) > 20:
-                st.caption("Mostrando os 20 pedidos mais recentes. A fila completa continua disponível no Fluxo de Pedidos.")
-
-    st.divider()
-    st.subheader("🚨 Atenção")
-
-    def _selecionar_alerta_central(numero):
-        # Callback nativo: evita st.rerun() disparado durante a própria renderização
-        # do bloco de alertas, reduzindo conflitos de reconciliação no frontend React.
-        st.session_state.alerta_proposta_numero = numero
-
-    alertas_central = []
-    for p in pedidos_atrasados_central[:5]:
-        alertas_central.append(("🚨", p.get("numero_proposta"), p.get("cliente_nome"), f"Atrasado desde {p.get('data_entrega', '—')}"))
-    for p in entregas_hoje_central[:5]:
-        alertas_central.append(("📦", p.get("numero_proposta"), p.get("cliente_nome"), "Entrega hoje"))
-    for t in aguardando_aprovacao_central[:5]:
-        alertas_central.append(("🟡", t.get("numero_proposta"), t.get("cliente_nome"), "Aguardando aprovação"))
-    if alertas_central:
-        for idx_alerta, (icone, numero, cliente, texto) in enumerate(alertas_central[:10]):
-            # Container estável por alerta: evita mudanças bruscas na árvore DOM
-            # quando o editor operacional é aberto logo abaixo da lista.
-            with st.container(border=True):
-                al1, al2 = st.columns([7, 2])
-                prop_alerta = mapa_propostas_central_hf38.get(str(numero).strip())
-                resumo_alerta = resumo_produtos_pedido(prop_alerta) if prop_alerta else "Sem itens informados"
-                al1.markdown(f"{icone} **{html.escape(str(numero))} — {html.escape(str(cliente or 'Cliente'))}** · 🧾 {html.escape(resumo_alerta)} · {html.escape(str(texto))}")
-                al2.button(
-                    "Abrir e atualizar",
-                    key=f"central_alerta_abrir_{idx_alerta}_{numero}",
-                    use_container_width=True,
-                    on_click=_selecionar_alerta_central,
-                    args=(numero,),
-                )
-    else:
-        st.info("Nenhum alerta importante agora.")
+    # HF65.24.42 — a fila da produção e as prioridades já permitem abrir pedidos.
+    # Não repetir "Pedidos em andamento" e "Atenção" com as mesmas propostas.
 
     # Editor operacional rápido: permite à Anna dar andamento sem procurar a proposta em outra aba.
     numero_central_selecionado = st.session_state.get("alerta_proposta_numero")
@@ -27048,7 +26962,7 @@ if pagina_atual == "central":
                 # do editor e oferece ida/volta direta para o tratamento do pedido.
                 consumo_editor_hf9 = _i8124_consumo_ativo_pedido(numero_central_selecionado, _consumos_runtime_central_hf36)
                 estado_editor_hf9 = _status_resumo(proposta_central_selecionada)
-                if estado_editor_hf9.get("aprovado") and not estado_editor_hf9.get("pronto"):
+                if (not MODO_SOB_ENCOMENDA_HF38) and estado_editor_hf9.get("aprovado") and not estado_editor_hf9.get("pronto"):
                     if consumo_editor_hf9:
                         resumo_editor_hf9 = _i8124_resumo_consumo(consumo_editor_hf9, _estoque_runtime_central_hf36)
                         if resumo_editor_hf9.get("pendente"):
