@@ -198,7 +198,7 @@ def render_alpha_intelligence(clientes, historico, catalogo, producao, save_snap
     c5.metric("Produção em aberto", summary["producao_aberta"])
 
     if save_snapshot is not None:
-        if st.button("🔄 Recalcular e salvar conhecimento", type="primary", use_container_width=True):
+        if st.button("🔄 Recalcular e salvar conhecimento", type="primary", width="stretch"):
             save_snapshot(data)
             st.success("Conhecimento recalculado e salvo sem alterar os dados operacionais.")
 
@@ -252,11 +252,11 @@ def render_alpha_intelligence(clientes, historico, catalogo, producao, save_snap
             st.info("Ainda não existem itens suficientes no histórico.")
         else:
             st.subheader("Produtos mais vendidos")
-            st.dataframe(products.head(20), use_container_width=True, hide_index=True)
+            st.dataframe(products.head(20), width="stretch", hide_index=True)
         combos = pd.DataFrame(data["combinacoes"])
         if not combos.empty:
             st.subheader("Produtos comprados juntos")
-            st.dataframe(combos.head(20), use_container_width=True, hide_index=True)
+            st.dataframe(combos.head(20), width="stretch", hide_index=True)
 
     with tab_trends:
         monthly = pd.DataFrame(data["mensal"])
@@ -265,7 +265,7 @@ def render_alpha_intelligence(clientes, historico, catalogo, producao, save_snap
         else:
             st.subheader("Receita por mês")
             st.line_chart(monthly.set_index("mes")["receita"])
-            st.dataframe(monthly, use_container_width=True, hide_index=True)
+            st.dataframe(monthly, width="stretch", hide_index=True)
 
     st.caption(f"Último cálculo nesta tela: {data['gerado_em']}")
     return data

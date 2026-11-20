@@ -147,7 +147,7 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
                         'Sessões anteriores':channel_past.get(name,0),
                         'Sessões com WhatsApp (atual)':(recent.get('canais_whatsapp') or {}).get(name,0),
                         'Sessões com WhatsApp (anterior)':(before.get('canais_whatsapp') or {}).get(name,0)}
-                        for name in channels]),hide_index=True,use_container_width=True)
+                        for name in channels]),hide_index=True,width="stretch")
                 else: st.caption('Sem origem de sessão identificada nas duas janelas.')
             with st.expander('Produtos com maior movimento'):
                 now_products=recent.get('produtos_abertos') or {}
@@ -157,7 +157,7 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
                     st.dataframe(pd.DataFrame([{'Produto':name,'Aberturas atuais':now_products.get(name,0),
                         'Aberturas anteriores':before_products.get(name,0),
                         'Diferença':now_products.get(name,0)-before_products.get(name,0)} for name in names]),
-                        hide_index=True,use_container_width=True)
+                        hide_index=True,width="stretch")
                 else: st.caption('Sem aberturas de produtos nas duas janelas.')
     with tab_products:
         st.markdown('#### 🧭 Ranking de oportunidades · últimos 30 dias')
@@ -168,7 +168,7 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
             rows=[{'Produto':v['produto'], 'Aberturas':_positive_int(v['aberturas']),
                    'Cliques diretos':_positive_int(v['cliques_diretos']), 'Leitura':v['sinal']}
                   for v in candidates[:limit]]
-            st.dataframe(pd.DataFrame(rows),hide_index=True,use_container_width=True)
+            st.dataframe(pd.DataFrame(rows),hide_index=True,width="stretch")
             st.caption('Cliques diretos são associados ao produto nomeado no botão individual. Orçamentos com múltiplos itens no carrinho NÃO são atribuídos artificialmente a produtos específicos.')
             featured=candidates[0]
             with st.container(border=True):
@@ -273,7 +273,7 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
             st.dataframe(pd.DataFrame([{'Canal':v['canal'], 'Sessões':v['sessoes'],
                 'Sessões com WhatsApp':v['sessoes_whatsapp'],
                 'Participação com clique':f"{v['percentual']:.1f}%"}
-                for v in channel_rows]),hide_index=True,use_container_width=True)
+                for v in channel_rows]),hide_index=True,width="stretch")
         else:
             st.caption('Ainda não há sessões com origem identificada.')
         st.caption('Associação na mesma sessão, não comprovação de venda ou causalidade. Acesso Direto pode incluir aplicativos sem referência; testes internos também podem estar presentes. Compare períodos antes de escolher onde investir.')
@@ -307,7 +307,7 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
                 'Sessões com WhatsApp':r['sessoes_whatsapp'],
                 'Cliques no WhatsApp':r['cliques_whatsapp'],
                 'Participação':f"{r['percentual']:.1f}%"} for r in current_campaigns]),
-                hide_index=True,use_container_width=True)
+                hide_index=True,width="stretch")
             st.caption('Antes = janela anterior de igual duração. Sessões com WhatsApp contam uma vez por sessão; múltiplos cliques podem ocorrer. Testes internos podem aparecer.')
             leader=max(current_campaigns,key=lambda r:(r['sessoes_whatsapp'],r['sessoes']))
             if leader['sessoes_whatsapp'] >= 3:

@@ -84,7 +84,7 @@ def render(load_document,save_document,actor,now):
                          'Situação':status_of(x,today), 'Valor (R$)':x.get('valor'),
                          'Pagamento':x.get('pago_em',''), 'Guia': 'Sim' if x.get('guia_path') else 'Não',
                          'Comprovante':'Sim' if x.get('comprovante_path') else 'Não'})
-        st.dataframe(rows,hide_index=True,use_container_width=True)
+        st.dataframe(rows,hide_index=True,width="stretch")
         stream=io.StringIO(); writer=csv.DictWriter(stream,fieldnames=list(rows[0]),delimiter=';');writer.writeheader();writer.writerows(rows)
         st.download_button('⬇️ Exportar controle CSV',stream.getvalue().encode('utf-8-sig'),file_name=f'das_mei_{year}.csv',mime='text/csv',key='das_csv')
     else: st.info('Nenhuma competência cadastrada para este ano. Use o botão acima.')
@@ -105,7 +105,7 @@ def render(load_document,save_document,actor,now):
         pdf_guide=st.file_uploader('Guia DAS em PDF (até 8 MB)',type=['pdf'],key=f'das_guia_{key}')
         pdf_receipt=st.file_uploader('Comprovante de pagamento em PDF (até 8 MB)',type=['pdf'],key=f'das_receipt_{key}')
         confirm=st.checkbox('Confirmo que conferi o pagamento no banco/PGMEI',value=False)
-        save=st.form_submit_button('💾 Salvar competência',type='primary',use_container_width=True)
+        save=st.form_submit_button('💾 Salvar competência',type='primary',width="stretch")
     if save:
         try:
             if option == 'Paga' and not confirm:

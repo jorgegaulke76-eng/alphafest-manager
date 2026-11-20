@@ -32,7 +32,7 @@ def render_system_health_tab(*, diagnostico_sistema: Callable[[], dict[str, Any]
         f"Registros de auditoria: **{diag['auditorias']}** • "
         f"Itens recuperáveis na lixeira: **{diag['lixeira']}**"
     )
-    if st.button("🔄 Executar diagnóstico novamente", key="health_refresh", use_container_width=True):
+    if st.button("🔄 Executar diagnóstico novamente", key="health_refresh", width="stretch"):
         st.rerun()
 
 
@@ -55,10 +55,10 @@ def render_boot_manager_tab(
             "Tempo (s)": round(float(info_etapa.get("duracao", 0.0) or 0.0), 3),
             "Detalhe": str(info_etapa.get("detalhe", "")),
         })
-    st.dataframe(pd.DataFrame(linhas_boot), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(linhas_boot), width="stretch", hide_index=True)
     flags_boot = feature_flags()
     st.markdown("#### Chaves de segurança")
     st.json(flags_boot, expanded=False)
     st.info("Preview, IA e Campanha Mestre permanecem desligados até homologação na Central do Jorge.")
-    if st.button("🔄 Atualizar diagnóstico do boot", key="boot1424_refresh", use_container_width=True):
+    if st.button("🔄 Atualizar diagnóstico do boot", key="boot1424_refresh", width="stretch"):
         st.rerun()

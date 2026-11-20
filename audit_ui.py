@@ -36,7 +36,7 @@ def render_audit_tab(
         "O reparo automático normal continua restrito ao espelho do Fluxo; status oficiais só podem ser completados "
         "pelo saneamento histórico seguro abaixo, com prévia e confirmação explícita."
     )
-    if st.button("🔄 Auditar e sincronizar telas agora", key="hf7_auditar_sincronizar", use_container_width=True, type="primary"):
+    if st.button("🔄 Auditar e sincronizar telas agora", key="hf7_auditar_sincronizar", width="stretch", type="primary"):
         with st.spinner("Conferindo a Fonte Única e reconciliando projeções seguras..."):
             rel_manual_hf7 = executar_auditoria_sincronizacao_operacional(force_refresh=True, registrar=True)
         renderizar_auditoria_sincronizacao_operacional(rel_manual_hf7, expandido=True)
@@ -51,7 +51,7 @@ def render_audit_tab(
         "Completa somente pré-requisitos obrigatórios: Entregue → Pronto; Pronto → Aprovado; Pago → Aprovado. "
         "Nunca infere Pago, nunca desfaz status, não altera estoque e não cria datas retroativas."
     )
-    if st.button("🔍 Preparar prévia do saneamento", key="hf7_preparar_saneamento", use_container_width=True):
+    if st.button("🔍 Preparar prévia do saneamento", key="hf7_preparar_saneamento", width="stretch"):
         plano_hf7 = planejar_saneamento_status(carregar_historico(force_refresh=True))
         st.session_state["_i8134_hf7_previa_saneamento"] = copy.deepcopy(plano_hf7)
     plano_hf7 = st.session_state.get("_i8134_hf7_previa_saneamento")
@@ -65,7 +65,7 @@ def render_audit_tab(
             if st.button(
                 "🧹 Corrigir inconsistências históricas seguras",
                 key="hf7_aplicar_saneamento",
-                use_container_width=True,
+                width="stretch",
                 type="primary",
                 disabled=not confirmar_hf7,
             ):
@@ -77,7 +77,7 @@ def render_audit_tab(
                         f"{resultado_hf7.get('alteracoes_confirmadas', 0)} correção(ões) confirmada(s); "
                         f"{len(resultado_hf7.get('falhas') or [])} proposta(s) exigem nova tentativa/revisão."
                     )
-                    st.dataframe(pd.DataFrame(resultado_hf7.get("falhas") or []), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(resultado_hf7.get("falhas") or []), width="stretch", hide_index=True)
                 else:
                     st.success(
                         f"✅ {resultado_hf7.get('alteracoes_confirmadas', 0)} correção(ões) histórica(s) confirmada(s) no banco. "
@@ -131,11 +131,11 @@ def render_audit_tab(
             "Identificador": reg.get("identificador"),
             "Resultado": reg.get("resultado"),
         })
-    st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
     st.download_button(
         "⬇️ Exportar auditoria JSON",
         json.dumps(auditoria, ensure_ascii=False, indent=2),
         file_name=f"auditoria_festmanager_{hoje_local().isoformat()}.json",
         mime="application/json",
-        use_container_width=True,
+        width="stretch",
     )

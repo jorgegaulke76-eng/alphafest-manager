@@ -1513,7 +1513,7 @@ def renderizar_radar_atualizacoes_hf4():
             st.markdown(f"**{_hf4_tempo_evento(dt)}** · **{acao}** · {modulo}{sufixo}")
         if len(novos) > 8:
             st.caption(f"+ {len(novos) - 8} atualização(ões) recente(s).")
-        if st.button("🔄 Atualizar painel agora", type="primary", use_container_width=True, key="hf4_atualizar_painel"):
+        if st.button("🔄 Atualizar painel agora", type="primary", width="stretch", key="hf4_atualizar_painel"):
             st.session_state["_hf4_painel_atualizado_em"] = agora_local().isoformat()
             try:
                 st.rerun(scope="app")
@@ -1918,7 +1918,7 @@ def renderizar_configuracoes_orientacoes_thu():
                 texto = st.text_area("Mensagens (uma por linha)", value=atual, height=130, key=f"thu_msgs_{chave_tela}")
                 mensagens_novas[chave_tela] = [linha.strip() for linha in texto.splitlines() if linha.strip()]
 
-        salvar = st.form_submit_button("💾 Salvar orientações do THU", type="primary", use_container_width=True)
+        salvar = st.form_submit_button("💾 Salvar orientações do THU", type="primary", width="stretch")
 
     if salvar:
         nova_cfg = {
@@ -2458,7 +2458,7 @@ def _hf8_render_status_proposta_jorge_inline(num_proposta, prefixo="hf8_orcament
             help="Retira a proposta das filas operacionais sem apagar os status já registrados.",
         )
         salvar_status_hf11 = st.form_submit_button(
-            "💾 Salvar status", type="primary", use_container_width=True
+            "💾 Salvar status", type="primary", width="stretch"
         )
 
     if salvar_status_hf11:
@@ -4361,7 +4361,7 @@ def renderizar_auditoria_resultados(historico, resultados=None):
             "Valor oficial": f"R$ {resultados['recebido_hoje']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
         },
     ])
-    st.dataframe(regras, use_container_width=True, hide_index=True)
+    st.dataframe(regras, width="stretch", hide_index=True)
 
     fallback = resultados.get("fallback_eventos", {})
     total_fallback = sum(int(v or 0) for v in fallback.values())
@@ -4381,7 +4381,7 @@ def renderizar_auditoria_resultados(historico, resultados=None):
         atencao = sum(1 for a in achados if a["nivel"] == "Atenção")
         legado = sum(1 for a in achados if a["nivel"] == "Legado")
         st.caption(f"Críticos: {criticos} • Atenção: {atencao} • Legados: {legado}")
-        st.dataframe(pd.DataFrame(achados[:100]), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(achados[:100]), width="stretch", hide_index=True)
         if len(achados) > 100:
             st.caption(f"Mostrando 100 de {len(achados)} achados.")
 
@@ -6564,7 +6564,7 @@ def dialog_reserva_rapida_pedido(numero_proposta):
                 "Reservar agora": f"{_i8121_quantidade(reservar)} {nec.get('unidade', '')}",
                 "Falta": f"{_i8121_quantidade(falta)} {nec.get('unidade', '')}",
             })
-        st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
 
     tem_ficha_completa = bool(necessidades_padrao) and not bool(previa.get("sem_ficha"))
     opcoes = []
@@ -6628,7 +6628,7 @@ def dialog_reserva_rapida_pedido(numero_proposta):
         or modo == "sem_consumo"
     )
     rotulo = "🔒 Reservar materiais agora" if modo != "sem_consumo" else "✅ Liberar sem reserva"
-    if st.button(rotulo, type="primary", use_container_width=True, disabled=not habilitado, key=f"hf653_reserva_salvar_{numero}_{modo}"):
+    if st.button(rotulo, type="primary", width="stretch", disabled=not habilitado, key=f"hf653_reserva_salvar_{numero}_{modo}"):
         ok, mensagem, _ = _i8124_confirmar_consumo_pedido(
             proposta,
             usuario=obter_usuario_atual(),
@@ -9543,12 +9543,12 @@ def dialog_thu_importar_imagens_site(pagina):
                         or _thu_site_url_imagem_original(img.get("url"))
                         or img.get("url")
                     )
-                    st.image(_preview_hd, use_container_width=True)
+                    st.image(_preview_hd, width="stretch")
                     if _preview_hd != img.get("url"):
                         st.caption("Prévia em maior resolução do arquivo original")
                 except Exception:
                     try:
-                        st.image(img.get("url"), use_container_width=True)
+                        st.image(img.get("url"), width="stretch")
                         st.caption("Prévia reduzida • o original será tentado na importação")
                     except Exception:
                         st.caption("Prévia indisponível")
@@ -9577,7 +9577,7 @@ def dialog_thu_importar_imagens_site(pagina):
     if st.button(
         "💾 Importar imagens selecionadas",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         disabled=(produto_escolhido == "— Escolha o produto oficial —" or not selecionadas),
         key=f"thu_site_importar_{abs(hash(pagina.get('url','')))}",
     ):
@@ -10139,7 +10139,7 @@ def renderizar_previa_saneamento_status_hf7(plano):
     c2.metric("Correções seguras", alteracoes)
     linhas = _auditoria_linhas_previa_saneamento(plano)
     if linhas:
-        st.dataframe(pd.DataFrame(linhas), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(linhas), width="stretch", hide_index=True)
     else:
         st.success("Nenhuma inconsistência histórica segura para corrigir.")
 
@@ -10168,7 +10168,7 @@ def renderizar_auditoria_sincronizacao_operacional(relatorio, *, expandido=False
         c4.metric("Prontos em Entregas", cont.get("fila_saida", 0))
         linhas_sync = _auditoria_linhas_relatorio_sincronizacao(relatorio)
         if linhas_sync:
-            st.dataframe(pd.DataFrame(linhas_sync), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(linhas_sync), width="stretch", hide_index=True)
         else:
             st.caption("Nenhuma divergência detectada nesta leitura fresca.")
         st.caption(
@@ -11119,7 +11119,7 @@ def renderizar_base_conhecimento():
         categorias = sorted(componentes.keys(), key=str.lower)
         categoria = c1.selectbox("Categoria", categorias, key="kb_categoria")
         novo = c2.text_input("Nova opção", placeholder="Ex.: Confete metalizado em formato de estrela", key="kb_nova_opcao")
-        if c3.button("Adicionar", type="primary", use_container_width=True, key="kb_add"):
+        if c3.button("Adicionar", type="primary", width="stretch", key="kb_add"):
             if novo.strip():
                 componentes.setdefault(categoria, [])
                 if novo.strip().lower() not in {x.lower() for x in componentes[categoria]}:
@@ -11180,7 +11180,7 @@ def renderizar_base_conhecimento():
                 placeholder="Ex.: confete meia-lua perolado, mistura exclusiva de cores...",
                 key=f"kb_livres_{projeto.get('id')}",
             )
-            if st.button("💾 Salvar conhecimento do projeto", type="primary", use_container_width=True, key="kb_salvar_projeto"):
+            if st.button("💾 Salvar conhecimento do projeto", type="primary", width="stretch", key="kb_salvar_projeto"):
                 projeto["componentes"] = {k: v for k, v in novos_componentes.items() if v}
                 projeto["caracteristicas_livres"] = livres.strip()
                 atualizar_projeto(projeto)
@@ -11474,17 +11474,17 @@ def renderizar_alpha_assistente_comercial():
     bloqueado_alpha = bool(restricao_alpha and (restricao_alpha.get("nivel") == "Bloqueado" or not restricao_alpha.get("permitir_resposta", True)))
     if telefone and not bloqueado_alpha:
         numero = telefone if telefone.startswith("55") else "55" + telefone
-        a1.link_button("📱 Abrir WhatsApp", f"https://wa.me/{numero}?text={quote(resposta)}", use_container_width=True)
+        a1.link_button("📱 Abrir WhatsApp", f"https://wa.me/{numero}?text={quote(resposta)}", width="stretch")
     elif bloqueado_alpha:
-        a1.button("🛑 Resposta bloqueada", disabled=True, use_container_width=True)
+        a1.button("🛑 Resposta bloqueada", disabled=True, width="stretch")
     else:
-        a1.button("📱 Informe o WhatsApp", disabled=True, use_container_width=True)
-    if a2.button("🚀 Levar para Jornada", type="primary", use_container_width=True, disabled=bool(restricao_alpha and not restricao_alpha.get("permitir_orcamento", True))):
+        a1.button("📱 Informe o WhatsApp", disabled=True, width="stretch")
+    if a2.button("🚀 Levar para Jornada", type="primary", width="stretch", disabled=bool(restricao_alpha and not restricao_alpha.get("permitir_orcamento", True))):
         preencher_jornada_com_alpha(analise, cliente, whatsapp)
         if atendimento_id:
             st.session_state["alpha_atendimento_origem"] = atendimento_id
         st.success("Dados preparados. Abra a aba Jornada para continuar sem redigitar.")
-    if a3.button("🧩 Preparar Projeto", use_container_width=True, disabled=bool(restricao_alpha and not restricao_alpha.get("permitir_orcamento", True))):
+    if a3.button("🧩 Preparar Projeto", width="stretch", disabled=bool(restricao_alpha and not restricao_alpha.get("permitir_orcamento", True))):
         st.session_state["_projeto_prefill"] = {"cliente": cliente, "whatsapp": whatsapp, "necessidade": mensagem, "origem": "Alpha Assistente Comercial", "atendimento_id": atendimento_id}
         st.success("Projeto preparado. Abra Projeto Personalizado.")
 
@@ -11725,13 +11725,13 @@ def renderizar_jornada_atendimento():
     }
 
     salvar_col, limpar_col = st.columns([1, 1])
-    if salvar_col.button("💾 Salvar rascunho", use_container_width=True):
+    if salvar_col.button("💾 Salvar rascunho", width="stretch"):
         if not necessidade.strip():
             st.warning("Descreva o que o cliente precisa antes de salvar.")
         else:
             _salvar_rascunho_jornada(dados_jornada)
             st.success("Rascunho salvo na Memória da Empresa.")
-    if limpar_col.button("🧹 Limpar jornada", use_container_width=True):
+    if limpar_col.button("🧹 Limpar jornada", width="stretch"):
         for chave in [
             "jornada_cliente", "jornada_whatsapp", "jornada_necessidade", "jornada_ocasiao",
             "jornada_tema", "jornada_quantidade", "jornada_prazo", "jornada_limite",
@@ -11753,7 +11753,7 @@ def renderizar_jornada_atendimento():
     valor_item = i3.number_input("Valor unitário", min_value=0.0, step=0.5, key="jornada_valor")
     escolha_catalogo = st.selectbox("Ou selecione do catálogo", [""] + opcoes_catalogo, key="jornada_catalogo")
     especificacao_item = st.text_area("Detalhes deste item", key="jornada_especificacao", height=70)
-    if st.button("➕ Adicionar à solução", type="primary", use_container_width=True):
+    if st.button("➕ Adicionar à solução", type="primary", width="stretch"):
         nome_item = produto_item.strip() or escolha_catalogo.strip()
         if not nome_item:
             st.warning("Informe um produto ou solução.")
@@ -11801,7 +11801,7 @@ def renderizar_jornada_atendimento():
     total = max(subtotal - desconto, 0.0)
     st.metric("Valor total", f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
-    if st.button("🚀 Criar projeto e proposta", type="primary", use_container_width=True, disabled=not bool(st.session_state.jornada_itens)):
+    if st.button("🚀 Criar projeto e proposta", type="primary", width="stretch", disabled=not bool(st.session_state.jornada_itens)):
         if not necessidade.strip():
             st.warning("Descreva a necessidade do cliente.")
             return
@@ -11911,8 +11911,8 @@ def renderizar_assistente_projeto_personalizado():
         )
 
         salvar, preparar = st.columns(2)
-        botao_salvar = salvar.form_submit_button("💾 Salvar como projeto", use_container_width=True)
-        botao_preparar = preparar.form_submit_button("➡️ Salvar e preparar orçamento", type="primary", use_container_width=True)
+        botao_salvar = salvar.form_submit_button("💾 Salvar como projeto", width="stretch")
+        botao_preparar = preparar.form_submit_button("➡️ Salvar e preparar orçamento", type="primary", width="stretch")
 
     if botao_salvar or botao_preparar:
         if not necessidade.strip():
@@ -12017,7 +12017,7 @@ def renderizar_caixa_projeto(proposta, prefixo="historico"):
     o1, o2, o3 = st.columns(3)
     modelo = o1.checkbox("♻️ Modelo reutilizável", value=bool(projeto.get("modelo")), key=f"proj_modelo_{kbase}")
     favorito = o2.checkbox("⭐ Projeto favorito", value=bool(projeto.get("favorito")), key=f"proj_fav_{kbase}")
-    if o3.button("💾 Salvar projeto", key=f"proj_salvar_{kbase}", use_container_width=True):
+    if o3.button("💾 Salvar projeto", key=f"proj_salvar_{kbase}", width="stretch"):
         projeto["observacoes"] = observacoes.strip()
         projeto["modelo"] = bool(modelo)
         projeto["favorito"] = bool(favorito)
@@ -12036,7 +12036,7 @@ def renderizar_caixa_projeto(proposta, prefixo="historico"):
         tags = u2.text_input("Tags", placeholder="Ex.: Stitch, azul, corte", key=f"proj_tags_{kbase}")
         descricao = st.text_input("Descrição", placeholder="Ex.: arte final aprovada", key=f"proj_desc_{kbase}")
         mestre = st.checkbox("⭐ Marcar como arquivo mestre", key=f"proj_mestre_{kbase}")
-        if st.button("📤 Enviar arquivo", key=f"proj_enviar_{kbase}", type="primary", use_container_width=True):
+        if st.button("📤 Enviar arquivo", key=f"proj_enviar_{kbase}", type="primary", width="stretch"):
             if upload is None:
                 st.warning("Escolha um arquivo.")
             else:
@@ -12077,8 +12077,8 @@ def renderizar_caixa_projeto(proposta, prefixo="historico"):
             if arq.get("tags"):
                 a2.caption("Tags: " + " • ".join(arq.get("tags", [])))
             if arq.get("url"):
-                a3.link_button("Abrir / baixar", arq.get("url"), use_container_width=True)
-            if a3.button("📦 Arquivar", key=f"proj_arq_{kbase}_{i}", use_container_width=True):
+                a3.link_button("Abrir / baixar", arq.get("url"), width="stretch")
+            if a3.button("📦 Arquivar", key=f"proj_arq_{kbase}_{i}", width="stretch"):
                 projeto["arquivos"][i]["arquivado"] = True
                 projeto["arquivos"][i]["mestre"] = False
                 atualizar_projeto(projeto)
@@ -12577,7 +12577,7 @@ def renderizar_galeria_trabalhos(catalogo):
             key=_galeria_form_key("hf461_destaque"),
         )
 
-        if st.button("💾 Guardar fotos na Galeria interna", type="primary", use_container_width=True, key=_galeria_form_key("hf461_salvar")):
+        if st.button("💾 Guardar fotos na Galeria interna", type="primary", width="stretch", key=_galeria_form_key("hf461_salvar")):
             fotos_validas = list(fotos or [])[:20]
             if not fotos_validas:
                 st.warning("Selecione pelo menos uma foto.")
@@ -12764,13 +12764,13 @@ def renderizar_galeria_trabalhos(catalogo):
         _hf65142_add = _hf65142_b1.button(
             "➕ Adicionar às Datas & Ocasiões",
             key="hf65142_galeria_adicionar",
-            use_container_width=True,
+            width="stretch",
             type="primary",
         )
         _hf65142_del = _hf65142_b2.button(
             "➖ Remover destas Datas & Ocasiões",
             key="hf65142_galeria_remover",
-            use_container_width=True,
+            width="stretch",
         )
 
         if _hf65142_add or _hf65142_del:
@@ -12856,7 +12856,7 @@ def renderizar_galeria_trabalhos(catalogo):
                     alvo_img = thumb_cols[idx_foto % len(thumb_cols)]
                     if bruto:
                         try:
-                            alvo_img.image(bruto, use_container_width=True)
+                            alvo_img.image(bruto, width="stretch")
                         except Exception:
                             indisponiveis += 1
                     else:
@@ -12918,7 +12918,7 @@ def renderizar_galeria_trabalhos(catalogo):
                     if st.button(
                         "💾 Salvar categorias de exibição",
                         key=f"hf58_extra_cats_save_{gid}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
                         atualizado_categorias = False
                         extras_limpas = [
@@ -12956,7 +12956,7 @@ def renderizar_galeria_trabalhos(catalogo):
                     if st.button(
                         "💾 Salvar Datas & Ocasiões",
                         key=f"hf659_datas_save_{gid}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
                         _atualizou_hf659 = False
                         _datas_limpas_hf659 = list(dict.fromkeys(
@@ -13018,7 +13018,7 @@ def renderizar_galeria_trabalhos(catalogo):
                                 file_name=f"alphafest_{gid[:8]}{_ext_canal_hf6515}",
                                 mime=_mime_canal_hf6515,
                                 key=f"hf6515_download_canal_{gid}",
-                                use_container_width=True,
+                                width="stretch",
                             )
                         else:
                             st.warning("A prévia/arquivo desta foto não está disponível neste momento.")
@@ -13030,7 +13030,7 @@ def renderizar_galeria_trabalhos(catalogo):
                     st.link_button(
                         "📢 Abrir Canal da AlphaFest",
                         _url_canal_hf6515,
-                        use_container_width=True,
+                        width="stretch",
                     )
                     st.caption("Fluxo rápido: copiar texto → baixar foto → abrir canal → publicar.")
 
@@ -13045,7 +13045,7 @@ def renderizar_galeria_trabalhos(catalogo):
                     )
                     if novas_fotos and len(novas_fotos) > 20:
                         st.warning("Selecione no máximo 20 fotos neste lote. Depois você pode adicionar outro lote.")
-                    if st.button("💾 Adicionar fotos", key=f"hf461_add_btn_{gid}", use_container_width=True):
+                    if st.button("💾 Adicionar fotos", key=f"hf461_add_btn_{gid}", width="stretch"):
                         lote = list(novas_fotos or [])[:20]
                         if not lote:
                             st.warning("Selecione pelo menos uma foto para adicionar.")
@@ -13108,7 +13108,7 @@ def renderizar_galeria_trabalhos(catalogo):
                             if st.button(
                                 "🗑️ Excluir somente esta foto",
                                 key=f"hf55_del_btn_{gid}_{_foto_key}",
-                                use_container_width=True,
+                                width="stretch",
                                 disabled=not confirmar_exclusao,
                             ):
                                 galeria_atualizada, encontrou_registro = _galeria_remover_foto_referencia(
@@ -13149,14 +13149,14 @@ def renderizar_galeria_trabalhos(catalogo):
                                     st.error("O banco não confirmou a exclusão. Nenhuma foto foi removida.")
 
                 if bool(item.get("autorizado_publicacao")) and not bool(item.get("selecionado_site")):
-                    if c_acoes.button("⭐ Pré-selecionar", key=f"hf461_sel_{gid}", use_container_width=True):
+                    if c_acoes.button("⭐ Pré-selecionar", key=f"hf461_sel_{gid}", width="stretch"):
                         for reg in galeria:
                             if str((reg or {}).get("id")) == gid:
                                 reg["selecionado_site"] = True
                         if salvar_galeria_trabalhos(galeria):
                             st.rerun()
                 elif bool(item.get("selecionado_site")):
-                    if c_acoes.button("↩️ Retirar da seleção", key=f"hf461_unsel_{gid}", use_container_width=True):
+                    if c_acoes.button("↩️ Retirar da seleção", key=f"hf461_unsel_{gid}", width="stretch"):
                         for reg in galeria:
                             if str((reg or {}).get("id")) == gid:
                                 reg["selecionado_site"] = False
@@ -13165,7 +13165,7 @@ def renderizar_galeria_trabalhos(catalogo):
                             st.rerun()
                 else:
                     c_acoes.caption("🔒 Uso interno — sem autorização para exposição")
-                if c_acoes.button("📦 Arquivar", key=f"hf461_arq_{gid}", use_container_width=True):
+                if c_acoes.button("📦 Arquivar", key=f"hf461_arq_{gid}", width="stretch"):
                     for reg in galeria:
                         if str((reg or {}).get("id")) == gid:
                             reg["arquivado"] = True
@@ -13402,7 +13402,7 @@ def _orcamento_previa_visual_catalogo(produto, *, prefixo="orcamento_produto"):
                     st.image(
                         imagem_streamlit_catalogo(imagens[0]),
                         caption="Foto principal",
-                        use_container_width=True,
+                        width="stretch",
                     )
                 except Exception:
                     st.caption("🖼️ Foto principal cadastrada; a prévia não pôde ser carregada agora.")
@@ -13424,7 +13424,7 @@ def _orcamento_previa_visual_catalogo(produto, *, prefixo="orcamento_produto"):
                 st.link_button(
                     "▶️ Ver vídeo do produto",
                     video,
-                    use_container_width=True,
+                    width="stretch",
                 )
             elif video:
                 st.caption("▶️ Há um vídeo salvo no Catálogo deste produto.")
@@ -13437,7 +13437,7 @@ def _orcamento_previa_visual_catalogo(produto, *, prefixo="orcamento_produto"):
                     try:
                         colunas[pos % len(colunas)].image(
                             imagem_streamlit_catalogo(origem),
-                            use_container_width=True,
+                            width="stretch",
                         )
                     except Exception:
                         colunas[pos % len(colunas)].caption("Foto cadastrada")
@@ -13799,7 +13799,7 @@ def renderizar_alerta_thu_produto_sem_catalogo(proposta, prefixo="thu_sem_catalo
         if st.button(
             "➕ Cadastrar no Catálogo",
             key=f"{prefixo}_cadastrar_{abs(hash((numero, nome)))}",
-            use_container_width=True,
+            width="stretch",
         ):
             dialog_catalogo_cadastro_anna(nome_prefill=nome)
     else:
@@ -13810,7 +13810,7 @@ def renderizar_alerta_thu_produto_sem_catalogo(proposta, prefixo="thu_sem_catalo
                 if st.button(
                     f"➕ {nome}",
                     key=f"{prefixo}_cadastrar_{idx}_{abs(hash((numero, nome)))}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     dialog_catalogo_cadastro_anna(nome_prefill=nome)
 
@@ -14367,7 +14367,7 @@ def dialog_thu_i861_revisar_saneamento(indice_produto):
             if ac1.button(
                 "🌐 Definir Permanente / Todas as épocas",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 key=f"thu_i861_permanente_{idx}",
             ):
                 thu_i861_aplicar_permanente(idx)
@@ -14378,7 +14378,7 @@ def dialog_thu_i861_revisar_saneamento(indice_produto):
 
             if ac2.button(
                 "✏️ Abrir cadastro e escolher datas",
-                use_container_width=True,
+                width="stretch",
                 key=f"thu_i861_editar_campanhas_{idx}",
             ):
                 st.session_state.catalogo_edit_index = idx
@@ -14393,7 +14393,7 @@ def dialog_thu_i861_revisar_saneamento(indice_produto):
             if ac1.button(
                 "🚫 Confirmar que Material não se aplica",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 disabled=not bool(justificativa),
                 key=f"thu_i861_nao_aplica_material_{idx}",
             ):
@@ -14412,7 +14412,7 @@ def dialog_thu_i861_revisar_saneamento(indice_produto):
 
             if ac2.button(
                 "✏️ Informar material no cadastro",
-                use_container_width=True,
+                width="stretch",
                 key=f"thu_i861_editar_material_{idx}",
             ):
                 st.session_state.catalogo_edit_index = idx
@@ -14426,7 +14426,7 @@ def dialog_thu_i861_revisar_saneamento(indice_produto):
             if ac1.button(
                 "✅ Revisado — manter sem foto",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 disabled=not bool(justificativa),
                 key=f"thu_i861_aceitar_foto_{idx}",
             ):
@@ -14445,7 +14445,7 @@ def dialog_thu_i861_revisar_saneamento(indice_produto):
 
             if ac2.button(
                 "✏️ Adicionar foto no cadastro",
-                use_container_width=True,
+                width="stretch",
                 key=f"thu_i861_editar_foto_{idx}",
             ):
                 st.session_state.catalogo_edit_index = idx
@@ -14460,7 +14460,7 @@ def dialog_thu_i861_revisar_saneamento(indice_produto):
             if ac1.button(
                 "✅ Revisado e aceito como está",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 disabled=not bool(justificativa),
                 key=f"thu_i861_aceitar_legado_{idx}_{abs(hash(chave))}",
             ):
@@ -14479,7 +14479,7 @@ def dialog_thu_i861_revisar_saneamento(indice_produto):
 
             if ac2.button(
                 "✏️ Corrigir no cadastro",
-                use_container_width=True,
+                width="stretch",
                 key=f"thu_i861_editar_legado_{idx}_{abs(hash(chave))}",
             ):
                 st.session_state.catalogo_edit_index = idx
@@ -14497,7 +14497,7 @@ def dialog_thu_i861_revisar_saneamento(indice_produto):
             if ac1.button(
                 "✅ Confirmar que são produtos diferentes",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 disabled=not bool(justificativa) or outro_idx is None,
                 key=f"thu_i861_nao_dup_{idx}_{outro_idx}",
             ):
@@ -14513,7 +14513,7 @@ def dialog_thu_i861_revisar_saneamento(indice_produto):
 
             if ac2.button(
                 "✏️ Abrir este cadastro",
-                use_container_width=True,
+                width="stretch",
                 key=f"thu_i861_editar_dup_{idx}_{outro_idx}",
             ):
                 st.session_state.catalogo_edit_index = idx
@@ -14527,7 +14527,7 @@ def dialog_thu_i861_revisar_saneamento(indice_produto):
             if st.button(
                 "✏️ Abrir cadastro oficial",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 key=f"thu_i861_editar_estrutural_{idx}_{abs(hash(chave))}",
             ):
                 st.session_state.catalogo_edit_index = idx
@@ -14559,7 +14559,7 @@ def dialog_thu_i861_revisar_saneamento(indice_produto):
                 if st.button(
                     "↩️ Reabrir este alerta",
                     key=f"thu_i861_reabrir_{idx}_{pos_a}_{abs(hash(chave_a))}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     thu_i861_reabrir_decisao(idx, chave_a)
                     st.session_state["_thu_i861_feedback"] = (
@@ -14804,7 +14804,7 @@ def renderizar_saneamento_catalogo(catalogo):
                     if st.button(
                         "✏️ Corrigir cadastro",
                         key=f"thu_i86_editar_{idx}",
-                        use_container_width=True,
+                        width="stretch",
                         type="primary" if d["ordem"] == 0 else "secondary",
                     ):
                         st.session_state.catalogo_edit_index = idx
@@ -14813,7 +14813,7 @@ def renderizar_saneamento_catalogo(catalogo):
                     if st.button(
                         "✅ Revisar / aceitar",
                         key=f"thu_i861_revisar_{idx}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
                         dialog_thu_i861_revisar_saneamento(idx)
 
@@ -14850,21 +14850,21 @@ def renderizar_saneamento_catalogo(catalogo):
                     if b1.button(
                         "✏️ Abrir A",
                         key=f"thu_i86_dup_a_{pos_dup}_{i}_{j}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
                         st.session_state.catalogo_edit_index = i
                         st.rerun()
                     if b2.button(
                         "✏️ Abrir B",
                         key=f"thu_i86_dup_b_{pos_dup}_{i}_{j}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
                         st.session_state.catalogo_edit_index = j
                         st.rerun()
                     if b3.button(
                         "✅ Revisar par",
                         key=f"thu_i861_dup_revisar_{pos_dup}_{i}_{j}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
                         dialog_thu_i861_revisar_saneamento(i)
 
@@ -18020,21 +18020,21 @@ with st.sidebar:
             for cliente in resultados_globais["clientes"]:
                 st.write(f"👤 **{cliente.get('nome', 'Cliente')}** · {cliente.get('whatsapp') or 'sem WhatsApp'}")
                 a, b = st.columns(2)
-                if a.button("Orçamento", key=f"gcli_orc_{cliente.get('id')}", use_container_width=True):
+                if a.button("Orçamento", key=f"gcli_orc_{cliente.get('id')}", width="stretch"):
                     carregar_cliente_no_orcamento(cliente)
                     rerun_na_aba("novo_orcamento", f"Cliente {cliente.get('nome', 'Cliente')} carregado no Novo Orçamento.")
                 telefone = re.sub(r"\D", "", str(cliente.get("whatsapp", "")))
                 numero = telefone if telefone.startswith("55") else f"55{telefone}"
                 if telefone:
-                    b.link_button("WhatsApp", f"https://wa.me/{numero}", use_container_width=True)
+                    b.link_button("WhatsApp", f"https://wa.me/{numero}", width="stretch")
             for proposta in resultados_globais["propostas"]:
                 st.write(f"📄 **{proposta.get('numero_proposta', '—')}** · {proposta.get('cliente_nome', 'Cliente')} · 🧾 {resumo_produtos_pedido(proposta)}")
-                if st.button("Selecionar proposta", key=f"gprop_{proposta.get('numero_proposta')}", use_container_width=True):
+                if st.button("Selecionar proposta", key=f"gprop_{proposta.get('numero_proposta')}", width="stretch"):
                     st.session_state.alerta_proposta_numero = proposta.get("numero_proposta")
                     st.success("Proposta selecionada. Abra Histórico.")
             for produto in resultados_globais["produtos"]:
                 st.write(f"📦 **{produto.get('Nome', 'Produto')}** · {produto.get('Categoria', 'Sem categoria')}")
-                if st.button("Filtrar no catálogo", key=f"gprod_{produto.get('_indice_catalogo')}", use_container_width=True):
+                if st.button("Filtrar no catálogo", key=f"gprod_{produto.get('_indice_catalogo')}", width="stretch"):
                     st.session_state["pesquisa_catalogo"] = produto.get("Nome", "")
                     st.success("Filtro preparado. Abra Catálogo → Produtos cadastrados.")
             for atendimento in resultados_globais["atendimentos"]:
@@ -18044,7 +18044,7 @@ with st.sidebar:
 
     # HF20 — backups manuais são preparados somente quando solicitados. Antes,
     # três json.dumps grandes rodavam em todo rerun da barra lateral.
-    if st.button("💾 Preparar backups para download", key="hf20_preparar_backups_sidebar", use_container_width=True):
+    if st.button("💾 Preparar backups para download", key="hf20_preparar_backups_sidebar", width="stretch"):
         st.session_state["_hf20_backups_sidebar"] = {
             "historico": json.dumps(carregar_historico(), ensure_ascii=False, indent=4),
             "catalogo": json.dumps(carregar_catalogo(), ensure_ascii=False, indent=4),
@@ -18053,9 +18053,9 @@ with st.sidebar:
         }
     _hf20_backups = st.session_state.get("_hf20_backups_sidebar")
     if isinstance(_hf20_backups, dict):
-        st.download_button("📥 BACKUP DO HISTÓRICO", data=_hf20_backups.get("historico", "[]"), file_name="backup_historico.json", mime="application/json", type="primary", use_container_width=True)
-        st.download_button("📦 BACKUP DO CATÁLOGO", data=_hf20_backups.get("catalogo", "[]"), file_name="backup_catalogo.json", mime="application/json", use_container_width=True)
-        st.download_button("👥 BACKUP DE CLIENTES", data=_hf20_backups.get("clientes", "[]"), file_name="backup_clientes.json", mime="application/json", use_container_width=True)
+        st.download_button("📥 BACKUP DO HISTÓRICO", data=_hf20_backups.get("historico", "[]"), file_name="backup_historico.json", mime="application/json", type="primary", width="stretch")
+        st.download_button("📦 BACKUP DO CATÁLOGO", data=_hf20_backups.get("catalogo", "[]"), file_name="backup_catalogo.json", mime="application/json", width="stretch")
+        st.download_button("👥 BACKUP DE CLIENTES", data=_hf20_backups.get("clientes", "[]"), file_name="backup_clientes.json", mime="application/json", width="stretch")
         try:
             _hf20_preparado = datetime.fromisoformat(str(_hf20_backups.get("preparado_em") or "")).strftime("%H:%M")
             st.caption(f"Backups preparados às {_hf20_preparado}. Clique novamente em Preparar para atualizar.")
@@ -18073,7 +18073,7 @@ with st.sidebar:
             st.error(f"{urgentes_sidebar} atendimento(s) urgente(s)")
 
     backup_enviado = st.file_uploader("💾 RESTAURAR BACKUP", type=["json"], key="restaurar_historico")
-    if backup_enviado is not None and st.button("Restaurar agora", use_container_width=True):
+    if backup_enviado is not None and st.button("Restaurar agora", width="stretch"):
         try:
             restaurado = json.load(backup_enviado)
             if not isinstance(restaurado, list):
@@ -18172,7 +18172,7 @@ def renderizar_alertas_clicaveis(titulo, alertas, tipo, prefixo):
         cliente_alerta = p.get("cliente_nome", "Cliente não informado")
         c1, c2 = st.columns([7, 1])
         c1.write(f"**{numero_alerta} — {cliente_alerta}** · {situacao}")
-        if c2.button("Abrir", key=f"abrir_alerta_{prefixo}_{tipo}_{numero_alerta}", use_container_width=True):
+        if c2.button("Abrir", key=f"abrir_alerta_{prefixo}_{tipo}_{numero_alerta}", width="stretch"):
             st.session_state.alerta_proposta_numero = numero_alerta
             st.rerun()
 
@@ -18219,7 +18219,7 @@ def renderizar_painel_alertas(prefixo):
         usuario_alerta_jorge_hf2 = str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold() == "jorge"
         a1, a2, a3, a4 = st.columns(4)
 
-        if a1.button("✏️ Editar proposta", key=f"editar_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}", use_container_width=True):
+        if a1.button("✏️ Editar proposta", key=f"editar_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}", width="stretch"):
             carregar_proposta_no_formulario(proposta_alerta, duplicar=False)
             st.session_state.alerta_proposta_numero = None
             rerun_na_aba("novo_orcamento", "Proposta carregada para edição e atualização dos status.")
@@ -18227,16 +18227,16 @@ def renderizar_painel_alertas(prefixo):
         if numero_alerta and not numero_alerta.startswith("55"):
             numero_alerta = "55" + numero_alerta
         link_alerta = f"https://wa.me/{numero_alerta}?text={quote(formatar_msg_whatsapp(proposta_alerta))}" if numero_alerta else f"https://wa.me/?text={quote(formatar_msg_whatsapp(proposta_alerta))}"
-        a2.link_button("📱 Enviar WhatsApp", link_alerta, use_container_width=True)
+        a2.link_button("📱 Enviar WhatsApp", link_alerta, width="stretch")
         a3.download_button(
             "📄 Baixar HTML",
             gerar_html(proposta_alerta),
             file_name=f"{proposta_alerta.get('numero_proposta', 'proposta')}.html",
             mime="text/html",
             key=f"html_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}",
-            use_container_width=True,
+            width="stretch",
         )
-        if a4.button("Fechar", key=f"fechar_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}", use_container_width=True):
+        if a4.button("Fechar", key=f"fechar_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}", width="stretch"):
             st.session_state.alerta_proposta_numero = None
             st.rerun()
 
@@ -18247,7 +18247,7 @@ def renderizar_painel_alertas(prefixo):
             if adm1.button(
                 "📋 Duplicar pedido",
                 key=f"duplicar_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}",
-                use_container_width=True,
+                width="stretch",
             ):
                 carregar_proposta_no_formulario(proposta_alerta, duplicar=True)
                 st.session_state.alerta_proposta_numero = None
@@ -18255,7 +18255,7 @@ def renderizar_painel_alertas(prefixo):
             if adm2.button(
                 "🗑️ Excluir proposta",
                 key=f"excluir_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}",
-                use_container_width=True,
+                width="stretch",
                 help="Envia a proposta para a Lixeira. Disponível somente no perfil Jorge.",
             ):
                 numero_excluir_alerta_hf2 = str(proposta_alerta.get("numero_proposta") or "")
@@ -18440,9 +18440,9 @@ def dialog_orcamento_anna(proposta=None):
             if destino and not destino.startswith("55"):
                 destino = "55" + destino
             link = f"https://wa.me/{destino}?text={quote(formatar_msg_whatsapp(ultima))}" if destino else f"https://wa.me/?text={quote(formatar_msg_whatsapp(ultima))}"
-            a1.link_button("📱 Enviar orçamento por WhatsApp", link, use_container_width=True)
-            a2.download_button("📄 Gerar HTML", gerar_html(ultima), file_name=f"{ultima.get('numero_proposta','orcamento')}.html", mime="text/html", use_container_width=True, key=f"anna_html_salvo_{ultima.get('numero_proposta','orcamento')}")
-            if a3.button("✖ Fechar", key="anna_modal_fechar_sucesso", use_container_width=True):
+            a1.link_button("📱 Enviar orçamento por WhatsApp", link, width="stretch")
+            a2.download_button("📄 Gerar HTML", gerar_html(ultima), file_name=f"{ultima.get('numero_proposta','orcamento')}.html", mime="text/html", width="stretch", key=f"anna_html_salvo_{ultima.get('numero_proposta','orcamento')}")
+            if a3.button("✖ Fechar", key="anna_modal_fechar_sucesso", width="stretch"):
                 st.session_state.pop("_ultima_proposta_salva_anna", None)
                 st.rerun()
 
@@ -18554,7 +18554,7 @@ def dialog_orcamento_anna(proposta=None):
     elif preco_previa_i8113:
         st.caption((f"💼 Prévia com preço especial: R$ {preco_previa_i8113['preco_base']:.2f} - R$ {preco_previa_i8113['abatimento']:.2f} = R$ {preco_previa_i8113['preco_final']:.2f} por unidade").replace(".", ","))
 
-    adicionar = st.button("➕ Adicionar Item", use_container_width=True, key=f"anna_modal_adicionar_{chave_item_i8113}")
+    adicionar = st.button("➕ Adicionar Item", width="stretch", key=f"anna_modal_adicionar_{chave_item_i8113}")
 
     if adicionar:
         registrar_atividade(obter_usuario_atual(), "Adicionando item ao orçamento", "Orçamentos")
@@ -18598,7 +18598,7 @@ def dialog_orcamento_anna(proposta=None):
         cliente_itens_i811 = localizar_cliente_comercial(nome, doc, wa)
         perfil_itens_i811 = resumo_perfil_comercial(cliente_itens_i811) if cliente_itens_i811 else resumo_perfil_comercial({})
         if cliente_itens_i811 and perfil_itens_i811.get("qtd_regras_ativas", 0):
-            if st.button("💼 Recalcular itens pelo Perfil Comercial", key="anna_i811hf2_recalcular_itens", use_container_width=True):
+            if st.button("💼 Recalcular itens pelo Perfil Comercial", key="anna_i811hf2_recalcular_itens", width="stretch"):
                 alterados_i811 = 0
                 bloqueados_i811 = []
                 for item_i811 in itens:
@@ -18684,7 +18684,7 @@ def dialog_orcamento_anna(proposta=None):
         t4.metric("Valor total", f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
         salvar_rotulo = "💾 SALVAR ALTERAÇÕES" if numero_original else "🚀 SALVAR PROPOSTA"
-        if st.button(salvar_rotulo, type="primary", use_container_width=True, key="anna_modal_salvar_orcamento"):
+        if st.button(salvar_rotulo, type="primary", width="stretch", key="anna_modal_salvar_orcamento"):
             if not nome.strip():
                 st.error("Informe o nome do cliente.")
                 return
@@ -18751,7 +18751,7 @@ def dialog_atendimento_anna():
         origem = st.selectbox("Canal de origem", ["WhatsApp", "Instagram", "Facebook", "TikTok", "YouTube", "Site", "Manual"])
         mensagem = st.text_area("Mensagem ou solicitação")
         prioridade = st.selectbox("Prioridade", ["Normal", "Alta", "Urgente"])
-        salvar = st.form_submit_button("Salvar atendimento", type="primary", use_container_width=True)
+        salvar = st.form_submit_button("Salvar atendimento", type="primary", width="stretch")
     if salvar:
         dados = carregar_atendimentos()
         dados["itens"].insert(0, {
@@ -18776,7 +18776,7 @@ def dialog_cliente_anna():
         documento = c2.text_input("CPF/CNPJ")
         cidade = st.text_input("Cidade")
         observacoes = st.text_area("Observações")
-        salvar = st.form_submit_button("Salvar cliente", type="primary", use_container_width=True)
+        salvar = st.form_submit_button("Salvar cliente", type="primary", width="stretch")
     if salvar:
         clientes = carregar_clientes()
         chave = chave_cliente(nome, documento, whatsapp)
@@ -19016,7 +19016,7 @@ def dialog_fluxo_anna():
                     disabled=bool(estado_form_fluxo.get("entregue")),
                     help="Encerra a proposta nas filas sem apagar os status anteriores.",
                 )
-                salvar = st.form_submit_button("💾 Salvar andamento", use_container_width=True)
+                salvar = st.form_submit_button("💾 Salvar andamento", width="stretch")
             if salvar:
                 ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue, cancelado_cliente)
                 if ok:
@@ -19725,7 +19725,7 @@ def renderizar_plano_execucao_thu(
                 if c2.button(
                     label,
                     key=f"{prefixo}_acao_{pos}_{abs(hash((item.get('id'), campanha, acao)))}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     _thu_i5_acionar_plano(item, prefixo)
 
@@ -19735,7 +19735,7 @@ def renderizar_plano_execucao_thu(
                 if c2.button(
                     "📤 Registrar publicação",
                     key=f"{prefixo}_publicar_{pos}_{abs(hash((item.get('id'), campanha)))}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     _thu_i6_abrir_registro_preparada(salva)
                     if compacto:
@@ -19772,7 +19772,7 @@ def renderizar_plano_execucao_thu(
                 if salva and c2.button(
                     "➕ Outro canal",
                     key=f"{prefixo}_outro_canal_{pos}_{abs(hash((item.get('id'), campanha)))}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     _thu_i6_abrir_registro_preparada(salva)
                     if compacto:
@@ -20221,7 +20221,7 @@ def dialog_thu_aproveitar_imagem_social(publicacao_id):
     if st.button(
         "✅ Confirmar no banco de imagens",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key=f"thu_i6_aproveitar_confirmar_{publicacao_id}",
     ):
         imagens = list(produto.get("Imagens", []) or [])
@@ -20298,12 +20298,12 @@ def renderizar_acervo_social_thu(marketing, conteudos):
     perf1.link_button(
         "📸 Abrir Instagram AlphaFest",
         "https://www.instagram.com/alphafest10/",
-        use_container_width=True,
+        width="stretch",
     )
     perf2.link_button(
         "📘 Abrir Facebook AlphaFest",
         "https://www.facebook.com/alphafest10",
-        use_container_width=True,
+        width="stretch",
     )
     perf3.caption(
         "Use estes atalhos para revisar publicações antigas e registrar no Acervo Social somente o que realmente vale preservar."
@@ -20510,7 +20510,7 @@ def renderizar_acervo_social_thu(marketing, conteudos):
         if st.button(
             "✅ Registrar como publicada",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             key="thu_i6_salvar_publicacao",
         ):
             if not canal:
@@ -20636,7 +20636,7 @@ def renderizar_acervo_social_thu(marketing, conteudos):
                         h2.link_button(
                             "🔗 Abrir publicação",
                             str(pub.get("link")),
-                            use_container_width=True,
+                            width="stretch",
                         )
                     else:
                         h2.caption("Sem link registrado")
@@ -20645,7 +20645,7 @@ def renderizar_acervo_social_thu(marketing, conteudos):
                         if h2.button(
                             "📸 Aproveitar imagem",
                             key=f"thu_i6_aproveitar_{pub.get('id')}",
-                            use_container_width=True,
+                            width="stretch",
                         ):
                             dialog_thu_aproveitar_imagem_social(pub.get("id"))
 
@@ -20663,7 +20663,7 @@ def renderizar_acervo_social_thu(marketing, conteudos):
                             "Anular",
                             key=f"thu_i6_anular_{pub.get('id')}",
                             disabled=not confirmar_anular,
-                            use_container_width=True,
+                            width="stretch",
                         ):
                             if thu_social_anular_publicacao(
                                 marketing,
@@ -21327,7 +21327,7 @@ def renderizar_inteligencia_marketing_resultados(marketing):
     if c_acao.button(
         "📊 Atualizar inteligência agora",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key="thu_i7_analisar",
     ):
         with st.spinner("THU consolidando Marketing, Catálogo e propostas..."):
@@ -21507,7 +21507,7 @@ def renderizar_inteligencia_marketing_resultados(marketing):
             ])
             st.dataframe(
                 df_demanda,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -21601,7 +21601,7 @@ def renderizar_inteligencia_marketing_resultados(marketing):
                         if p2.button(
                             "💙 Levar ao THU",
                             key=f"thu_i7_levar_{pos}_{abs(hash(x.get('produto')))}",
-                            use_container_width=True,
+                            width="stretch",
                         ):
                             st.session_state["thu_produto_escolhido_2049"] = x.get("produto")
                             st.session_state["thu_catalogo_consulta_2049"] = x.get("produto")
@@ -21653,7 +21653,7 @@ def renderizar_inteligencia_marketing_resultados(marketing):
             ])
             st.dataframe(
                 df_origens,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
         else:
@@ -21720,7 +21720,7 @@ def renderizar_inteligencia_marketing_resultados(marketing):
                         t2.link_button(
                             "🔗 Ver publicação",
                             item.get("link"),
-                            use_container_width=True,
+                            width="stretch",
                         )
 
     with tab_qual:
@@ -22270,10 +22270,10 @@ def dialog_thu_i85_recortar_catalogo(
     pv1, pv2 = st.columns(2)
     with pv1:
         st.markdown("##### Página + área selecionada")
-        st.image(marcado or str(preview_path), use_container_width=True)
+        st.image(marcado or str(preview_path), width="stretch")
     with pv2:
         st.markdown("##### Resultado do recorte")
-        st.image(recorte_temp["imagem"], use_container_width=True)
+        st.image(recorte_temp["imagem"], width="stretch")
         st.caption(
             f"Recorte: {recorte_temp['imagem'].size[0]} × "
             f"{recorte_temp['imagem'].size[1]} px"
@@ -22358,7 +22358,7 @@ def dialog_thu_i85_recortar_catalogo(
         if st.button(
             "💾 Salvar recorte no produto",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             key=f"{chave_base}_salvar_existente",
         ):
             try:
@@ -22403,7 +22403,7 @@ def dialog_thu_i85_recortar_catalogo(
         if st.button(
             "💾 Guardar recorte para o novo cadastro",
             type="primary",
-            use_container_width=True,
+            width="stretch",
             key=f"{chave_base}_salvar_novo",
         ):
             if not nome_novo:
@@ -23059,7 +23059,7 @@ def dialog_thu_i8_revisar_produto(catalogo_id, pagina, nome_candidato=""):
     with cprev:
         prev = thu_i8_preview_path(pg)
         if prev:
-            st.image(str(prev), use_container_width=True)
+            st.image(str(prev), width="stretch")
         st.caption("Prévia histórica da página original")
 
     with cform:
@@ -23210,7 +23210,7 @@ def dialog_thu_i8_revisar_produto(catalogo_id, pagina, nome_candidato=""):
     if st.button(
         "✅ Aplicar somente as informações confirmadas",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key=f"thu_i8_aplicar_{catalogo_id}_{pagina}",
     ):
         if idx_prod is None:
@@ -23329,7 +23329,7 @@ def renderizar_acervo_catalogos_legados():
     _rf1, _rf2 = st.columns([1.5, 2.5])
     if _rf1.button(
         "🩺 Auditar e reparar fotos do Catálogo",
-        use_container_width=True,
+        width="stretch",
         key="thu_i83_recuperar_fotos_manual",
         help=(
             "Executa somente quando você clicar. Valida referências de imagem, arquiva links "
@@ -23494,11 +23494,11 @@ def renderizar_acervo_catalogos_legados():
     with left:
         prev = thu_i8_preview_path(pg)
         if prev:
-            st.image(str(prev), use_container_width=True)
+            st.image(str(prev), width="stretch")
             if st.button(
                 "✂️ Recortar produto desta página",
                 key=f"thu_i85_recorte_pagina_{catalogo_id}_{pg.get('pagina')}",
-                use_container_width=True,
+                width="stretch",
             ):
                 dialog_thu_i85_recortar_catalogo(
                     catalogo_id,
@@ -23528,7 +23528,7 @@ def renderizar_acervo_catalogos_legados():
                     f"▶️ Continuar cadastro de {_pendentes_retomar_i8[0]}",
                     key=f"thu_i8_retomar_{catalogo_id}_{pg.get('pagina')}",
                     type="primary",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     if thu_i8_preparar_cadastro_novo(
                         catalogo_id,
@@ -23655,14 +23655,14 @@ def renderizar_acervo_catalogos_legados():
                 if n2.button(
                     "🔗 Revisar existente",
                     key=f"thu_i8_existente_{catalogo_id}_{pg.get('pagina')}_{pos}_{abs(hash(nome))}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     dialog_thu_i8_revisar_produto(catalogo_id, pg.get("pagina"), nome)
 
                 if n4.button(
                     "✂️ Recortar foto",
                     key=f"thu_i85_recortar_item_{catalogo_id}_{pg.get('pagina')}_{pos}_{abs(hash(nome))}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     dialog_thu_i85_recortar_catalogo(
                         catalogo_id,
@@ -23674,7 +23674,7 @@ def renderizar_acervo_catalogos_legados():
                 if n3.button(
                     "✅ Já existe" if _match_exato else ("⚡ Preparar kit" if pg.get("composicao_kit") else "🆕 Preparar cadastro"),
                     key=f"thu_i8_novo_{catalogo_id}_{pg.get('pagina')}_{pos}_{abs(hash(nome))}",
-                    use_container_width=True,
+                    width="stretch",
                     disabled=_match_exato,
                 ):
                     if thu_i8_preparar_cadastro_novo(catalogo_id, pg.get("pagina"), nome):
@@ -23692,7 +23692,7 @@ def renderizar_acervo_catalogos_legados():
     if r1.button(
         "✅ Marcar página como revisada",
         key=f"thu_i8_pag_revisada_{catalogo_id}_{pg.get('pagina')}",
-        use_container_width=True,
+        width="stretch",
     ):
         thu_i8_marcar_pagina(catalogo_id, pg.get("pagina"), "Revisada", produtos=nomes)
         st.session_state["_thu_i8_feedback"] = "Página marcada como revisada. O conteúdo original continua preservado no acervo."
@@ -23701,7 +23701,7 @@ def renderizar_acervo_catalogos_legados():
     if r2.button(
         "⚪ Página institucional / sem produto",
         key=f"thu_i8_pag_ignorada_{catalogo_id}_{pg.get('pagina')}",
-        use_container_width=True,
+        width="stretch",
     ):
         thu_i8_marcar_pagina(
             catalogo_id,
@@ -23840,7 +23840,7 @@ def dialog_thu_revisar_elegibilidade(campanha_inicial=""):
             confirmar = st.form_submit_button(
                 f"✅ Confirmar selecionados para {campanha}",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
             )
 
         if confirmar:
@@ -23946,7 +23946,7 @@ def dialog_catalogo_cadastro_anna(
         c5, c6 = st.columns(2)
         ativo = c5.checkbox("Produto ativo", value=bool(produto.get("Ativo", True)))
         destaque = c6.checkbox("Produto em destaque", value=bool(produto.get("Destaque", False)))
-        salvar = st.form_submit_button("💾 Salvar produto", type="primary", use_container_width=True)
+        salvar = st.form_submit_button("💾 Salvar produto", type="primary", width="stretch")
     if salvar:
         if not nome.strip() or not categoria.strip():
             st.error("Informe o nome e o grupo/categoria.")
@@ -24136,13 +24136,13 @@ def renderizar_auditoria_thu_pos_cadastro(nome_produto, prefixo="thu_auditoria_p
         if b1.button(
             "✏️ Completar / revisar cadastro",
             key=f"{prefixo}_editar_{idx}_{abs(hash(nome_produto))}",
-            use_container_width=True,
+            width="stretch",
         ):
             dialog_catalogo_cadastro_anna(produto_indice=idx)
         if b2.button(
             "Fechar auditoria",
             key=f"{prefixo}_fechar_{abs(hash(nome_produto))}",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state.pop("_thu_auditar_produto_nome", None)
             st.rerun()
@@ -24210,7 +24210,7 @@ def dialog_banco_imagens_entrega(numero_proposta, produto_nome):
         st.warning(
             f"💙 THU informa: **{produto_nome}** ainda não possui cadastro oficial. Cadastre o produto antes de atualizar o banco de imagens."
         )
-        if st.button("➕ Cadastrar produto", use_container_width=True):
+        if st.button("➕ Cadastrar produto", width="stretch"):
             dialog_catalogo_cadastro_anna(nome_prefill=str(produto_nome))
         return
 
@@ -24228,7 +24228,7 @@ def dialog_banco_imagens_entrega(numero_proposta, produto_nome):
         for pos, imagem in enumerate(imagens_atuais[:3]):
             with cols_prev[pos]:
                 try:
-                    st.image(imagem_streamlit_catalogo(imagem), use_container_width=True)
+                    st.image(imagem_streamlit_catalogo(imagem), width="stretch")
                 except Exception:
                     st.caption("Imagem indisponível")
     else:
@@ -24261,11 +24261,11 @@ def dialog_banco_imagens_entrega(numero_proposta, produto_nome):
         salvar_fotos = st.form_submit_button(
             "💾 Salvar no banco de imagens",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
         ignorar = st.form_submit_button(
             "Não há imagem nova útil nesta entrega",
-            use_container_width=True,
+            width="stretch",
         )
 
     if ignorar:
@@ -24391,7 +24391,7 @@ def renderizar_sugestao_banco_imagens_entrega(proposta, prefixo="thu_banco_entre
         if st.button(
             f"📸 Revisar fotos de {nome}",
             key=f"{prefixo}_foto_{abs(hash((numero, nome)))}",
-            use_container_width=True,
+            width="stretch",
         ):
             dialog_banco_imagens_entrega(numero, nome)
     else:
@@ -24402,7 +24402,7 @@ def renderizar_sugestao_banco_imagens_entrega(proposta, prefixo="thu_banco_entre
                 if st.button(
                     f"📸 {nome}",
                     key=f"{prefixo}_foto_{pos}_{abs(hash((numero, nome)))}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     dialog_banco_imagens_entrega(numero, nome)
 
@@ -24455,7 +24455,7 @@ def dialog_catalogo_visualizar_anna():
             with topo_img:
                 if imagens_atuais:
                     try:
-                        st.image(imagem_streamlit_catalogo(imagens_atuais[0]), use_container_width=True)
+                        st.image(imagem_streamlit_catalogo(imagens_atuais[0]), width="stretch")
                     except Exception:
                         st.caption("Imagem indisponível")
                 else:
@@ -24486,7 +24486,7 @@ def dialog_catalogo_visualizar_anna():
                     for pos, imagem in enumerate(imagens_atuais):
                         with cols[pos % 3]:
                             try:
-                                st.image(imagem, use_container_width=True)
+                                st.image(imagem, width="stretch")
                             except Exception:
                                 st.caption(Path(imagem).name or "Imagem indisponível")
 
@@ -24551,7 +24551,7 @@ def dialog_catalogo_visualizar_anna():
                     c5, c6 = st.columns(2)
                     ativo = c5.checkbox("Produto ativo", value=bool(produto.get("Ativo", True)), key=f"{form_key}_ativo")
                     destaque = c6.checkbox("Produto em destaque", value=bool(produto.get("Destaque", False)), key=f"{form_key}_dest")
-                    salvar = st.form_submit_button("💾 Salvar alterações e fotos", type="primary", use_container_width=True)
+                    salvar = st.form_submit_button("💾 Salvar alterações e fotos", type="primary", width="stretch")
 
                 if salvar:
                     if not nome.strip() or not categoria.strip():
@@ -24609,7 +24609,7 @@ def dialog_catalogo_visualizar_anna():
                         else:
                             st.error("Não foi possível confirmar a atualização do produto.")
 
-                if st.button("🗑️ Excluir este produto", key=f"anna_cat_del_{i}", use_container_width=True):
+                if st.button("🗑️ Excluir este produto", key=f"anna_cat_del_{i}", width="stretch"):
                     nome_excluido_evt = str(produto.get("Nome") or "Produto").strip()
                     catalogo.pop(i)
                     salvar_catalogo(catalogo)
@@ -24629,8 +24629,8 @@ def dialog_catalogo_gerar_anna():
     html_interno = gerar_html_catalogo(produtos, titulo="Catálogo Geral Alphafest", mostrar_precos=True)
     html_cliente = gerar_html_catalogo(produtos, titulo="Catálogo Alphafest", mostrar_precos=False)
     c1,c2 = st.columns(2)
-    c1.download_button("💰 Catálogo geral com valores", html_interno, file_name="catalogo_geral_com_valores.html", mime="text/html", use_container_width=True)
-    c2.download_button("👥 Catálogo do cliente sem valores", html_cliente, file_name="catalogo_cliente_sem_valores.html", mime="text/html", use_container_width=True)
+    c1.download_button("💰 Catálogo geral com valores", html_interno, file_name="catalogo_geral_com_valores.html", mime="text/html", width="stretch")
+    c2.download_button("👥 Catálogo do cliente sem valores", html_cliente, file_name="catalogo_cliente_sem_valores.html", mime="text/html", width="stretch")
 
 
 
@@ -24693,7 +24693,7 @@ def _renderizar_linha_proposta_anna(prop, prefixo, permitir_reserva_rapida=True)
     c1.caption(
         f"🧾 Produto: {resumo_hf653['produtos']} · 🎨 Tema: {resumo_hf653['temas']} · 💰 Valor: {resumo_hf653['valor']}"
     )
-    if c2.button("✏️ Atualizar", key=f"{prefixo}_edit_{numero}", use_container_width=True):
+    if c2.button("✏️ Atualizar", key=f"{prefixo}_edit_{numero}", width="stretch"):
         dialog_orcamento_anna(prop)
     numero_wa_hf655 = _anna_numero_whatsapp(prop.get("whatsapp") or prop.get("cliente_wa"))
     link_hf655 = (
@@ -24701,21 +24701,21 @@ def _renderizar_linha_proposta_anna(prop, prefixo, permitir_reserva_rapida=True)
         if numero_wa_hf655
         else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop))}"
     )
-    c3.link_button("📱 Enviar", link_hf655, use_container_width=True)
+    c3.link_button("📱 Enviar", link_hf655, width="stretch")
     estado_linha_hf653 = _status_resumo(prop)
     pode_reservar_hf653 = bool(estado_linha_hf653.get("aprovado")) and not bool(estado_linha_hf653.get("pronto")) and not bool(estado_linha_hf653.get("entregue"))
     if permitir_reserva_rapida and not MODO_SOB_ENCOMENDA_HF38:
-        if c4.button("🔒 Materiais", key=f"{prefixo}_mat_{numero}", use_container_width=True, disabled=not pode_reservar_hf653):
+        if c4.button("🔒 Materiais", key=f"{prefixo}_mat_{numero}", width="stretch", disabled=not pode_reservar_hf653):
             dialog_reserva_rapida_pedido(numero)
     elif not MODO_SOB_ENCOMENDA_HF38:
-        c4.button("🔒 Materiais", key=f"{prefixo}_mat_bloq_{numero}", use_container_width=True, disabled=True, help="Feche esta janela para usar a reserva rápida na Central.")
+        c4.button("🔒 Materiais", key=f"{prefixo}_mat_bloq_{numero}", width="stretch", disabled=True, help="Feche esta janela para usar a reserva rápida na Central.")
     c5.download_button(
         "📄 HTML",
         gerar_html(prop),
         file_name=f"{numero}.html",
         mime="text/html",
         key=f"{prefixo}_html_{numero}",
-        use_container_width=True,
+        width="stretch",
     )
 
     _i8124_render_status_pedido(prop, prefixo=f"{prefixo}_estoque", detalhado=False)
@@ -24748,7 +24748,7 @@ def _renderizar_linha_proposta_anna(prop, prefixo, permitir_reserva_rapida=True)
                 disabled=bool(estado_linha.get("entregue")),
                 help="Encerra a proposta nas filas sem apagar os status anteriores.",
             )
-            salvar_status = st.form_submit_button("💾 Salvar andamento", type="primary", use_container_width=True)
+            salvar_status = st.form_submit_button("💾 Salvar andamento", type="primary", width="stretch")
         if salvar_status:
             ok, mensagem = salvar_andamento_proposta(numero, aprovado, pago, pronto, entregue, cancelado_cliente)
             if ok:
@@ -24880,37 +24880,37 @@ def renderizar_workspace_anna_isolado():
             c1, c2, c3, c4 = st.columns([2,2,1,1])
             numero = _anna_numero_whatsapp(ultima.get("whatsapp") or ultima.get("cliente_wa"))
             link = f"https://wa.me/{numero}?text={quote(formatar_msg_whatsapp(ultima))}" if numero else f"https://wa.me/?text={quote(formatar_msg_whatsapp(ultima))}"
-            c1.link_button("📱 Enviar por WhatsApp", link, use_container_width=True)
-            c2.download_button("📄 Gerar HTML", gerar_html(ultima), file_name=f"{ultima.get('numero_proposta','orcamento')}.html", mime="text/html", use_container_width=True, key=f"html_ultima_{ultima.get('numero_proposta','orcamento')}")
-            if c3.button("➕ Outro", use_container_width=True):
+            c1.link_button("📱 Enviar por WhatsApp", link, width="stretch")
+            c2.download_button("📄 Gerar HTML", gerar_html(ultima), file_name=f"{ultima.get('numero_proposta','orcamento')}.html", mime="text/html", width="stretch", key=f"html_ultima_{ultima.get('numero_proposta','orcamento')}")
+            if c3.button("➕ Outro", width="stretch"):
                 st.session_state.pop("_ultima_proposta_salva_anna", None)
                 dialog_orcamento_anna()
-            if c4.button("Fechar", use_container_width=True):
+            if c4.button("Fechar", width="stretch"):
                 st.session_state.pop("_ultima_proposta_salva_anna", None)
                 st.rerun()
 
     a1, a2, a3, a4, a5 = st.columns(5)
-    if a1.button("💬 Novo atendimento", use_container_width=True): dialog_atendimento_anna()
-    if a2.button("➕ Novo orçamento", type="primary", use_container_width=True): dialog_orcamento_anna()
-    if a3.button("👤 Novo cliente", use_container_width=True): dialog_cliente_anna()
-    if a4.button("📦 Fluxo de pedidos", use_container_width=True):
+    if a1.button("💬 Novo atendimento", width="stretch"): dialog_atendimento_anna()
+    if a2.button("➕ Novo orçamento", type="primary", width="stretch"): dialog_orcamento_anna()
+    if a3.button("👤 Novo cliente", width="stretch"): dialog_cliente_anna()
+    if a4.button("📦 Fluxo de pedidos", width="stretch"):
         rerun_na_aba("fluxo", "Abrindo o Fluxo operacional único de pedidos.")
-    if a5.button("📋 Histórico", use_container_width=True):
+    if a5.button("📋 Histórico", width="stretch"):
         rerun_na_aba("historico")
 
     st.markdown("### 📚 Catálogo")
     st.caption("⚡ CAT1 ativa • Kits Festa e catálogos antigos disponíveis no Acervo Histórico.")
     k1, k2, k3, k4, k5, k6, k7 = st.columns(7)
-    if k1.button("➕ Cadastrar produto", use_container_width=True): dialog_catalogo_cadastro_anna()
-    if k2.button("📋 Visualizar produtos", use_container_width=True): dialog_catalogo_visualizar_anna()
-    if k3.button("📤 Gerar rápido", use_container_width=True): dialog_catalogo_gerar_anna()
-    if k4.button("📅 Revisar campanhas", use_container_width=True): dialog_thu_revisar_elegibilidade()
-    if k5.button("📚 Acervo histórico", use_container_width=True):
+    if k1.button("➕ Cadastrar produto", width="stretch"): dialog_catalogo_cadastro_anna()
+    if k2.button("📋 Visualizar produtos", width="stretch"): dialog_catalogo_visualizar_anna()
+    if k3.button("📤 Gerar rápido", width="stretch"): dialog_catalogo_gerar_anna()
+    if k4.button("📅 Revisar campanhas", width="stretch"): dialog_thu_revisar_elegibilidade()
+    if k5.button("📚 Acervo histórico", width="stretch"):
         st.session_state["_cat1_abrir_acervo_direto"] = True
         rerun_na_aba("catalogo")
-    if k6.button("✨ Gerador / Modelos / Central", use_container_width=True):
+    if k6.button("✨ Gerador / Modelos / Central", width="stretch"):
         rerun_na_aba("catalogo")
-    if k7.button("🌐 Site AlphaFest", use_container_width=True):
+    if k7.button("🌐 Site AlphaFest", width="stretch"):
         rerun_na_aba("site")
 
     entregas_hoje = list(entregas_hoje_hf653)
@@ -24922,7 +24922,7 @@ def renderizar_workspace_anna_isolado():
     m3.metric("Pedidos ativos", len(ativos))
     m4.metric("Entregas hoje", len(entregas_hoje))
     if entregas_hoje:
-        if m4.button("🔎 Ver quais são", key="anna_ver_entregas_hoje", use_container_width=True):
+        if m4.button("🔎 Ver quais são", key="anna_ver_entregas_hoje", width="stretch"):
             dialog_entregas_hoje_anna(historico)
 
     # HF18 — roteiro diário imprimível da Anna alinhado ao Histórico. Somente leitura e somente dados:
@@ -24956,7 +24956,7 @@ def renderizar_workspace_anna_isolado():
         ])
         st.dataframe(
             previa_agenda_hf17,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             height=min(420, 36 + 35 * len(previa_agenda_hf17)),
         )
@@ -25024,7 +25024,7 @@ def renderizar_workspace_anna_isolado():
             if st.button(
                 "🌅 Registrar início do dia",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 key="anna_registrar_inicio_hf19",
             ):
                 snapshot_novo_hf19 = _anna_criar_snapshot_inicio(agenda_anna_hf17, agora_local()) if _anna_criar_snapshot_inicio else None
@@ -25066,7 +25066,7 @@ def renderizar_workspace_anna_isolado():
                 pdf_atual_hf20,
                 file_name=f"agenda_anna_{data_arquivo_hf19}_atual_{hora_arquivo_hf20}.pdf",
                 mime="application/pdf",
-                use_container_width=True,
+                width="stretch",
                 key="anna_agenda_atual_hf20",
                 help="Gera uma nova agenda com a situação atual do banco, sem alterar a fotografia registrada pela manhã.",
             )
@@ -25099,7 +25099,7 @@ def renderizar_workspace_anna_isolado():
                     pdf_manha_hf19,
                     file_name=f"agenda_anna_{data_arquivo_hf19}_inicio_do_dia.pdf",
                     mime="application/pdf",
-                    use_container_width=True,
+                    width="stretch",
                     key="anna_agenda_inicio_hf19",
                 )
 
@@ -25141,7 +25141,7 @@ def renderizar_workspace_anna_isolado():
                     pdf_fech_hf19,
                     file_name=f"agenda_anna_{data_arquivo_hf19}_fechamento_comparativo.pdf",
                     mime="application/pdf",
-                    use_container_width=True,
+                    width="stretch",
                     key="anna_agenda_fim_hf19",
                 )
             elif not ANNA_FECHAMENTO_IMPORT_ERROR:
@@ -25154,7 +25154,7 @@ def renderizar_workspace_anna_isolado():
         st.caption(f"{len(propostas_hoje)} orçamento(s) encontrado(s) hoje. Os mais recentes ficam sempre no topo.")
         for idx, prop in enumerate(propostas_hoje[:5]):
             _renderizar_linha_proposta_anna(prop, f"anna_hoje_{idx}")
-        if len(propostas_hoje) > 5 and st.button(f"Ver todos os {len(propostas_hoje)} orçamentos de hoje", key="anna_ver_todos_hoje", use_container_width=True):
+        if len(propostas_hoje) > 5 and st.button(f"Ver todos os {len(propostas_hoje)} orçamentos de hoje", key="anna_ver_todos_hoje", width="stretch"):
             dialog_propostas_hoje_anna(historico)
     else:
         st.info("Nenhum orçamento lançado hoje foi localizado. Use Atualizar dados para consultar o banco novamente.")
@@ -25294,7 +25294,7 @@ if pagina_atual == "central":
                 st.caption("⭐ Favoritos")
                 cols_fav = st.columns(len(favoritos_validos))
                 for col_fav, (chave_fav, rotulo_fav) in zip(cols_fav, favoritos_validos):
-                    if col_fav.button(rotulo_fav, key=f"fav_anna_{chave_fav}", use_container_width=True):
+                    if col_fav.button(rotulo_fav, key=f"fav_anna_{chave_fav}", width="stretch"):
                         solicitar_navegacao_aba(indice_aba(chave_fav))
         else:
             favoritos_validos = [(ch, dict(ABAS_SISTEMA).get(ch, ch)) for ch in favoritos_central if ch in dict(ABAS_SISTEMA)]
@@ -25302,7 +25302,7 @@ if pagina_atual == "central":
                 st.caption("⭐ Favoritos")
                 cols_fav = st.columns(len(favoritos_validos))
                 for col_fav, (chave_fav, rotulo_fav) in zip(cols_fav, favoritos_validos):
-                    if col_fav.button(rotulo_fav, key=f"fav_jorge_{chave_fav}", use_container_width=True):
+                    if col_fav.button(rotulo_fav, key=f"fav_jorge_{chave_fav}", width="stretch"):
                         solicitar_navegacao_aba(indice_aba(chave_fav))
 
     # Anna Workspace: área operacional leve e direta, sem alterar o modelo da mensagem de orçamento.
@@ -25350,8 +25350,8 @@ if pagina_atual == "central":
                         telefone_ws = re.sub(r"\D", "", str(item_ws.get("telefone", "")))
                         numero_ws = telefone_ws if telefone_ws.startswith("55") else f"55{telefone_ws}"
                         if telefone_ws:
-                            ra1.link_button("📱 Abrir WhatsApp", f"https://wa.me/{numero_ws}", use_container_width=True)
-                        if ra2.button("➕ Orçamento", key=f"ws_orc_{item_ws.get('id')}", use_container_width=True):
+                            ra1.link_button("📱 Abrir WhatsApp", f"https://wa.me/{numero_ws}", width="stretch")
+                        if ra2.button("➕ Orçamento", key=f"ws_orc_{item_ws.get('id')}", width="stretch"):
                             st.session_state.form_cliente = item_ws.get("cliente", "")
                             st.session_state.form_whatsapp = item_ws.get("telefone", "")
                             st.session_state.form_observacoes = item_ws.get("mensagem", "")
@@ -25362,14 +25362,14 @@ if pagina_atual == "central":
                             salvar_atendimentos(dados_ws)
                             st.session_state["_mensagem_sucesso_pendente"] = "Cliente e conversa preparados. Abra Novo Orçamento; a mensagem padrão permanece intacta."
                             st.rerun()
-                        if ra3.button("✅ Respondido", key=f"ws_resp_{item_ws.get('id')}", use_container_width=True):
+                        if ra3.button("✅ Respondido", key=f"ws_resp_{item_ws.get('id')}", width="stretch"):
                             status_ant = item_ws.get("status", "Novo contato")
                             item_ws["status"] = "Aguardando cliente"
                             item_ws["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
                             registrar_evento_atendimento(item_ws, f"Status alterado de {status_ant} para Aguardando cliente")
                             salvar_atendimentos(dados_ws)
                             st.rerun()
-                        if ra4.button("📦 Arquivar", key=f"ws_arq_{item_ws.get('id')}", use_container_width=True):
+                        if ra4.button("📦 Arquivar", key=f"ws_arq_{item_ws.get('id')}", width="stretch"):
                             item_ws["status"] = "Arquivado"
                             item_ws["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
                             registrar_evento_atendimento(item_ws, "Atendimento arquivado no Modo Trabalho")
@@ -25385,7 +25385,7 @@ if pagina_atual == "central":
                     _, _, total_ws = calcular_valores_proposta(p_ws)
                     cws1, cws2 = st.columns([7, 2])
                     cws1.write(f"**{p_ws.get('numero_proposta', '—')} — {p_ws.get('cliente_nome', 'Cliente')}** · 🧾 {resumo_produtos_pedido(p_ws)} · Entrega: {p_ws.get('data_entrega', 'A combinar')} · R$ {total_ws:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
-                    if cws2.button("Abrir", key=f"ws_abrir_prop_{p_ws.get('numero_proposta')}", use_container_width=True):
+                    if cws2.button("Abrir", key=f"ws_abrir_prop_{p_ws.get('numero_proposta')}", width="stretch"):
                         st.session_state.alerta_proposta_numero = p_ws.get("numero_proposta")
                         st.rerun()
 
@@ -25412,7 +25412,7 @@ if pagina_atual == "central":
                         preco_ws = cp2.text_input("Preço", value=str(prod_ws.get("Preco", "")), key=f"ws_preco_{idx_ws}")
                         ativo_atual_ws = bool(prod_ws.get("Ativo", True))
                         ativo_ws = cp3.checkbox("Ativo", value=ativo_atual_ws, key=f"ws_ativo_{idx_ws}")
-                        if cp4.button("Salvar", key=f"ws_salvar_cat_{idx_ws}", use_container_width=True):
+                        if cp4.button("Salvar", key=f"ws_salvar_cat_{idx_ws}", width="stretch"):
                             catalogo_ws[idx_ws]["Preco"] = preco_ws.strip()
                             catalogo_ws[idx_ws]["Ativo"] = bool(ativo_ws)
                             catalogo_ws[idx_ws]["AtualizadoEm"] = agora_local().strftime("%d/%m/%Y %H:%M")
@@ -25423,21 +25423,21 @@ if pagina_atual == "central":
 
     st.markdown("#### ⚡ Ações rápidas")
     ac1, ac2, ac3, ac4, ac5, ac6 = st.columns(6)
-    if ac1.button("📥 Novo atendimento", key="acao_rapida_atendimento", use_container_width=True):
+    if ac1.button("📥 Novo atendimento", key="acao_rapida_atendimento", width="stretch"):
         st.session_state["foco_novo_atendimento"] = True
         solicitar_navegacao_aba(indice_aba("atendimento"))
-    if ac2.button("➕ Novo orçamento", key="acao_rapida_orcamento", use_container_width=True):
+    if ac2.button("➕ Novo orçamento", key="acao_rapida_orcamento", width="stretch"):
         st.session_state["form_cliente"] = ""
         st.session_state["form_whatsapp"] = ""
         solicitar_navegacao_aba(indice_aba("novo_orcamento"))
-    if ac3.button("🧩 Novo projeto", key="acao_rapida_projeto", use_container_width=True):
+    if ac3.button("🧩 Novo projeto", key="acao_rapida_projeto", width="stretch"):
         solicitar_navegacao_aba(indice_aba("projeto"))
-    if ac4.button("👤 Novo cliente", key="acao_rapida_cliente", use_container_width=True):
+    if ac4.button("👤 Novo cliente", key="acao_rapida_cliente", width="stretch"):
         st.session_state["cliente_edicao_id"] = None
         solicitar_navegacao_aba(indice_aba("relacionamentos"))
-    if ac5.button("📦 Fluxo de pedidos", key="acao_rapida_fluxo", use_container_width=True):
+    if ac5.button("📦 Fluxo de pedidos", key="acao_rapida_fluxo", width="stretch"):
         solicitar_navegacao_aba(indice_aba("fluxo"))
-    if ac6.button("🚚 Entregas", key="acao_rapida_entregas", use_container_width=True):
+    if ac6.button("🚚 Entregas", key="acao_rapida_entregas", width="stretch"):
         solicitar_navegacao_aba(indice_aba("entregas_retiradas"))
 
     historico_central = carregar_historico(force_refresh=True)
@@ -25475,7 +25475,7 @@ if pagina_atual == "central":
             f"{resumo_saida_central_i813.get('nao_avisados')} cliente(s) ainda não registrado(s) como avisados · "
             f"{resumo_saida_central_i813.get('aguardando_3_dias')} aguardando há 3+ dias."
         )
-        if st.button("🚚 Abrir Central de Entregas & Retiradas", key="central_abrir_i813", use_container_width=True):
+        if st.button("🚚 Abrir Central de Entregas & Retiradas", key="central_abrir_i813", width="stretch"):
             rerun_na_aba("entregas_retiradas")
     entregas_hoje_central = [
         p for p in propostas_aprovadas_abertas_central
@@ -25541,10 +25541,10 @@ if pagina_atual == "central":
                     "As propostas abaixo eram justamente casos em que a regra antiga poderia mostrar pendência em uma tela e conclusão em outra. "
                     "Com o HF3, a regra oficial já é usada por todas as telas."
                 )
-                st.dataframe(pd.DataFrame(diagnostico_hf3["divergencias_legadas"]), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(diagnostico_hf3["divergencias_legadas"]), width="stretch", hide_index=True)
             if diagnostico_hf3["contradicoes"]:
                 st.warning("Há registros com combinação de status que merece revisão operacional.")
-                st.dataframe(pd.DataFrame(diagnostico_hf3["contradicoes"]), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(diagnostico_hf3["contradicoes"]), width="stretch", hide_index=True)
             if not diagnostico_hf3["divergencias_legadas"] and not diagnostico_hf3["contradicoes"]:
                 st.success("Nenhuma divergência de status detectada nesta leitura.")
 
@@ -25712,7 +25712,7 @@ if pagina_atual == "central":
                 lj2_hf653.button(
                     "⚡ Atualizar",
                     key=f"hf653_jorge_ativo_{idx_hf653}_{numero_hf653}",
-                    use_container_width=True,
+                    width="stretch",
                     on_click=lambda n=numero_hf653: st.session_state.__setitem__("alerta_proposta_numero", n),
                 )
                 numero_wa_jorge_hf655 = _anna_numero_whatsapp(prop_hf653.get("whatsapp") or prop_hf653.get("cliente_wa"))
@@ -25721,9 +25721,9 @@ if pagina_atual == "central":
                     if numero_wa_jorge_hf655
                     else f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop_hf653))}"
                 )
-                lj3_hf653.link_button("📱 Enviar", link_jorge_hf655, use_container_width=True)
+                lj3_hf653.link_button("📱 Enviar", link_jorge_hf655, width="stretch")
                 pode_mat_hf653 = bool(estado_hf653.get("aprovado")) and not bool(estado_hf653.get("pronto")) and not bool(estado_hf653.get("entregue"))
-                if lj4_hf653.button("🔒 Materiais", key=f"hf653_jorge_mat_{idx_hf653}_{numero_hf653}", use_container_width=True, disabled=not pode_mat_hf653):
+                if lj4_hf653.button("🔒 Materiais", key=f"hf653_jorge_mat_{idx_hf653}_{numero_hf653}", width="stretch", disabled=not pode_mat_hf653):
                     dialog_reserva_rapida_pedido(numero_hf653)
                 lj5_hf653.download_button(
                     "📄 HTML",
@@ -25731,7 +25731,7 @@ if pagina_atual == "central":
                     file_name=f"{numero_hf653}.html",
                     mime="text/html",
                     key=f"hf655_jorge_html_{idx_hf653}_{numero_hf653}",
-                    use_container_width=True,
+                    width="stretch",
                 )
     else:
         c1, c2, c3, c4, c5, c6 = st.columns(6)
@@ -25988,7 +25988,7 @@ if pagina_atual == "central":
                                 _cab_hf29.button(
                                     "📋 Abrir pedido",
                                     key=f"tempo_ciclo_abrir_hf29_{_idx_ca_hf29}_{_num_ca_hf29}",
-                                    use_container_width=True,
+                                    width="stretch",
                                     on_click=lambda n=_num_ca_hf29: st.session_state.__setitem__("alerta_proposta_numero", n),
                                 )
                             else:
@@ -25996,7 +25996,7 @@ if pagina_atual == "central":
                                     "📋 Sem proposta",
                                     key=f"tempo_ciclo_sem_numero_hf29_{_idx_ca_hf29}",
                                     disabled=True,
-                                    use_container_width=True,
+                                    width="stretch",
                                 )
                     if len(_ciclos_abertos_hf29) > 6:
                         st.caption(f"Mais {len(_ciclos_abertos_hf29) - 6} ciclo(s) em andamento na memória.")
@@ -26016,7 +26016,7 @@ if pagina_atual == "central":
                             "Base": _tc_hf27.get("nivel", "Base inicial"),
                             "Processos": ", ".join(_tc_hf27.get("processos") or []) or "—",
                         })
-                    st.dataframe(pd.DataFrame(_linhas_ciclo_hf27), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(_linhas_ciclo_hf27), width="stretch", hide_index=True)
                     st.caption(
                         "HF31/HF32: a Faixa central é apenas uma leitura auxiliar sem durações estatisticamente extremas. "
                         "Registrar contexto não apaga nem altera a amostra; a faixa total continua visível e estes dados ainda NÃO calculam capacidade."
@@ -26106,7 +26106,7 @@ if pagina_atual == "central":
                                     _rb_hf32.button(
                                         "📋 Abrir pedido",
                                         key=f"tempo_ciclo_revisar_hf32_{_idx_rev_hf32}_{_sufixo_rev_hf32}",
-                                        use_container_width=True,
+                                        width="stretch",
                                         on_click=lambda n=_num_rev_hf32: st.session_state.__setitem__("alerta_proposta_numero", n),
                                     )
                                 else:
@@ -26114,7 +26114,7 @@ if pagina_atual == "central":
                                         "📋 Sem proposta",
                                         key=f"tempo_ciclo_revisar_sem_numero_hf32_{_idx_rev_hf32}_{_sufixo_rev_hf32}",
                                         disabled=True,
-                                        use_container_width=True,
+                                        width="stretch",
                                     )
 
                                 _labels_hf32 = list(_categorias_hf32.keys())
@@ -26134,7 +26134,7 @@ if pagina_atual == "central":
                                     )
                                     _salvar_rev_hf32 = st.form_submit_button(
                                         "💾 Atualizar revisão" if _revisao_atual_hf32 else "✅ Registrar revisão",
-                                        use_container_width=True,
+                                        width="stretch",
                                     )
                                     if _salvar_rev_hf32:
                                         _detalhes_rev_hf32 = {
@@ -26258,19 +26258,19 @@ if pagina_atual == "central":
                         _ag2_hf16.link_button(
                             _rotulo_wa_ag_hf16,
                             f"https://wa.me/{_wa_ag_hf16}?text={quote(_msg_ag_hf16)}",
-                            use_container_width=True,
+                            width="stretch",
                         )
                     else:
                         _ag2_hf16.button(
                             "📌 Ação interna",
                             key=f"thu_agenda_interna_hf16_{_numero_ag_hf16}",
                             disabled=True,
-                            use_container_width=True,
+                            width="stretch",
                         )
                     _ag3_hf16.button(
                         "📋 Abrir pedido",
                         key=f"thu_agenda_abrir_hf16_{_numero_ag_hf16}",
-                        use_container_width=True,
+                        width="stretch",
                         on_click=lambda n=_numero_ag_hf16: st.session_state.__setitem__("alerta_proposta_numero", n),
                     )
             if len(agenda_executiva_hf16) > 6:
@@ -26327,7 +26327,7 @@ if pagina_atual == "central":
                     _sg2_hf21.button(
                         "📋 Abrir pedido",
                         key=f"thu_sem_avanco_abrir_hf21_{_numero_hf21}",
-                        use_container_width=True,
+                        width="stretch",
                         on_click=lambda n=_numero_hf21: st.session_state.__setitem__("alerta_proposta_numero", n),
                     )
             if len(_sinais_cont_hf21) > 6:
@@ -26387,14 +26387,14 @@ if pagina_atual == "central":
                         _r2_hf14.link_button(
                             "📱 Retomar",
                             f"https://wa.me/{_numero_retorno_hf14}?text={quote(str(_ret_hf14.get('mensagem_sugerida') or ''))}",
-                            use_container_width=True,
+                            width="stretch",
                         )
                     else:
-                        _r2_hf14.button("📱 Sem WhatsApp", disabled=True, key=f"thu_ret_sem_wa_{_ret_hf14.get('numero_proposta')}", use_container_width=True)
+                        _r2_hf14.button("📱 Sem WhatsApp", disabled=True, key=f"thu_ret_sem_wa_{_ret_hf14.get('numero_proposta')}", width="stretch")
                     if _r3_hf14.button(
                         "✅ Registrei contato",
                         key=f"thu_ret_reg_hf14_{_ret_hf14.get('numero_proposta')}",
-                        use_container_width=True,
+                        width="stretch",
                         help="Clique somente depois de realmente falar/enviar ao cliente. Isso reinicia o tempo de acompanhamento do THU.",
                     ):
                         _ok_ret_hf14, _prop_ret_hf14, _motivo_ret_hf14 = registrar_envio_comercial_proposta(
@@ -26408,7 +26408,7 @@ if pagina_atual == "central":
                     _r4_hf14.button(
                         "📋 Abrir proposta",
                         key=f"thu_ret_abrir_hf14_{_ret_hf14.get('numero_proposta')}",
-                        use_container_width=True,
+                        width="stretch",
                         on_click=lambda n=_ret_hf14.get("numero_proposta"): st.session_state.__setitem__("alerta_proposta_numero", n),
                     )
             if len(retornos_comerciais_hf14) > 5:
@@ -26468,19 +26468,19 @@ if pagina_atual == "central":
                         _c2_hf15.link_button(
                             "💳 Cobrar",
                             f"https://wa.me/{_wa_cob_hf15}?text={quote(str(_cob_hf15.get('mensagem_sugerida') or ''))}",
-                            use_container_width=True,
+                            width="stretch",
                         )
                     else:
                         _c2_hf15.button(
                             "📱 Sem WhatsApp",
                             disabled=True,
                             key=f"thu_cob_sem_wa_hf15_{_numero_cob_hf15}",
-                            use_container_width=True,
+                            width="stretch",
                         )
                     if _c3_hf15.button(
                         "✅ Registrei cobrança",
                         key=f"thu_cob_reg_hf15_{_numero_cob_hf15}",
-                        use_container_width=True,
+                        width="stretch",
                         help="Clique somente depois de realmente cobrar/falar com o cliente. Isso não marca o pedido como Pago.",
                     ):
                         _ok_cob_hf15, _prop_reg_cob_hf15, _motivo_cob_hf15 = registrar_cobranca_financeira_proposta(_numero_cob_hf15)
@@ -26494,7 +26494,7 @@ if pagina_atual == "central":
                     _c4_hf15.button(
                         "📋 Abrir pedido",
                         key=f"thu_cob_abrir_hf15_{_numero_cob_hf15}",
-                        use_container_width=True,
+                        width="stretch",
                         on_click=lambda n=_numero_cob_hf15: st.session_state.__setitem__("alerta_proposta_numero", n),
                     )
             if len(cobrancas_hf15) > 5:
@@ -26717,7 +26717,7 @@ if pagina_atual == "central":
             ac1_hf42, ac2_hf42 = st.columns([6, 2])
             ac1_hf42.markdown(f"**{html.escape(num_hf42)} — {html.escape(str(ped_hf42.get('cliente_nome') or 'Cliente'))}**")
             ac1_hf42.caption(f"{ped_hf42['prazo_hf41']} · {ped_hf42['fase_nome_hf41']} · {html.escape(str(ped_hf42.get('resumo_produtos') or ''))}")
-            if ac2_hf42.button("Abrir pedido", key=f"hf42_prioridade_{pos_hf42}_{num_hf42}", use_container_width=True):
+            if ac2_hf42.button("Abrir pedido", key=f"hf42_prioridade_{pos_hf42}_{num_hf42}", width="stretch"):
                 st.session_state['alerta_proposta_numero'] = num_hf42
                 st.rerun()
     with st.expander("🗓️ Agenda de entregas · próximos compromissos", expanded=False):
@@ -26728,7 +26728,7 @@ if pagina_atual == "central":
                 'Entrega': p['data_texto_hf41'], 'Pedido': p.get('numero_proposta'),
                 'Cliente': p.get('cliente_nome') or 'Cliente',
                 'Etapa': p['fase_nome_hf41'], 'Situação': p['prazo_hf41']
-            } for p in agenda_hf42]), use_container_width=True, hide_index=True)
+            } for p in agenda_hf42]), width="stretch", hide_index=True)
             st.caption("Consulta rápida da produção. A Agenda da Anna completa e seus PDFs continuam disponíveis na área própria.")
         else:
             st.info("Nenhuma entrega com data cadastrada nesta fila.")
@@ -26751,7 +26751,7 @@ if pagina_atual == "central":
                 pcol_hf41.markdown(f"**{html.escape(numero_hf41)} — {cliente_hf41}**")
                 pcol_hf41.caption(f"{ped_hf41['fase_nome_hf41']} · Entrega: {ped_hf41['data_texto_hf41']} · {ped_hf41['prazo_hf41']}")
                 pcol_hf41.write(f"🧾 {produtos_hf41}")
-                if btn_hf41.button("📋 Abrir pedido", key=f"hf41_abrir_{numero_hf41}_{pos_hf41}", use_container_width=True):
+                if btn_hf41.button("📋 Abrir pedido", key=f"hf41_abrir_{numero_hf41}_{pos_hf41}", width="stretch"):
                     st.session_state['alerta_proposta_numero'] = numero_hf41
                     st.rerun()
         if not visiveis_hf41:
@@ -26780,7 +26780,7 @@ if pagina_atual == "central":
                         **({} if MODO_SOB_ENCOMENDA_HF38 else {"Materiais": linha_hf1.get("status_base")}),
                         "Produção": linha_hf1.get("etapa_manual"),
                     })
-                st.dataframe(pd.DataFrame(linhas_auditoria_central_hf1), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(linhas_auditoria_central_hf1), width="stretch", hide_index=True)
 
     numeros_consumo_ativos_central_i8124 = {
         str(c.get("numero_proposta") or "").strip()
@@ -26871,13 +26871,13 @@ if pagina_atual == "central":
                         col_nome_hf40, col_action_hf40, col_disp_hf40 = st.columns([5, 2, 2])
                         col_nome_hf40.markdown("**" + html.escape(titulo_hf40) + "**")
                         if dispensado_hf40:
-                            if col_disp_hf40.button("↩️ Repor na lista", key=f"hf40_repor_{id_hf40}", use_container_width=True):
+                            if col_disp_hf40.button("↩️ Repor na lista", key=f"hf40_repor_{id_hf40}", width="stretch"):
                                 ocultos_hf40.pop(chave_hf40, None)
                                 st.rerun()
                         else:
-                            if col_action_hf40.button("➕ Cadastrar novo", key=f"hf40_cadastrar_{id_hf40}", use_container_width=True):
+                            if col_action_hf40.button("➕ Cadastrar novo", key=f"hf40_cadastrar_{id_hf40}", width="stretch"):
                                 dialog_catalogo_cadastro_anna(nome_prefill=nome_hf40)
-                            if col_disp_hf40.button("Não cadastrar", key=f"hf40_dispensar_{id_hf40}", use_container_width=True):
+                            if col_disp_hf40.button("Não cadastrar", key=f"hf40_dispensar_{id_hf40}", width="stretch"):
                                 ocultos_hf40[chave_hf40] = nome_hf40
                                 st.rerun()
                             with st.expander("🔗 Vincular a produto existente", expanded=False):
@@ -26972,7 +26972,7 @@ if pagina_atual == "central":
                     else:
                         mc1_hf9, mc2_hf9 = st.columns([5, 2])
                         mc1_hf9.warning("📦 Materiais: aguardando tratamento/liberação.")
-                        if mc2_hf9.button("🔒 Reservar aqui", key=f"hf653_reserva_central_{numero_central_selecionado}", use_container_width=True):
+                        if mc2_hf9.button("🔒 Reservar aqui", key=f"hf653_reserva_central_{numero_central_selecionado}", width="stretch"):
                             dialog_reserva_rapida_pedido(numero_central_selecionado)
 
                 st.markdown("**Atualização rápida**")
@@ -27004,7 +27004,7 @@ if pagina_atual == "central":
                     height=80,
                 )
                 op1, op2, op3 = st.columns(3)
-                if op1.button("💾 Salvar andamento", key=f"central_salvar_{numero_central_selecionado}", type="primary", use_container_width=True):
+                if op1.button("💾 Salvar andamento", key=f"central_salvar_{numero_central_selecionado}", type="primary", width="stretch"):
                     ok_andamento, msg_andamento = salvar_andamento_proposta(
                         numero_central_selecionado, aprovado_central, pago_central, pronto_central, entregue_central, cancelado_central
                     )
@@ -27046,11 +27046,11 @@ if pagina_atual == "central":
                     except Exception:
                         pass
                     st.rerun()
-                if op2.button("✏️ Editar proposta completa", key=f"central_editar_{numero_central_selecionado}", use_container_width=True):
+                if op2.button("✏️ Editar proposta completa", key=f"central_editar_{numero_central_selecionado}", width="stretch"):
                     carregar_proposta_no_formulario(proposta_central_selecionada, duplicar=False)
                     st.session_state.alerta_proposta_numero = None
                     rerun_na_aba("novo_orcamento", "Proposta carregada para edição.")
-                if op3.button("✖ Fechar", key=f"central_fechar_{numero_central_selecionado}", use_container_width=True):
+                if op3.button("✖ Fechar", key=f"central_fechar_{numero_central_selecionado}", width="stretch"):
                     st.session_state.alerta_proposta_numero = None
                     st.rerun()
         else:
@@ -27141,7 +27141,7 @@ if pagina_atual == "central":
                                 if _oc2.button(
                                     "Preparar campanha",
                                     key=f"thu_cal_prep_i_{oportunidade.get('id','')}_{_n}",
-                                    use_container_width=True,
+                                    width="stretch",
                                 ):
                                     st.session_state["thu_campanha_preparar_2049c"] = {
                                         "produto": _p.get("Nome"),
@@ -27155,7 +27155,7 @@ if pagina_atual == "central":
                                 if _oc2.button(
                                     "Revisar cadastro",
                                     key=f"thu_cal_revisar_i_{oportunidade.get('id','')}_{_n}",
-                                    use_container_width=True,
+                                    width="stretch",
                                 ):
                                     _idx_prod = next(
                                         (
@@ -27173,7 +27173,7 @@ if pagina_atual == "central":
                     if st.button(
                         "📅 Revisar elegibilidade desta campanha",
                         key=f"thu_i4_revisar_central_{oportunidade.get('id','')}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
                         dialog_thu_revisar_elegibilidade(
                             oportunidade.get("nome", "")
@@ -27217,7 +27217,7 @@ if pagina_atual == "central":
                         numero_rec = re.sub(r"\D", "", telefone_rec)
                         if numero_rec and not numero_rec.startswith("55"):
                             numero_rec = "55" + numero_rec
-                        rc2.link_button("📱 Abrir WhatsApp", f"https://wa.me/{numero_rec}", use_container_width=True)
+                        rc2.link_button("📱 Abrir WhatsApp", f"https://wa.me/{numero_rec}", width="stretch")
                     else:
                         rc2.info(rec["acao"])
                 else:
@@ -27388,7 +27388,7 @@ if pagina_atual == "atendimento":
                     st.info(f"📄 Atendimento vinculado à proposta **{item.get('numero_proposta')}**")
 
                 b1, b2, b3, b4 = st.columns(4)
-                if b1.button("💾 Salvar", key=f"salvar_at_{item.get('id')}", use_container_width=True):
+                if b1.button("💾 Salvar", key=f"salvar_at_{item.get('id')}", width="stretch"):
                     status_anterior = item.get("status", "Novo contato")
                     item.update({"status": novo_status, "prioridade": nova_prioridade, "responsavel": "" if novo_responsavel == "Sem responsável" else novo_responsavel, "modo": modo_conversa, "resposta_rascunho": resposta, "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
                     if status_anterior != novo_status:
@@ -27402,10 +27402,10 @@ if pagina_atual == "atendimento":
                 bloqueado_item = bool(restricao_item and (restricao_item.get("nivel") == "Bloqueado" or not restricao_item.get("permitir_resposta", True)))
                 orcamento_bloqueado_item = bool(restricao_item and not restricao_item.get("permitir_orcamento", True))
                 if link_wa and not bloqueado_item:
-                    b2.link_button("📱 Responder", link_wa, use_container_width=True)
+                    b2.link_button("📱 Responder", link_wa, width="stretch")
                 elif bloqueado_item:
-                    b2.button("🛑 Bloqueado", disabled=True, use_container_width=True)
-                if b3.button("🧩 Criar projeto", key=f"proj_at_{item.get('id')}", use_container_width=True, disabled=orcamento_bloqueado_item):
+                    b2.button("🛑 Bloqueado", disabled=True, width="stretch")
+                if b3.button("🧩 Criar projeto", key=f"proj_at_{item.get('id')}", width="stretch", disabled=orcamento_bloqueado_item):
                     st.session_state._projeto_prefill = {
                         "cliente": item.get("cliente", ""),
                         "whatsapp": item.get("telefone", ""),
@@ -27419,7 +27419,7 @@ if pagina_atual == "atendimento":
                     registrar_evento_atendimento(item, "Dados enviados para criação de projeto personalizado")
                     salvar_atendimentos(dados_at)
                     st.success("Projeto preparado. Abra a aba Projeto Personalizado para revisar e salvar.")
-                if b4.button("➕ Criar orçamento", key=f"orc_at_{item.get('id')}", use_container_width=True, disabled=orcamento_bloqueado_item):
+                if b4.button("➕ Criar orçamento", key=f"orc_at_{item.get('id')}", width="stretch", disabled=orcamento_bloqueado_item):
                     st.session_state.form_cliente = item.get("cliente", "")
                     st.session_state.form_whatsapp = item.get("telefone", "")
                     st.session_state.form_observacoes = item.get("mensagem", "")
@@ -27432,25 +27432,25 @@ if pagina_atual == "atendimento":
                     st.success("Dados preparados. Abra a aba Novo Orçamento.")
 
                 q1, q2, q3, q4 = st.columns(4)
-                if q1.button("✅ Atendido", key=f"atendido_{item.get('id')}", use_container_width=True):
+                if q1.button("✅ Atendido", key=f"atendido_{item.get('id')}", width="stretch"):
                     status_anterior = item.get("status", "Novo contato")
                     item.update({"status": "Aguardando cliente", "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
                     registrar_evento_atendimento(item, f"Status alterado de {status_anterior} para Aguardando cliente")
                     salvar_atendimentos(dados_at)
                     st.rerun()
-                if q2.button("⏳ Aguardar cliente", key=f"aguardar_{item.get('id')}", use_container_width=True):
+                if q2.button("⏳ Aguardar cliente", key=f"aguardar_{item.get('id')}", width="stretch"):
                     status_anterior = item.get("status", "Novo contato")
                     item.update({"status": "Aguardando cliente", "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
                     registrar_evento_atendimento(item, f"Status alterado de {status_anterior} para Aguardando cliente")
                     salvar_atendimentos(dados_at)
                     st.rerun()
-                if q3.button("🏁 Concluir", key=f"concluir_{item.get('id')}", use_container_width=True):
+                if q3.button("🏁 Concluir", key=f"concluir_{item.get('id')}", width="stretch"):
                     status_anterior = item.get("status", "Novo contato")
                     item.update({"status": "Pós-venda", "concluido_em": agora_local().strftime("%d/%m/%Y %H:%M"), "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
                     registrar_evento_atendimento(item, f"Atendimento concluído a partir do status {status_anterior}")
                     salvar_atendimentos(dados_at)
                     st.rerun()
-                if q4.button("📦 Arquivar", key=f"arquivar_{item.get('id')}", use_container_width=True):
+                if q4.button("📦 Arquivar", key=f"arquivar_{item.get('id')}", width="stretch"):
                     status_anterior = item.get("status", "Novo contato")
                     item.update({"status": "Arquivado", "atualizado_em": agora_local().strftime("%d/%m/%Y %H:%M")})
                     registrar_evento_atendimento(item, f"Atendimento arquivado a partir do status {status_anterior}")
@@ -27478,7 +27478,7 @@ if pagina_atual == "atendimento":
             campanha_at = fc3.text_input("Campanha", key="novo_at_campanha")
             produto_interesse_at = fc4.text_input("Produto relacionado", key="novo_at_produto")
             conteudo_url_at = st.text_input("Link do conteúdo (opcional)", key="novo_at_conteudo_url")
-        if st.button("➕ Adicionar à fila", type="primary", use_container_width=True):
+        if st.button("➕ Adicionar à fila", type="primary", width="stretch"):
             if not nome_at.strip() and not telefone_at.strip():
                 st.warning("Informe pelo menos um nome ou WhatsApp.")
             else:
@@ -27587,7 +27587,7 @@ if pagina_atual == "atendimento":
         int_ig = a2.toggle("Webhook Instagram validado", value=bool(cfg.get("integracao_instagram")), disabled=not cred_ig)
         int_fb = a3.toggle("Webhook Facebook validado", value=bool(cfg.get("integracao_facebook")), disabled=not cred_fb)
         teste_webhook_col, salvar_webhook_col = st.columns([1, 2])
-        if teste_webhook_col.button("🧪 Testar endpoint", use_container_width=True, disabled=not bool(webhook_url.strip() and verify_token.strip())):
+        if teste_webhook_col.button("🧪 Testar endpoint", width="stretch", disabled=not bool(webhook_url.strip() and verify_token.strip())):
             try:
                 desafio = "ALPHAFEST_OK"
                 resposta_webhook = requests.get(
@@ -27609,7 +27609,7 @@ if pagina_atual == "atendimento":
                 salvar_atendimentos(dados_at)
                 st.error(f"Não foi possível alcançar o endpoint: {erro_teste_webhook.__class__.__name__}")
 
-        if salvar_webhook_col.button("💾 Salvar configuração das integrações", type="primary", use_container_width=True):
+        if salvar_webhook_col.button("💾 Salvar configuração das integrações", type="primary", width="stretch"):
             cfg.update({
                 "meta_app_id": meta_app_id.strip(),
                 "meta_business_id": meta_business_id.strip(),
@@ -27634,7 +27634,7 @@ if pagina_atual == "atendimento":
         teste_canal = t1.selectbox("Canal do teste", ["WhatsApp", "Instagram", "Facebook", "Site / Catálogo"], key="teste_canal_meta")
         teste_nome = t2.text_input("Nome ou perfil", key="teste_nome_meta", placeholder="@cliente ou Maria")
         teste_msg = st.text_area("Mensagem de teste", key="teste_msg_meta", placeholder="Vocês fazem medalhas personalizadas? Gostaria de orçamento.")
-        if st.button("📥 Inserir oportunidade de teste", use_container_width=True):
+        if st.button("📥 Inserir oportunidade de teste", width="stretch"):
             if not teste_msg.strip():
                 st.warning("Digite a mensagem de teste.")
             else:
@@ -27780,9 +27780,9 @@ if pagina_atual == "crm":
                 numero_op = telefone_op
                 if not numero_op.startswith("55"):
                     numero_op = "55" + numero_op
-                ac1.link_button("📱 WhatsApp", f"https://wa.me/{numero_op}", use_container_width=True)
+                ac1.link_button("📱 WhatsApp", f"https://wa.me/{numero_op}", width="stretch")
             else:
-                ac1.button("📱 Sem telefone", disabled=True, use_container_width=True, key=f"crm_sem_tel_{op_id}")
+                ac1.button("📱 Sem telefone", disabled=True, width="stretch", key=f"crm_sem_tel_{op_id}")
             novo_status_crm = ac2.selectbox(
                 "Etapa / status", STATUS_ATENDIMENTO,
                 index=STATUS_ATENDIMENTO.index(op.get("status")) if op.get("status") in STATUS_ATENDIMENTO else 0,
@@ -27793,7 +27793,7 @@ if pagina_atual == "crm":
                 index=["Sem responsável", "Anna", "Jorge"].index(str(op.get("responsavel") or "Sem responsável")) if str(op.get("responsavel") or "Sem responsável") in ["Sem responsável", "Anna", "Jorge"] else 0,
                 key=f"crm_resp_{op_id}", label_visibility="collapsed",
             )
-            if ac4.button("💾 Atualizar", key=f"crm_salvar_{op_id}", use_container_width=True):
+            if ac4.button("💾 Atualizar", key=f"crm_salvar_{op_id}", width="stretch"):
                 original = originais_crm_por_id.get(op_id)
                 if original is not None:
                     original["status"] = novo_status_crm
@@ -27882,7 +27882,7 @@ if pagina_atual == "site":
             st.markdown("**Arte atual**")
             if _camp_preview_src_hf65:
                 try:
-                    st.image(_camp_preview_src_hf65, use_container_width=True)
+                    st.image(_camp_preview_src_hf65, width="stretch")
                 except Exception:
                     st.caption("A arte está salva e será exibida na prévia do site.")
             else:
@@ -27911,7 +27911,7 @@ if pagina_atual == "site":
                 )
                 if _hf65_upload is not None:
                     try:
-                        st.image(_hf65_upload, caption="Prévia da nova arte", use_container_width=True)
+                        st.image(_hf65_upload, caption="Prévia da nova arte", width="stretch")
                     except Exception:
                         pass
                 elif not _camp_usar_padrao_hf65:
@@ -27965,7 +27965,7 @@ if pagina_atual == "site":
                     _hf65_headline = st.text_input("Título adicional", value=str(campanha_hf65.get("headline") or ""), max_chars=180)
                     _hf65_message = st.text_area("Mensagem adicional", value=str(campanha_hf65.get("message") or ""), height=80, max_chars=700)
 
-                _hf65_submit = st.form_submit_button("💾 Salvar Campanha Destaque", type="primary", use_container_width=True)
+                _hf65_submit = st.form_submit_button("💾 Salvar Campanha Destaque", type="primary", width="stretch")
 
             if _hf65_submit:
                 _novo_hf65 = dict(campanha_hf65)
@@ -28041,7 +28041,7 @@ if pagina_atual == "site":
                 value=str(home_hf6514.get("hero_cta_url") or "https://whatsapp.com/channel/0029VbDLvQQLI8YOtOO2lG3I"),
                 placeholder="https://...",
             )
-            _home_cta_save_hf6514 = st.form_submit_button("💾 Salvar botão principal", use_container_width=True)
+            _home_cta_save_hf6514 = st.form_submit_button("💾 Salvar botão principal", width="stretch")
         if _home_cta_save_hf6514:
             _novo_home_hf6514 = dict(home_hf6514)
             _novo_home_hf6514["hero_cta_text"] = _home_cta_text_hf6514.strip() or "Entre para nosso canal"
@@ -28063,7 +28063,7 @@ if pagina_atual == "site":
             _bc1_hf6514, _bc2_hf6514 = st.columns(2)
             _banner_title_hf6514 = _bc1_hf6514.text_input("Descrição interna / acessibilidade", key="hf6514_banner_title", placeholder="Ex.: Outubro Rosa 2026")
             _banner_link_hf6514 = _bc2_hf6514.text_input("Link ao clicar (opcional)", key="hf6514_banner_link", placeholder="https://...")
-            if st.button("➕ Adicionar banner", key="hf6514_banner_add", type="primary", use_container_width=True):
+            if st.button("➕ Adicionar banner", key="hf6514_banner_add", type="primary", width="stretch"):
                 if _banner_upload_hf6514 is None:
                     st.warning("Escolha a imagem do banner primeiro.")
                 elif len(home_hf6514.get("banners") or []) >= 12:
@@ -28090,21 +28090,21 @@ if pagina_atual == "site":
                     _bi1_hf6514, _bi2_hf6514, _bi3_hf6514, _bi4_hf6514 = st.columns([1.2, 2.6, 1, 1])
                     with _bi1_hf6514:
                         try:
-                            st.image(str(_item_hf6514.get("image_src") or ""), use_container_width=True)
+                            st.image(str(_item_hf6514.get("image_src") or ""), width="stretch")
                         except Exception:
                             st.caption("Imagem salva")
                     _bi2_hf6514.markdown(f"**{_item_hf6514.get('title') or 'Banner informativo'}**")
                     if _item_hf6514.get("link"):
                         _bi2_hf6514.caption(str(_item_hf6514.get("link")))
                     _ativo_hf6514 = bool(_item_hf6514.get("active", True))
-                    if _bi3_hf6514.button("⏸️ Pausar" if _ativo_hf6514 else "▶️ Ativar", key=f"hf6514_banner_toggle_{_item_hf6514.get('id')}", use_container_width=True):
+                    if _bi3_hf6514.button("⏸️ Pausar" if _ativo_hf6514 else "▶️ Ativar", key=f"hf6514_banner_toggle_{_item_hf6514.get('id')}", width="stretch"):
                         _novo_home_hf6514 = dict(home_hf6514)
                         _lista_hf6514 = [dict(x) for x in (_novo_home_hf6514.get("banners") or [])]
                         if _i_hf6514 < len(_lista_hf6514):
                             _lista_hf6514[_i_hf6514]["active"] = not _ativo_hf6514
                         _novo_home_hf6514["banners"] = _lista_hf6514
                         _salvar_home_hf6514(_novo_home_hf6514, "Status do banner atualizado.")
-                    if _bi4_hf6514.button("🗑️ Excluir", key=f"hf6514_banner_del_{_item_hf6514.get('id')}", use_container_width=True):
+                    if _bi4_hf6514.button("🗑️ Excluir", key=f"hf6514_banner_del_{_item_hf6514.get('id')}", width="stretch"):
                         _novo_home_hf6514 = dict(home_hf6514)
                         _novo_home_hf6514["banners"] = [dict(x) for j, x in enumerate(_novo_home_hf6514.get("banners") or []) if j != _i_hf6514]
                         _salvar_home_hf6514(_novo_home_hf6514, "Banner removido da Home.")
@@ -28140,7 +28140,7 @@ if pagina_atual == "site":
                     "Texto / legenda do depoimento", height=110, max_chars=700,
                     help="Obrigatório apenas em depoimentos por escrito. Imagem e vídeo podem ter legenda opcional.",
                 )
-                _dep_add_hf6514 = st.form_submit_button("➕ Adicionar depoimento", type="primary", use_container_width=True)
+                _dep_add_hf6514 = st.form_submit_button("➕ Adicionar depoimento", type="primary", width="stretch")
             if _dep_add_hf6514:
                 _dep_kind_hf6514 = {"Texto": "text", "Imagem": "image", "Vídeo": "video"}.get(_dep_tipo_hf6514, "text")
                 _dep_image_src_hf6514 = ""
@@ -28188,7 +28188,7 @@ if pagina_atual == "site":
                     _di1_hf6514.markdown(f"**{_item_hf6514.get('name') or 'Cliente'}** · {_rotulo_dep_hf6514}" + (f" · {_item_hf6514.get('company')}" if _item_hf6514.get('company') else ""))
                     if _tipo_dep_hf6514 == "image" and _item_hf6514.get("image_src"):
                         try:
-                            _di1_hf6514.image(str(_item_hf6514.get("image_src")), use_container_width=True)
+                            _di1_hf6514.image(str(_item_hf6514.get("image_src")), width="stretch")
                         except Exception:
                             _di1_hf6514.caption("Imagem salva")
                     elif _tipo_dep_hf6514 == "video" and _item_hf6514.get("video_src"):
@@ -28198,7 +28198,7 @@ if pagina_atual == "site":
                             _di1_hf6514.caption("Vídeo salvo")
                     if _item_hf6514.get("text"):
                         _di1_hf6514.caption(str(_item_hf6514.get("text") or ""))
-                    if _di2_hf6514.button("🗑️ Excluir", key=f"hf6514_depo_del_{_item_hf6514.get('id')}", use_container_width=True):
+                    if _di2_hf6514.button("🗑️ Excluir", key=f"hf6514_depo_del_{_item_hf6514.get('id')}", width="stretch"):
                         _novo_home_hf6514 = dict(home_hf6514)
                         _novo_home_hf6514["testimonials"] = [dict(x) for j, x in enumerate(_novo_home_hf6514.get("testimonials") or []) if j != _i_hf6514]
                         _salvar_home_hf6514(_novo_home_hf6514, "Depoimento removido da Home.")
@@ -28215,7 +28215,7 @@ if pagina_atual == "site":
             _cliente_headline_hf6514 = _cc2_hf6514.text_input("Título do destaque", key="hf6514_client_headline", placeholder="Ex.: Projeto especial para evento corporativo")
             _cliente_desc_hf6514 = st.text_area("Informações do projeto", key="hf6514_client_desc", height=110, max_chars=900)
             _cliente_link_hf6514 = st.text_input("Link opcional", key="hf6514_client_link", placeholder="https://...")
-            if st.button("➕ Adicionar empresa / projeto", key="hf6514_client_add", type="primary", use_container_width=True):
+            if st.button("➕ Adicionar empresa / projeto", key="hf6514_client_add", type="primary", width="stretch"):
                 if not (_cliente_empresa_hf6514.strip() or _cliente_headline_hf6514.strip() or _cliente_desc_hf6514.strip() or _cliente_upload_hf6514):
                     st.warning("Informe pelo menos a empresa, um texto ou uma imagem.")
                 else:
@@ -28239,12 +28239,12 @@ if pagina_atual == "site":
                     with _ci1_hf6514:
                         if _item_hf6514.get("image_src"):
                             try:
-                                st.image(str(_item_hf6514.get("image_src")), use_container_width=True)
+                                st.image(str(_item_hf6514.get("image_src")), width="stretch")
                             except Exception:
                                 st.caption("Imagem salva")
                     _ci2_hf6514.markdown(f"**{_item_hf6514.get('company') or 'Cliente AlphaFest'}**")
                     _ci2_hf6514.caption(str(_item_hf6514.get("headline") or _item_hf6514.get("description") or ""))
-                    if _ci3_hf6514.button("🗑️ Excluir", key=f"hf6514_client_del_{_item_hf6514.get('id')}", use_container_width=True):
+                    if _ci3_hf6514.button("🗑️ Excluir", key=f"hf6514_client_del_{_item_hf6514.get('id')}", width="stretch"):
                         _novo_home_hf6514 = dict(home_hf6514)
                         _novo_home_hf6514["clients"] = [dict(x) for j, x in enumerate(_novo_home_hf6514.get("clients") or []) if j != _i_hf6514]
                         _salvar_home_hf6514(_novo_home_hf6514, "Empresa/projeto removido da Home.")
@@ -28266,7 +28266,7 @@ if pagina_atual == "site":
 
                 _refresh_col, _status_col = st.columns([1, 3])
                 with _refresh_col:
-                    _metrics_force_refresh = st.button("↻ Atualizar agora", key="site_metrics_refresh_hf52_1_hf1", use_container_width=True)
+                    _metrics_force_refresh = st.button("↻ Atualizar agora", key="site_metrics_refresh_hf52_1_hf1", width="stretch")
 
                 try:
                     if _metrics_force_refresh:
@@ -28331,7 +28331,7 @@ if pagina_atual == "site":
             )
             _adsense_salvar_hf6520 = st.form_submit_button(
                 "💾 Salvar código do AdSense (sem publicar)",
-                use_container_width=True,
+                width="stretch",
             )
         if _adsense_salvar_hf6520:
             try:
@@ -28374,7 +28374,7 @@ if pagina_atual == "site":
                 st.caption("Canal ainda não conectado. Os artigos e Shorts continuam disponíveis para revisão.")
             if _yt23_configurado(_yt_conf_hf6523):
                 st.link_button("🔐 Conectar / renovar autorização Google", _yt23_url_autorizacao(_yt_conf_hf6523),
-                               use_container_width=True)
+                               width="stretch")
                 if st.session_state.get("hf6523_youtube_autorizado_sessao") == _yt_reg_hf6523.get("channel_id") and _yt_reg_hf6523.get("channel_id"):
                     st.caption("Sessão Google confirmada para envios privados. Cada vídeo exige confirmação.")
                 else:
@@ -28417,7 +28417,7 @@ if pagina_atual == "site":
             )
             _arte_hf6524 = st.file_uploader('Arte finalizada do artigo (JPG, PNG ou WEBP)',type=['jpg','jpeg','png','webp'],key='hf6524_arte_'+str(_sel_slug_hf6522))
             _remover_arte_hf6524 = st.checkbox('Remover a arte atual deste artigo',key='hf6524_remover_'+str(_sel_slug_hf6522))
-            _salvar_dica_hf6522 = st.form_submit_button('💾 Salvar dica e roteiro (sem publicar)',use_container_width=True)
+            _salvar_dica_hf6522 = st.form_submit_button('💾 Salvar dica e roteiro (sem publicar)',width="stretch")
         if _salvar_dica_hf6522:
             _nome_slug_hf6522 = _sel_slug_hf6522 if _sel_slug_hf6522!='__novo__' else re.sub(
                 r'[^a-z0-9-]+','-',unicodedata.normalize('NFKD',_titulo_hf6522).encode('ascii','ignore').decode().lower()
@@ -28535,7 +28535,7 @@ if pagina_atual == "site":
     if col_preview_hf59.button(
         "🔄 Preparar / atualizar prévia do site",
         type="primary",
-        use_container_width=True,
+        width="stretch",
         key="site_hf59_preparar_preview",
     ):
         with st.spinner("Montando o site com o Catálogo e a Galeria atuais…"):
@@ -28558,7 +28558,7 @@ if pagina_atual == "site":
                 posts_content=_posts_hf652417,
             )
         st.success("✅ Prévia atualizada. Confira abaixo antes de publicar.")
-    col_site_hf59.link_button("🌐 Abrir site atual", "https://alphafest.com.br", use_container_width=True)
+    col_site_hf59.link_button("🌐 Abrir site atual", "https://alphafest.com.br", width="stretch")
 
     html_preview_hf59 = st.session_state.get("site_hf59_html_preview", "")
     if html_preview_hf59:
@@ -28692,7 +28692,7 @@ if pagina_atual == "site":
                 if not SITE_CF_IMPORT_ERROR and st.button(
                     "🔎 Testar conexão sem publicar",
                     key="site_hf60_cf_testar",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     if not _cf_account_hf60 or not _cf_token_hf60:
                         st.warning("Informe Account ID e API Token para testar.")
@@ -28746,7 +28746,7 @@ if pagina_atual == "site":
             if st.button(
                 "🚀 Publicar site agora",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 disabled=not _cf_pode_publicar_hf59,
                 key="site_hf59_publicar_agora",
             ):
@@ -28766,7 +28766,7 @@ if pagina_atual == "site":
                         f"✅ Site publicado no Worker `{_cf_worker_hf60}`. "
                         f"Versão Cloudflare: `{_cf_resultado_hf59.get('version_id', 'confirmada')}`."
                     )
-                    st.link_button("🌐 Abrir alphafest.com.br para conferir", "https://alphafest.com.br", use_container_width=True)
+                    st.link_button("🌐 Abrir alphafest.com.br para conferir", "https://alphafest.com.br", width="stretch")
                 except Exception as _cf_publish_exc_hf59:
                     st.error(f"A publicação foi interrompida com segurança: {_cf_publish_exc_hf59}")
 
@@ -28776,7 +28776,7 @@ if pagina_atual == "site":
                     data=pacote_producao_hf59,
                     file_name="alphafest-site-producao-hf65.zip",
                     mime="application/zip",
-                    use_container_width=True,
+                    width="stretch",
                     key="site_hf59_download_producao",
                 )
     else:
@@ -29007,7 +29007,7 @@ if pagina_atual == "crescimento":
                 )
             with _ap2:
                 try:
-                    st.image(_mkt_choice["image"], caption="Foto usada como base", use_container_width=True)
+                    st.image(_mkt_choice["image"], caption="Foto usada como base", width="stretch")
                 except Exception:
                     st.caption("Foto cadastrada no produto.")
 
@@ -29028,7 +29028,7 @@ if pagina_atual == "crescimento":
             if st.button(
                 "⚡ Gerar campanha automaticamente",
                 type="primary",
-                use_container_width=True,
+                width="stretch",
                 disabled=not bool(_mkt_channels),
                 key="mkt_autopilot_gerar_hf53_1",
             ):
@@ -29428,7 +29428,7 @@ if pagina_atual == "crescimento":
                                 paleta_final,
                                 photo_mode,
                             )
-                            st.image(arte_preview, use_container_width=True)
+                            st.image(arte_preview, width="stretch")
                             st.markdown(f'<div class="af-card-title">{html.escape(str(produto_mkt.get("Nome", "Produto")))}</div>', unsafe_allow_html=True)
                             if campanha:
                                 st.caption(campanha)
@@ -29450,7 +29450,7 @@ if pagina_atual == "crescimento":
 
             if st.button(
                 "✨ Gerar campanha IA Premium" if modo_criacao == "Campanha IA Premium" else ("⚡ GERAR ARTE" if modo_rapido else "🚀 Gerar campanha"),
-                type="primary", use_container_width=True, key="mkt_gerar_campanha_2020"
+                type="primary", width="stretch", key="mkt_gerar_campanha_2020"
             ):
                 origem = upload_mkt if fonte_imagem == "Upload livre" else imagem_ref
                 faltas = []
@@ -29555,8 +29555,8 @@ if pagina_atual == "crescimento":
                             arte_b64 = ultimo.get("artes_png", {}).get(canal)
                             if arte_b64:
                                 arte_bytes = base64.b64decode(arte_b64)
-                                st.image(arte_bytes, use_container_width=True)
-                                st.download_button("⬇️ Baixar PNG", arte_bytes, file_name=f"{re.sub(r'[^A-Za-z0-9_-]','_',ultimo.get('produto','campanha'))}_{re.sub(r'[^A-Za-z0-9_-]','_',canal)}.png", mime="image/png", key=f"baixar_{ultimo_id}_{canal}", use_container_width=True)
+                                st.image(arte_bytes, width="stretch")
+                                st.download_button("⬇️ Baixar PNG", arte_bytes, file_name=f"{re.sub(r'[^A-Za-z0-9_-]','_',ultimo.get('produto','campanha'))}_{re.sub(r'[^A-Za-z0-9_-]','_',canal)}.png", mime="image/png", key=f"baixar_{ultimo_id}_{canal}", width="stretch")
                             elif ultimo.get("video_original"):
                                 st.video(ultimo.get("video_original"))
                                 st.info("O vídeo original foi preservado. O roteiro abaixo está pronto para o canal; a edição MP4 automática será habilitada no Video Studio.")
@@ -29574,7 +29574,7 @@ if pagina_atual == "crescimento":
                     ultimo["status"] = "Aprovado" if all(ultimo.get("aprovacoes", {}).get(c) for c in ultimo.get("canais", [])) else "Em revisão"
                     salvar_marketing(marketing)
                 b1, b2 = st.columns([1, 1])
-                if b1.button("💾 Salvar textos e aprovações", use_container_width=True):
+                if b1.button("💾 Salvar textos e aprovações", width="stretch"):
                     salvar_marketing(marketing); st.success("Revisão salva.")
                 aprovados = [c for c in ultimo.get("canais", []) if ultimo.get("aprovacoes", {}).get(c)]
                 kit_bytes = gerar_zip_campanha(ultimo)
@@ -29583,7 +29583,7 @@ if pagina_atual == "crescimento":
                     kit_bytes,
                     file_name=f"Campanha_{_nome_arquivo_seguro(ultimo.get('produto'))}_{_nome_arquivo_seguro(ultimo.get('campanha') or ultimo.get('objetivo'))}.zip",
                     mime="application/zip",
-                    use_container_width=True,
+                    width="stretch",
                     key=f"kit_ultimo_{ultimo_id}",
                 )
                 if False:
@@ -29631,7 +29631,7 @@ if pagina_atual == "crescimento":
                 arte_pronta_tema = imp4.text_input("Tema / ocasião", placeholder="Permanente, Natal...", key="central_camp_tema_2030")
                 arte_pronta_preco = imp5.text_input("Preço registrado (opcional)", placeholder="R$ 19,90", key="central_camp_preco_2030")
                 arte_pronta_oficial = st.checkbox("⭐ Marcar como referência oficial AlphaFest", key="central_camp_oficial_2030")
-                if st.button("💾 Salvar arte na Central", use_container_width=True, disabled=arte_pronta_upload is None, key="central_camp_salvar_pronta_2030"):
+                if st.button("💾 Salvar arte na Central", width="stretch", disabled=arte_pronta_upload is None, key="central_camp_salvar_pronta_2030"):
                     try:
                         pronto_bytes = converter_imagem_para_png(arte_pronta_upload)
                         novo_id = f"MKT-REF-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
@@ -29761,7 +29761,7 @@ if pagina_atual == "crescimento":
                                 if _r2.button(
                                     "Preparar campanha",
                                     key=f"thu_cal_arte_i_{_i}_{_arte_rec.get('id')}",
-                                    use_container_width=True,
+                                    width="stretch",
                                 ):
                                     st.session_state["thu_campanha_preparar_2049c"] = {
                                         "produto": _p.get("Nome"),
@@ -29775,7 +29775,7 @@ if pagina_atual == "crescimento":
                                 if _r2.button(
                                     "Revisar cadastro",
                                     key=f"thu_cal_revisar_i_mkt_{_i}_{abs(hash(str(_p.get('Nome'))))}",
-                                    use_container_width=True,
+                                    width="stretch",
                                 ):
                                     _idx_prod = next(
                                         (
@@ -29793,7 +29793,7 @@ if pagina_atual == "crescimento":
                         if st.button(
                             "📅 Revisar outros produtos para esta campanha",
                             key=f"thu_i4_revisar_outros_{abs(hash(_ev_thu['name']))}",
-                            use_container_width=True,
+                            width="stretch",
                         ):
                             dialog_thu_revisar_elegibilidade(_ev_thu["name"])
                     else:
@@ -29804,7 +29804,7 @@ if pagina_atual == "crescimento":
                         if st.button(
                             "📅 THU, revisar elegibilidade",
                             key=f"thu_i4_revisar_marketing_{abs(hash(_ev_thu['name']))}",
-                            use_container_width=True,
+                            width="stretch",
                         ):
                             dialog_thu_revisar_elegibilidade(_ev_thu["name"])
 
@@ -29871,7 +29871,7 @@ if pagina_atual == "crescimento":
                 if st.button(
                     "🔄 Analisar o site agora",
                     type="primary",
-                    use_container_width=True,
+                    width="stretch",
                     key="thu_site_scan_i31",
                 ):
                     with st.spinner("Assistente THU lendo e classificando o acervo público da AlphaFest..."):
@@ -30083,7 +30083,7 @@ if pagina_atual == "crescimento":
                                     pc2.link_button(
                                         "🌐 Abrir página",
                                         str(_pg.get("url") or ALPHAFEST_SITE_BASE),
-                                        use_container_width=True,
+                                        width="stretch",
                                     )
 
                                     # Cadastro só é oferecido para página classificada como produto
@@ -30092,7 +30092,7 @@ if pagina_atual == "crescimento":
                                         if pc2.button(
                                             "➕ Cadastrar produto",
                                             key=f"thu_site_cad_i31_{_pi}_{abs(hash(_pg.get('url','')))}",
-                                            use_container_width=True,
+                                            width="stretch",
                                         ):
                                             dialog_catalogo_cadastro_anna(
                                                 nome_prefill=_pg.get("nome", "")
@@ -30101,7 +30101,7 @@ if pagina_atual == "crescimento":
                                         if pc2.button(
                                             "✏️ Revisar cadastro",
                                             key=f"thu_site_edit_i31_{_pi}_{abs(hash(_pg.get('url','')))}",
-                                            use_container_width=True,
+                                            width="stretch",
                                         ):
                                             dialog_catalogo_cadastro_anna(
                                                 produto_indice=int(_match["indice"])
@@ -30110,7 +30110,7 @@ if pagina_atual == "crescimento":
                                     if _imgs and pc2.button(
                                         "📸 Revisar imagens",
                                         key=f"thu_site_img_open_i31_{_pi}_{abs(hash(_pg.get('url','')))}",
-                                        use_container_width=True,
+                                        width="stretch",
                                     ):
                                         dialog_thu_importar_imagens_site(_pg)
 
@@ -30146,12 +30146,12 @@ if pagina_atual == "crescimento":
                                     cg2.link_button(
                                         "🌐 Abrir página",
                                         str(_pg.get("url") or ALPHAFEST_SITE_BASE),
-                                        use_container_width=True,
+                                        width="stretch",
                                     )
                                     if _imgs and cg2.button(
                                         "📸 Revisar imagens",
                                         key=f"thu_site_cat_img_i31_{_ci}_{abs(hash(_pg.get('url','')))}",
-                                        use_container_width=True,
+                                        width="stretch",
                                     ):
                                         dialog_thu_importar_imagens_site(_pg)
 
@@ -30188,12 +30188,12 @@ if pagina_atual == "crescimento":
                                     fc2.link_button(
                                         "🌐 Página",
                                         str(_pg.get("url") or ALPHAFEST_SITE_BASE),
-                                        use_container_width=True,
+                                        width="stretch",
                                     )
                                     if fc2.button(
                                         "📥 Revisar / importar",
                                         key=f"thu_site_fotos_i31_{_fi}_{abs(hash(_pg.get('url','')))}",
-                                        use_container_width=True,
+                                        width="stretch",
                                     ):
                                         dialog_thu_importar_imagens_site(_pg)
 
@@ -30236,19 +30236,19 @@ if pagina_atual == "crescimento":
                                     cc2.link_button(
                                         "🌐 Abrir página",
                                         str(_pg.get("url") or ALPHAFEST_SITE_BASE),
-                                        use_container_width=True,
+                                        width="stretch",
                                     )
                                     if cc2.button(
                                         "📅 Abrir Calendário",
                                         key=f"thu_site_cal_i31_{_cpi}_{abs(hash(_pg.get('url','')))}",
-                                        use_container_width=True,
+                                        width="stretch",
                                     ):
                                         rerun_na_aba("calendario")
 
                                     if _pg.get("imagens") and cc2.button(
                                         "📸 Revisar fotos",
                                         key=f"thu_site_camp_img_i31_{_cpi}_{abs(hash(_pg.get('url','')))}",
-                                        use_container_width=True,
+                                        width="stretch",
                                     ):
                                         dialog_thu_importar_imagens_site(_pg)
 
@@ -30284,18 +30284,18 @@ if pagina_atual == "crescimento":
                         _story=_x2.text_area("📱 Story / Status",value=_camp["story"],height=260,key=f"thu_camp_story_2049c_{_obj}")
                         _cta=st.text_input("CTA",value=_camp["cta"],key=f"thu_camp_cta_2049c_{_obj}")
                         _b1,_b2,_b3=st.columns(3)
-                        if _b1.button("💾 Salvar campanha sugerida",type="primary",use_container_width=True,key="thu_camp_salvar_2049c"):
+                        if _b1.button("💾 Salvar campanha sugerida",type="primary",width="stretch",key="thu_camp_salvar_2049c"):
                             _camp["legenda"]=_leg; _camp["story"]=_story; _camp["status"]=_story; _camp["cta"]=_cta
                             _camp["chave_social"] = thu_social_chave_campanha(_camp)
                             _camp["status_publicacao"] = "Preparada"
                             marketing.setdefault("thu_campanhas_sugeridas",[]).insert(0,_camp)
                             salvar_marketing(marketing)
                             st.success("Campanha sugerida salva no Marketing.")
-                        if _b2.button("🎨 Mostrar arte na Central",use_container_width=True,key="thu_camp_mostrar_2049c",disabled=_arte_prep is None):
+                        if _b2.button("🎨 Mostrar arte na Central",width="stretch",key="thu_camp_mostrar_2049c",disabled=_arte_prep is None):
                             st.session_state["_thu_aplicar_busca_2048"]=str((_arte_prep or {}).get("produto") or "")
                             st.session_state.pop("thu_campanha_preparar_2049c",None)
                             st.rerun()
-                        if _b3.button("Fechar",use_container_width=True,key="thu_camp_fechar_2049c"):
+                        if _b3.button("Fechar",width="stretch",key="thu_camp_fechar_2049c"):
                             st.session_state.pop("thu_campanha_preparar_2049c",None); st.rerun()
 
             with st.expander("💙 Assistente THU • Catálogo → Arte → Campanha", expanded=True):
@@ -30306,7 +30306,7 @@ if pagina_atual == "crescimento":
                 campanha_thu = th2.selectbox("Campanha / data", ["Sem campanha específica"] + CAMPANHAS_PRODUTO_OPCOES, key="thu_catalogo_campanha_2049")
                 campanha_consulta = "" if campanha_thu == "Sem campanha específica" else campanha_thu
 
-                if st.button("🔎 THU, consultar Catálogo", type="primary", use_container_width=True, key="thu_consultar_catalogo_2049"):
+                if st.button("🔎 THU, consultar Catálogo", type="primary", width="stretch", key="thu_consultar_catalogo_2049"):
                     st.session_state["thu_catalogo_resultados_2049"] = [
                         {"nome": p.get("Nome",""), "elegivel": elegivel, "campanha": camp}
                         for _, p, elegivel, camp in thu_consultar_catalogo_produto(catalogo_thu, thu_busca, campanha_consulta)
@@ -30333,7 +30333,7 @@ if pagina_atual == "crescimento":
                         pc1.caption(" • ".join(detalhes) if detalhes else "Cadastro ainda sem detalhes suficientes.")
                         if campanha_consulta and not elegivel:
                             pc1.warning(f"Este produto NÃO está cadastrado para a campanha {campanha_consulta}.")
-                        if pc2.button("Usar produto", key=f"thu_usar_prod_cat_{pos}_{abs(hash(prod.get('Nome','')))}", use_container_width=True, disabled=bool(campanha_consulta and not elegivel)):
+                        if pc2.button("Usar produto", key=f"thu_usar_prod_cat_{pos}_{abs(hash(prod.get('Nome','')))}", width="stretch", disabled=bool(campanha_consulta and not elegivel)):
                             st.session_state["thu_produto_escolhido_2049"] = prod.get("Nome")
                             st.rerun()
 
@@ -30376,7 +30376,7 @@ if pagina_atual == "crescimento":
                                 ar1,ar2=st.columns([3.2,1])
                                 ar1.markdown(f"🎨 **{apos}. {arte.get('produto') or 'Arte AlphaFest'}**" + (" ⭐" if arte.get("favorita") else ""))
                                 ar1.caption(f"{arte.get('categoria') or 'Sem categoria'} • {arte.get('tema_reuso') or arte.get('campanha') or 'Permanente'}")
-                                if ar2.button("Mostrar arte", key=f"thu_cat_arte_{arte.get('id')}_{apos}", use_container_width=True):
+                                if ar2.button("Mostrar arte", key=f"thu_cat_arte_{arte.get('id')}_{apos}", width="stretch"):
                                     st.session_state["_thu_aplicar_busca_2048"] = str(arte.get("produto") or "")
                                     st.rerun()
                         else:
@@ -30385,7 +30385,7 @@ if pagina_atual == "crescimento":
                 elif st.session_state.get("thu_catalogo_consulta_2049") is not None:
                     st.warning("Produto não encontrado no Catálogo. O THU não vai inventar descrição, material, valor ou campanha.")
                     st.markdown("**Para continuar, cadastre primeiro:** Nome do produto, Categoria, Descrição, Material, Valor e Campanhas/Datas permitidas.")
-                    if st.button("📦 Ir para Cadastro de Produto", key="thu_ir_catalogo_2049", use_container_width=True):
+                    if st.button("📦 Ir para Cadastro de Produto", key="thu_ir_catalogo_2049", width="stretch"):
                         st.session_state["_thu_catalogo_prefill_nome_2049"] = st.session_state.get("thu_catalogo_consulta_2049","")
                         rerun_na_aba("catalogo")
 
@@ -30454,7 +30454,7 @@ if pagina_atual == "crescimento":
                     arte_thumb_b64 = next((item.get("artes_png", {}).get(c) for c in item.get("canais", []) if item.get("artes_png", {}).get(c)), None)
                     if arte_thumb_b64:
                         try:
-                            cab1.image(base64.b64decode(arte_thumb_b64), use_container_width=True)
+                            cab1.image(base64.b64decode(arte_thumb_b64), width="stretch")
                         except Exception:
                             pass
                     with cab2:
@@ -30500,17 +30500,17 @@ if pagina_atual == "crescimento":
                     ac1.download_button(
                         "⬇️ Baixar kit", gerar_zip_campanha(item),
                         file_name=f"Campanha_{_nome_arquivo_seguro(produto_item)}_{_nome_arquivo_seguro(campanha_item)}.zip",
-                        mime="application/zip", key=f"central_zip_{item_id}", use_container_width=True,
+                        mime="application/zip", key=f"central_zip_{item_id}", width="stretch",
                     )
-                    if ac2.button("📋 Reutilizar", key=f"central_reutilizar_{item_id}", use_container_width=True):
+                    if ac2.button("📋 Reutilizar", key=f"central_reutilizar_{item_id}", width="stretch"):
                         st.session_state["central_reutilizar_id_2030"] = item_id
                         st.rerun()
-                    if ac3.button("💙 THU divulgar", key=f"central_thu_divulgar_{item_id}", use_container_width=True):
+                    if ac3.button("💙 THU divulgar", key=f"central_thu_divulgar_{item_id}", width="stretch"):
                         st.session_state["central_thu_divulgar_id_2048c"] = item_id
                         st.session_state[f"thu_objetivo_{item_id}"] = "Vender"
                         st.session_state[f"thu_copy_{item_id}"] = thu_preparar_divulgacao_arte(item, "Vender")
                         st.rerun()
-                    if ac4.button("🗑️ Remover", key=f"central_remover_{item_id}", use_container_width=True):
+                    if ac4.button("🗑️ Remover", key=f"central_remover_{item_id}", width="stretch"):
                         marketing["conteudos"] = [x for x in conteudos if str(x.get("id")) != item_id]
                         salvar_marketing(marketing)
                         st.rerun()
@@ -30540,20 +30540,20 @@ if pagina_atual == "crescimento":
                         cta_thu = st.text_input("CTA", value=thu_copy.get("cta",""), key=f"thu_cta_{item_id}_{objetivo_key}")
 
                         td1, td2, td3 = st.columns(3)
-                        if td1.button("💾 Salvar textos na campanha", type="primary", use_container_width=True, key=f"thu_salvar_copy_{item_id}"):
+                        if td1.button("💾 Salvar textos na campanha", type="primary", width="stretch", key=f"thu_salvar_copy_{item_id}"):
                             item["thu_divulgacao"] = {
                                 "legenda": legenda_thu, "story": story_thu, "status": status_thu,
                                 "hashtags": hashtags_thu, "cta": cta_thu, "gerado_em": agora_local().isoformat()
                             }
                             salvar_marketing(marketing)
                             st.success("Textos do THU salvos nesta campanha.")
-                        if td2.button("🔄 Gerar novamente", use_container_width=True, key=f"thu_regenerar_copy_{item_id}"):
+                        if td2.button("🔄 Gerar novamente", width="stretch", key=f"thu_regenerar_copy_{item_id}"):
                             st.session_state[f"thu_copy_{item_id}"] = thu_preparar_divulgacao_arte(item, objetivo_thu)
                             # limpa somente os widgets do objetivo atual para refletir a nova geração
                             for _campo in ("legenda", "story", "status", "hashtags", "cta"):
                                 st.session_state.pop(f"thu_{_campo}_{item_id}_{objetivo_key}", None)
                             st.rerun()
-                        if td3.button("Fechar", use_container_width=True, key=f"thu_fechar_copy_{item_id}"):
+                        if td3.button("Fechar", width="stretch", key=f"thu_fechar_copy_{item_id}"):
                             st.session_state.pop("central_thu_divulgar_id_2048c", None)
                             st.rerun()
 
@@ -30569,7 +30569,7 @@ if pagina_atual == "crescimento":
                             flat_tema = fr4.text_input("Tema / ocasião", value=str(item.get("campanha") or "Permanente"), key=f"central_flat_tema_{item_id}")
                             st.info("💡 Se o preço estiver escrito dentro da própria imagem, ele continuará igual. Como esta é uma arte final/flat, o sistema não altera pixels nem refaz o design.")
                             fa1, fa2 = st.columns(2)
-                            if fa1.button("♻️ Criar reutilização", type="primary", use_container_width=True, key=f"central_flat_reuse_{item_id}"):
+                            if fa1.button("♻️ Criar reutilização", type="primary", width="stretch", key=f"central_flat_reuse_{item_id}"):
                                 novo = copy.deepcopy(item)
                                 novo["id"] = f"MKT-REF-{agora_local().strftime('%Y%m%d%H%M%S%f')}"
                                 novo["criado_em"] = agora_local().isoformat()
@@ -30594,7 +30594,7 @@ if pagina_atual == "crescimento":
                                 st.session_state.pop("central_reutilizar_id_2030", None)
                                 st.success("Reutilização criada sem alterar a arte original.")
                                 st.rerun()
-                            if fa2.button("Cancelar", use_container_width=True, key=f"central_flat_cancel_{item_id}"):
+                            if fa2.button("Cancelar", width="stretch", key=f"central_flat_cancel_{item_id}"):
                                 st.session_state.pop("central_reutilizar_id_2030", None); st.rerun()
                         else:
                             r1, r2 = st.columns(2)
@@ -30609,7 +30609,7 @@ if pagina_atual == "crescimento":
                                 key=f"central_canais_reuso_{item_id}",
                             )
                             rr1, rr2 = st.columns(2)
-                            if rr1.button("⚡ Gerar nova versão", type="primary", use_container_width=True, key=f"central_gerar_reuso_{item_id}"):
+                            if rr1.button("⚡ Gerar nova versão", type="primary", width="stretch", key=f"central_gerar_reuso_{item_id}"):
                                 try:
                                     origem_b64 = item.get("imagem_png_base64")
                                     if not origem_b64:
@@ -30653,7 +30653,7 @@ if pagina_atual == "crescimento":
                                     st.rerun()
                                 except Exception as exc:
                                     st.error(f"Não foi possível gerar a nova versão: {exc}")
-                            if rr2.button("Cancelar", use_container_width=True, key=f"central_cancelar_reuso_{item_id}"):
+                            if rr2.button("Cancelar", width="stretch", key=f"central_cancelar_reuso_{item_id}"):
                                 st.session_state.pop("central_reutilizar_id_2030", None); st.rerun()
 
         with t4:
@@ -30672,7 +30672,7 @@ if pagina_atual == "crescimento":
                         file_name=f"Campanha_{_nome_arquivo_seguro(item.get('produto'))}_{_nome_arquivo_seguro(item.get('campanha') or item.get('objetivo'))}.zip",
                         mime="application/zip",
                         key=f"export_zip_{item.get('id')}",
-                        use_container_width=True,
+                        width="stretch",
                     )
 
 
@@ -30700,7 +30700,7 @@ if pagina_atual == "crescimento":
                     with cprev:
                         preview_path = Path(tpl.get("preview") or "")
                         if preview_path.exists():
-                            st.image(str(preview_path), use_container_width=True)
+                            st.image(str(preview_path), width="stretch")
                         elif tpl.get("oficial"):
                             st.caption("Prévia oficial preservada no pacote HF53.3.")
                         else:
@@ -30735,7 +30735,7 @@ if pagina_atual == "crescimento":
                 st.caption("Envie um ZIP contendo fundo.png, layout.json e config.json. preview.png é opcional. O pacote entra como 'Em teste' e não toma o lugar do mestre HF7.")
                 tpl_zip = st.file_uploader("Pacote do template (.zip)", type=["zip"], key="mkt_template_zip_upload_2000")
                 replace_tpl = st.checkbox("Substituir se já existir", value=False, key="mkt_template_replace_2000")
-                if st.button("📥 Instalar template", use_container_width=True, disabled=tpl_zip is None, key="mkt_install_template_2000"):
+                if st.button("📥 Instalar template", width="stretch", disabled=tpl_zip is None, key="mkt_install_template_2000"):
                     try:
                         pacote_bytes = tpl_zip.getvalue()
                         instalado = install_template_zip(pacote_bytes, replace=replace_tpl)
@@ -30799,20 +30799,20 @@ if pagina_atual == "novo_orcamento":
             if numero_destino and not numero_destino.startswith("55"):
                 numero_destino = "55" + numero_destino
             link_whatsapp = f"https://wa.me/{numero_destino}?text={quote(formatar_msg_whatsapp(ultima_salva))}" if numero_destino else f"https://wa.me/?text={quote(formatar_msg_whatsapp(ultima_salva))}"
-            ac1.link_button("📱 Enviar orçamento por WhatsApp", link_whatsapp, use_container_width=True)
+            ac1.link_button("📱 Enviar orçamento por WhatsApp", link_whatsapp, width="stretch")
             ac2.download_button(
                 "📄 Gerar HTML",
                 gerar_html(ultima_salva),
                 file_name=f"{ultima_salva.get('numero_proposta', 'orcamento')}.html",
                 mime="text/html",
-                use_container_width=True,
+                width="stretch",
                 key=f"html_pos_salvar_{ultima_salva.get('numero_proposta', 'orcamento')}",
             )
             _rotulo_envio_hf14 = "🔁 Registrar novo contato" if ultima_salva.get("enviado") else "✅ Registrar envio"
             if ac3.button(
                 _rotulo_envio_hf14,
                 key=f"registrar_envio_pos_salvar_{ultima_salva.get('numero_proposta', 'orcamento')}",
-                use_container_width=True,
+                width="stretch",
                 help="Use depois de enviar/retomar no WhatsApp. O THU passa a contar o tempo de retorno a partir deste registro; nenhuma mensagem é enviada automaticamente.",
             ):
                 _ok_envio_hf14, _atualizada_envio_hf14, _motivo_envio_hf14 = registrar_envio_comercial_proposta(
@@ -30824,7 +30824,7 @@ if pagina_atual == "novo_orcamento":
                     st.rerun()
                 else:
                     st.error(_motivo_envio_hf14 or "Não foi possível registrar o envio.")
-            if ac4.button("✖ Fechar", key="fechar_acoes_ultima_proposta", use_container_width=True):
+            if ac4.button("✖ Fechar", key="fechar_acoes_ultima_proposta", width="stretch"):
                 st.session_state.pop("_ultima_proposta_salva", None)
                 st.rerun()
             if ultima_salva.get("enviado"):
@@ -30847,7 +30847,7 @@ if pagina_atual == "novo_orcamento":
                 if aa1.button(
                     "✏️ Editar proposta",
                     key=f"editar_pos_salvar_{ultima_salva.get('numero_proposta', 'orcamento')}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     carregar_proposta_no_formulario(ultima_salva, duplicar=False)
                     st.session_state.pop("_ultima_proposta_salva", None)
@@ -30855,7 +30855,7 @@ if pagina_atual == "novo_orcamento":
                 if aa2.button(
                     "📋 Duplicar pedido",
                     key=f"duplicar_pos_salvar_{ultima_salva.get('numero_proposta', 'orcamento')}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     carregar_proposta_no_formulario(ultima_salva, duplicar=True)
                     st.session_state.pop("_ultima_proposta_salva", None)
@@ -30863,7 +30863,7 @@ if pagina_atual == "novo_orcamento":
                 if aa3.button(
                     "🗑️ Excluir proposta",
                     key=f"excluir_pos_salvar_{ultima_salva.get('numero_proposta', 'orcamento')}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     numero_excluir_hf1 = str(ultima_salva.get("numero_proposta") or "")
                     st.session_state.pop("_ultima_proposta_salva", None)
@@ -30955,7 +30955,7 @@ if pagina_atual == "novo_orcamento":
             v = st.number_input("Valor Unitário (R$)", step=0.5, key=_jorge_valor_key_i8113)
         else:
             v = st.number_input("Valor Unitário (R$)", value=0.0, step=0.5, key=_jorge_valor_key_i8113)
-        adicionar_item = st.form_submit_button("➕ Adicionar Item", use_container_width=True)
+        adicionar_item = st.form_submit_button("➕ Adicionar Item", width="stretch")
 
     if adicionar_item:
         if not prod.strip():
@@ -31011,7 +31011,7 @@ if pagina_atual == "novo_orcamento":
                 )
             if resumo_atual_i811.get("qtd_regras_ativas", 0):
                 st.caption(f"💰 Perfil Comercial encontrado: {resumo_atual_i811.get('qtd_regras_ativas')} abatimento(s) fixo(s) ativo(s) por produto.")
-                if st.button("💼 Recalcular itens pelo Perfil Comercial", key="i811_recalcular_itens", use_container_width=True):
+                if st.button("💼 Recalcular itens pelo Perfil Comercial", key="i811_recalcular_itens", width="stretch"):
                     alterados_i811 = 0
                     bloqueados_i811 = []
                     for item_i811 in st.session_state.temp_itens:
@@ -31506,7 +31506,7 @@ if pagina_atual == "biblioteca_3d":
         st.caption("🔤 Catálogo 3D em ordem A–Z · produtos 3D do Catálogo Oficial são incorporados automaticamente · alterações comerciais são espelhadas para propostas e site.")
 
         if biblioteca_b3d:
-            if st.button("🔄 Sincronizar Catálogo 3D → Propostas e Site", type="primary", use_container_width=True, key="biblioteca3d_sync_site_hf657"):
+            if st.button("🔄 Sincronizar Catálogo 3D → Propostas e Site", type="primary", width="stretch", key="biblioteca3d_sync_site_hf657"):
                 catalogo_sync_b3d = carregar_catalogo()
                 criados_b3d = atualizados_b3d = falhas_b3d = pulados_dup_b3d = 0
                 vistos_nome_b3d = set()
@@ -31589,7 +31589,7 @@ if pagina_atual == "biblioteca_3d":
                 if st.button(
                     "✨ Preparar prévia e catálogo 3D",
                     type="primary",
-                    use_container_width=True,
+                    width="stretch",
                     disabled=not bool(selecionados_c3d),
                     key="catalogo3d_preparar_hf23",
                 ):
@@ -31644,7 +31644,7 @@ if pagina_atual == "biblioteca_3d":
                         file_name=f"{slug_html(titulo_c3d or 'catalogo_3d_alphafest').lower()}.html",
                         mime="text/html",
                         type="primary",
-                        use_container_width=True,
+                        width="stretch",
                         key="catalogo3d_download_hf23",
                     )
                     st.caption(
@@ -31714,7 +31714,7 @@ if pagina_atual == "biblioteca_3d":
                     key="biblioteca3d_arquivo_upload",
                     help="Aceita projetos de impressão e pacotes comuns, incluindo 3MF e ZIP.",
                 )
-                salvar_b3d = st.form_submit_button("💾 Salvar no Catálogo 3D", type="primary", use_container_width=True)
+                salvar_b3d = st.form_submit_button("💾 Salvar no Catálogo 3D", type="primary", width="stretch")
 
             if salvar_b3d:
                 erro_b3d = ""
@@ -31838,7 +31838,7 @@ if pagina_atual == "biblioteca_3d":
                     imagem_bytes_b3d = _biblioteca3d_bytes_cache(str(modelo_b3d.get("imagem_path") or ""))
                     if imagem_bytes_b3d:
                         try:
-                            bi1.image(imagem_bytes_b3d, use_container_width=True)
+                            bi1.image(imagem_bytes_b3d, width="stretch")
                         except Exception:
                             bi1.caption("🖼️ Imagem salva")
                     else:
@@ -31848,7 +31848,7 @@ if pagina_atual == "biblioteca_3d":
                             _img_publica_b3d = _imgs_com_b3d[0] if _imgs_com_b3d else ""
                         if _img_publica_b3d:
                             try:
-                                bi1.image(_img_publica_b3d, use_container_width=True)
+                                bi1.image(_img_publica_b3d, width="stretch")
                                 bi1.caption("Imagem do Catálogo Oficial")
                             except Exception:
                                 bi1.caption("🖼️ Imagem cadastrada")
@@ -31883,23 +31883,23 @@ if pagina_atual == "biblioteca_3d":
                     preparar_b3d = ba1_b3d.button(
                         "⬇️ Arquivo",
                         key=f"biblioteca3d_preparar_{_id_b3d}",
-                        use_container_width=True,
+                        width="stretch",
                         disabled=not _tem_arquivo_b3d,
                     )
                     editar_b3d = ba2_b3d.button(
                         "✏️ Editar",
                         key=f"biblioteca3d_editar_{_id_b3d}",
-                        use_container_width=True,
+                        width="stretch",
                     )
                     publicar_b3d = ba3_b3d.button(
                         "🔄 Sincronizar",
                         key=f"biblioteca3d_site_{_id_b3d}",
-                        use_container_width=True,
+                        width="stretch",
                     )
                     excluir_b3d = ba4_b3d.button(
                         "🗑️ Excluir",
                         key=f"biblioteca3d_excluir_{_id_b3d}",
-                        use_container_width=True,
+                        width="stretch",
                     )
 
                     if editar_b3d:
@@ -31958,8 +31958,8 @@ if pagina_atual == "biblioteca_3d":
                                 key=f"biblioteca3d_ed_arq_{_id_b3d}",
                             )
                             es1_b3d, es2_b3d = st.columns(2)
-                            salvar_ed_b3d = es1_b3d.form_submit_button("💾 Salvar alterações", type="primary", use_container_width=True)
-                            cancelar_ed_b3d = es2_b3d.form_submit_button("↩️ Fechar", use_container_width=True)
+                            salvar_ed_b3d = es1_b3d.form_submit_button("💾 Salvar alterações", type="primary", width="stretch")
+                            cancelar_ed_b3d = es2_b3d.form_submit_button("↩️ Fechar", width="stretch")
 
                         if cancelar_ed_b3d:
                             st.session_state.pop("_biblioteca3d_editar_id", None)
@@ -32065,7 +32065,7 @@ if pagina_atual == "biblioteca_3d":
                     if st.session_state.get("_biblioteca3d_confirmar_exclusao") == _id_b3d:
                         st.warning("Excluir este produto 3D? O item vinculado também será retirado do Catálogo Oficial para não voltar pela migração automática. Propostas antigas não são alteradas.")
                         bx1_b3d, bx2_b3d = st.columns(2)
-                        if bx1_b3d.button("✅ Confirmar exclusão", key=f"biblioteca3d_confirmar_{_id_b3d}", use_container_width=True):
+                        if bx1_b3d.button("✅ Confirmar exclusão", key=f"biblioteca3d_confirmar_{_id_b3d}", width="stretch"):
                             nova_lista_b3d = [
                                 dict(x) for x in biblioteca_b3d
                                 if isinstance(x, dict) and str(x.get("id") or "").strip() != _id_b3d
@@ -32085,7 +32085,7 @@ if pagina_atual == "biblioteca_3d":
                                 st.session_state.pop("_biblioteca3d_confirmar_exclusao", None)
                                 st.success("Produto removido do Catálogo 3D e do espelho comercial.")
                                 st.rerun()
-                        if bx2_b3d.button("↩️ Cancelar", key=f"biblioteca3d_cancelar_exclusao_{_id_b3d}", use_container_width=True):
+                        if bx2_b3d.button("↩️ Cancelar", key=f"biblioteca3d_cancelar_exclusao_{_id_b3d}", width="stretch"):
                             st.session_state.pop("_biblioteca3d_confirmar_exclusao", None)
                             st.rerun()
 
@@ -32105,7 +32105,7 @@ if pagina_atual == "biblioteca_3d":
                             file_name=arq_nome_b3d,
                             mime="application/octet-stream",
                             key=f"biblioteca3d_download_{_id_b3d}",
-                            use_container_width=True,
+                            width="stretch",
                         )
 
 
@@ -32245,9 +32245,9 @@ if pagina_atual == "historico":
                 st.warning("🎯 Fluxo de Pedidos ainda sem etapa registrada para esta proposta.")
 
             c1, c2, cfluxo = st.columns(3)
-            c1.link_button("📱 Enviar WhatsApp", f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop_atual))}", use_container_width=True)
-            c2.download_button("📄 Gerar HTML", gerar_html(prop_atual), file_name=f"{num_p}.html", mime="text/html", use_container_width=True, key=f"html_historico_{num_p}")
-            if cfluxo.button("🎯 Abrir no Fluxo", key=f"abrir_fluxo_historico_{num_p}", use_container_width=True):
+            c1.link_button("📱 Enviar WhatsApp", f"https://wa.me/?text={quote(formatar_msg_whatsapp(prop_atual))}", width="stretch")
+            c2.download_button("📄 Gerar HTML", gerar_html(prop_atual), file_name=f"{num_p}.html", mime="text/html", width="stretch", key=f"html_historico_{num_p}")
+            if cfluxo.button("🎯 Abrir no Fluxo", key=f"abrir_fluxo_historico_{num_p}", width="stretch"):
                 st.session_state["_fluxo_pedido_foco"] = str(num_p)
                 rerun_na_aba("fluxo", f"Pedido {num_p} aberto a partir do Histórico.")
 
@@ -32269,7 +32269,7 @@ if pagina_atual == "historico":
                 if _ret2_hf14.button(
                     _rotulo_hist_envio_hf14,
                     key=f"hist_registrar_envio_hf14_{num_p}",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     _ok_hist_envio_hf14, _prop_hist_envio_hf14, _motivo_hist_envio_hf14 = registrar_envio_comercial_proposta(num_p)
                     if _ok_hist_envio_hf14:
@@ -32283,13 +32283,13 @@ if pagina_atual == "historico":
             else:
                 c3, c4 = st.columns(2)
                 c5 = None
-            if c3.button("✏️ Editar", key=f"editar_{num_p}", use_container_width=True):
+            if c3.button("✏️ Editar", key=f"editar_{num_p}", width="stretch"):
                 carregar_proposta_no_formulario(prop, duplicar=False)
                 rerun_na_aba("novo_orcamento", "Proposta carregada para correção.")
-            if c4.button("📋 Duplicar pedido", key=f"duplicar_{num_p}", use_container_width=True):
+            if c4.button("📋 Duplicar pedido", key=f"duplicar_{num_p}", width="stretch"):
                 carregar_proposta_no_formulario(prop_atual, duplicar=True)
                 rerun_na_aba("novo_orcamento", "Cópia carregada como novo orçamento.")
-            if c5 is not None and c5.button("🗑️ Excluir", key=f"del_{num_p}", use_container_width=True):
+            if c5 is not None and c5.button("🗑️ Excluir", key=f"del_{num_p}", width="stretch"):
                 excluir_proposta(num_p)
 
             s1, s2, s3, s4 = st.columns(4)
@@ -32464,7 +32464,7 @@ if pagina_atual == "fluxo":
                 "Produção": linha_i8128.get("etapa_manual"),
                 "Próxima ação": linha_i8128.get("proxima_acao_producao"),
             })
-        st.dataframe(pd.DataFrame(linhas_tabela_i8128), use_container_width=True, hide_index=True, height=min(420, 44 + 35 * len(linhas_tabela_i8128)))
+        st.dataframe(pd.DataFrame(linhas_tabela_i8128), width="stretch", hide_index=True, height=min(420, 44 + 35 * len(linhas_tabela_i8128)))
 
         if str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold() == "jorge":
             with st.expander("🔎 Fonte única operacional · HF2", expanded=False):
@@ -32491,7 +32491,7 @@ if pagina_atual == "fluxo":
                         "Materiais": linha_hf1.get("status_base"),
                         "Etapa manual": linha_hf1.get("etapa_manual"),
                     })
-                st.dataframe(pd.DataFrame(auditoria_hf1), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(auditoria_hf1), width="stretch", hide_index=True)
 
         opcoes_prod_i8128 = [str(l.get("numero_proposta") or "") for l in central_prod_i8128]
         rotulos_prod_i8128 = {
@@ -32513,11 +32513,11 @@ if pagina_atual == "fluxo":
                     st.caption("Prazo/material: " + " · ".join(str(x) for x in linha_sel_i8128.get("motivos") or []))
                 qa1_i8128, qa2_i8128 = st.columns(2)
                 iniciar_i8128 = qa1_i8128.button(
-                    "▶️ Iniciar produção", key=f"i8128_iniciar_{selecionado_prod_i8128}", use_container_width=True,
+                    "▶️ Iniciar produção", key=f"i8128_iniciar_{selecionado_prod_i8128}", width="stretch",
                     disabled=not bool(linha_sel_i8128.get("pode_iniciar_producao")),
                 )
                 pronto_i8128 = qa2_i8128.button(
-                    "✅ Marcar pedido pronto", key=f"i8128_pronto_{selecionado_prod_i8128}", use_container_width=True,
+                    "✅ Marcar pedido pronto", key=f"i8128_pronto_{selecionado_prod_i8128}", width="stretch",
                     disabled=not bool(linha_sel_i8128.get("pode_marcar_pronto")),
                 )
                 if iniciar_i8128:
@@ -32593,7 +32593,7 @@ if pagina_atual == "fluxo":
                 observacao = st.text_area("Observação interna", value=str(tarefa.get("observacao_interna", "")), key=f"fluxo_obs_{prefixo}_{tid}")
 
                 b1, b2 = st.columns(2)
-                if b1.button("💾 Salvar andamento", key=f"salvar_fluxo_{prefixo}_{tid}", type="primary", use_container_width=True):
+                if b1.button("💾 Salvar andamento", key=f"salvar_fluxo_{prefixo}_{tid}", type="primary", width="stretch"):
                     ok_fluxo_i8132, msg_fluxo_i8132 = salvar_tarefa_producao(tid, {
                         "numero_proposta": tarefa.get("numero_proposta"),
                         "status": novo_status,
@@ -32607,7 +32607,7 @@ if pagina_atual == "fluxo":
                         st.rerun()
                     else:
                         st.error(msg_fluxo_i8132)
-                if b2.button("📋 Abrir pedido no Histórico", key=f"hist_fluxo_{prefixo}_{tid}", use_container_width=True):
+                if b2.button("📋 Abrir pedido no Histórico", key=f"hist_fluxo_{prefixo}_{tid}", width="stretch"):
                     numero_destino_i8134 = str(tarefa.get("numero_proposta") or "").strip()
                     st.session_state.alerta_proposta_numero = numero_destino_i8134
                     rerun_na_aba("historico", f"Pedido {numero_destino_i8134} selecionado a partir do Fluxo.")
@@ -32767,7 +32767,7 @@ if pagina_atual == "entregas_retiradas":
                     )
 
                     a1, a2, a3, a4 = st.columns(4)
-                    if a1.button("💾 Salvar logística", key=f"i813_salvar_{numero_i813}_{idx_i813}", use_container_width=True):
+                    if a1.button("💾 Salvar logística", key=f"i813_salvar_{numero_i813}_{idx_i813}", width="stretch"):
                         try:
                             if atualizar_logistica_pedido(numero_i813, tipo_entrega=tipo_novo_i813, observacao=obs_nova_i813):
                                 st.session_state["_mensagem_sucesso_pendente"] = f"Logística do pedido {numero_i813} atualizada."
@@ -32781,9 +32781,9 @@ if pagina_atual == "entregas_retiradas":
                         numero_wa_i813 = "55" + numero_wa_i813
                     mensagem_i813 = _i813_mensagem_pronto({**proposta_i813, "logistica_tipo": tipo_novo_i813})
                     link_i813 = f"https://wa.me/{numero_wa_i813}?text={quote(mensagem_i813)}" if numero_wa_i813 else f"https://wa.me/?text={quote(mensagem_i813)}"
-                    a2.link_button("📱 Abrir WhatsApp", link_i813, use_container_width=True)
+                    a2.link_button("📱 Abrir WhatsApp", link_i813, width="stretch")
 
-                    if a3.button("✅ Registrar aviso", key=f"i813_avisado_{numero_i813}_{idx_i813}", use_container_width=True):
+                    if a3.button("✅ Registrar aviso", key=f"i813_avisado_{numero_i813}_{idx_i813}", width="stretch"):
                         if atualizar_logistica_pedido(numero_i813, tipo_entrega=tipo_novo_i813, observacao=obs_nova_i813, marcar_avisado=True):
                             st.session_state["_mensagem_sucesso_pendente"] = f"Cliente de {numero_i813} registrado como avisado."
                             st.rerun()
@@ -32791,7 +32791,7 @@ if pagina_atual == "entregas_retiradas":
 
                     confirmar_entrega_i813 = a4.checkbox("Confirmar saída", key=f"i813_conf_entrega_{numero_i813}_{idx_i813}")
                     if st.button(
-                        "🚚 Marcar Entregue", type="primary", use_container_width=True,
+                        "🚚 Marcar Entregue", type="primary", width="stretch",
                         disabled=not confirmar_entrega_i813, key=f"i813_entregue_{numero_i813}_{idx_i813}",
                         help="Entregue fecha a operação e mantém Pronto automaticamente.",
                     ):
@@ -32967,7 +32967,7 @@ if pagina_atual == "faturamento_mensal":
                         with st.expander("📋 Conferir pedidos e temas", expanded=True):
                             st.dataframe(
                                 pd.DataFrame(tabela_preview_hf62),
-                                use_container_width=True,
+                                width="stretch",
                                 hide_index=True,
                                 column_config={"Valor do pedido": st.column_config.NumberColumn(format="R$ %.2f")},
                             )
@@ -32979,7 +32979,7 @@ if pagina_atual == "faturamento_mensal":
                         if st.button(
                             f"🔒 Fechar período {inicio_hf62.strftime('%d/%m')} a {fim_hf62.strftime('%d/%m')}",
                             type="primary",
-                            use_container_width=True,
+                            width="stretch",
                             disabled=not confirmar_hf62,
                             key=f"hf62_fechar_{key_safe_hf62}_{idx_hf62}_{inicio_hf62}_{fim_hf62}",
                         ):
@@ -33040,7 +33040,7 @@ if pagina_atual == "faturamento_mensal":
                                     "Qtd.": row_hf62.get("quantidade") or "—",
                                     "Valor do pedido": row_hf62.get("valor"),
                                 })
-                            st.dataframe(pd.DataFrame(linhas_hist_hf62), use_container_width=True, hide_index=True, column_config={"Valor do pedido": st.column_config.NumberColumn(format="R$ %.2f")})
+                            st.dataframe(pd.DataFrame(linhas_hist_hf62), width="stretch", hide_index=True, column_config={"Valor do pedido": st.column_config.NumberColumn(format="R$ %.2f")})
                         else:
                             for p_i8111 in reg_i8111.get("propostas") or []:
                                 st.write(f"• **{p_i8111.get('numero_proposta')}** · {_i8111_formatar_moeda(p_i8111.get('valor'))}")
@@ -33054,7 +33054,7 @@ if pagina_atual == "faturamento_mensal":
                         placeholder="Ex.: conferido pela cliente, ajuste combinado, referência interna...",
                     )
                     doc1_i8111, doc2_i8111, doc3_i8111, doc4_i8111 = st.columns(4)
-                    if doc1_i8111.button("💾 Salvar observação", use_container_width=True, key=f"hf62_salvar_obs_{reg_i8111.get('id')}"):
+                    if doc1_i8111.button("💾 Salvar observação", width="stretch", key=f"hf62_salvar_obs_{reg_i8111.get('id')}"):
                         try:
                             salvar_observacao_fechamento_mensal(reg_i8111.get("id"), obs_atual_i8111)
                             st.session_state["_mensagem_sucesso_pendente"] = "Observação do fechamento salva."
@@ -33068,7 +33068,7 @@ if pagina_atual == "faturamento_mensal":
                         wa_num_i8111 = "55" + wa_num_i8111
                     wa_text_i8111 = quote(formatar_msg_whatsapp_fechamento_mensal(reg_doc_i8111))
                     wa_url_i8111 = f"https://wa.me/{wa_num_i8111}?text={wa_text_i8111}" if wa_num_i8111 else f"https://wa.me/?text={wa_text_i8111}"
-                    doc2_i8111.link_button("💬 Enviar p/ conferência", wa_url_i8111, use_container_width=True)
+                    doc2_i8111.link_button("💬 Enviar p/ conferência", wa_url_i8111, width="stretch")
                     html_fm_i8111 = gerar_html_fechamento_mensal(reg_doc_i8111)
                     slug_cliente_i8111 = re.sub(r"[^A-Za-z0-9]+", "_", str(reg_i8111.get("cliente_nome") or "cliente")).strip("_") or "cliente"
                     doc3_i8111.download_button(
@@ -33076,11 +33076,11 @@ if pagina_atual == "faturamento_mensal":
                         html_fm_i8111,
                         file_name=f"fechamento_{slug_cliente_i8111}_{reg_i8111.get('id')}.html",
                         mime="text/html",
-                        use_container_width=True,
+                        width="stretch",
                         key=f"hf62_html_{reg_i8111.get('id')}",
                     )
                     pdf_cache_key_i8111 = f"_hf62_pdf_cache_{reg_i8111.get('id')}"
-                    if doc4_i8111.button("📥 Preparar PDF", use_container_width=True, key=f"hf62_preparar_pdf_{reg_i8111.get('id')}"):
+                    if doc4_i8111.button("📥 Preparar PDF", width="stretch", key=f"hf62_preparar_pdf_{reg_i8111.get('id')}"):
                         try:
                             st.session_state[pdf_cache_key_i8111] = gerar_pdf_fechamento_mensal(reg_doc_i8111)
                         except Exception as exc_pdf_i8111:
@@ -33091,7 +33091,7 @@ if pagina_atual == "faturamento_mensal":
                             st.session_state[pdf_cache_key_i8111],
                             file_name=f"fechamento_{slug_cliente_i8111}_{reg_i8111.get('id')}.pdf",
                             mime="application/pdf",
-                            use_container_width=True,
+                            width="stretch",
                             key=f"hf62_pdf_{reg_i8111.get('id')}",
                         )
 
@@ -33108,7 +33108,7 @@ if pagina_atual == "faturamento_mensal":
                     if status_real_i8111 == I8111_STATUS_REABERTO:
                         st.warning(f"↩️ Fechamento em correção. Motivo: **{reg_i8111.get('motivo_reabertura') or 'não informado'}**.")
                         rb1, rb2 = st.columns(2)
-                        if rb1.button("🔄 Atualizar pelos pedidos atuais", type="primary", use_container_width=True, key=f"hf62_sync_{reg_i8111.get('id')}"):
+                        if rb1.button("🔄 Atualizar pelos pedidos atuais", type="primary", width="stretch", key=f"hf62_sync_{reg_i8111.get('id')}"):
                             try:
                                 sincronizar_fechamento_reaberto(reg_i8111.get("id"))
                                 st.session_state["_mensagem_sucesso_pendente"] = "Fechamento atualizado com os pedidos atuais."
@@ -33116,7 +33116,7 @@ if pagina_atual == "faturamento_mensal":
                             except Exception as exc_i8111:
                                 st.error(str(exc_i8111))
                         conf_reclose_i8111 = rb2.checkbox("Confirmar correção", key=f"hf62_conf_reclose_{reg_i8111.get('id')}")
-                        if rb2.button("🔒 Concluir correção", use_container_width=True, disabled=not conf_reclose_i8111, key=f"hf62_reclose_{reg_i8111.get('id')}"):
+                        if rb2.button("🔒 Concluir correção", width="stretch", disabled=not conf_reclose_i8111, key=f"hf62_reclose_{reg_i8111.get('id')}"):
                             try:
                                 sincronizar_fechamento_reaberto(reg_i8111.get("id"))
                                 atualizar_status_faturamento_mensal(reg_i8111.get("id"), I8111_STATUS_FECHADO)
@@ -33126,7 +33126,7 @@ if pagina_atual == "faturamento_mensal":
                                 st.error(str(exc_i8111))
                     elif status_real_i8111 == I8111_STATUS_FECHADO:
                         st.caption("Depois de enviar o boletim para a cliente e receber a conferência, marque abaixo como enviado/faturado.")
-                        if st.button("📤 Marcar como enviado / faturado", type="primary", use_container_width=True, key=f"hf62_faturar_{reg_i8111.get('id')}"):
+                        if st.button("📤 Marcar como enviado / faturado", type="primary", width="stretch", key=f"hf62_faturar_{reg_i8111.get('id')}"):
                             try:
                                 salvar_observacao_fechamento_mensal(reg_i8111.get("id"), obs_atual_i8111)
                                 atualizar_status_faturamento_mensal(reg_i8111.get("id"), I8111_STATUS_FATURADO)
@@ -33137,7 +33137,7 @@ if pagina_atual == "faturamento_mensal":
                     elif status_real_i8111 == I8111_STATUS_FATURADO:
                         st.warning("Ao confirmar o recebimento, o Manager marcará automaticamente todos os pedidos deste fechamento como pagos. Não é necessário abrir um por um.")
                         conf_rec_i8111 = st.checkbox("Confirmo que o valor deste fechamento foi recebido", key=f"hf62_conf_receber_{reg_i8111.get('id')}")
-                        if st.button("✅ Registrar recebimento", type="primary", use_container_width=True, disabled=not conf_rec_i8111, key=f"hf62_receber_{reg_i8111.get('id')}"):
+                        if st.button("✅ Registrar recebimento", type="primary", width="stretch", disabled=not conf_rec_i8111, key=f"hf62_receber_{reg_i8111.get('id')}"):
                             try:
                                 atualizar_status_faturamento_mensal(reg_i8111.get("id"), I8111_STATUS_RECEBIDO)
                                 st.session_state["_mensagem_sucesso_pendente"] = "Recebimento registrado e pedidos atualizados automaticamente."
@@ -33157,7 +33157,7 @@ if pagina_atual == "faturamento_mensal":
                             confirma_reabrir_i8111 = st.checkbox("Confirmo a reabertura auditada", key=f"hf62_conf_reabrir_{reg_i8111.get('id')}")
                             if st.button(
                                 "↩️ Reabrir para correção",
-                                use_container_width=True,
+                                width="stretch",
                                 disabled=not confirma_reabrir_i8111 or len(motivo_reabrir_i8111.strip()) < 3,
                                 key=f"hf62_reabrir_{reg_i8111.get('id')}",
                             ):
@@ -33299,7 +33299,7 @@ if pagina_atual == "compras_custos":
                 "Status": ("🟠 Pedido(s) aguardando material" if pendente_i8124 > 0.000001 else _i8122_status_material(livre_i8132, minimo_i8122)),
                 "Último custo": _i8121_moeda(ultima_compra_i8122.get("custo_unitario", 0)) if ultima_compra_i8122 else "Sem compra vinculada",
             })
-        st.dataframe(pd.DataFrame(linhas_estoque_i8122), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(linhas_estoque_i8122), width="stretch", hide_index=True)
     else:
         st.info("Nenhum material em estoque ainda. Registre uma compra com entrada de estoque ou cadastre o primeiro material abaixo.")
 
@@ -33348,7 +33348,7 @@ if pagina_atual == "compras_custos":
                 key="i8124hf3_cons_confirma",
             )
             if st.button(
-                "🧹 Consolidar sem apagar histórico", key="i8124hf3_cons_salvar", use_container_width=True,
+                "🧹 Consolidar sem apagar histórico", key="i8124hf3_cons_salvar", width="stretch",
                 disabled=not confirma_cons_i8122 or not destino_cons_i8122,
             ):
                 ok_cons_i8122, msg_cons_i8122 = _i8122_consolidar_material_duplicado(
@@ -33382,7 +33382,7 @@ if pagina_atual == "compras_custos":
                     "Motivo": motivo_hist_i8122,
                     "Inativado em": data_hist_i8122 or "—",
                 })
-            st.dataframe(pd.DataFrame(linhas_inativos_i8122), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(linhas_inativos_i8122), width="stretch", hide_index=True)
         else:
             st.caption("Nenhum material inativo/histórico registrado até o momento.")
 
@@ -33413,7 +33413,7 @@ if pagina_atual == "compras_custos":
                 key="i8124hf4_confirma_arquivar",
             )
             if st.button(
-                "🗂️ Mover para Inativos/Históricos", key="i8124hf4_salvar_arquivamento", use_container_width=True,
+                "🗂️ Mover para Inativos/Históricos", key="i8124hf4_salvar_arquivamento", width="stretch",
                 disabled=not confirma_arq_i8122,
             ):
                 ok_arq_i8122, msg_arq_i8122 = _i8122_inativar_material_historico(
@@ -33502,7 +33502,7 @@ if pagina_atual == "compras_custos":
                 "Materiais": materiais_txt_i8127,
                 "Motivo / próxima atenção": atencao_txt_i8127,
             })
-        st.dataframe(pd.DataFrame(linhas_previsao_i8127), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(linhas_previsao_i8127), width="stretch", hide_index=True)
         if risco_i8127:
             st.error(
                 f"🚨 {len(risco_i8127)} pedido(s) precisam de atenção de prazo. O alerta não altera sozinho a etapa de produção; "
@@ -33559,7 +33559,7 @@ if pagina_atual == "compras_custos":
                 "Último fornecedor": nec_i8126.get("fornecedor_nome") or "Sem histórico",
                 "Último custo": _i8121_moeda(nec_i8126.get("ultimo_custo")) if nec_i8126.get("ultimo_custo") is not None else "Sem custo",
             })
-        st.dataframe(pd.DataFrame(linhas_central_i8126), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(linhas_central_i8126), width="stretch", hide_index=True)
 
         st.markdown("#### 🔎 Materiais, pedidos e solicitação ao fornecedor")
         mapa_fornecedores_i8126 = {str(f.get("id") or ""): f for f in fornecedores_i8121 if isinstance(f, dict)}
@@ -33592,7 +33592,7 @@ if pagina_atual == "compras_custos":
                         "Produto(s)": ", ".join(ped_i8126.get("produtos") or []) or "—",
                     })
                 if linhas_ped_i8126:
-                    st.dataframe(pd.DataFrame(linhas_ped_i8126), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(linhas_ped_i8126), width="stretch", hide_index=True)
 
                 if nec_i8126.get("planos_abertos"):
                     st.markdown("**Solicitações já abertas para este material**")
@@ -33639,7 +33639,7 @@ if pagina_atual == "compras_custos":
                             if valor_float(qtd_plan_i8126) > qtd_solicitar_i8126 + 0.0000001:
                                 st.warning(f"Você está solicitando {_i8121_quantidade(valor_float(qtd_plan_i8126) - qtd_solicitar_i8126)} {unidade_i8126} acima da falta ainda não coberta. Isso é permitido, mas ficará visível como excesso planejado para revisão.")
                             st.info("Registrar esta solicitação NÃO lança entrada e NÃO reduz a falta real. Ela apenas informa que o material já foi pedido ao fornecedor.")
-                            if st.button("📤 Registrar solicitação ao fornecedor", key=f"i8126_salvar_{nec_i8126.get('material_id')}", type="primary", use_container_width=True):
+                            if st.button("📤 Registrar solicitação ao fornecedor", key=f"i8126_salvar_{nec_i8126.get('material_id')}", type="primary", width="stretch"):
                                 estoque_fresco_plan_i8126 = carregar_estoque(force_refresh=True)
                                 material_plan_i8126 = _i8122_material_destino_ativo(estoque_fresco_plan_i8126, nec_i8126.get("material_id")) or _i8122_material_por_id(estoque_fresco_plan_i8126, nec_i8126.get("material_id"))
                                 fornecedor_plan_i8126 = mapa_fornecedores_i8126.get(str(fornecedor_plan_id_i8126), {})
@@ -33659,7 +33659,7 @@ if pagina_atual == "compras_custos":
                 if fornecedor_pode_prefill_i8126 and qtd_falta_i8126 > 0.0000001:
                     if st.button(
                         "🧾 Registrar compra/recebimento agora",
-                        key=f"i8126_comprar_agora_{nec_i8126.get('material_id')}", use_container_width=True,
+                        key=f"i8126_comprar_agora_{nec_i8126.get('material_id')}", width="stretch",
                         help="Atalho para uma compra que já está sendo recebida agora. Diferente de 'Solicitar ao fornecedor', esta ação prepara o registro real de compra/entrada.",
                     ):
                         unidade_pref_i8126 = unidade_i8126 or "un"
@@ -33699,7 +33699,7 @@ if pagina_atual == "compras_custos":
                 "Previsão": str(plano_i8126.get("previsao_recebimento") or "—")[:10],
                 "Status": _i8126_engine_status(plano_i8126),
             })
-        st.dataframe(pd.DataFrame(linhas_planos_i8126), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(linhas_planos_i8126), width="stretch", hide_index=True)
 
         for plano_i8126 in sorted(planos_abertos_i8126, key=lambda x: (str(x.get("previsao_recebimento") or "9999-12-31"), str(x.get("criado_em") or ""))):
             aberto_i8126 = _i8126_engine_aberta(plano_i8126)
@@ -33716,7 +33716,7 @@ if pagina_atual == "compras_custos":
                 if plano_i8126.get("observacao"):
                     st.write(f"**Observação:** {plano_i8126.get('observacao')}")
                 br1_i8126, br2_i8126 = st.columns(2)
-                if br1_i8126.button("📥 Receber / registrar compra", key=f"i8126_receber_{plano_i8126.get('id')}", use_container_width=True):
+                if br1_i8126.button("📥 Receber / registrar compra", key=f"i8126_receber_{plano_i8126.get('id')}", width="stretch"):
                     fornecedor_id_plan_i8126 = str(plano_i8126.get("fornecedor_id") or "")
                     if fornecedor_id_plan_i8126 not in {str(f.get("id") or "") for f in fornecedores_i8121}:
                         st.error("O fornecedor desta solicitação não está mais disponível no cadastro de Relacionamentos.")
@@ -33742,7 +33742,7 @@ if pagina_atual == "compras_custos":
                 with br2_i8126.expander("✖️ Cancelar saldo em aberto", expanded=False):
                     motivo_cancel_i8126 = st.text_input("Motivo", key=f"i8126_mot_cancel_{plano_i8126.get('id')}", placeholder="Ex.: fornecedor sem estoque, pedido substituído...")
                     confirma_cancel_i8126 = st.checkbox("Confirmo o cancelamento do saldo ainda não recebido", key=f"i8126_conf_cancel_{plano_i8126.get('id')}")
-                    if st.button("✖️ Cancelar solicitação", key=f"i8126_cancel_{plano_i8126.get('id')}", use_container_width=True, disabled=not confirma_cancel_i8126):
+                    if st.button("✖️ Cancelar solicitação", key=f"i8126_cancel_{plano_i8126.get('id')}", width="stretch", disabled=not confirma_cancel_i8126):
                         ok_cancel_i8126, msg_cancel_i8126 = _i8126_cancelar_plano(plano_i8126.get("id"), motivo_cancel_i8126, usuario=str(usuario_compras.get("nome") or "Jorge"))
                         if ok_cancel_i8126:
                             st.session_state["_mensagem_sucesso_pendente"] = msg_cancel_i8126
@@ -33763,7 +33763,7 @@ if pagina_atual == "compras_custos":
                     "Status": _i8126_engine_status(plano_hist_i8126),
                     "Criado em": str(plano_hist_i8126.get("criado_em") or "")[:16].replace("T", " "),
                 })
-            st.dataframe(pd.DataFrame(linhas_hist_plan_i8126), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(linhas_hist_plan_i8126), width="stretch", hide_index=True)
 
     st.divider()
     # I8.12.3 — ficha técnica por produto, somente configuração e simulação.
@@ -33832,7 +33832,7 @@ if pagina_atual == "compras_custos":
                     "Capacidade pelo material": f"{cap_ft_i8123} un",
                     "Observação": comp_i8123.get("observacao", ""),
                 })
-            st.dataframe(pd.DataFrame(linhas_ft_i8123), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(linhas_ft_i8123), width="stretch", hide_index=True)
         else:
             st.caption("Este produto ainda não possui materiais vinculados na ficha técnica.")
 
@@ -33868,7 +33868,7 @@ if pagina_atual == "compras_custos":
                 f"Regra prevista: 1 unidade de {produto_i8123.get('Nome', 'produto')} consome "
                 f"{_i8121_quantidade(consumo_ft_i8123)} {mat_sel_ft_i8123.get('unidade', '')} de {mat_sel_ft_i8123.get('nome', 'material')}."
             )
-            if st.button("💾 Salvar material na ficha", key=f"i8123_salvar_comp_{prod_idx_i8123}", type="primary", use_container_width=True):
+            if st.button("💾 Salvar material na ficha", key=f"i8123_salvar_comp_{prod_idx_i8123}", type="primary", width="stretch"):
                 fichas_frescas_i8123 = carregar_fichas_tecnicas(force_refresh=True)
                 ficha_fresca_i8123 = _i8123_ficha_para_produto(fichas_frescas_i8123, produto_i8123, prod_idx_i8123)
                 agora_ft_i8123 = agora_local().isoformat()
@@ -33922,7 +33922,7 @@ if pagina_atual == "compras_custos":
                     key=f"i8123_rem_{prod_idx_i8123}",
                 )
                 confirma_rem_i8123 = st.checkbox("Confirmo a remoção deste material da ficha", key=f"i8123_conf_rem_{prod_idx_i8123}")
-                if st.button("🧹 Remover da ficha", key=f"i8123_btn_rem_{prod_idx_i8123}", use_container_width=True, disabled=not confirma_rem_i8123):
+                if st.button("🧹 Remover da ficha", key=f"i8123_btn_rem_{prod_idx_i8123}", width="stretch", disabled=not confirma_rem_i8123):
                     fichas_frescas_i8123 = carregar_fichas_tecnicas(force_refresh=True)
                     ficha_fresca_i8123 = _i8123_ficha_para_produto(fichas_frescas_i8123, produto_i8123, prod_idx_i8123)
                     if ficha_fresca_i8123:
@@ -33971,7 +33971,7 @@ if pagina_atual == "compras_custos":
                     "Livre se produzir": f"{_i8121_quantidade(previsto_sim_i8123)} {unidade_sim_i8123}",
                     "Situação": "✅ Suficiente" if suficiente_sim_i8123 else "🔴 Insuficiente",
                 })
-            st.dataframe(pd.DataFrame(linhas_sim_i8123), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(linhas_sim_i8123), width="stretch", hide_index=True)
             if faltantes_sim_i8123:
                 st.error("A produção simulada excede o estoque disponível de pelo menos um material. Nenhuma baixa foi realizada.")
             else:
@@ -33998,7 +33998,7 @@ if pagina_atual == "compras_custos":
     cp2.metric("Liberados sem falta", pedidos_atendidos_i8124)
     cp3.metric("Reserva parcial / falta", pedidos_parciais_i8124 + pedidos_pendentes_i8124)
     cp4.metric("Materiais em falta", len(materiais_pendentes_ids_i8124))
-    if st.button("🔄 Reconciliar reservas com o saldo físico", key="i8124_reconciliar", use_container_width=True, help="Confere reservas x saldo físico. Entradas completam reservas FIFO; perdas/ajustes podem reduzir reservas mais novas. Nenhuma baixa física é feita aqui."):
+    if st.button("🔄 Reconciliar reservas com o saldo físico", key="i8124_reconciliar", width="stretch", help="Confere reservas x saldo físico. Entradas completam reservas FIFO; perdas/ajustes podem reduzir reservas mais novas. Nenhuma baixa física é feita aqui."):
         resultado_recon_i8124 = _i8124_regularizar_pendencias_automaticamente(usuario=usuario_compras)
         if resultado_recon_i8124.get("reservas_criadas") or resultado_recon_i8124.get("reservas_liberadas"):
             st.session_state["_mensagem_sucesso_pendente"] = resultado_recon_i8124.get("mensagem")
@@ -34072,7 +34072,7 @@ if pagina_atual == "compras_custos":
                     "Falta": f"{_i8121_quantidade(nec_estorno_i8124.get('pendente'))} {unidade_estorno_i8124}",
                 })
             if linhas_estorno_i8124:
-                st.dataframe(pd.DataFrame(linhas_estorno_i8124), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(linhas_estorno_i8124), width="stretch", hide_index=True)
 
             if total_consumido_estorno_i8124 > 0.0000001:
                 st.warning(
@@ -34096,7 +34096,7 @@ if pagina_atual == "compras_custos":
             if st.button(
                 "↩️ Estornar liberação de materiais",
                 key=f"i8124_estornar_ativo_{consumo_id_estorno_i8124}",
-                use_container_width=True,
+                width="stretch",
                 disabled=not conf_est_ativo_i8124 or len(motivo_est_ativo_i8124.strip()) < 3,
             ):
                 ok_est_ativo_i8124, msg_est_ativo_i8124 = _i8124_estornar_consumo(
@@ -34161,7 +34161,7 @@ if pagina_atual == "compras_custos":
                         "Falta": f"{_i8121_quantidade(nec_i8124.get('pendente'))} {nec_i8124.get('unidade', '')}",
                     })
                 if linhas_status_i8124:
-                    st.dataframe(pd.DataFrame(linhas_status_i8124), use_container_width=True, hide_index=True)
+                    st.dataframe(pd.DataFrame(linhas_status_i8124), width="stretch", hide_index=True)
                 modo_ativo_i8132 = str(consumo_ativo_i8124.get("modo_consumo") or "ficha_padrao")
                 if modo_ativo_i8132 == "sem_consumo":
                     st.info("➖ Este pedido foi liberado sem consumo de estoque controlado. Nenhuma reserva ou baixa física será feita.")
@@ -34172,7 +34172,7 @@ if pagina_atual == "compras_custos":
                 with st.expander("↩️ Estornar / corrigir reserva e consumo do pedido", expanded=False):
                     motivo_est_i8124 = st.text_input("Motivo do estorno", key=f"i8124_motivo_est_{numero_pedido_i8124}", placeholder="Ex.: quantidade corrigida, pedido cancelado, ficha técnica revisada...")
                     conf_est_i8124 = st.checkbox("Confirmo o estorno auditado", key=f"i8124_conf_est_{numero_pedido_i8124}")
-                    if st.button("↩️ Estornar liberação de materiais", key=f"i8124_estornar_{numero_pedido_i8124}", use_container_width=True, disabled=not conf_est_i8124 or len(motivo_est_i8124.strip()) < 3):
+                    if st.button("↩️ Estornar liberação de materiais", key=f"i8124_estornar_{numero_pedido_i8124}", width="stretch", disabled=not conf_est_i8124 or len(motivo_est_i8124.strip()) < 3):
                         ok_est_i8124, msg_est_i8124 = _i8124_estornar_consumo(consumo_ativo_i8124.get("id"), motivo_est_i8124, usuario=usuario_compras)
                         if ok_est_i8124:
                             st.session_state["_mensagem_sucesso_pendente"] = msg_est_i8124
@@ -34273,7 +34273,7 @@ if pagina_atual == "compras_custos":
                             "Falta": f"{_i8121_quantidade(pendente_i8124)} {nec_i8124.get('unidade', '')}",
                         })
                     if linhas_prev_i8124:
-                        st.dataframe(pd.DataFrame(linhas_prev_i8124), use_container_width=True, hide_index=True)
+                        st.dataframe(pd.DataFrame(linhas_prev_i8124), width="stretch", hide_index=True)
                     necessidades_confirmar_i8132 = previa_i8124.get("necessidades") or []
 
                 elif modo_i8132 == "manual_pedido":
@@ -34331,7 +34331,7 @@ if pagina_atual == "compras_custos":
                 )
                 pode_confirmar_i8124 = bool(modo_i8132) and confirma_consumo_i8124 and tem_dados_modo_i8132 and not sem_catalogo_i8132
                 rotulo_btn_i8132 = "✅ Liberar pedido sem reserva" if modo_i8132 == "sem_consumo" else "🔒 Confirmar tratamento e reservar"
-                if st.button(rotulo_btn_i8132, key=f"i8124_confirmar_{numero_pedido_i8124}_{modo_i8132}", type="primary", use_container_width=True, disabled=not pode_confirmar_i8124):
+                if st.button(rotulo_btn_i8132, key=f"i8124_confirmar_{numero_pedido_i8124}_{modo_i8132}", type="primary", width="stretch", disabled=not pode_confirmar_i8124):
                     ok_conf_i8124, msg_conf_i8124, _ = _i8124_confirmar_consumo_pedido(
                         proposta_i8124,
                         usuario=usuario_compras,
@@ -34368,7 +34368,7 @@ if pagina_atual == "compras_custos":
                     "Liberado por": consumo_i8124.get("confirmado_por", ""),
                     "Liberado em": str(consumo_i8124.get("confirmado_em") or "")[:16].replace("T", " "),
                 })
-            st.dataframe(pd.DataFrame(linhas_consumos_i8124), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(linhas_consumos_i8124), width="stretch", hide_index=True)
 
     st.divider()
 
@@ -34377,7 +34377,7 @@ if pagina_atual == "compras_custos":
         nome_mat_i8122 = cm1.text_input("Material", key="i8122_cad_nome", placeholder="Ex.: Fita cetim azul 22 mm")
         unidade_mat_i8122 = cm2.selectbox("Unidade", I8121_UNIDADES, key="i8122_cad_unidade")
         minimo_mat_i8122 = cm3.number_input("Estoque mínimo", min_value=0.0, value=0.0, step=1.0, format="%.3f", key="i8122_cad_minimo")
-        if st.button("💾 Cadastrar material", key="i8122_cad_salvar", use_container_width=True):
+        if st.button("💾 Cadastrar material", key="i8122_cad_salvar", width="stretch"):
             if not nome_mat_i8122.strip():
                 st.warning("Informe o nome do material.")
             else:
@@ -34437,7 +34437,7 @@ if pagina_atual == "compras_custos":
                 st.error("Esta saída manual usaria material já reservado para pedidos. Use somente o saldo disponível livre ou revise/estorne a reserva do pedido correspondente.")
             elif saldo_prev_i8122 + 0.000001 < reservado_atual_i8132 and tipo_mov_i8122 in {"Perda", "Ajuste de inventário"}:
                 st.warning("O saldo físico ficará menor que o reservado. Ao salvar, o Manager reduzirá automaticamente as reservas mais novas e os pedidos afetados voltarão a indicar falta de material.")
-            if st.button("💾 Registrar movimentação", key="i8122_mov_salvar", type="primary", use_container_width=True, disabled=bloqueio_mov_i8122):
+            if st.button("💾 Registrar movimentação", key="i8122_mov_salvar", type="primary", width="stretch", disabled=bloqueio_mov_i8122):
                 dados_frescos_i8122 = carregar_estoque(force_refresh=True)
                 mat_fresco_i8122 = _i8122_material_por_id(dados_frescos_i8122, mat_id_mov_i8122)
                 saldo_fresco_i8122 = _i8122_saldo_material(dados_frescos_i8122, mat_id_mov_i8122)
@@ -34476,7 +34476,7 @@ if pagina_atual == "compras_custos":
                 "Estoque mínimo", min_value=0.0, value=float(valor_float(mat_min_i8122.get("estoque_minimo", 0))),
                 step=1.0, format="%.3f", key=f"i8122_min_valor_{mat_id_min_i8122}"
             )
-            if st.button("💾 Salvar estoque mínimo", key="i8122_min_salvar", use_container_width=True):
+            if st.button("💾 Salvar estoque mínimo", key="i8122_min_salvar", width="stretch"):
                 dados_frescos_i8122 = carregar_estoque(force_refresh=True)
                 alvo_min_i8122 = _i8122_material_por_id(dados_frescos_i8122, mat_id_min_i8122)
                 if alvo_min_i8122:
@@ -34507,7 +34507,7 @@ if pagina_atual == "compras_custos":
                     else (f"{mov_i8122.get('origem_tipo')} · {mov_i8122.get('origem_id')}" if mov_i8122.get("origem_id") else mov_i8122.get("origem_tipo", "Manual"))
                 ),
             })
-        st.dataframe(pd.DataFrame(linhas_mov_i8122), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(linhas_mov_i8122), width="stretch", hide_index=True)
 
         reversiveis_i8122 = [
             m for m in mov_ord_i8122
@@ -34525,7 +34525,7 @@ if pagina_atual == "compras_custos":
                 )
                 motivo_rev_i8122 = st.text_input("Motivo do estorno", key="i8122_rev_motivo", placeholder="Ex.: lançamento duplicado / quantidade incorreta")
                 confirma_rev_i8122 = st.checkbox("Confirmo o estorno desta movimentação", key="i8122_rev_conf")
-                if st.button("↩️ Registrar estorno", key="i8122_rev_salvar", use_container_width=True, disabled=not confirma_rev_i8122):
+                if st.button("↩️ Registrar estorno", key="i8122_rev_salvar", width="stretch", disabled=not confirma_rev_i8122):
                     dados_frescos_i8122 = carregar_estoque(force_refresh=True)
                     original_rev_i8122 = next((m for m in dados_frescos_i8122.get("movimentacoes", []) if str(m.get("id")) == str(mov_id_rev_i8122)), None)
                     if not original_rev_i8122 or _i8122_movimento_estornado(dados_frescos_i8122, mov_id_rev_i8122):
@@ -34568,12 +34568,12 @@ if pagina_atual == "compras_custos":
                 f"{_i8121_quantidade(_i8126_engine_aberta(plano_recebimento_i8126))} {plano_recebimento_i8126.get('unidade', '')} ainda em aberto. "
                 "Registre somente a quantidade que realmente chegou."
             )
-            if st.button("↩️ Desvincular deste planejamento", key="i8126_desvincular_recebimento", use_container_width=True):
+            if st.button("↩️ Desvincular deste planejamento", key="i8126_desvincular_recebimento", width="stretch"):
                 st.session_state.pop("_i8126_plano_recebimento_id", None)
                 st.rerun()
         if not fornecedores_i8121:
             st.warning("Nenhum relacionamento com papel **Fornecedor** foi encontrado. Cadastre o fornecedor primeiro em Relacionamentos para manter uma única fonte de cadastro.")
-            if st.button("🏭 Abrir Relacionamentos para cadastrar fornecedor", key="i8121_ir_fornecedores", use_container_width=True):
+            if st.button("🏭 Abrir Relacionamentos para cadastrar fornecedor", key="i8121_ir_fornecedores", width="stretch"):
                 rerun_na_aba("relacionamentos")
         else:
             mapa_fornecedores_i8121 = {str(f.get("id")): f for f in fornecedores_i8121}
@@ -34730,7 +34730,7 @@ if pagina_atual == "compras_custos":
                 else:
                     st.info(f"Custo unitário igual à última compra deste item neste fornecedor: {_i8121_moeda_md(anterior_custo_i8121)} em {data_ant_i8121}.")
 
-            if st.button("💾 Registrar compra", type="primary", use_container_width=True, key="i8121_salvar_compra"):
+            if st.button("💾 Registrar compra", type="primary", width="stretch", key="i8121_salvar_compra"):
                 if not item_i8121.strip():
                     st.warning("Informe o produto ou material comprado.")
                 elif custo_unit_i8121 <= 0:
@@ -34851,7 +34851,7 @@ if pagina_atual == "compras_custos":
                 "Variação vs compra anterior": _i8121_resumo_variacao(delta_i8121),
             })
         if linhas_i8121:
-            st.dataframe(pd.DataFrame(linhas_i8121), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(linhas_i8121), width="stretch", hide_index=True)
 
         st.markdown("#### 🔎 Detalhes e alertas")
         for compra_i8121 in filtradas_i8121[:30]:
@@ -34894,7 +34894,7 @@ if pagina_atual == "compras_custos":
                     if st.button(
                         "🗑️ Enviar compra para a Lixeira",
                         key=f"i8121_excluir_{compra_i8121.get('id')}",
-                        use_container_width=True,
+                        width="stretch",
                         disabled=not confirma_excluir_i8121,
                     ):
                         compras_frescas_i8121 = carregar_compras(force_refresh=True)
@@ -35124,7 +35124,7 @@ if pagina_atual == "relatorios":
                 .sort_values("Periodo")
             )
             st.subheader("📈 Orçamentos por período")
-            st.line_chart(vendas.set_index("Periodo")["valor_total"], use_container_width=True)
+            st.line_chart(vendas.set_index("Periodo")["valor_total"], width="stretch")
         else:
             st.info("Não há propostas com data válida para montar o gráfico neste período.")
 
@@ -35140,7 +35140,7 @@ if pagina_atual == "relatorios":
                 clientes, "cliente_nome", "valor_total", "Total por cliente", horizontal=True
             )
             if grafico_clientes:
-                st.altair_chart(grafico_clientes, use_container_width=True)
+                st.altair_chart(grafico_clientes, width="stretch")
         else:
             st.info("Nenhum cliente com proposta no período selecionado.")
 
@@ -35173,8 +35173,8 @@ if pagina_atual == "relatorios":
                 horizontal=True, formato=".0f"
             )
             if grafico_prod:
-                st.altair_chart(grafico_prod, use_container_width=True)
-            st.dataframe(ranking, use_container_width=True, hide_index=True)
+                st.altair_chart(grafico_prod, width="stretch")
+            st.dataframe(ranking, width="stretch", hide_index=True)
 
             pagos = (
                 df_prod[df_prod["pago"]]
@@ -35190,8 +35190,8 @@ if pagina_atual == "relatorios":
                     "Faturamento de produtos pagos", horizontal=True
                 )
                 if grafico_pagos:
-                    st.altair_chart(grafico_pagos, use_container_width=True)
-                st.dataframe(pagos, use_container_width=True, hide_index=True)
+                    st.altair_chart(grafico_pagos, width="stretch")
+                st.dataframe(pagos, width="stretch", hide_index=True)
             else:
                 st.info("Ainda não existem produtos em propostas marcadas como pagas neste período.")
 
@@ -35383,7 +35383,7 @@ if pagina_atual == "relatorios":
                                 if criar2.button(
                                     "➕ Criar produto oficial",
                                     key=f"rel_criar_produto_h21_{pos_dup}_{abs(hash('|'.join(nomes_dup)))}",
-                                    use_container_width=True,
+                                    width="stretch",
                                 ):
                                     for _estado_h2_antigo in (
                                         "_retorno_padronizacao_h2",
@@ -35424,7 +35424,7 @@ if pagina_atual == "relatorios":
                                 if st.button(
                                     "🔗 Confirmar equivalência",
                                     key=f"rel_alias_salvar_h1_{pos_dup}_{abs(hash('|'.join(nomes_dup)))}",
-                                    use_container_width=True,
+                                    width="stretch",
                                     disabled=not novos_aliases,
                                 ):
                                     conflitos = [
@@ -35504,7 +35504,7 @@ if pagina_atual == "relatorios":
                     ]
                     st.dataframe(
                         pd.DataFrame(dados_aliases),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                     )
         else:
@@ -35668,7 +35668,7 @@ if pagina_atual == "executivo":
                 y=alt.Y("Valor:Q", title="Valor orçado"),
                 tooltip=[alt.Tooltip("Dia:N"), alt.Tooltip("Valor:Q", format=",.2f")],
             ).properties(height=280)
-            st.altair_chart(chart_mes, use_container_width=True)
+            st.altair_chart(chart_mes, width="stretch")
             st.caption(f"Total do mês: {_moeda_exec(total_mes)}")
         else:
             st.info("Ainda não há propostas neste mês.")
@@ -35684,7 +35684,7 @@ if pagina_atual == "executivo":
                 y=alt.Y("Produto:N", sort="-x", title=None),
                 tooltip=[alt.Tooltip("Produto:N"), alt.Tooltip("Quantidade:Q", format=",.1f")],
             ).properties(height=280)
-            st.altair_chart(chart_prod, use_container_width=True)
+            st.altair_chart(chart_prod, width="stretch")
         else:
             st.info("Ainda não há itens suficientes para o ranking.")
 
@@ -35711,7 +35711,7 @@ if pagina_atual == "catalogo":
     st.caption("Cadastro interno e geração de seleções específicas para consulta do cliente.")
     if usuario_em_operacao_protegida(obter_usuario_atual()):
         ac_anna_i884, info_anna_i884 = st.columns([1, 3])
-        if ac_anna_i884.button("⬅️ Voltar para Central da Anna", use_container_width=True, key="i884_anna_voltar_central"):
+        if ac_anna_i884.button("⬅️ Voltar para Central da Anna", width="stretch", key="i884_anna_voltar_central"):
             rerun_na_aba("central")
         info_anna_i884.success(
             "👩‍💼 I8.8.4: Gerador, Prévia, Modelos e Central de Catálogos liberados para a Anna. "
@@ -35782,7 +35782,7 @@ if pagina_atual == "catalogo":
                     "🧊 Este produto é gerenciado pelo Catálogo 3D. O registro daqui é o espelho usado por propostas e site. "
                     "Para evitar divergência de preço/configuração, prefira editar pelo Catálogo 3D."
                 )
-                if st.button("🧊 Abrir este produto no Catálogo 3D", key=f"cat_abrir_3d_{sufixo}", use_container_width=True):
+                if st.button("🧊 Abrir este produto no Catálogo 3D", key=f"cat_abrir_3d_{sufixo}", width="stretch"):
                     st.session_state["_biblioteca3d_editar_id"] = str(item_edicao.get("biblioteca_3d_id") or "").strip()
                     rerun_na_aba("biblioteca_3d")
         elif prefill_i8:
@@ -35948,9 +35948,9 @@ if pagina_atual == "catalogo":
                     key=f"cat_ideias_geracao_{sufixo}",
                 )
                 g1, g2, g3 = st.columns(3)
-                gerar_tudo = g1.button("✨ Gerar tudo", use_container_width=True, key=f"cat_gerar_tudo_{sufixo}")
-                gerar_descricoes = g2.button("📝 Só descrições", use_container_width=True, key=f"cat_gerar_desc_{sufixo}")
-                gerar_marketing = g3.button("📣 Só marketing", use_container_width=True, key=f"cat_gerar_mkt_{sufixo}")
+                gerar_tudo = g1.button("✨ Gerar tudo", width="stretch", key=f"cat_gerar_tudo_{sufixo}")
+                gerar_descricoes = g2.button("📝 Só descrições", width="stretch", key=f"cat_gerar_desc_{sufixo}")
+                gerar_marketing = g3.button("📣 Só marketing", width="stretch", key=f"cat_gerar_mkt_{sufixo}")
 
                 if gerar_tudo or gerar_descricoes or gerar_marketing:
                     if not nome_cat.strip():
@@ -36082,7 +36082,7 @@ if pagina_atual == "catalogo":
                 "Descrição do arquivo", placeholder="Ex.: arquivo final aprovado para corte", key=f"cat_arquivo_desc_{sufixo}"
             )
             arq_mestre = st.checkbox("⭐ Marcar como arquivo mestre", key=f"cat_arquivo_mestre_{sufixo}")
-            if st.button("📤 Enviar e vincular arquivo", key=f"cat_enviar_arquivo_{sufixo}", use_container_width=True):
+            if st.button("📤 Enviar e vincular arquivo", key=f"cat_enviar_arquivo_{sufixo}", width="stretch"):
                 if not item_edicao:
                     st.warning("Salve o produto primeiro. Depois abra Editar para adicionar arquivos à memória.")
                 elif arq_upload is None:
@@ -36128,8 +36128,8 @@ if pagina_atual == "catalogo":
                         if arq.get("tags"):
                             i2.caption("Tags: " + " • ".join(arq.get("tags", [])))
                         if arq.get("url"):
-                            i3.link_button("Abrir / baixar", arq.get("url"), use_container_width=True)
-                        if i3.button("⭐ Mestre" if not arq.get("mestre") else "✓ Mestre", key=f"arq_mestre_{sufixo}_{j}", use_container_width=True, disabled=bool(arq.get("mestre"))):
+                            i3.link_button("Abrir / baixar", arq.get("url"), width="stretch")
+                        if i3.button("⭐ Mestre" if not arq.get("mestre") else "✓ Mestre", key=f"arq_mestre_{sufixo}_{j}", width="stretch", disabled=bool(arq.get("mestre"))):
                             for outro in arquivos_atuais:
                                 outro["mestre"] = False
                             arquivos_atuais[j]["mestre"] = True
@@ -36137,7 +36137,7 @@ if pagina_atual == "catalogo":
                             catalogo[indice_edicao] = item_edicao
                             salvar_catalogo(catalogo)
                             st.rerun()
-                        if i3.button("📦 Arquivar", key=f"arq_arquivar_{sufixo}_{j}", use_container_width=True):
+                        if i3.button("📦 Arquivar", key=f"arq_arquivar_{sufixo}_{j}", width="stretch"):
                             arquivos_atuais[j]["arquivado"] = True
                             arquivos_atuais[j]["mestre"] = False
                             item_edicao["ArquivosBiblioteca"] = arquivos_atuais
@@ -36165,7 +36165,7 @@ if pagina_atual == "catalogo":
                 try:
                     _rc1.image(
                         imagem_streamlit_catalogo(prefill_i8.get("recorte_historico_url")),
-                        use_container_width=True,
+                        width="stretch",
                     )
                 except Exception:
                     _rc1.caption("Recorte histórico preparado")
@@ -36186,7 +36186,7 @@ if pagina_atual == "catalogo":
                     st.markdown("##### 📚 Foto encontrada no catálogo histórico")
                     _fh1, _fh2 = st.columns([1.25, 3.75])
                     try:
-                        _fh1.image(str(_i8_preview_historico), use_container_width=True)
+                        _fh1.image(str(_i8_preview_historico), width="stretch")
                     except Exception:
                         _fh1.caption("Prévia histórica")
                     _pagina_multi_foto = bool(prefill_i8.get("pagina_multiproduto"))
@@ -36345,10 +36345,10 @@ if pagina_atual == "catalogo":
 
         salvar = b1.button(
             _label_salvar_cat, type="primary",
-            use_container_width=True, key=f"cat_salvar_{sufixo}"
+            width="stretch", key=f"cat_salvar_{sufixo}"
         )
         cancelar = b2.button(
-            _label_cancelar_cat, use_container_width=True,
+            _label_cancelar_cat, width="stretch",
             key=f"cat_cancelar_{sufixo}"
         )
 
@@ -36795,13 +36795,13 @@ if pagina_atual == "catalogo":
                 _hf6513_adicionar = _hf6513_b1.button(
                     "➕ Adicionar às épocas atuais",
                     key="hf6513_adicionar_lote",
-                    use_container_width=True,
+                    width="stretch",
                     type="primary",
                 )
                 _hf6513_remover = _hf6513_b2.button(
                     "➖ Remover destas épocas",
                     key="hf6513_remover_lote",
-                    use_container_width=True,
+                    width="stretch",
                 )
 
                 if _hf6513_adicionar or _hf6513_remover:
@@ -36889,12 +36889,12 @@ if pagina_atual == "catalogo":
                 _hf514_aplicar = _hf514_c2.button(
                     "🎠 Preencher carrossel",
                     key="hf514_aplicar_carrossel",
-                    use_container_width=True,
+                    width="stretch",
                 )
                 _hf514_limpar = _hf514_c3.button(
                     "🧹 Limpar carrossel",
                     key="hf514_limpar_carrossel",
-                    use_container_width=True,
+                    width="stretch",
                 )
                 if _hf514_aplicar:
                     _candidatos_hf514 = []
@@ -36966,7 +36966,7 @@ if pagina_atual == "catalogo":
                 _hf492_editado = st.data_editor(
                     _hf492_df,
                     key=f"hf492_editor_site_{_hf492_assinatura_filtro}",
-                    use_container_width=True,
+                    width="stretch",
                     hide_index=True,
                     num_rows="fixed",
                     disabled=["Produto", "Categoria", "Subcategoria", "Preço atual"],
@@ -37136,7 +37136,7 @@ if pagina_atual == "catalogo":
                     _hf61_editado = st.data_editor(
                         _hf61_df,
                         key=f"hf61_editor_categorias_{_hf61_assinatura}",
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                         num_rows="fixed",
                         disabled=["Produto", "Categoria principal", "Subcategoria", "🌐 Site"],
@@ -37239,7 +37239,7 @@ if pagina_atual == "catalogo":
             if st.button(
                 _rotulo_gerar_hf451,
                 key="hf451_preparar_pdf_revisao",
-                use_container_width=True,
+                width="stretch",
                 disabled=not bool(catalogo),
             ):
                 with st.spinner("Preparando a folha A4 da Anna…"):
@@ -37258,7 +37258,7 @@ if pagina_atual == "catalogo":
                     file_name="alphafest_revisao_categorias_subcategorias_A4.pdf",
                     mime="application/pdf",
                     key="hf451_pdf_revisao_catalogo",
-                    use_container_width=True,
+                    width="stretch",
                 )
 
             # HF45.2 — digitação rápida das correções anotadas pela Anna.
@@ -37294,7 +37294,7 @@ if pagina_atual == "catalogo":
             _hf452_editado = st.data_editor(
                 _hf452_df_base,
                 key="hf452_editor_revisao",
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
                 num_rows="fixed",
                 disabled=["ID", "Produto", "Categoria atual", "Subcategoria atual"],
@@ -37347,7 +37347,7 @@ if pagina_atual == "catalogo":
             if st.button(
                 "💾 Salvar correções de categoria e subcategoria",
                 key="hf452_salvar_revisao",
-                use_container_width=True,
+                width="stretch",
                 disabled=not bool(_hf452_alteracoes and _hf452_confirmar),
             ):
                 _catalogo_novo_hf452 = [dict(p or {}) for p in (catalogo or [])]
@@ -37506,15 +37506,15 @@ if pagina_atual == "catalogo":
                         cinfo.caption(f"🧠 Memória: {len(arquivos_memoria)} arquivo(s)" + (f" • {mestres} mestre" if mestres else ""))
                     if produto_cat.get("PublicarSite"):
                         cinfo.success("🌐 Marcado para publicação no site")
-                    if cacoes.button("✏️ Editar", key=f"cat_editar_{i}", use_container_width=True):
+                    if cacoes.button("✏️ Editar", key=f"cat_editar_{i}", width="stretch"):
                         st.session_state.catalogo_edit_index = i
                         st.rerun()
-                    if cacoes.button("🗑️ Mover para lixeira", key=f"cat_excluir_{i}", use_container_width=True):
+                    if cacoes.button("🗑️ Mover para lixeira", key=f"cat_excluir_{i}", width="stretch"):
                         removido = catalogo.pop(i)
                         enviar_para_lixeira("Produto", removido, removido.get("Nome", ""))
                         salvar_catalogo(catalogo)
                         st.rerun()
-                    if cacoes.button("➕ Orçamento", key=f"cat_orcamento_{i}", use_container_width=True):
+                    if cacoes.button("➕ Orçamento", key=f"cat_orcamento_{i}", width="stretch"):
                         preco_txt = str(produto_cat.get("Preco", "0")).replace("R$", "").strip()
                         preco_num = valor_float(preco_txt.replace(".", "").replace(",", "."))
                         st.session_state.temp_itens.append({
@@ -37623,7 +37623,7 @@ if pagina_atual == "catalogo":
                     if mc2.button(
                         "Aplicar modelo",
                         key="i883_aplicar_modelo",
-                        use_container_width=True,
+                        width="stretch",
                         disabled=bool(problemas_modelo_i883),
                     ):
                         try:
@@ -37740,14 +37740,14 @@ if pagina_atual == "catalogo":
                 if a1.button(
                     "Selecionar todos",
                     key="i871_selecionar_todos",
-                    use_container_width=True,
+                    width="stretch",
                     disabled=not bool(indices_base_i871),
                 ):
                     st.session_state[chave_produtos_widget] = list(indices_base_i871)
                 if a2.button(
                     "Limpar seleção",
                     key="i871_limpar_produtos",
-                    use_container_width=True,
+                    width="stretch",
                     disabled=not bool(indices_base_i871),
                 ):
                     st.session_state[chave_produtos_widget] = []
@@ -37897,12 +37897,12 @@ if pagina_atual == "catalogo":
                     file_name=f"{slug_html(titulo_i871 or 'catalogo_alphafest').lower()}_i89.html",
                     mime="text/html",
                     type="primary",
-                    use_container_width=True,
+                    width="stretch",
                     disabled=not bool(selecao_saida_i871),
                 )
                 if sh2_i89.button(
                     "📄 Preparar PDF comercial",
-                    use_container_width=True,
+                    width="stretch",
                     disabled=not bool(selecao_saida_i871),
                     key="i89_preparar_pdf_gerador",
                 ):
@@ -37928,7 +37928,7 @@ if pagina_atual == "catalogo":
                         st.session_state.get("i89_pdf_gerador_bytes"),
                         file_name=f"{st.session_state.get('i89_pdf_gerador_nome') or 'catalogo_alphafest'}_i89.pdf",
                         mime="application/pdf",
-                        use_container_width=True,
+                        width="stretch",
                         key="i89_download_pdf_gerador",
                     )
                 st.caption(
@@ -38001,7 +38001,7 @@ if pagina_atual == "catalogo":
                     if mb1.button(
                         "💾 Salvar como novo modelo",
                         type="primary",
-                        use_container_width=True,
+                        width="stretch",
                         key="i883_salvar_novo_modelo",
                     ):
                         if not str(modelo_nome_i883).strip():
@@ -38024,7 +38024,7 @@ if pagina_atual == "catalogo":
                     if personalizado_aplicado_i883:
                         if mb2.button(
                             "🔄 Atualizar modelo aplicado",
-                            use_container_width=True,
+                            width="stretch",
                             key="i883_atualizar_modelo",
                         ):
                             atualizado_modelo_i883 = _i883_criar_modelo_personalizado(
@@ -38061,7 +38061,7 @@ if pagina_atual == "catalogo":
                 if st.button(
                     "💾 Salvar catálogo na Central I8.9",
                     type="primary",
-                    use_container_width=True,
+                    width="stretch",
                     key="i88_salvar_novo_do_gerador",
                     disabled=not bool(indices_sel_i871),
                 ):
@@ -38144,7 +38144,7 @@ if pagina_atual == "catalogo":
                         if ms2.button(
                             "Usar no Gerador",
                             key=f"i883_sys_apply_{modelo_sis_i883.get('id')}",
-                            use_container_width=True,
+                            width="stretch",
                         ):
                             st.session_state["i883_modelo_pendente"] = copy.deepcopy(modelo_sis_i883)
                             st.rerun()
@@ -38203,12 +38203,12 @@ if pagina_atual == "catalogo":
                     if ma1.button(
                         "Usar no Gerador",
                         key=f"i883_usr_apply_{mid_i883}",
-                        use_container_width=True,
+                        width="stretch",
                         disabled=bool(problemas_usr_i883) or status_i883 == "arquivado",
                     ):
                         st.session_state["i883_modelo_pendente"] = copy.deepcopy(modelo_usr_i883)
                         st.rerun()
-                    if ma2.button("📑 Duplicar", key=f"i883_usr_dup_{mid_i883}", use_container_width=True):
+                    if ma2.button("📑 Duplicar", key=f"i883_usr_dup_{mid_i883}", width="stretch"):
                         copia_modelo_i883 = _i883_duplicar_modelo(modelo_usr_i883)
                         lista_modelos_i883 = carregar_modelos_catalogo()
                         lista_modelos_i883.insert(0, copia_modelo_i883)
@@ -38218,7 +38218,7 @@ if pagina_atual == "catalogo":
                         )
                         st.rerun()
                     label_arq_modelo_i883 = "♻️ Reativar" if status_i883 == "arquivado" else "📦 Arquivar"
-                    if ma3.button(label_arq_modelo_i883, key=f"i883_usr_arq_{mid_i883}", use_container_width=True):
+                    if ma3.button(label_arq_modelo_i883, key=f"i883_usr_arq_{mid_i883}", width="stretch"):
                         lista_modelos_i883 = carregar_modelos_catalogo()
                         for item_modelo_i883 in lista_modelos_i883:
                             if str(item_modelo_i883.get("id")) == mid_i883:
@@ -38232,13 +38232,13 @@ if pagina_atual == "catalogo":
                             "Modelo de catálogo", mid_i883,
                         )
                         st.rerun()
-                    if ma4.button("🗑️ Excluir", key=f"i883_usr_del_{mid_i883}", use_container_width=True):
+                    if ma4.button("🗑️ Excluir", key=f"i883_usr_del_{mid_i883}", width="stretch"):
                         st.session_state["i883_confirmar_exclusao"] = mid_i883
                         st.rerun()
                     if st.session_state.get("i883_confirmar_exclusao") == mid_i883:
                         st.warning("O modelo irá para a Lixeira. Nenhum catálogo salvo e nenhum produto oficial será alterado.")
                         md1, md2 = st.columns(2)
-                        if md1.button("Confirmar exclusão", key=f"i883_usr_del_ok_{mid_i883}", type="primary", use_container_width=True):
+                        if md1.button("Confirmar exclusão", key=f"i883_usr_del_ok_{mid_i883}", type="primary", width="stretch"):
                             restantes_i883 = [m for m in carregar_modelos_catalogo() if str(m.get("id")) != mid_i883]
                             salvar_modelos_catalogo(restantes_i883)
                             enviar_para_lixeira("Modelo de catálogo", modelo_usr_i883, mid_i883)
@@ -38246,7 +38246,7 @@ if pagina_atual == "catalogo":
                             if st.session_state.get("i883_modelo_aplicado_id") == mid_i883:
                                 st.session_state.pop("i883_modelo_aplicado_id", None)
                             st.rerun()
-                        if md2.button("Cancelar", key=f"i883_usr_del_cancel_{mid_i883}", use_container_width=True):
+                        if md2.button("Cancelar", key=f"i883_usr_del_cancel_{mid_i883}", width="stretch"):
                             st.session_state.pop("i883_confirmar_exclusao", None)
                             st.rerun()
 
@@ -38260,7 +38260,7 @@ if pagina_atual == "catalogo":
                     with st.container(border=True):
                         st.markdown(f"**🗑️ {html.escape(nome_lix_modelo_i883)}**")
                         lm1, lm2 = st.columns(2)
-                        if lm1.button("♻️ Restaurar modelo", key=f"i883_lix_restore_{lid_modelo_i883}", use_container_width=True):
+                        if lm1.button("♻️ Restaurar modelo", key=f"i883_lix_restore_{lid_modelo_i883}", width="stretch"):
                             try:
                                 restaurar_item_lixeira(lix_modelo_i883)
                                 st.rerun()
@@ -38279,7 +38279,7 @@ if pagina_atual == "catalogo":
                             "❌ Remover modelo definitivamente",
                             key=f"i883_lix_purge_{lid_modelo_i883}",
                             disabled=(not confirmar_purge_modelo_i883) or (not pode_purge_modelo_i884),
-                            use_container_width=True,
+                            width="stretch",
                         ):
                             remover_da_lixeira(lid_modelo_i883)
                             registrar_auditoria("Remover definitivamente", "Modelo de catálogo", lix_modelo_i883.get("identificador", ""))
@@ -38350,7 +38350,7 @@ if pagina_atual == "catalogo":
                             if lr1.button(
                                 "♻️ Restaurar catálogo",
                                 key=f"i881_lix_restore_{id_lix_i881}",
-                                use_container_width=True,
+                                width="stretch",
                             ):
                                 try:
                                     restaurar_item_lixeira(lix_i881)
@@ -38372,7 +38372,7 @@ if pagina_atual == "catalogo":
                                 "❌ Remover definitivamente",
                                 key=f"i881_lix_purge_{id_lix_i881}",
                                 disabled=(not confirmar_purge_i881) or (not pode_purge_i884),
-                                use_container_width=True,
+                                width="stretch",
                             ):
                                 remover_da_lixeira(id_lix_i881)
                                 registrar_auditoria(
@@ -38486,14 +38486,14 @@ if pagina_atual == "catalogo":
                         )
 
                     ac1, ac2, ac3, ac4, ac5 = st.columns(5)
-                    if ac1.button("👁️ Abrir / prévia", key=f"i88_abrir_{reg_id_i88}", use_container_width=True):
+                    if ac1.button("👁️ Abrir / prévia", key=f"i88_abrir_{reg_id_i88}", width="stretch"):
                         atual = st.session_state.get("i88_aberto_id")
                         st.session_state["i88_aberto_id"] = None if atual == reg_id_i88 else reg_id_i88
                         st.rerun()
-                    if ac2.button("✏️ Editar", key=f"i88_editar_{reg_id_i88}", use_container_width=True):
+                    if ac2.button("✏️ Editar", key=f"i88_editar_{reg_id_i88}", width="stretch"):
                         st.session_state["i88_editor_id"] = reg_id_i88
                         st.rerun()
-                    if ac3.button("📑 Duplicar", key=f"i88_dup_{reg_id_i88}", use_container_width=True):
+                    if ac3.button("📑 Duplicar", key=f"i88_dup_{reg_id_i88}", width="stretch"):
                         copia_i88 = _i88_duplicar_registro(reg_i88)
                         novos_i88 = carregar_catalogos_gerados()
                         novos_i88.insert(0, copia_i88)
@@ -38503,7 +38503,7 @@ if pagina_atual == "catalogo":
                         st.session_state["i88_flash_texto"] = f"Cópia criada: {copia_i88.get('nome_interno')}."
                         st.rerun()
                     label_arquivo_i88 = "♻️ Reativar" if status_reg_i88 == "arquivado" else "📦 Arquivar"
-                    if ac4.button(label_arquivo_i88, key=f"i88_arq_{reg_id_i88}", use_container_width=True):
+                    if ac4.button(label_arquivo_i88, key=f"i88_arq_{reg_id_i88}", width="stretch"):
                         novos_i88 = carregar_catalogos_gerados()
                         for item_i88 in novos_i88:
                             if item_i88.get("id") == reg_id_i88:
@@ -38518,7 +38518,7 @@ if pagina_atual == "catalogo":
                             reg_id_i88,
                         )
                         st.rerun()
-                    if ac5.button("🗑️ Excluir", key=f"i88_del_{reg_id_i88}", use_container_width=True):
+                    if ac5.button("🗑️ Excluir", key=f"i88_del_{reg_id_i88}", width="stretch"):
                         st.session_state["i88_confirmar_exclusao"] = reg_id_i88
                         st.rerun()
 
@@ -38528,7 +38528,7 @@ if pagina_atual == "catalogo":
                             "O Catálogo Oficial e os produtos não serão alterados."
                         )
                         ex1, ex2 = st.columns(2)
-                        if ex1.button("Confirmar exclusão", key=f"i88_del_ok_{reg_id_i88}", type="primary", use_container_width=True):
+                        if ex1.button("Confirmar exclusão", key=f"i88_del_ok_{reg_id_i88}", type="primary", width="stretch"):
                             novos_i88 = [x for x in carregar_catalogos_gerados() if x.get("id") != reg_id_i88]
                             salvar_catalogos_gerados(novos_i88)
                             enviar_para_lixeira("Catálogo gerado", reg_i88, reg_id_i88)
@@ -38536,7 +38536,7 @@ if pagina_atual == "catalogo":
                             if st.session_state.get("i88_editor_id") == reg_id_i88:
                                 st.session_state.pop("i88_editor_id", None)
                             st.rerun()
-                        if ex2.button("Cancelar", key=f"i88_del_cancel_{reg_id_i88}", use_container_width=True):
+                        if ex2.button("Cancelar", key=f"i88_del_cancel_{reg_id_i88}", width="stretch"):
                             st.session_state.pop("i88_confirmar_exclusao", None)
                             st.rerun()
 
@@ -38569,7 +38569,7 @@ if pagina_atual == "catalogo":
                     if gc1_i89.button(
                         "📤 Compartilhar",
                         key=f"i89_share_{reg_id_i88}",
-                        use_container_width=True,
+                        width="stretch",
                         disabled=not bool(produtos_saida_reg_i88),
                     ):
                         atual_share_i89 = st.session_state.get("i89_compartilhar_id")
@@ -38580,7 +38580,7 @@ if pagina_atual == "catalogo":
                         data=html_download_i884,
                         file_name=f"{slug_html(reg_i88.get('titulo') or reg_i88.get('nome_interno') or 'catalogo').lower()}_i89.html",
                         mime="text/html",
-                        use_container_width=True,
+                        width="stretch",
                         disabled=not bool(produtos_saida_reg_i88),
                         key=f"i88_download_{reg_id_i88}",
                     )
@@ -38634,7 +38634,7 @@ if pagina_atual == "catalogo":
                         if url_ultima_i89 and renderer_ok_i891:
                             u1_i89, u2_i89 = st.columns([3, 1])
                             u1_i89.code(url_ultima_i89, language=None)
-                            u2_i89.link_button("🌐 Abrir catálogo", url_ultima_i89, use_container_width=True)
+                            u2_i89.link_button("🌐 Abrir catálogo", url_ultima_i89, width="stretch")
                             qr_ultima_i89 = _i89_qr_png_bytes(url_ultima_i89)
                             q1_i89, q2_i89 = st.columns([1, 3])
                             if qr_ultima_i89:
@@ -38644,7 +38644,7 @@ if pagina_atual == "catalogo":
                                     qr_ultima_i89,
                                     file_name=f"qr_{slug_html(compartilhar_reg_i89.get('nome_interno') or 'catalogo').lower()}.png",
                                     mime="image/png",
-                                    use_container_width=True,
+                                    width="stretch",
                                     key=f"i89_qr_{share_id_i89}",
                                 )
                             with q2_i89:
@@ -38663,7 +38663,7 @@ if pagina_atual == "catalogo":
                                         compartilhar_reg_i89.get("titulo") or "Catálogo AlphaFest",
                                         telefone_share_i89,
                                     )
-                                    st.link_button("💬 Enviar pelo WhatsApp", link_wpp_i89, type="primary", use_container_width=True)
+                                    st.link_button("💬 Enviar pelo WhatsApp", link_wpp_i89, type="primary", width="stretch")
                                     st.caption("A mensagem já informa a validade comercial do catálogo.")
                         elif url_ultima_i89 and not renderer_ok_i891:
                             st.warning(
@@ -38678,7 +38678,7 @@ if pagina_atual == "catalogo":
                     if n1_i89.button(
                         "🌐 Publicar nova versão + QR",
                         type="primary",
-                        use_container_width=True,
+                        width="stretch",
                         key=f"i89_publicar_{share_id_i89}",
                         disabled=not (storage_disponivel_i89 and renderer_disponivel_i891),
                     ):
@@ -38745,7 +38745,7 @@ if pagina_atual == "catalogo":
 
                     if n2_i89.button(
                         "📄 Preparar PDF comercial",
-                        use_container_width=True,
+                        width="stretch",
                         key=f"i89_preparar_pdf_{share_id_i89}",
                     ):
                         meta_pdf_i89 = _i884_metadados_geracao()
@@ -38771,7 +38771,7 @@ if pagina_atual == "catalogo":
                             file_name=f"{slug_html(compartilhar_reg_i89.get('titulo') or compartilhar_reg_i89.get('nome_interno') or 'catalogo').lower()}_i89.pdf",
                             mime="application/pdf",
                             type="primary",
-                            use_container_width=True,
+                            width="stretch",
                             key=f"i89_download_pdf_{share_id_i89}",
                         )
 
@@ -38967,7 +38967,7 @@ if pagina_atual == "catalogo":
                 )
 
                 eb1, eb2 = st.columns(2)
-                if eb1.button("💾 Salvar alterações", type="primary", use_container_width=True, key=prefixo_i88 + "salvar"):
+                if eb1.button("💾 Salvar alterações", type="primary", width="stretch", key=prefixo_i88 + "salvar"):
                     if not produtos_editor_i88:
                         st.warning("Selecione pelo menos um produto para salvar o catálogo.")
                     else:
@@ -39010,7 +39010,7 @@ if pagina_atual == "catalogo":
                         st.session_state["i88_flash"] = True
                         st.session_state["i88_flash_texto"] = f"Catálogo '{atualizado_i88.get('nome_interno')}' atualizado."
                         st.rerun()
-                if eb2.button("↩️ Cancelar edição", use_container_width=True, key=prefixo_i88 + "cancelar"):
+                if eb2.button("↩️ Cancelar edição", width="stretch", key=prefixo_i88 + "cancelar"):
                     for chave_estado_i88 in list(st.session_state.keys()):
                         if str(chave_estado_i88).startswith(prefixo_i88):
                             st.session_state.pop(chave_estado_i88, None)
@@ -39204,7 +39204,7 @@ if pagina_atual == "catalogo":
                     if a1_i810.button(
                         acao_publicar_i8101,
                         key=f"i8101_publicar_{diag_i810.get('id')}",
-                        use_container_width=True,
+                        width="stretch",
                         type="primary" if prioridade_i810 >= 70 else "secondary",
                         disabled=not pode_publicar_i8101,
                         help="Gera uma nova versão pública com os dados atuais e nova validade de 30 dias.",
@@ -39219,7 +39219,7 @@ if pagina_atual == "catalogo":
                     if a2_i810.button(
                         "📤 Preparar na Central",
                         key=f"i810_share_{diag_i810.get('id')}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
                         st.session_state["i89_compartilhar_id"] = str(diag_i810.get("id") or "")
                         st.session_state["i810_flash"] = (
@@ -39229,7 +39229,7 @@ if pagina_atual == "catalogo":
                     ultima_diag_i810 = diag_i810.get("ultima_publicacao") or {}
                     url_diag_i810 = _i891_url_cliente(ultima_diag_i810)
                     if url_diag_i810 and catalog_render_available():
-                        a3_i810.link_button("🌐 Abrir catálogo", url_diag_i810, use_container_width=True)
+                        a3_i810.link_button("🌐 Abrir catálogo", url_diag_i810, width="stretch")
                     else:
                         a3_i810.caption("Sem link público.")
 
@@ -39243,7 +39243,7 @@ if pagina_atual == "catalogo":
                             if a4_i810.button(
                                 "✏️ Abrir produto",
                                 key=f"i8101_abrir_produto_{diag_i810.get('id')}_{indice_produto_i8101}",
-                                use_container_width=True,
+                                width="stretch",
                             ):
                                 st.session_state.catalogo_edit_index = int(indice_produto_i8101)
                                 st.rerun()
@@ -39293,7 +39293,7 @@ if pagina_atual == "catalogo":
                         f"{item_hist_i810['data']} • {item_hist_i810['usuario']} • válido até {item_hist_i810['validade']}"
                     )
                     if item_hist_i810.get("url") and catalog_render_available():
-                        h2_i810.link_button("Abrir", item_hist_i810["url"], use_container_width=True)
+                        h2_i810.link_button("Abrir", item_hist_i810["url"], width="stretch")
             else:
                 st.info("Ainda não há publicações registradas.")
 
@@ -39476,7 +39476,7 @@ if pagina_atual == "catalogo":
                     file_name=f"{slug_html(titulo_cliente).lower()}.html",
                     mime="text/html",
                     type="primary",
-                    use_container_width=True,
+                    width="stretch",
                     disabled=not bool(selecao_cliente),
                 )
                 st.download_button(
@@ -39484,7 +39484,7 @@ if pagina_atual == "catalogo":
                     data=gerar_html_catalogo(catalogo, "Catálogo Completo Alphafest", True),
                     file_name="catalogo_completo_alphafest.html",
                     mime="text/html",
-                    use_container_width=True,
+                    width="stretch",
                 )
 
 if pagina_atual == "relacionamentos":
@@ -39495,7 +39495,7 @@ if pagina_atual == "relacionamentos":
     # escondido na navegação principal, especialmente no perfil operacional.
     if usuario_pode_ver_aba("faturamento_mensal"):
         atalho_fech_hf64, _ = st.columns([1.4, 3])
-        if atalho_fech_hf64.button("💳 Fechamentos Recorrentes", type="primary", use_container_width=True, key="hf64_atalho_fechamentos_rel"):
+        if atalho_fech_hf64.button("💳 Fechamentos Recorrentes", type="primary", width="stretch", key="hf64_atalho_fechamentos_rel"):
             rerun_na_aba("faturamento_mensal")
 
     clientes = sincronizar_clientes_do_historico()
@@ -39544,7 +39544,7 @@ if pagina_atual == "relacionamentos":
         c1.metric("Relacionamentos com ID", f"{ids_ok}/{len(clientes)}")
         c2.metric("Orçamentos vinculados", f"{hist_vinc}/{len(hist_atual)}")
         c3.metric("Fonte oficial", "Relacionamentos")
-        if st.button("🔄 Sincronizar Cadastro Mestre agora", type="primary", use_container_width=True):
+        if st.button("🔄 Sincronizar Cadastro Mestre agora", type="primary", width="stretch"):
             with st.spinner("Consolidando IDs e vínculos sem apagar históricos..."):
                 resumo_master = sincronizar_cadastro_mestre(salvar=True)
             st.success(f"Sincronização concluída: {resumo_master['alteracoes']} vínculo(s) criado(s) e {resumo_master['duplicidades_consolidadas']} duplicidade(s) segura(s) consolidada(s).")
@@ -39672,13 +39672,13 @@ if pagina_atual == "relacionamentos":
 
                 b1, b2, b3 = st.columns(3)
                 pol_acao_cli = politica_atendimento(cli)
-                if b1.button("➕ Novo orçamento", key=f"cli_orc_{cli.get('id')}", use_container_width=True, disabled=not pol_acao_cli.get("permitir_orcamento", True)):
+                if b1.button("➕ Novo orçamento", key=f"cli_orc_{cli.get('id')}", width="stretch", disabled=not pol_acao_cli.get("permitir_orcamento", True)):
                     carregar_cliente_no_orcamento(cli)
                     rerun_na_aba("novo_orcamento", f"Cliente {cli.get('nome', 'Cliente')} carregado no Novo Orçamento.")
-                if b2.button("✏️ Editar cliente", key=f"cli_edit_{cli.get('id')}", use_container_width=True):
+                if b2.button("✏️ Editar cliente", key=f"cli_edit_{cli.get('id')}", width="stretch"):
                     st.session_state.cliente_edit_id = cli.get("id")
                     st.rerun()  # HF63: o rerun reabre diretamente na aba de edição.
-                if b3.button("🗑️ Mover para lixeira", key=f"cli_del_{cli.get('id')}", use_container_width=True):
+                if b3.button("🗑️ Mover para lixeira", key=f"cli_del_{cli.get('id')}", width="stretch"):
                     enviar_para_lixeira("Cliente", cli, cli.get("id") or cli.get("nome", ""))
                     restantes = [c for c in clientes if c.get("id") != cli.get("id")]
                     salvar_clientes(restantes)
@@ -39704,7 +39704,7 @@ if pagina_atual == "relacionamentos":
                         })
                     st.dataframe(
                         pd.DataFrame(linhas_cli),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                         column_config={"Total": st.column_config.NumberColumn(format="R$ %.2f")},
                     )
@@ -39795,7 +39795,7 @@ if pagina_atual == "relacionamentos":
         regras_editadas_i811 = st.data_editor(
             df_regras_i811,
             num_rows="dynamic",
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             key=f"cli_regras_i811_{edit_id}",
             column_config={
@@ -39842,7 +39842,7 @@ if pagina_atual == "relacionamentos":
         with st.expander("⚙️ Gerenciar perfis comerciais"):
             novo_segmento = st.text_input("Adicionar novo perfil/segmento", key=f"novo_segmento_{edit_id}")
             gs1, gs2 = st.columns(2)
-            if gs1.button("Adicionar perfil", key=f"add_segmento_{edit_id}", use_container_width=True):
+            if gs1.button("Adicionar perfil", key=f"add_segmento_{edit_id}", width="stretch"):
                 if novo_segmento.strip():
                     salvar_segmentos(carregar_segmentos() + [novo_segmento.strip()])
                     st.rerun()
@@ -39851,7 +39851,7 @@ if pagina_atual == "relacionamentos":
                 salvar_segmentos([x for x in carregar_segmentos() if x != segmento_remover])
                 st.rerun()
         ac1, ac2 = st.columns(2)
-        if ac1.button("💾 Salvar relacionamento", type="primary", use_container_width=True):
+        if ac1.button("💾 Salvar relacionamento", type="primary", width="stretch"):
             if not cli_nome.strip():
                 st.warning("Informe o nome ou a identificação do relacionamento.")
             else:
@@ -39985,7 +39985,7 @@ if pagina_atual == "relacionamentos":
                 st.session_state.cliente_edit_id = None
                 st.success("Relacionamento e Perfil Comercial salvos.")
                 st.rerun()
-        if cliente_edicao and ac2.button("Cancelar edição", use_container_width=True):
+        if cliente_edicao and ac2.button("Cancelar edição", width="stretch"):
             st.session_state.cliente_edit_id = None
             st.rerun()
 
@@ -40045,11 +40045,11 @@ if pagina_atual == "memoria":
                     x1, x2 = st.columns([5, 2])
                     x1.write(f"{'⭐ ' if arq.get('mestre') else ''}{arq.get('nome', 'Arquivo')} — {arq.get('categoria', '')}")
                     if arq.get("url"):
-                        x2.link_button("Abrir / baixar", arq.get("url"), use_container_width=True)
+                        x2.link_button("Abrir / baixar", arq.get("url"), width="stretch")
             proposta_origem = propostas_memoria_por_numero.get(str(projeto.get("numero_proposta") or "").strip())
             if proposta_origem:
                 b1, b2 = st.columns(2)
-                if b1.button("📋 Duplicar como novo pedido", key=f"mem_dup_{projeto.get('id')}", use_container_width=True):
+                if b1.button("📋 Duplicar como novo pedido", key=f"mem_dup_{projeto.get('id')}", width="stretch"):
                     carregar_proposta_no_formulario(proposta_origem, duplicar=True)
                     st.session_state._mensagem_sucesso_pendente = "Modelo carregado em Novo Orçamento."
                     st.rerun()
@@ -40059,7 +40059,7 @@ if pagina_atual == "memoria":
                     file_name=f"{proposta_origem.get('numero_proposta', 'pedido')}.html",
                     mime="text/html",
                     key=f"mem_html_{projeto.get('id')}",
-                    use_container_width=True,
+                    width="stretch",
                 )
 
 
@@ -40117,7 +40117,7 @@ if pagina_atual == "calendario":
                 if campanha.get("observacoes"):
                     a.write(campanha.get("observacoes"))
                 b.write(f"**Status:** {campanha.get('status', 'Planejamento')}")
-                if b.button("✏️ Editar", key=f"camp_op_edit_{campanha.get('id')}", use_container_width=True):
+                if b.button("✏️ Editar", key=f"camp_op_edit_{campanha.get('id')}", width="stretch"):
                     st.session_state.campanha_edit_id = campanha.get("id")
                     st.rerun()
 
@@ -40156,15 +40156,15 @@ if pagina_atual == "calendario":
                 if campanha.get("observacoes"):
                     st.write("**Observações:** " + str(campanha.get("observacoes")))
                 x1, x2, x3 = st.columns(3)
-                if x1.button("✏️ Editar", key=f"camp_edit_{campanha.get('id')}", use_container_width=True):
+                if x1.button("✏️ Editar", key=f"camp_edit_{campanha.get('id')}", width="stretch"):
                     st.session_state.campanha_edit_id = campanha.get("id")
                     st.rerun()
-                if x2.button("⏯️ Ativar/Desativar", key=f"camp_toggle_{campanha.get('id')}", use_container_width=True):
+                if x2.button("⏯️ Ativar/Desativar", key=f"camp_toggle_{campanha.get('id')}", width="stretch"):
                     campanha["ativa"] = not campanha.get("ativa", True)
                     campanha["atualizado_em"] = agora_local().isoformat()
                     salvar_campanhas(campanhas)
                     st.rerun()
-                if x3.button("🗑️ Mover para lixeira", key=f"camp_del_{campanha.get('id')}", use_container_width=True):
+                if x3.button("🗑️ Mover para lixeira", key=f"camp_del_{campanha.get('id')}", width="stretch"):
                     enviar_para_lixeira("Campanha", campanha, campanha.get("id") or campanha.get("nome", ""))
                     salvar_campanhas([c for c in campanhas if c.get("id") != campanha.get("id")])
                     st.rerun()
@@ -40200,7 +40200,7 @@ if pagina_atual == "calendario":
             produtos_txt = st.text_area("Produtos relacionados (um por linha ou separados por vírgula)", value="\n".join(map(str, atual.get("produtos", []) or [])) if atual else "")
             observacoes = st.text_area("Observações e ideias da campanha", value=str(atual.get("observacoes", "")) if atual else "")
             ativa = st.checkbox("Campanha ativa", value=bool(atual.get("ativa", True)) if atual else True)
-            salvar = st.form_submit_button("💾 Salvar campanha", type="primary", use_container_width=True)
+            salvar = st.form_submit_button("💾 Salvar campanha", type="primary", width="stretch")
         if salvar:
             if not nome_camp.strip():
                 st.warning("Informe o nome da campanha.")
@@ -40309,7 +40309,7 @@ if pagina_atual == "configuracoes":
                     )
                     acoes_novas[chave] = escolhidas
 
-            if st.button("💾 Salvar ambiente deste usuário", type="primary", use_container_width=True, key="salvar_permissoes_usuario"):
+            if st.button("💾 Salvar ambiente deste usuário", type="primary", width="stretch", key="salvar_permissoes_usuario"):
                 cfg_usuario.update({"nome": nome_perfil.strip() or cfg_usuario.get("nome", "Usuário"), "perfil": perfil_nome, "abas": selecionadas, "acoes": acoes_novas, "favoritos": favoritos})
                 usuarios_cfg[email_edicao] = cfg_usuario
                 salvar_config_usuarios(dados_usuarios)
@@ -40321,7 +40321,7 @@ if pagina_atual == "configuracoes":
             n1, n2 = st.columns(2)
             novo_email = n1.text_input("E-mail do novo usuário", key="novo_usuario_email").strip().lower()
             novo_nome = n2.text_input("Nome do novo usuário", key="novo_usuario_nome").strip()
-            if st.button("➕ Criar usuário operacional", use_container_width=True, key="criar_novo_usuario"):
+            if st.button("➕ Criar usuário operacional", width="stretch", key="criar_novo_usuario"):
                 if not novo_email or "@" not in novo_email:
                     st.warning("Informe um e-mail válido.")
                 elif novo_email in usuarios_cfg:
@@ -40393,7 +40393,7 @@ if pagina_atual == "configuracoes":
                 help="Para Itatiba/SP, use America/Sao_Paulo.",
             )
 
-            salvar_config = st.form_submit_button("💾 Salvar configurações", type="primary", use_container_width=True)
+            salvar_config = st.form_submit_button("💾 Salvar configurações", type="primary", width="stretch")
 
         if salvar_config:
             nova_config = {
@@ -40440,7 +40440,7 @@ if pagina_atual == "configuracoes":
             backup_ativo = b1.checkbox("Backup automático ativo", value=bool(cfg_backup.get("ativo", True)))
             horario_backup = b2.text_input("Horário diário", value=str(cfg_backup.get("horario", "22:00")), help="Formato HH:MM. Se o Manager estiver fechado no horário, o backup pendente será feito no primeiro acesso seguinte, mesmo que seja no dia seguinte.")
             retencao_backup = b3.number_input("Backups automáticos mantidos", min_value=1, max_value=365, value=int(cfg_backup.get("retencao_automatica", 30) or 30))
-            salvar_backup_cfg = st.form_submit_button("💾 Salvar rotina de backup", use_container_width=True)
+            salvar_backup_cfg = st.form_submit_button("💾 Salvar rotina de backup", width="stretch")
         if salvar_backup_cfg:
             if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", horario_backup.strip()):
                 st.warning("Informe o horário no formato HH:MM, por exemplo 22:00.")
@@ -40466,14 +40466,14 @@ if pagina_atual == "configuracoes":
         c3.metric("Produtos", contagens_integridade.get("catalogo_db", 0))
         c4.metric("Atendimentos", contagens_integridade.get("atendimentos_db", 0))
         ac1, ac2 = st.columns(2)
-        if ac1.button("🛡️ Fazer backup completo agora", type="primary", use_container_width=True):
+        if ac1.button("🛡️ Fazer backup completo agora", type="primary", width="stretch"):
             try:
                 novo_backup = criar_backup_completo(tipo="manual", protegido=True, motivo="Backup manual solicitado pela equipe")
                 st.session_state._backup_download_id = novo_backup["backup_id"]
                 st.success("Backup completo criado e protegido.")
             except Exception as exc:
                 st.error(f"Falha ao criar backup: {exc}")
-        if ac2.button("🔎 Verificar integridade dos dados", use_container_width=True):
+        if ac2.button("🔎 Verificar integridade dos dados", width="stretch"):
             if problemas_integridade:
                 for problema in problemas_integridade:
                     st.error(problema)
@@ -40489,9 +40489,9 @@ if pagina_atual == "configuracoes":
             if backup_selecionado:
                 st.json({k: v for k, v in backup_selecionado.items() if k != "documentos"}, expanded=False)
                 d1, d2 = st.columns(2)
-                d1.download_button("⬇️ Baixar cópia ZIP", data=backup_para_zip_bytes(backup_selecionado), file_name=f"festmanager_backup_{backup_selecionado.get('backup_id','')}.zip", mime="application/zip", use_container_width=True)
+                d1.download_button("⬇️ Baixar cópia ZIP", data=backup_para_zip_bytes(backup_selecionado), file_name=f"festmanager_backup_{backup_selecionado.get('backup_id','')}.zip", mime="application/zip", width="stretch")
                 confirmacao = d2.text_input("Para restaurar, digite RESTAURAR", key=f"confirmar_restauracao_{backup_selecionado.get('backup_id')}")
-                if st.button("♻️ Restaurar backup selecionado", disabled=confirmacao.strip().upper() != "RESTAURAR", use_container_width=True):
+                if st.button("♻️ Restaurar backup selecionado", disabled=confirmacao.strip().upper() != "RESTAURAR", width="stretch"):
                     try:
                         restaurados = restaurar_backup_payload(backup_selecionado)
                         st.success(f"Restauração concluída. Documentos restaurados: {len(restaurados)}.")

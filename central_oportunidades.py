@@ -153,7 +153,7 @@ def render_central_oportunidades(
                     if item.get("campanha") or item.get("produto_interesse"):
                         st.caption(f"Campanha: {item.get('campanha') or '—'} · Produto: {item.get('produto_interesse') or '—'}")
                     if item.get("conteudo_url"):
-                        st.link_button("🔗 Abrir conteúdo original", str(item.get("conteudo_url")), use_container_width=False)
+                        st.link_button("🔗 Abrir conteúdo original", str(item.get("conteudo_url")), width="content")
                     st.caption(f"Canal de atendimento: **{item.get('canal_atendimento') or ('WhatsApp' if 'WhatsApp' in etapa_atual else 'Canal de origem')}**")
                 with dir_:
                     nova_etapa = st.selectbox("Etapa da captação", ETAPAS_CAPTACAO, index=ETAPAS_CAPTACAO.index(etapa_atual) if etapa_atual in ETAPAS_CAPTACAO else 0, key=f"opp_etapa_{item.get('id')}")
@@ -188,7 +188,7 @@ def render_central_oportunidades(
                 st.text_area("Mensagem para convidar ao WhatsApp", value=convite_completo, key=f"opp_convite_{item.get('id')}", height=95)
 
                 b1, b2, b3, b4 = st.columns(4)
-                if b1.button("💾 Salvar", key=f"opp_salvar_{item.get('id')}", use_container_width=True):
+                if b1.button("💾 Salvar", key=f"opp_salvar_{item.get('id')}", width="stretch"):
                     anterior = etapa_atual
                     item.update({
                         "etapa_captacao": nova_etapa, "motivo_contato": motivo, "telefone": whatsapp.strip(),
@@ -199,34 +199,34 @@ def render_central_oportunidades(
                         _evento(item, f"Captação alterada de {anterior} para {nova_etapa}", now_fn)
                     salvar_atendimentos(dados_at)
                     st.rerun()
-                if b2.button("📲 Convite enviado", key=f"opp_convite_enviado_{item.get('id')}", use_container_width=True):
+                if b2.button("📲 Convite enviado", key=f"opp_convite_enviado_{item.get('id')}", width="stretch"):
                     item.update({"etapa_captacao": "Aguardando migração", "canal_origem": origem, "canal_atendimento": "WhatsApp"})
                     _evento(item, "Convite para continuar o atendimento no WhatsApp enviado", now_fn)
                     salvar_atendimentos(dados_at)
                     st.rerun()
-                if b3.button("✅ Migrou ao WhatsApp", key=f"opp_migrou_{item.get('id')}", use_container_width=True):
+                if b3.button("✅ Migrou ao WhatsApp", key=f"opp_migrou_{item.get('id')}", width="stretch"):
                     item.update({"etapa_captacao": "Em atendimento no WhatsApp", "canal_origem": origem, "canal_atendimento": "WhatsApp", "canal": "WhatsApp", "telefone": whatsapp.strip()})
                     _evento(item, f"Contato migrado de {origem} para WhatsApp", now_fn)
                     salvar_atendimentos(dados_at)
                     st.rerun()
-                if b4.button("🗑️ Descartar", key=f"opp_descartar_{item.get('id')}", use_container_width=True):
+                if b4.button("🗑️ Descartar", key=f"opp_descartar_{item.get('id')}", width="stretch"):
                     item["etapa_captacao"] = "Descartada"
                     _evento(item, "Oportunidade descartada", now_fn)
                     salvar_atendimentos(dados_at)
                     st.rerun()
 
                 r1, r2, r3 = st.columns(3)
-                if r1.button("🚫 Recusar", key=f"opp_recusar_{item.get('id')}", use_container_width=True):
+                if r1.button("🚫 Recusar", key=f"opp_recusar_{item.get('id')}", width="stretch"):
                     item["etapa_captacao"] = "Recusada"
                     _evento(item, "Oportunidade recusada pela política comercial", now_fn)
                     salvar_atendimentos(dados_at)
                     st.rerun()
-                if r2.button("📄 Marcar orçamento", key=f"opp_orcamento_{item.get('id')}", use_container_width=True):
+                if r2.button("📄 Marcar orçamento", key=f"opp_orcamento_{item.get('id')}", width="stretch"):
                     item["etapa_captacao"] = "Orçamento criado"
                     _evento(item, "Orçamento criado a partir desta oportunidade", now_fn)
                     salvar_atendimentos(dados_at)
                     st.rerun()
-                if r3.button("💰 Marcar venda", key=f"opp_venda_{item.get('id')}", use_container_width=True):
+                if r3.button("💰 Marcar venda", key=f"opp_venda_{item.get('id')}", width="stretch"):
                     item["etapa_captacao"] = "Venda fechada"
                     _evento(item, "Venda fechada a partir desta oportunidade", now_fn)
                     salvar_atendimentos(dados_at)
@@ -252,7 +252,7 @@ def render_central_oportunidades(
             })
         if linhas:
             df = pd.DataFrame(linhas).sort_values(["Vendas", "Contatos"], ascending=False)
-            st.dataframe(df, use_container_width=True, hide_index=True, column_config={"Faturamento": st.column_config.NumberColumn(format="R$ %.2f")})
+            st.dataframe(df, width="stretch", hide_index=True, column_config={"Faturamento": st.column_config.NumberColumn(format="R$ %.2f")})
             campeao = df.iloc[0]
             st.success(f"🏆 Canal com melhor resultado registrado: **{campeao['Canal']}** · {int(campeao['Vendas'])} venda(s) · conversão de {campeao['Conversão final (%)']}%.")
         else:
@@ -276,6 +276,6 @@ def render_central_oportunidades(
                     reg["Faturamento"] += _valor_proposta(p)
         if agregado:
             dfc = pd.DataFrame(agregado.values()).sort_values(["Faturamento", "Vendas", "Contatos"], ascending=False)
-            st.dataframe(dfc, use_container_width=True, hide_index=True, column_config={"Faturamento": st.column_config.NumberColumn(format="R$ %.2f")})
+            st.dataframe(dfc, width="stretch", hide_index=True, column_config={"Faturamento": st.column_config.NumberColumn(format="R$ %.2f")})
         else:
             st.info("Cadastre o nome do post, Reel, vídeo ou página em cada oportunidade para descobrir quais conteúdos colocam dinheiro no caixa.")

@@ -79,7 +79,7 @@ def render_duplicates(posts, save, clear_cache):
         clicked = st.button(
             '🗑️ Excluir cópias selecionadas do Manager',
             disabled=not ids or not confirmation,
-            use_container_width=True, key='afposts_duplicate_delete',
+            width="stretch", key='afposts_duplicate_delete',
         )
         if clicked:
             # Always retain the keeper, even if a form state is malformed.
@@ -164,7 +164,7 @@ def render(load, save, clear_cache):
                 st.caption(f'{len(targets)} arte(s) selecionada(s) de {len(candidates)} disponíveis.')
                 confirm=st.checkbox('Conferi as artes selecionadas e confirmo a alteração',key='afposts_confirm_bulk')
                 action_label='✅ Aprovar artes selecionadas' if operation.startswith('Aprovar') else '📝 Retirar artes selecionadas'
-                if st.button(action_label,disabled=not targets or not confirm,key='afposts_apply_bulk',use_container_width=True):
+                if st.button(action_label,disabled=not targets or not confirm,key='afposts_apply_bulk',width="stretch"):
                     selected_ids=set(targets)
                     desired='publicado' if operation.startswith('Aprovar') else 'rascunho'
                     updated=[{**p,'status':desired} if p['id'] in selected_ids else p for p in posts]
@@ -190,9 +190,9 @@ def render(load, save, clear_cache):
             expires=st.text_input('Fim da divulgação (opcional, AAAA-MM-DD)',value=old.get('expires_at',''),help='Após a data, a oferta sai do site quando você publicar uma nova versão. Deixe vazio para manter.')
             upload=st.file_uploader('Arte finalizada (JPG, PNG, WEBP)',type=['jpg','jpeg','png','webp'],key='afposts_img_'+selected)
             delete=st.checkbox('Arquivar / retirar do site (manter no Manager)',value=False) if selected!='__new__' else False
-            save_clicked=st.form_submit_button('💾 Salvar publicação (sem publicar site)',use_container_width=True)
+            save_clicked=st.form_submit_button('💾 Salvar publicação (sem publicar site)',width="stretch")
         if old.get('image_data_uri'):
-            st.image(old['image_data_uri'],caption='Arte atual · proporção original',use_container_width=False,width=340)
+            st.image(old['image_data_uri'],caption='Arte atual · proporção original',width=340)
         if save_clicked:
             try:
                 if expires:

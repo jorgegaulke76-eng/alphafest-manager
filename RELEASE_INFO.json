@@ -1,6 +1,6 @@
 {
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.42",
-  "created_at": "2026-11-20T12:11:00-03:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.43",
+  "created_at": "2026-11-20T13:28:23-03:00",
   "timezone": "America/Sao_Paulo",
-  "description": "HF65.24.42 — Central de produção unificada com prioridades e agenda de entregas na mesma tela; elimina listas duplicadas, preserva editor e não bloqueia por estoque."
+  "description": "HF65.24.43 — estabilidade de interface: substituição dos parâmetros Streamlit obsoletos de largura; mantém lógica operacional, dados e integração sem mudanças."
 }

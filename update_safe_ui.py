@@ -98,7 +98,7 @@ def render_update_safe_tab(
         "🛡️ Preparar atualização segura",
         type="primary",
         key="preparar_update_seguro",
-        use_container_width=True,
+        width="stretch",
         disabled=update_blocked,
     ):
         try:
@@ -119,7 +119,7 @@ def render_update_safe_tab(
                 data=backup_para_zip_bytes(backup),
                 file_name=f"antes_atualizacao_{backup.get('backup_id')}.zip",
                 mime="application/zip",
-                use_container_width=True,
+                width="stretch",
             )
         except Exception as exc:
             st.error(f"Falha ao preparar atualização: {exc}")

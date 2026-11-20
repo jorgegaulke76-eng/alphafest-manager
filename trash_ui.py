@@ -38,7 +38,7 @@ def render_trash_tab(
             st.caption(f"Movido por: {reg.get('excluido_por', 'Não informado')}")
             st.json(reg.get("item", {}), expanded=False)
             r1, r2 = st.columns(2)
-            if r1.button("♻️ Restaurar", key=f"lix_restore_{reg.get('id_lixeira')}", use_container_width=True):
+            if r1.button("♻️ Restaurar", key=f"lix_restore_{reg.get('id_lixeira')}", width="stretch"):
                 try:
                     restaurar_item_lixeira(reg)
                     st.success("Item restaurado.")
@@ -51,7 +51,7 @@ def render_trash_tab(
                 "❌ Remover definitivamente",
                 key=f"lix_purge_{reg.get('id_lixeira')}",
                 disabled=not confirm,
-                use_container_width=True,
+                width="stretch",
             ):
                 remover_da_lixeira(reg.get("id_lixeira"))
                 registrar_auditoria(

@@ -150,7 +150,7 @@ def render_alpha_connect(
             if st.button(
                 "🧪 Testar conexão",
                 key=f"teste_connect_{item['chave']}",
-                use_container_width=True,
+                width="stretch",
                 disabled=not can_test,
             ):
                 with st.spinner(f"Testando {item['nome']}..."):
