@@ -111,9 +111,20 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
   let entryPath='';
   try{entryPath=sessionStorage.getItem('af_entry_path_v1')||'';if(!entryPath){entryPath=location.pathname+location.search+location.hash;sessionStorage.setItem('af_entry_path_v1',entryPath);}}catch(e){entryPath=location.pathname;}
   const qs=new URLSearchParams(location.search);
+  // HF65.24.52: mantém a atribuição UTM apenas dentro da sessão atual.
+  // Uma nova campanha explícita substitui a anterior. Não armazena dados pessoais.
+  const utm={source:clip(qs.get('utm_source'),120),medium:clip(qs.get('utm_medium'),120),campaign:clip(qs.get('utm_campaign'),180)};
+  try {
+    const stored=JSON.parse(sessionStorage.getItem('af_utm_v52')||'{}');
+    if(utm.source||utm.medium||utm.campaign){
+      sessionStorage.setItem('af_utm_v52',JSON.stringify(utm));
+    } else {
+      utm.source=clip(stored.source,120);utm.medium=clip(stored.medium,120);utm.campaign=clip(stored.campaign,180);
+    }
+  } catch(e) {}
   const baseMeta={
-    device_type:deviceType(), browser:browserName(), traffic_source:sourceName(),
-    utm_source:clip(qs.get('utm_source'),120), utm_medium:clip(qs.get('utm_medium'),120), utm_campaign:clip(qs.get('utm_campaign'),180),
+    device_type:deviceType(), browser:browserName(), traffic_source:utm.source||sourceName(),
+    utm_source:utm.source, utm_medium:utm.medium, utm_campaign:utm.campaign,
     entry_path:clip(entryPath,300)
   };
   // HF65.24.32: nunca bloquear a medição à espera de geolocalização.
@@ -141,8 +152,18 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
   window.addEventListener('alphafest:metric',function(ev){
     const d=(ev&&ev.detail)||{};
     if(d.type==='whatsapp_click') send('whatsapp_click',clip(d.product,180),clip(d.context,80));
+    if(d.type==='product_open') send('product_open',clip(d.product,180),clip(d.context,80));
   });
   send('page_view','','page');
+  // A ficha de campanha pode ter aberto antes da inicialização deste rastreador.
+  // Registra a abertura direta uma única vez sem depender de eventos anteriores.
+  try {
+    const slug=qs.get('produto')||'';
+    if(/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      const product=[...document.querySelectorAll('.product-card[data-product]')].find(c=>c.dataset.product===slug);
+      if(product) send('product_open',product.dataset.detailName||'','campaign_product');
+    }
+  } catch(e) {}
   let searchTimer=null, lastSearch='';
   function scheduleSearch(value){
     clearTimeout(searchTimer);
