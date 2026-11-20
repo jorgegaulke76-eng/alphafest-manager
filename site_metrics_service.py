@@ -508,40 +508,55 @@ def _compare_periods(rows: list[dict[str, Any]], now: datetime) -> dict[str, Any
 
 # HF65.24.37 — associação por sessão e campanha UTM, sem venda presumida.
 def _campaign_opportunities(rows: list[dict[str, Any]], start: datetime, end: datetime) -> list[dict[str, Any]]:
-    """Campanhas identificadas na primeira visita de cada sessão dentro da janela.
+    """Agrupa a primeira campanha UTM identificada por sessão na janela.
 
-    Atribuição conservadora: cliques WhatsApp na mesma sessão; não atribui
-    mensagens enviadas, compras, receita ou campanhas ausentes de UTM.
+    Um acesso direto anterior ao link UTM não elimina a campanha encontrada
+    posteriormente. Somente cliques WhatsApp após essa primeira identificação
+    entram na contagem. Não se inferem mensagens enviadas ou vendas.
     """
-    selected=[]
-    for r in rows:
+    selected = []
+    for row in rows:
         try:
-            t=datetime.fromisoformat(str(r.get('created_at') or '').replace('Z','+00:00'))
-            if t.tzinfo is None: t=t.replace(tzinfo=timezone.utc)
-            t=t.astimezone(timezone.utc)
-        except (ValueError,TypeError):
+            t = datetime.fromisoformat(str(row.get("created_at") or "").replace("Z", "+00:00"))
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=timezone.utc)
+            t = t.astimezone(timezone.utc)
+        except (ValueError, TypeError):
             continue
-        if start <= t < end: selected.append(r)
-    first={}
-    for r in sorted(selected,key=lambda r:str(r.get('created_at') or '')):
-        if r.get('event_type') != 'page_view' or _technical_page_path(r.get('page_path')): continue
-        sid=str(r.get('session_id') or '').strip()
-        if sid and sid not in first: first[sid]=r
-    wa_by_sid=Counter(str(r.get('session_id') or '').strip() for r in selected
-                      if r.get('event_type')=='whatsapp_click' and r.get('session_id'))
-    hits=Counter(); wa_sessions=Counter(); wa_clicks=Counter(); sources={}
-    for sid,r in first.items():
-        name=str(r.get('utm_campaign') or '').strip()[:180]
-        if not name: continue
-        src=str(r.get('utm_source') or r.get('traffic_source') or 'Não informado').strip()[:120]
-        key=(name,src)
-        hits[key]+=1
-        if wa_by_sid[sid]: wa_sessions[key]+=1; wa_clicks[key]+=wa_by_sid[sid]
-    return [{'campanha':name,'canal':source,'sessoes':qty,
-             'sessoes_whatsapp':wa_sessions[(name,source)],
-             'cliques_whatsapp':wa_clicks[(name,source)],
-             'percentual':_pct(wa_sessions[(name,source)],qty)}
-            for (name,source),qty in sorted(hits.items(), key=lambda z:(-z[1],z[0][0].casefold(),z[0][1].casefold()))]
+        if start <= t < end:
+            selected.append((t, row))
+    first_utm = {}
+    for t, row in sorted(selected, key=lambda item: item[0]):
+        if row.get("event_type") != "page_view" or _technical_page_path(row.get("page_path")):
+            continue
+        sid = str(row.get("session_id") or "").strip()
+        campaign = str(row.get("utm_campaign") or "").strip()
+        if sid and campaign and sid not in first_utm:
+            first_utm[sid] = (t, row)
+    wa_by_sid = Counter()
+    for t, row in selected:
+        sid = str(row.get("session_id") or "").strip()
+        if (row.get("event_type") == "whatsapp_click"
+                and sid in first_utm and t >= first_utm[sid][0]):
+            wa_by_sid[sid] += 1
+    hits = Counter()
+    wa_sessions = Counter()
+    wa_clicks = Counter()
+    for sid, (_, row) in first_utm.items():
+        name = str(row.get("utm_campaign") or "").strip()[:180]
+        src = str(row.get("utm_source") or row.get("traffic_source") or "Não informado").strip()[:120]
+        key = (name, src)
+        hits[key] += 1
+        if wa_by_sid[sid]:
+            wa_sessions[key] += 1
+            wa_clicks[key] += wa_by_sid[sid]
+    return [{"campanha": name, "canal": source, "sessoes": qty,
+             "sessoes_whatsapp": wa_sessions[(name, source)],
+             "cliques_whatsapp": wa_clicks[(name, source)],
+             "percentual": _pct(wa_sessions[(name, source)], qty)}
+            for (name, source), qty in sorted(
+                hits.items(), key=lambda z: (-z[1], z[0][0].casefold(), z[0][1].casefold())
+            )]
 
 
 def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
