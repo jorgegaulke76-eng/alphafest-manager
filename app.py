@@ -26717,6 +26717,43 @@ if pagina_atual == "central":
                 st.rerun()
         st.caption("Aguardando aprovação usa o status oficial da proposta; não representa uma confirmação de arte separada.")
 
+    # HF65.24.47 — dados já carregados na Central; nenhuma consulta/gravação adicional.
+    from produtividade_entregas_hf47 import indicadores as _hf47_indicadores
+    with st.expander("📊 Produtividade e entregas · decisões da semana", expanded=False):
+        hf47_periodo = st.radio("Período de análise", [7, 30], format_func=lambda n: f"Últimos {n} dias", horizontal=True, key="hf47_periodo")
+        hf47 = _hf47_indicadores(historico_central, hoje=hoje_local(), dias=hf47_periodo)
+        st.caption("Somente marcos oficialmente registrados. Entregas antigas sem carimbo de data não são contabilizadas.")
+        hfa, hfb, hfc, hfd = st.columns(4)
+        hfa.metric("📦 Marcados Pronto", hf47['prontos'], delta=hf47['prontos']-hf47['prontos_anterior'], help="Diferença em quantidade frente ao período imediatamente anterior.")
+        hfb.metric("✅ Entregues registrados", hf47['entregues'], delta=hf47['entregues']-hf47['entregues_anterior'], help="Diferença em quantidade frente ao período imediatamente anterior.")
+        hfc.metric("🚨 Aprovados vencidos", hf47['vencidos'])
+        hfd.metric("📅 Próximos 2 dias", hf47['proximos_2_dias'])
+        c1_hf47, c2_hf47, c3_hf47 = st.columns(3)
+        if hf47['entregas_com_prazo']:
+            c1_hf47.metric("No prazo (amostra)", f"{hf47['entregas_no_prazo']}/{hf47['entregas_com_prazo']}")
+        else:
+            c1_hf47.metric("No prazo (amostra)", "Sem dados")
+        if hf47['mediana_dias_aprovacao_entrega'] is not None:
+            c2_hf47.metric("Mediana aprovação → entrega", f"{hf47['mediana_dias_aprovacao_entrega']:g} dias")
+        else:
+            c2_hf47.metric("Mediana aprovação → entrega", "Sem dados")
+        c3_hf47.metric("Aprovados sem prazo", hf47['sem_prazo'])
+        st.caption(f"Pontualidade avaliada em {hf47['entregas_com_prazo']} entrega(s) com data efetiva e prevista; duração calculada com {hf47['duracoes_validas']} registros completos. Não representa produção iniciada nem horas trabalhadas.")
+        if hf47['vencidos']:
+            st.warning(f"Prioridade: revisar {hf47['vencidos']} pedido(s) aprovado(s) cujo prazo já venceu. Confirme a situação real antes de mudar status.")
+        elif hf47['proximos_2_dias']:
+            st.info(f"Planejamento: {hf47['proximos_2_dias']} pedido(s) aprovado(s) com entrega nos próximos dois dias.")
+        else:
+            st.success("Sem prazos vencidos ou próximos identificados nos pedidos aprovados.")
+        if hf47['recentes']:
+            with st.expander("Últimas entregas registradas neste período", expanded=False):
+                st.dataframe(pd.DataFrame([{
+                    'Pedido':x['numero'], 'Cliente':x['cliente'],
+                    'Entregue em':x['entregue'].strftime('%d/%m/%Y'),
+                    'Previsto':x['previsto'].strftime('%d/%m/%Y') if x['previsto'] else 'Não informado',
+                    'Pontualidade':x['situacao']
+                } for x in hf47['recentes']]), hide_index=True, width="stretch")
+
     # HF65.24.41 — painel enxuto de produção sob encomenda, sem travas de materiais.
     from central_producao_painel_hf41 import FASES as _hf41_fases, preparar_fila as _hf41_preparar, resumo_fila as _hf41_resumo, filtrar_fila as _hf41_filtrar
     fila_producao_hf41 = _hf41_preparar(central_prod_central_i8128, hoje=date.today())
