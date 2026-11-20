@@ -565,9 +565,6 @@ def gerar_html_vitrine(
       const match=cards.find(c=>c.dataset.product===requested);
       if(match) {
         open(match);
-        window.dispatchEvent(new CustomEvent('alphafest:metric',{
-          detail:{type:'product_open',product:match.dataset.detailName||'',context:'campaign_product'}
-        }));
       }
     }
   } catch(e) { /* sem impacto na navegação normal */ }
