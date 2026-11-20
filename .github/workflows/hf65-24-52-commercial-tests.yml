@@ -12,6 +12,7 @@ on:
       - 'site_metrics_service.py'
       - 'site_vitrine_service.py'
       - 'tests/test_hf65_24_52_commercial_links.py'
+      - 'tests/test_hf65_24_52_site_runtime.py'
       - '.github/workflows/hf65-24-52-commercial-tests.yml'
 
 permissions:
@@ -34,4 +35,4 @@ jobs:
       - name: Instalar pytest
         run: python -m pip install pytest requests
       - name: Executar regressao de links comerciais
-        run: python -m pytest -q tests/test_hf65_24_52_commercial_links.py
+        run: python -m pytest -q tests/test_hf65_24_52_commercial_links.py tests/test_hf65_24_52_site_runtime.py
