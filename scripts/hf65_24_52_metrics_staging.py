@@ -148,8 +148,12 @@ def main() -> None:
                     assert x["utm_campaign"] == "hf52-staging-local"
                     assert x["utm_source"] == "instagram"
                     assert x["utm_medium"] == "stories"
-                assert before_click[1]["product_name"] == PRODUCT_NAME
-                assert before_click[1]["event_context"] == "campaign_product"
+                # Os POSTs são assíncronos e podem chegar fora de ordem.
+                # Seleciona pelo tipo do evento, nunca pela posição na lista.
+                product_events = [x for x in before_click if x["event_type"] == "product_open"]
+                assert len(product_events) == 1, before_click
+                assert product_events[0]["product_name"] == PRODUCT_NAME
+                assert product_events[0]["event_context"] == "campaign_product"
 
                 # O clique acontece no elemento REAL. A tentativa de abrir o
                 # WhatsApp é bloqueada pelo roteador de rede do teste.
