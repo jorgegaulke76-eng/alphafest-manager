@@ -12,12 +12,18 @@ from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
+import sys
 from threading import Thread, Lock
 import time
 from unittest.mock import patch
 from urllib.parse import quote, urlparse
 
 from playwright.sync_api import sync_playwright
+
+# Executado em 'scripts/', mas importa módulos puros da raiz do repositório.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 import site_metrics_service as metrics
 from hf65_24_52_browser_preview import (
