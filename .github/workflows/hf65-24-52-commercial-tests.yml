@@ -115,6 +115,14 @@ jobs:
           python -m pip install playwright==1.56.0
           python -m playwright install chromium
           python scripts/hf65_24_52_postgrest_browser.py
+      - name: Guardar capturas e relatório do carrinho e PostgREST
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hf65-24-52-carrinho-postgrest
+          path: hf52-postgrest-output/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Encerrar containers de teste
         if: always()
         run: |
