@@ -160,7 +160,9 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
   try {
     const slug=qs.get('produto')||'';
     if(/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-      const product=[...document.querySelectorAll('.product-card[data-product]')].find(c=>c.dataset.product===slug);
+      const cards=[...document.querySelectorAll('.product-card[data-product]')];
+      const product=cards.find(c=>c.dataset.product===slug) ||
+        cards.find(c=>(c.dataset.productAliases||'').split(/\s+/).includes(slug));
       if(product) send('product_open',product.dataset.detailName||'','campaign_product');
     }
   } catch(e) {}
