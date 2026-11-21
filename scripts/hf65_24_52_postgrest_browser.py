@@ -278,6 +278,19 @@ def main() -> None:
                     flush=True,
                 )
                 context.close()
+            # Sem UTM, o mesmo carrinho deve permanecer neutro: nenhuma origem
+            # é acrescentada ao texto e o banco segue sem venda presumida.
+            neutral = browser.new_context(viewport={"width": 390, "height": 844})
+            neutral.route("**/*", block_external)
+            neutral_page = neutral.new_page()
+            neutral_page.goto(host + "/", wait_until="domcontentloaded")
+            neutral_page.wait_for_function("window.__alphafestMetricsReady === true")
+            neutral_page.locator("#afquote-add").click(timeout=7000)
+            neutral_page.locator("#afquote-review").click(timeout=7000)
+            neutral_text = neutral_page.locator("#afquote-message").input_value()
+            assert "Bubble Personalizado de Teste" in neutral_text
+            assert "Referência da campanha:" not in neutral_text, neutral_text[-180:]
+            neutral.close()
             browser.close()
         assert not failed_http, f"Falhas HTTP do PostgREST: {failed_http}"
         assert not blocked_external, (
