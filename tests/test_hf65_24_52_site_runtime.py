@@ -141,15 +141,15 @@ if(type(a,'whatsapp_click').length!==1)
   throw Error('Clique WhatsApp nao contado uma unica vez');
 if(type(a,'whatsapp_click')[0].utm_campaign!=='natal-2026')
   throw Error('WhatsApp perdeu campanha');
-let legacy=run('?produto=bubble-antigo&utm_source=instagram&utm_medium=stories&utm_campaign=historico');
-if(type(legacy,'product_open').length!==1 || type(legacy,'product_open')[0].product_name!=='Bubble personalizado')
-  throw Error('Metrica de alias historico ausente ou duplicada');
 let b=run('?filtro=promocoes');
 if(type(b,'page_view').length!==1)
   throw Error('Nova navegacao sem acesso registrado');
 const second=type(b,'page_view')[0];
 if(second.utm_campaign!=='natal-2026' || second.utm_source!=='instagram')
   throw Error('Campanha perdida na navegacao interna');
+let legacy=run('?produto=bubble-antigo&utm_source=instagram&utm_medium=stories&utm_campaign=historico');
+if(type(legacy,'product_open').length!==1 || type(legacy,'product_open')[0].product_name!=='Bubble personalizado')
+  throw Error('Metrica de alias historico ausente ou duplicada');
 let cart=run('');
 cart.handlers['win:alphafest:metric']({
   detail:{type:'whatsapp_click',product:'Orcamento com 2 produtos',context:'carrinho'}
