@@ -96,7 +96,7 @@ const vm=require('vm');
 const code=process.argv[1];
 const makeStorage=()=>{
  const values=new Map();
- return {getItem:k=>values.has(k)?values.get(k):null,setItem:(k,v)=>values.set(k,String(v))};
+ return {getItem:k=>values.has(k)?values.get(k):null,setItem:(k,v)=>values.set(k,String(v)),clear:()=>values.clear()};
 };
 const sessionStorage=makeStorage(),localStorage=makeStorage();
 let seq=0;
@@ -133,6 +133,7 @@ if(safe.referrer!=='https://instagram.com')
   throw Error('Origem da visita continua expondo parametros pessoais');
 if(JSON.stringify(safe).includes('ana@example.org') || JSON.stringify(safe).includes('11999998888'))
   throw Error('Dado pessoal nao relacionado a campanha foi registrado');
+sessionStorage.clear(); // A checagem de privacidade representa outra sessão.
 let a=run('?produto=bubble-personalizado&utm_source=instagram&utm_medium=stories&utm_campaign=natal-2026');
 const type=(r,t)=>r.posts.filter(x=>x.event_type===t);
 if(type(a,'page_view').length!==1 || type(a,'product_open').length!==1)
@@ -140,6 +141,7 @@ if(type(a,'page_view').length!==1 || type(a,'product_open').length!==1)
 if(type(a,'product_open')[0].product_name!=='Bubble personalizado')
   throw Error('Produto diferente do anuncio');
 const anchor={
+ href:'https://wa.me/5511999999999?text=Solicitar%20or%C3%A7amento',
  closest:(selector)=>{
    if(selector==='a,button,.product-card,.product-related-card') return anchor;
    if(selector.includes('a[href*=')) return anchor;
@@ -153,8 +155,11 @@ if(type(a,'whatsapp_click')[0].utm_campaign!=='natal-2026')
   throw Error('WhatsApp perdeu campanha');
 if(type(a,'whatsapp_click')[0].product_name!=='')
   throw Error('CTA geral herdou nome de produto que nao esta em ficha aberta');
+if(new URL(anchor.href).searchParams.get('text')!=='Solicitar orçamento')
+  throw Error('CTA geral foi modificado com origem do produto');
 const productModal={hidden:false,querySelector:()=>({textContent:'Bubble personalizado'})};
 const modalAnchor={
+  href:'https://wa.me/5511999999999?text=Quero%20or%C3%A7amento%20para%20Bubble',
   closest:(selector)=>{
     if(selector==='a,button,.product-card,.product-related-card') return modalAnchor;
     if(selector.includes('a[href*=')) return modalAnchor;
@@ -167,6 +172,15 @@ modalVisit.handlers['doc:click']({target:modalAnchor});
 const modalClicks=type(modalVisit,'whatsapp_click');
 if(modalClicks.length!==1 || modalClicks[0].product_name!=='Bubble personalizado')
   throw Error('CTA dentro da ficha nao atribuiu o produto correto');
+const message=new URL(modalAnchor.href).searchParams.get('text')||'';
+if(!message.includes('Quero orçamento para Bubble'))
+  throw Error('Mensagem original do orçamento foi perdida');
+if(!message.endsWith('\n\nReferência da campanha: instagram/stories/natal-2026'))
+  throw Error('Referência UTM não foi adicionada ao WhatsApp da ficha');
+modalVisit.handlers['doc:click']({target:modalAnchor});
+const repeated=new URL(modalAnchor.href).searchParams.get('text')||'';
+if((repeated.match(/Referência da campanha:/g)||[]).length!==1)
+  throw Error('Referência da campanha duplicada ao clicar novamente');
 let b=run('?filtro=promocoes');
 if(type(b,'page_view').length!==1)
   throw Error('Nova navegacao sem acesso registrado');
@@ -176,6 +190,8 @@ if(second.utm_campaign!=='natal-2026' || second.utm_source!=='instagram')
 let legacy=run('?produto=bubble-antigo&utm_source=instagram&utm_medium=stories&utm_campaign=historico');
 if(type(legacy,'product_open').length!==1 || type(legacy,'product_open')[0].product_name!=='Bubble personalizado')
   throw Error('Metrica de alias historico ausente ou duplicada');
+if(type(legacy,'product_open')[0].utm_campaign!=='natal-2026')
+  throw Error('Primeira campanha foi substituída por outra na mesma sessão');
 let cart=run('');
 cart.handlers['win:alphafest:metric']({
   detail:{type:'whatsapp_click',product:'Orcamento com 2 produtos',context:'carrinho'}
