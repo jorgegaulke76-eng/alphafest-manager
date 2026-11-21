@@ -121,7 +121,8 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
       if(!raw) return '';
       const u=new URL(raw);
       if(u.protocol!=='https:' && u.protocol!=='http:') return '';
-      return clip(u.origin+u.pathname,500);
+      // O domínio basta para identificar o canal; caminhos externos podem conter dados privados.
+      return clip(u.origin,500);
     }catch(e){return '';}
   }
   let entryPath=safePath(location.pathname);
