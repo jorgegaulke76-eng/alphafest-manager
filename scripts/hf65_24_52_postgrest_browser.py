@@ -36,7 +36,7 @@ HTML = (
     '<div id="product-detail-modal">'
     '<span id="product-detail-name">Bubble Personalizado de Teste</span>'
     '<a id="cta" target="_blank" rel="noopener" '
-    'href="https://wa.me/5511999999999">Solicitar orçamento</a>'
+    'href="https://wa.me/5511999999999?text=Quero%20um%20or%C3%A7amento">Solicitar orçamento</a>'
     '</div></body></html>'
 )
 
@@ -178,6 +178,13 @@ def main() -> None:
                 page.wait_for_function("window.__alphafestMetricsReady === true")
                 wait_for_written_rows(4 * index + 2)
                 page.locator("#cta").click(timeout=7000)
+                from urllib.parse import parse_qs
+                href = page.locator("#cta").get_attribute("href") or ""
+                message = parse_qs(urlparse(href).query).get("text", [""])[0]
+                assert message.endswith(
+                    "\n\nReferência da campanha: instagram/stories/" + campaign
+                ), f"{device}: campanha não acompanhou a mensagem do WhatsApp"
+                assert message.count("Referência da campanha:") == 1
                 wait_for_written_rows(4 * index + 3)
                 response = page.goto(
                     f"{host}/novidades/", wait_until="domcontentloaded", timeout=30000
