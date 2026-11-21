@@ -12,11 +12,16 @@ from __future__ import annotations
 import ast
 import html
 import re
+import sys
 from pathlib import Path
 from urllib.request import Request, urlopen
 from urllib.parse import quote
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from site_metrics_dashboard_ui import published_products_from_html
+
 OUT = ROOT / "hf52-preview-output"
 SOURCE = "https://alphafest.com.br/"
 PRODUCT_SLUG = "bubble-personalizado-com-confetes-e-baloes-metalizado"
@@ -51,9 +56,15 @@ def build_public_preview() -> Path:
             f"A prévia esperava 92 cards públicos, mas encontrou {len(cards)}. "
             "Revisar a versão publicada antes de homologar."
         )
-    slug_check = f'data-product="{PRODUCT_SLUG}"'
-    if slug_check not in page:
-        raise RuntimeError("Produto de referência não está disponível na vitrine pública")
+    published = published_products_from_html(page)
+    if len(published) != len(cards):
+        raise RuntimeError(
+            f"A seleção de produtos do Manager encontrou {len(published)} fichas "
+            f"em vez das {len(cards)} publicadas. Verificar links duplicados."
+        )
+    if (PRODUCT_NAME, PRODUCT_SLUG) not in published:
+        raise RuntimeError("Produto de referência não aparece na lista validada do Manager")
+    print(f"Gerador de campanhas conferiu {len(published)} slugs da vitrine publicada", flush=True)
 
     # Remover exclusivamente o rastreador público que enviaria dados de navegação reais.
     page, metrics_count = re.subn(
