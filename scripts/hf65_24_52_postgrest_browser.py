@@ -25,6 +25,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import site_metrics_service as metrics
+from site_carrinho_orcamento_service import inject_cart
 
 PGRST = "http://127.0.0.1:3000/site_metrics_events"
 NAME = "Bubble Personalizado de Teste"
@@ -33,11 +34,14 @@ HTML = (
     '<title>HF52 Teste Local</title></head><body>'
     '<article class="product-card" data-product="bubble-teste" '
     'data-detail-name="Bubble Personalizado de Teste"></article>'
+    '<article class="product-card" data-product="caneca-teste" '
+    'data-detail-name="Caneca Personalizada de Teste"></article>'
     '<div id="product-detail-modal">'
     '<span id="product-detail-name">Bubble Personalizado de Teste</span>'
+    '<div class="product-detail-actions">'
     '<a id="cta" target="_blank" rel="noopener" '
     'href="https://wa.me/5511999999999?text=Quero%20um%20or%C3%A7amento">Solicitar orçamento</a>'
-    '</div></body></html>'
+    '</div></div></body></html>'
 )
 
 
@@ -139,7 +143,9 @@ def main() -> None:
         metrics, "public_config",
         return_value={"url": host, "key": "sb_publishable_HF52_TEST_ONLY"},
     ):
-        injected_html = metrics.inject_tracking(HTML).encode("utf-8")
+        # O carrinho da branch é injetado antes do rastreador, como no site real.
+        with_cart = inject_cart(HTML, {"celular": "1199999999"})
+        injected_html = metrics.inject_tracking(with_cart).encode("utf-8")
 
     thread = Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -176,7 +182,7 @@ def main() -> None:
                     wait_until="domcontentloaded", timeout=30000,
                 )
                 page.wait_for_function("window.__alphafestMetricsReady === true")
-                wait_for_written_rows(4 * index + 2)
+                wait_for_written_rows(5 * index + 2)
                 page.locator("#cta").click(timeout=7000)
                 from urllib.parse import parse_qs
                 href = page.locator("#cta").get_attribute("href") or ""
@@ -185,7 +191,47 @@ def main() -> None:
                     "\n\nReferência da campanha: instagram/stories/" + campaign
                 ), f"{device}: campanha não acompanhou a mensagem do WhatsApp"
                 assert message.count("Referência da campanha:") == 1
-                wait_for_written_rows(4 * index + 3)
+                wait_for_written_rows(5 * index + 3)
+
+                # A referência comercial precisa aparecer no carrinho com
+                # vários produtos e permanecer editável antes do envio.
+                page.locator("#afquote-add").click(timeout=7000)
+                page.locator('#afquote-layer [data-afquote-close]').first.click()
+                page.locator("#product-detail-name").evaluate(
+                    "(el) => { el.textContent = 'Caneca Personalizada de Teste'; }"
+                )
+                page.locator("#afquote-add").click(timeout=7000)
+                page.locator("#afquote-review").click(timeout=7000)
+                review = page.locator("#afquote-message")
+                draft = review.input_value()
+                expected_ref = (
+                    "Referência da campanha: instagram/stories/" + campaign
+                )
+                assert "Bubble Personalizado de Teste" in draft
+                assert "Caneca Personalizada de Teste" in draft
+                assert draft.endswith(expected_ref), (device, draft[-180:])
+                assert draft.count("Referência da campanha:") == 1
+                # O cliente pode remover a origem no próprio WhatsApp.
+                review.fill(draft.replace("\n\n" + expected_ref, ""))
+                assert expected_ref not in review.input_value()
+                # Recolocar para testar o texto final enviado por clique.
+                review.fill(draft + "\nRevisão opcional de teste.")
+                page.evaluate("""() => {
+                  window.__hf52CartUrls = [];
+                  window.open = (url) => {
+                    window.__hf52CartUrls.push(url);
+                    return {closed: false};
+                  };
+                }""")
+                page.locator("#afquote-send").click(timeout=7000)
+                urls = page.evaluate("window.__hf52CartUrls")
+                assert len(urls) == 1, (device, urls)
+                sent = requests.utils.unquote(urls[0])
+                assert expected_ref in sent and "Revisão opcional de teste." in sent
+                assert "Bubble Personalizado de Teste" in sent
+                assert "Caneca Personalizada de Teste" in sent
+                wait_for_written_rows(5 * index + 4)
+
                 response = page.goto(
                     f"{host}/novidades/", wait_until="domcontentloaded", timeout=30000
                 )
@@ -201,11 +247,11 @@ def main() -> None:
                 print(f"{device}: segunda navegação e rastreador: {diag}", flush=True)
                 assert diag["path"] == "/novidades/" and diag["tracker"]
                 assert diag["utm"].get("campaign") == campaign
-                rows = wait_for_written_rows(4 * index + 4)
+                rows = wait_for_written_rows(5 * index + 5)
                 selected = [r for r in rows if r["utm_campaign"] == campaign]
                 counts = Counter(r["event_type"] for r in selected)
                 assert counts == {
-                    "page_view": 2, "product_open": 1, "whatsapp_click": 1
+                    "page_view": 2, "product_open": 1, "whatsapp_click": 2
                 }, (device, counts)
                 assert len({r["session_id"] for r in selected}) == 1
                 assert all(r["utm_source"] == "instagram" and r["utm_medium"] == "stories"
@@ -224,9 +270,10 @@ def main() -> None:
                 )
                 assert len(stats) == 1 and stats[0]["sessoes"] == 1
                 assert stats[0]["sessoes_whatsapp"] == 1
-                assert stats[0]["cliques_whatsapp"] == 1
+                assert stats[0]["cliques_whatsapp"] == 2
+                assert sum(r["event_context"] == "carrinho" for r in selected) == 1
                 print(
-                    f"{device}: 4 eventos efetivamente persistidos em PostgreSQL local; "
+                    f"{device}: 5 eventos efetivamente persistidos em PostgreSQL local; "
                     "campanha atribuída e privacidade preservada",
                     flush=True,
                 )
@@ -237,10 +284,10 @@ def main() -> None:
             f"Tentativas inesperadas de conexão externa: {blocked_external}"
         )
         rows = read_db()
-        assert len(rows) == 8, f"Total de linhas no banco local: {len(rows)}"
+        assert len(rows) == 10, f"Total de linhas no banco local: {len(rows)}"
         print(
             "Integração real navegador -> PostgREST -> PostgreSQL: "
-            "8 eventos em 2 dispositivos, zero conexões externas.",
+            "10 eventos em 2 dispositivos, zero conexões externas.",
             flush=True,
         )
     finally:
