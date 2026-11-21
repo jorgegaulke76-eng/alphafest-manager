@@ -181,7 +181,7 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
       if(target.protocol!=='https:' || target.hostname!=='wa.me') return;
       const message=target.searchParams.get('text')||'';
       if(!message || message.includes('Referência da campanha:')) return;
-      target.searchParams.set('text',message+'\\n\\nReferência da campanha: '+ref);
+      target.searchParams.set('text',message+'\n\nReferência da campanha: '+ref);
       wa.href=target.toString();
     }catch(e){ /* WhatsApp continua com o link original */ }
   }
