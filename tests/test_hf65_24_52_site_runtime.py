@@ -100,18 +100,18 @@ const makeStorage=()=>{
 };
 const sessionStorage=makeStorage(),localStorage=makeStorage();
 let seq=0;
-function run(search){
+function run(search, opts={}){
   const posts=[], handlers={};
   const card={dataset:{product:'bubble-personalizado',productAliases:'bubble-antigo',detailName:'Bubble personalizado'}};
   const modalName={textContent:'Bubble personalizado'};
   const document={
-    referrer:'',
+    referrer:opts.referrer||'',
     querySelectorAll:sel=>sel.includes('.product-card[data-product]')?[card]:[],
     getElementById:id=>id==='product-detail-name'?modalName:null,
     addEventListener:(name,fn)=>{handlers['doc:'+name]=fn;}
   };
   const window={addEventListener:(name,fn)=>{handlers['win:'+name]=fn;}};
-  const location={protocol:'https:',pathname:'/',hash:'',search};
+  const location={protocol:'https:',pathname:opts.pathname||'/',hash:opts.hash||'',search};
   const fetch=(url,opts)=>{
     if(opts&&opts.method==='POST') posts.push(JSON.parse(opts.body));
     return Promise.resolve({ok:false,json:()=>Promise.resolve({})});
@@ -123,6 +123,16 @@ function run(search){
   vm.runInNewContext(code,context);
   return {posts,handlers};
 }
+let privacy=run('?utm_source=instagram&utm_campaign=campanha-privada&telefone=11999998888',{
+  pathname:'/novidades/',hash:'#contato=ana',referrer:'https://instagram.com/p/abc?email=ana@example.org'
+});
+const safe=privacy.posts[0];
+if(safe.page_path!=='/novidades/' || safe.entry_path!=='/novidades/')
+  throw Error('Caminhos continuam expondo query string ou fragmento');
+if(safe.referrer!=='https://instagram.com/p/abc')
+  throw Error('Origem da visita continua expondo parametros pessoais');
+if(JSON.stringify(safe).includes('ana@example.org') || JSON.stringify(safe).includes('11999998888'))
+  throw Error('Dado pessoal nao relacionado a campanha foi registrado');
 let a=run('?produto=bubble-personalizado&utm_source=instagram&utm_medium=stories&utm_campaign=natal-2026');
 const type=(r,t)=>r.posts.filter(x=>x.event_type===t);
 if(type(a,'page_view').length!==1 || type(a,'product_open').length!==1)
