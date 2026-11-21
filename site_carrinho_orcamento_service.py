@@ -54,7 +54,7 @@ JS = r'''
       const get=window.alphaFestCampaignReference;
       if(typeof get!=='function') return '';
       const reference=String(get()||'');
-      if(reference.length>170 || !/^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*){0,2}$/.test(reference)) return '';
+      if(reference.length>210 || !/^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*){0,2}$/.test(reference)) return '';
       return reference;
     }catch(e){return '';}
   }
