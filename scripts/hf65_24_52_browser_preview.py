@@ -81,6 +81,18 @@ def build_public_preview() -> Path:
         raise RuntimeError(
             "Não foi possível substituir com segurança o script da ficha na cópia pública"
         )
+    # O HTML público tem o CSS da versão 51; aplicar somente o trecho responsivo
+    # da própria branch 52, nunca um CSS de teste divergente.
+    vitrine_source = (ROOT / "site_vitrine_service.py").read_text(encoding="utf-8")
+    css_start = vitrine_source.index(".product-detail-modal{{padding:8px;align-items:flex-end")
+    css_end = vitrine_source.index(".product-detail-copy{{padding:0 2px}}", css_start)
+    mobile_css = vitrine_source[css_start:css_end].replace("{{", "{").replace("}}", "}")
+    page = page.replace(
+        "</head>",
+        '<style id="hf52-preview-mobile-css">@media(max-width:620px){'
+        + mobile_css + "}</style></head>",
+        1,
+    )
     marker = (
         '<div id="hf52-preview-warning" style="position:fixed;top:0;left:0;right:0;'
         'z-index:2147483647;background:#fff4c7;color:#233b61;padding:6px 10px;'
