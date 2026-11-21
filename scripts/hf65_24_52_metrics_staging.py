@@ -162,7 +162,24 @@ def main() -> None:
                 # Nova página na mesma sessão; não há UTM na URL, mas o
                 # rastreador deve recuperar a campanha sem atribuir nova venda.
                 page.goto(origin + "/novidades/", wait_until="domcontentloaded", timeout=45000)
-                final_events = await_events(events, lock, 4)
+                diag = page.evaluate("""() => ({
+                  url:location.href, ready:!!window.__alphafestMetricsReady,
+                  storedUTM:sessionStorage.getItem('af_utm_v52'),
+                  tracking:!!document.querySelector('#alphafest-site-metrics')
+                })""")
+                print(f"{device}: segunda página carregada: {diag}", flush=True)
+                assert diag["ready"] and diag["tracking"], (
+                    f"{device}: rastreador não foi inicializado na página seguinte: {diag}"
+                )
+                try:
+                    final_events = await_events(events, lock, 4)
+                except AssertionError:
+                    with lock:
+                        seen = [(x.get("event_type"), x.get("utm_campaign")) for x in events]
+                    raise AssertionError(
+                        f"{device}: não chegaram eventos da segunda página; "
+                        f"estado={diag} eventos={seen}"
+                    )
                 fresh_pages = [x for x in final_events if x["event_type"] == "page_view"]
                 assert len(fresh_pages) == 2, final_events
                 assert fresh_pages[1]["utm_campaign"] == "hf52-staging-local"
