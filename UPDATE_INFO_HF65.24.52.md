@@ -13,8 +13,14 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
 - Link `https://alphafest.com.br/?produto=<slug>&utm_source=...&utm_medium=...&utm_campaign=...`.
 - Ficha abre automaticamente no destino indicado, respeitando o celular e
   permitindo fechar sem deslocamento horizontal.
-- A navegação conserva parâmetros UTM dentro da sessão da aba. O painel
-  usa a primeira campanha identificada e somente cliques de WhatsApp posteriores.
+- A navegação conserva o **primeiro toque UTM da sessão da aba**. O painel
+  usa essa primeira campanha identificada e somente cliques de WhatsApp posteriores.
+- Ao clicar no WhatsApp **dentro de uma ficha de produto**, o texto de orçamento
+  ganha a linha editável `Referência da campanha: instagram/stories/natal-2026`
+  (quando houver campanha UTM válida). A linha não é duplicada em cliques
+  repetidos e não aparece nos CTAs gerais. O cliente ainda decide se envia
+  ou não a mensagem. Essa referência permite à equipe comparar manualmente
+  conversas recebidas com campanhas, **sem declarar vendas automaticamente**.
 - Links antigos de produtos renomeados continuam a funcionar quando o nome
   anterior é mantido como **Alias não ambíguo** no Catálogo Oficial.
 - Eventos de acesso não armazenam query strings, fragmentos nem caminhos externos
@@ -25,8 +31,10 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
   ou alterar status, orçamento, estoque, produção ou financeiro.
 
 ## Evidências automatizadas
-- Execução GitHub Actions: https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/44901604767
-- 13 testes de regressão Python/JavaScript aprovados.
+- Execução GitHub Actions: https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/44903502249
+- 13 testes de regressão Python/JavaScript aprovados, incluindo a referência
+  de campanha no WhatsApp da ficha, prevenção de duplicações, preservação do
+  texto original e separação dos CTAs gerais.
 - Navegador Chromium desktop e celular aprovado em cópia da vitrine real,
   verificando 92 slugs publicados, abertura/fechamento e CTA.
 - API fictícia local: fluxo campanha -> produto -> WhatsApp -> página seguinte
@@ -51,6 +59,9 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
 - [ ] Gerar prévia do site no Manager e publicar pelo fluxo Cloudflare existente.
 - [ ] Após publicar, usar uma campanha real de divulgação e conferir os registros
       como **intenções de orçamento**, sem presumir mensagens enviadas.
+- [ ] Verificar manualmente se a mensagem enviada no WhatsApp contém a referência
+      esperada; comparar a referência com o pedido pago antes de considerar uma
+      venda atribuída à campanha.
 
 ## Critérios de reversão
 Se ficha deixar de abrir, WhatsApp falhar, métrica duplicar ou desempenho piorar:
