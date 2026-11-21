@@ -329,8 +329,26 @@ def gerar_html_vitrine(
         if usar_taxonomia_catalogo else ''
     )
 
+    # HF65.24.52: URLs anteriores podem apontar para um Alias do mesmo produto.
+    # Usa somente o Catálogo Oficial. Não publica aliases ambíguos nem aliases
+    # que coincidam com o slug principal de outro item.
+    canonical_slugs = {
+        _slug(str(p.get("nome") or "")) for p in produtos
+    }
+    alias_owners: Dict[str, set[int]] = {}
+    for idx, p in enumerate(produtos):
+        for alias in _lista(p.get("aliases") or []):
+            alias_slug = _slug(alias)
+            if alias_slug and alias_slug != "sem-categoria" and alias_slug not in canonical_slugs:
+                alias_owners.setdefault(alias_slug, set()).add(idx)
+    valid_aliases: Dict[int, List[str]] = {}
+    for alias_slug, owners in alias_owners.items():
+        if len(owners) == 1:
+            owner = next(iter(owners))
+            valid_aliases.setdefault(owner, []).append(alias_slug)
+
     cards: List[str] = []
-    for item in produtos:
+    for product_index, item in enumerate(produtos):
         nome = str(item.get("nome") or "Produto").strip() or "Produto"
         descricao = str(item.get("descricao") or "").strip()
         categorias_origem = _lista(item.get("categorias_origem") or item.get("categorias_site") or [])
@@ -377,6 +395,7 @@ def gerar_html_vitrine(
         ])
         busca = unicodedata.normalize("NFKD", busca).encode("ascii", "ignore").decode("ascii").casefold()
         produto_slug = _slug(nome)
+        apelidos_slug = html.escape(' '.join(valid_aliases.get(product_index, [])), quote=True)
         sub_data = html.escape(_slug(subcategoria_publica), quote=True) if subcategoria_publica else ""
         categorias_slugs = " " + " ".join(_slug(cat) for cat in categorias_publicas) + " " if usar_taxonomia_catalogo else f" {_slug(categoria)} "
         tem_galeria = produto_slug in produtos_galeria_slugs
@@ -385,7 +404,7 @@ def gerar_html_vitrine(
         # na ficha aberta pelo cliente.
         cards.append(
             f'''<article class="product-card product-card-compact" role="button" tabindex="0" aria-label="Ver detalhes de {html.escape(nome, quote=True)}"
-                data-cat="{html.escape(_slug(categoria), quote=True)}" data-cats="{html.escape(categorias_slugs, quote=True)}" data-sub="{sub_data}" data-product="{html.escape(produto_slug, quote=True)}" data-search="{html.escape(busca, quote=True)}"
+                data-cat="{html.escape(_slug(categoria), quote=True)}" data-cats="{html.escape(categorias_slugs, quote=True)}" data-sub="{sub_data}" data-product="{html.escape(produto_slug, quote=True)}" data-product-aliases="{apelidos_slug}" data-search="{html.escape(busca, quote=True)}"
                 data-detail-name="{html.escape(nome, quote=True)}" data-detail-description="{html.escape(descricao, quote=True)}"
                 data-detail-category="{html.escape(categoria, quote=True)}" data-detail-subcategory="{html.escape(subcategoria_publica, quote=True)}"
                 data-detail-price="{html.escape(preco, quote=True)}" data-detail-image="{html.escape(img, quote=True)}"
@@ -584,7 +603,8 @@ def gerar_html_vitrine(
   try {
     const requested=new URLSearchParams(window.location.search).get('produto');
     if(requested && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(requested)) {
-      const match=cards.find(c=>c.dataset.product===requested);
+      const match=cards.find(c=>c.dataset.product===requested) ||
+        cards.find(c=>(c.dataset.productAliases||'').split(/\s+/).includes(requested));
       if(match) {
         open(match);
       }
