@@ -49,7 +49,21 @@ JS = r'''
     total.textContent=items.length?`${items.length} produto(s) diferente(s) · ${items.reduce((a,i)=>a+i.quantity,0)} unidade(s). Valores finais a confirmar com a AlphaFest.`:'';
     layer.querySelector('#afquote-review').disabled=!items.length;layer.querySelector('#afquote-clear').disabled=!items.length;
   }
-  function message(){return 'Olá! Gostaria de solicitar um orçamento na AlphaFest para os seguintes produtos:\n\n'+items.map((i,j)=>`${j+1}. ${i.name}\nQuantidade: ${i.quantity}${i.note?'\nPersonalização/observações: '+i.note:''}`).join('\n\n')+'\n\nPodem confirmar valores, disponibilidade, prazo e opções de retirada/entrega? Obrigado!';}
+  function campaignReferenceForCart(){
+    try{
+      const get=window.alphaFestCampaignReference;
+      if(typeof get!=='function') return '';
+      const reference=String(get()||'');
+      if(reference.length>170 || !/^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*){0,2}$/.test(reference)) return '';
+      return reference;
+    }catch(e){return '';}
+  }
+  function message(){
+    const base='Olá! Gostaria de solicitar um orçamento na AlphaFest para os seguintes produtos:\n\n'+items.map((i,j)=>`${j+1}. ${i.name}\nQuantidade: ${i.quantity}${i.note?'\nPersonalização/observações: '+i.note:''}`).join('\n\n')+'\n\nPodem confirmar valores, disponibilidade, prazo e opções de retirada/entrega? Obrigado!';
+    const ref=campaignReferenceForCart();
+    const suffix=ref?'\n\nReferência da campanha: '+ref:'';
+    return base.slice(0,6000-suffix.length)+suffix;
+  }
   trigger.addEventListener('click',show);
   layer.querySelectorAll('[data-afquote-close]').forEach(b=>b.addEventListener('click',hide));
   layer.querySelectorAll('.afquote-continue').forEach(b=>b.addEventListener('click',()=>{hide();const modal=document.getElementById('product-detail-modal');if(modal && !modal.hidden){const close=modal.querySelector('[data-product-close]');if(close)close.click();}}));
