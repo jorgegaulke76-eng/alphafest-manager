@@ -159,7 +159,10 @@ def main() -> None:
                     if route.request.url.startswith(host + "/"):
                         route.continue_()
                     else:
-                        blocked_external.append(route.request.method)
+                        # O clique do CTA pode tentar abrir wa.me em outra aba;
+                        # o teste cancela a navegação antes de alcançar a rede.
+                        if not route.request.url.startswith('https://wa.me/'):
+                            blocked_external.append(route.request.method)
                         route.abort()
 
                 context.route("**/*", block_external)
