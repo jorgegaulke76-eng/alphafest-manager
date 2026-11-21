@@ -178,7 +178,21 @@ def main() -> None:
                 wait_for_written_rows(4 * index + 2)
                 page.locator("#cta").click(timeout=7000)
                 wait_for_written_rows(4 * index + 3)
-                page.goto(f"{host}/novidades/", wait_until="domcontentloaded")
+                response = page.goto(
+                    f"{host}/novidades/", wait_until="domcontentloaded", timeout=30000
+                )
+                assert response is not None and response.status == 200
+                page.wait_for_function(
+                    "window.__alphafestMetricsReady === true", timeout=10000
+                )
+                diag = page.evaluate("""() => ({
+                  path:location.pathname,
+                  utm:JSON.parse(sessionStorage.getItem('af_utm_v52')||'{}'),
+                  tracker:!!document.querySelector('#alphafest-site-metrics')
+                })""")
+                print(f"{device}: segunda navegação e rastreador: {diag}", flush=True)
+                assert diag["path"] == "/novidades/" and diag["tracker"]
+                assert diag["utm"].get("campaign") == campaign
                 rows = wait_for_written_rows(4 * index + 4)
                 selected = [r for r in rows if r["utm_campaign"] == campaign]
                 counts = Counter(r["event_type"] for r in selected)
