@@ -95,11 +95,11 @@ def published_products_from_html(page: str) -> tuple[tuple[str, str], ...]:
     """
     valid: dict[str, str] = {}
     duplicates: set[str] = set()
-    for match in re.finditer(r'<article\\b[^>]*>', str(page or ''), flags=re.I | re.S):
+    for match in re.finditer(r'<article\b[^>]*>', str(page or ''), flags=re.I | re.S):
         attrs = {
             key.lower(): unescape(value)
-            for key, _, value in re.findall(
-                r'([a-z][a-z0-9_-]*)\\s*=\\s*(["\\\'])(.*?)\\2',
+            for key, value in re.findall(
+                r'([a-z][a-z0-9_-]*)\s*=\s*"([^"]*)"',
                 match.group(0), flags=re.I | re.S,
             )
         }
