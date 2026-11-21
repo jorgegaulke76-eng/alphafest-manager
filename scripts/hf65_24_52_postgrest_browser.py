@@ -32,11 +32,12 @@ HTML = (
     '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
     '<title>HF52 Teste Local</title></head><body>'
     '<article class="product-card" data-product="bubble-teste" '
-    'data-detail-name="Bubble Personalizado de Teste">'
+    'data-detail-name="Bubble Personalizado de Teste"></article>'
+    '<div id="product-detail-modal">'
     '<span id="product-detail-name">Bubble Personalizado de Teste</span>'
     '<a id="cta" target="_blank" rel="noopener" '
     'href="https://wa.me/5511999999999">Solicitar orçamento</a>'
-    '</article></body></html>'
+    '</div></body></html>'
 )
 
 
