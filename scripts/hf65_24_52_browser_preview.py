@@ -138,9 +138,13 @@ def test_in_real_browser(file_path: Path) -> None:
                 f"{kind}: prévia não deve conter rastreador real"
             )
             assert not post_requests, f"{kind}: houve tentativa POST: {post_requests}"
+            rect = page.locator(".product-detail-panel").bounding_box()
+            assert rect and rect["x"] >= -1 and rect["x"] + rect["width"] <= width + 1, (
+                f"{kind}: ficha ultrapassa largura da tela: {rect!r} para {width}px"
+            )
             page.screenshot(path=str(OUT / f"previa-{kind}.png"), full_page=False)
-            print(f"{kind}: ficha aberta, CTA preservado, sem POST, screenshot aprovado")
-            page.locator(".product-detail-close").click()
+            print(f"{kind}: ficha aberta, dentro da tela, CTA preservado e sem POST")
+            page.locator(".product-detail-close").click(timeout=5000)
             assert page.locator("#product-detail-modal").is_hidden(), (
                 f"{kind}: ficha não fechou"
             )
