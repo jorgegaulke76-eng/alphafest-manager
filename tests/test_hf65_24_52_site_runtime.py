@@ -151,6 +151,22 @@ if(type(a,'whatsapp_click').length!==1)
   throw Error('Clique WhatsApp nao contado uma unica vez');
 if(type(a,'whatsapp_click')[0].utm_campaign!=='natal-2026')
   throw Error('WhatsApp perdeu campanha');
+if(type(a,'whatsapp_click')[0].product_name!=='')
+  throw Error('CTA geral herdou nome de produto que nao esta em ficha aberta');
+const productModal={hidden:false,querySelector:()=>({textContent:'Bubble personalizado'})};
+const modalAnchor={
+  closest:(selector)=>{
+    if(selector==='a,button,.product-card,.product-related-card') return modalAnchor;
+    if(selector.includes('a[href*=')) return modalAnchor;
+    if(selector==='#product-detail-modal') return productModal;
+    return null;
+  }
+};
+const modalVisit=run('?utm_source=instagram&utm_campaign=produto-modal');
+modalVisit.handlers['doc:click']({target:modalAnchor});
+const modalClicks=type(modalVisit,'whatsapp_click');
+if(modalClicks.length!==1 || modalClicks[0].product_name!=='Bubble personalizado')
+  throw Error('CTA dentro da ficha nao atribuiu o produto correto');
 let b=run('?filtro=promocoes');
 if(type(b,'page_view').length!==1)
   throw Error('Nova navegacao sem acesso registrado');
