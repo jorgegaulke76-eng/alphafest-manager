@@ -151,10 +151,18 @@ def test_in_real_browser(file_path: Path) -> None:
             )
             assert not post_requests, f"{kind}: houve tentativa POST: {post_requests}"
             rect = page.locator(".product-detail-panel").bounding_box()
+            geometry = page.evaluate("""() => {
+              const names=[\"#product-detail-modal\",\".product-detail-panel\",\".product-detail-close\",\".product-detail-media\"];
+              return {innerWidth,innerHeight,scrollX,scrollY,
+                docWidth:document.documentElement.scrollWidth,
+                visual:window.visualViewport?{width:visualViewport.width,height:visualViewport.height,offsetLeft:visualViewport.offsetLeft,offsetTop:visualViewport.offsetTop,scale:visualViewport.scale}:null,
+                boxes:names.map(q=>{const el=document.querySelector(q),r=el.getBoundingClientRect();return {q,x:r.x,y:r.y,w:r.width,h:r.height,position:getComputedStyle(el).position};})};
+            }""")
+            print(f"{kind}: dimensoes da prévia: {geometry}", flush=True)
+            page.screenshot(path=str(OUT / f"previa-{kind}.png"), full_page=False)
             assert rect and rect["x"] >= -1 and rect["x"] + rect["width"] <= width + 1, (
                 f"{kind}: ficha ultrapassa largura da tela: {rect!r} para {width}px"
             )
-            page.screenshot(path=str(OUT / f"previa-{kind}.png"), full_page=False)
             print(f"{kind}: ficha aberta, dentro da tela, CTA preservado e sem POST")
             page.locator(".product-detail-close").click(timeout=5000)
             assert page.locator("#product-detail-modal").is_hidden(), (
