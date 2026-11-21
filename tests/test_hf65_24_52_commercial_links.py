@@ -219,3 +219,11 @@ def test_lista_publicada_cacheada_nao_dispara_requisicoes_repetidas(monkeypatch)
         assert calls[0][1]["timeout"] == 15
     finally:
         ui.published_products_cached.cache_clear()
+
+
+def test_campanha_utm_com_120_caracteres_permanece_valida():
+    campanha = "n" * 120
+    link = campaign_link("instagram", "stories", campanha, "Produto específico", "bubble-personalizado")
+    params = parse_qs(urlparse(link).query)
+    assert params["utm_campaign"] == [campanha]
+    assert len(params["utm_campaign"][0]) == 120
