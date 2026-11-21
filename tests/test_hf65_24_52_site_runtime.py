@@ -55,7 +55,7 @@ function render(search){
   nodes['product-detail-modal'].querySelector=()=>({focus:noop});
   nodes['product-detail-modal'].querySelectorAll=()=>[];
   const card=make();
-  card.dataset={product:'bubble-personalizado',detailName:'Bubble personalizado',
+  card.dataset={product:'bubble-personalizado',productAliases:'bubble-antigo',detailName:'Bubble personalizado',
     detailDescription:'Produto AlphaFest',detailWhatsapp:'https://wa.me/5511999999999',
     detailGallery:'0',detailCategory:'Baloes',detailSubcategory:''};
   const document={getElementById:id=>nodes[id]||null,
@@ -69,6 +69,9 @@ let ok=render('?produto=bubble-personalizado&utm_campaign=natal-2026');
 if(ok['product-detail-modal'].hidden!==false) throw Error('Ficha nao abriu');
 if(ok['product-detail-name'].textContent!=='Bubble personalizado') throw Error('Produto incorreto');
 if(ok['product-detail-whatsapp'].href!=='https://wa.me/5511999999999') throw Error('Link WhatsApp alterado');
+let legacy=render('?produto=bubble-antigo&utm_campaign=natal-2026');
+if(legacy['product-detail-modal'].hidden!==false) throw Error('Alias historico nao abriu ficha');
+if(legacy['product-detail-name'].textContent!=='Bubble personalizado') throw Error('Alias apontou para ficha errada');
 let bad=render('?produto=outro-item');
 if(bad['product-detail-modal'].hidden!==true) throw Error('Produto inexistente abriu');
 let invalid=render('?produto=%3Cscript%3E');
@@ -99,7 +102,7 @@ const sessionStorage=makeStorage(),localStorage=makeStorage();
 let seq=0;
 function run(search){
   const posts=[], handlers={};
-  const card={dataset:{product:'bubble-personalizado',detailName:'Bubble personalizado'}};
+  const card={dataset:{product:'bubble-personalizado',productAliases:'bubble-antigo',detailName:'Bubble personalizado'}};
   const modalName={textContent:'Bubble personalizado'};
   const document={
     referrer:'',
@@ -138,6 +141,9 @@ if(type(a,'whatsapp_click').length!==1)
   throw Error('Clique WhatsApp nao contado uma unica vez');
 if(type(a,'whatsapp_click')[0].utm_campaign!=='natal-2026')
   throw Error('WhatsApp perdeu campanha');
+let legacy=run('?produto=bubble-antigo&utm_source=instagram&utm_medium=stories&utm_campaign=historico');
+if(type(legacy,'product_open').length!==1 || type(legacy,'product_open')[0].product_name!=='Bubble personalizado')
+  throw Error('Metrica de alias historico ausente ou duplicada');
 let b=run('?filtro=promocoes');
 if(type(b,'page_view').length!==1)
   throw Error('Nova navegacao sem acesso registrado');
