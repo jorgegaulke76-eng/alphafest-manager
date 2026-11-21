@@ -216,8 +216,12 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
     if(wa){
       const galleryCard=wa.closest('.gallery-card');
       const galleryName=galleryCard&&galleryCard.querySelector('h3')?galleryCard.querySelector('h3').textContent.trim():'';
-      const modal=document.getElementById('product-detail-name');
-      const name=galleryName||(modal&&modal.textContent?modal.textContent.trim():'');
+      // Somente atribuir um produto se o CTA estiver dentro da ficha
+      // atualmente aberta. Links gerais nunca herdam um nome antigo.
+      const productModal=wa.closest('#product-detail-modal');
+      const modalName=productModal && !productModal.hidden
+        ? productModal.querySelector('#product-detail-name') : null;
+      const name=galleryName||(modalName&&modalName.textContent?modalName.textContent.trim():'');
       send('whatsapp_click',name,galleryCard?'gallery':'site');
       return;
     }
