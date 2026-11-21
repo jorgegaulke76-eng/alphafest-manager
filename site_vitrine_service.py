@@ -529,6 +529,22 @@ def gerar_html_vitrine(
   const related=document.getElementById('product-related');
   const relatedGrid=document.getElementById('product-related-grid');
   let current=null;
+  // HF65.24.52: a largura do layout pode superar a tela visual em navegadores
+  // móveis. Centraliza a ficha na visualViewport sem deslocar o site inteiro.
+  function fitVisualViewport(){
+    const v=window.visualViewport;
+    if(!v || !window.matchMedia || !window.matchMedia('(max-width:620px)').matches || modal.hidden || !modal.style)return;
+    modal.style.left=v.offsetLeft+'px';
+    modal.style.top=v.offsetTop+'px';
+    modal.style.width=v.width+'px';
+    modal.style.height=v.height+'px';
+    modal.style.right='auto';
+    modal.style.bottom='auto';
+  }
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize',fitVisualViewport,{passive:true});
+    window.visualViewport.addEventListener('scroll',fitVisualViewport,{passive:true});
+  }
   function esc(s){return (s||'').replace(/[&<>"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch];});}
   function relatedFor(card){
     const sameSub=cards.filter(c=>c!==card && card.dataset.sub && c.dataset.sub===card.dataset.sub && c.dataset.cat===card.dataset.cat);
@@ -554,9 +570,15 @@ def gerar_html_vitrine(
     });
     related.hidden=!rel.length;
     modal.hidden=false; modal.setAttribute('aria-hidden','false'); document.body.classList.add('product-modal-open');
-    const closeBtn=modal.querySelector('.product-detail-close'); if(closeBtn)closeBtn.focus();
+    fitVisualViewport();
+    const closeBtn=modal.querySelector('.product-detail-close');
+    if(closeBtn){try{closeBtn.focus({preventScroll:true});}catch(e){closeBtn.focus();}}
   }
-  function close(){modal.hidden=true;modal.setAttribute('aria-hidden','true');document.body.classList.remove('product-modal-open');if(current)current.focus();}
+  function close(){
+    modal.hidden=true;modal.setAttribute('aria-hidden','true');document.body.classList.remove('product-modal-open');
+    if(modal.style){['left','top','width','height','right','bottom'].forEach(p=>modal.style.removeProperty(p));}
+    if(current)current.focus();
+  }
   // HF65.24.52: abre a ficha diretamente quando o visitante chega por campanha.
   // O identificador é comparado com os produtos existentes, sem HTML dinâmico.
   try {
