@@ -170,7 +170,7 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
     return t.length>0 && t.length<=max && /^[a-z0-9][a-z0-9_-]*$/.test(t) ? t : '';
   }
   function campaignReference(){
-    const campaign=campaignToken(utm.campaign,80);
+    const campaign=campaignToken(utm.campaign,120);
     if(!campaign) return '';
     const source=campaignToken(utm.source,40);
     const medium=campaignToken(utm.medium,40);
