@@ -108,8 +108,28 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
   }
   const clientId=uid(localStorage,'af_client_id_v1');
   const sessionId=uid(sessionStorage,'af_session_id_v1');
-  let entryPath='';
-  try{entryPath=sessionStorage.getItem('af_entry_path_v1')||'';if(!entryPath){entryPath=location.pathname+location.search+location.hash;sessionStorage.setItem('af_entry_path_v1',entryPath);}}catch(e){entryPath=location.pathname;}
+  // HF65.24.52: caminhos e origem NÃO incluem query string nem fragmentos.
+  // Links recebidos podem carregar email, telefone ou tokens em parâmetros
+  // arbitrários, que não são necessários para entender oportunidades.
+  function safePath(raw){
+    const base=String(raw||'/').split(/[?#]/,1)[0]||'/';
+    return clip(base,300);
+  }
+  function safeReferrer(){
+    try{
+      const raw=document.referrer||'';
+      if(!raw) return '';
+      const u=new URL(raw);
+      if(u.protocol!=='https:' && u.protocol!=='http:') return '';
+      return clip(u.origin+u.pathname,500);
+    }catch(e){return '';}
+  }
+  let entryPath=safePath(location.pathname);
+  try{
+    // Chave nova para não reutilizar o valor antigo, que continha a URL completa.
+    entryPath=safePath(sessionStorage.getItem('af_entry_path_v52')||entryPath);
+    sessionStorage.setItem('af_entry_path_v52',entryPath);
+  }catch(e){}
   const qs=new URLSearchParams(location.search);
   // HF65.24.52: mantém a atribuição UTM apenas dentro da sessão atual.
   // Uma nova campanha explícita substitui a anterior. Não armazena dados pessoais.
@@ -139,7 +159,7 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
   }catch(e){}
   function send(type, product, context){
     const payload=Object.assign({},baseMeta,geoCache,{
-      event_type:type,product_name:clip(product,180),page_path:clip(location.pathname+location.hash,300),referrer:clip(document.referrer,500),
+      event_type:type,product_name:clip(product,180),page_path:safePath(location.pathname),referrer:safeReferrer(),
       client_id:clientId,session_id:sessionId,event_context:clip(context,80)
     });
     const headers={'apikey':CFG.key,'Content-Type':'application/json','Prefer':'return=minimal'};
