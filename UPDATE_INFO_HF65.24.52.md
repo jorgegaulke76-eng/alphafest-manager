@@ -16,11 +16,16 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
 - A navegação conserva o **primeiro toque UTM da sessão da aba**. O painel
   usa essa primeira campanha identificada e somente cliques de WhatsApp posteriores.
 - Ao clicar no WhatsApp **dentro de uma ficha de produto**, o texto de orçamento
-  ganha a linha editável `Referência da campanha: instagram/stories/natal-2026`
-  (quando houver campanha UTM válida). A linha não é duplicada em cliques
-  repetidos e não aparece nos CTAs gerais. O cliente ainda decide se envia
-  ou não a mensagem. Essa referência permite à equipe comparar manualmente
-  conversas recebidas com campanhas, **sem declarar vendas automaticamente**.
+  ganha a linha `Referência da campanha: instagram/stories/natal-2026`
+  (quando houver campanha UTM válida), sem duplicá-la em cliques repetidos.
+- **Novo no carrinho HF65.24.52:** a mesma referência validada aparece no
+  texto de orçamento com vários produtos, antes de abrir o WhatsApp.
+  O cliente pode editar ou remover a referência na revisão. Se não houver
+  campanha identificada, nenhuma referência é acrescentada; CTAs gerais
+  permanecem inalterados. O carrinho conserva quantidades e observações
+  existentes e NÃO envia mensagens automaticamente.
+- Essa referência pode ajudar a comparar manualmente conversas recebidas
+  com campanhas, **sem declarar vendas automaticamente**.
 - Links antigos de produtos renomeados continuam a funcionar quando o nome
   anterior é mantido como **Alias não ambíguo** no Catálogo Oficial.
 - Eventos de acesso não armazenam query strings, fragmentos nem caminhos externos
@@ -31,7 +36,7 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
   ou alterar status, orçamento, estoque, produção ou financeiro.
 
 ## Evidências automatizadas
-- Execução GitHub Actions: https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/44903502249
+- Execução GitHub Actions: https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/44936873512
 - 13 testes de regressão Python/JavaScript aprovados, incluindo a referência
   de campanha no WhatsApp da ficha, prevenção de duplicações, preservação do
   texto original e separação dos CTAs gerais.
@@ -41,8 +46,13 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
   e cálculo do painel, sem envio de dados externos.
 - **PostgREST + PostgreSQL descartáveis:** regras INSERT/SELECT/UPDATE testadas.
 - **Navegador -> rastreador HF52 -> PostgREST real -> PostgreSQL temporário:**
-  8 eventos persistidos em duas sessões independentes (desktop e celular),
-  com uma abertura e um clique por sessão, e análise UTM correta.
+  10 eventos de campanha persistidos em duas sessões independentes
+  (desktop e celular), sendo por dispositivo 2 page_views, 1 product_open
+  e 2 whatsapp_clicks (ficha e carrinho). O relatório conserva 1 sessão
+  com WhatsApp por campanha, sem duplicar oportunidades por clique.
+- O teste abriu o carrinho com 2 produtos, validou referência UTM no texto
+  editável, a possibilidade de apagá-la e o envio simulado sem abrir serviços
+  externos. Uma sessão sem campanha não recebeu referência indevida.
 - Este último teste valida o contrato técnico em ambiente descartável.
   **Não é homologação da API Supabase hospedada nem prova de mensagens/vendas.**
 
@@ -59,8 +69,9 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
 - [ ] Gerar prévia do site no Manager e publicar pelo fluxo Cloudflare existente.
 - [ ] Após publicar, usar uma campanha real de divulgação e conferir os registros
       como **intenções de orçamento**, sem presumir mensagens enviadas.
-- [ ] Verificar manualmente se a mensagem enviada no WhatsApp contém a referência
-      esperada; comparar a referência com o pedido pago antes de considerar uma
+- [ ] Verificar manualmente se a mensagem recebida no WhatsApp contém a referência
+      esperada, tanto na ficha quanto no carrinho, e se a mensagem continua editável;
+      comparar a referência com o pedido pago antes de considerar uma
       venda atribuída à campanha.
 
 ## Critérios de reversão
