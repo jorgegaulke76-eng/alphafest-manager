@@ -32,6 +32,7 @@ PGRST = "http://127.0.0.1:3000/site_metrics_events"
 NAME = "Bubble Personalizado de Teste"
 HTML = (
     '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
+    '<meta name="viewport" content="width=device-width, initial-scale=1">'
     '<title>HF52 Teste Local</title></head><body>'
     '<article class="product-card" data-product="bubble-teste" '
     'data-detail-name="Bubble Personalizado de Teste"></article>'
@@ -212,6 +213,14 @@ def main() -> None:
                 assert "Caneca Personalizada de Teste" in draft
                 assert draft.endswith(expected_ref), (device, draft[-180:])
                 assert draft.count("Referência da campanha:") == 1
+                # A captura móvel precisa usar a largura visual real.
+                geometry = page.locator(".afquote-panel").bounding_box()
+                assert geometry and geometry["x"] >= -1, (
+                    f"{device}: painel deslocado para fora da tela: {geometry}"
+                )
+                assert geometry["x"] + geometry["width"] <= width + 1, (
+                    f"{device}: painel cortado lateralmente: {geometry}"
+                )
                 OUTPUT.mkdir(exist_ok=True)
                 page.screenshot(
                     path=str(OUTPUT / f"carrinho-{device}.png"),
