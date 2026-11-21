@@ -132,12 +132,16 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
     sessionStorage.setItem('af_entry_path_v52',entryPath);
   }catch(e){}
   const qs=new URLSearchParams(location.search);
-  // HF65.24.52: mantém a atribuição UTM apenas dentro da sessão atual.
-  // Uma nova campanha explícita substitui a anterior. Não armazena dados pessoais.
+  // HF65.24.52: primeiro toque UTM por sessão, igual ao relatório.
+  // Uma segunda campanha na mesma aba não altera a atribuição inicial.
   const utm={source:clip(qs.get('utm_source'),120),medium:clip(qs.get('utm_medium'),120),campaign:clip(qs.get('utm_campaign'),180)};
   try {
     const stored=JSON.parse(sessionStorage.getItem('af_utm_v52')||'{}');
-    if(utm.source||utm.medium||utm.campaign){
+    if(stored.campaign){
+      utm.source=clip(stored.source,120);
+      utm.medium=clip(stored.medium,120);
+      utm.campaign=clip(stored.campaign,180);
+    } else if(utm.source||utm.medium||utm.campaign) {
       sessionStorage.setItem('af_utm_v52',JSON.stringify(utm));
     } else {
       utm.source=clip(stored.source,120);utm.medium=clip(stored.medium,120);utm.campaign=clip(stored.campaign,180);
