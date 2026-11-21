@@ -196,7 +196,7 @@ def main() -> None:
                 # A referência comercial precisa aparecer no carrinho com
                 # vários produtos e permanecer editável antes do envio.
                 page.locator("#afquote-add").click(timeout=7000)
-                page.locator('#afquote-layer [data-afquote-close]').first.click()
+                page.locator('#afquote-layer .afquote-close').click()
                 page.locator("#product-detail-name").evaluate(
                     "(el) => { el.textContent = 'Caneca Personalizada de Teste'; }"
                 )
