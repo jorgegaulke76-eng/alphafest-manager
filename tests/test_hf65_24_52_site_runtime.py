@@ -129,7 +129,7 @@ let privacy=run('?utm_source=instagram&utm_campaign=campanha-privada&telefone=11
 const safe=privacy.posts[0];
 if(safe.page_path!=='/novidades/' || safe.entry_path!=='/novidades/')
   throw Error('Caminhos continuam expondo query string ou fragmento');
-if(safe.referrer!=='https://instagram.com/p/abc')
+if(safe.referrer!=='https://instagram.com')
   throw Error('Origem da visita continua expondo parametros pessoais');
 if(JSON.stringify(safe).includes('ana@example.org') || JSON.stringify(safe).includes('11999998888'))
   throw Error('Dado pessoal nao relacionado a campanha foi registrado');
