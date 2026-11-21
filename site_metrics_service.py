@@ -158,6 +158,29 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
       .then(g=>{geoCache={city:clip(g.city,120),region:clip(g.region,120),country:clip(g.country,80)};})
       .catch(function(){});
   }catch(e){}
+  // HF65.24.52: referência comercial apenas no texto pré-preenchido
+  // do WhatsApp da ficha. Nunca envia mensagem por conta própria.
+  // Não copia a URL nem dados pessoais de parâmetros não autorizados.
+  function campaignToken(value,max){
+    const t=String(value||'').trim().toLowerCase();
+    return t.length>0 && t.length<=max && /^[a-z0-9][a-z0-9_-]*$/.test(t) ? t : '';
+  }
+  function markProductWhatsapp(wa){
+    if(!wa || !wa.closest || !wa.closest('#product-detail-modal')) return;
+    const campaign=campaignToken(utm.campaign,80);
+    if(!campaign) return;
+    const source=campaignToken(utm.source,40);
+    const medium=campaignToken(utm.medium,40);
+    const ref=[source,medium,campaign].filter(Boolean).join('/');
+    try{
+      const target=new URL(wa.href,location.href);
+      if(target.protocol!=='https:' || target.hostname!=='wa.me') return;
+      const message=target.searchParams.get('text')||'';
+      if(!message || message.includes('Referência da campanha:')) return;
+      target.searchParams.set('text',message+'\\n\\nReferência da campanha: '+ref);
+      wa.href=target.toString();
+    }catch(e){ /* WhatsApp continua com o link original */ }
+  }
   function send(type, product, context){
     const payload=Object.assign({},baseMeta,geoCache,{
       event_type:type,product_name:clip(product,180),page_path:safePath(location.pathname),referrer:safeReferrer(),
@@ -214,6 +237,7 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
     if(!t) return;
     const wa=t.closest && t.closest('a[href*="wa.me"],a[href*="api.whatsapp.com"],a[href*="whatsapp.com/send"]');
     if(wa){
+      markProductWhatsapp(wa);
       const galleryCard=wa.closest('.gallery-card');
       const galleryName=galleryCard&&galleryCard.querySelector('h3')?galleryCard.querySelector('h3').textContent.trim():'';
       // Somente atribuir um produto se o CTA estiver dentro da ficha
