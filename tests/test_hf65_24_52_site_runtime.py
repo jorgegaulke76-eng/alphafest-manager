@@ -162,7 +162,7 @@ const modalAnchor={
     return null;
   }
 };
-const modalVisit=run('?utm_source=instagram&utm_campaign=produto-modal');
+const modalVisit=run('?utm_source=instagram&utm_campaign=natal-2026');
 modalVisit.handlers['doc:click']({target:modalAnchor});
 const modalClicks=type(modalVisit,'whatsapp_click');
 if(modalClicks.length!==1 || modalClicks[0].product_name!=='Bubble personalizado')
