@@ -292,7 +292,7 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
             with col_a:
                 origem=st.selectbox('Canal de divulgação', ['instagram','facebook','google','whatsapp','tiktok','youtube','pinterest','outro'],key='hf37_canal')
                 destino=st.selectbox('Página de destino', ['Página inicial','Para Empresas','Novidades & Ofertas','Produto específico'],key='hf37_destino')
-                slug_produto=st.text_input('Nome do produto no catálogo ou slug',key='hf52_produto_slug',help='Digite o nome exatamente como aparece na vitrine; o link usa o mesmo slug do site. Confirme a ficha na prévia antes de divulgar.') if destino=='Produto específico' else ''
+                slug_produto=st.text_input('Nome do produto no catálogo ou slug',key='hf52_produto_slug',help='Digite o nome do produto publicado na vitrine. Se renomear um produto, mantenha o nome anterior em Aliases do Catálogo Oficial para preservar links antigos. Confirme a ficha antes de divulgar.') if destino=='Produto específico' else ''
             with col_b:
                 meio=st.selectbox('Tipo de divulgação', ['social','post','stories','bio','mensagem','cpc','email'],key='hf37_meio')
                 nome=st.text_input('Nome da campanha (sem informações pessoais)',value='natal-2026',max_chars=120,key='hf37_nome')
