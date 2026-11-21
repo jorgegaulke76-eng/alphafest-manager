@@ -163,7 +163,7 @@ def main() -> None:
                 message = parse_qs(urlparse(href).query).get("text", [""])[0]
                 assert (
                     message.endswith(
-                        "\\n\\nReferência da campanha: instagram/stories/hf52-staging-local"
+                        "\n\nReferência da campanha: instagram/stories/hf52-staging-local"
                     )
                 ), f"{device}: referência comercial não apareceu no WhatsApp"
                 assert message.count("Referência da campanha:") == 1
