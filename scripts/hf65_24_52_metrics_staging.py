@@ -135,6 +135,8 @@ def main() -> None:
                     origin + "/?produto=" + quote(PRODUCT_SLUG)
                     + "&utm_source=instagram&utm_medium=stories"
                     + "&utm_campaign=hf52-staging-local"
+                    + "&cliente=TestePrivacidade&telefone=11999998888"
+                    + "#email=teste@example.org"
                 )
                 page.goto(url, wait_until="domcontentloaded", timeout=45000)
                 page.locator("#product-detail-modal").wait_for(state="visible")
@@ -199,6 +201,17 @@ def main() -> None:
                 assert campaign["sessoes_whatsapp"] == 1
                 assert campaign["cliques_whatsapp"] == 1
                 assert campaign["percentual"] == 100.0
+                # Os campos enviados à API nunca devem reproduzir parâmetros
+                # arbitrários com contatos pessoais presentes no link.
+                for sent in final_events:
+                    for field in ("entry_path", "page_path", "referrer"):
+                        assert "?" not in sent.get(field, "") and "#" not in sent.get(field, ""), (
+                            f"{device}: URL com parâmetros exposta em {field}"
+                        )
+                for secret in ("TestePrivacidade", "11999998888", "teste@example.org"):
+                    assert secret not in json.dumps(final_events, ensure_ascii=False), (
+                        f"{device}: valor de parâmetro pessoal enviado à API local"
+                    )
                 assert not blocked, f"{device}: POST externo bloqueado: {blocked}"
 
                 # Relatório local só com dados agregados; não escrever IDs,
