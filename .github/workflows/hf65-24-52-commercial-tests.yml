@@ -1,0 +1,120 @@
+name: HF65.24.52 - Validacao comercial
+
+on:
+  push:
+    branches:
+      - hf65-24-52-integracao-comercial
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'site_metrics_dashboard_ui.py'
+      - 'site_metrics_service.py'
+      - 'site_vitrine_service.py'
+      - 'tests/test_hf65_24_52_commercial_links.py'
+      - 'tests/test_hf65_24_52_site_runtime.py'
+      - 'scripts/hf65_24_52_browser_preview.py'
+      - 'scripts/hf65_24_52_metrics_staging.py'
+      - 'scripts/hf65_24_52_postgrest_contract.py'
+      - 'scripts/hf65_24_52_postgrest_browser.py'
+      - 'tests/fixtures/hf65_24_52_metrics_contract.sql'
+      - '.github/workflows/hf65-24-52-commercial-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  commercial-links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validar sintaxe Python
+        run: |
+          python -m py_compile site_metrics_dashboard_ui.py site_metrics_service.py site_vitrine_service.py
+      - name: Instalar pytest
+        run: python -m pip install pytest requests
+      - name: Executar regressao de links comerciais
+        run: python -m pytest -q tests/test_hf65_24_52_commercial_links.py tests/test_hf65_24_52_site_runtime.py
+
+  browser-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Baixar codigo da HF52
+        uses: actions/checkout@v4
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar Playwright
+        run: |
+          python -m pip install playwright==1.56.0 requests
+          python -m playwright install chromium
+      - name: Homologar copia publica em Chromium desktop e celular
+        run: python scripts/hf65_24_52_browser_preview.py
+      - name: Testar eventos e atribuição com API simulada local
+        run: python scripts/hf65_24_52_metrics_staging.py
+      - name: Guardar previa isolada e imagens
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hf65-24-52-previa-e-metricas-locais
+          path: hf52-preview-output/
+          if-no-files-found: warn
+          retention-days: 7
+
+  postgrest-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Baixar arquivos da HF52
+        uses: actions/checkout@v4
+      - name: Criar PostgreSQL temporário sem conexão com Supabase
+        run: |
+          docker run -d --name hf52-pg -e POSTGRES_PASSWORD=hf52-local -p 5433:5432 postgres:17
+          for i in {1..45}; do
+            if docker exec hf52-pg pg_isready -U postgres -d postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec hf52-pg pg_isready -U postgres -d postgres
+          docker exec -i hf52-pg psql -v ON_ERROR_STOP=1 -U postgres -d postgres < tests/fixtures/hf65_24_52_metrics_contract.sql
+      - name: Subir serviço PostgREST real em localhost
+        run: |
+          docker run -d --name hf52-api --network host \
+            -e PGRST_DB_URI='postgres://postgres:hf52-local@127.0.0.1:5433/postgres' \
+            -e PGRST_DB_SCHEMAS=public -e PGRST_DB_ANON_ROLE=anon \
+            -e PGRST_SERVER_PORT=3000 \
+            postgrest/postgrest:v16.6
+          ready=0
+          for i in {1..40}; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/site_metrics_events || true)
+            if [ "$code" = "401" ] || [ "$code" = "403" ]; then ready=1; break; fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            docker logs hf52-api --tail 100
+            exit 1
+          fi
+      - name: Preparar teste Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Testar API e política RLS do banco isolado
+        run: |
+          python -m pip install requests
+          python scripts/hf65_24_52_postgrest_contract.py
+      - name: Testar navegador real gravando eventos no PostgREST descartável
+        run: |
+          python -m pip install playwright==1.56.0
+          python -m playwright install chromium
+          python scripts/hf65_24_52_postgrest_browser.py
+      - name: Encerrar containers de teste
+        if: always()
+        run: |
+          docker rm -f hf52-api hf52-pg || true
