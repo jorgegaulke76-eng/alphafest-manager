@@ -158,7 +158,12 @@ def main() -> None:
             for index, (device, width, height, mobile) in enumerate(
                 [("desktop", 1366, 850, False), ("celular", 390, 844, True)]
             ):
-                campaign = f"hf52-api-{device}"
+                base_campaign = f"hf52-api-{device}"
+                campaign = (
+                    base_campaign + "n" * (120 - len(base_campaign))
+                    if device == "desktop" else base_campaign
+                )
+                assert len(campaign) == (120 if device == "desktop" else len(base_campaign))
                 context = browser.new_context(
                     viewport={"width": width, "height": height},
                     is_mobile=mobile,
