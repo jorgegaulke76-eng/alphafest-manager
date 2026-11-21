@@ -40,9 +40,10 @@ def build_public_preview() -> Path:
     with urlopen(req, timeout=25) as resp:
         if resp.status != 200:
             raise RuntimeError(f"Site público não respondeu HTTP 200: {resp.status}")
-        page = resp.read(8_000_001)
-    if len(page) > 8_000_000:
-        raise RuntimeError("HTML público maior que 8 MB: revisão manual necessária")
+        page = resp.read(48_000_001)
+    if len(page) > 48_000_000:
+        raise RuntimeError("HTML público maior que 48 MB: revisão manual necessária")
+    print(f"HTML público obtido: {len(page) / (1024 * 1024):.1f} MiB")
     page = page.decode("utf-8")
     cards = re.findall(r'<article\s+class="product-card\b', page)
     if len(cards) != 92:
