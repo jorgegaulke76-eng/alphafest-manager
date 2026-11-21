@@ -144,3 +144,31 @@ def test_geracao_da_vitrine_mantem_identificador_e_nao_publica_produto_desmarcad
     assert 'data-product="arco-de-balao-tradicional"' in html
     assert 'data-product="produto-interno"' not in html
     assert 'class="product-card product-card-compact"' in html
+
+
+def test_renomeacao_mantem_link_antigo_quando_nome_anterior_esta_nos_aliases():
+    from site_vitrine_service import gerar_html_vitrine
+
+    produtos = [
+        {"Nome": "Bubble Novo", "Aliases": ["Bubble Antigo", "Promo Compartilhada"],
+         "Descricao": "Bubble de festa", "Imagens": ["https://example.com/bubble.webp"],
+         "PublicarSite": True, "Ativo": True, "Categoria": "BALÃO"},
+        {"Nome": "Balão Premium", "Aliases": ["Promo Compartilhada", "Bubble Novo"],
+         "Descricao": "Balão decorado", "Imagens": ["https://example.com/balao.webp"],
+         "PublicarSite": True, "Ativo": True, "Categoria": "BALÃO"},
+    ]
+    html = gerar_html_vitrine(produtos, {"nome": "AlphaFest", "celular": "11972949533"}, modo_preview=True)
+    assert 'data-product="bubble-novo" data-product-aliases="bubble-antigo"' in html
+    assert 'data-product="balao-premium" data-product-aliases=""' in html
+    # Alias ambíguo não pode direcionar o cliente ao produto errado.
+    assert 'data-product-aliases="promo-compartilhada"' not in html
+    assert 'data-product-aliases="bubble-novo"' not in html
+
+
+def test_link_utm_antigo_eh_preservado_pelo_mesmo_slug_de_alias():
+    url = campaign_link(
+        "instagram", "stories", "natal-2026", "Produto específico", "Bubble Antigo"
+    )
+    params = parse_qs(urlparse(url).query)
+    assert params["produto"] == ["bubble-antigo"]
+    assert params["utm_campaign"] == ["natal-2026"]
