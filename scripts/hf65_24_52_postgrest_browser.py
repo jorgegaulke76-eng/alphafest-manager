@@ -21,6 +21,7 @@ import requests
 from playwright.sync_api import sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
+OUTPUT = ROOT / "hf52-postgrest-output"
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -211,6 +212,11 @@ def main() -> None:
                 assert "Caneca Personalizada de Teste" in draft
                 assert draft.endswith(expected_ref), (device, draft[-180:])
                 assert draft.count("Referência da campanha:") == 1
+                OUTPUT.mkdir(exist_ok=True)
+                page.screenshot(
+                    path=str(OUTPUT / f"carrinho-{device}.png"),
+                    full_page=False,
+                )
                 # O cliente pode remover a origem no próprio WhatsApp.
                 review.fill(draft.replace("\n\n" + expected_ref, ""))
                 assert expected_ref not in review.input_value()
@@ -272,6 +278,21 @@ def main() -> None:
                 assert stats[0]["sessoes_whatsapp"] == 1
                 assert stats[0]["cliques_whatsapp"] == 2
                 assert sum(r["event_context"] == "carrinho" for r in selected) == 1
+                report = {
+                    "dispositivo": device,
+                    "resultado": "aprovado",
+                    "api": "PostgREST e PostgreSQL reais em containers descartáveis",
+                    "eventos": dict(counts),
+                    "atribuicao": stats[0],
+                    "carrinho_itens": 2,
+                    "texto_whatsapp": "referência editável e não duplicada",
+                    "mensagens_enviadas": "não aferido",
+                    "vendas_confirmadas": "não aferido",
+                    "conexoes_externas_do_navegador": 0,
+                }
+                (OUTPUT / f"eventos-{device}.json").write_text(
+                    json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+                )
                 print(
                     f"{device}: 5 eventos efetivamente persistidos em PostgreSQL local; "
                     "campanha atribuída e privacidade preservada",
