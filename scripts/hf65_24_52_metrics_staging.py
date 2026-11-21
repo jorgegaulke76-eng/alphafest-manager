@@ -158,6 +158,15 @@ def main() -> None:
                 # O clique acontece no elemento REAL. A tentativa de abrir o
                 # WhatsApp é bloqueada pelo roteador de rede do teste.
                 page.locator("#product-detail-whatsapp").click(timeout=10000)
+                href = page.locator("#product-detail-whatsapp").get_attribute("href") or ""
+                from urllib.parse import parse_qs
+                message = parse_qs(urlparse(href).query).get("text", [""])[0]
+                assert (
+                    message.endswith(
+                        "\\n\\nReferência da campanha: instagram/stories/hf52-staging-local"
+                    )
+                ), f"{device}: referência comercial não apareceu no WhatsApp"
+                assert message.count("Referência da campanha:") == 1
                 after_click = await_events(events, lock, 3)
                 clicks = [x for x in after_click if x["event_type"] == "whatsapp_click"]
                 assert len(clicks) == 1, after_click
