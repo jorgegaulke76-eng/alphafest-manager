@@ -57,7 +57,8 @@ def read_db() -> list[dict]:
             'created_at', created_at
           ) ORDER BY id
         ), '[]'::json)
-        FROM public.site_metrics_events;
+        FROM public.site_metrics_events
+        WHERE utm_campaign LIKE 'hf52-api-%';
     """
     result = subprocess.run(
         ["docker", "exec", "hf52-pg", "psql", "-X", "-A", "-t", "-U", "postgres",
