@@ -169,13 +169,20 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
     const t=String(value||'').trim().toLowerCase();
     return t.length>0 && t.length<=max && /^[a-z0-9][a-z0-9_-]*$/.test(t) ? t : '';
   }
-  function markProductWhatsapp(wa){
-    if(!wa || !wa.closest || !wa.closest('#product-detail-modal')) return;
+  function campaignReference(){
     const campaign=campaignToken(utm.campaign,80);
-    if(!campaign) return;
+    if(!campaign) return '';
     const source=campaignToken(utm.source,40);
     const medium=campaignToken(utm.medium,40);
-    const ref=[source,medium,campaign].filter(Boolean).join('/');
+    return [source,medium,campaign].filter(Boolean).join('/');
+  }
+  // O carrinho consulta a referência somente ao preparar a mensagem editável.
+  // Nenhum nome, telefone ou texto de mensagem é compartilhado com métricas.
+  window.alphaFestCampaignReference=campaignReference;
+  function markProductWhatsapp(wa){
+    if(!wa || !wa.closest || !wa.closest('#product-detail-modal')) return;
+    const ref=campaignReference();
+    if(!ref) return;
     try{
       const target=new URL(wa.href,location.href);
       if(target.protocol!=='https:' || target.hostname!=='wa.me') return;
