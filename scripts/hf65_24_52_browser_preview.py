@@ -66,6 +66,14 @@ def build_public_preview() -> Path:
         raise RuntimeError(
             f"Era esperado exatamente 1 script de métricas; encontrados: {metrics_count}"
         )
+    # O Worker público também injeta Cloudflare Web Analytics automaticamente.
+    # Impedir que o HTML da prévia em arquivo gere beacon RUM (mesmo sem POST válido).
+    page = re.sub(
+        r'<script\b[^>]*src=["\']https://static\.cloudflareinsights\.com/beacon\.min\.js[^>]*></script>',
+        "",
+        page,
+        flags=re.IGNORECASE,
+    )
     old_detail = (
         r'<script>\s*\(function\(\)\{\s*'
         r"const modal=document\.getElementById\(['\"]product-detail-modal['\"]\);"
