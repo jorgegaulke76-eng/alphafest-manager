@@ -172,3 +172,50 @@ def test_link_utm_antigo_eh_preservado_pelo_mesmo_slug_de_alias():
     params = parse_qs(urlparse(url).query)
     assert params["produto"] == ["bubble-antigo"]
     assert params["utm_campaign"] == ["natal-2026"]
+
+
+def test_lista_publicada_filtra_slugs_invalidos_e_ambiguos():
+    from site_metrics_dashboard_ui import published_products_from_html
+
+    public_html = """
+    <article class="product-card product-card-compact" data-detail-name="Bubble &amp; Balões" data-product="bubble-baloes"></article>
+    <article class="product-card" data-product="caneca-personalizada" data-detail-name="Caneca Personalizada"></article>
+    <article class="product-card" data-product="caneca-personalizada" data-detail-name="Caneca Duplicada"></article>
+    <article class="product-card" data-product="codigo?privado=1" data-detail-name="Link inválido"></article>
+    <article class="outro-card" data-product="nao-e-produto" data-detail-name="Outra seção"></article>
+    <article class="product-card" data-product="sem-nome"></article>
+    """
+    assert published_products_from_html(public_html) == (
+        ("Bubble & Balões", "bubble-baloes"),
+    )
+
+
+def test_lista_publicada_cacheada_nao_dispara_requisicoes_repetidas(monkeypatch):
+    import site_metrics_dashboard_ui as ui
+
+    calls = []
+
+    class Response:
+        content = (
+            b'<article class="product-card product-card-compact" '
+            b'data-detail-name="Bubble Personalizado" data-product="bubble-personalizado"></article>'
+        )
+
+        def raise_for_status(self):
+            return None
+
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs))
+        return Response()
+
+    ui.published_products_cached.cache_clear()
+    monkeypatch.setattr(ui.requests, "get", fake_get)
+    try:
+        first = ui.published_products_cached(123456)
+        second = ui.published_products_cached(123456)
+        assert first == second == (("Bubble Personalizado", "bubble-personalizado"),)
+        assert len(calls) == 1
+        assert calls[0][0] == "https://alphafest.com.br/"
+        assert calls[0][1]["timeout"] == 15
+    finally:
+        ui.published_products_cached.cache_clear()
