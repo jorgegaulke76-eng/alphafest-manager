@@ -13,6 +13,9 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
 - Link `https://alphafest.com.br/?produto=<slug>&utm_source=...&utm_medium=...&utm_campaign=...`.
 - Ficha abre automaticamente no destino indicado, respeitando o celular e
   permitindo fechar sem deslocamento horizontal.
+- O identificador comercial do WhatsApp aceita o nome de campanha com o mesmo
+  limite de **120 caracteres** do gerador de links. O teste E2E verifica
+  uma campanha de 120 caracteres tanto na ficha quanto no carrinho.
 - A navegação conserva o **primeiro toque UTM da sessão da aba**. O painel
   usa essa primeira campanha identificada e somente cliques de WhatsApp posteriores.
 - Ao clicar no WhatsApp **dentro de uma ficha de produto**, o texto de orçamento
@@ -36,8 +39,8 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
   ou alterar status, orçamento, estoque, produção ou financeiro.
 
 ## Evidências automatizadas
-- Execução GitHub Actions: https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/44936873512
-- 13 testes de regressão Python/JavaScript aprovados, incluindo a referência
+- Execução GitHub Actions: https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/44939143695
+- 14 testes de regressão Python/JavaScript aprovados, incluindo a referência
   de campanha no WhatsApp da ficha, prevenção de duplicações, preservação do
   texto original e separação dos CTAs gerais.
 - Navegador Chromium desktop e celular aprovado em cópia da vitrine real,
