@@ -123,3 +123,21 @@ def test_bad_remote_history_never_produces_a_report():
     cloud = Cloud([{"unexpected": True}])
     with pytest.raises((ValueError, PrivateDocumentUnavailable)):
         run(cloud)
+
+
+def test_event_referring_to_missing_official_proposal_blocks_entire_report():
+    cloud = Cloud([EVENT, {**EVENT,
+        "event_id": "e7261eb4-13e5-43f5-b30a-5f8bd25bd5e7",
+        "numero_proposta": "REMOVED-ORDER",
+        "atendimento_id": "A2",
+        "ocorrido_em": "2026-11-23T19:02:00+00:00",
+    }])
+    with pytest.raises(ValueError, match="Histórico comercial diverge"):
+        run(cloud)
+
+
+def test_relocated_official_contact_blocks_entire_report():
+    cloud = Cloud([EVENT])
+    proposals = [{**PROPOSALS[0], "atendimento_id": "ANOTHER"}]
+    with pytest.raises(ValueError, match="Histórico comercial diverge"):
+        run(cloud, load_official_snapshots=lambda: (proposals, CONTACTS))
