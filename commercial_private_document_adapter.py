@@ -39,7 +39,7 @@ def _authorized(principal: Any, action: str, authorize: Callable[[Any, str], boo
 
 def _valid_document(value: Any) -> dict[str, Any]:
     if value in (None, {}):
-        return {"events": []}
+        raise PrivateStoreConflict("Histórico remoto não inicializado; criação automática proibida.")
     if not isinstance(value, dict) or set(value) != {"events"}:
         raise ValueError("Documento de auditoria em formato desconhecido.")
     events = value["events"]
@@ -97,8 +97,7 @@ def append_private_event(*, principal: Any,
         usuario=usuario_verificado, ocorrido_em=ocorrido_em,
         propostas=propostas, atendimentos=atendimentos,
     )
-    raw_before = load(DOCUMENT_KEY)
-    before = _valid_document(raw_before)
+    before = _valid_document(load(DOCUMENT_KEY))
     existing = [e for e in before["events"] if e["event_id"] == str(event_id)]
     full = {"event_id": str(event_id), **event}
     if existing:
@@ -117,9 +116,9 @@ def append_private_event(*, principal: Any,
     if related and any(e["atendimento_id"] != atendimento_id for e in related):
         raise PrivateStoreConflict("Pedido possui outro atendimento no histórico.")
     proposed = {"events": before["events"] + [full]}
-    # O documento ainda pode não existir: CAS espera a versão real lida.
-    expected = raw_before if raw_before in (None, {}) else before
-    ok, reason = save_cas(DOCUMENT_KEY, expected, proposed)
+    # Somente PATCH/CAS de documento já criado e conferido separadamente.
+    # A inicialização via UPSERT não é atômica com a verificação de ausência.
+    ok, reason = save_cas(DOCUMENT_KEY, before, proposed)
     if ok is not True or reason != "online":
         raise PrivateStoreConflict("Gravação não confirmada; confira a revisão do documento.")
     return event
