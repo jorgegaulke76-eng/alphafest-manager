@@ -11,7 +11,9 @@ from collections.abc import Callable, Mapping
 from copy import deepcopy
 from typing import Any
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
+
+from commercial_operator_policy import VerifiedOperator
 
 from commercial_attribution_service import (
     build_attribution_event, clean_campaign, validate_event_history,
@@ -32,9 +34,17 @@ class PrivateStoreConflict(RuntimeError):
 def _authorized(principal: Any, action: str, authorize: Callable[[Any, str], bool],
                 credential_mode: Callable[[], str]) -> None:
     """Não aceita o texto de um formulário como prova de identidade."""
+    if not isinstance(principal, VerifiedOperator):
+        raise PrivateStoreDenied("Identidade verificada obrigatória.")
+    if not principal.subject.strip() or len(principal.subject) > 80:
+        raise PrivateStoreDenied("Identificador autenticado inválido.")
     if not callable(authorize) or not callable(credential_mode):
         raise PrivateStoreDenied("Autorização do servidor obrigatória.")
-    if credential_mode() != "service" or authorize(principal, action) is not True:
+    try:
+        allowed = credential_mode() == "service" and authorize(principal, action) is True
+    except Exception:
+        allowed = False
+    if not allowed:
         raise PrivateStoreDenied("Acesso negado ou banco sem credencial de servidor.")
 
 
@@ -110,7 +120,7 @@ def append_private_event(*, principal: Any,
                          save_cas: Callable[[str, Any, Any], tuple[bool, str]],
                          event_id: str, numero_proposta: str, atendimento_id: str,
                          campaign: str, decisao: str, evidencia: str,
-                         ocorrido_em: str, usuario_verificado: str,
+                         ocorrido_em: str,
                          propostas: list[dict[str, Any]],
                          atendimentos: list[dict[str, Any]]) -> dict[str, str]:
     """Somente grava com identidade validada e CAS confirmado pelo servidor.
@@ -118,19 +128,21 @@ def append_private_event(*, principal: Any,
     save_cas deve apontar para cloud_db.save_document_cas com local_path
     configurado exclusivamente pelo servidor e sem aceitar fallback local.
     O evento é criado novamente a partir de dados oficiais no momento da
-    operação; o operador deve vir da sessão autenticada, nunca do formulário.
+    operação; usuario é derivado do sujeito autenticado, jamais do formulário.
+    A identidade tipada só pode ser emitida por autenticador real do backend.
     """
     _authorized(principal, "write_attribution", authorize, credential_mode)
     if not callable(load) or not callable(save_cas):
         raise PrivateStoreDenied("Persistência de servidor não configurada.")
     try:
-        UUID(str(event_id))
+        if not isinstance(event_id, str) or str(UUID(event_id)) != event_id:
+            raise ValueError()
     except (ValueError, TypeError, AttributeError):
         raise ValueError("ID idempotente inválido.") from None
     event = build_attribution_event(
         numero_proposta=numero_proposta, atendimento_id=atendimento_id,
         campaign=campaign, decisao=decisao, evidencia=evidencia,
-        usuario=usuario_verificado, ocorrido_em=ocorrido_em,
+        usuario=principal.subject, ocorrido_em=ocorrido_em,
         propostas=propostas, atendimentos=atendimentos,
     )
     before = _valid_document(load(DOCUMENT_KEY))
@@ -151,6 +163,16 @@ def append_private_event(*, principal: Any,
         raise PrivateStoreConflict("Histórico existente contém evento inconsistente.")
     if related and any(e["atendimento_id"] != atendimento_id for e in related):
         raise PrivateStoreConflict("Pedido possui outro atendimento no histórico.")
+    # O histórico usa hora UTC comparável; eventos retroativos ou com timestamp
+    # igual tornam a resolução temporal ambígua. Rejeitar antes da gravação.
+    if related:
+        new_time = datetime.fromisoformat(event["ocorrido_em"]).astimezone(timezone.utc)
+        old_times = [
+            datetime.fromisoformat(e["ocorrido_em"]).astimezone(timezone.utc)
+            for e in related
+        ]
+        if new_time <= max(old_times):
+            raise PrivateStoreConflict("Horário retroativo ou duplicado no histórico.")
     proposed = {"events": before["events"] + [full]}
     # Somente PATCH/CAS de documento já criado e conferido separadamente.
     # A inicialização via UPSERT não é atômica com a verificação de ausência.
