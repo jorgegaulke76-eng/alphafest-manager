@@ -72,6 +72,21 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
     try{let v=storage.getItem(key); if(v) return v; v=(crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(16).slice(2); storage.setItem(key,v); return v;}catch(e){return '';}
   }
   function clip(v,n){return String(v||'').replace(/\s+/g,' ').trim().slice(0,n);}
+  // Evita armazenar parâmetros UTM arbitrários como e-mails, URLs ou telefones.
+  // O gerador do Manager já usa somente letras, números, _ e -.
+  function safeUtm(value,limit){
+    const v=String(value||'').trim();
+    if(!v || v.length>limit || !/^[a-z0-9][a-z0-9_-]*$/i.test(v)
+       || /(^|[-_])\d{9,}($|[-_])/.test(v)) return '';
+    return v.toLowerCase();
+  }
+  // Termos de busca com possíveis contatos pessoais não são enviados às métricas.
+  function safeSearchTerm(value){
+    const text=clip(value,180);
+    if(text.length<2 || /@|https?:\/\/|www\./i.test(text)) return '';
+    if(text.replace(/\D/g,'').length>=9) return '';
+    return text;
+  }
   function browserName(){
     const ua=navigator.userAgent||'';
     if(/Edg\//.test(ua)) return 'Edge';
@@ -89,7 +104,7 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
   }
   function sourceName(){
     const params=new URLSearchParams(location.search);
-    const utm=clip(params.get('utm_source'),120);
+    const utm=safeUtm(params.get('utm_source'),120);
     if(utm) return utm;
     const raw=document.referrer||'';
     if(!raw) return 'Direto';
@@ -134,17 +149,19 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
   const qs=new URLSearchParams(location.search);
   // HF65.24.52: primeiro toque UTM por sessão, igual ao relatório.
   // Uma segunda campanha na mesma aba não altera a atribuição inicial.
-  const utm={source:clip(qs.get('utm_source'),120),medium:clip(qs.get('utm_medium'),120),campaign:clip(qs.get('utm_campaign'),180)};
+  const utm={
+    source:safeUtm(qs.get('utm_source'),120),
+    medium:safeUtm(qs.get('utm_medium'),120),
+    campaign:safeUtm(qs.get('utm_campaign'),180)
+  };
   try {
     const stored=JSON.parse(sessionStorage.getItem('af_utm_v52')||'{}');
-    if(stored.campaign){
-      utm.source=clip(stored.source,120);
-      utm.medium=clip(stored.medium,120);
-      utm.campaign=clip(stored.campaign,180);
+    if(safeUtm(stored.campaign,180)){
+      utm.source=safeUtm(stored.source,120);
+      utm.medium=safeUtm(stored.medium,120);
+      utm.campaign=safeUtm(stored.campaign,180);
     } else if(utm.source||utm.medium||utm.campaign) {
       sessionStorage.setItem('af_utm_v52',JSON.stringify(utm));
-    } else {
-      utm.source=clip(stored.source,120);utm.medium=clip(stored.medium,120);utm.campaign=clip(stored.campaign,180);
     }
   } catch(e) {}
   const baseMeta={
@@ -224,8 +241,8 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
   let searchTimer=null, lastSearch='';
   function scheduleSearch(value){
     clearTimeout(searchTimer);
-    const term=clip(value,180);
-    if(term.length<2) return;
+    const term=safeSearchTerm(value);
+    if(!term) return;
     searchTimer=setTimeout(function(){
       const key=term.toLocaleLowerCase('pt-BR');
       if(key===lastSearch) return;
