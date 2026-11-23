@@ -9,7 +9,7 @@ from collections import Counter
 from decimal import Decimal
 from typing import Any, Iterable, Mapping
 
-from commercial_attribution_service import effective_attributions
+from commercial_attribution_service import effective_attributions, validate_event_history
 from commercial_conversion_service import summarize_verified_campaign_sales
 from commercial_funnel_audit import audit_opportunity_funnel
 
@@ -28,7 +28,8 @@ def build_verified_commercial_report(
     proposals = [dict(x) for x in proposals if isinstance(x, Mapping)]
     events = [dict(x) for x in audited_events if isinstance(x, Mapping)]
     audit = audit_opportunity_funnel(contacts, proposals)
-    links = effective_attributions(events)
+    validated_events = validate_event_history(events, proposals, contacts)
+    links = effective_attributions(validated_events)
 
     # Recusar atribuição se a ligação mudou após a confirmação.
     proposal_counts = Counter(
@@ -49,7 +50,7 @@ def build_verified_commercial_report(
         if not aid or contact_counts[aid] != 1:
             continue
         rows = [
-            e for e in events if str(e.get("numero_proposta") or "").strip() == number
+            e for e in validated_events if str(e.get("numero_proposta") or "").strip() == number
         ]
         if not rows or any(
             str(e.get("atendimento_id") or "").strip() != aid for e in rows
