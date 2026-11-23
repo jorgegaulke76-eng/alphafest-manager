@@ -64,6 +64,14 @@ jobs:
         run: python scripts/hf65_24_52_metrics_staging.py
       - name: Validar prévia online isolada com Chromium desktop/celular
         run: python scripts/hf65_24_52_online_preview.py --check
+      - name: Guardar pacote da prévia online para revisão
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hf65-24-52-previsualizacao-online-html
+          path: hf52-pages/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Guardar previa isolada e imagens
         if: always()
         uses: actions/upload-artifact@v4
@@ -176,14 +184,23 @@ jobs:
           assert 'robots.txt' not in s or 'noindex' in s
           print('Somente ambiente de homologacao; sem POST Supabase real',flush=True)
           PY
-      - name: Configurar GitHub Pages gratuito para repositorio publico
+      - name: Conferir GitHub Pages sem falhar CI se precisa de ativação inicial
+        id: pages_config
         uses: actions/configure-pages@v5
+        continue-on-error: true
         with:
           enablement: true
+      - name: Informar quando ativação de Pages precisa ser feita no GitHub
+        if: steps.pages_config.outcome != 'success'
+        run: |
+          echo "::notice title=Prévia HF65.24.52::Ative Settings > Pages > Source: GitHub Actions neste repositório público. Depois execute novamente o workflow para publicar a prévia."
+          echo "A prévia não foi publicada; os testes comerciais continuam válidos."
       - name: Enviar site estático isolado para GitHub Pages
+        if: steps.pages_config.outcome == 'success'
         uses: actions/upload-pages-artifact@v4
         with:
           path: './hf52-pages'
       - name: Publicar apenas a prévia online, sem tocar no Cloudflare
+        if: steps.pages_config.outcome == 'success'
         id: deployment
         uses: actions/deploy-pages@v4
