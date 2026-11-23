@@ -6,10 +6,11 @@ Não acessa o Supabase quando identidade ou privilégios não foram verificados.
 """
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from typing import Any
 
 from commercial_online_document_reader import load_private_document_online_only
+from commercial_operator_policy import VerifiedOperator
 from commercial_private_document_adapter import (
     DOCUMENT_KEY, PrivateStoreDenied, _valid_document,
 )
@@ -17,8 +18,8 @@ from commercial_private_document_adapter import (
 
 def read_verified_operator_history(
     *, session: Any,
-    authenticate: Callable[[Any], Mapping[str, Any] | None],
-    authorize: Callable[[Mapping[str, Any], str], bool],
+    authenticate: Callable[[Any], VerifiedOperator | None],
+    authorize: Callable[[VerifiedOperator, str], bool],
     cloud: Any,
 ) -> list[dict[str, str]]:
     """Exige autenticação + autorização por ação e modo service antes de rede.
@@ -33,9 +34,9 @@ def read_verified_operator_history(
         principal = authenticate(session)
     except Exception:
         raise PrivateStoreDenied("Autenticação indisponível.") from None
-    if not isinstance(principal, Mapping):
+    if not isinstance(principal, VerifiedOperator):
         raise PrivateStoreDenied("Sessão não autenticada.")
-    identity = str(principal.get("subject") or "").strip()
+    identity = str(principal.subject or "").strip()
     if not identity or len(identity) > 256:
         raise PrivateStoreDenied("Identidade não verificada.")
     try:
