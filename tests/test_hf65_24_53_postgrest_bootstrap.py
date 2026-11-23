@@ -145,3 +145,23 @@ def test_full_bootstrap_with_mock_postgrest_and_authorization():
     assert initialize_private_history_if_absent(**kwargs) == "created"
     assert initialize_private_history_if_absent(**kwargs) == "existing"
     assert [call[0] for call in fake.calls].count("post") == 1
+
+
+@pytest.mark.parametrize("unsafe_url", [
+    "https://evil.example",
+    "https://example.supabase.co.evil.example",
+    "https://user:secret@example.supabase.co",
+    "https://example.supabase.co/rest/v1/app_data",
+    "https://example.supabase.co?redirect=https://evil.example",
+    "https://example.supabase.co#fragment",
+    "https://example.supabase.co:8443",
+    "http://example.supabase.co",
+])
+def test_no_secret_sent_to_untrusted_endpoint(unsafe_url):
+    fake = FakeHttp()
+    with pytest.raises(PrivateBootstrapHttpError):
+        read(get=fake.get, base_url=unsafe_url, headers=HEADERS)
+    with pytest.raises(PrivateBootstrapHttpError):
+        insert(post=fake.post, base_url=unsafe_url, headers=HEADERS,
+               document_key=DOCUMENT_KEY, document={"events": []})
+    assert fake.calls == []
