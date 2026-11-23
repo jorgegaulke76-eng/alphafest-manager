@@ -1,6 +1,6 @@
 {
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.51",
-  "created_at": "2026-11-20T19:00:24-03:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.52",
+  "created_at": "2026-11-23T11:25:36-03:00",
   "timezone": "America/Sao_Paulo",
-  "description": "HF65.24.51 — exportacao de roteiro diario TXT e agenda semanal CSV a partir dos dados ja carregados. Retornos comerciais somente para Jorge e por opcao explicita; sem banco, estoque ou alteracao de pedidos."
+  "description": "HF65.24.52 — links comerciais por produto, atribuicao conservadora de campanhas UTM, referencia de campanha em orcamentos pelo WhatsApp e painel de cliques (nao vendas), apos 23 testes automatizados e previa homologada. Site Cloudflare continua sem publicacao."
 }
