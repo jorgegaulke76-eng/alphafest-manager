@@ -5,6 +5,7 @@ import pytest
 from commercial_server_read_gateway import read_verified_operator_history
 from commercial_private_document_adapter import PrivateStoreDenied
 from commercial_online_document_reader import PrivateDocumentUnavailable
+from commercial_operator_policy import VerifiedOperator, OperatorPolicy, READ
 
 
 class FakeResponse:
@@ -46,11 +47,18 @@ class FakeCloud:
 
 
 def auth(_):
-    return {"subject": "verified-operator-id"}
+    # O teste recebe a identidade de um autenticador fictício confiável.
+    return VerifiedOperator("verified-operator-id", "test-issuer", "test-manager")
+
+
+_POLICY = OperatorPolicy(
+    issuer="test-issuer", audience="test-manager",
+    grants={"verified-operator-id": {READ}},
+)
 
 
 def allow(principal, action):
-    return principal["subject"] == "verified-operator-id" and action == "read_attribution"
+    return _POLICY.permitted(principal, action)
 
 
 def read(cloud, **kwargs):
@@ -69,6 +77,7 @@ def test_authorized_server_only_reads_remote():
     {"authenticate": None},
     {"authenticate": lambda _: None},
     {"authenticate": lambda _: {"email": "someone@example.com"}},
+    {"authenticate": lambda _: {"subject": "verified-operator-id"}},
     {"authenticate": lambda _: (_ for _ in ()).throw(RuntimeError("auth unavailable"))},
     {"authorize": lambda *_: False},
     {"authorize": lambda *_: "True"},
@@ -96,3 +105,14 @@ def test_invalid_remote_data_never_falls_back_to_cache():
     with pytest.raises(PrivateDocumentUnavailable):
         read(cloud)
     assert cloud.calls == 1
+
+
+def test_wrong_issuer_or_audience_denied_before_http():
+    cloud = FakeCloud()
+    for principal in (
+        VerifiedOperator("verified-operator-id", "bad-issuer", "test-manager"),
+        VerifiedOperator("verified-operator-id", "test-issuer", "wrong-app"),
+    ):
+        with pytest.raises(PrivateStoreDenied):
+            read(cloud, authenticate=lambda _, p=principal: p)
+    assert cloud.calls == 0
