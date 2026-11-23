@@ -18,6 +18,7 @@ POLICY = OperatorPolicy(
 class Response:
     def __init__(self, rows):
         self.rows = rows
+        self.status_code = 200
 
     def raise_for_status(self):
         return None
@@ -46,7 +47,8 @@ class Cloud:
     def _headers(self):
         return {"apikey": "server-only-test-key"}
 
-    def get(self, url, *, headers, params, timeout):
+    def get(self, url, *, headers, params, timeout, allow_redirects):
+        assert allow_redirects is False
         self.calls += 1
         assert url == "https://example.supabase.co/rest/v1/app_data"
         assert params["key"] == "eq." + DOCUMENT_KEY
@@ -54,7 +56,8 @@ class Cloud:
             {"key": DOCUMENT_KEY, "value": self.document},
         ])
 
-    def post(self, url, *, headers, params, json, timeout):
+    def post(self, url, *, headers, params, json, timeout, allow_redirects):
+        assert allow_redirects is False
         self.calls += 1
         assert headers["Prefer"] == "resolution=ignore-duplicates,return=representation"
         assert params["on_conflict"] == "key"
