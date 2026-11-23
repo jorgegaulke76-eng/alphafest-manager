@@ -33,14 +33,19 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
   anterior é mantido como **Alias não ambíguo** no Catálogo Oficial.
 - Eventos de acesso não armazenam query strings, fragmentos nem caminhos externos
   detalhados do referenciador. A origem externa fica restrita ao domínio.
+- **Proteção adicional de privacidade:** o rastreador deixa de registrar consultas
+  de busca que aparentem conter e-mails, telefones ou URLs, sem interromper buscas
+  normais por produtos. Valores UTM recebidos de fora são validados com o mesmo
+  alfabeto do gerador comercial e sequências de 9 ou mais dígitos são rejeitadas.
+  Esses filtros são preventivos; não substituem uma avaliação ampla de privacidade.
 - Botões gerais de WhatsApp **não** herdam o nome do último produto visitado;
   somente CTAs dentro da ficha aberta ou da galeria identificam produto.
 - Aproveita a tabela existente `site_metrics_events`, sem criar cadastro paralelo
   ou alterar status, orçamento, estoque, produção ou financeiro.
 
 ## Evidências automatizadas
-- Execução GitHub Actions: https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/44939143695
-- 14 testes de regressão Python/JavaScript aprovados, incluindo a referência
+- Execução GitHub Actions: https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/45152760248
+- 14 testes de regressão Python/JavaScript aprovados, incluindo a proteção de buscas e UTM suspeitos, além da referência
   de campanha no WhatsApp da ficha, prevenção de duplicações, preservação do
   texto original e separação dos CTAs gerais.
 - Navegador Chromium desktop e celular aprovado em cópia da vitrine real,
