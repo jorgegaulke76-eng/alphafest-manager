@@ -292,12 +292,30 @@ def main() -> None:
                 assert stats[0]["sessoes_whatsapp"] == 1
                 assert stats[0]["cliques_whatsapp"] == 2
                 assert sum(r["event_context"] == "carrinho" for r in selected) == 1
+                # Simula perda dos page_view já persistidos. Uma ficha aberta
+                # com UTM mantém a sessão atribuível; clique isolado não bastaria.
+                without_page_views = [
+                    row for row in selected if row["event_type"] != "page_view"
+                ]
+                recovered = metrics._campaign_opportunities(
+                    without_page_views,
+                    now - timedelta(minutes=5),
+                    now + timedelta(minutes=5),
+                )
+                assert len(recovered) == 1 and recovered[0]["sessoes"] == 1
+                assert recovered[0]["sessoes_whatsapp"] == 1
+                assert recovered[0]["cliques_whatsapp"] == 2
                 report = {
                     "dispositivo": device,
                     "resultado": "aprovado",
                     "api": "PostgREST e PostgreSQL reais em containers descartáveis",
                     "eventos": dict(counts),
                     "atribuicao": stats[0],
+                    "recuperacao_sem_page_view": {
+                        "sessoes": recovered[0]["sessoes"],
+                        "sessoes_whatsapp": recovered[0]["sessoes_whatsapp"],
+                        "cliques_whatsapp": recovered[0]["cliques_whatsapp"],
+                    },
                     "carrinho_itens": 2,
                     "texto_whatsapp": "referência editável e não duplicada",
                     "mensagens_enviadas": "não aferido",
