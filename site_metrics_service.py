@@ -77,7 +77,7 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
   function safeUtm(value,limit){
     const v=String(value||'').trim();
     if(!v || v.length>limit || !/^[a-z0-9][a-z0-9_-]*$/i.test(v)
-       || /(^|[-_])\d{9,}($|[-_])/.test(v)) return '';
+       || /\d{9,}/.test(v)) return '';
     return v.toLowerCase();
   }
   // Termos de busca com possíveis contatos pessoais não são enviados às métricas.
