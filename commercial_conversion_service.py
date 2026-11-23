@@ -42,12 +42,12 @@ def _amount(value: Any) -> Decimal | None:
         return None
     if "," in raw:
         # BR: 1234,56 ou 1.234,56. Não aceitar separadores inconsistentes.
-        match = re.fullmatch(r"(?:[0-9]+|[1-9][0-9]{0,2}(?:\\.[0-9]{3})+),[0-9]{2}", raw)
+        match = re.fullmatch(r"(?:[0-9]+|[1-9][0-9]{0,2}(?:\.[0-9]{3})+),[0-9]{2}", raw)
         if not match:
             return None
         raw = raw.replace(".", "").replace(",", ".")
     elif "." in raw:
-        if not re.fullmatch(r"[0-9]+\\.[0-9]{2}", raw):
+        if not re.fullmatch(r"[0-9]+\.[0-9]{2}", raw):
             return None
     elif not re.fullmatch(r"[0-9]+", raw):
         return None
