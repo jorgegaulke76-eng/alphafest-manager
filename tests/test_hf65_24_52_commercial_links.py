@@ -287,3 +287,69 @@ def test_campanha_apos_acesso_direto_proximo_nao_atribui_contato_direto():
     assert len(report) == 1
     assert report[0]["sessoes_whatsapp"] == 0
     assert report[0]["cliques_whatsapp"] == 0
+
+
+def test_campanha_sobrevive_sem_page_view_quando_produto_aberto_e_whatsapp_clicado():
+    from datetime import datetime, timedelta, timezone
+    from site_metrics_service import _campaign_opportunities
+
+    start = datetime(2026, 11, 23, 15, 0, tzinfo=timezone.utc)
+
+    def event(sec, kind, sid, campaign="", source="", context=""):
+        return {
+            "created_at": (start + timedelta(seconds=sec)).isoformat(),
+            "session_id": sid,
+            "event_type": kind,
+            "page_path": "/",
+            "utm_source": source,
+            "utm_campaign": campaign,
+            "utm_medium": "stories",
+            "event_context": context,
+        }
+
+    events = [
+        # A página não foi registrada, mas há ficha e intenção de contato.
+        event(0, "product_open", "sem-visita", "natal-2026", "instagram", "campaign_product"),
+        event(1, "whatsapp_click", "sem-visita", "natal-2026", "instagram", "site"),
+        # Clique isolado NÃO representa visita comprovada.
+        event(2, "whatsapp_click", "so-clique", "natal-2026", "facebook", "site"),
+        # Ficha sem UTM não atribui campanha a um clique com UTM posterior.
+        event(3, "product_open", "sem-utm"),
+        event(4, "whatsapp_click", "sem-utm", "natal-2026", "instagram"),
+    ]
+    result = _campaign_opportunities(
+        events, start - timedelta(seconds=1), start + timedelta(seconds=10)
+    )
+    assert len(result) == 1
+    assert result[0]["campanha"] == "natal-2026"
+    assert result[0]["canal"] == "instagram"
+    assert result[0]["sessoes"] == 1
+    assert result[0]["sessoes_whatsapp"] == 1
+    assert result[0]["cliques_whatsapp"] == 1
+
+
+def test_page_view_da_campanha_tem_prioridade_sobre_abertura_de_outro_produto_utm():
+    from datetime import datetime, timedelta, timezone
+    from site_metrics_service import _campaign_opportunities
+
+    start = datetime(2026, 11, 23, 16, 0, tzinfo=timezone.utc)
+    rows = [
+        {"created_at": start.isoformat(), "session_id": "sessao-a",
+         "event_type": "page_view", "page_path": "/",
+         "utm_source": "instagram", "utm_campaign": "natal-original"},
+        {"created_at": (start + timedelta(seconds=2)).isoformat(),
+         "session_id": "sessao-a", "event_type": "product_open",
+         "page_path": "/", "utm_source": "facebook", "utm_campaign": "outra"},
+        {"created_at": (start + timedelta(seconds=3)).isoformat(),
+         "session_id": "sessao-a", "event_type": "whatsapp_click",
+         "page_path": "/", "utm_source": "instagram",
+         "utm_campaign": "natal-original"},
+    ]
+    result = _campaign_opportunities(
+        rows, start - timedelta(seconds=1), start + timedelta(seconds=10)
+    )
+    assert len(result) == 1
+    assert result[0]["campanha"] == "natal-original"
+    assert result[0]["canal"] == "instagram"
+    assert result[0]["sessoes_whatsapp"] == 1
+    assert result[0]["cliques_whatsapp"] == 1
