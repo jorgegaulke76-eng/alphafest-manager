@@ -120,3 +120,21 @@ def test_refuse_nonpositive_and_float_with_fractional_cent():
         [{"numero_proposta": str(i), "campaign": "natal"} for i in (1, 2, 3)],
     )
     assert result == {}
+
+
+def test_invalid_link_for_same_order_blocks_otherwise_valid_attribution():
+    orders = [{"numero_proposta": "1", "pago": True, "valor_total": "120,00"}]
+    links = [
+        {"numero_proposta": "1", "campaign": "natal_2026"},
+        {"numero_proposta": "1", "campaign": "cliente@email.com"},
+    ]
+    assert summarize(orders, links) == {}
+
+
+def test_sensitive_number_in_second_link_invalidates_order():
+    orders = [{"numero_proposta": "1", "pago": True, "total": "120,00"}]
+    links = [
+        {"numero_proposta": "1", "campaign": "natal"},
+        {"numero_proposta": "1", "campaign": "11999999999"},
+    ]
+    assert summarize(orders, links) == {}
