@@ -605,8 +605,20 @@ def _campaign_opportunities(rows: list[dict[str, Any]], start: datetime, end: da
         if start <= t < end:
             selected.append((t, row))
     first_utm = {}
-    for t, row in sorted(selected, key=lambda item: item[0]):
+    ordered = sorted(selected, key=lambda item: item[0])
+    for t, row in ordered:
         if row.get("event_type") != "page_view" or _technical_page_path(row.get("page_path")):
+            continue
+        sid = str(row.get("session_id") or "").strip()
+        campaign = str(row.get("utm_campaign") or "").strip()
+        if sid and campaign and sid not in first_utm:
+            first_utm[sid] = (t, row)
+    # Algumas visitas não chegam ao banco por bloqueio de rede. Uma abertura
+    # real da ficha com UTM é evidência alternativa da sessão, mas só quando
+    # NÃO existe page_view de campanha para aquela sessão na janela.
+    # O clique WhatsApp isolado jamais cria campanha ou sessão.
+    for t, row in ordered:
+        if row.get("event_type") != "product_open" or _technical_page_path(row.get("page_path")):
             continue
         sid = str(row.get("session_id") or "").strip()
         campaign = str(row.get("utm_campaign") or "").strip()
