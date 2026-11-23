@@ -17,7 +17,10 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
   limite de **120 caracteres** do gerador de links. O teste E2E verifica
   uma campanha de 120 caracteres tanto na ficha quanto no carrinho.
 - A navegação conserva o **primeiro toque UTM da sessão da aba**. O painel
-  usa essa primeira campanha identificada e somente cliques de WhatsApp posteriores.
+  usa essa primeira campanha identificada e os cliques de WhatsApp posteriores.
+  Uma tolerância técnica de até **10 segundos de inversão na chegada** só se
+  aplica quando campanha, canal e meio UTM são exatamente iguais aos da visita
+  identificada; contatos diretos prévios continuam excluídos.
 - Ao clicar no WhatsApp **dentro de uma ficha de produto**, o texto de orçamento
   ganha a linha `Referência da campanha: instagram/stories/natal-2026`
   (quando houver campanha UTM válida), sem duplicá-la em cliques repetidos.
@@ -44,8 +47,8 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
   ou alterar status, orçamento, estoque, produção ou financeiro.
 
 ## Evidências automatizadas
-- Execução GitHub Actions: https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/45152760248
-- 14 testes de regressão Python/JavaScript aprovados, incluindo a proteção de buscas e UTM suspeitos, além da referência
+- Execução GitHub Actions: https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/45158432187
+- 16 testes de regressão Python/JavaScript aprovados, incluindo testes de inversão assíncrona de eventos e exclusão de cliques anteriores, além da proteção de buscas e UTM suspeitos e da referência
   de campanha no WhatsApp da ficha, prevenção de duplicações, preservação do
   texto original e separação dos CTAs gerais.
 - Navegador Chromium desktop e celular aprovado em cópia da vitrine real,
