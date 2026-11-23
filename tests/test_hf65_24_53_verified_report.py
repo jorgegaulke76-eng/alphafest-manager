@@ -1,5 +1,6 @@
 """Contrato do relatório comercial privado HF65.24.53."""
 from decimal import Decimal
+import pytest
 
 from commercial_verified_report import build_verified_commercial_report
 from commercial_attribution_service import build_attribution_event
@@ -46,19 +47,16 @@ def test_link_without_confirmed_manual_evidence_has_no_revenue():
 
 def test_changed_contact_link_refuses_attribution():
     changed = [dict(ORDERS[0], atendimento_id="A2")]
-    result = build_verified_commercial_report(CONTACTS, changed, [link()])
-    assert result["receita_atribuida"] == 0
-
+    with pytest.raises(ValueError, match="Histórico comercial diverge"):
+        build_verified_commercial_report(CONTACTS, changed, [link()])
 
 def test_duplicate_contact_id_refuses_attribution():
-    result = build_verified_commercial_report(CONTACTS + CONTACTS, ORDERS, [link()])
-    assert result["receita_atribuida"] == 0
-
+    with pytest.raises(ValueError, match="Histórico comercial diverge"):
+        build_verified_commercial_report(CONTACTS + CONTACTS, ORDERS, [link()])
 
 def test_duplicate_order_refuses_attribution():
-    result = build_verified_commercial_report(CONTACTS, ORDERS + ORDERS, [link()])
-    assert result["receita_atribuida"] == 0
-
+    with pytest.raises(ValueError, match="Histórico comercial diverge"):
+        build_verified_commercial_report(CONTACTS, ORDERS + ORDERS, [link()])
 
 def test_cancelled_paid_order_excluded():
     cancelled = [dict(ORDERS[0], cancelado_cliente=True)]
@@ -77,20 +75,18 @@ def test_forged_event_without_operator_or_evidence_is_rejected():
     forged = {"numero_proposta": "P1", "atendimento_id": "A1",
               "campaign": "natal-2026", "decisao": "confirmar",
               "ocorrido_em": "2026-11-23T16:00:00-03:00"}
-    report = build_verified_commercial_report(CONTACTS, ORDERS, [forged])
-    assert report["receita_atribuida"] == 0
-
+    with pytest.raises(ValueError, match="Histórico comercial diverge"):
+        build_verified_commercial_report(CONTACTS, ORDERS, [forged])
 
 def test_invalid_intermediate_event_invalidates_entire_order_history():
     first = link()
     invalid = dict(link(), campaign="cliente@email.com",
                    ocorrido_em="2026-11-23T16:01:00-03:00")
     last = dict(link(), ocorrido_em="2026-11-23T16:02:00-03:00")
-    report = build_verified_commercial_report(CONTACTS, ORDERS, [first, invalid, last])
-    assert report["pedidos_pagos_atribuidos"] == 0
-
+    with pytest.raises(ValueError, match="Histórico comercial diverge"):
+        build_verified_commercial_report(CONTACTS, ORDERS, [first, invalid, last])
 
 def test_event_operator_and_evidence_must_be_valid():
     bad = dict(link(), usuario="", evidencia="desconhecida")
-    report = build_verified_commercial_report(CONTACTS, ORDERS, [bad])
-    assert report["receita_atribuida"] == 0
+    with pytest.raises(ValueError, match="Histórico comercial diverge"):
+        build_verified_commercial_report(CONTACTS, ORDERS, [bad])
