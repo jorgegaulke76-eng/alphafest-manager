@@ -17,8 +17,9 @@ HEADERS = {"apikey": "test-key", "Content-Type": "application/json"}
 
 
 class FakeResponse:
-    def __init__(self, rows=None, failed=False):
+    def __init__(self, rows=None, failed=False, status_code=200):
         self.rows, self.failed = rows, failed
+        self.status_code = status_code
 
     def raise_for_status(self):
         if self.failed:
@@ -33,14 +34,16 @@ class FakeHttp:
         self.document = copy.deepcopy(initial)
         self.calls = []
 
-    def get(self, url, *, headers, params, timeout):
+    def get(self, url, *, headers, params, timeout, allow_redirects):
+        assert allow_redirects is False
         self.calls.append(("get", url, headers, params))
         assert params["key"] == "eq." + DOCUMENT_KEY
         return FakeResponse([] if self.document is None else [
             {"key": DOCUMENT_KEY, "value": self.document}
         ])
 
-    def post(self, url, *, headers, params, json, timeout):
+    def post(self, url, *, headers, params, json, timeout, allow_redirects):
+        assert allow_redirects is False
         self.calls.append(("post", url, headers, params, copy.deepcopy(json)))
         assert headers["Prefer"] == "resolution=ignore-duplicates,return=representation"
         assert "merge-duplicates" not in headers["Prefer"]
@@ -165,3 +168,14 @@ def test_no_secret_sent_to_untrusted_endpoint(unsafe_url):
         insert(post=fake.post, base_url=unsafe_url, headers=HEADERS,
                document_key=DOCUMENT_KEY, document={"events": []})
     assert fake.calls == []
+
+
+@pytest.mark.parametrize("status_code", [301, 302, 307, 308, 401, 500])
+def test_redirects_and_http_errors_cannot_claim_missing_or_inserted(status_code):
+    with pytest.raises(PrivateBootstrapHttpError):
+        read(get=lambda *a, **k: FakeResponse([], status_code=status_code),
+             base_url=URL, headers=HEADERS)
+    with pytest.raises(PrivateBootstrapHttpError):
+        insert(post=lambda *a, **k: FakeResponse([], status_code=status_code),
+               base_url=URL, headers=HEADERS, document_key=DOCUMENT_KEY,
+               document={"events": []})
