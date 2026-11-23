@@ -15,7 +15,7 @@ CONTACTS = [{"id": "A1"}]
 
 class MemoryDocument:
     def __init__(self):
-        self.value = None
+        self.value = {"events": []}
         self.cas_calls = 0
 
     def load(self, key):
@@ -147,3 +147,16 @@ def test_cannot_migrate_event_to_unrelated_contact():
             db, atendimento_id="A2", propostas=[{"numero_proposta": "P1", "atendimento_id": "A2"}],
             atendimentos=[{"id": "A2"}]
         ))
+
+
+def test_missing_remote_document_blocks_writes_and_reads():
+    db = MemoryDocument()
+    db.value = None
+    with pytest.raises(PrivateStoreConflict):
+        append_private_event(**args(db))
+    with pytest.raises(PrivateStoreConflict):
+        read_private_events(
+            principal=("verified", "admin"), authorize=allow,
+            credential_mode=service, load=db.load,
+        )
+    assert db.cas_calls == 0
