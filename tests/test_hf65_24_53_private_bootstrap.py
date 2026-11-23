@@ -154,3 +154,47 @@ def test_insert_success_but_concurrent_change_does_not_claim_empty():
             invoke(store, insert_if_absent=inserted_then_changed)
     finally:
         store.close()
+
+
+def test_permission_revoked_between_read_and_insert_prevents_write():
+    store = SQLiteDocument()
+    try:
+        checks = []
+
+        def approve(_user):
+            checks.append(True)
+            return len(checks) == 1
+
+        with pytest.raises(PrivateStoreDenied):
+            invoke(store, approve_initialization=approve)
+        assert len(checks) == 2
+        assert store.calls == 0
+        assert store.read(DOCUMENT_KEY) is None
+    finally:
+        store.close()
+
+
+def test_credentials_downgraded_between_read_and_insert_prevents_write():
+    store = SQLiteDocument()
+    try:
+        modes = iter(["service", "anon"])
+        with pytest.raises(PrivateStoreDenied):
+            invoke(store, credential_mode=lambda: next(modes))
+        assert store.calls == 0
+    finally:
+        store.close()
+
+
+def test_preexisting_history_does_not_need_second_permission_check():
+    store = SQLiteDocument()
+    try:
+        assert store.insert(DOCUMENT_KEY, {"events": []}) is True
+        checks = []
+        def approve(_user):
+            checks.append(True)
+            return True
+        assert invoke(store, approve_initialization=approve) == "existing"
+        assert len(checks) == 1
+        assert store.calls == 1
+    finally:
+        store.close()
