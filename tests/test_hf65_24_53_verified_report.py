@@ -71,3 +71,26 @@ def test_revoked_attribution_excluded():
                       ocorrido_em="2026-11-23T16:01:00-03:00")
     result = build_verified_commercial_report(CONTACTS, ORDERS, [link(), revocation])
     assert result["receita_atribuida"] == 0
+
+
+def test_forged_event_without_operator_or_evidence_is_rejected():
+    forged = {"numero_proposta": "P1", "atendimento_id": "A1",
+              "campaign": "natal-2026", "decisao": "confirmar",
+              "ocorrido_em": "2026-11-23T16:00:00-03:00"}
+    report = build_verified_commercial_report(CONTACTS, ORDERS, [forged])
+    assert report["receita_atribuida"] == 0
+
+
+def test_invalid_intermediate_event_invalidates_entire_order_history():
+    first = link()
+    invalid = dict(link(), campaign="cliente@email.com",
+                   ocorrido_em="2026-11-23T16:01:00-03:00")
+    last = dict(link(), ocorrido_em="2026-11-23T16:02:00-03:00")
+    report = build_verified_commercial_report(CONTACTS, ORDERS, [first, invalid, last])
+    assert report["pedidos_pagos_atribuidos"] == 0
+
+
+def test_event_operator_and_evidence_must_be_valid():
+    bad = dict(link(), usuario="", evidencia="desconhecida")
+    report = build_verified_commercial_report(CONTACTS, ORDERS, [bad])
+    assert report["receita_atribuida"] == 0
