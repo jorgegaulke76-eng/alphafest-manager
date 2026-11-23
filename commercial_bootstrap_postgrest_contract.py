@@ -54,9 +54,11 @@ def read_bootstrap_document_optional(
         response = get(
             endpoint, headers=dict(headers),
             params={"select": "key,value", "key": "eq." + document_key, "limit": "2"},
-            timeout=timeout,
+            timeout=timeout, allow_redirects=False,
         )
         response.raise_for_status()
+        if not isinstance(response.status_code, int) or not 200 <= response.status_code < 300:
+            raise PrivateBootstrapHttpError("Status remoto não confirmado.")
         rows = response.json()
     except Exception:
         raise PrivateBootstrapHttpError("Leitura remota não confirmada.") from None
@@ -89,9 +91,11 @@ def insert_bootstrap_document_if_absent(
             endpoint, headers=request_headers,
             params={"on_conflict": "key", "select": "key,value"},
             json={"key": document_key, "value": {"events": []}},
-            timeout=timeout,
+            timeout=timeout, allow_redirects=False,
         )
         response.raise_for_status()
+        if not isinstance(response.status_code, int) or not 200 <= response.status_code < 300:
+            raise PrivateBootstrapHttpError("Status remoto não confirmado.")
         rows = response.json()
     except Exception:
         raise PrivateBootstrapHttpError("Inserção não confirmada pelo banco.") from None
