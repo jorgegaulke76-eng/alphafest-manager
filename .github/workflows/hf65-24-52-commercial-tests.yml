@@ -130,3 +130,56 @@ jobs:
         if: always()
         run: |
           docker rm -f hf52-api hf52-pg || true
+
+  deploy-online-preview:
+    # Only the feature branch may deploy this public, isolated GitHub Pages
+    # preview. A PR build or main branch build can never publish it.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/hf65-24-52-integracao-comercial'
+    needs: [commercial-links, browser-preview, postgrest-contract]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages-hf65-24-52-preview
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Baixar codigo aprovado da HF52
+        uses: actions/checkout@v4
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar dependencias pequenas
+        run: python -m pip install requests
+      - name: Construir pagina online com UTM local e WhatsApp simulado
+        run: python scripts/hf65_24_52_online_preview.py
+      - name: Conferir que o rastreamento externo foi removido
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('hf52-pages/index.html').read_text(encoding='utf-8')
+          assert 'window.__HF52_PREVIEW_EVENTS' in s
+          assert 'id="alphafest-site-metrics"' in s
+          assert 'fetch(endpoint' not in s
+          assert "fetch('/__af_geo'" not in s
+          assert 'hf52-pages-protections' in s
+          assert 'robots.txt' not in s or 'noindex' in s
+          print('Somente ambiente de homologacao; sem POST Supabase real',flush=True)
+          PY
+      - name: Configurar GitHub Pages gratuito para repositorio publico
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - name: Enviar site estático isolado para GitHub Pages
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: './hf52-pages'
+      - name: Publicar apenas a prévia online, sem tocar no Cloudflare
+        id: deployment
+        uses: actions/deploy-pages@v4
