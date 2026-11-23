@@ -1,25 +1,49 @@
-"""HF65.24.53 — reconciliação comercial determinística, sem I/O.
+"""HF65.24.53 — reconciliação comercial determinística e somente leitura.
 
-Este módulo não consulta Supabase, não altera pedidos e não deduz venda a partir
-de um clique. Só considera confirmações explicitamente vinculadas a um pedido.
-A integração com o Manager dependerá de revisão do esquema existente.
+Não consulta Supabase, não altera pedidos nem deduz vendas de cliques.
+Aceita propostas oficiais com número e flags de pagamento e associações
+explícitas e auditáveis fornecidas pelo operador. Ainda não ligado à UI.
 """
 from __future__ import annotations
 
 from collections import defaultdict
 from decimal import Decimal, InvalidOperation
-from typing import Iterable, Mapping, Any
+import re
+from typing import Any, Iterable, Mapping
 
-CONFIRMED = frozenset({"pago", "paid"})
-PENDING = frozenset({"orcamento", "orçamento", "pendente", "aprovado", "pronto", "entregue"})
+from proposal_status import (
+    proposta_encerrada,
+    proposta_faturamento_mensal,
+    status_bool,
+)
 
 
 def _amount(value: Any) -> Decimal | None:
-    """Aceita apenas quantias não negativas fornecidas pela origem financeira."""
+    """Normaliza importâncias em reais, recusando valores ambíguos ou inválidos."""
     if isinstance(value, bool) or value is None:
         return None
+    raw = str(value).strip().replace("R$", "").replace(" ", "")
+    if not raw:
+        return None
+    # Milhares com ponto + decimal vírgula (padrão BR) ou inteiro simples.
+    if "," in raw:
+        if raw.count(",") != 1:
+            return None
+        integer, cents = raw.split(",")
+        if not cents.isdigit() or len(cents) != 2:
+            return None
+        if "." in integer:
+            chunks = integer.split(".")
+            if not chunks[0].isdigit() or not 1 <= len(chunks[0]) <= 3 or not all(
+                len(x) == 3 and x.isdigit() for x in chunks[1:]
+            ):
+                return None
+            integer = "".join(chunks)
+        if not integer.isdigit():
+            return None
+        raw = f"{integer}.{cents}"
     try:
-        amount = Decimal(str(value))
+        amount = Decimal(raw)
     except (InvalidOperation, ValueError, TypeError):
         return None
     return amount if amount.is_finite() and amount >= 0 else None
@@ -29,48 +53,59 @@ def summarize_verified_campaign_sales(
     orders: Iterable[Mapping[str, Any]],
     attributions: Iterable[Mapping[str, Any]],
 ) -> dict[str, dict[str, Any]]:
-    """Soma pedidos PAGOS com vínculo explícito e unívoco a uma campanha.
+    """Contabiliza apenas propostas oficiais pagas com vínculo inequívoco.
 
-    orders: order_id, status, amount.
-    attributions: order_id, campaign (reconciliação confirmada no atendimento).
+    orders: numero_proposta, pago, cancelado_cliente, modalidade_cobranca,
+      e total/valor_total/total_geral (quando preço fechado confirmado).
+    attributions: numero_proposta, campaign; vínculo informado e conferido
+      manualmente, nunca inferido por CPF, telefone, nome ou sessão.
 
-    Não aceita inferência por telefone, nome, data, sessão ou clique.
-    IDs de pedido duplicados/conflitantes e múltiplas campanhas são excluídos.
-    O chamador deve fornecer dados já autorizados, sem PII.
+    Exclui propostas encerradas/canceladas, mensalistas (liquidação deve vir
+    de sua fonte financeira), IDs duplicados, valores inválidos e vínculos
+    de campanha contraditórios.
     """
     by_order: dict[str, set[str]] = defaultdict(set)
     for item in attributions:
-        order_id = str(item.get("order_id") or "").strip()
+        order_id = str(item.get("numero_proposta") or "").strip()
         campaign = str(item.get("campaign") or "").strip().lower()
         if order_id and campaign and len(campaign) <= 120 and all(
-            c.isascii() and (c.isalnum() or c in "_-") for c in campaign
+            ch.isascii() and (ch.isalnum() or ch in "_-") for ch in campaign
         ):
-            by_order[order_id].add(campaign)
+            # Não armazenar dados pessoais nem texto livre no identificador.
+            if not re.search(r"\d{9,}", campaign):
+                by_order[order_id].add(campaign)
 
     seen: set[str] = set()
-    conflicted: set[str] = set()
+    duplicate: set[str] = set()
     unique: dict[str, Mapping[str, Any]] = {}
     for order in orders:
-        order_id = str(order.get("order_id") or "").strip()
-        if not order_id:
+        number = str(order.get("numero_proposta") or "").strip()
+        if not number:
             continue
-        if order_id in seen:
-            conflicted.add(order_id)
-        seen.add(order_id)
-        unique[order_id] = order
+        if number in seen:
+            duplicate.add(number)
+        seen.add(number)
+        unique[number] = order
 
     totals: dict[str, dict[str, Any]] = defaultdict(
         lambda: {"paid_orders": 0, "paid_revenue": Decimal("0")}
     )
-    for order_id, order in unique.items():
-        if order_id in conflicted or len(by_order[order_id]) != 1:
+    for number, order in unique.items():
+        if number in duplicate or len(by_order[number]) != 1:
             continue
-        if str(order.get("status") or "").strip().lower() not in CONFIRMED:
+        if not status_bool(dict(order), "pago"):
             continue
-        amount = _amount(order.get("amount"))
+        if proposta_encerrada(dict(order)) or proposta_faturamento_mensal(dict(order)):
+            continue
+        # Não estimar valor a partir de preço de catálogo ou métricas.
+        raw_amount = next(
+            (order[key] for key in ("valor_total", "total", "total_geral")
+             if order.get(key) not in (None, "")), None
+        )
+        amount = _amount(raw_amount)
         if amount is None:
             continue
-        campaign = next(iter(by_order[order_id]))
+        campaign = next(iter(by_order[number]))
         totals[campaign]["paid_orders"] += 1
         totals[campaign]["paid_revenue"] += amount
     return dict(totals)
