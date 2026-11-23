@@ -14,7 +14,8 @@ from typing import Any
 
 READ = "read_attribution"
 WRITE = "write_attribution"
-PERMISSIONS = frozenset({READ, WRITE})
+BOOTSTRAP = "initialize_attribution"
+PERMISSIONS = frozenset({READ, WRITE, BOOTSTRAP})
 
 
 @dataclass(frozen=True)
