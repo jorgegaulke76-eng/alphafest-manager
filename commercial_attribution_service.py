@@ -109,3 +109,51 @@ def effective_attributions(events: Iterable[Mapping[str, Any]]) -> list[dict[str
         if latest[3] == "confirmar":
             resolved.append({"numero_proposta": number, "campaign": latest[1]})
     return sorted(resolved, key=lambda item: item["numero_proposta"])
+
+
+def validate_event_history(
+    events: Iterable[Mapping[str, Any]],
+    propostas: Iterable[Mapping[str, Any]],
+    atendimentos: Iterable[Mapping[str, Any]],
+) -> list[dict[str, str]]:
+    """Revalida o diário completo contra os identificadores oficiais atuais.
+
+    Falha fechada POR PEDIDO: se qualquer evento é inválido, nenhum evento
+    daquele pedido passa à reconciliação. Não atesta autenticidade criptográfica
+    nem substitui autorização do banco. O relatório deve receber eventos de
+    fonte privada confiável e verificar sua integridade separadamente.
+    """
+    source_events = [dict(e) for e in events if isinstance(e, Mapping)]
+    orders = [dict(p) for p in propostas if isinstance(p, Mapping)]
+    contacts = [dict(c) for c in atendimentos if isinstance(c, Mapping)]
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for e in source_events:
+        number = str(e.get("numero_proposta") or "").strip()
+        if number:
+            grouped.setdefault(number, []).append(e)
+    valid: list[dict[str, str]] = []
+    for number, rows in grouped.items():
+        validated: list[dict[str, str]] = []
+        for row in rows:
+            try:
+                candidate = build_attribution_event(
+                    numero_proposta=row.get("numero_proposta", ""),
+                    atendimento_id=row.get("atendimento_id", ""),
+                    campaign=row.get("campaign", ""),
+                    decisao=row.get("decisao", ""),
+                    evidencia=row.get("evidencia", ""),
+                    usuario=row.get("usuario", ""),
+                    ocorrido_em=row.get("ocorrido_em", ""),
+                    propostas=orders, atendimentos=contacts,
+                )
+                # Rejeita timestamps normalizados que divergirem do original:
+                # a sequência auditada precisa continuar representando o registro.
+                if any(str(row.get(k, "")) != v for k, v in candidate.items()):
+                    raise ValueError("Divergência no registro auditado.")
+                validated.append(candidate)
+            except (ValueError, TypeError, AttributeError):
+                validated = []
+                break
+        if len(validated) == len(rows):
+            valid.extend(validated)
+    return valid
