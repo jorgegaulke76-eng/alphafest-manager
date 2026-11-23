@@ -627,6 +627,8 @@ def _campaign_opportunities(rows: list[dict[str, Any]], start: datetime, end: da
                 == str(first_row.get("utm_campaign") or "").strip()
             and str(row.get("utm_source") or "").strip()
                 == str(first_row.get("utm_source") or "").strip()
+            and str(row.get("utm_medium") or "").strip()
+                == str(first_row.get("utm_medium") or "").strip()
         )
         reordered = (
             first_time - timedelta(seconds=10) <= t < first_time
