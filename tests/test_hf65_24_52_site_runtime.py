@@ -119,7 +119,7 @@ function run(search, opts={}){
   const context={window,location,document,sessionStorage,localStorage,
     navigator:{userAgent:'Chrome/120'},screen:{width:1200,height:800},
     crypto:{randomUUID:()=>String(++seq)},fetch,URL,URLSearchParams,
-    setTimeout,clearTimeout};
+    setTimeout:opts.immediateTimers ? (fn)=>{fn();return 1;} : setTimeout,clearTimeout};
   vm.runInNewContext(code,context);
   return {posts,handlers};
 }
@@ -133,6 +133,25 @@ if(safe.referrer!=='https://instagram.com')
   throw Error('Origem da visita continua expondo parametros pessoais');
 if(JSON.stringify(safe).includes('ana@example.org') || JSON.stringify(safe).includes('11999998888'))
   throw Error('Dado pessoal nao relacionado a campanha foi registrado');
+// Entrada UTM de terceiros com PII não vira identificação comercial.
+sessionStorage.clear();
+const unsafe=run('?utm_source=ana%40example.com&utm_medium=stories&utm_campaign=contato-11988887777',{
+  immediateTimers:true
+});
+const unsafePage=unsafe.posts[0];
+if(unsafePage.utm_source!=='' || unsafePage.utm_campaign!=='' ||
+   JSON.stringify(unsafePage).includes('ana@example.com') ||
+   JSON.stringify(unsafePage).includes('11988887777'))
+  throw Error('UTM externa com dados de contato foi enviada ao banco');
+unsafe.handlers['doc:input']({target:{id:'search',value:'ana@example.org'}});
+unsafe.handlers['doc:input']({target:{id:'search',value:'(11) 99876-5432'}});
+unsafe.handlers['doc:input']({target:{id:'search',value:'https://example.org/cliente'}});
+if(unsafe.posts.some(x=>x.event_type==='search'))
+  throw Error('Busca com e-mail, telefone ou URL foi registrada');
+unsafe.handlers['doc:input']({target:{id:'search',value:'balão bubble azul'}});
+const recordedSearch=unsafe.posts.find(x=>x.event_type==='search');
+if(!recordedSearch || recordedSearch.product_name!=='balão bubble azul')
+  throw Error('Busca normal de produto deixou de ser medida');
 sessionStorage.clear(); // A checagem de privacidade representa outra sessão.
 let a=run('?produto=bubble-personalizado&utm_source=instagram&utm_medium=stories&utm_campaign=natal-2026');
 const type=(r,t)=>r.posts.filter(x=>x.event_type===t);
