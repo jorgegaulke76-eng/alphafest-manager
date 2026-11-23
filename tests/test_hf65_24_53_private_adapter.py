@@ -1,6 +1,7 @@
 """Testes do adaptador sem internet, Supabase ou dados reais."""
 import copy
 from uuid import uuid4
+from commercial_operator_policy import VerifiedOperator
 
 import pytest
 
@@ -32,7 +33,7 @@ class MemoryDocument:
 
 
 def allow(principal, action):
-    return principal == ("verified", "admin") and action in {
+    return principal == VerifiedOperator("operator-test", "test-issuer", "test-audience") and action in {
         "read_attribution", "write_attribution"
     }
 
@@ -51,7 +52,7 @@ def anon():
 
 def args(db, **overrides):
     data = {
-        "principal": ("verified", "admin"),
+        "principal": VerifiedOperator("operator-test", "test-issuer", "test-audience"),
         "authorize": allow,
         "credential_mode": service,
         "load": db.load,
@@ -63,7 +64,6 @@ def args(db, **overrides):
         "decisao": "confirmar",
         "evidencia": "mensagem_whatsapp",
         "ocorrido_em": "2026-11-23T16:00:00-03:00",
-        "usuario_verificado": "operador_autenticado",
         "propostas": ORDERS,
         "atendimentos": CONTACTS,
     }
@@ -99,8 +99,9 @@ def test_create_and_retry_are_idempotent():
     append_private_event(**params)
     append_private_event(**params)
     assert db.cas_calls == 1
+    assert db.value["events"][0]["usuario"] == "operator-test"
     assert len(read_private_events(
-        principal=("verified", "admin"), authorize=allow,
+        principal=VerifiedOperator("operator-test", "test-issuer", "test-audience"), authorize=allow,
         credential_mode=service, load=db.load,
     )) == 1
 
@@ -156,7 +157,7 @@ def test_missing_remote_document_blocks_writes_and_reads():
         append_private_event(**args(db))
     with pytest.raises(PrivateStoreConflict):
         read_private_events(
-            principal=("verified", "admin"), authorize=allow,
+            principal=VerifiedOperator("operator-test", "test-issuer", "test-audience"), authorize=allow,
             credential_mode=service, load=db.load,
         )
     assert db.cas_calls == 0
@@ -168,7 +169,7 @@ def test_duplicate_event_ids_in_remote_history_are_rejected():
     append_private_event(**params)
     db.value["events"].append(copy.deepcopy(db.value["events"][0]))
     with pytest.raises(PrivateStoreConflict):
-        read_private_events(principal=("verified", "admin"), authorize=allow,
+        read_private_events(principal=VerifiedOperator("operator-test", "test-issuer", "test-audience"), authorize=allow,
                             credential_mode=service, load=db.load)
     with pytest.raises(PrivateStoreConflict):
         append_private_event(**args(db))
@@ -189,7 +190,7 @@ def test_tampered_remote_event_fails_closed(change):
     append_private_event(**args(db))
     db.value["events"][0].update(change)
     with pytest.raises((ValueError, PrivateStoreConflict)):
-        read_private_events(principal=("verified", "admin"), authorize=allow,
+        read_private_events(principal=VerifiedOperator("operator-test", "test-issuer", "test-audience"), authorize=allow,
                             credential_mode=service, load=db.load)
     with pytest.raises((ValueError, PrivateStoreConflict)):
         append_private_event(**args(db))
@@ -209,3 +210,44 @@ def test_reusing_event_id_across_orders_is_denied():
     with pytest.raises(PrivateStoreConflict):
         append_private_event(**second)
     assert len(db.value["events"]) == 1
+
+
+def test_operator_is_derived_from_verified_principal_not_a_text_field():
+    db = MemoryDocument()
+    with pytest.raises(TypeError):
+        append_private_event(**args(db, usuario_verificado="qualquer_nome"))
+    assert db.cas_calls == 0
+
+
+def test_plain_tuple_or_dictionary_cannot_be_operator():
+    db = MemoryDocument()
+    for principal in (("verified", "admin"), {"subject": "operator-test"}, "operator-test"):
+        with pytest.raises(PrivateStoreDenied):
+            append_private_event(**args(db, principal=principal))
+    assert db.cas_calls == 0
+
+
+def test_retroactive_and_equal_timestamp_rejected():
+    db = MemoryDocument()
+    append_private_event(**args(db))
+    for when in ("2026-11-23T15:59:59-03:00", "2026-11-23T19:00:00+00:00"):
+        with pytest.raises(PrivateStoreConflict):
+            append_private_event(**args(db, ocorrido_em=when, decisao="revogar"))
+    assert db.cas_calls == 1
+
+
+def test_valid_later_revocation_is_persisted():
+    db = MemoryDocument()
+    append_private_event(**args(db))
+    append_private_event(**args(db, decisao="revogar",
+                                ocorrido_em="2026-11-23T16:01:00-03:00"))
+    assert [x["decisao"] for x in db.value["events"]] == ["confirmar", "revogar"]
+
+
+def test_permission_callback_exception_denied_without_network():
+    db = MemoryDocument()
+    def broken(*_):
+        raise RuntimeError("permissions offline")
+    with pytest.raises(PrivateStoreDenied):
+        append_private_event(**args(db, authorize=broken))
+    assert db.cas_calls == 0
