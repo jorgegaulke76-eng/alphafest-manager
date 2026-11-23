@@ -6,6 +6,7 @@ from commercial_server_read_gateway import read_verified_operator_history
 from commercial_private_document_adapter import PrivateStoreDenied
 from commercial_online_document_reader import PrivateDocumentUnavailable
 from commercial_operator_policy import VerifiedOperator, OperatorPolicy, READ
+from commercial_session_guard import verify_authenticated_session
 
 
 class FakeResponse:
@@ -115,4 +116,35 @@ def test_wrong_issuer_or_audience_denied_before_http():
     ):
         with pytest.raises(PrivateStoreDenied):
             read(cloud, authenticate=lambda _, p=principal: p)
+    assert cloud.calls == 0
+
+
+def test_gateway_accepts_only_active_guard_verified_session():
+    from datetime import datetime, timezone
+
+    cloud = FakeCloud()
+    now = datetime(2026, 11, 23, 19, 0, tzinfo=timezone.utc)
+    sec = int(now.timestamp())
+    claim = {
+        "verified": True, "sub": "verified-operator-id",
+        "iss": "test-issuer", "aud": "test-manager",
+        "sid": "active-session", "iat": sec - 60, "exp": sec + 300,
+    }
+
+    def verified_auth(session):
+        return verify_authenticated_session(
+            session,
+            verify_provider=lambda _: claim,
+            is_session_active=lambda subject, sid: sid == "active-session",
+            expected_issuer="test-issuer", expected_audience="test-manager",
+            now=now,
+        )
+
+    assert read(cloud, authenticate=verified_auth) == []
+    assert cloud.calls == 1
+
+    cloud.calls = 0
+    claim["exp"] = sec - 1
+    with pytest.raises(PrivateStoreDenied):
+        read(cloud, authenticate=verified_auth)
     assert cloud.calls == 0
