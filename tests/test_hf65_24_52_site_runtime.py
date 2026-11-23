@@ -135,7 +135,7 @@ if(JSON.stringify(safe).includes('ana@example.org') || JSON.stringify(safe).incl
   throw Error('Dado pessoal nao relacionado a campanha foi registrado');
 // Entrada UTM de terceiros com PII não vira identificação comercial.
 sessionStorage.clear();
-const unsafe=run('?utm_source=ana%40example.com&utm_medium=stories&utm_campaign=contato-11988887777',{
+const unsafe=run('?utm_source=ana%40example.com&utm_medium=stories&utm_campaign=contato11988887777',{
   immediateTimers:true
 });
 const unsafePage=unsafe.posts[0];
