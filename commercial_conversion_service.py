@@ -84,7 +84,7 @@ def summarize_verified_campaign_sales(
         if (
             not campaign or len(campaign) > 120
             or not all(ch.isascii() and (ch.isalnum() or ch in "_-") for ch in campaign)
-            or re.search(r"\\d{9,}", campaign)
+            or re.search(r"\d{9,}", campaign)
         ):
             # O pedido inteiro precisa de reconciliação manual: uma linha
             # inválida não pode ser simplesmente ignorada.
