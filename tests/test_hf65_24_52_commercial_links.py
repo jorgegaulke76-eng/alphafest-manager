@@ -227,3 +227,62 @@ def test_campanha_utm_com_120_caracteres_permanece_valida():
     params = parse_qs(urlparse(link).query)
     assert params["utm_campaign"] == [campanha]
     assert len(params["utm_campaign"][0]) == 120
+
+
+def test_ordem_de_chegada_assincrona_wa_so_aceita_utm_igual_e_dez_segundos():
+    from datetime import datetime, timedelta, timezone
+    from site_metrics_service import _campaign_opportunities
+
+    origin = datetime(2026, 11, 23, 12, 0, tzinfo=timezone.utc)
+
+    def row(offset_seconds, kind, campaign="", source=""):
+        return {
+            "created_at": (origin + timedelta(seconds=offset_seconds)).isoformat(),
+            "event_type": kind,
+            "session_id": "sessao-assincrona",
+            "page_path": "/",
+            "utm_campaign": campaign,
+            "utm_source": source,
+        }
+
+    rows = [
+        row(-60, "whatsapp_click"),                    # contato direto antigo
+        row(-20, "whatsapp_click", "natal-2026", "instagram"),
+        row(-7, "whatsapp_click", "outra-campanha", "facebook"),
+        row(-5, "whatsapp_click", "", ""),             # contato direto próximo
+        row(-4, "whatsapp_click", "natal-2026", "facebook"),
+        row(-2, "whatsapp_click", "natal-2026", "instagram"),  # POST invertido
+        row(0, "page_view", "natal-2026", "instagram"),
+        row(5, "whatsapp_click", "natal-2026", "instagram"),
+    ]
+    report = _campaign_opportunities(
+        rows, origin - timedelta(minutes=2), origin + timedelta(minutes=2)
+    )
+    assert len(report) == 1
+    assert report[0]["sessoes"] == 1
+    assert report[0]["sessoes_whatsapp"] == 1
+    assert report[0]["cliques_whatsapp"] == 2
+
+
+def test_campanha_apos_acesso_direto_proximo_nao_atribui_contato_direto():
+    from datetime import datetime, timedelta, timezone
+    from site_metrics_service import _campaign_opportunities
+
+    origin = datetime(2026, 11, 23, 12, 0, tzinfo=timezone.utc)
+    rows = [
+        {
+            "created_at": (origin - timedelta(seconds=3)).isoformat(),
+            "event_type": "whatsapp_click", "session_id": "x",
+            "utm_campaign": "", "utm_source": "", "page_path": "/"
+        },
+        {
+            "created_at": origin.isoformat(),
+            "event_type": "page_view", "session_id": "x",
+            "utm_campaign": "natal-2026", "utm_source": "instagram", "page_path": "/"
+        },
+    ]
+    report = _campaign_opportunities(rows, origin - timedelta(minutes=1),
+                                     origin + timedelta(minutes=1))
+    assert len(report) == 1
+    assert report[0]["sessoes_whatsapp"] == 0
+    assert report[0]["cliques_whatsapp"] == 0
