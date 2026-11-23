@@ -6,6 +6,8 @@ on:
       - hf65-24-53-conversao-comercial
     paths:
       - 'commercial_conversion_service.py'
+      - 'commercial_verified_report.py'
+      - 'tests/test_hf65_24_53_verified_report.py'
       - 'commercial_funnel_audit.py'
       - 'tests/test_hf65_24_53_conversion.py'
       - 'tests/test_hf65_24_53_funnel_audit.py'
@@ -21,6 +23,8 @@ on:
       - main
     paths:
       - 'commercial_conversion_service.py'
+      - 'commercial_verified_report.py'
+      - 'tests/test_hf65_24_53_verified_report.py'
       - 'commercial_funnel_audit.py'
       - 'tests/test_hf65_24_53_conversion.py'
       - 'tests/test_hf65_24_53_funnel_audit.py'
@@ -48,7 +52,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Verificar sintaxe sem segredos ou banco
-        run: python -m py_compile commercial_conversion_service.py commercial_funnel_audit.py commercial_attribution_service.py commercial_attribution_sqlite_lab.py commercial_attribution_preview_ui.py proposal_status.py tests/test_hf65_24_53_conversion.py tests/test_hf65_24_53_funnel_audit.py tests/test_hf65_24_53_attribution.py tests/test_hf65_24_53_sqlite_lab.py
+        run: python -m py_compile commercial_conversion_service.py commercial_verified_report.py commercial_funnel_audit.py commercial_attribution_service.py commercial_attribution_sqlite_lab.py commercial_attribution_preview_ui.py proposal_status.py tests/test_hf65_24_53_conversion.py tests/test_hf65_24_53_funnel_audit.py tests/test_hf65_24_53_attribution.py tests/test_hf65_24_53_sqlite_lab.py tests/test_hf65_24_53_verified_report.py
       - name: Instalar pytest local
         run: python -m pip install pytest
       - name: Contrato de conversao e auditoria
