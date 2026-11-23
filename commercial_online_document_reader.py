@@ -10,6 +10,7 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from commercial_private_document_adapter import DOCUMENT_KEY
+from commercial_bootstrap_postgrest_contract import _validate_args, PrivateBootstrapHttpError
 
 
 class PrivateDocumentUnavailable(RuntimeError):
@@ -28,18 +29,22 @@ def load_private_document_online_only(
     """
     if document_key != DOCUMENT_KEY:
         raise PrivateDocumentUnavailable("Chave de documento não autorizada.")
-    if not callable(get) or not isinstance(base_url, str) or not base_url.startswith("https://"):
+    if not callable(get):
         raise PrivateDocumentUnavailable("Conexão remota segura não configurada.")
-    if not isinstance(headers, Mapping) or not headers.get("apikey"):
-        raise PrivateDocumentUnavailable("Credencial de servidor indisponível.")
+    try:
+        endpoint = _validate_args(base_url, headers, document_key)
+    except PrivateBootstrapHttpError:
+        raise PrivateDocumentUnavailable("Endpoint ou credencial privada inválida.") from None
     try:
         response = get(
-            base_url.rstrip("/") + "/rest/v1/app_data",
+            endpoint,
             headers=dict(headers),
             params={"select": "value", "key": "eq." + document_key, "limit": "2"},
-            timeout=timeout,
+            timeout=timeout, allow_redirects=False,
         )
         response.raise_for_status()
+        if not isinstance(response.status_code, int) or not 200 <= response.status_code < 300:
+            raise PrivateDocumentUnavailable("Status HTTP não confirmado.")
         rows = response.json()
     except Exception as exc:
         raise PrivateDocumentUnavailable("Falha ao consultar histórico privado online.") from None
