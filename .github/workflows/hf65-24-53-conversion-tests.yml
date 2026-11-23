@@ -11,6 +11,8 @@ on:
       - 'tests/test_hf65_24_53_funnel_audit.py'
       - 'proposal_status.py'
       - 'commercial_attribution_service.py'
+      - 'commercial_attribution_sqlite_lab.py'
+      - 'tests/test_hf65_24_53_sqlite_lab.py'
       - 'commercial_attribution_preview_ui.py'
       - 'tests/test_hf65_24_53_attribution.py'
       - '.github/workflows/hf65-24-53-conversion-tests.yml'
@@ -24,6 +26,8 @@ on:
       - 'tests/test_hf65_24_53_funnel_audit.py'
       - 'proposal_status.py'
       - 'commercial_attribution_service.py'
+      - 'commercial_attribution_sqlite_lab.py'
+      - 'tests/test_hf65_24_53_sqlite_lab.py'
       - 'commercial_attribution_preview_ui.py'
       - 'tests/test_hf65_24_53_attribution.py'
       - '.github/workflows/hf65-24-53-conversion-tests.yml'
@@ -44,8 +48,8 @@ jobs:
         with:
           python-version: '3.12'
       - name: Verificar sintaxe sem segredos ou banco
-        run: python -m py_compile commercial_conversion_service.py commercial_funnel_audit.py commercial_attribution_service.py commercial_attribution_preview_ui.py proposal_status.py tests/test_hf65_24_53_conversion.py tests/test_hf65_24_53_funnel_audit.py tests/test_hf65_24_53_attribution.py
+        run: python -m py_compile commercial_conversion_service.py commercial_funnel_audit.py commercial_attribution_service.py commercial_attribution_sqlite_lab.py commercial_attribution_preview_ui.py proposal_status.py tests/test_hf65_24_53_conversion.py tests/test_hf65_24_53_funnel_audit.py tests/test_hf65_24_53_attribution.py tests/test_hf65_24_53_sqlite_lab.py
       - name: Instalar pytest local
         run: python -m pip install pytest
       - name: Contrato de conversao e auditoria
-        run: python -m pytest -q tests/test_hf65_24_53_conversion.py tests/test_hf65_24_53_funnel_audit.py tests/test_hf65_24_53_attribution.py
+        run: python -m pytest -q tests/test_hf65_24_53_conversion.py tests/test_hf65_24_53_funnel_audit.py tests/test_hf65_24_53_attribution.py tests/test_hf65_24_53_sqlite_lab.py
