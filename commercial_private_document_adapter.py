@@ -11,9 +11,10 @@ from collections.abc import Callable, Mapping
 from copy import deepcopy
 from typing import Any
 from uuid import UUID
+from datetime import datetime
 
 from commercial_attribution_service import (
-    build_attribution_event, effective_attributions, validate_event_history,
+    build_attribution_event, clean_campaign, validate_event_history,
 )
 
 DOCUMENT_KEY = "hf65_24_53_attribution_events_private_db"
@@ -45,16 +46,51 @@ def _valid_document(value: Any) -> dict[str, Any]:
     events = value["events"]
     if not isinstance(events, list) or len(events) > MAX_EVENTS:
         raise ValueError("Histórico de auditoria inválido ou acima do limite.")
+    seen_ids: set[str] = set()
     for row in events:
         if not isinstance(row, dict) or set(row) != {
             "event_id", "numero_proposta", "atendimento_id", "campaign",
             "decisao", "evidencia", "usuario", "ocorrido_em"
         }:
             raise ValueError("Evento persistido em formato inesperado.")
+        event_id = row["event_id"]
         try:
-            UUID(str(row["event_id"]))
+            if not isinstance(event_id, str) or str(UUID(event_id)) != event_id:
+                raise ValueError()
         except (ValueError, TypeError, AttributeError):
-            raise ValueError("ID de evento inválido.") from None
+            raise ValueError("ID de evento inválido ou não canônico.") from None
+        if event_id in seen_ids:
+            raise PrivateStoreConflict("Histórico contém ID de evento duplicado.")
+        seen_ids.add(event_id)
+        for field, maximum in (("numero_proposta", 120), ("atendimento_id", 120),
+                               ("usuario", 80)):
+            value = row[field]
+            if not isinstance(value, str) or not value.strip() or len(value) > maximum:
+                raise ValueError("Identificador de evento inválido.")
+        if row["numero_proposta"] != row["numero_proposta"].strip() or (
+            row["atendimento_id"] != row["atendimento_id"].strip()
+        ) or row["usuario"] != row["usuario"].strip():
+            raise ValueError("Identificador não canônico.")
+        if not isinstance(row["campaign"], str):
+            raise ValueError("Campanha armazenada inválida.")
+        if clean_campaign(row["campaign"]) != row["campaign"]:
+            raise ValueError("Campanha não canônica.")
+        if row["decisao"] not in ("confirmar", "revogar") or row["evidencia"] not in (
+            "mensagem_whatsapp", "referencia_cliente", "link_utm_conferido",
+            "atendimento_manual"
+        ):
+            raise ValueError("Decisão ou evidência inválida no histórico.")
+        try:
+            stamp = row["ocorrido_em"]
+            if not isinstance(stamp, str):
+                raise ValueError()
+            moment = datetime.fromisoformat(stamp)
+            if moment.tzinfo is None or moment.utcoffset() is None:
+                raise ValueError()
+            if moment.isoformat() != stamp:
+                raise ValueError()
+        except (ValueError, TypeError):
+            raise ValueError("Horário do histórico inválido.") from None
     return {"events": deepcopy(events)}
 
 
