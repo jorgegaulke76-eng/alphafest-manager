@@ -142,11 +142,9 @@ jobs:
   deploy-online-preview:
     # Only the feature branch may deploy this public, isolated GitHub Pages
     # preview. A PR build or main branch build can never publish it.
-    if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/hf65-24-52-integracao-comercial') ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository &&
-       github.event.pull_request.head.ref == 'hf65-24-52-integracao-comercial')
+    # GitHub Pages protege o ambiente contra refs/pull/3/merge.
+    # A PR faz testes, mas apenas o push na branch HF52 pode hospedar preview.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/hf65-24-52-integracao-comercial'
     needs: [commercial-links, browser-preview, postgrest-contract]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
