@@ -54,6 +54,15 @@ def initialize_private_history_if_absent(
     if existing is not None:
         _valid_document(existing)
         return "existing"
+    # Permissão ou credencial pode ser revogada entre a leitura e a escrita.
+    # Revalidar imediatamente antes de qualquer tentativa de INSERT.
+    try:
+        still_allowed = (credential_mode() == "service" and
+                         approve_initialization(principal) is True)
+    except Exception:
+        still_allowed = False
+    if not still_allowed:
+        raise PrivateStoreDenied("Permissão de inicialização expirada.")
     # insert_if_absent precisa ser uma operação condicional ATÔMICA.
     # Em hipótese alguma fazer save_document ou upsert merge-duplicates.
     try:
