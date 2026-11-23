@@ -21,6 +21,10 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
   Uma tolerância técnica de até **10 segundos de inversão na chegada** só se
   aplica quando campanha, canal e meio UTM são exatamente iguais aos da visita
   identificada; contatos diretos prévios continuam excluídos.
+- **Recuperação de visita perdida:** se não houver um `page_view` com UTM
+  daquela sessão na janela, o painel aceita `product_open` com UTM como
+  evidência alternativa de acesso. `page_view` com campanha tem prioridade;
+  um `whatsapp_click` isolado não cria sessão e não gera conversão.
 - Ao clicar no WhatsApp **dentro de uma ficha de produto**, o texto de orçamento
   ganha a linha `Referência da campanha: instagram/stories/natal-2026`
   (quando houver campanha UTM válida), sem duplicá-la em cliques repetidos.
@@ -47,8 +51,8 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
   ou alterar status, orçamento, estoque, produção ou financeiro.
 
 ## Evidências automatizadas
-- Execução GitHub Actions: https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/45158432187
-- 16 testes de regressão Python/JavaScript aprovados, incluindo testes de inversão assíncrona de eventos e exclusão de cliques anteriores, além da proteção de buscas e UTM suspeitos e da referência
+- Execução GitHub Actions: https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/45159326591
+- 18 testes de regressão Python/JavaScript aprovados, incluindo testes de inversão assíncrona de eventos e exclusão de cliques anteriores, além da proteção de buscas e UTM suspeitos e da referência
   de campanha no WhatsApp da ficha, prevenção de duplicações, preservação do
   texto original e separação dos CTAs gerais.
 - Navegador Chromium desktop e celular aprovado em cópia da vitrine real,
@@ -64,6 +68,10 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
 - O teste abriu o carrinho com 2 produtos, validou referência UTM no texto
   editável, a possibilidade de apagá-la e o envio simulado sem abrir serviços
   externos. Uma sessão sem campanha não recebeu referência indevida.
+- O teste integrado também recalculou o relatório após **remover apenas da
+  consulta os eventos de visita já persistidos**. A abertura da ficha manteve
+  a atribuição com 1 sessão e 2 cliques em cada dispositivo, sem apagar linhas
+  do banco de teste.
 - Este último teste valida o contrato técnico em ambiente descartável.
   **Não é homologação da API Supabase hospedada nem prova de mensagens/vendas.**
 
