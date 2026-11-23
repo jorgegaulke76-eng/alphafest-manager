@@ -12,6 +12,7 @@ from commercial_session_guard import verify_authenticated_session
 class FakeResponse:
     def __init__(self, value):
         self.value = value
+        self.status_code = 200
 
     def raise_for_status(self):
         pass
@@ -40,7 +41,8 @@ class FakeCloud:
     def _headers(self):
         return {"apikey": "server-only-secret"}
 
-    def get(self, url, *, headers, params, timeout):
+    def get(self, url, *, headers, params, timeout, allow_redirects):
+        assert allow_redirects is False
         self.calls += 1
         assert url == "https://example.supabase.co/rest/v1/app_data"
         assert params["key"] == "eq.hf65_24_53_attribution_events_private_db"
