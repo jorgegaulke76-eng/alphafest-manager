@@ -29,6 +29,10 @@ def build_verified_commercial_report(
     events = [dict(x) for x in audited_events if isinstance(x, Mapping)]
     audit = audit_opportunity_funnel(contacts, proposals)
     validated_events = validate_event_history(events, proposals, contacts)
+    # Nunca apresentar um relatório aparentemente completo quando parte do
+    # diário foi rejeitada por perda de vínculo, adulteração ou dado inválido.
+    if len(validated_events) != len(events):
+        raise ValueError("Histórico comercial diverge das fontes oficiais; revisão necessária.")
     links = effective_attributions(validated_events)
 
     # Recusar atribuição se a ligação mudou após a confirmação.
