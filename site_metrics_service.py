@@ -72,6 +72,21 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
     try{let v=storage.getItem(key); if(v) return v; v=(crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+'-'+Math.random().toString(16).slice(2); storage.setItem(key,v); return v;}catch(e){return '';}
   }
   function clip(v,n){return String(v||'').replace(/\s+/g,' ').trim().slice(0,n);}
+  // Evita armazenar parâmetros UTM arbitrários como e-mails, URLs ou telefones.
+  // O gerador do Manager já usa somente letras, números, _ e -.
+  function safeUtm(value,limit){
+    const v=String(value||'').trim();
+    if(!v || v.length>limit || !/^[a-z0-9][a-z0-9_-]*$/i.test(v)
+       || /\d{9,}/.test(v)) return '';
+    return v.toLowerCase();
+  }
+  // Termos de busca com possíveis contatos pessoais não são enviados às métricas.
+  function safeSearchTerm(value){
+    const text=clip(value,180);
+    if(text.length<2 || /@|https?:\/\/|www\./i.test(text)) return '';
+    if(text.replace(/\D/g,'').length>=9) return '';
+    return text;
+  }
   function browserName(){
     const ua=navigator.userAgent||'';
     if(/Edg\//.test(ua)) return 'Edge';
@@ -89,7 +104,7 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
   }
   function sourceName(){
     const params=new URLSearchParams(location.search);
-    const utm=clip(params.get('utm_source'),120);
+    const utm=safeUtm(params.get('utm_source'),120);
     if(utm) return utm;
     const raw=document.referrer||'';
     if(!raw) return 'Direto';
@@ -108,12 +123,50 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
   }
   const clientId=uid(localStorage,'af_client_id_v1');
   const sessionId=uid(sessionStorage,'af_session_id_v1');
-  let entryPath='';
-  try{entryPath=sessionStorage.getItem('af_entry_path_v1')||'';if(!entryPath){entryPath=location.pathname+location.search+location.hash;sessionStorage.setItem('af_entry_path_v1',entryPath);}}catch(e){entryPath=location.pathname;}
+  // HF65.24.52: caminhos e origem NÃO incluem query string nem fragmentos.
+  // Links recebidos podem carregar email, telefone ou tokens em parâmetros
+  // arbitrários, que não são necessários para entender oportunidades.
+  function safePath(raw){
+    const base=String(raw||'/').split(/[?#]/,1)[0]||'/';
+    return clip(base,300);
+  }
+  function safeReferrer(){
+    try{
+      const raw=document.referrer||'';
+      if(!raw) return '';
+      const u=new URL(raw);
+      if(u.protocol!=='https:' && u.protocol!=='http:') return '';
+      // O domínio basta para identificar o canal; caminhos externos podem conter dados privados.
+      return clip(u.origin,500);
+    }catch(e){return '';}
+  }
+  let entryPath=safePath(location.pathname);
+  try{
+    // Chave nova para não reutilizar o valor antigo, que continha a URL completa.
+    entryPath=safePath(sessionStorage.getItem('af_entry_path_v52')||entryPath);
+    sessionStorage.setItem('af_entry_path_v52',entryPath);
+  }catch(e){}
   const qs=new URLSearchParams(location.search);
+  // HF65.24.52: primeiro toque UTM por sessão, igual ao relatório.
+  // Uma segunda campanha na mesma aba não altera a atribuição inicial.
+  const utm={
+    source:safeUtm(qs.get('utm_source'),120),
+    medium:safeUtm(qs.get('utm_medium'),120),
+    campaign:safeUtm(qs.get('utm_campaign'),180)
+  };
+  try {
+    const stored=JSON.parse(sessionStorage.getItem('af_utm_v52')||'{}');
+    if(safeUtm(stored.campaign,180)){
+      utm.source=safeUtm(stored.source,120);
+      utm.medium=safeUtm(stored.medium,120);
+      utm.campaign=safeUtm(stored.campaign,180);
+    } else if(utm.source||utm.medium||utm.campaign) {
+      sessionStorage.setItem('af_utm_v52',JSON.stringify(utm));
+    }
+  } catch(e) {}
   const baseMeta={
-    device_type:deviceType(), browser:browserName(), traffic_source:sourceName(),
-    utm_source:clip(qs.get('utm_source'),120), utm_medium:clip(qs.get('utm_medium'),120), utm_campaign:clip(qs.get('utm_campaign'),180),
+    device_type:deviceType(), browser:browserName(), traffic_source:utm.source||sourceName(),
+    utm_source:utm.source, utm_medium:utm.medium, utm_campaign:utm.campaign,
     entry_path:clip(entryPath,300)
   };
   // HF65.24.32: nunca bloquear a medição à espera de geolocalização.
@@ -126,9 +179,39 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
       .then(g=>{geoCache={city:clip(g.city,120),region:clip(g.region,120),country:clip(g.country,80)};})
       .catch(function(){});
   }catch(e){}
+  // HF65.24.52: referência comercial apenas no texto pré-preenchido
+  // do WhatsApp da ficha. Nunca envia mensagem por conta própria.
+  // Não copia a URL nem dados pessoais de parâmetros não autorizados.
+  function campaignToken(value,max){
+    const t=String(value||'').trim().toLowerCase();
+    return t.length>0 && t.length<=max && /^[a-z0-9][a-z0-9_-]*$/.test(t) ? t : '';
+  }
+  function campaignReference(){
+    const campaign=campaignToken(utm.campaign,120);
+    if(!campaign) return '';
+    const source=campaignToken(utm.source,40);
+    const medium=campaignToken(utm.medium,40);
+    return [source,medium,campaign].filter(Boolean).join('/');
+  }
+  // O carrinho consulta a referência somente ao preparar a mensagem editável.
+  // Nenhum nome, telefone ou texto de mensagem é compartilhado com métricas.
+  window.alphaFestCampaignReference=campaignReference;
+  function markProductWhatsapp(wa){
+    if(!wa || !wa.closest || !wa.closest('#product-detail-modal')) return;
+    const ref=campaignReference();
+    if(!ref) return;
+    try{
+      const target=new URL(wa.href,location.href);
+      if(target.protocol!=='https:' || target.hostname!=='wa.me') return;
+      const message=target.searchParams.get('text')||'';
+      if(!message || message.includes('Referência da campanha:')) return;
+      target.searchParams.set('text',message+'\n\nReferência da campanha: '+ref);
+      wa.href=target.toString();
+    }catch(e){ /* WhatsApp continua com o link original */ }
+  }
   function send(type, product, context){
     const payload=Object.assign({},baseMeta,geoCache,{
-      event_type:type,product_name:clip(product,180),page_path:clip(location.pathname+location.hash,300),referrer:clip(document.referrer,500),
+      event_type:type,product_name:clip(product,180),page_path:safePath(location.pathname),referrer:safeReferrer(),
       client_id:clientId,session_id:sessionId,event_context:clip(context,80)
     });
     const headers={'apikey':CFG.key,'Content-Type':'application/json','Prefer':'return=minimal'};
@@ -141,13 +224,25 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
   window.addEventListener('alphafest:metric',function(ev){
     const d=(ev&&ev.detail)||{};
     if(d.type==='whatsapp_click') send('whatsapp_click',clip(d.product,180),clip(d.context,80));
+    if(d.type==='product_open') send('product_open',clip(d.product,180),clip(d.context,80));
   });
   send('page_view','','page');
+  // A ficha de campanha pode ter aberto antes da inicialização deste rastreador.
+  // Registra a abertura direta uma única vez sem depender de eventos anteriores.
+  try {
+    const slug=qs.get('produto')||'';
+    if(/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+      const cards=[...document.querySelectorAll('.product-card[data-product]')];
+      const product=cards.find(c=>c.dataset.product===slug) ||
+        cards.find(c=>(c.dataset.productAliases||'').split(/\s+/).includes(slug));
+      if(product) send('product_open',product.dataset.detailName||'','campaign_product');
+    }
+  } catch(e) {}
   let searchTimer=null, lastSearch='';
   function scheduleSearch(value){
     clearTimeout(searchTimer);
-    const term=clip(value,180);
-    if(term.length<2) return;
+    const term=safeSearchTerm(value);
+    if(!term) return;
     searchTimer=setTimeout(function(){
       const key=term.toLocaleLowerCase('pt-BR');
       if(key===lastSearch) return;
@@ -170,10 +265,15 @@ def inject_tracking(page: str, *, enabled: bool = True) -> str:
     if(!t) return;
     const wa=t.closest && t.closest('a[href*="wa.me"],a[href*="api.whatsapp.com"],a[href*="whatsapp.com/send"]');
     if(wa){
+      markProductWhatsapp(wa);
       const galleryCard=wa.closest('.gallery-card');
       const galleryName=galleryCard&&galleryCard.querySelector('h3')?galleryCard.querySelector('h3').textContent.trim():'';
-      const modal=document.getElementById('product-detail-name');
-      const name=galleryName||(modal&&modal.textContent?modal.textContent.trim():'');
+      // Somente atribuir um produto se o CTA estiver dentro da ficha
+      // atualmente aberta. Links gerais nunca herdam um nome antigo.
+      const productModal=wa.closest('#product-detail-modal');
+      const modalName=productModal && !productModal.hidden
+        ? productModal.querySelector('#product-detail-name') : null;
+      const name=galleryName||(modalName&&modalName.textContent?modalName.textContent.trim():'');
       send('whatsapp_click',name,galleryCard?'gallery':'site');
       return;
     }
@@ -487,40 +587,85 @@ def _compare_periods(rows: list[dict[str, Any]], now: datetime) -> dict[str, Any
 
 # HF65.24.37 — associação por sessão e campanha UTM, sem venda presumida.
 def _campaign_opportunities(rows: list[dict[str, Any]], start: datetime, end: datetime) -> list[dict[str, Any]]:
-    """Campanhas identificadas na primeira visita de cada sessão dentro da janela.
+    """Agrupa a primeira campanha UTM identificada por sessão na janela.
 
-    Atribuição conservadora: cliques WhatsApp na mesma sessão; não atribui
-    mensagens enviadas, compras, receita ou campanhas ausentes de UTM.
+    Um acesso direto anterior ao link UTM não elimina a campanha encontrada
+    posteriormente. Somente cliques WhatsApp após essa primeira identificação
+    entram na contagem. Não se inferem mensagens enviadas ou vendas.
     """
-    selected=[]
-    for r in rows:
+    selected = []
+    for row in rows:
         try:
-            t=datetime.fromisoformat(str(r.get('created_at') or '').replace('Z','+00:00'))
-            if t.tzinfo is None: t=t.replace(tzinfo=timezone.utc)
-            t=t.astimezone(timezone.utc)
-        except (ValueError,TypeError):
+            t = datetime.fromisoformat(str(row.get("created_at") or "").replace("Z", "+00:00"))
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=timezone.utc)
+            t = t.astimezone(timezone.utc)
+        except (ValueError, TypeError):
             continue
-        if start <= t < end: selected.append(r)
-    first={}
-    for r in sorted(selected,key=lambda r:str(r.get('created_at') or '')):
-        if r.get('event_type') != 'page_view' or _technical_page_path(r.get('page_path')): continue
-        sid=str(r.get('session_id') or '').strip()
-        if sid and sid not in first: first[sid]=r
-    wa_by_sid=Counter(str(r.get('session_id') or '').strip() for r in selected
-                      if r.get('event_type')=='whatsapp_click' and r.get('session_id'))
-    hits=Counter(); wa_sessions=Counter(); wa_clicks=Counter(); sources={}
-    for sid,r in first.items():
-        name=str(r.get('utm_campaign') or '').strip()[:180]
-        if not name: continue
-        src=str(r.get('utm_source') or r.get('traffic_source') or 'Não informado').strip()[:120]
-        key=(name,src)
-        hits[key]+=1
-        if wa_by_sid[sid]: wa_sessions[key]+=1; wa_clicks[key]+=wa_by_sid[sid]
-    return [{'campanha':name,'canal':source,'sessoes':qty,
-             'sessoes_whatsapp':wa_sessions[(name,source)],
-             'cliques_whatsapp':wa_clicks[(name,source)],
-             'percentual':_pct(wa_sessions[(name,source)],qty)}
-            for (name,source),qty in sorted(hits.items(), key=lambda z:(-z[1],z[0][0].casefold(),z[0][1].casefold()))]
+        if start <= t < end:
+            selected.append((t, row))
+    first_utm = {}
+    ordered = sorted(selected, key=lambda item: item[0])
+    for t, row in ordered:
+        if row.get("event_type") != "page_view" or _technical_page_path(row.get("page_path")):
+            continue
+        sid = str(row.get("session_id") or "").strip()
+        campaign = str(row.get("utm_campaign") or "").strip()
+        if sid and campaign and sid not in first_utm:
+            first_utm[sid] = (t, row)
+    # Algumas visitas não chegam ao banco por bloqueio de rede. Uma abertura
+    # real da ficha com UTM é evidência alternativa da sessão, mas só quando
+    # NÃO existe page_view de campanha para aquela sessão na janela.
+    # O clique WhatsApp isolado jamais cria campanha ou sessão.
+    for t, row in ordered:
+        if row.get("event_type") != "product_open" or _technical_page_path(row.get("page_path")):
+            continue
+        sid = str(row.get("session_id") or "").strip()
+        campaign = str(row.get("utm_campaign") or "").strip()
+        if sid and campaign and sid not in first_utm:
+            first_utm[sid] = (t, row)
+    wa_by_sid = Counter()
+    for t, row in selected:
+        sid = str(row.get("session_id") or "").strip()
+        if row.get("event_type") != "whatsapp_click" or sid not in first_utm:
+            continue
+        first_time, first_row = first_utm[sid]
+        # POSTs assíncronos podem chegar ao servidor fora da ordem do clique.
+        # Admitimos até 10 s de inversão SOMENTE com a mesma UTM explícita.
+        # Contatos diretos anteriores à campanha (sem UTM) continuam excluídos.
+        same_campaign = (
+            bool(str(row.get("utm_campaign") or "").strip())
+            and str(row.get("utm_campaign") or "").strip()
+                == str(first_row.get("utm_campaign") or "").strip()
+            and str(row.get("utm_source") or "").strip()
+                == str(first_row.get("utm_source") or "").strip()
+            and str(row.get("utm_medium") or "").strip()
+                == str(first_row.get("utm_medium") or "").strip()
+        )
+        reordered = (
+            first_time - timedelta(seconds=10) <= t < first_time
+            and same_campaign
+        )
+        if t >= first_time or reordered:
+            wa_by_sid[sid] += 1
+    hits = Counter()
+    wa_sessions = Counter()
+    wa_clicks = Counter()
+    for sid, (_, row) in first_utm.items():
+        name = str(row.get("utm_campaign") or "").strip()[:180]
+        src = str(row.get("utm_source") or row.get("traffic_source") or "Não informado").strip()[:120]
+        key = (name, src)
+        hits[key] += 1
+        if wa_by_sid[sid]:
+            wa_sessions[key] += 1
+            wa_clicks[key] += wa_by_sid[sid]
+    return [{"campanha": name, "canal": source, "sessoes": qty,
+             "sessoes_whatsapp": wa_sessions[(name, source)],
+             "cliques_whatsapp": wa_clicks[(name, source)],
+             "percentual": _pct(wa_sessions[(name, source)], qty)}
+            for (name, source), qty in sorted(
+                hits.items(), key=lambda z: (-z[1], z[0][0].casefold(), z[0][1].casefold())
+            )]
 
 
 def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
