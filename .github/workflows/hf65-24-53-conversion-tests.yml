@@ -12,6 +12,8 @@ on:
       - 'commercial_server_read_gateway.py'
       - 'commercial_operator_policy.py'
       - 'commercial_session_guard.py'
+      - 'commercial_streamlit_oidc_bridge.py'
+      - 'tests/test_hf65_24_53_streamlit_oidc_bridge.py'
       - 'tests/test_hf65_24_53_session_guard.py'
       - 'tests/test_hf65_24_53_operator_policy.py'
       - 'tests/test_hf65_24_53_server_gateway.py'
@@ -41,6 +43,8 @@ on:
       - 'commercial_server_read_gateway.py'
       - 'commercial_operator_policy.py'
       - 'commercial_session_guard.py'
+      - 'commercial_streamlit_oidc_bridge.py'
+      - 'tests/test_hf65_24_53_streamlit_oidc_bridge.py'
       - 'tests/test_hf65_24_53_session_guard.py'
       - 'tests/test_hf65_24_53_operator_policy.py'
       - 'tests/test_hf65_24_53_server_gateway.py'
@@ -76,7 +80,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Verificar sintaxe sem segredos ou banco
-        run: python -m py_compile commercial_conversion_service.py commercial_verified_report.py commercial_private_document_adapter.py commercial_online_document_reader.py commercial_server_read_gateway.py commercial_operator_policy.py commercial_session_guard.py commercial_verified_report_preview_ui.py commercial_funnel_audit.py commercial_attribution_service.py commercial_attribution_sqlite_lab.py commercial_attribution_preview_ui.py proposal_status.py tests/test_hf65_24_53_conversion.py tests/test_hf65_24_53_funnel_audit.py tests/test_hf65_24_53_attribution.py tests/test_hf65_24_53_sqlite_lab.py tests/test_hf65_24_53_verified_report.py tests/test_hf65_24_53_staging_flow.py tests/test_hf65_24_53_private_adapter.py
+        run: python -m py_compile commercial_conversion_service.py commercial_verified_report.py commercial_private_document_adapter.py commercial_online_document_reader.py commercial_server_read_gateway.py commercial_operator_policy.py commercial_session_guard.py commercial_streamlit_oidc_bridge.py commercial_verified_report_preview_ui.py commercial_funnel_audit.py commercial_attribution_service.py commercial_attribution_sqlite_lab.py commercial_attribution_preview_ui.py proposal_status.py tests/test_hf65_24_53_conversion.py tests/test_hf65_24_53_funnel_audit.py tests/test_hf65_24_53_attribution.py tests/test_hf65_24_53_sqlite_lab.py tests/test_hf65_24_53_verified_report.py tests/test_hf65_24_53_staging_flow.py tests/test_hf65_24_53_private_adapter.py
       - name: Instalar pytest local
         run: python -m pip install pytest
       - name: Contrato de conversao e auditoria
