@@ -97,7 +97,8 @@ def append_private_event(*, principal: Any,
         usuario=usuario_verificado, ocorrido_em=ocorrido_em,
         propostas=propostas, atendimentos=atendimentos,
     )
-    before = _valid_document(load(DOCUMENT_KEY))
+    raw_before = load(DOCUMENT_KEY)
+    before = _valid_document(raw_before)
     existing = [e for e in before["events"] if e["event_id"] == str(event_id)]
     full = {"event_id": str(event_id), **event}
     if existing:
@@ -116,7 +117,9 @@ def append_private_event(*, principal: Any,
     if related and any(e["atendimento_id"] != atendimento_id for e in related):
         raise PrivateStoreConflict("Pedido possui outro atendimento no histórico.")
     proposed = {"events": before["events"] + [full]}
-    ok, reason = save_cas(DOCUMENT_KEY, before, proposed)
+    # O documento ainda pode não existir: CAS espera a versão real lida.
+    expected = raw_before if raw_before in (None, {}) else before
+    ok, reason = save_cas(DOCUMENT_KEY, expected, proposed)
     if ok is not True or reason != "online":
         raise PrivateStoreConflict("Gravação não confirmada; confira a revisão do documento.")
     return event
