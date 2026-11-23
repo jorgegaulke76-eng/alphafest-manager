@@ -30,6 +30,7 @@ EVENT = {
 class Response:
     def __init__(self, events):
         self.events = events
+        self.status_code = 200
     def raise_for_status(self):
         return None
     def json(self):
@@ -50,7 +51,8 @@ class Cloud:
         return "https://example.supabase.co", "private-test-key"
     def _headers(self):
         return {"apikey": "private-test-key"}
-    def get(self, url, *, headers, params, timeout):
+    def get(self, url, *, headers, params, timeout, allow_redirects):
+        assert allow_redirects is False
         self.calls += 1
         assert params["key"] == "eq." + DOCUMENT_KEY
         return Response(self.events)
