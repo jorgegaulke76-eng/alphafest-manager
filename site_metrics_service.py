@@ -615,8 +615,24 @@ def _campaign_opportunities(rows: list[dict[str, Any]], start: datetime, end: da
     wa_by_sid = Counter()
     for t, row in selected:
         sid = str(row.get("session_id") or "").strip()
-        if (row.get("event_type") == "whatsapp_click"
-                and sid in first_utm and t >= first_utm[sid][0]):
+        if row.get("event_type") != "whatsapp_click" or sid not in first_utm:
+            continue
+        first_time, first_row = first_utm[sid]
+        # POSTs assíncronos podem chegar ao servidor fora da ordem do clique.
+        # Admitimos até 10 s de inversão SOMENTE com a mesma UTM explícita.
+        # Contatos diretos anteriores à campanha (sem UTM) continuam excluídos.
+        same_campaign = (
+            bool(str(row.get("utm_campaign") or "").strip())
+            and str(row.get("utm_campaign") or "").strip()
+                == str(first_row.get("utm_campaign") or "").strip()
+            and str(row.get("utm_source") or "").strip()
+                == str(first_row.get("utm_source") or "").strip()
+        )
+        reordered = (
+            first_time - timedelta(seconds=10) <= t < first_time
+            and same_campaign
+        )
+        if t >= first_time or reordered:
             wa_by_sid[sid] += 1
     hits = Counter()
     wa_sessions = Counter()
