@@ -160,3 +160,52 @@ def test_missing_remote_document_blocks_writes_and_reads():
             credential_mode=service, load=db.load,
         )
     assert db.cas_calls == 0
+
+
+def test_duplicate_event_ids_in_remote_history_are_rejected():
+    db = MemoryDocument()
+    params = args(db)
+    append_private_event(**params)
+    db.value["events"].append(copy.deepcopy(db.value["events"][0]))
+    with pytest.raises(PrivateStoreConflict):
+        read_private_events(principal=("verified", "admin"), authorize=allow,
+                            credential_mode=service, load=db.load)
+    with pytest.raises(PrivateStoreConflict):
+        append_private_event(**args(db))
+    assert db.cas_calls == 1
+
+
+@pytest.mark.parametrize("change", [
+    {"usuario": ""},
+    {"evidencia": "sem_prova"},
+    {"decisao": "excluir"},
+    {"campaign": "cliente@email.com"},
+    {"campaign": "Natal_2026"},
+    {"ocorrido_em": "2026-11-23T16:00:00"},
+    {"numero_proposta": " P1"},
+])
+def test_tampered_remote_event_fails_closed(change):
+    db = MemoryDocument()
+    append_private_event(**args(db))
+    db.value["events"][0].update(change)
+    with pytest.raises((ValueError, PrivateStoreConflict)):
+        read_private_events(principal=("verified", "admin"), authorize=allow,
+                            credential_mode=service, load=db.load)
+    with pytest.raises((ValueError, PrivateStoreConflict)):
+        append_private_event(**args(db))
+    assert db.cas_calls == 1
+
+
+def test_reusing_event_id_across_orders_is_denied():
+    db = MemoryDocument()
+    params = args(db)
+    append_private_event(**params)
+    second = args(
+        db, event_id=params["event_id"], numero_proposta="P2",
+        atendimento_id="A2",
+        propostas=ORDERS + [{"numero_proposta": "P2", "atendimento_id": "A2"}],
+        atendimentos=CONTACTS + [{"id": "A2"}],
+    )
+    with pytest.raises(PrivateStoreConflict):
+        append_private_event(**second)
+    assert len(db.value["events"]) == 1
