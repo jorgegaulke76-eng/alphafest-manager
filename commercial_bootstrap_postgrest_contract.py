@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from typing import Any
+from urllib.parse import urlsplit
 
 from commercial_private_document_adapter import DOCUMENT_KEY, _valid_document
 
@@ -19,8 +20,22 @@ class PrivateBootstrapHttpError(RuntimeError):
 def _validate_args(url: str, headers: Mapping[str, str], key: str) -> str:
     if key != DOCUMENT_KEY:
         raise PrivateBootstrapHttpError("Chave de diário não autorizada.")
-    if not isinstance(url, str) or not url.startswith("https://") or "@" in url:
+    if not isinstance(url, str):
         raise PrivateBootstrapHttpError("Endpoint HTTPS obrigatório.")
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        raise PrivateBootstrapHttpError("Endpoint do banco inválido.") from None
+    # Host explícito do Supabase; nunca enviar apikey a um host arbitrário.
+    # Domínios personalizados/self-hosted exigem revisão e adaptação separada.
+    host = parsed.hostname or ""
+    if (
+        parsed.scheme != "https" or not host.endswith(".supabase.co")
+        or parsed.username is not None or parsed.password is not None
+        or parsed.port not in (None, 443)
+        or parsed.path not in ("", "/") or parsed.query or parsed.fragment
+    ):
+        raise PrivateBootstrapHttpError("Endpoint Supabase seguro obrigatório.")
     if not isinstance(headers, Mapping) or not isinstance(headers.get("apikey"), str) or not headers["apikey"]:
         raise PrivateBootstrapHttpError("Credencial do servidor ausente.")
     return url.rstrip("/") + "/rest/v1/app_data"
