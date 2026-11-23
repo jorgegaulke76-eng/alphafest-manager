@@ -73,15 +73,24 @@ def summarize_verified_campaign_sales(
     de campanha contraditórios.
     """
     by_order: dict[str, set[str]] = defaultdict(set)
+    invalid_links: set[str] = set()
     for item in attributions:
+        if not isinstance(item, Mapping):
+            continue
         order_id = str(item.get("numero_proposta") or "").strip()
+        if not order_id:
+            continue
         campaign = str(item.get("campaign") or "").strip().lower()
-        if order_id and campaign and len(campaign) <= 120 and all(
-            ch.isascii() and (ch.isalnum() or ch in "_-") for ch in campaign
+        if (
+            not campaign or len(campaign) > 120
+            or not all(ch.isascii() and (ch.isalnum() or ch in "_-") for ch in campaign)
+            or re.search(r"\\d{9,}", campaign)
         ):
-            # Não armazenar dados pessoais nem texto livre no identificador.
-            if not re.search(r"\d{9,}", campaign):
-                by_order[order_id].add(campaign)
+            # O pedido inteiro precisa de reconciliação manual: uma linha
+            # inválida não pode ser simplesmente ignorada.
+            invalid_links.add(order_id)
+            continue
+        by_order[order_id].add(campaign)
 
     seen: set[str] = set()
     duplicate: set[str] = set()
@@ -99,7 +108,7 @@ def summarize_verified_campaign_sales(
         lambda: {"paid_orders": 0, "paid_revenue": Decimal("0")}
     )
     for number, order in unique.items():
-        if number in duplicate or len(by_order[number]) != 1:
+        if number in duplicate or number in invalid_links or len(by_order[number]) != 1:
             continue
         if not status_bool(dict(order), "pago"):
             continue
