@@ -80,3 +80,43 @@ def test_brazilian_format():
         [{"numero_proposta": "1", "campaign": "campanha_1"}],
     )
     assert result["campanha_1"]["paid_revenue"] == Decimal("1234.56")
+
+
+
+def test_refuse_ambiguous_or_overprecise_amounts():
+    orders = [
+        {"numero_proposta": str(n), "pago": True, "valor_total": value}
+        for n, value in enumerate(
+            ["1.234", "12.345", "1e3", "R$ 1.23,45", "R$ 1.234", "0,00",
+             "-100,00", "100,0", "100.000", "1_000", "1.234,567"], 1
+        )
+    ]
+    links = [{"numero_proposta": str(n), "campaign": "natal"}
+             for n in range(1, len(orders) + 1)]
+    assert summarize(orders, links) == {}
+
+
+def test_precise_cents_and_structured_numbers():
+    result = summarize(
+        [
+            {"numero_proposta": "1", "pago": True, "total": "1.234,56"},
+            {"numero_proposta": "2", "pago": True, "total": "1234.56"},
+            {"numero_proposta": "3", "pago": True, "total": 12.5},
+            {"numero_proposta": "4", "pago": True, "total": Decimal("0.25")},
+        ],
+        [{"numero_proposta": str(i), "campaign": "natal"} for i in range(1, 5)],
+    )
+    assert result["natal"]["paid_orders"] == 4
+    assert result["natal"]["paid_revenue"] == Decimal("2481.87")
+
+
+def test_refuse_nonpositive_and_float_with_fractional_cent():
+    result = summarize(
+        [
+            {"numero_proposta": "1", "pago": True, "total": 0},
+            {"numero_proposta": "2", "pago": True, "total": 1.234},
+            {"numero_proposta": "3", "pago": True, "total": Decimal("10.001")},
+        ],
+        [{"numero_proposta": str(i), "campaign": "natal"} for i in (1, 2, 3)],
+    )
+    assert result == {}
