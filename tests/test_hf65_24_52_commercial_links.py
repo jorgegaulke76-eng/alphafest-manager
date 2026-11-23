@@ -251,8 +251,9 @@ def test_ordem_de_chegada_assincrona_wa_so_aceita_utm_igual_e_dez_segundos():
         row(-7, "whatsapp_click", "outra-campanha", "facebook"),
         row(-5, "whatsapp_click", "", ""),             # contato direto próximo
         row(-4, "whatsapp_click", "natal-2026", "facebook"),
+        {**row(-3, "whatsapp_click", "natal-2026", "instagram"), "utm_medium": "post"},
         row(-2, "whatsapp_click", "natal-2026", "instagram"),  # POST invertido
-        row(0, "page_view", "natal-2026", "instagram"),
+        {**row(0, "page_view", "natal-2026", "instagram"), "utm_medium": ""},
         row(5, "whatsapp_click", "natal-2026", "instagram"),
     ]
     report = _campaign_opportunities(
