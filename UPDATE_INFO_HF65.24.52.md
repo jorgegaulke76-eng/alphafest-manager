@@ -75,6 +75,21 @@ de orçamento pelo WhatsApp, sem confundir um clique com uma conversa ou venda.
 - Este último teste valida o contrato técnico em ambiente descartável.
   **Não é homologação da API Supabase hospedada nem prova de mensagens/vendas.**
 
+## Marco de homologação e preparação (23/11/2026)
+- [x] Prévia isolada GitHub Pages aprovada visualmente pelo usuário com o retorno
+      **“está perfeito”**. Isso não comprova envio real de WhatsApp nem uso em
+      todos os modelos de telefone.
+- [x] Preparação final **sem publicação** autorizada pelo usuário.
+- [x] Testes preventivos do pacote de produção acrescentados, sem chamar
+      `publicar_pacote` nem criar versão no Worker.
+- [ ] Autorização explícita de merge para a `main` ainda pendente.
+- [ ] Autorização explícita de publicação no Cloudflare ainda pendente.
+
+Plano de liberação e reversão auditável:
+[`HF65.24.52_PLANO_LIBERACAO_CONTROLADA.md`](HF65.24.52_PLANO_LIBERACAO_CONTROLADA.md).
+A versão de código do Manager e a versão ativa de **Static Assets do Worker**
+são estados distintos: proteger a branch 51 não substitui o backup do Worker.
+
 ## Checklist antes de liberar (exige conferência explícita)
 - [ ] Revisar a PR e preservar cópia da versão 51 funcional.
 - [ ] Em ambiente separado de produção, confirmar recebimento de eventos
