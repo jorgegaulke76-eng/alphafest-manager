@@ -64,4 +64,4 @@ jobs:
       - name: Instalar pytest local
         run: python -m pip install pytest
       - name: Contrato de conversao e auditoria
-        run: python -m pytest -q tests/test_hf65_24_53_conversion.py tests/test_hf65_24_53_funnel_audit.py tests/test_hf65_24_53_attribution.py tests/test_hf65_24_53_sqlite_lab.py
+        run: python -m pytest -q tests/test_hf65_24_53_*.py
