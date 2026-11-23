@@ -19,35 +19,35 @@ from proposal_status import (
 
 
 def _amount(value: Any) -> Decimal | None:
-    """Normaliza importâncias em reais, recusando valores ambíguos ou inválidos."""
+    """Lê centavos apenas em formatos inequívocos; nunca arredonda silenciosamente.
+
+    Aceita inteiro simples, decimal com exatamente duas casas, formato BRL
+    agrupado com vírgula e número Decimal/float finito já estruturado.
+    Recusa pontos ambíguos (1.234), notação exponencial e três casas.
+    """
     if isinstance(value, bool) or value is None:
         return None
-    raw = str(value).strip().replace("R$", "").replace(" ", "")
+    raw = str(value).strip()
+    if raw.startswith("R$"):
+        raw = raw[2:].strip()
     if not raw:
         return None
-    # Milhares com ponto + decimal vírgula (padrão BR) ou inteiro simples.
     if "," in raw:
-        if raw.count(",") != 1:
+        # BR: 1234,56 ou 1.234,56. Não aceitar separadores inconsistentes.
+        match = re.fullmatch(r"(?:[0-9]+|[1-9][0-9]{0,2}(?:\\.[0-9]{3})+),[0-9]{2}", raw)
+        if not match:
             return None
-        integer, cents = raw.split(",")
-        if not cents.isdigit() or len(cents) != 2:
+        raw = raw.replace(".", "").replace(",", ".")
+    elif "." in raw:
+        if not re.fullmatch(r"[0-9]+\\.[0-9]{2}", raw):
             return None
-        if "." in integer:
-            chunks = integer.split(".")
-            if not chunks[0].isdigit() or not 1 <= len(chunks[0]) <= 3 or not all(
-                len(x) == 3 and x.isdigit() for x in chunks[1:]
-            ):
-                return None
-            integer = "".join(chunks)
-        if not integer.isdigit():
-            return None
-        raw = f"{integer}.{cents}"
+    elif not re.fullmatch(r"[0-9]+", raw):
+        return None
     try:
         amount = Decimal(raw)
     except (InvalidOperation, ValueError, TypeError):
         return None
-    return amount if amount.is_finite() and amount >= 0 else None
-
+    return amount if amount.is_finite() and amount > 0 else None
 
 def summarize_verified_campaign_sales(
     orders: Iterable[Mapping[str, Any]],
