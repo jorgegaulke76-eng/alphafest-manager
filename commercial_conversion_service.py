@@ -27,6 +27,14 @@ def _amount(value: Any) -> Decimal | None:
     """
     if isinstance(value, bool) or value is None:
         return None
+    if isinstance(value, (int, float, Decimal)):
+        try:
+            numeric = Decimal(str(value))
+            if numeric.is_finite() and numeric > 0 and numeric.as_tuple().exponent >= -2:
+                return numeric
+        except (InvalidOperation, ValueError, TypeError):
+            pass
+        return None
     raw = str(value).strip()
     if raw.startswith("R$"):
         raw = raw[2:].strip()
