@@ -142,7 +142,7 @@ def test_no_local_fallback_confirmation():
 def test_cannot_migrate_event_to_unrelated_contact():
     db = MemoryDocument()
     append_private_event(**args(db))
-    with pytest.raises(ValueError):
+    with pytest.raises(PrivateStoreConflict):
         append_private_event(**args(
             db, atendimento_id="A2", propostas=[{"numero_proposta": "P1", "atendimento_id": "A2"}],
             atendimentos=[{"id": "A2"}]
