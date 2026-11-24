@@ -32,10 +32,17 @@ def _endpoint(base_url: str, headers: Mapping[str, str]) -> str:
             or p.username is not None or p.password is not None
             or p.path not in ("", "/") or p.query or p.fragment):
             raise ValueError()
-        if (not isinstance(headers, Mapping)
-            or not isinstance(headers.get("apikey"), str) or not headers["apikey"]
-            or not isinstance(headers.get("Authorization"), str)
-            or not headers["Authorization"].startswith("Bearer ")):
+        if not isinstance(headers, Mapping):
+            raise ValueError()
+        key = headers.get("apikey")
+        bearer = headers.get("Authorization")
+        if not isinstance(key, str) or not key.strip():
+            raise ValueError()
+        if key.startswith("sb_secret_"):
+            # Nova chave Supabase nao e JWT: apikey sem Bearer.
+            if bearer is not None:
+                raise ValueError()
+        elif not isinstance(bearer, str) or bearer != "Bearer " + key:
             raise ValueError()
     except (ValueError, TypeError, AttributeError):
         raise SessionHttpDenied("Credencial privada ou endpoint de homologação inválido.") from None
