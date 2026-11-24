@@ -138,3 +138,52 @@ def test_sensitive_number_in_second_link_invalidates_order():
         {"numero_proposta": "1", "campaign": "11999999999"},
     ]
     assert summarize(orders, links) == {}
+
+
+def test_payment_partials_refunds_and_pending_balances_require_review():
+    base = {"pago": True, "valor_total": "200,00"}
+    variations = [
+        {"pagamento_parcial": True},
+        {"pago_parcial": "sim"},
+        {"estornado": True},
+        {"reembolsado": True},
+        {"chargeback": True},
+        {"status_pagamento": "Parcialmente pago"},
+        {"situacao_pagamento": "estornado"},
+        {"status_financeiro": "Pendente"},
+        {"valor_pago": "100,00"},
+        {"valor_recebido": "150,00"},
+        {"total_recebido": "NaN"},
+        {"valor_estornado": "30,00"},
+        {"valor_reembolsado": "10,00"},
+        {"saldo_pendente": "50,00"},
+        {"saldo_devedor": "10,00"},
+    ]
+    orders = [dict(base, numero_proposta=str(i), **variation)
+              for i, variation in enumerate(variations, 1)]
+    links = [{"numero_proposta": str(i), "campaign": "natal"}
+             for i in range(1, len(orders) + 1)]
+    assert summarize(orders, links) == {}
+
+
+def test_full_payment_with_explicit_amount_remains_commercial_not_accounting():
+    order = {
+        "numero_proposta": "fully-paid", "pago": True,
+        "valor_total": "250,00", "valor_recebido": "250,00",
+        "valor_estornado": "0,00", "saldo_pendente": "0,00",
+    }
+    result = summarize([order], [{"numero_proposta": "fully-paid", "campaign": "natal"}])
+    assert result["natal"] == {"paid_orders": 1, "paid_revenue": Decimal("250.00")}
+
+
+def test_one_partial_payment_does_not_hide_other_fully_paid_order():
+    orders = [
+        {"numero_proposta": "1", "pago": True, "valor_total": "100,00",
+         "valor_pago": "40,00"},
+        {"numero_proposta": "2", "pago": True, "valor_total": "80,00",
+         "valor_pago": "80,00"},
+    ]
+    links = [{"numero_proposta": str(i), "campaign": "natal"} for i in (1, 2)]
+    assert summarize(orders, links) == {
+        "natal": {"paid_orders": 1, "paid_revenue": Decimal("80.00")}
+    }
