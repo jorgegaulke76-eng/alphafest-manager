@@ -13,6 +13,9 @@ from urllib.parse import urlsplit
 from commercial_private_document_adapter import DOCUMENT_KEY, _valid_document
 
 
+STAGING_HOST = "hvaptsdhaxrdxgqqpicu.supabase.co"
+
+
 class PrivateBootstrapHttpError(RuntimeError):
     pass
 
@@ -26,11 +29,11 @@ def _validate_args(url: str, headers: Mapping[str, str], key: str) -> str:
         parsed = urlsplit(url)
     except ValueError:
         raise PrivateBootstrapHttpError("Endpoint do banco inválido.") from None
-    # Host explícito do Supabase; nunca enviar apikey a um host arbitrário.
-    # Domínios personalizados/self-hosted exigem revisão e adaptação separada.
+    # HF53 é um experimento exclusivamente de homologação: nunca enviar
+    # chave privada para outro projeto, inclusive AlphaFest em produção.
     host = parsed.hostname or ""
     if (
-        parsed.scheme != "https" or not host.endswith(".supabase.co")
+        parsed.scheme != "https" or host != STAGING_HOST
         or parsed.username is not None or parsed.password is not None
         or parsed.port not in (None, 443)
         or parsed.path not in ("", "/") or parsed.query or parsed.fragment
