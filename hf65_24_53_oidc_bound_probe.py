@@ -24,11 +24,27 @@ from hf65_24_53_http_diagnostic import _eligible, STAGING_URL
 SUCCESS = "Sessao vinculada ao login Google e revogada no Supabase de homologacao."
 
 
-def authenticated_principal(st: Any, *, now: datetime | None = None) -> VerifiedOperator:
-    """Atesta so para este probe, sem inferir permissao ao relatorio."""
-    allowed, _ = _eligible(st)
-    if not allowed:
-        raise PermissionError("Identidade do probe indisponivel.")
+def authenticated_principal(
+    st: Any, *, now: datetime | None = None,
+    require_diagnostic_access: bool = True,
+) -> VerifiedOperator:
+    """Identidade Google no servidor; autorizacao comercial e verificada na ACL.
+
+    O modo padrao preserva o bloqueio do diagnostico; o gate comercial usa
+    require_diagnostic_access=False, mas exige login OIDC e email verificado
+    independentemente do email/flag dos diagnósticos.
+    """
+    if require_diagnostic_access:
+        allowed, _ = _eligible(st)
+        if not allowed:
+            raise PermissionError("Identidade do probe indisponivel.")
+    else:
+        try:
+            if (st.user.is_logged_in is not True
+                or st.user.to_dict().get("email_verified") is not True):
+                raise ValueError()
+        except Exception:
+            raise PermissionError("Login Google verificado obrigatorio.") from None
     try:
         user = st.user
         c = user.to_dict()
