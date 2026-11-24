@@ -78,3 +78,51 @@ def render_http_diagnostic(st: Any, *, probe: Callable[..., str] | None = None) 
         st.error("Conexão privada não confirmada. Confira configurações no servidor.")
         return
     st.success("GET privado de homologação confirmado, sem escrita nem dados de clientes.")
+
+
+def render_session_write_diagnostic(
+    st: Any, *, probe: Callable[..., str] | None = None,
+) -> None:
+    """POST/GET/PATCH exclusivamente de uma sessao ficticia de 60 s.
+
+    NAO e o login do Manager e nao concede permissao ao relatorio.
+    """
+    st.subheader("Sessao de teste — criacao e revogacao HTTP")
+    authorized, reason = _eligible(st)
+    if not authorized:
+        st.caption(reason or "Diagnostico indisponivel.")
+        return
+    try:
+        enabled = st.secrets.get("HF53_SESSION_WRITE_DIAG_ENABLED") is True
+    except Exception:
+        enabled = False
+    if not enabled:
+        st.caption("Ensaio de escrita de sessao desativado.")
+        return
+    st.caption(
+        "Cria uma sessao ficticia de 60 segundos, verifica e revoga. "
+        "Uma linha revogada permanece no banco de homologacao para auditoria."
+    )
+    if not st.button("Testar criacao e revogacao HTTP de sessao"):
+        return
+    try:
+        if probe is None:
+            from hf65_24_53_session_write_probe import run_session_write_probe
+            probe = run_session_write_probe
+        result = probe(
+            base_url=st.secrets["HF53_STAGING_SUPABASE_URL"],
+            service_key=st.secrets["HF53_STAGING_SERVICE_KEY"],
+        )
+        from hf65_24_53_session_write_probe import SUCCESS
+        if result != SUCCESS:
+            raise ValueError("Ensaio sem confirmacao.")
+    except Exception:
+        st.error(
+            "Teste de criacao/revogacao nao confirmado. "
+            "Nenhum acesso comercial foi habilitado."
+        )
+        return
+    st.success(
+        "POST, GET e PATCH confirmados: sessao ficticia revogada. "
+        "Relatorio comercial continua bloqueado."
+    )
