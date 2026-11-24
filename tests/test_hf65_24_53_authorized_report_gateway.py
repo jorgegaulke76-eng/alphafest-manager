@@ -48,7 +48,7 @@ class Cloud:
     def online_configured(self):
         return True
     def _config(self):
-        return "https://example.supabase.co", "private-test-key"
+        return "https://hvaptsdhaxrdxgqqpicu.supabase.co", "private-test-key"
     def _headers(self):
         return {"apikey": "private-test-key"}
     def get(self, url, *, headers, params, timeout, allow_redirects):
