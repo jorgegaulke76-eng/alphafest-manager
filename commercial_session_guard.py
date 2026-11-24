@@ -35,7 +35,10 @@ def verify_authenticated_session(
     """
     if not callable(verify_provider) or not callable(is_session_active):
         raise SessionRejected("Validação da sessão indisponível.")
-    if not expected_issuer or not expected_audience:
+    if (not isinstance(expected_issuer, str) or not expected_issuer.strip()
+            or expected_issuer != expected_issuer.strip()
+            or not isinstance(expected_audience, str) or not expected_audience.strip()
+            or expected_audience != expected_audience.strip()):
         raise SessionRejected("Emissor/público do aplicativo não configurados.")
     try:
         claims = verify_provider(session)
@@ -50,9 +53,11 @@ def verify_authenticated_session(
     issued_at = claims.get("iat")
     expires_at = claims.get("exp")
     if (
-        not isinstance(subject, str) or not subject.strip() or len(subject) > 256
+        not isinstance(subject, str) or not subject.strip() or subject != subject.strip()
+        or len(subject) > 256
         or issuer != expected_issuer or audience != expected_audience
-        or not isinstance(session_id, str) or not session_id.strip() or len(session_id) > 256
+        or not isinstance(session_id, str) or not session_id.strip()
+        or session_id != session_id.strip() or len(session_id) > 256
         or isinstance(issued_at, bool) or not isinstance(issued_at, (int, float))
         or isinstance(expires_at, bool) or not isinstance(expires_at, (int, float))
         or not isfinite(issued_at) or not isfinite(expires_at)
