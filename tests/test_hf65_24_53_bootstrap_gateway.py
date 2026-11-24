@@ -124,7 +124,7 @@ def test_does_not_overwrite_existing_document():
 def test_bootstrap_rejects_production_project_before_any_http():
     cloud = Cloud()
     cloud._config = lambda: ("https://guejrwlblcxptzlobhit.supabase.co", "server-only-test-key")
-    from commercial_bootstrap_postgrest_contract import PrivateBootstrapHttpError
-    with pytest.raises(PrivateBootstrapHttpError):
+    from commercial_private_bootstrap import BootstrapUnavailable
+    with pytest.raises(BootstrapUnavailable):
         run(cloud)
     assert cloud.calls == 0
