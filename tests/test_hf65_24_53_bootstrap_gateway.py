@@ -42,7 +42,7 @@ class Cloud:
         return self.online
 
     def _config(self):
-        return "https://example.supabase.co", "server-only-test-key"
+        return "https://hvaptsdhaxrdxgqqpicu.supabase.co", "server-only-test-key"
 
     def _headers(self):
         return {"apikey": "server-only-test-key"}
@@ -50,7 +50,7 @@ class Cloud:
     def get(self, url, *, headers, params, timeout, allow_redirects):
         assert allow_redirects is False
         self.calls += 1
-        assert url == "https://example.supabase.co/rest/v1/app_data"
+        assert url == "https://hvaptsdhaxrdxgqqpicu.supabase.co/rest/v1/app_data"
         assert params["key"] == "eq." + DOCUMENT_KEY
         return Response([] if self.document is None else [
             {"key": DOCUMENT_KEY, "value": self.document},
@@ -119,3 +119,12 @@ def test_does_not_overwrite_existing_document():
     assert run(cloud) == "existing"
     assert cloud.document == {"events": []}
     assert cloud.calls == 1
+
+
+def test_bootstrap_rejects_production_project_before_any_http():
+    cloud = Cloud()
+    cloud._config = lambda: ("https://guejrwlblcxptzlobhit.supabase.co", "server-only-test-key")
+    from commercial_bootstrap_postgrest_contract import PrivateBootstrapHttpError
+    with pytest.raises(PrivateBootstrapHttpError):
+        run(cloud)
+    assert cloud.calls == 0
