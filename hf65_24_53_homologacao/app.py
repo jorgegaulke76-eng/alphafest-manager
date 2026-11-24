@@ -18,6 +18,7 @@ from hf65_24_53_http_diagnostic import render_http_diagnostic, render_session_wr
 from hf65_24_53_oidc_bound_probe import render_bound_session_diagnostic
 from hf65_24_53_work_session_diagnostic import render_work_session_diagnostic
 from hf65_24_53_fictional_commercial_preview import render_fictional_commercial_preview
+from hf65_24_53_staging_readiness import render_staging_readiness
 
 st.set_page_config(page_title="AlphaFest HF65.24.53 — Login teste")
 render(st)
@@ -26,3 +27,4 @@ render_session_write_diagnostic(st)
 render_bound_session_diagnostic(st)
 render_work_session_diagnostic(st)
 render_fictional_commercial_preview(st)
+render_staging_readiness(st)
