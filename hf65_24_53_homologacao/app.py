@@ -15,8 +15,10 @@ if str(ROOT) not in sys.path:
 import streamlit as st
 from hf65_24_53_homologacao_login import render
 from hf65_24_53_http_diagnostic import render_http_diagnostic, render_session_write_diagnostic
+from hf65_24_53_oidc_bound_probe import render_bound_session_diagnostic
 
 st.set_page_config(page_title="AlphaFest HF65.24.53 — Login teste")
 render(st)
 render_http_diagnostic(st)
 render_session_write_diagnostic(st)
+render_bound_session_diagnostic(st)
