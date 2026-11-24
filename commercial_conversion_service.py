@@ -57,6 +57,41 @@ def _amount(value: Any) -> Decimal | None:
         return None
     return amount if amount.is_finite() and amount > 0 else None
 
+
+def _needs_financial_review(order: Mapping[str, Any], total: Decimal) -> bool:
+    """Requer conciliação quando snapshot aponta liquidação parcial ou estorno.
+
+    Não substitui a fonte financeira: dados ausentes preservam o status
+    comercial legado, sempre rotulado como receita não contábil.
+    """
+    for key in (
+        "pagamento_parcial", "pago_parcial", "parcialmente_pago",
+        "estornado", "pagamento_estornado", "reembolsado",
+        "reembolso_pendente", "chargeback", "contestacao_pagamento",
+    ):
+        if key in order and status_bool(dict(order), key):
+            return True
+    flagged = {
+        "parcial", "parcialmente pago", "pago parcialmente", "pagamento parcial",
+        "estornado", "reembolsado", "reembolso", "chargeback", "contestado",
+        "pendente", "em aberto", "aguardando", "cancelado",
+    }
+    for key in ("status_pagamento", "situacao_pagamento", "status_financeiro"):
+        if key in order and str(order[key] or "").strip().casefold() in flagged:
+            return True
+    for key in ("valor_pago", "valor_recebido", "total_recebido"):
+        if key in order and order[key] not in (None, ""):
+            amount = _amount(order[key])
+            if amount is None or amount != total:
+                return True
+    for key in ("valor_estornado", "valor_reembolsado", "saldo_pendente", "saldo_devedor"):
+        if key in order and order[key] not in (None, ""):
+            raw = str(order[key]).strip().replace("R$", "").strip()
+            if raw not in ("0", "0,00", "0.00", "0.0"):
+                return True
+    return False
+
+
 def summarize_verified_campaign_sales(
     orders: Iterable[Mapping[str, Any]],
     attributions: Iterable[Mapping[str, Any]],
@@ -120,7 +155,7 @@ def summarize_verified_campaign_sales(
              if order.get(key) not in (None, "")), None
         )
         amount = _amount(raw_amount)
-        if amount is None:
+        if amount is None or _needs_financial_review(order, amount):
             continue
         campaign = next(iter(by_order[number]))
         totals[campaign]["paid_orders"] += 1
