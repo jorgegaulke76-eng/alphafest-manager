@@ -181,3 +181,32 @@ def test_redirects_and_http_errors_cannot_claim_missing_or_inserted(status_code)
         insert(post=lambda *a, **k: FakeResponse([], status_code=status_code),
                base_url=URL, headers=HEADERS, document_key=DOCUMENT_KEY,
                document={"events": []})
+
+
+def test_two_operators_competing_to_initialize_keep_first_document_intact():
+    """Simula concorrência entre GET ausente e INSERT condicional sem sobrescrever."""
+    class RaceHttp(FakeHttp):
+        def post(self, url, *, headers, params, json, timeout, allow_redirects):
+            # Outro operador terminou o INSERT após nosso GET inicial.
+            self.document = {"events": []}
+            return super().post(
+                url, headers=headers, params=params, json=json,
+                timeout=timeout, allow_redirects=allow_redirects,
+            )
+
+    fake = RaceHttp()
+    user = VerifiedOperator("operator-test", "issuer-test", "app-test")
+    result = initialize_private_history_if_absent(
+        principal=user, approve_initialization=lambda principal: principal == user,
+        credential_mode=lambda: "service",
+        read_online=lambda key: read(
+            get=fake.get, base_url=URL, headers=HEADERS, document_key=key
+        ),
+        insert_if_absent=lambda key, value: insert(
+            post=fake.post, base_url=URL, headers=HEADERS,
+            document_key=key, document=value,
+        ),
+    )
+    assert result == "existing"
+    assert fake.document == {"events": []}
+    assert [item[0] for item in fake.calls] == ["get", "post", "get"]
