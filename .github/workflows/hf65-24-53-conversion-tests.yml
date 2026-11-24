@@ -113,6 +113,20 @@ jobs:
           python-version: '3.12'
       - name: Verificar sintaxe sem segredos ou banco
         run: python -m py_compile commercial_conversion_service.py commercial_verified_report.py commercial_authorized_report_gateway.py commercial_private_document_adapter.py commercial_private_bootstrap.py commercial_bootstrap_server_gateway.py commercial_bootstrap_postgrest_contract.py commercial_online_document_reader.py commercial_server_read_gateway.py commercial_operator_policy.py commercial_session_guard.py commercial_streamlit_oidc_bridge.py hf65_24_53_homologacao_login.py hf65_24_53_homologacao/app.py commercial_streamlit_private_report_entry.py scripts/hf65_24_53_staging_http_probe.py commercial_verified_report_preview_ui.py commercial_funnel_audit.py commercial_attribution_service.py commercial_attribution_sqlite_lab.py commercial_attribution_preview_ui.py proposal_status.py tests/test_hf65_24_53_conversion.py tests/test_hf65_24_53_funnel_audit.py tests/test_hf65_24_53_attribution.py tests/test_hf65_24_53_sqlite_lab.py tests/test_hf65_24_53_verified_report.py tests/test_hf65_24_53_staging_flow.py tests/test_hf65_24_53_private_adapter.py
+      - name: Instalar dependencias reais do app de login isolado
+        run: python -m pip install -r hf65_24_53_homologacao/requirements.txt
+      - name: Validar runtime OIDC do app isolado
+        run: |
+          python - <<'PY'
+          import authlib
+          import streamlit as st
+          from hf65_24_53_homologacao_login import oidc_readiness
+          assert hasattr(st, "login") and callable(st.login)
+          assert hasattr(st, "logout") and callable(st.logout)
+          assert hasattr(st, "user")
+          assert callable(oidc_readiness)
+          print("Streamlit e Authlib instalados; login OIDC disponivel para configurar.")
+          PY
       - name: Instalar pytest local
         run: python -m pip install pytest requests
       - name: Contrato de conversao e auditoria
