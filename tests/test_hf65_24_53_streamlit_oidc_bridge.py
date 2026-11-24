@@ -96,3 +96,29 @@ def test_exposed_email_does_not_override_subject_allowlist():
         grants={"someone-else": {READ}},
     )
     assert not policy.permitted(operator, READ)
+
+
+def test_legacy_jorge_anna_fallback_never_authenticates_hf53():
+    # app.py admite selecao de perfil para UX quando OIDC nao está disponivel.
+    # Selecionar "Jorge" ou "Anna" não constitui sessão assinada.
+    for selected_name in ("Jorge", "Anna"):
+        st = SimpleNamespace(
+            user=FakeUser(credentials(), logged=False),
+            session_state={"usuario_atual_fallback": selected_name},
+        )
+        with pytest.raises(SessionRejected):
+            authenticate_streamlit_oidc_user(
+                st, expected_issuer="https://issuer.example",
+                expected_audience="manager-example",
+                is_session_active=lambda *_: True, now=NOW,
+            )
+
+
+def test_legacy_fallback_without_st_user_is_always_denied():
+    st = SimpleNamespace(session_state={"usuario_atual_fallback": "Jorge"})
+    with pytest.raises(SessionRejected):
+        authenticate_streamlit_oidc_user(
+            st, expected_issuer="https://issuer.example",
+            expected_audience="manager-example",
+            is_session_active=lambda *_: True, now=NOW,
+        )
