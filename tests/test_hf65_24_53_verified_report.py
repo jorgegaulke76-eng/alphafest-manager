@@ -90,3 +90,27 @@ def test_event_operator_and_evidence_must_be_valid():
     bad = dict(link(), usuario="", evidencia="desconhecida")
     with pytest.raises(ValueError, match="Histórico comercial diverge"):
         build_verified_commercial_report(CONTACTS, ORDERS, [bad])
+
+def test_manager_real_proposal_fields_are_commercial_not_bank_settlement():
+    # app.py armazena valor_total e booleano pago nas propostas comuns.
+    # Este cenário gera indicador COMERCIAL, não prova crédito financeiro.
+    result = build_verified_commercial_report(CONTACTS, ORDERS, [link()])
+    assert result["receita_atribuida"] == Decimal("125.90")
+    assert "NÃO comprova crédito bancário" in result["aviso"]
+    assert "valor_total/total é preço do pedido" in result["aviso"]
+
+
+def test_monthly_billing_snapshot_excluded_even_when_marked_paid():
+    # Fechamentos mensais são um documento separado do histórico de propostas.
+    monthly = [dict(ORDERS[0], faturamento_mensal=True)]
+    result = build_verified_commercial_report(CONTACTS, monthly, [link()])
+    assert result["receita_atribuida"] == 0
+    assert result["pedidos_pagos_atribuidos"] == 0
+    assert "Fechamentos mensais ficam excluídos" in result["aviso"]
+
+
+def test_explicit_partial_receipt_cannot_be_counted_as_full_campaign_sale():
+    partial = [dict(ORDERS[0], valor_recebido="50,00")]
+    result = build_verified_commercial_report(CONTACTS, partial, [link()])
+    assert result["receita_atribuida"] == 0
+    assert result["pedidos_pagos_atribuidos"] == 0
