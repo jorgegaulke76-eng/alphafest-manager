@@ -43,7 +43,7 @@ def authorized_work_session(
             return None
         if not isinstance(policy, OperatorPolicy):
             return None
-        principal = authenticated_principal(st, now=now)
+        principal = authenticated_principal(st, now=now, require_diagnostic_access=False)
         if policy.permitted(principal, action) is not True:
             return None
         handle = st.session_state.get(HANDLE_KEY)
@@ -67,7 +67,7 @@ def revoke_local_work_session(
     """Revoga primeiro no backend, descarta handle depois. Nunca autentica."""
     from commercial_server_session_postgrest import revoke_staging_session
     try:
-        principal = authenticated_principal(st, now=now)
+        principal = authenticated_principal(st, now=now, require_diagnostic_access=False)
         handle = st.session_state.get(HANDLE_KEY)
         url, headers = _backend(st)
         if not isinstance(handle, str):
