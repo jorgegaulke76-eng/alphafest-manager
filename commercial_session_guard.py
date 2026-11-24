@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
+from math import isfinite
 from typing import Any
 
 from commercial_operator_policy import VerifiedOperator
@@ -54,12 +55,15 @@ def verify_authenticated_session(
         or not isinstance(session_id, str) or not session_id.strip() or len(session_id) > 256
         or isinstance(issued_at, bool) or not isinstance(issued_at, (int, float))
         or isinstance(expires_at, bool) or not isinstance(expires_at, (int, float))
+        or not isfinite(issued_at) or not isfinite(expires_at)
     ):
         raise SessionRejected("Identidade de sessão inválida.")
     current = now or datetime.now(timezone.utc)
     if current.tzinfo is None:
         raise SessionRejected("Relógio do servidor sem fuso.")
     ts = current.timestamp()
+    if not isfinite(ts):
+        raise SessionRejected("Relógio do servidor inválido.")
     # Valida limites temporais com tolerância mínima de clock skew.
     if expires_at <= ts or issued_at > ts + 60 or issued_at >= expires_at:
         raise SessionRejected("Sessão expirada ou inconsistente.")
