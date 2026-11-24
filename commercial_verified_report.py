@@ -79,9 +79,12 @@ def build_verified_commercial_report(
         "receita_atribuida": sum((x["receita_atribuida"] for x in campaigns), Decimal("0")),
         "campanhas": campaigns,
         "aviso": (
-            "Receita atribuída experimental: apenas propostas pagas com vínculo "
-            "manual inequívoco. Não representa liquidação contábil nem mensagens "
-            "recebidas automaticamente. Mensalistas, estornos e pagamentos parciais "
-            "exigem reconciliação financeira separada."
+            "Valor comercial atribuído experimental: usa o marcador operacional "
+            "pago da proposta e vínculo manual inequívoco. O campo pago NÃO "
+            "comprova crédito bancário; valor_total/total é preço do pedido, "
+            "não extrato de recebimento. Fechamentos mensais ficam excluídos; "
+            "pagamentos parciais, estornos e reembolsos exigem conciliação "
+            "financeira independente. Não é faturamento contábil nem venda "
+            "provada por clique ou mensagem."
         ),
     }
