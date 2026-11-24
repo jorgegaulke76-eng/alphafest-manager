@@ -12,7 +12,7 @@ from commercial_private_bootstrap import initialize_private_history_if_absent
 from commercial_private_document_adapter import DOCUMENT_KEY
 from commercial_operator_policy import VerifiedOperator
 
-URL = "https://example.supabase.co"
+URL = "https://hvaptsdhaxrdxgqqpicu.supabase.co"
 HEADERS = {"apikey": "test-key", "Content-Type": "application/json"}
 
 
@@ -152,12 +152,14 @@ def test_full_bootstrap_with_mock_postgrest_and_authorization():
 
 @pytest.mark.parametrize("unsafe_url", [
     "https://evil.example",
-    "https://example.supabase.co.evil.example",
+    "https://guejrwlblcxptzlobhit.supabase.co",
+    "https://other.supabase.co",
+    "https://hvaptsdhaxrdxgqqpicu.supabase.co.evil.example",
     "https://user:secret@example.supabase.co",
-    "https://example.supabase.co/rest/v1/app_data",
-    "https://example.supabase.co?redirect=https://evil.example",
-    "https://example.supabase.co#fragment",
-    "https://example.supabase.co:8443",
+    "https://hvaptsdhaxrdxgqqpicu.supabase.co/rest/v1/app_data",
+    "https://hvaptsdhaxrdxgqqpicu.supabase.co?redirect=https://evil.example",
+    "https://hvaptsdhaxrdxgqqpicu.supabase.co#fragment",
+    "https://hvaptsdhaxrdxgqqpicu.supabase.co:8443",
     "http://example.supabase.co",
 ])
 def test_no_secret_sent_to_untrusted_endpoint(unsafe_url):
