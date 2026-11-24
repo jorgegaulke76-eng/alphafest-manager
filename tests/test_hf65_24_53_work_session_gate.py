@@ -102,3 +102,17 @@ def test_missing_backend_revocation_denies_and_drops_handle():
         now=NOW,
     )
     assert HANDLE_KEY not in ui.session_state
+
+
+def test_commercial_acl_does_not_depend_on_http_diagnostic_flag_or_email_allowlist():
+    ui, remote, principal, policy = setup()
+    ui.secrets["HF53_HTTP_DIAG_ENABLED"] = False
+    ui.secrets.pop("HF53_HTTP_DIAG_ALLOWED_EMAIL", None)
+    assert authorized_work_session(
+        ui, policy=policy, action=READ, get=remote.get, now=NOW
+    ) == principal
+    # OIDC ainda é obrigatório sem os diagnósticos.
+    ui.user.claims["email_verified"] = False
+    assert authorized_work_session(
+        ui, policy=policy, action=READ, get=remote.get, now=NOW
+    ) is None
