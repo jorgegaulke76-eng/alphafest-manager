@@ -46,7 +46,7 @@ class Cloud:
     def online_configured(self):
         return True
     def _config(self):
-        return "https://example.supabase.co", "fictitious-key"
+        return "https://hvaptsdhaxrdxgqqpicu.supabase.co", "fictitious-key"
     def _headers(self):
         return {"apikey": "fictitious-key"}
     def get(self, url, **kwargs):
@@ -124,4 +124,42 @@ def test_legacy_anna_fallback_not_used_for_authentication():
             is_session_active=lambda *_: True,
             load_official_snapshots=lambda: ([], []),
         )
+    assert cloud.calls == 0
+
+
+@pytest.mark.parametrize("invalid_url", [
+    "https://guejrwlblcxptzlobhit.supabase.co",
+    "https://hvaptsdhaxrdxgqqpicu.supabase.co.evil.example",
+    "https://hvaptsdhaxrdxgqqpicu.supabase.co/path",
+    "http://hvaptsdhaxrdxgqqpicu.supabase.co",
+    "https://hvaptsdhaxrdxgqqpicu.supabase.co?redirect=1",
+])
+def test_wrong_database_is_rejected_before_http(invalid_url):
+    cloud = Cloud()
+    cloud._config = lambda: (invalid_url, "fictitious-key")
+    st = SimpleNamespace(
+        secrets={"HF65_24_53_PRIVATE_REPORT_ENABLED": True},
+        user=User(), session_state={"usuario_atual_fallback": "Jorge"},
+    )
+    snapshots = []
+    with pytest.raises(PrivateStoreDenied, match="homologação"):
+        build(
+            st=st, policy=POLICY, cloud=cloud,
+            is_session_active=lambda *_: True,
+            load_official_snapshots=lambda: (snapshots.append(True) or [], []),
+        )
+    assert cloud.calls == 0
+    assert snapshots == []
+
+
+def test_anon_client_blocked_before_http_even_with_valid_login():
+    cloud = Cloud()
+    cloud.credential_mode = lambda: "anon"
+    st = SimpleNamespace(
+        secrets={"HF65_24_53_PRIVATE_REPORT_ENABLED": True}, user=User(),
+    )
+    with pytest.raises(PrivateStoreDenied):
+        build(st=st, policy=POLICY, cloud=cloud,
+              is_session_active=lambda *_: True,
+              load_official_snapshots=lambda: ([], []))
     assert cloud.calls == 0
