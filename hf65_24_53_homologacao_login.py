@@ -39,7 +39,8 @@ def oidc_readiness(st: Any) -> dict[str, Any]:
         "logged_in": logged_in,
         "claims_present": present,
         "session_identifier_present": present["sid"],
-        "hf53_auth_ready": configured and logged_in and all(present.values()),
+        "oidc_claims_complete": configured and logged_in and all(present.values()),
+        "hf53_access_authorized": False,  # Diagnóstico NUNCA atesta ACL nem revogação real.
     }
 
 
@@ -60,7 +61,8 @@ def render(st: Any) -> None:
     if st.button("Sair deste app de homologação"):
         st.logout()
         return
-    # Mostrar apenas presença de campos, jamais os valores.
+    # Mostrar apenas presença de campos, jamais os valores. Presença NÃO valida assinatura,
+    # validade temporal, revogação ou ACL (o diagnóstico nunca autoriza acesso).
     st.write({
         "Identificador do provedor presente": status["claims_present"]["sub"],
         "Emissor presente": status["claims_present"]["iss"],
@@ -74,7 +76,7 @@ def render(st: Any) -> None:
             "O provedor não retornou sid. A HF65.24.53 exige sessão revogável; "
             "não será liberada apenas pela identidade OIDC."
         )
-    elif status["hf53_auth_ready"]:
+    elif status["oidc_claims_complete"]:
         st.info(
             "Claims mínimos presentes. A validação de revogação e ACL no servidor "
             "ainda é obrigatória; esta tela NÃO habilita acesso a dados."
