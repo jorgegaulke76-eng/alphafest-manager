@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from typing import Any
+from urllib.parse import urlsplit
 
 from commercial_authorized_report_gateway import build_authorized_commercial_report
 from commercial_operator_policy import OperatorPolicy, VerifiedOperator
@@ -35,6 +36,26 @@ def build_streamlit_private_commercial_report(
         raise PrivateStoreDenied("Relatório comercial privado não habilitado no servidor.")
     if not isinstance(policy, OperatorPolicy) or not callable(is_session_active):
         raise PrivateStoreDenied("Política e controle de sessão indisponíveis.")
+
+    # Trava de homologação: não usar, por acidente, o Supabase de produção.
+    # Esta entrada só admite o projeto de TESTE explicitamente criado para HF53.
+    try:
+        url, _key = cloud._config()
+        parsed = urlsplit(url)
+        allowed_host = "hvaptsdhaxrdxgqqpicu.supabase.co"
+        if (
+            parsed.scheme != "https" or parsed.hostname != allowed_host
+            or parsed.username is not None or parsed.password is not None
+            or parsed.port not in (None, 443)
+            or parsed.path not in ("", "/") or parsed.query or parsed.fragment
+        ):
+            raise PrivateStoreDenied("Banco não corresponde à homologação HF65.24.53.")
+        if cloud.credential_mode() != "service" or not cloud.online_configured():
+            raise PrivateStoreDenied("Credencial privada de homologação indisponível.")
+    except PrivateStoreDenied:
+        raise
+    except Exception:
+        raise PrivateStoreDenied("Configuração da homologação inválida.") from None
 
     # O autenticador real do Streamlit é executado durante cada acesso.
     # O login/claims devem estar ligados a um provedor confiável no backend.
