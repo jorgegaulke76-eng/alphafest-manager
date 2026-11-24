@@ -63,6 +63,8 @@ def test_ui_denies_before_http_without_login_or_diag_flag():
 def test_ui_displays_no_customer_content_and_reports_absence():
     ui = UI()
     ui.secrets["HF53_STAGING_SERVICE_KEY"] = "sb_secret_backend_fake"
+    ui.warning = lambda msg: ui.messages.append(("warning", msg))
+    ui.info = lambda msg: ui.messages.append(("info", msg))
     render_staging_readiness(ui, get=_get(set(), []))
     assert any(kind == "warning" for kind,_ in ui.messages)
     text = str(ui.messages)
