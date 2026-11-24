@@ -122,3 +122,21 @@ def test_legacy_fallback_without_st_user_is_always_denied():
             expected_audience="manager-example",
             is_session_active=lambda *_: True, now=NOW,
         )
+
+
+@pytest.mark.parametrize("corrupt_claims", [
+    {"iat": float("nan")},
+    {"exp": float("nan")},
+    {"iat": float("inf")},
+    {"exp": float("inf")},
+    {"iat": float("-inf")},
+    {"exp": float("-inf")},
+])
+def test_non_finite_oidc_timestamps_never_authorize_or_query_session_service(corrupt_claims):
+    checks = []
+    with pytest.raises(SessionRejected, match="Identidade de sessão inválida"):
+        authenticate(
+            FakeUser(credentials(**corrupt_claims)),
+            is_session_active=lambda subject, sid: checks.append((subject, sid)) or True,
+        )
+    assert checks == []
