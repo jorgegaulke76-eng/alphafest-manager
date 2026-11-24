@@ -1,3 +1,6 @@
 # Dependências exclusivas do app de diagnóstico OIDC isolado HF65.24.53.
 # Streamlit [auth] inclui Authlib exigido por st.login().
 streamlit[auth]>=1.45,<2
+
+# Probe HTTP de homologação opcional; não instalado no Manager principal.
+requests>=2.31,<3
