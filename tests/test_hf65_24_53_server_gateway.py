@@ -36,7 +36,7 @@ class FakeCloud:
         return self.online
 
     def _config(self):
-        return "https://example.supabase.co", "server-only-secret"
+        return "https://hvaptsdhaxrdxgqqpicu.supabase.co", "server-only-secret"
 
     def _headers(self):
         return {"apikey": "server-only-secret"}
@@ -44,7 +44,7 @@ class FakeCloud:
     def get(self, url, *, headers, params, timeout, allow_redirects):
         assert allow_redirects is False
         self.calls += 1
-        assert url == "https://example.supabase.co/rest/v1/app_data"
+        assert url == "https://hvaptsdhaxrdxgqqpicu.supabase.co/rest/v1/app_data"
         assert params["key"] == "eq.hf65_24_53_attribution_events_private_db"
         return FakeResponse(self.value)
 
