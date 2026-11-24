@@ -30,7 +30,7 @@ class User:
 def test_no_secrets_does_not_claim_oidc_ready():
     status = oidc_readiness(SimpleNamespace(secrets={}, user=User()))
     assert status["oidc_configured"] is False
-    assert status["hf53_auth_ready"] is False
+    assert status["oidc_claims_complete"] is False
 
 
 def test_logged_out_refuses_identity_even_with_session_fallback():
@@ -40,7 +40,7 @@ def test_logged_out_refuses_identity_even_with_session_fallback():
     ))
     assert status["oidc_configured"] is True
     assert status["logged_in"] is False
-    assert status["hf53_auth_ready"] is False
+    assert status["oidc_claims_complete"] is False
 
 
 def test_google_style_id_token_without_sid_reports_blocker():
@@ -48,12 +48,13 @@ def test_google_style_id_token_without_sid_reports_blocker():
     assert status["logged_in"] is True
     assert status["claims_present"]["sub"]
     assert status["session_identifier_present"] is False
-    assert status["hf53_auth_ready"] is False
+    assert status["oidc_claims_complete"] is False
 
 
 def test_full_claims_only_meet_diagnostic_not_acl():
     status = oidc_readiness(SimpleNamespace(secrets={"auth": AUTH}, user=User(sid="session-test")))
-    assert status["hf53_auth_ready"] is True
+    assert status["oidc_claims_complete"] is True
+    assert status["hf53_access_authorized"] is False
     assert "sub" not in status
     assert "tokens" not in status
 
@@ -95,3 +96,12 @@ def test_logged_in_diagnostics_do_not_print_subject_or_tokens():
     assert not any("private-id" in str(value) for _, value in ui.actions)
     assert not any(k == "login" for k, _ in ui.actions)
     assert any(k == "warning" and "sid" in str(value) for k, value in ui.actions)
+
+
+def test_claims_complete_do_not_imply_verified_revocation_or_acl():
+    # Mesmo com atributos OIDC presentes, este app somente diagnostica.
+    status = oidc_readiness(SimpleNamespace(
+        secrets={"auth": AUTH}, user=User(sid="simulated-sid"),
+    ))
+    assert status["oidc_claims_complete"] is True
+    assert status["hf53_access_authorized"] is False
