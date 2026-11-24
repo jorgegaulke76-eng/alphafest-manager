@@ -87,3 +87,32 @@ def test_no_provider_callbacks_denied():
             is_session_active=lambda *_: True,
             expected_issuer=ISSUER, expected_audience=AUDIENCE, now=NOW,
         )
+
+
+@pytest.mark.parametrize("bad", [
+    {"sub": " opaque-subject"}, {"sub": "opaque-subject "},
+    {"sid": " server-session-id"}, {"sid": "server-session-id "},
+    {"sub": " "}, {"sid": " "},
+])
+def test_noncanonical_ids_rejected_before_session_lookup(bad):
+    checked = []
+    with pytest.raises(SessionRejected, match="Identidade de sessão inválida"):
+        auth(claims(**bad), active=lambda *args: checked.append(args) or True)
+    assert checked == []
+
+
+@pytest.mark.parametrize("issuer,audience", [
+    (" "+ISSUER, AUDIENCE), (ISSUER+" ", AUDIENCE),
+    (ISSUER, " "+AUDIENCE), (ISSUER, AUDIENCE+" "),
+    (None, AUDIENCE), (ISSUER, None),
+    (123, AUDIENCE), (ISSUER, 123),
+])
+def test_invalid_policy_issuer_audience_fail_before_provider(issuer, audience):
+    verified = []
+    with pytest.raises(SessionRejected, match="Emissor/público"):
+        verify_authenticated_session(
+            object(), verify_provider=lambda _: verified.append(True) or claims(),
+            is_session_active=lambda *_: True, expected_issuer=issuer,
+            expected_audience=audience, now=NOW,
+        )
+    assert verified == []
