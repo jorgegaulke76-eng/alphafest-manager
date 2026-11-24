@@ -25,7 +25,7 @@ class FakeSession:
         assert timeout == 10
         assert headers["apikey"] == "sb_secret_fictitious"
         assert "Authorization" not in headers
-        key = params["key"].removeprefix("eq.")
+        key = (json["key"] if method == "POST" else params["key"].removeprefix("eq."))
         assert key.startswith(PREFIX)
         self.calls.append(method)
         if method == "GET":
