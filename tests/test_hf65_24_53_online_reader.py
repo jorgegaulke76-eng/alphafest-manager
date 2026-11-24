@@ -29,7 +29,7 @@ def client(payload, *, error=False, record=None):
     return get
 
 
-KW = {"base_url": "https://example.supabase.co", "headers": {"apikey": "ficticia"}}
+KW = {"base_url": "https://hvaptsdhaxrdxgqqpicu.supabase.co", "headers": {"apikey": "ficticia"}}
 
 
 def test_existing_empty_document_is_valid_and_no_local_read():
@@ -71,10 +71,10 @@ def test_missing_service_request_header_rejected():
 
 @pytest.mark.parametrize("url", [
     "https://evil.example",
-    "https://example.supabase.co.evil.example",
+    "https://hvaptsdhaxrdxgqqpicu.supabase.co.evil.example",
     "https://user:token@example.supabase.co",
-    "https://example.supabase.co/rest/v1/app_data",
-    "https://example.supabase.co?redirect=https://evil.example",
+    "https://hvaptsdhaxrdxgqqpicu.supabase.co/rest/v1/app_data",
+    "https://hvaptsdhaxrdxgqqpicu.supabase.co?redirect=https://evil.example",
     "http://example.supabase.co",
 ])
 def test_rejects_unsafe_url_before_request(url):
