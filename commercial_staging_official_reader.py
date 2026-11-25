@@ -60,7 +60,18 @@ def read_sanitized_staging_official_snapshots(
     raw_contacts = _read_one(
         get=get, base_url=base_url, headers=headers, key=CONTACT_KEY,
     )
+    # app_data do staging aceita SOMENTE objetos JSON na raiz.
+    # A lista histórica nativa do Manager deve chegar via importação
+    # explicitamente aprovada e saneada como {"itens": [...]}; jamais
+    # tratar um objeto arbitrário como lista vazia ou como fonte oficial.
+    if (not isinstance(raw_proposals, Mapping)
+        or set(raw_proposals) != {"itens"}
+        or not isinstance(raw_proposals["itens"], list)
+        or not isinstance(raw_contacts, Mapping)
+        or set(raw_contacts) != {"config", "itens"}
+        or not isinstance(raw_contacts["itens"], list)):
+        raise PrivateStoreDenied("Envelope de snapshots de homologação inválido.")
     return sanitize_official_manager_snapshots(
-        historico_orcamentos=raw_proposals,
+        historico_orcamentos=raw_proposals["itens"],
         atendimentos_db=raw_contacts,
     )
