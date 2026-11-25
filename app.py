@@ -331,6 +331,12 @@ import manager_workflow_hf53 as _workflow_hf53
 from site_quote_import_ui import renderizar_importacao as _hf54_renderizar_importacao
 import proposal_duplicate_ui_hf55 as _duplicidades_hf55
 import proposal_review_ui_hf56 as _revisao_hf56
+import proposal_draft_service_hf57 as _rascunho_hf57
+from proposal_draft_ui_hf57 import (
+    renderizar_exportacao as _hf57_renderizar_exportacao,
+    renderizar_retomada as _hf57_renderizar_retomada,
+    renderizar_referencias as _hf57_renderizar_referencias,
+)
 from manager_operational_planning_hf53 import (
     montar_planejamentos as _hf53_montar_planejamentos,
     renderizar_planejamentos as _hf53_renderizar_planejamentos,
@@ -4466,6 +4472,8 @@ def aplicar_proposta_pendente_no_formulario():
 
     st.session_state.pop("_hf53_edicao_jorge", None)
     st.session_state.pop("_hf54_cliente_importado_jorge", None)
+    st.session_state.pop("_hf57_origem_rascunho_jorge", None)
+    st.session_state.pop("_hf57_pendencias_rascunho_jorge", None)
     st.session_state.temp_itens = [dict(item) for item in prop.get("itens", []) or []]
     st.session_state.form_cliente = prop.get("cliente_nome", prop.get("cliente", ""))
     st.session_state.form_documento = prop.get("documento", prop.get("cliente_cpf_cnpj", ""))
@@ -4502,6 +4510,8 @@ def aplicar_limpeza_formulario_pendente():
 
     st.session_state.pop("_hf53_edicao_jorge", None)
     st.session_state.pop("_hf54_cliente_importado_jorge", None)
+    st.session_state.pop("_hf57_origem_rascunho_jorge", None)
+    st.session_state.pop("_hf57_pendencias_rascunho_jorge", None)
     st.session_state.temp_itens = []
     st.session_state.editar_numero = None
     st.session_state.form_cliente = ""
@@ -4626,7 +4636,8 @@ def _hf54_abrir_rascunho_importado(dados):
 
 
 def _hf54_identificacao_importada(resultado):
-    if not resultado.get("aplicado") or not resultado.get("dados", {}).get("_hf54_importacao_site"):
+    dados = resultado.get("dados", {})
+    if not resultado.get("aplicado") or not (dados.get("_hf54_importacao_site") or dados.get("_hf57_retomada")):
         return
     anna = bool(resultado.get("anna"))
     prefixo = "anna_orc_cliente_novo" if anna else "jorge_orc_cliente"
@@ -4774,6 +4785,71 @@ def _hf56_validar_revisao(proposta, *, anna=False, numero_original=""):
     )
 
 
+def _hf57_capturar_rascunho(*, anna=False):
+    return _rascunho_hf57.capturar_rascunho(
+        st.session_state, anna=anna, agora=agora_local(), versao_manager=APP_VERSION,
+    )
+
+
+def _hf57_abrir_rascunho(dados):
+    """Enfileira a retomada revisada, sem criar cliente, proposta ou vínculo."""
+    if not _hf54_pode_importar_site():
+        st.warning("Seu perfil não permite criar um novo orçamento.")
+        return False
+    if not isinstance(dados, dict) or dados.get("_hf57_retomada") is not True:
+        st.error("O arquivo precisa ser conferido antes de retomar o rascunho.")
+        return False
+    preparados = copy.deepcopy(dados)
+    for campo in ("atendimento_id", "projeto_id", "numero_proposta", "editar_numero"):
+        preparados.pop(campo, None)
+    try:
+        _workflow_hf53.solicitar_abertura(
+            st.session_state, "novo_orcamento", preparados,
+            anna=usuario_em_operacao_protegida(obter_usuario_atual()),
+        )
+    except ValueError as erro:
+        st.warning(str(erro))
+        return False
+    return True
+
+
+def _hf57_mostrar_referencias(*, anna=False):
+    perfil = "anna" if anna else "jorge"
+
+    def dispensar():
+        st.session_state.pop(f"_hf57_pendencias_rascunho_{perfil}", None)
+        return True
+
+    _hf57_renderizar_referencias(
+        st, st.session_state.get(f"_hf57_origem_rascunho_{perfil}", {}),
+        st.session_state.get(f"_hf57_pendencias_rascunho_{perfil}", {}),
+        prefixo=f"hf57_referencias_{perfil}", dispensar_pendencias=dispensar,
+        contexto=st.session_state.get("anna_modal_item_key" if anna else "form_key", 0),
+    )
+
+
+def _hf57_preservar_pendencias_apos_salvar(*, anna=False):
+    """Conserva informações manuais sem repetir os itens que já foram salvos."""
+    perfil = "anna" if anna else "jorge"
+    pendencias = st.session_state.get(f"_hf57_pendencias_rascunho_{perfil}", {})
+    if not isinstance(pendencias, dict) or not any(
+        pendencias.get(campo) for campo in ("item_nao_adicionado", "edicao_item")
+    ):
+        return False
+    st.session_state["anna_modal_itens" if anna else "temp_itens"] = []
+    st.session_state["anna_modal_numero_original" if anna else "editar_numero"] = "" if anna else None
+    contador = "anna_modal_item_key" if anna else "form_key"
+    st.session_state[contador] = int(st.session_state.get(contador, 0)) + 1
+    st.session_state.pop(f"_hf53_edicao_{perfil}", None)
+    origem = "_anna_hf53" if anna else ""
+    st.session_state[origem + "_atendimento_origem_id"] = ""
+    st.session_state[origem + "_projeto_origem_id"] = ""
+    if anna:
+        st.session_state["anna_modal_iniciado_novo"] = True
+        st.session_state["_hf53_anna_contexto_formulario"] = "anna_modal_iniciado_novo"
+    return True
+
+
 def _hf53_solicitar_abertura(destino, dados):
     perfil = obter_perfil_configurado(obter_usuario_atual())
     if destino not in set(perfil.get("abas", [])):
@@ -4838,9 +4914,10 @@ def _hf53_processar_abertura_pendente():
     if not pendente:
         return
     destino = pendente["destino"]
-    if pendente.get("dados", {}).get("_hf54_importacao_site") and not _hf54_pode_importar_site():
+    dados_pendentes = pendente.get("dados", {})
+    if (dados_pendentes.get("_hf54_importacao_site") or dados_pendentes.get("_hf57_retomada")) and not _hf54_pode_importar_site():
         _workflow_hf53.resolver_abertura(st.session_state, "cancelar")
-        st.warning("Seu perfil não permite criar um novo orçamento. A mensagem continua disponível na importação.")
+        st.warning("Seu perfil não permite criar um novo orçamento. O conteúdo continua disponível na revisão da importação.")
         return
     if destino not in set(obter_perfil_configurado(obter_usuario_atual()).get("abas", [])):
         _workflow_hf53.resolver_abertura(st.session_state, "cancelar")
@@ -4866,9 +4943,14 @@ def _hf53_processar_abertura_pendente():
                 st.stop()
     resultado = _workflow_hf53.resolver_abertura(st.session_state, escolha, hoje=hoje_local())
     if resultado["aplicado"]:
-        if resultado["dados"].get("_hf54_importacao_site"):
+        if resultado["dados"].get("_hf54_importacao_site") or resultado["dados"].get("_hf57_retomada"):
             _hf54_identificacao_importada(resultado)
-        _hf53_registrar_abertura_origem(resultado)
+        if resultado["dados"].get("_hf57_retomada"):
+            perfil = "anna" if resultado["anna"] else "jorge"
+            _duplicidades_hf55.limpar_conferencia(st.session_state, f"hf55_{perfil}")
+            _revisao_hf56.limpar_revisao(st.session_state, f"hf56_{perfil}")
+        else:
+            _hf53_registrar_abertura_origem(resultado)
     if resultado["anna"]:
         st.session_state["_hf53_anna_abrir_formulario"] = destino
         rerun_na_aba("central")
@@ -18817,6 +18899,8 @@ def dialog_orcamento_anna(proposta=None):
         # os dados dela, mesmo que seu marcador de abertura antigo ainda exista.
         st.session_state["_hf53_anna_contexto_formulario"] = chave_modal
         st.session_state.pop("_hf54_cliente_importado_anna", None)
+        st.session_state.pop("_hf57_origem_rascunho_anna", None)
+        st.session_state.pop("_hf57_pendencias_rascunho_anna", None)
         st.session_state[chave_modal] = True
         st.session_state["anna_modal_cliente"] = str(proposta.get("cliente_nome", proposta.get("cliente", "")))
         st.session_state["anna_modal_documento"] = str(proposta.get("documento", proposta.get("cliente_cpf_cnpj", "")))
@@ -18856,6 +18940,7 @@ def dialog_orcamento_anna(proposta=None):
     if numero_original:
         st.info(f"✏️ Editando a proposta {numero_original}")
     _hf54_mostrar_origem_orcamento(st.session_state.get("anna_modal_observacoes"))
+    _hf57_mostrar_referencias(anna=True)
 
     ultima = st.session_state.get("_ultima_proposta_salva_anna")
     if ultima:
@@ -19124,6 +19209,9 @@ def dialog_orcamento_anna(proposta=None):
         revisao_hf56 = _hf56_renderizar_revisao(rascunho_hf55, anna=True, numero_original=numero_original)
         if revisao_hf56.get("pode_salvar"):
             _hf55_renderizar_conferencia(rascunho_hf55, anna=True, numero_original=numero_original)
+        _hf57_renderizar_exportacao(
+            st, lambda: _hf57_capturar_rascunho(anna=True), prefixo="hf57_exportar_anna",
+        )
         salvar_rotulo = "💾 SALVAR ALTERAÇÕES" if numero_original else "🚀 SALVAR PROPOSTA"
         if st.button(salvar_rotulo, type="primary", width="stretch", key="anna_modal_salvar_orcamento", disabled=editando_item_hf53):
             if not nome.strip():
@@ -19185,12 +19273,21 @@ def dialog_orcamento_anna(proposta=None):
                         f"Cliente {nome.strip()} cadastrado e proposta {retorno_salvar} salva com sucesso."
                     )
                 st.session_state["anna_modal_itens"] = []
-                st.session_state[chave_modal] = False
+                if _hf57_preservar_pendencias_apos_salvar(anna=True):
+                    st.session_state["_mensagem_sucesso_pendente"] = (
+                        f"Proposta {retorno_salvar} salva. As informações ainda não recuperadas "
+                        "continuam no rascunho novo, sem repetir os itens já salvos."
+                    )
+                else:
+                    st.session_state[chave_modal] = False
                 st.rerun()
             else:
                 st.error(retorno_salvar)
     else:
         st.info("Adicione pelo menos um item para concluir o orçamento.")
+        _hf57_renderizar_exportacao(
+            st, lambda: _hf57_capturar_rascunho(anna=True), prefixo="hf57_exportar_anna",
+        )
 
 
 @st.dialog("💬 Novo atendimento", width="large")
@@ -25350,6 +25447,7 @@ def renderizar_workspace_anna_isolado():
 
     if _hf54_pode_importar_site():
         _hf54_renderizar_importacao(st, _hf54_carregar_catalogo_importacao, _hf54_abrir_rascunho_importado, prefixo="hf54_importar_anna")
+        _hf57_renderizar_retomada(st, _hf57_abrir_rascunho, prefixo="hf57_retomar_anna")
 
     a1, a2, a3, a4, a5 = st.columns(5)
     if a1.button("💬 Novo atendimento", width="stretch"): dialog_atendimento_anna()
@@ -31552,7 +31650,9 @@ if pagina_atual == "novo_orcamento":
     renderizar_painel_alertas("novo_orcamento")
     if _hf54_pode_importar_site():
         _hf54_renderizar_importacao(st, _hf54_carregar_catalogo_importacao, _hf54_abrir_rascunho_importado, prefixo="hf54_importar_jorge")
+        _hf57_renderizar_retomada(st, _hf57_abrir_rascunho, prefixo="hf57_retomar_jorge")
     _hf54_mostrar_origem_orcamento(st.session_state.get("form_observacoes"))
+    _hf57_mostrar_referencias()
 
     if st.session_state.editar_numero:
         st.info(f"✏️ Editando a proposta {st.session_state.editar_numero}")
@@ -31877,6 +31977,9 @@ if pagina_atual == "novo_orcamento":
         revisao_hf56 = _hf56_renderizar_revisao(rascunho_hf55, numero_original=st.session_state.editar_numero)
         if revisao_hf56.get("pode_salvar"):
             _hf55_renderizar_conferencia(rascunho_hf55, numero_original=st.session_state.editar_numero)
+        _hf57_renderizar_exportacao(
+            st, _hf57_capturar_rascunho, prefixo="hf57_exportar_jorge",
+        )
         rotulo_salvar = "💾 SALVAR ALTERAÇÕES" if st.session_state.editar_numero else "🚀 SALVAR PROPOSTA"
         if st.button(rotulo_salvar, type="primary", disabled=editando_item_hf53):
             if not _hf56_validar_revisao(rascunho_hf55, numero_original=st.session_state.editar_numero):
@@ -31976,15 +32079,26 @@ if pagina_atual == "novo_orcamento":
                 salvar_atendimentos(dados_at_link)
 
             # Mantém uma cópia somente para exibir as ações imediatas após salvar.
-            # A mensagem e o layout padrão permanecem exatamente os mesmos.
             st.session_state["_ultima_proposta_salva"] = dict(dados)
-            agendar_limpeza_formulario()
+            pendencias_mantidas_hf57 = _hf57_preservar_pendencias_apos_salvar()
+            if not pendencias_mantidas_hf57:
+                agendar_limpeza_formulario()
             mensagem_salva_i811 = (
                 f"Cliente {nome.strip()} cadastrado e proposta salva com sucesso."
                 if cliente_novo_i811
                 else "Proposta salva com sucesso e operação atualizada."
             )
+            if pendencias_mantidas_hf57:
+                mensagem_salva_i811 += (
+                    " As informações ainda não recuperadas continuam no rascunho novo, "
+                    "sem repetir os itens já salvos."
+                )
             rerun_na_aba("novo_orcamento", mensagem_salva_i811)
+
+    if not st.session_state.temp_itens:
+        _hf57_renderizar_exportacao(
+            st, _hf57_capturar_rascunho, prefixo="hf57_exportar_jorge",
+        )
 
 
 # HF65.8 — Catálogo 3D como fonte comercial dos produtos de Impressão 3D.

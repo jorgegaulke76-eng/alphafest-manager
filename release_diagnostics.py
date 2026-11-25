@@ -35,6 +35,8 @@ CRITICAL_PYTHON_FILES = (
     "proposal_duplicate_ui_hf55.py",
     "proposal_review_service_hf56.py",
     "proposal_review_ui_hf56.py",
+    "proposal_draft_service_hf57.py",
+    "proposal_draft_ui_hf57.py",
     "manager_workflow_hf53.py",
     "manager_operational_planning_hf53.py",
     "site_carrinho_orcamento_service.py",

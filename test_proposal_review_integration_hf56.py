@@ -26,6 +26,7 @@ FUNCTIONS = {node.name: node for node in TREE.body if isinstance(node, ast.Funct
 HELPERS = (
     "valor_float", "_hf55_rascunho_para_conferencia", "_hf56_rascunho_para_revisao",
     "_hf56_renderizar_revisao", "_hf56_validar_revisao", "atualizar_proposta",
+    "_hf57_preservar_pendencias_apos_salvar",
 )
 TODAY = date(2026, 11, 25)
 

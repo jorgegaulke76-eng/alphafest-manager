@@ -145,6 +145,14 @@ def possui_rascunho(estado, destino, *, anna=False, hoje=None):
     if destino != "novo_orcamento":
         raise ValueError("Destino de formulário inválido.")
     prefixo, itens_key, numero_key = _quote_keys(anna)
+    # Um arquivo incompleto pode trazer somente informações para recuperar
+    # manualmente. Elas também são trabalho e precisam da escolha de abertura.
+    perfil = "anna" if anna else "jorge"
+    pendencias = estado.get(f"_hf57_pendencias_rascunho_{perfil}", {})
+    if isinstance(pendencias, dict) and any(
+        pendencias.get(campo) for campo in ("item_nao_adicionado", "edicao_item")
+    ):
+        return True
     if anna and not estado.get(itens_key) and not estado.get(f"anna_modal_iniciado_{estado.get(numero_key) or 'novo'}"):
         return False
     if estado.get(itens_key) or estado.get(numero_key):
@@ -201,7 +209,17 @@ def resolver_abertura(estado, escolha, *, hoje=None):
         estado.pop("_projeto_prefill", None)
     else:
         prefixo, itens_key, numero_key = _quote_keys(anna)
-        estado[f"_hf54_cliente_importado_{'anna' if anna else 'jorge'}"] = bool(dados.get("_hf54_importacao_site"))
+        perfil = "anna" if anna else "jorge"
+        retomada = dados.get("_hf57_retomada") is True
+        # Dados externos conservam a identificação digitada até uma escolha
+        # explícita de cadastro, inclusive diante de clientes homônimos.
+        estado[f"_hf54_cliente_importado_{perfil}"] = bool(dados.get("_hf54_importacao_site")) or retomada
+        if retomada:
+            estado[f"_hf57_origem_rascunho_{perfil}"] = deepcopy(dados.get("_hf57_origem", {}))
+            estado[f"_hf57_pendencias_rascunho_{perfil}"] = deepcopy(dados.get("_hf57_pendencias", {}))
+        else:
+            estado.pop(f"_hf57_origem_rascunho_{perfil}", None)
+            estado.pop(f"_hf57_pendencias_rascunho_{perfil}", None)
         defaults = dict(cliente="", documento="", whatsapp="", evento="", observacoes="",
                         desconto=0.0, entrega=hoje or date.today(), prazo="10", frete="Retirada",
                         taxa_entrega=0.0, validade="5")
@@ -216,8 +234,10 @@ def resolver_abertura(estado, escolha, *, hoje=None):
                       "anna_orc_cliente_novo_token" if anna else "jorge_orc_cliente_token"):
             estado.pop(chave, None)
         origem_prefixo = "_anna_hf53" if anna else ""
-        estado[origem_prefixo + "_atendimento_origem_id"] = str(dados.get("atendimento_id") or "")
-        estado[origem_prefixo + "_projeto_origem_id"] = str(dados.get("projeto_id") or "")
+        # O arquivo portátil abre um orçamento novo. Referências de registros
+        # anteriores não voltam como vínculos ativos capazes de alterar dados.
+        estado[origem_prefixo + "_atendimento_origem_id"] = "" if retomada else str(dados.get("atendimento_id") or "")
+        estado[origem_prefixo + "_projeto_origem_id"] = "" if retomada else str(dados.get("projeto_id") or "")
         if anna:
             estado["anna_modal_iniciado_novo"] = True
             estado["_hf53_anna_contexto_formulario"] = "anna_modal_iniciado_novo"

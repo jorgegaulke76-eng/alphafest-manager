@@ -1,60 +1,66 @@
-ALPHAFEST MANAGER — HF65.24.56 · REVISÃO FINAL E MENSAGEM PRESERVADA
+ALPHAFEST MANAGER — HF65.24.57 · RASCUNHOS RECUPERÁVEIS
 
-Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.24.56
-Pacote cumulativo sobre a HF65.24.55. Inclui as personalizações do carrinho, a importação do orçamento do site e as melhorias anteriores de operação.
+Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.24.57
+Pacote cumulativo sobre a HF65.24.56, com as melhorias anteriores do Manager e do carrinho.
 
 COMO ATUALIZAR O MANAGER
 
 1. No Manager atual, abra Configurações > Núcleo Profissional > Atualização segura. Prepare e baixe o ponto de restauração.
 2. Extraia este ZIP em uma pasta temporária.
 3. Copie o CONTEÚDO da pasta alphafest-manager-main para o repositório atual, na pasta que já contém app.py. Substitua os arquivos correspondentes, preservando dados e configurações locais. Não apague o repositório nem crie uma segunda pasta do mesmo nome dentro dele.
-4. No GitHub Desktop, confira as alterações, faça Commit e Push no repositório/branch do aplicativo atual.
-5. Aguarde o Streamlit atualizar e confira HF65.24.56 na interface. Se necessário, reinicie pelo painel do Streamlit.
-6. Confira a seção Conferência final do orçamento em Jorge e Anna. Use registros de teste identificados ou ambiente de homologação para validar gravações.
+4. No GitHub Desktop, confira as alterações, faça Commit e Push no repositório e branch do aplicativo atual.
+5. Aguarde o Streamlit atualizar e confira HF65.24.57 na interface. Se necessário, reinicie pelo painel do Streamlit.
+6. Confira o roteiro de recuperação abaixo nos perfis Jorge e Anna. Use um rascunho de teste; recuperar o arquivo não grava uma proposta.
 
-PUBLICAR AS MUDANÇAS DO SITE
+Esta rodada acrescenta funções ao Manager. Não é necessário republicar o site para usar os rascunhos recuperáveis. As mudanças públicas de HF55/HF56 continuam dependendo da publicação realizada pelo fluxo do site.
 
-1. No Manager atualizado, abra a Central do Site e prepare uma nova prévia.
-2. Confira Desktop/Celular, a mensagem editada preservada e a atualização depois de mudar os itens.
-3. Publique pelo fluxo habitual. Se usar publicação manual, gere o arquivo em Contingência / ZIP manual > Baixar ZIP de produção.
+GUARDAR UM RASCUNHO
 
-Este ZIP instala o Manager. O ZIP público para Cloudflare é outro arquivo, gerado pelo Manager. O carrinho atualizado só aparece no site depois dessa republicação.
+1. No formulário de orçamento do Jorge ou da Anna, preencha o trabalho normalmente.
+2. Para incluir o produto em preenchimento, use Adicionar Item. Para incluir uma edição, use Aplicar alteração do item.
+3. Abra Baixar rascunho, clique Preparar arquivo e depois Baixar rascunho.
+4. Guarde o arquivo .json no computador ou aparelho. Ele pode ser retomado em outra sessão ou em outro computador com o Manager atualizado.
 
-CONFERÊNCIA FINAL NO MANAGER
+O arquivo pode ser preparado mesmo sem cliente, itens ou data. Ele conserva os dados recebidos pelo Manager, os itens incluídos, suas personalizações e metadados, as condições e a mensagem original do site.
+Preparar o arquivo não significa baixá-lo. Se alterar o rascunho depois da preparação, prepare um novo arquivo antes de baixar.
+Campos de um formulário ainda não enviados pelo navegador podem não ter chegado ao Manager. Para assegurar que a alteração entrou, adicione o item ou aplique sua edição antes de preparar o arquivo.
 
-- Depois dos itens e totais, abra Conferência final do orçamento para revisar produtos, personalizações, quantidades, preços e condições.
-- Corrija os erros obrigatórios antes de salvar: valores negativos/inválidos, quantidade não positiva, desconto acima do subtotal, data ausente ou totais inconsistentes, entre outros.
-- Brinde/preço zero, total zero, data passada em proposta nova, prazo/validade pendentes ou item ainda não adicionado exigem revisão explícita.
-- Quando necessário, marque Revisei os pontos de atenção e quero salvar este orçamento e clique no botão normal de salvar.
-- Um orçamento válido, sem pontos que exijam confirmação, não precisa desse clique adicional.
-- Alterar os dados exige nova revisão. WhatsApp vazio não bloqueia atendimento presencial. A data passada, sozinha, não exige aceite em edição histórica.
-- Somente itens já adicionados entram na proposta. No Jorge, texto ainda não enviado por Adicionar Item pode não estar disponível para o aviso de item pendente.
-- A conferência acontece antes da verificação de propostas semelhantes e do cadastro/gravação.
-- Em falha de salvamento no Jorge, o formulário permanece aberto; confira conexão e Histórico antes de tentar novamente. Anna mantém a retenção existente do diálogo.
+RETOMAR UM RASCUNHO
 
-MENSAGEM EDITADA NO CARRINHO
+1. Jorge: abra Novo Orçamento > Retomar rascunho. Anna: abra Retomar rascunho na Central.
+2. Selecione o arquivo .json baixado pelo Manager. O limite é 2 MiB.
+3. Confira cliente, contatos, itens, condições, origem e informações pendentes. Há uma área para consultar o conteúdo completo.
+4. Marque Conferi os dados deste arquivo para retomar o rascunho.
+5. Se houver proposta anterior, confirme também que a retomada abrirá um NOVO orçamento.
+6. Clique Retomar rascunho. Se já existir trabalho aberto, escolha Continuar rascunho atual, Substituir pelos novos dados ou Cancelar abertura.
+7. Confira os campos e complete o que faltar. Use a revisão comercial e o botão normal de salvar quando o orçamento estiver pronto.
 
-1. Inclua os produtos e suas personalizações e abra a revisão.
-2. Complete a mensagem com as informações desejadas.
-3. Voltar e reabrir a revisão, ou recarregar a página com o carrinho igual, mantém a mensagem no mesmo navegador.
-4. Se mudar os itens, use Gerar mensagem atualizada antes de enviar.
-5. O texto manual anterior continua disponível para consulta/cópia. Recupere os complementos desejados para a mensagem atual.
+A retomada SEMPRE cria um rascunho novo. Não atualiza uma proposta existente, mesmo que o arquivo tenha sido baixado durante uma edição. O número anterior fica apenas como referência. Para editar uma proposta já salva, abra-a pelo Histórico.
+Valores e personalizações são preservados para conferência; os preços não são recalculados automaticamente. Os aceites anteriores não são recuperados. A conferência final HF56 e a conferência de propostas semelhantes HF55 continuam aplicáveis antes de salvar.
+O cliente começa em digitação manual para preservar os contatos do arquivo. O operador pode selecionar explicitamente um cadastro existente.
+Atendimentos e projetos anteriores aparecem como referências e não voltam como vínculos ativos.
 
-O histórico conserva até 10 textos manuais anteriores distintos; mensagens geradas sem edição não ocupam esse histórico. O descarte é explícito. Limpar o carrinho também limpa a revisão. Se o navegador não puder guardar o texto, copie-o antes de recarregar, conforme o aviso na tela. O envio no WhatsApp continua dependendo da confirmação do visitante.
+INFORMAÇÕES PARA RECUPERAÇÃO MANUAL
 
-RECURSOS DAS VERSÕES ANTERIORES
+Itens ainda não adicionados e edições ainda não aplicadas, quando já recebidos pelo Manager, aparecem em Informações recuperadas do rascunho. Não entram automaticamente nos itens ou nos totais.
+Recupere o conteúdo desejado manualmente. Depois, marque Confirmei a recuperação manual das informações acima e use Já recuperei estas informações.
+Se baixar outro arquivo antes de dispensá-las, essas informações continuam no novo arquivo.
+Se salvar a proposta antes de concluir a recuperação manual, os itens gravados saem do rascunho e as informações restantes continuam em um rascunho novo, sem repetir os itens já salvos. A identificação e as condições ficam disponíveis para completar esse trabalho.
+Continuar mantém o trabalho atual; Substituir descarta esse rascunho por escolha explícita. Guarde um arquivo antes de substituir algo que ainda precise conservar.
 
-- Outra personalização cria linha independente do mesmo produto; para mais unidades iguais, altere Quantidade.
-- Limite de 25 linhas no carrinho, de 1 a 999 unidades por linha. Linhas antigas são preservadas.
-- A mensagem completa recebida no WhatsApp pode ser analisada em Importar orçamento do site no Jorge ou na Central da Anna. Confira o resultado e abra o rascunho.
-- A conferência de propostas semelhantes continua considerando hoje e os 29 dias anteriores, para perfis com acesso ao Histórico. Use a consulta, revise os candidatos e confirme a criação quando for um pedido novo legítimo.
-- Consultar no Histórico não substitui o rascunho. Volte ao formulário na mesma sessão para continuar.
+REVISÃO DO ARQUIVO
+
+- Trocar ou remover o arquivo invalida seus aceites.
+- Se cancelar a abertura protegida, use Reabrir revisão do arquivo para tentar novamente.
+- Limpar revisão do arquivo limpa apenas essa revisão, sem apagar o orçamento aberto.
+- Arquivo inválido apresenta erro e mantém o trabalho atual. Não há importação parcial nem truncamento silencioso.
 
 DADOS E DOCUMENTAÇÃO
 
+O arquivo baixado é o meio de recuperação entre sessões. A funcionalidade não cria salvamento automático de rascunhos no servidor ou sincronização entre aparelhos.
 Não há SQL novo nem migração de banco; DATA_VERSION permanece 5. Não há nova dependência em requirements.txt.
-Dados operacionais e credenciais locais não são incluídos no ZIP.
-Rascunhos e confirmações do Manager pertencem à sessão; a mensagem do site pertence ao navegador usado pelo cliente.
+Dados operacionais e credenciais locais não são incluídos no pacote de atualização.
 
-Detalhes e limites: UPDATE_INFO_HF65.24.56.md
-Testes: VALIDACAO_HF65.24.56.md
+Detalhes, formato e limites: UPDATE_INFO_HF65.24.57.md
+Validação e escopo dos testes: VALIDACAO_HF65.24.57.md
+Integridade e resultado do empacotamento: UPDATE_MANIFEST.json
