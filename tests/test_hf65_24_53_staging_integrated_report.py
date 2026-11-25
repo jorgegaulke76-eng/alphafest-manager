@@ -20,12 +20,12 @@ class Http:
         self.sessions = session_transport
         self.snapshot_calls = []
         self.documents = {
-            "historico_orcamentos": [
+            "historico_orcamentos": {"itens": [
                 {"numero_proposta": "P1", "atendimento_id": "A1",
                  "pago": True, "valor_total": "79,90",
                  "cliente_nome": "NOME_SENSIVEL",
                  "telefone": "11999999999"},
-            ],
+            ]},
             "atendimentos_db": {
                 "config": {"api_secret": "SEGREDO"},
                 "itens": [
