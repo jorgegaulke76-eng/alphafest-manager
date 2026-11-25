@@ -12488,12 +12488,13 @@ from ficha_producao_hf58 import (
     identidade_conferencia_arte as _hf58_identidade_arte,
     registrar_aprovacao_conferida as _hf58_registrar_aprovacao_conferida,
     ficha_producao_txt as _hf58_ficha_producao_txt,
+    registrar_mutacao_arte as _hf58_marcar_mutacao_arte,
 )
 
 def renderizar_caixa_projeto(proposta, prefixo="historico"):
     """Caixa do Projeto: arquivos, observações e reutilização ligados ao pedido."""
     projeto, _ = obter_ou_criar_projeto(proposta)
-    projeto = dict(projeto)
+    projeto = copy.deepcopy(projeto)
     st.markdown("#### 📦 Caixa do Projeto")
     st.caption("Guarde artes, arquivos de produção, fotos finais e observações deste pedido.")
     kbase = f"{prefixo}_{projeto.get('id')}"
@@ -12516,9 +12517,11 @@ def renderizar_caixa_projeto(proposta, prefixo="historico"):
         projeto["observacoes"] = observacoes.strip()
         projeto["modelo"] = bool(modelo)
         projeto["favorito"] = bool(favorito)
-        atualizar_projeto(projeto)
-        st.success("Caixa do Projeto atualizada.")
-        st.rerun()
+        if atualizar_projeto(projeto):
+            st.success("Caixa do Projeto atualizada.")
+            st.rerun()
+        else:
+            st.error("A alteracao do projeto nao foi salva. Revise os dados antes de tentar novamente.")
 
     with st.expander("➕ Adicionar arquivo ao projeto", expanded=False):
         upload = st.file_uploader("Escolher arquivo", type=None, key=f"proj_upload_{kbase}")
@@ -12556,9 +12559,13 @@ def renderizar_caixa_projeto(proposta, prefixo="historico"):
                         "criado_em": agora_local().strftime("%d/%m/%Y %H:%M"),
                     })
                     projeto["arquivos"] = arquivos
-                    atualizar_projeto(projeto)
-                    st.success("Arquivo adicionado ao projeto.")
-                    st.rerun()
+                    if categoria == "Arte":
+                        projeto = _hf58_marcar_mutacao_arte(projeto)
+                    if atualizar_projeto(projeto):
+                        st.success("Arquivo adicionado ao projeto.")
+                        st.rerun()
+                    else:
+                        st.error("O arquivo foi enviado, mas o vinculo ao projeto nao foi confirmado. Confira a Caixa do Projeto antes de reenviar.")
 
     ativos = [(i, a) for i, a in enumerate(projeto.get("arquivos", []) or []) if not a.get("arquivado")]
     if ativos:
@@ -12576,8 +12583,13 @@ def renderizar_caixa_projeto(proposta, prefixo="historico"):
             if a3.button("📦 Arquivar", key=f"proj_arq_{kbase}_{i}", width="stretch"):
                 projeto["arquivos"][i]["arquivado"] = True
                 projeto["arquivos"][i]["mestre"] = False
-                atualizar_projeto(projeto)
-                st.rerun()
+                if arq.get("categoria") == "Arte":
+                    projeto = _hf58_marcar_mutacao_arte(projeto)
+                if atualizar_projeto(projeto):
+                    st.success("Arquivo arquivado.")
+                    st.rerun()
+                else:
+                    st.error("O arquivamento nao foi confirmado. Recarregue a Caixa do Projeto antes de tentar novamente.")
     else:
         st.info("Nenhum arquivo vinculado a este projeto ainda.")
 

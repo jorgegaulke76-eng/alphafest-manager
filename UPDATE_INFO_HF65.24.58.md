@@ -1,20 +1,18 @@
-# HF65.24.58 RC3 — Arte por versão e ficha de produção
+# HF65.24.58 RC4 - Homologacao pendente
 
-**Pacote de homologação, não produção.** Baseado na HF65.24.57 e na prévia HF65.24.58 RC2.
+**Nao instalar em producao.** Incremento sobre RC3 para aumentar a seguranca da aprovacao de arte e evitar mensagens de sucesso sem persistencia.
 
-## O que a operação terá após homologação
-- Aprovação manual vinculada à arte ativa mais recente, com usuário e data do registro.
-- Ao enviar, alterar, substituir ou arquivar uma arte, a confirmação anterior é reavaliada e, quando necessário, fica pendente.
-- O checkbox é desmarcado quando a identidade da arte muda, mesmo que o ID permaneça igual. Após salvar, é necessário novo aceite para outro registro.
-- O clique revalida a versão atual antes de gravar e usa a proteção CAS já adotada pelo Manager para projetos.
-- A ficha de produção TXT inclui número da proposta, cliente, entrega, produtos, quantidades, especificações completas, observações internas e status da arte.
+## Mudancas RC4
+- Novo marcador de mutacao de arte persistido no projeto ao enviar/arquivar arte. O aceite anterior nao reaparece ao restaurar uma arte, mesmo com o mesmo ID/nome/URL.
+- Aprovacao ligada a arte ativa mais recente, inclusive na presenca de IDs repetidos.
+- A Caixa do Projeto somente confirma atualizacoes de observacoes, arquivamento e vinculo de arquivo quando a gravacao retorna sucesso.
+- Caso o upload externo tenha ocorrido e o vinculo ao projeto falhe, o Manager orienta a conferir antes de reenviar.
+- Edicoes locais de arquivo sao feitas numa copia profunda da estrutura do projeto, reduzindo risco de refletir mudancas que nao foram salvas.
 
-## O que não muda
-- A aprovação comercial, o Fluxo e o banco de dados existente.
-- O site público, o catálogo e a publicação.
-- Nenhum pedido é alterado ao gerar a ficha.
+## O que permanece
+- Ficha interna de producao TXT, completa e sem alterar situacao do pedido.
+- Aprovacao comercial, estoque e Fluxo independentes; sem SQL ou dependencias novas.
+- HF65.24.57 e melhorias anteriores preservadas pela base cumulativa.
 
-## Atenções
-- A aprovação é operacional, não prova automática do cliente.
-- Alterações no conteúdo remoto de um arquivo sem troca de metadados não são detectáveis pela assinatura atual.
-- A release definitiva depende do roteiro `VALIDACAO_HF65.24.58.md`.
+## Validacao
+Leia VALIDACAO_HF65.24.58.md e VALIDAR_HF58_WINDOWS.bat. A regressao integral e a interface Streamlit real ainda precisam passar antes de uma versao FINAL.

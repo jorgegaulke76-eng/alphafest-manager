@@ -1,36 +1,45 @@
-# AlphaFest HF65.24.58 — homologação RC3 (25/11/2026 14:06)
+# AlphaFest HF65.24.58 RC4 - Relatorio de homologacao
 
-**Status: HOMOLOGAÇÃO PARCIAL. NÃO SUBSTITUIR O MANAGER EM PRODUÇÃO COM ESTE PACOTE.**
+Gerado em: 25/11/2026 14:30 (America/Sao_Paulo).
 
-## Base conferida
-- ZIP de origem: `ALPHAFEST_MANAGER_HF65.24.58_HOMOLOGACAO_REV2.zip`, recebido neste diálogo.
-- Versão interna mantida: `20.4.9-I8.13.5-HF53.3-HF8-HF65.24.58`.
-- Mudanças RC3: aceite de arte versionado por identidade da referência + histórico/arquivamento; revalidação da versão atual do projeto antes de registrar; preservação integral de instruções extensas na ficha TXT; documentação de homologação.
-- A aplicação continua usando o mecanismo CAS existente para proteger a gravação do documento `projetos_db` no Supabase; em caso de conflito de edição, não há confirmação de salvamento.
+**SITUACAO: HOMOLOGACAO PARCIAL. NAO INSTALAR NO MANAGER EM PRODUCAO.**
 
-## Testes executados
-- **64 testes selecionados em 3 módulos** (`test_ficha_producao_hf58`, `test_proposal_draft_hf57`, `test_roteiro_producao_hf51`): **64 aprovados, 0 falhas, 0 ignorados**.
-- Desses, **11 são específicos da ficha e aprovação HF58**. Cobrem nova arte, substituição por URL/nome com mesmo ID, registros antigos, invalidação por arquivamento, token de interface, checagem da versão fresca, personalizações e observações extensas.
-- Compilação com `py_compile` de `app.py`, `ficha_producao_hf58.py` e teste específico: **aprovada**.
-- Regressão ampla real `python -m unittest discover -p 'test_*.py' -q`: **427 testes, 93 ignorados e quatro erros de importação** (`test_proposal_draft_integration_hf57`, `test_proposal_duplicate_integration_hf55`, `test_site_integrity_hf53`, `test_site_quote_import_integration_hf54`) por ausência do pacote `streamlit`. **Não passou**, não conta como homologação integral.
-- Tentativa de instalar o Streamlit pelo gerenciador de pacotes: **indisponível por falha de resolução de DNS**. Uma tentativa adicional com substituto temporário apenas para importação não concluiu dentro do limite; esse substituto **não está no ZIP** e não comprova compatibilidade com Streamlit.
-- ZIP: conferência integral de CRC, hash SHA-256 por arquivo, versões e política de exclusão de dados operacionais, a ser registrada no manifesto do pacote RC3.
+## Base e alteracoes
+- Origem: ALPHAFEST_MANAGER_HF65.24.58_HOMOLOGACAO_RC3.zip.
+- Versao interna permanece: 20.4.9-I8.13.5-HF53.3-HF8-HF65.24.58.
+- RC4 vincula a aprovacao a um marcador persistido das mutacoes das artes, impedindo reaproveitar um aceite ao arquivar e restaurar a mesma referencia.
+- Ficha aprovada aponta para a ultima arte ativa mesmo que existam IDs duplicados.
+- Caixa do Projeto testa a resposta de gravacao antes de informar sucesso ao salvar observacoes, arquivar ou vincular arquivos. Se o upload ocorreu mas o vinculo falhou, mostra aviso para conferencia.
+- Copia profunda da Caixa do Projeto evita alterar objetos em cache antes da confirmacao da gravacao.
+- O site publico, contratos de banco e aprovacao comercial nao foram alterados.
 
-## Limitações de segurança/escopo
-- A assinatura da arte protege os **metadados registrados** (ID, nome, URL, criação, categoria); não verifica uma troca silenciosa dos bytes em um armazenamento remoto sem alteração desses campos.
-- O aceite é um **registro operacional manual**: depende da confirmação humana do cliente e não substitui comprovante de concordância, aprovação comercial ou a liberação de produção.
-- O arquivo TXT é **interno**, contém dados do pedido e não deve ser compartilhado publicamente sem revisão.
-- Não há alteração de banco/SQL, dependências, cadastro de clientes ou site público nesta RC3.
+## Evidencias reais da execucao
+- Arquivo especifico HF58: **16 testes aprovados**, sem erros ou ignorados.
+- Suite selecionada (HF58 + rascunhos HF57 + roteiro HF51): **69 testes aprovados**.
+- Descoberta geral unittest: **432 testes contabilizados, 4 erros de importacao e 93 ignorados** por ausencia de Streamlit. Resultado: REPROVADO.
+- Execucao individual do conjunto critico (36 arquivos, isolamento por processo, max 18 s por arquivo): **27 arquivos aprovados**, 9 arquivos reprovados, **435 testes contabilizados**, 348 aprovados, 4 erros de importacao e 87 ignorados. Nao houve falha de assercao registrada. Resultado: REPROVADO.
+- Diagnostico estatico release_diagnostics: aprovado antes da atualizacao das notas.
+- A execucao sequencial oficial com timeout padrao nao concluiu no prazo deste ambiente, portanto NAO se atribui a ela um resultado de aprovacao.
+- Streamlit nao esta instalado; a rede deste container nao resolve pypi.org. A tentativa de baixar a distribuicao por meio oficial nao concluiu. Nenhum substituto de Streamlit foi usado como prova de homologacao.
 
-## Homologação obrigatória para liberação final
-1. Em **ambiente separado e com dados fictícios**, instalar `requirements.txt` e executar toda a regressão e o gate crítico oficial (`python build_update_package.py --root . --output ../HF58_VALIDADO_TESTE.zip --release-note UPDATE_INFO_HF65.24.58.md`). Não ignorar falhas/skips críticos.
-2. Abrir a **Caixa do Projeto** de uma proposta fictícia, com dois itens e personalizações diferentes; conferir a ficha TXT inteira, incluindo textos longos.
-3. Enviar **arte v1**; confirmar com responsável; baixar a ficha, conferir versão, data e status.
-4. Enviar **arte v2**; confirmar que v1 perdeu a validade e que o checkbox aparece **desmarcado**, mesmo se o ID do registro de arte for mantido e o nome ou URL for alterado.
-5. Arquivar ou substituir arte; verificar que a ficha acusa revisão pendente ou ausência de arte e não descreve arquivo antigo como aprovado.
-6. Testar em **Jorge e Anna** e com duas sessões: salvar uma alteração do projeto em outra sessão e verificar que o aceite antigo não sobrescreve essa alteração.
-7. Conferir falha de rede/gravação: nenhuma mensagem de sucesso quando não houve persistência.
-8. Confirmar que gerar ou baixar a ficha não altera proposta, status do Fluxo ou estoque.
-9. Registrar os resultados com screenshots e o relatório do gate antes de converter esta RC3 em release de produção.
+Arquivos criticos ainda bloqueados: test_proposal_draft_ui_hf57.py, test_proposal_draft_integration_hf57.py, test_proposal_review_ui_hf56.py, test_proposal_duplicate_ui_hf55.py, test_proposal_duplicate_integration_hf55.py, test_proposal_duplicate_navigation_hf55.py, test_site_quote_import_integration_hf54.py, test_site_quote_import_ui_hf54.py, test_site_integrity_hf53.py.
 
-> Até esses passos terminarem, manter em produção a última versão estável já instalada. Não copiar este ZIP sobre o repositório ativo.
+## Auditoria do pacote RC4
+- Todos os caminhos sao relativos e inspecionados para evitar travessia de diretorio.
+- Os arquivos do ZIP possuem SHA-256 no UPDATE_MANIFEST.json e o CRC deve ser verificado integralmente.
+- A validacao do manifesto traz o estado HOMOLOGACAO_PARCIAL, deliberadamente diferente de OK. Nao usar este pacote no fluxo de atualizacao segura de producao.
+- O pacote foi preparado sem bancos operacionais, credenciais, ambientes virtuais ou caches.
+
+## Roteiro obrigatorio antes da liberacao
+1. Extrair o ZIP em um diretorio novo, separado do repositorio que roda o Manager. Usar dados ficticios e nao conectar ao banco de producao.
+2. Em Windows com Python, executar VALIDAR_HF58_WINDOWS.bat para instalar as dependencias em ambiente isolado, executar a regressao completa e o gate oficial. Guardar os logs.
+3. Abrir o Streamlit de TESTE com Jorge e Anna; criar um pedido ficticio com dois itens e personalizacoes diferentes; gerar a ficha e conferir o texto completo.
+4. Aprovar arte v1 e validar registro de usuario/data; depois adicionar v2, arquivar e restaurar uma arte e conferir a invalidez do aceite anterior e o checkbox desmarcado.
+5. Simular conflito entre duas sessoes e erro de salvamento; a interface nao pode indicar sucesso sem persistencia real.
+6. Conferir que gerar/baixar a ficha nao muda pedido, fluxo, financeiro ou estoque. Revisar protecao do arquivo TXT que contem dados internos.
+7. Somente com esses resultados completos e aprovados, gerar e revisar um pacote FINAL separado por build_update_package.py. Nao promover automaticamente esta RC4.
+
+## Limites conhecidos
+- A assinatura compara metadados registrados, mais o marcador de mutacao gerenciado pelo Manager. Uma troca clandestina dos bytes em armazenamento remoto, sem alteracao de metadados ou do marcador, nao e identificavel por essa assinatura.
+- A aprovacao de arte e registro manual operacional; nao substitui evidencia de aceite do cliente, aprovacao comercial nem liberacao de producao.
+- O arquivo TXT inclui detalhes internos e nao deve ser enviado ao cliente sem revisao.

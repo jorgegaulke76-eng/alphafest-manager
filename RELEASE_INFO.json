@@ -1,6 +1,6 @@
 {
   "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.58",
-  "created_at": "2026-11-25T13:19:04-03:00",
+  "created_at": "2026-11-25T14:30:12-03:00",
   "timezone": "America/Sao_Paulo",
-  "description": "HF65.24.58 RC3 — somente homologação: aprovação de arte por versão e ficha interna TXT; release final pendente de regressão com Streamlit."
+  "description": "HF65.24.58 RC4 - pacote de homologacao PARCIAL: versao de arte, ficha TXT e protecao de gravacao; liberacao final bloqueada ate regressao real Streamlit."
 }

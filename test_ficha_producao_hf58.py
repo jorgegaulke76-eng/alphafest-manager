@@ -2,7 +2,7 @@
 import unittest
 from datetime import datetime
 from ficha_producao_hf58 import (situacao_arte, registrar_aprovacao, ficha_producao_txt,
-    identidade_conferencia_arte, registrar_aprovacao_conferida)
+    identidade_conferencia_arte, registrar_aprovacao_conferida, registrar_mutacao_arte)
 
 NOW = datetime(2026, 11, 25, 13, 20)
 
@@ -106,6 +106,61 @@ class FichaHF58Tests(unittest.TestCase):
         texto = ficha_producao_txt({}, {}, NOW).decode('utf-8-sig')
         self.assertIn('SEM ARTE CADASTRADA', texto)
         self.assertIn('não informado', texto)
+
+
+    def test_arquivar_e_restaurar_nao_reaproveita_aceite_antigo(self):
+        p = registrar_aprovacao(projeto(), 'AR1', 'Anna', NOW)
+        self.assertEqual(situacao_arte(p)[0], 'aprovada')
+        p = registrar_mutacao_arte(p, token='arquivamento-1')
+        p['arquivos'][0]['arquivado'] = True
+        self.assertEqual(situacao_arte(p)[0], 'sem_arte')
+        p = registrar_mutacao_arte(p, token='restauracao-2')
+        p['arquivos'][0]['arquivado'] = False
+        self.assertEqual(situacao_arte(p)[0], 'revisao_pendente')
+        p = registrar_aprovacao(p, 'AR1', 'Anna', NOW)
+        self.assertEqual(situacao_arte(p)[0], 'aprovada')
+
+    def test_reenvio_mesmo_nome_id_url_exige_nova_aprovacao(self):
+        p = registrar_aprovacao(projeto(), 'AR1', 'Jorge', NOW)
+        antes = identidade_conferencia_arte(p)
+        p = registrar_mutacao_arte(p, token='novo-envio-3')
+        self.assertNotEqual(antes, identidade_conferencia_arte(p))
+        self.assertEqual(situacao_arte(p)[0], 'revisao_pendente')
+        self.assertNotIn('APROVADA (registro interno)',
+                         ficha_producao_txt({}, p, NOW).decode('utf-8-sig'))
+
+    def test_ids_repetidos_aprovacao_refere_a_ultima_arte(self):
+        p = projeto()
+        p['arquivos'].append({'id':'AR1', 'nome':'Ana_v2.png', 'categoria':'Arte', 'arquivado':False})
+        p = registrar_mutacao_arte(p, token='novo-upload-4')
+        p = registrar_aprovacao(p, 'AR1', 'Anna', NOW)
+        status, ultima = situacao_arte(p)
+        self.assertEqual(status, 'aprovada')
+        self.assertEqual(ultima['nome'], 'Ana_v2.png')
+        ficha = ficha_producao_txt({}, p, NOW).decode('utf-8-sig')
+        self.assertIn('Arquivo aprovado: Ana_v2.png', ficha)
+
+    def test_arte_atualizada_em_outra_sessao_rejeita_aceite_antigo(self):
+        exibido = projeto()
+        exibido['id'] = 'PRJ-5'
+        atual = registrar_mutacao_arte(exibido, token='mudou-na-outra-sessao')
+        with self.assertRaisesRegex(ValueError, 'arte mudou'):
+            registrar_aprovacao_conferida(exibido, atual, 'AR1', 'Anna', NOW)
+
+    def test_tela_confirma_gravacao_e_marca_ciclo_de_arte(self):
+        import ast
+        from pathlib import Path
+        texto = Path(__file__).with_name('app.py').read_text(encoding='utf-8')
+        arvore = ast.parse(texto)
+        no = next(n for n in arvore.body if isinstance(n, ast.FunctionDef)
+                  and n.name == 'renderizar_caixa_projeto')
+        fonte = ast.get_source_segment(texto, no)
+        self.assertEqual(fonte.count('if atualizar_projeto(projeto):'), 3)
+        self.assertIn('if categoria == "Arte":', fonte)
+        self.assertIn('if arq.get("categoria") == "Arte":', fonte)
+        self.assertEqual(fonte.count('_hf58_marcar_mutacao_arte(projeto)'), 2)
+        self.assertIn('projeto = copy.deepcopy(projeto)', fonte)
+
 
 if __name__ == '__main__':
     unittest.main()

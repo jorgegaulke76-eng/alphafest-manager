@@ -2,36 +2,42 @@
   "schema": 2,
   "product": "AlphaFest Manager",
   "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.58",
-  "generated_at_utc": "2026-11-25T17:07:11.050773+00:00",
+  "generated_at_utc": "2026-11-25T17:30:31.099600+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
     "status": "HOMOLOGACAO_PARCIAL",
     "problems": [
-      "Regressao total reprovada: Streamlit ausente (4 erros de importacao; 93 testes ignorados).",
-      "Interface real e banco de homologacao ainda nao verificados. NAO instalar no Manager de producao."
+      "Regressao completa reprovada: ausencia de Streamlit (4 erros de importacao e 93 skips).",
+      "Gate critico individual nao aprovado: 9 arquivos dependem de Streamlit real.",
+      "Homologacao UI de Jorge e Anna em ambiente real ainda pendente. Nao instalar em producao."
     ],
     "warnings": [
-      "RC3 destinada somente a copia isolada de homologacao."
+      "RC4 exclusivamente para testes isolados e com dados ficticios.",
+      "Aprovacao manual exige prova de cliente e conferencia operacional."
     ],
-    "tests": {
-      "selected": 64,
-      "selected_passed": 64,
-      "selected_failed": 0,
-      "selected_skipped": 0,
-      "hf58_unit": 11,
-      "full_discovery_total": 427,
-      "full_discovery_errors": 4,
-      "full_discovery_skipped": 93,
-      "full_discovery_status": "REPROVADO"
-    },
     "critical_python_compile": {
       "status": "OK",
-      "scope": "compileall de .py no pacote"
+      "scope": "Todos os arquivos Python do pacote"
+    },
+    "tests": {
+      "hf58_specific_passed": 16,
+      "selected_3_files_passed": 69,
+      "full_discovery_tests": 432,
+      "full_discovery_errors": 4,
+      "full_discovery_skipped": 93,
+      "critical_individual_files": 36,
+      "critical_individual_approved_files": 27,
+      "critical_individual_tests": 435,
+      "critical_individual_passed": 348,
+      "critical_individual_errors": 4,
+      "critical_individual_skipped": 87,
+      "status": "REPROVADO",
+      "streamlit_available": false
     }
   },
-  "file_count": 521,
-  "uncompressed_bytes": 40014008,
+  "file_count": 522,
+  "uncompressed_bytes": 40020034,
   "files": [
     {
       "path": ".gitignore",
@@ -115,13 +121,13 @@
     },
     {
       "path": "LEIA_ME_ATUALIZACAO.txt",
-      "size": 5900,
-      "sha256": "60baf58a514e62a07eedf62706a31629f552b048d307214bf516e02c8a95c701"
+      "size": 6074,
+      "sha256": "5ce3e1d62a5d5f948bac5aacee937a90bcf6515143191f47efd53bb721af0041"
     },
     {
       "path": "LEIA_ME_HF65.24.58.txt",
-      "size": 1001,
-      "sha256": "ba94216b773072c665984e08045c85cc63518c10cd8c74807741e291b17d0651"
+      "size": 987,
+      "sha256": "bfc100f01d70ec9bc9a120145c7eb7b5cd95977dd82b4872201904bb1fc9b0af"
     },
     {
       "path": "LEIA_ME_HF65_24_13.txt",
@@ -155,8 +161,8 @@
     },
     {
       "path": "RELEASE_INFO.json",
-      "size": 303,
-      "sha256": "eac68d86b462e38c0b6839ee68477e5cdd939092aee8f294dee82c2a08c0b5f6"
+      "size": 310,
+      "sha256": "02ea0ae30711f547d9e6c1cfafd457cd4c2b445dbd1459b09a397a59ab9beb1d"
     },
     {
       "path": "ROADMAP.md",
@@ -190,8 +196,8 @@
     },
     {
       "path": "UPDATE_INFO_HF65.24.58.md",
-      "size": 1317,
-      "sha256": "76fa7ac41800c86bd513b150a4e05d243c5398926edcdabb6ae97415f96ffbf0"
+      "size": 1275,
+      "sha256": "ba2a6a846a3af81da3d2d066156226c30ca01af4375e36153f7be88ce6820bd4"
     },
     {
       "path": "VALIDACAO_HF65.24.52.md",
@@ -225,8 +231,13 @@
     },
     {
       "path": "VALIDACAO_HF65.24.58.md",
-      "size": 4415,
-      "sha256": "4b6defbb2d29b5d2bebf723104c41580da4341b269ef6664951c0d817b0e40c4"
+      "size": 4492,
+      "sha256": "fb3736918d61eb168f9f48d15d8684f566d142e6a2a0f8cf237200b386826d1c"
+    },
+    {
+      "path": "VALIDAR_HF58_WINDOWS.bat",
+      "size": 1480,
+      "sha256": "81deccec7d7b7aedfb8f2576a704278512f29be8b20c8085c977cab0619ea0f1"
     },
     {
       "path": "VERSAO",
@@ -310,8 +321,8 @@
     },
     {
       "path": "app.py",
-      "size": 2185584,
-      "sha256": "0f9fe3f8a8580fa54bf545f7c5b9098a31842091b6eea819301d73484443a9bb"
+      "size": 2186405,
+      "sha256": "90f17d3a2c040267967cedd9635011ecfb03e044304d27d403bec644330a7c25"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",
@@ -1935,8 +1946,8 @@
     },
     {
       "path": "ficha_producao_hf58.py",
-      "size": 7299,
-      "sha256": "57b7e086f788e2f3788419b210ab4126e504e06616178a367c59b0b9bb9c62cd"
+      "size": 7957,
+      "sha256": "359b358b28fdd22a26b9fd624b5361756664c617883046aeeefa4825ca549a24"
     },
     {
       "path": "finance_runtime_index_service.py",
@@ -2395,8 +2406,8 @@
     },
     {
       "path": "test_ficha_producao_hf58.py",
-      "size": 5694,
-      "sha256": "e2bc0bf53e44abd99e32c6a07e4d684a2c6a5355c4fd283391ef0a60f7e63d55"
+      "size": 8559,
+      "sha256": "7ff9adafd6f10833fc3f1b72e3fb7e317fe12b4c4c63e3df949ea78d8b68f088"
     },
     {
       "path": "test_hf652438_sob_encomenda.py",

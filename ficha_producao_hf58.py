@@ -6,6 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from hashlib import sha256
 import json
+import secrets
 
 
 def _texto(value, max_len=500):
@@ -25,6 +26,19 @@ def assinatura_arquivo(arquivo):
 
 
 
+def registrar_mutacao_arte(projeto, *, token=None):
+    """Marca uma mudanca de ciclo de vida da arte, mesmo com metadados iguais.
+
+    Chamar ao cadastrar, arquivar, reativar ou substituir uma arte pelo UI.
+    O token acompanha o documento salvo e invalida o aceite anterior.
+    """
+    if not isinstance(projeto, dict):
+        raise ValueError('Projeto invalido.')
+    atualizado = dict(projeto)
+    atualizado['versao_arquivos_hf58'] = str(token or secrets.token_hex(16))
+    return atualizado
+
+
 def identidade_conferencia_arte(projeto):
     """Versão imutável da arte exibida na tela; troca a chave do aceite quando ela muda.
 
@@ -38,6 +52,7 @@ def identidade_conferencia_arte(projeto):
              if isinstance(a, dict) and a.get('categoria') == 'Arte' and a.get('id')]
     estado = {
         'projeto': str(projeto.get('id') or ''),
+        'mutacao': str(projeto.get('versao_arquivos_hf58') or ''),
         'recente': assinatura_arquivo(lista[-1]),
         'artes': [{'assinatura': assinatura_arquivo(a),
                    'arquivado': bool(a.get('arquivado'))} for a in todas],
@@ -65,17 +80,17 @@ def situacao_arte(projeto):
         return 'sem_arte', None
     if not registro.get('arquivo_id'):
         return 'sem_aprovacao', None
-    selecionada = next((a for a in lista if a.get('id') == registro.get('arquivo_id')), None)
-    if not selecionada:
-        return 'revisao_pendente', None
-    # Um upload posterior exige nova conferência, ainda que a arte anterior permaneça.
-    todas_artes = [a for a in (projeto.get('arquivos') or []) if isinstance(a, dict) and a.get('categoria') == 'Arte' and a.get('id')]
+    # Compare com a ULTIMA arte ativa, nao com a primeira que compartilha ID.
     ultima = lista[-1]
-    if (ultima.get('id') != selecionada.get('id')
-            or registro.get('total_artes_no_registro') != len(todas_artes)
-            or registro.get('assinatura_arquivo') != assinatura_arquivo(selecionada)):
-        return 'revisao_pendente', selecionada
-    return 'aprovada', selecionada
+    if ultima.get('id') != registro.get('arquivo_id'):
+        return 'revisao_pendente', ultima
+    todas_artes = [a for a in (projeto.get('arquivos') or []) if isinstance(a, dict)
+                   and a.get('categoria') == 'Arte' and a.get('id')]
+    if (registro.get('total_artes_no_registro') != len(todas_artes)
+            or registro.get('assinatura_arquivo') != assinatura_arquivo(ultima)
+            or str(registro.get('versao_arquivos_hf58') or '') != str(projeto.get('versao_arquivos_hf58') or '')):
+        return 'revisao_pendente', ultima
+    return 'aprovada', ultima
 
 
 def registrar_aprovacao(projeto, arquivo_id, responsavel, instante):
@@ -92,7 +107,8 @@ def registrar_aprovacao(projeto, arquivo_id, responsavel, instante):
     evento = {'arquivo_id': arquivo_id, 'arquivo_nome': _texto(lista[-1].get('nome'), 180),
               'responsavel': nome, 'registrado_em': instante.isoformat(timespec='seconds'),
               'total_artes_no_registro': len(todas_artes),
-              'assinatura_arquivo': assinatura_arquivo(lista[-1])}
+              'assinatura_arquivo': assinatura_arquivo(lista[-1]),
+              'versao_arquivos_hf58': str(projeto.get('versao_arquivos_hf58') or '')}
     historico = list(resultado.get('historico_aprovacao_arte_hf58') or [])
     historico.append(evento)
     resultado['historico_aprovacao_arte_hf58'] = historico[-100:]
