@@ -4,6 +4,8 @@ Não substitui aprovação comercial nem modifica status do Fluxo/Histórico.
 """
 from __future__ import annotations
 from datetime import datetime
+from hashlib import sha256
+import json
 
 
 def _texto(value, max_len=500):
@@ -13,6 +15,12 @@ def _texto(value, max_len=500):
 def artes(projeto):
     return [a for a in (projeto.get('arquivos') or []) if isinstance(a, dict)
             and not a.get('arquivado') and a.get('categoria') == 'Arte' and a.get('id')]
+
+
+def assinatura_arquivo(arquivo):
+    """Detecta alterações na referência aprovada, sem depender do nome isolado."""
+    campos = {k: str(arquivo.get(k) or '') for k in ('id', 'nome', 'url', 'criado_em', 'categoria')}
+    return sha256(json.dumps(campos, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()
 
 
 def situacao_arte(projeto):
@@ -28,7 +36,9 @@ def situacao_arte(projeto):
     # Um upload posterior exige nova conferência, ainda que a arte anterior permaneça.
     todas_artes = [a for a in (projeto.get('arquivos') or []) if isinstance(a, dict) and a.get('categoria') == 'Arte' and a.get('id')]
     ultima = lista[-1]
-    if ultima.get('id') != selecionada.get('id') or registro.get('total_artes_no_registro') != len(todas_artes):
+    if (ultima.get('id') != selecionada.get('id')
+            or registro.get('total_artes_no_registro') != len(todas_artes)
+            or registro.get('assinatura_arquivo') != assinatura_arquivo(selecionada)):
         return 'revisao_pendente', selecionada
     return 'aprovada', selecionada
 
@@ -46,7 +56,8 @@ def registrar_aprovacao(projeto, arquivo_id, responsavel, instante):
     resultado = dict(projeto)
     evento = {'arquivo_id': arquivo_id, 'arquivo_nome': _texto(lista[-1].get('nome'), 180),
               'responsavel': nome, 'registrado_em': instante.isoformat(timespec='seconds'),
-              'total_artes_no_registro': len(todas_artes)}
+              'total_artes_no_registro': len(todas_artes),
+              'assinatura_arquivo': assinatura_arquivo(lista[-1])}
     historico = list(resultado.get('historico_aprovacao_arte_hf58') or [])
     historico.append(evento)
     resultado['historico_aprovacao_arte_hf58'] = historico[-100:]

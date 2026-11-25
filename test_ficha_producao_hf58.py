@@ -37,6 +37,20 @@ class FichaHF58Tests(unittest.TestCase):
         p = registrar_aprovacao(p, 'AR1', 'Jorge', NOW)
         self.assertEqual(situacao_arte(p)[0], 'aprovada')
 
+    def test_substituir_arquivo_sem_mudar_id_exige_nova_confirmacao(self):
+        p = registrar_aprovacao(projeto(), 'AR1', 'Anna', NOW)
+        p['arquivos'][0]['url'] = 'https://exemplo.invalid/arte-corrigida.png'
+        self.assertEqual(situacao_arte(p)[0], 'revisao_pendente')
+        p = registrar_aprovacao(p, 'AR1', 'Anna', NOW)
+        self.assertEqual(situacao_arte(p)[0], 'aprovada')
+        p['arquivos'][0]['nome'] = 'Ana_v2.png'
+        self.assertEqual(situacao_arte(p)[0], 'revisao_pendente')
+
+    def test_registro_antigo_sem_assinatura_exige_reconfirmacao(self):
+        p = registrar_aprovacao(projeto(), 'AR1', 'Anna', NOW)
+        del p['aprovacao_arte_hf58']['assinatura_arquivo']
+        self.assertEqual(situacao_arte(p)[0], 'revisao_pendente')
+
     def test_arquivo_aprovado_arquivado_invalida(self):
         p = registrar_aprovacao(projeto(), 'AR1', 'Jorge', NOW)
         p['arquivos'][0]['arquivado'] = True

@@ -2,43 +2,25 @@
   "schema": 2,
   "product": "AlphaFest Manager",
   "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.58",
-  "generated_at_utc": "2026-11-25T16:19:05.876515+00:00",
+  "generated_at_utc": "2026-11-25T16:46:34.816994+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
-  "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
-    "status": "OK",
-    "problems": [],
-    "warnings": [
-      "1 arquivo(s) de teste dependem de versão histórica; eles são classificados como legado e não reprovam a release atual apenas pelo número antigo."
+    "status": "HOMOLOGACAO_PARCIAL",
+    "problems": [
+      "Gate completo nao executado: Streamlit indisponivel no ambiente local. Nao instalar em producao antes de homologar."
     ],
-    "critical_python_compile": {
-      "status": "OK",
-      "files_checked": 54,
-      "files_ok": 54
-    },
     "tests": {
-      "found_files": 43,
-      "executed_files": 0,
-      "approved_files": 0,
-      "executed_cases": 0,
-      "approved_cases": 0,
-      "execution_status": "NAO_EXECUTADO",
-      "inventory": {
-        "total_files": 43,
-        "portable_files": 42,
-        "current_release_files": 0,
-        "historical_version_files": 1,
-        "historical_examples": [
-          "test_hf652450_otimizacao.py"
-        ],
-        "invalid_files": 0,
-        "invalid_examples": []
-      },
-      "execution": {}
-    }
+      "functional_offline_selected": 61,
+      "passed": 61,
+      "errors": 0,
+      "skipped": 0
+    },
+    "warnings": [
+      "Previa RC2 somente para ambiente de teste."
+    ]
   },
   "file_count": 520,
-  "uncompressed_bytes": 40002935,
+  "uncompressed_bytes": 40005629,
   "files": [
     {
       "path": ".gitignore",
@@ -227,8 +209,8 @@
     },
     {
       "path": "VALIDACAO_HF65.24.58.md",
-      "size": 1073,
-      "sha256": "c50b8acc62e433e4f41e9faa948a095faa61a750acc3c2cdb45845ebf1c2f681"
+      "size": 2435,
+      "sha256": "62e09f818a723b8772c3f95f93018ade7677cd8707cceaedea7e302362cd22e4"
     },
     {
       "path": "VERSAO",
@@ -312,8 +294,8 @@
     },
     {
       "path": "app.py",
-      "size": 2184573,
-      "sha256": "f200491851c9672700b370f29e523dc28b26913cafc8015c14080fb2e6ff3f34"
+      "size": 2184605,
+      "sha256": "66c7644fb4984f02addb4604caa62c5173ebda8096aee9467e4f714f361da1e0"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",
@@ -1937,8 +1919,8 @@
     },
     {
       "path": "ficha_producao_hf58.py",
-      "size": 5030,
-      "sha256": "1f9a3d81afc628abfd96c6ec3d277c17fde85a5745e183555e85c69131390d44"
+      "size": 5559,
+      "sha256": "bd79cb456d61d270f405e08b02b9caf10680c36c5583a1cf0cc42e28b4dfdc6f"
     },
     {
       "path": "finance_runtime_index_service.py",
@@ -2397,8 +2379,8 @@
     },
     {
       "path": "test_ficha_producao_hf58.py",
-      "size": 2595,
-      "sha256": "2689afe972b0e336dd9f93d9e901d2ada2b91afd090d11f57a38f39285703053"
+      "size": 3366,
+      "sha256": "309818e9728e04ed799855782a416ccba9cedaa8851e8f7a9798f143e7f58246"
     },
     {
       "path": "test_hf652438_sob_encomenda.py",

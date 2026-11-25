@@ -12591,8 +12591,8 @@ def renderizar_caixa_projeto(proposta, prefixo="historico"):
     if lista_artes:
         recente = lista_artes[-1]
         st.write("**Arte mais recente:** " + str(recente.get("nome") or "Sem nome"))
-        responsavel_hf58 = st.text_input("Responsável pela conferência da arte", key=f"hf58_responsavel_{kbase}", max_chars=90)
-        conf_hf58 = st.checkbox("Conferi a confirmação do cliente para esta versão específica da arte", key=f"hf58_confirmacao_{kbase}")
+        responsavel_hf58 = st.text_input("Responsável pela conferência da arte", key=f"hf58_responsavel_{kbase}_{recente['id']}", max_chars=90)
+        conf_hf58 = st.checkbox("Conferi a confirmação do cliente para esta versão específica da arte", key=f"hf58_confirmacao_{kbase}_{recente['id']}")
         if st.button("Registrar aprovação desta versão", key=f"hf58_aprovar_{kbase}", disabled=not conf_hf58):
             try:
                 revisado = _hf58_registrar_aprovacao(projeto, recente["id"], responsavel_hf58, agora_local())
