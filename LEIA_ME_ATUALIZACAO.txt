@@ -1,59 +1,60 @@
-ALPHAFEST MANAGER — HF65.24.55 · PERSONALIZAÇÕES E CONFERÊNCIA
+ALPHAFEST MANAGER — HF65.24.56 · REVISÃO FINAL E MENSAGEM PRESERVADA
 
-Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.24.55
-Pacote cumulativo sobre a HF65.24.54. Inclui a importação do orçamento do site e as melhorias anteriores de site e operação.
+Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.24.56
+Pacote cumulativo sobre a HF65.24.55. Inclui as personalizações do carrinho, a importação do orçamento do site e as melhorias anteriores de operação.
 
 COMO ATUALIZAR O MANAGER
 
 1. No Manager atual, abra Configurações > Núcleo Profissional > Atualização segura. Prepare e baixe o ponto de restauração.
 2. Extraia este ZIP em uma pasta temporária.
-3. Copie o CONTEÚDO da pasta alphafest-manager-main para o repositório atual, na pasta que já contém app.py. Substitua os arquivos correspondentes, preservando os dados e configurações locais. Não apague o repositório nem crie uma segunda pasta do mesmo nome dentro dele.
+3. Copie o CONTEÚDO da pasta alphafest-manager-main para o repositório atual, na pasta que já contém app.py. Substitua os arquivos correspondentes, preservando dados e configurações locais. Não apague o repositório nem crie uma segunda pasta do mesmo nome dentro dele.
 4. No GitHub Desktop, confira as alterações, faça Commit e Push no repositório/branch do aplicativo atual.
-5. Aguarde o Streamlit atualizar e confira HF65.24.55 na interface. Se necessário, reinicie pelo painel do Streamlit e abra novamente.
-6. Confira os formulários de Jorge e Anna e o novo painel de propostas semelhantes. Use registros de teste identificados ou ambiente de homologação para validar a gravação.
+5. Aguarde o Streamlit atualizar e confira HF65.24.56 na interface. Se necessário, reinicie pelo painel do Streamlit.
+6. Confira a seção Conferência final do orçamento em Jorge e Anna. Use registros de teste identificados ou ambiente de homologação para validar gravações.
 
 PUBLICAR AS MUDANÇAS DO SITE
 
 1. No Manager atualizado, abra a Central do Site e prepare uma nova prévia.
-2. Confira Desktop/Celular, duas personalizações do mesmo produto e a mensagem final.
+2. Confira Desktop/Celular, a mensagem editada preservada e a atualização depois de mudar os itens.
 3. Publique pelo fluxo habitual. Se usar publicação manual, gere o arquivo em Contingência / ZIP manual > Baixar ZIP de produção.
 
-Este ZIP instala o Manager. O ZIP público para Cloudflare é outro arquivo, gerado pelo Manager. As personalizações novas só aparecem no site depois dessa republicação.
+Este ZIP instala o Manager. O ZIP público para Cloudflare é outro arquivo, gerado pelo Manager. O carrinho atualizado só aparece no site depois dessa republicação.
 
-CARRINHO: OUTRA PERSONALIZAÇÃO
+CONFERÊNCIA FINAL NO MANAGER
 
-- Adicione um produto e preencha quantidade e observações.
-- Para o mesmo produto com outro nome, cor ou tamanho, clique em Outra personalização. A nova linha começa com quantidade 1 e observações vazias.
-- Para mais unidades iguais, altere Quantidade na linha correspondente.
-- Abrir a ficha e adicionar novamente um produto já presente apenas abre o carrinho para revisão; não aumenta a quantidade.
-- Cada linha pode ser editada ou removida separadamente. Limite de 25 linhas; de 1 a 999 unidades por linha.
-- As linhas antigas do carrinho são preservadas. O carrinho permanece no navegador usado pelo cliente.
+- Depois dos itens e totais, abra Conferência final do orçamento para revisar produtos, personalizações, quantidades, preços e condições.
+- Corrija os erros obrigatórios antes de salvar: valores negativos/inválidos, quantidade não positiva, desconto acima do subtotal, data ausente ou totais inconsistentes, entre outros.
+- Brinde/preço zero, total zero, data passada em proposta nova, prazo/validade pendentes ou item ainda não adicionado exigem revisão explícita.
+- Quando necessário, marque Revisei os pontos de atenção e quero salvar este orçamento e clique no botão normal de salvar.
+- Um orçamento válido, sem pontos que exijam confirmação, não precisa desse clique adicional.
+- Alterar os dados exige nova revisão. WhatsApp vazio não bloqueia atendimento presencial. A data passada, sozinha, não exige aceite em edição histórica.
+- Somente itens já adicionados entram na proposta. No Jorge, texto ainda não enviado por Adicionar Item pode não estar disponível para o aviso de item pendente.
+- A conferência acontece antes da verificação de propostas semelhantes e do cadastro/gravação.
+- Em falha de salvamento no Jorge, o formulário permanece aberto; confira conexão e Histórico antes de tentar novamente. Anna mantém a retenção existente do diálogo.
 
-CONFERÊNCIA NO MANAGER
+MENSAGEM EDITADA NO CARRINHO
 
-- Ao preparar uma proposta nova, use Conferir propostas semelhantes ou clique normalmente em Salvar proposta.
-- O Manager consulta as propostas geradas hoje e nos 29 dias anteriores, buscando o cliente e a mesma mensagem do site ou as mesmas linhas/quantidades/personalizações.
-- Se houver candidatos, revise a tabela e use Consultar no Histórico quando necessário. A consulta não substitui seu rascunho.
-- Para retomar, volte a Novo Orçamento no Jorge ou abra Novo orçamento na Central da Anna, na mesma sessão.
-- Se for uma nova encomenda legítima, marque Conferi as propostas relacionadas e quero criar uma nova; depois clique novamente em Salvar proposta.
-- Alterar dados do rascunho ou candidatos relevantes exige nova conferência. O Histórico é reconsultado no salvamento.
-- Em falha de leitura, o rascunho permanece aberto e nenhuma nova proposta/cliente é gravada por aquele clique.
-- A edição de proposta existente mantém o fluxo normal. Perfis sem acesso ao Histórico não usam essa conferência.
-- O recurso sinaliza possibilidades; não mescla nem exclui propostas e não constitui bloqueio de duplicidade simultânea no banco.
+1. Inclua os produtos e suas personalizações e abra a revisão.
+2. Complete a mensagem com as informações desejadas.
+3. Voltar e reabrir a revisão, ou recarregar a página com o carrinho igual, mantém a mensagem no mesmo navegador.
+4. Se mudar os itens, use Gerar mensagem atualizada antes de enviar.
+5. O texto manual anterior continua disponível para consulta/cópia. Recupere os complementos desejados para a mensagem atual.
 
-IMPORTAÇÃO DO SITE — MANTIDA DA HF54
+O histórico conserva até 10 textos manuais anteriores distintos; mensagens geradas sem edição não ocupam esse histórico. O descarte é explícito. Limpar o carrinho também limpa a revisão. Se o navegador não puder guardar o texto, copie-o antes de recarregar, conforme o aviso na tela. O envio no WhatsApp continua dependendo da confirmação do visitante.
 
-1. Copie a mensagem completa recebida do site no WhatsApp.
-2. No Jorge, abra Novo Orçamento > Importar orçamento do site. Na Anna, use o recurso na Central Operacional.
-3. Cole a mensagem e clique em Analisar mensagem. Confira produtos, quantidades, personalizações, valores e identificação.
-4. Confirme a revisão e abra o rascunho. Se já houver trabalho em andamento, escolha continuar, substituir ou cancelar.
-5. No formulário, confira data, condições e possíveis propostas semelhantes. Salve pelo fluxo normal.
+RECURSOS DAS VERSÕES ANTERIORES
+
+- Outra personalização cria linha independente do mesmo produto; para mais unidades iguais, altere Quantidade.
+- Limite de 25 linhas no carrinho, de 1 a 999 unidades por linha. Linhas antigas são preservadas.
+- A mensagem completa recebida no WhatsApp pode ser analisada em Importar orçamento do site no Jorge ou na Central da Anna. Confira o resultado e abra o rascunho.
+- A conferência de propostas semelhantes continua considerando hoje e os 29 dias anteriores, para perfis com acesso ao Histórico. Use a consulta, revise os candidatos e confirme a criação quando for um pedido novo legítimo.
+- Consultar no Histórico não substitui o rascunho. Volte ao formulário na mesma sessão para continuar.
 
 DADOS E DOCUMENTAÇÃO
 
 Não há SQL novo nem migração de banco; DATA_VERSION permanece 5. Não há nova dependência em requirements.txt.
-Dados operacionais, credenciais e segredos locais não são incluídos no ZIP.
-Rascunhos e confirmações pertencem à sessão. Salve a proposta para manter o trabalho após fechar/reiniciar a sessão.
+Dados operacionais e credenciais locais não são incluídos no ZIP.
+Rascunhos e confirmações do Manager pertencem à sessão; a mensagem do site pertence ao navegador usado pelo cliente.
 
-Detalhes e limites: UPDATE_INFO_HF65.24.55.md
-Testes: VALIDACAO_HF65.24.55.md
+Detalhes e limites: UPDATE_INFO_HF65.24.56.md
+Testes: VALIDACAO_HF65.24.56.md

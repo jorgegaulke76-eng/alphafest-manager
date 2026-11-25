@@ -35,7 +35,8 @@ document.querySelectorAll=()=>[];
 document.getElementById=get;
 document.createElement=()=>node();
 document.execCommand=()=>{if(input.clipboard==='fallback'){copied.push(get('afquote-message').value);return true;}return false;};
-const localStorage={getItem:()=>JSON.stringify(input.items),setItem(){}};
+const storage=new Map([['alphafest_orcamento_hf652423',JSON.stringify(input.items)]]);
+const localStorage={getItem:key=>storage.get(key)??null,setItem(key,value){storage.set(key,value);}};
 const navigator={clipboard:{async writeText(text){if(input.clipboard==='manual'||input.clipboard==='fallback')throw new Error('Sem permissão');copied.push(text);}}};
 const window={location:{href:''},dispatchEvent(event){metrics.push(event.detail);},open(url){opened.push(url);return {};}};
 class CustomEvent{constructor(type,options){this.type=type;this.detail=options.detail;}}

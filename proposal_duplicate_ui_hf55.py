@@ -19,6 +19,10 @@ _READ_ERROR = (
     "Não foi possível conferir as propostas recentes. Seu rascunho foi preservado. "
     "Confira a conexão e tente novamente antes de salvar."
 )
+_DATA_ERROR = (
+    "Não foi possível validar os dados para conferir propostas semelhantes. "
+    "Seu rascunho foi preservado. Revise os campos e tente novamente antes de salvar."
+)
 
 
 def _chave(prefixo):
@@ -43,7 +47,12 @@ def _nova_revisao(estado, prefixo, proposta_assinatura, hoje, *, resultado=None,
 
 
 def _contexto(estado, proposta, prefixo, hoje):
-    assinatura = assinatura_proposta(proposta)
+    try:
+        assinatura = assinatura_proposta(proposta)
+    except Exception:
+        # A proposta inteira precisa ser assinável. Não excluir metadados nem
+        # reutilizar uma aprovação anterior para contornar dados incompatíveis.
+        return _nova_revisao(estado, prefixo, None, hoje, erro=_DATA_ERROR)
     revisao = estado.get(_chave(prefixo))
     if (not revisao or revisao.get("proposta_assinatura") != assinatura
             or revisao.get("hoje") != str(hoje)):
@@ -53,6 +62,10 @@ def _contexto(estado, proposta, prefixo, hoje):
 
 def _consultar(estado, proposta, prefixo, carregar_historico, hoje):
     revisao = _contexto(estado, proposta, prefixo, hoje)
+    if revisao.get("erro") and revisao.get("proposta_assinatura") is None:
+        # Corrigir o rascunho vem antes da consulta. Erros de leitura anteriores
+        # ainda podem ser tentados novamente, pois têm uma assinatura válida.
+        return revisao
     try:
         resultado = analisar_duplicidades(proposta, carregar_historico(), hoje)
         prova = assinatura_conferencia(proposta, resultado)
@@ -87,7 +100,7 @@ def limpar_conferencia(estado, prefixo):
 
 
 def validar_salvamento(ui, proposta, *, prefixo, carregar_historico, hoje):
-    """Reconsulta sempre. False pede que o chamador redesenhe a conferência.
+    """Reconsulta dados assináveis. False pede que o chamador redesenhe a área.
 
     Esta função não executa rerun, nem persiste a proposta. O chamador mantém o
     rascunho, faz o rerun apropriado e limpa a conferência só após salvar de fato.

@@ -41,8 +41,10 @@ _RUNNER = r'''
 (async function(){
 const vm=require('vm'),input=JSON.parse(require('fs').readFileSync(0,'utf8'));
 const KEY='alphafest_orcamento_hf652423';
+const REVIEW_KEY='alphafest_orcamento_mensagem_hf652456';
 let stored=input.rawStorage===undefined?JSON.stringify(input.items||[]):input.rawStorage;
-const writes=[],opened=[],copied=[],metrics=[],alerts=[];
+let reviewStored=input.rawReviewStorage===undefined?null:input.rawReviewStorage;
+const writes=[],reviewWrites=[],opened=[],copied=[],metrics=[],alerts=[],confirms=[];
 function createPage(){
   let document;
   const decode=s=>String(s).replace(/&(amp|lt|gt|quot|apos|#39|#\d+|#x[\da-f]+);/gi,(all,key)=>{
@@ -122,17 +124,20 @@ function createPage(){
   document=new Element('document');document.readyState=input.readyState||'complete';
   parse(document,input.html);document.body=document.querySelector('body');document.activeElement=document.body;
   document.getElementById=id=>document.querySelector('#'+id);document.createElement=tag=>new Element(tag);
-  document.execCommand=()=>{copied.push(get('afquote-message').value);return true;};
+  document.execCommand=()=>{if(input.clipboard==='manual')return false;copied.push(document.activeElement.value);return true;};
   const get=id=>document.getElementById(id);
   const cards=document.querySelectorAll('.product-card[data-detail-name]');
   (input.cardOverrides||[]).forEach((overrides,i)=>Object.assign(cards[i].dataset,overrides));
   const window=new Element('window');window.location={search:input.query||'',href:''};window.matchMedia=()=>({matches:!!input.mobile});
   window.visualViewport=Object.assign(new Element('viewport'),{offsetLeft:0,offsetTop:0,width:390,height:720});
   window.open=url=>{opened.push(url);return {};};window.dispatchEvent=e=>metrics.push(e.detail);
-  const localStorage={getItem(key){if(key!==KEY)throw new Error('Chave de storage alterada');return stored;},setItem(key,value){if(key!==KEY)throw new Error('Chave de storage alterada');stored=value;writes.push(value);}};
-  const navigator={clipboard:{async writeText(value){copied.push(value);}}};
+  const localStorage={
+    getItem(key){if(key!==KEY&&key!==REVIEW_KEY)throw new Error('Chave de storage alterada');if(input.failStorageRead===true||input.failStorageRead===key)throw new Error('Leitura indisponível');return key===KEY?stored:reviewStored;},
+    setItem(key,value){if(key!==KEY&&key!==REVIEW_KEY)throw new Error('Chave de storage alterada');if(input.failStorageWrite===true||input.failStorageWrite===key)throw new Error('Gravação indisponível');if(key===KEY){stored=value;writes.push(value);}else{reviewStored=value;reviewWrites.push(value);}}
+  };
+  const navigator={clipboard:{async writeText(value){if(input.clipboard==='manual'||input.clipboard==='fallback')throw new Error('Sem permissão');copied.push(value);}}};
   class CustomEvent{constructor(type,options){this.type=type;this.detail=options.detail;}}
-  const context=vm.createContext({document,window,localStorage,navigator,CustomEvent,URLSearchParams,alert:m=>alerts.push(m),confirm:()=>true});
+  const context=vm.createContext({document,window,localStorage,navigator,CustomEvent,URLSearchParams,alert:m=>alerts.push(m),confirm:m=>{confirms.push(m);return input.confirm!==false;}});
   vm.runInContext(input.detailScript,context,{timeout:1000});
   vm.runInContext(input.cartScript,context,{timeout:1000});
   const entries=()=>get('afquote-list').querySelectorAll('[data-afline]');
@@ -141,6 +146,11 @@ function createPage(){
       count:get('afquote-counter').textContent,total:get('afquote-total').textContent,notice:get('afquote-notice').textContent,noticeHidden:get('afquote-notice').hidden,
       focused:document.activeElement.id,scrolled:!!document.activeElement.scrolled,html:get('afquote-list').innerHTML,
       message:get('afquote-message').value,reviewDisabled:get('afquote-review').disabled,clearDisabled:get('afquote-clear').disabled,
+      readOnly:!!get('afquote-message').readOnly,selected:!!get('afquote-message').selected,sendDisabled:get('afquote-send').disabled,sendLabel:get('afquote-send').textContent,helpHidden:get('afquote-message-help').hidden,
+      reviewWarning:get('afquote-review-warning').textContent,warningHidden:get('afquote-review-warning').hidden,regenerateHidden:get('afquote-regenerate').hidden,regenerateDisabled:get('afquote-regenerate').disabled,
+      historyHidden:get('afquote-history').hidden,historyText:get('afquote-history-message').value,historySelected:!!get('afquote-history-message').selected,historyOptions:get('afquote-history-select').querySelectorAll('option').map(option=>({value:option.value,text:option.textContent})),historyValue:get('afquote-history-select').value,historyStatus:get('afquote-history-status').textContent,
+      storageNote:get('afquote-storage-note').textContent,storageNoteHidden:get('afquote-storage-note').hidden,reviewStorage:reviewStored,reviewWrites:reviewWrites.length,
+      injected:!!document.querySelector('#injected'),copyStatus:get('afquote-copy-status').textContent,confirms:[...confirms],
       hidden:get('afquote-layer').hidden,modalHidden:get('product-detail-modal').hidden,product:get('product-detail-modal').dataset.product,
       opened:[...opened],copied:[...copied],metrics:[...metrics],alerts:[...alerts],storageWrites:writes.length};
   }
@@ -156,6 +166,13 @@ function createPage(){
     else if(action.event==='stale-remove'||action.event==='force-another'){
       const button=new Element('button');button.dataset[action.event==='stale-remove'?'afremove':'afanother']=action.lineId;await get('afquote-list').fire('click',{target:button});
     }else if(action.event==='dom-ready'){document.readyState='interactive';await document.fire('DOMContentLoaded');}
+    else if(action.event==='edit'){get('afquote-message').value=String(action.text);await get('afquote-message').fire('input');}
+    else if(action.event==='history-select'){get('afquote-history-select').value=String(action.index);await get('afquote-history-select').fire('change');}
+    else if(action.event==='force-send')await get('afquote-send').fire('click');
+    else if(action.event==='force-regenerate')await get('afquote-regenerate').fire('click');
+    else if(action.event==='storage-items')stored=JSON.stringify(action.items);
+    else if(action.event==='storage-review')reviewStored=action.raw;
+    else if(action.event==='key'){if(action.focus)get(action.focus).focus();await document.fire('keydown',{key:action.key,shiftKey:!!action.shift});}
     else if(action.event==='missing-id')delete get('product-detail-modal').dataset.product;
     else if(action.event==='show')await get('afquote-trigger').click();
     else if(action.event==='close')await get('afquote-layer').querySelector('.afquote-close').click();

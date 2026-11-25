@@ -100,6 +100,9 @@ class DuplicateIntegrationTest(unittest.TestCase):
             "_rel_localizar_cliente_orcamento": localizar_cliente_orcamento,
             "hoje_local": lambda: TODAY, "valor_float": lambda value: float(value or 0),
             "rerun_na_aba": self.navigate,
+            # Esta suíte verifica a conferência HF55; a validação comercial
+            # anterior tem testes próprios com o serviço real na HF56.
+            "_hf56_validar_revisao": Mock(return_value=True),
         }
         module = ast.Module(body=[copy.deepcopy(FUNCTIONS[name]) for name in HELPERS], type_ignores=[])
         exec(compile(ast.fix_missing_locations(module), "app.py", "exec"), self.env)

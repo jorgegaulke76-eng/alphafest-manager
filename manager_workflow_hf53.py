@@ -109,6 +109,36 @@ def _quote_keys(anna=False):
             "anna_modal_numero_original" if anna else "editar_numero")
 
 
+def item_em_preenchimento(estado, *, anna=False):
+    """HF56: snapshot do item atual que ainda não entrou na lista da proposta.
+
+    Usa somente a geração ativa. Campos de um formulário ainda não submetido
+    pelo navegador podem não existir no estado e não são recuperados aqui.
+    O snapshot completo invalida um aceite anterior se a digitação mudar.
+    """
+    sequencia = estado.get("anna_modal_item_key" if anna else "form_key", 0)
+    produto_prefixo = f"anna_modal_prod_{sequencia}" if anna else f"produto_novo_{sequencia}"
+    inicio = "anna_modal_" if anna else ""
+    campos = ("tema", "nome_item", "cor", "idade", "obs" if anna else "obs_item")
+    item = {
+        "perfil": "anna" if anna else "jorge",
+        "sequencia": sequencia,
+        "produto_catalogo": str(estado.get(produto_prefixo + "_catalogo") or "").strip(),
+        "produto_livre": str(estado.get(produto_prefixo + "_livre") or "").strip(),
+        "quantidade": deepcopy(estado.get(f"{inicio}qtd_{sequencia}", 1)),
+        "valor_unitario": deepcopy(estado.get(f"{inicio}valor_{sequencia}", 0)),
+        "detalhes": {campo: str(estado.get(f"{inicio}{campo}_{sequencia}") or "").strip()
+                     for campo in campos},
+    }
+    escolhido = item["produto_catalogo"]
+    ativo = (item["produto_livre"]
+             or (escolhido and escolhido != ORCAMENTO_PRODUTO_LIVRE)
+             or any(item["detalhes"].values())
+             or bool(item["valor_unitario"])
+             or item["quantidade"] != 1)
+    return item if ativo else None
+
+
 def possui_rascunho(estado, destino, *, anna=False, hoje=None):
     if destino == "projeto":
         return any(estado.get(f"hf53_projeto_{c}") for c in PROJECT_FIELDS) or bool(estado.get("_projeto_prefill"))
@@ -130,16 +160,7 @@ def possui_rascunho(estado, destino, *, anna=False, hoje=None):
         return True
     if estado.get(prefixo + "frete", "Retirada") not in ("Retirada", "Retirada em Itatiba"):
         return True
-    numero_item = estado.get("anna_modal_item_key" if anna else "form_key", 0)
-    produto_prefixo = f"anna_modal_prod_{numero_item}" if anna else f"produto_novo_{numero_item}"
-    produto_escolhido = str(estado.get(produto_prefixo + "_catalogo") or "")
-    if estado.get(produto_prefixo + "_livre") or (produto_escolhido and produto_escolhido != ORCAMENTO_PRODUTO_LIVRE):
-        return True
-    campos_item = ("tema", "nome_item", "cor", "idade", "obs") if anna else ("tema", "nome_item", "cor", "idade", "obs_item")
-    inicio = "anna_modal_" if anna else ""
-    return (any(estado.get(f"{inicio}{c}_{numero_item}") for c in campos_item)
-            or bool(estado.get(f"{inicio}valor_{numero_item}"))
-            or estado.get(f"{inicio}qtd_{numero_item}", 1) != 1)
+    return bool(item_em_preenchimento(estado, anna=anna))
 
 
 def solicitar_abertura(estado, destino, dados, *, anna=False):

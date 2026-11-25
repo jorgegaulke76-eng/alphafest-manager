@@ -17,6 +17,10 @@ from release_diagnostics import classify_test_file, release_source_fingerprint, 
 # novos fluxos críticos de cada release; o inventário completo não é um gate.
 # Nenhum destes testes importa o Manager nem precisa de banco ou rede.
 CRITICAL_TEST_FILES = (
+    "test_proposal_review_hf56.py",
+    "test_proposal_review_ui_hf56.py",
+    "test_proposal_review_integration_hf56.py",
+    "test_site_cart_message_hf56.py",
     "test_site_cart_personalizations_hf55.py",
     "test_proposal_duplicates_hf55.py",
     "test_proposal_duplicate_ui_hf55.py",

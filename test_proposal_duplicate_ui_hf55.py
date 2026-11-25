@@ -42,6 +42,22 @@ def registro(numero="PROP-TEST-01", **campos):
     return resultado
 
 
+def proposta_comercial():
+    proposta = copy.deepcopy(PROPOSTA)
+    proposta.update(subtotal=40.0, desconto=0.0, valor_total=40.0,
+                    taxa_entrega=0.0, frete_tipo="Retirada", data_entrega="30/11/2026",
+                    prazo_dias="10", validade_dias="5")
+    return proposta
+
+
+def dados_inassinaveis():
+    return (
+        ("metadata_nan", {"metadata": {"valor": float("nan"), "detalhe": "segredo-nao-exibir"}}),
+        ("metadata_bytes", {"metadata": {"arquivo": b"segredo-nao-exibir"}}),
+        ("prazo_nan", {"prazo_dias": float("nan")}),
+    )
+
+
 BASE = '''
 from copy import deepcopy
 from datetime import date
@@ -58,6 +74,7 @@ if "proposta" not in st.session_state:
     st.session_state["gravacoes"] = []
     st.session_state["navegacoes"] = []
     st.session_state["ultimo_resultado"] = None
+    st.session_state["mudanca_no_salvar"] = None
     st.session_state["origem_site"] = {"fonte": "rascunho-importado", "revisado": True}
 
 def carregar():
@@ -77,6 +94,9 @@ if st.checkbox("Mostrar conferência", value=True, key="fixture_mostrar"):
     )
 
 if st.button("Salvar proposta", key="fixture_salvar"):
+    if st.session_state["mudanca_no_salvar"] is not None:
+        st.session_state["proposta"].update(st.session_state["mudanca_no_salvar"])
+        st.session_state["mudanca_no_salvar"] = None
     permitido = validar_salvamento(
         st, st.session_state["proposta"], prefixo="teste",
         carregar_historico=carregar, hoje=st.session_state["hoje"],
@@ -271,6 +291,96 @@ class ConferenciaDuplicidadesUITest(unittest.TestCase):
         self.conferir(app)
         self.salvar(app)
         self.assertEqual(app.session_state["gravacoes"], [original])
+
+    def test_dados_inassinaveis_renderizam_erro_e_nao_consultam_ou_gravam(self):
+        for caso, campos in dados_inassinaveis():
+            with self.subTest(caso=caso):
+                app = self.app(historico=[])
+                original = proposta_comercial()
+                invalida = {**copy.deepcopy(original), **campos}
+                antes = repr(invalida)
+                app.session_state["proposta"] = invalida
+                app.run()
+                self.sem_excecao(app)
+                self.assertTrue(any("validar os dados" in erro.value for erro in app.error))
+                self.assertTrue(any("rascunho foi preservado" in erro.value for erro in app.error))
+                self.assertFalse(any("conexão" in erro.value or "segredo-nao-exibir" in erro.value
+                                     for erro in app.error))
+                self.assertEqual([c.key for c in app.checkbox], ["fixture_mostrar"])
+                self.assertEqual(app.session_state["leituras"], 0)
+                self.analisar(app)
+                self.salvar(app)
+                self.assertIs(app.session_state["ultimo_resultado"], False)
+                self.assertEqual(app.session_state["leituras"], 0)
+                self.assertEqual(app.session_state["gravacoes"], [])
+                self.assertEqual(repr(app.session_state["proposta"]), antes)
+                self.assertEqual(app.session_state["origem_site"], {"fonte": "rascunho-importado", "revisado": True})
+                # Uma correção completa retoma a consulta normal. Histórico sem
+                # candidatos não precisa de uma checkbox extra para recuperação.
+                app.session_state["proposta"] = original
+                self.salvar(app)
+                self.assertIs(app.session_state["ultimo_resultado"], True)
+                self.assertEqual(app.session_state["leituras"], 1)
+                self.assertEqual(app.session_state["gravacoes"], [original])
+
+    def test_falha_de_assinatura_invalida_aceite_e_correcao_exige_nova_conferencia(self):
+        for caso, campos in dados_inassinaveis():
+            with self.subTest(caso=caso):
+                app = self.app()
+                original = proposta_comercial()
+                app.session_state["proposta"] = copy.deepcopy(original)
+                self.conferir(self.analisar(app))
+                anterior = self.chave_conferencia(app)
+                invalida = {**copy.deepcopy(original), **campos}
+                antes = repr(invalida)
+                app.session_state["proposta"] = invalida
+                self.salvar(app)
+                self.assertIs(app.session_state["ultimo_resultado"], False)
+                self.assertEqual(app.session_state["leituras"], 1)
+                self.assertEqual(app.session_state["gravacoes"], [])
+                revisao = app.session_state["_teste_conferencia_duplicidades"]
+                self.assertFalse(revisao["confirmada"])
+                self.assertIsNone(revisao["resultado"])
+                self.assertIsNone(revisao["prova"])
+                self.assertNotEqual(self.chave_conferencia(app), anterior)
+                self.assertEqual(repr(app.session_state["proposta"]), antes)
+                app.session_state["proposta"] = copy.deepcopy(original)
+                self.salvar(app)
+                self.assertIs(app.session_state["ultimo_resultado"], False)
+                self.assertEqual(app.session_state["leituras"], 2)
+                self.assertFalse(app.checkbox(key=self.chave_conferencia(app)).value)
+                self.conferir(app)
+                self.salvar(app)
+                self.assertIs(app.session_state["ultimo_resultado"], True)
+                self.assertEqual(app.session_state["leituras"], 3)
+                self.assertEqual(app.session_state["gravacoes"], [original])
+
+    def test_guard_recusa_assinatura_invalida_com_interface_oculta(self):
+        app = self.conferir(self.analisar(self.app()))
+        app.checkbox(key="fixture_mostrar").uncheck().run()
+        app.session_state["proposta"]["metadata"] = {"arquivo": b"conteudo-invalido"}
+        antes = repr(app.session_state["proposta"])
+        self.salvar(app)
+        self.assertIs(app.session_state["ultimo_resultado"], False)
+        self.assertEqual(app.session_state["leituras"], 1)
+        self.assertEqual(app.session_state["gravacoes"], [])
+        self.assertEqual(repr(app.session_state["proposta"]), antes)
+        app.checkbox(key="fixture_mostrar").check().run()
+        self.sem_excecao(app)
+        self.assertTrue(any("validar os dados" in erro.value for erro in app.error))
+        self.assertEqual([c.key for c in app.checkbox], ["fixture_mostrar"])
+
+    def test_falha_de_assinatura_apos_renderizar_nao_modifica_widget_criado(self):
+        app = self.conferir(self.analisar(self.app()))
+        anterior = self.chave_conferencia(app)
+        app.session_state["mudanca_no_salvar"] = {"prazo_dias": float("nan")}
+        self.salvar(app)
+        self.assertIs(app.session_state["ultimo_resultado"], False)
+        self.assertEqual(app.session_state["leituras"], 1)
+        self.assertEqual(app.session_state["gravacoes"], [])
+        self.assertNotEqual(self.chave_conferencia(app), anterior)
+        self.assertFalse(app.session_state["_teste_conferencia_duplicidades"]["confirmada"])
+        self.assertTrue(any("validar os dados" in erro.value for erro in app.error))
 
     def test_historico_invalido_nao_vira_lista_vazia(self):
         for historico in (None, {}, "leitura incompleta"):

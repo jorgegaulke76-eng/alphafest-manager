@@ -1,6 +1,6 @@
 {
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.55",
-  "created_at": "2026-11-25T10:19:42-03:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.56",
+  "created_at": "2026-11-25T10:53:12-03:00",
   "timezone": "America/Sao_Paulo",
-  "description": "HF65.24.55 — Personalizações independentes no carrinho, preservadas na importação; conferência revisável de propostas recentes antes da criação nos formulários de Jorge e Anna, com leitura atual e preservação do rascunho."
+  "description": "HF65.24.56 — Conferência final de valores e condições nos orçamentos de Jorge e Anna; preservação da mensagem editada no carrinho e do rascunho quando o salvamento não é confirmado."
 }

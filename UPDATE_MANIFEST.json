@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.55",
-  "generated_at_utc": "2026-11-25T13:29:24.782369+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.56",
+  "generated_at_utc": "2026-11-25T14:00:10.457671+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -13,19 +13,19 @@
     ],
     "critical_python_compile": {
       "status": "OK",
-      "files_checked": 50,
-      "files_ok": 50
+      "files_checked": 52,
+      "files_ok": 52
     },
     "tests": {
-      "found_files": 35,
-      "executed_files": 28,
-      "approved_files": 28,
-      "executed_cases": 289,
-      "approved_cases": 289,
+      "found_files": 39,
+      "executed_files": 32,
+      "approved_files": 32,
+      "executed_cases": 405,
+      "approved_cases": 405,
       "execution_status": "APROVADO",
       "inventory": {
-        "total_files": 35,
-        "portable_files": 34,
+        "total_files": 39,
+        "portable_files": 38,
         "current_release_files": 0,
         "historical_version_files": 1,
         "historical_examples": [
@@ -36,19 +36,59 @@
       },
       "execution": {
         "status": "APROVADO",
-        "selected_files": 28,
-        "executed_files": 28,
-        "approved_files": 28,
-        "tests_run": 289,
-        "tests_passed": 289,
+        "selected_files": 32,
+        "executed_files": 32,
+        "approved_files": 32,
+        "tests_run": 405,
+        "tests_passed": 405,
         "failures": 0,
         "errors": 0,
         "skipped": 0,
         "historical_files": [],
-        "source_fingerprint": "0b2342e138efb3f18876cd76ff4e66fddc272c09407fb61de04e465ba54af9fc",
+        "source_fingerprint": "532d4828dc130c385daa26de6afb5e5a7164aa857abef7f8da6da333d8823edf",
         "source_unchanged": true,
         "python_version": "3.12.14",
         "results": [
+          {
+            "file": "test_proposal_review_hf56.py",
+            "executed": true,
+            "status": "APROVADO",
+            "tests_run": 47,
+            "tests_passed": 47,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          {
+            "file": "test_proposal_review_ui_hf56.py",
+            "executed": true,
+            "status": "APROVADO",
+            "tests_run": 22,
+            "tests_passed": 22,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          {
+            "file": "test_proposal_review_integration_hf56.py",
+            "executed": true,
+            "status": "APROVADO",
+            "tests_run": 22,
+            "tests_passed": 22,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          {
+            "file": "test_site_cart_message_hf56.py",
+            "executed": true,
+            "status": "APROVADO",
+            "tests_run": 21,
+            "tests_passed": 21,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
           {
             "file": "test_site_cart_personalizations_hf55.py",
             "executed": true,
@@ -73,8 +113,8 @@
             "file": "test_proposal_duplicate_ui_hf55.py",
             "executed": true,
             "status": "APROVADO",
-            "tests_run": 18,
-            "tests_passed": 18,
+            "tests_run": 22,
+            "tests_passed": 22,
             "failures": 0,
             "errors": 0,
             "skipped": 0
@@ -333,8 +373,8 @@
       }
     }
   },
-  "file_count": 504,
-  "uncompressed_bytes": 39693199,
+  "file_count": 511,
+  "uncompressed_bytes": 39849018,
   "files": [
     {
       "path": ".gitignore",
@@ -418,8 +458,8 @@
     },
     {
       "path": "LEIA_ME_ATUALIZACAO.txt",
-      "size": 4497,
-      "sha256": "9aef1a8731f2c0a12cd318e716e7a3051c0bd00ea0301fc188c2c2fd1ff8f7ec"
+      "size": 4995,
+      "sha256": "3840e58aea111beb8f022c0da0e7dff4e48a854eb1cb07475d32ec0863eae7b5"
     },
     {
       "path": "LEIA_ME_HF65_24_13.txt",
@@ -453,8 +493,8 @@
     },
     {
       "path": "RELEASE_INFO.json",
-      "size": 391,
-      "sha256": "492e66a1f3b1869d8f9ca2dcdfdf4212aa541b9219409207d64ab6f8e069b01b"
+      "size": 348,
+      "sha256": "21ad1a78ac0b361fb65abd1386801568edb5db2a57d18ec50f8dbb0dd1efcef9"
     },
     {
       "path": "ROADMAP.md",
@@ -487,9 +527,9 @@
       "sha256": "a1dda15cd8e71853bd653cdf3cadc7e1e721ec56bf910051cfed5ccf6093cced"
     },
     {
-      "path": "UPDATE_INFO_HF65.24.55.md",
-      "size": 9814,
-      "sha256": "041441d05718584ce465400dc7aafedb478c6910df9d164b0548e8d83972bf07"
+      "path": "UPDATE_INFO_HF65.24.56.md",
+      "size": 11251,
+      "sha256": "2930a4c4c81edc880b861aa1651204aaad3be374433304bf3ee34f1402ce2fa5"
     },
     {
       "path": "VALIDACAO_HF65.24.52.md",
@@ -512,14 +552,19 @@
       "sha256": "f96270c5c1603b4731a2051b83eefd9126859679d00253104d2cc0012ee26221"
     },
     {
+      "path": "VALIDACAO_HF65.24.56.md",
+      "size": 10275,
+      "sha256": "826d0fb36568179d670cb07e6075a65560c679682b9408bca50c2c73e5ddf266"
+    },
+    {
       "path": "VERSAO",
       "size": 37,
-      "sha256": "f09a52770fcf41c5322d8e42ade3f4bb09d90b34c32862daf51f32334376ff45"
+      "sha256": "659865dc19bcdac40e6c7a178947066967b1c82a17ade8e900eec64b98f3766e"
     },
     {
       "path": "VERSAO.txt",
       "size": 37,
-      "sha256": "f09a52770fcf41c5322d8e42ade3f4bb09d90b34c32862daf51f32334376ff45"
+      "sha256": "659865dc19bcdac40e6c7a178947066967b1c82a17ade8e900eec64b98f3766e"
     },
     {
       "path": "__init__.py",
@@ -593,8 +638,8 @@
     },
     {
       "path": "app.py",
-      "size": 2174077,
-      "sha256": "e06733704200263c87dae64be31b93c60f8f327c2ef8ef90c142779a94ae9f34"
+      "size": 2176494,
+      "sha256": "7352f833209274b586ffce0f97a4e6ace0de611a5ff0d05402aa0f39efbd61eb"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",
@@ -2088,8 +2133,8 @@
     },
     {
       "path": "build_update_package.py",
-      "size": 9803,
-      "sha256": "d65f9e1b743cf1b10dc7e372197839ec80d981b461bfbc9e8de5c72330f3aee0"
+      "size": 9964,
+      "sha256": "68751303d8eaa3b48a5d9f4f7a66daed42a1514060a18fc6ade8e6cfd7ef1964"
     },
     {
       "path": "catalogo_diagnostics_service.py",
@@ -2258,8 +2303,8 @@
     },
     {
       "path": "manager_workflow_hf53.py",
-      "size": 10096,
-      "sha256": "fe9633abc2d0c1af3687eb9eece6a522602888c614d04c6166d13283d01809f9"
+      "size": 10930,
+      "sha256": "7568d0fabc10a916493ba96c64cf0679265aacb5e74c53481045316e40df2ddf"
     },
     {
       "path": "marketing_ai_engine.py",
@@ -2363,13 +2408,23 @@
     },
     {
       "path": "proposal_duplicate_ui_hf55.py",
-      "size": 7399,
-      "sha256": "104cab54085fd42681dd3f569cbc59f00ae86659c5662d54f37bc97c6e5b4868"
+      "size": 8121,
+      "sha256": "131a42ff410aceb241988806c4d9eca8970ede7b02943590e751a0dcdc48ffea"
     },
     {
       "path": "proposal_persistence_service.py",
       "size": 2693,
       "sha256": "d6894ff04cf3aed2de72cb4c59a35d48c9d1f72cafb7a95dd698cd1b052316bf"
+    },
+    {
+      "path": "proposal_review_service_hf56.py",
+      "size": 15983,
+      "sha256": "5cef7352660525479841d574d6188ed6d3ef4526975ddfb17861b15a245c5810"
+    },
+    {
+      "path": "proposal_review_ui_hf56.py",
+      "size": 7610,
+      "sha256": "3100660d40b711b07cf229877d7bf05803fe8c5a78bbe39b7e28f4ebacb951e5"
     },
     {
       "path": "proposal_runtime_index_service.py",
@@ -2398,8 +2453,8 @@
     },
     {
       "path": "release_diagnostics.py",
-      "size": 13477,
-      "sha256": "16cb23272806728ee8aa3589c747c329e2b41d533f68a66ae812009bd1ad6e74"
+      "size": 13550,
+      "sha256": "8acd0da0384dfcbab653db5cf215fc45ec1e6e361d72b3ea29b5fdfb62ee7ebe"
     },
     {
       "path": "reports_runtime_index_service.py",
@@ -2438,8 +2493,8 @@
     },
     {
       "path": "site_carrinho_orcamento_service.py",
-      "size": 20889,
-      "sha256": "a8286be5e20d6cdb7956d57e2739fc201cd99fc396e7be16715fd1462558010b"
+      "size": 31944,
+      "sha256": "839c7377f4b204aeee202cfdaa41369ce9c5b85d85efdc3c787b097bd72e9f0e"
     },
     {
       "path": "site_cloudflare_publish_service.py",
@@ -2708,8 +2763,8 @@
     },
     {
       "path": "test_proposal_duplicate_integration_hf55.py",
-      "size": 18995,
-      "sha256": "5b4ce2d0cc5a0fb0a6e9abf95c48897cd359082aaf0b8c43dc9664b556826276"
+      "size": 19210,
+      "sha256": "e66c6f25e1ee690c7f60be0daf2a8dd5a7b79396b532a7c38740132f985efb83"
     },
     {
       "path": "test_proposal_duplicate_navigation_hf55.py",
@@ -2718,13 +2773,28 @@
     },
     {
       "path": "test_proposal_duplicate_ui_hf55.py",
-      "size": 16697,
-      "sha256": "e3f287a5deaaa0093ae7cb978227ffaf11f3b725dbef106c7df549fdf0d686bc"
+      "size": 22908,
+      "sha256": "5c21bfb49642cf03286caf6aed3d622d0ef8766add1bbdf7d5616e4fc845b1d6"
     },
     {
       "path": "test_proposal_duplicates_hf55.py",
       "size": 23429,
       "sha256": "7925ce17491208460fd34d5ab0bdb901416446aa2bef39b24ed270801c23ac92"
+    },
+    {
+      "path": "test_proposal_review_hf56.py",
+      "size": 26993,
+      "sha256": "c73fb604d2dcc3f2b4337f34799154402916ed10d5eeed3d3bdc8a88411d54cd"
+    },
+    {
+      "path": "test_proposal_review_integration_hf56.py",
+      "size": 22214,
+      "sha256": "21038b52c0c8cc650ceebf27f2735a1c4d99418d8f3dd1e3428b4b6d4ade212b"
+    },
+    {
+      "path": "test_proposal_review_ui_hf56.py",
+      "size": 23237,
+      "sha256": "840879f3dbb5782c7d2e20fc8fc6cfa86515f04b36dc17b31eb45760b5773c2a"
     },
     {
       "path": "test_pwa_hf652414.py",
@@ -2743,13 +2813,18 @@
     },
     {
       "path": "test_site_cart_hf53.py",
-      "size": 7573,
-      "sha256": "53238323bc3bd2541ea401558e069a040d03769f1da0f04fc6596e34b2554ebb"
+      "size": 7688,
+      "sha256": "ee790ed3a83efaa0f5ef6572c079af48c2473ef54342f3dcc5918a9107185c3e"
+    },
+    {
+      "path": "test_site_cart_message_hf56.py",
+      "size": 23154,
+      "sha256": "898457fcd6d8b553d4d5b2c9cf4b0936bf912f7cb6d61532980fcc742221676a"
     },
     {
       "path": "test_site_cart_personalizations_hf55.py",
-      "size": 26023,
-      "sha256": "7cbb22f92a5183d5f865931535b6fa0af10c4b158dd00c1f9eaf846826edfad0"
+      "size": 28608,
+      "sha256": "f35ca9beb0aa3d05ea7b5e28da3e9658acbbbd1f91b71c645bddd0f1766fa68a"
     },
     {
       "path": "test_site_integrity_hf53.py",
@@ -2848,8 +2923,8 @@
     },
     {
       "path": "update_hygiene.py",
-      "size": 15932,
-      "sha256": "23485b30aa466526a88a42201eba3adc8a11a2c3748d55cdeb6b61bd653600ff"
+      "size": 16005,
+      "sha256": "28aea55d991a7c047fd1f8089a2187f841f8895956cdbec410fce6bc4905b169"
     },
     {
       "path": "update_safe_ui.py",

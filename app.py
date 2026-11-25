@@ -330,6 +330,7 @@ from pedido_resumo import resumo_produtos_pedido
 import manager_workflow_hf53 as _workflow_hf53
 from site_quote_import_ui import renderizar_importacao as _hf54_renderizar_importacao
 import proposal_duplicate_ui_hf55 as _duplicidades_hf55
+import proposal_review_ui_hf56 as _revisao_hf56
 from manager_operational_planning_hf53 import (
     montar_planejamentos as _hf53_montar_planejamentos,
     renderizar_planejamentos as _hf53_renderizar_planejamentos,
@@ -4434,12 +4435,11 @@ def renderizar_auditoria_resultados(historico, resultados=None):
 
 
 def atualizar_proposta(numero_original, dados_atualizados):
-    historico = carregar_historico()
+    historico = carregar_historico(force_refresh=True)
     for indice, proposta in enumerate(historico):
         if proposta.get("numero_proposta") == numero_original:
             historico[indice] = dados_atualizados
-            salvar_historico_completo(historico)
-            return True
+            return bool(salvar_historico_completo(historico))
     return False
 
 
@@ -4700,7 +4700,7 @@ def _hf55_rascunho_para_conferencia(*, nome, documento, whatsapp, evento, itens,
         "evento": str(evento or "").strip(),
         "itens": copy.deepcopy(itens),
         "briefing_origem": str(estado.get("anna_modal_observacoes" if anna else "form_observacoes") or ""),
-        "data_entrega": entrega.strftime("%d/%m/%Y"),
+        "data_entrega": entrega.strftime("%d/%m/%Y") if hasattr(entrega, "strftime") else str(entrega or ""),
         "subtotal": subtotal,
         "desconto": desconto,
         "valor_total": total,
@@ -4745,6 +4745,32 @@ def _hf55_validar_conferencia(proposta, *, anna=False, numero_original=""):
     return _duplicidades_hf55.validar_salvamento(
         st, proposta, prefixo="hf55_anna" if anna else "hf55_jorge",
         carregar_historico=_hf55_carregar_historico_conferencia, hoje=hoje_local(),
+    )
+
+
+def _hf56_rascunho_para_revisao(proposta, *, anna=False, numero_original=""):
+    """Inclui contexto do item pendente sem alterar a proposta nem gravar dados."""
+    rascunho = copy.deepcopy(proposta)
+    rascunho["_item_em_preenchimento"] = _workflow_hf53.item_em_preenchimento(st.session_state, anna=anna)
+    rascunho["_numero_em_edicao"] = str(numero_original or "")
+    return rascunho
+
+
+def _hf56_renderizar_revisao(proposta, *, anna=False, numero_original=""):
+    rascunho = _hf56_rascunho_para_revisao(proposta, anna=anna, numero_original=numero_original)
+    return _revisao_hf56.renderizar_revisao(
+        st, rascunho, prefixo="hf56_anna" if anna else "hf56_jorge",
+        hoje=hoje_local(), em_edicao=bool(numero_original),
+        item_pendente=bool(rascunho["_item_em_preenchimento"]),
+    )
+
+
+def _hf56_validar_revisao(proposta, *, anna=False, numero_original=""):
+    rascunho = _hf56_rascunho_para_revisao(proposta, anna=anna, numero_original=numero_original)
+    return _revisao_hf56.validar_salvamento(
+        st, rascunho, prefixo="hf56_anna" if anna else "hf56_jorge",
+        hoje=hoje_local(), em_edicao=bool(numero_original),
+        item_pendente=bool(rascunho["_item_em_preenchimento"]),
     )
 
 
@@ -19095,11 +19121,16 @@ def dialog_orcamento_anna(proposta=None):
             taxa_entrega=taxa_entrega, validade=validade, subtotal=subtotal,
             total=total, cliente_selecionado=cliente_selecionado_hf6, anna=True,
         )
-        _hf55_renderizar_conferencia(rascunho_hf55, anna=True, numero_original=numero_original)
+        revisao_hf56 = _hf56_renderizar_revisao(rascunho_hf55, anna=True, numero_original=numero_original)
+        if revisao_hf56.get("pode_salvar"):
+            _hf55_renderizar_conferencia(rascunho_hf55, anna=True, numero_original=numero_original)
         salvar_rotulo = "💾 SALVAR ALTERAÇÕES" if numero_original else "🚀 SALVAR PROPOSTA"
         if st.button(salvar_rotulo, type="primary", width="stretch", key="anna_modal_salvar_orcamento", disabled=editando_item_hf53):
             if not nome.strip():
                 st.error("Informe o nome do cliente.")
+                return
+            if not _hf56_validar_revisao(rascunho_hf55, anna=True, numero_original=numero_original):
+                st.rerun(scope="fragment")
                 return
             if not _hf55_validar_conferencia(rascunho_hf55, anna=True, numero_original=numero_original):
                 st.rerun(scope="fragment")
@@ -19144,6 +19175,7 @@ def dialog_orcamento_anna(proposta=None):
             }
             ok_salvar, retorno_salvar = _anna_salvar_proposta(dados, numero_original)
             if ok_salvar:
+                _revisao_hf56.limpar_revisao(st.session_state, "hf56_anna")
                 _duplicidades_hf55.limpar_conferencia(st.session_state, "hf55_anna")
                 if not numero_original:
                     _hf53_vincular_proposta_origem_anna(dados, retorno_salvar)
@@ -31828,7 +31860,7 @@ if pagina_atual == "novo_orcamento":
         if frete == "Entrega":
             taxa_entrega = st.number_input("🚚 Taxa de Entrega (R$)", min_value=0.0, step=0.50, key="form_taxa_entrega")
 
-        subtotal = sum(valor_float(i['quantidade']) * valor_float(i['valor_unitario']) for i in st.session_state.temp_itens)
+        subtotal = sum(valor_float(i.get('quantidade')) * valor_float(i.get('valor_unitario')) for i in st.session_state.temp_itens)
         total = max(subtotal - desc, 0.0) + valor_float(taxa_entrega)
         r1, r2, r3, r4 = st.columns(4)
         r1.metric("Subtotal", f"R$ {subtotal:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
@@ -31842,9 +31874,14 @@ if pagina_atual == "novo_orcamento":
             taxa_entrega=taxa_entrega, validade=validade, subtotal=subtotal, total=total,
             cliente_selecionado=cliente_selecionado_hf6,
         )
-        _hf55_renderizar_conferencia(rascunho_hf55, numero_original=st.session_state.editar_numero)
+        revisao_hf56 = _hf56_renderizar_revisao(rascunho_hf55, numero_original=st.session_state.editar_numero)
+        if revisao_hf56.get("pode_salvar"):
+            _hf55_renderizar_conferencia(rascunho_hf55, numero_original=st.session_state.editar_numero)
         rotulo_salvar = "💾 SALVAR ALTERAÇÕES" if st.session_state.editar_numero else "🚀 SALVAR PROPOSTA"
         if st.button(rotulo_salvar, type="primary", disabled=editando_item_hf53):
+            if not _hf56_validar_revisao(rascunho_hf55, numero_original=st.session_state.editar_numero):
+                rerun_na_aba("novo_orcamento")
+                st.stop()
             if not _hf55_validar_conferencia(rascunho_hf55, numero_original=st.session_state.editar_numero):
                 rerun_na_aba("novo_orcamento")
                 st.stop()
@@ -31902,12 +31939,17 @@ if pagina_atual == "novo_orcamento":
 
             registrar_evento_proposta(dados, "Proposta atualizada" if st.session_state.editar_numero else "Proposta criada")
             if st.session_state.editar_numero:
-                atualizar_proposta(numero, dados)
+                ok_salvar_hf56 = atualizar_proposta(numero, dados)
             else:
                 h = carregar_historico(force_refresh=True)
                 h.insert(0, dados)
-                salvar_historico_completo(h)
+                ok_salvar_hf56 = salvar_historico_completo(h)
 
+            if not ok_salvar_hf56:
+                st.error("Não foi possível confirmar o salvamento da proposta. O rascunho foi mantido; confira a conexão e o Histórico antes de tentar novamente.")
+                st.stop()
+
+            _revisao_hf56.limpar_revisao(st.session_state, "hf56_jorge")
             _duplicidades_hf55.limpar_conferencia(st.session_state, "hf55_jorge")
             projeto_origem_id = st.session_state.pop("_projeto_origem_id", None) or dados.get("projeto_id")
             if projeto_origem_id:
