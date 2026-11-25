@@ -1,4 +1,4 @@
-# AlphaFest HF65.24.58 RC5 — demonstração isolada (Windows)
+# AlphaFest HF65.24.58 RC6 — demonstração isolada (Windows)
 
 **Somente homologação. Não instalar sobre o Manager em uso e não publicar no Streamlit Cloud.**
 

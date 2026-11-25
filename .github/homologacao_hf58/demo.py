@@ -1,4 +1,4 @@
-"""AlphaFest HF65.24.58 RC5 - demonstracao local, ficticia e isolada.
+"""AlphaFest HF65.24.58 RC6 - demonstracao local, ficticia e isolada.
 
 Usa a funcao real renderizar_caixa_projeto extraida de app.py, mas TODOS os
 acessos de projeto/arquivos sao substituidos por dados em memoria. Nao importa
@@ -38,12 +38,12 @@ def verificar_release():
         version = (ROOT / "VERSAO.txt").read_text(encoding="utf-8").strip()
         manifest = json.loads((ROOT / "UPDATE_MANIFEST.json").read_text(encoding="utf-8"))
     except (OSError, ValueError) as erro:
-        raise RuntimeError("Nao foi encontrado o pacote de homologacao RC5 completo.") from erro
+        raise RuntimeError("Nao foi encontrado o pacote de homologacao RC6 completo.") from erro
     if (not version.endswith("HF65.24.58")
             or manifest.get("version") != version
-            or manifest.get("release_candidate") != "RC5"
+            or manifest.get("release_candidate") != "RC6"
             or manifest.get("validation", {}).get("status") != "HOMOLOGACAO_PARCIAL"):
-        raise RuntimeError("Este demonstrador exige a branch/pacote HF65.24.58 RC5 de homologacao.")
+        raise RuntimeError("Este demonstrador exige a branch/pacote HF65.24.58 RC6 de homologacao.")
     return version
 
 
@@ -131,7 +131,7 @@ def main():
         st.error(str(erro))
         st.stop()
     iniciar()
-    st.title("AlphaFest | Homologacao HF65.24.58 RC5")
+    st.title("AlphaFest | Homologacao HF65.24.58 RC6")
     st.warning(
         "SIMULACAO ISOLADA: cliente, pedido, artes e gravacoes sao FICTICIOS. "
         "Os arquivos enviados ficam somente em memoria; nao ha conexao com banco "

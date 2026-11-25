@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Homologacao HF58 RC5: preflight fechado para um pacote RC4 exato.
+"""Homologacao HF58 RC6: preflight fechado para um pacote RC6 exato.
 
 Sem conexao ao banco, sem acesso a API, sem publicar e sem modificar dados.
 """
@@ -10,7 +10,7 @@ import sys
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parent
-EXPECTED_MANIFEST_SHA256 = '59d1d180559c7f47e93658139b5ae837d1162c9ad70a8867ed201e939747f87f'
+EXPECTED_MANIFEST_SHA256 = '4db28323cb4c4897bf6cbac7443912ed921a9e30a186a8a315411f16f45e46f4'
 EXPECTED_VERSION = '20.4.9-I8.13.5-HF53.3-HF8-HF65.24.58'
 
 
@@ -38,14 +38,14 @@ def check():
             fail(f'Arquivo sensivel detectado: {p.relative_to(ROOT)}')
     manifest_path = ROOT / 'UPDATE_MANIFEST.json'
     if not manifest_path.is_file():
-        fail('Manifesto RC5 nao encontrado.')
+        fail('Manifesto RC6 nao encontrado.')
     blob = manifest_path.read_bytes()
     if hashlib.sha256(blob).hexdigest() != EXPECTED_MANIFEST_SHA256:
-        fail('O manifesto RC5 foi alterado; use o pacote original.')
+        fail('O manifesto RC6 foi alterado; use o pacote original.')
     manifest = json.loads(blob)
     files = manifest.get('files') or []
-    if manifest.get('release_candidate') != 'RC5':
-        fail('O manifesto precisa identificar a release candidate RC5.')
+    if manifest.get('release_candidate') != 'RC6':
+        fail('O manifesto precisa identificar a release candidate RC6.')
     if manifest.get('version') != EXPECTED_VERSION:
         fail('Versao incorreta no manifesto.')
     if manifest.get('validation', {}).get('status') != 'HOMOLOGACAO_PARCIAL':
@@ -54,7 +54,7 @@ def check():
         fail('Quantidade de arquivos do pacote RC4 alterada.')
     if any((ROOT / f).read_text(encoding='utf-8').strip() != EXPECTED_VERSION
            for f in ('VERSAO', 'VERSAO.txt')):
-        fail('VERSAO e VERSAO.txt precisam indicar RC5.')
+        fail('VERSAO e VERSAO.txt precisam indicar RC6.')
     seen=set()
     for item in files:
         rel=str(item.get('path') or '')
@@ -64,13 +64,13 @@ def check():
         seen.add(rel)
         f=ROOT.joinpath(*pure.parts)
         if not f.is_file():
-            fail('Arquivo do RC5 ausente: '+rel)
+            fail('Arquivo do RC6 ausente: '+rel)
         if f.stat().st_size != item.get('size'):
             fail('Arquivo com tamanho divergente: '+rel)
         hash_arquivo=hashlib.sha256(f.read_bytes()).hexdigest()
         if hash_arquivo != item.get('sha256'):
             fail('Arquivo foi alterado: '+rel)
-    print(f'PREFLIGHT APROVADO - {len(files)} arquivos RC5 conferidos contra hashes SHA-256.', flush=True)
+    print(f'PREFLIGHT APROVADO - {len(files)} arquivos RC6 conferidos contra hashes SHA-256.', flush=True)
     print('Confirmada branch de homologacao quando no GitHub Actions; dados sensiveis basicos ausentes.', flush=True)
     print('Status do pacote permanece HOMOLOGACAO_PARCIAL; nenhuma instalacao autorizada.', flush=True)
     return 0

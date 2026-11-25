@@ -19,8 +19,8 @@ if os.environ.get('GITHUB_ACTIONS') == 'true' and os.environ.get('GITHUB_REF') !
 
 version = (ROOT / 'VERSAO.txt').read_text(encoding='utf-8').strip()
 manifest = json.loads((ROOT / 'UPDATE_MANIFEST.json').read_text(encoding='utf-8'))
-if not version.endswith('HF65.24.58') or manifest.get('version') != version or (manifest.get('validation', {}).get('status') != 'HOMOLOGACAO_PARCIAL' or manifest.get('release_candidate') != 'RC5'):
-    sys.exit('BLOQUEADO: expected RC5 com status HOMOLOGACAO_PARCIAL.')
+if not version.endswith('HF65.24.58') or manifest.get('version') != version or (manifest.get('validation', {}).get('status') != 'HOMOLOGACAO_PARCIAL' or manifest.get('release_candidate') != 'RC6'):
+    sys.exit('BLOQUEADO: expected RC6 com status HOMOLOGACAO_PARCIAL.')
 
 keys = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SERVICE_KEY', 'SUPABASE_ANON_KEY', 'SUPABASE_KEY']
 if os.environ.get('GITHUB_ACTIONS') == 'true' and any(os.environ.get(k) for k in keys):

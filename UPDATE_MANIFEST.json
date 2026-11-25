@@ -8,13 +8,14 @@
   "validation": {
     "status": "HOMOLOGACAO_PARCIAL",
     "problems": [
-      "RC4 reprovada na primeira regressao real (509 testes, 4 erros); RC5 contem correcoes com nova rodada pendente.",
-      "Homologacao dos fluxos de Jorge e Anna em ambiente isolado ainda pendente. Nao instalar em producao."
+      "HF65.24.58 RC6: aguarda execucao remota da regressao e gate critico com as mudancas de upload.",
+      "A transicao revisao_pendente ainda requer evidencia visual manual; upload real em Supabase de homologacao permanece nao testado."
     ],
     "warnings": [
       "RC4 exclusivamente para testes isolados e com dados ficticios.",
       "Aprovacao manual exige prova de cliente e conferencia operacional.",
-      "RC5: corregiu o f-string JSON-LD Python 3.11 e o botao Fechar revisao; teste remoto deve certificar."
+      "RC5: corregiu o f-string JSON-LD Python 3.11 e o botao Fechar revisao; teste remoto deve certificar.",
+      "RC6: quando Supabase esta configurado, falha de upload nao deve aparentar sucesso via arquivo local efemero."
     ],
     "critical_python_compile": {
       "status": "OK",
@@ -44,11 +45,20 @@
       "status": "REPROVADO"
     },
     "ci_rc5": {
+      "status": "APROVADO",
+      "run_id": 45682643988,
+      "unittest": 525,
+      "critical": 518,
+      "critical_files": 36,
+      "skipped": 0,
+      "failures": 0
+    },
+    "ci_rc6": {
       "status": "PENDENTE"
     }
   },
   "file_count": 522,
-  "uncompressed_bytes": 40022027,
+  "uncompressed_bytes": 40022346,
   "files": [
     {
       "path": ".gitignore",
@@ -1887,8 +1897,8 @@
     },
     {
       "path": "cloud_db.py",
-      "size": 40179,
-      "sha256": "b6d7d08863b2ca277c714e2968cfd0c9ad1ac6a4ff022c7d0079bf9d330e815a"
+      "size": 40498,
+      "sha256": "5dd94988213012dcca72b775620eb99c0cad9da4756ecc03f4f3dd36ebd3a978"
     },
     {
       "path": "compras_runtime_index_service.py",
@@ -2661,5 +2671,5 @@
       "sha256": "e5fbbf4a5f09892b6dbc5314463ca4a35428401da921a874f5e4e70803b60059"
     }
   ],
-  "release_candidate": "RC5"
+  "release_candidate": "RC6"
 }

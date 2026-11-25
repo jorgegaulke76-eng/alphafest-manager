@@ -4,7 +4,7 @@ pushd "%~dp0..\.."
 if errorlevel 1 goto erro_pasta
 echo.
 echo ================================================
-echo ALPHAFEST HF65.24.58 RC5 - HOMOLOGACAO ISOLADA
+echo ALPHAFEST HF65.24.58 RC6 - HOMOLOGACAO ISOLADA
 echo Somente dados ficticios - sem banco de producao
 echo ================================================
 echo.
