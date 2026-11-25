@@ -86,3 +86,28 @@ jobs:
           path: qa_logs/
           if-no-files-found: warn
           retention-days: 14
+
+  validar_inicializador_windows:
+    if: github.ref == 'refs/heads/homologacao-hf58'
+    runs-on: windows-2025
+    timeout-minutes: 30
+    env:
+      GITHUB_ACTIONS: 'true'
+      ALPHAFEST_CI_HOMOLOGACAO: '1'
+      SUPABASE_URL: ''
+      SUPABASE_KEY: ''
+      SUPABASE_ANON_KEY: ''
+      SUPABASE_SERVICE_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+    steps:
+      - name: Checkout isolado somente leitura
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Preparar Python 3.11 no Windows
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Verificar inicializador e criar ambiente isolado
+        shell: cmd
+        run: call .github\homologacao_hf58\INICIAR_DEMO_WINDOWS.bat --verificar

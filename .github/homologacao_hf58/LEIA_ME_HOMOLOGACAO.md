@@ -5,15 +5,18 @@
 ## Abrir sem modificar produção
 
 1. No GitHub, escolha a branch **homologacao-hf58** e utilize **Code → Download ZIP**.
-2. Extraia o ZIP em uma **pasta nova**, fora da pasta atual de GitHub Desktop que publica o Manager.
-3. Tenha Python 3.11 e Streamlit instalados nessa pasta/ambiente separado. Para preparar:
-   ```bat
-   py -3.11 -m venv .venv_hf58_demo
-   .venv_hf58_demo\Scripts\python.exe -m pip install -r requirements.txt
-   .venv_hf58_demo\Scripts\python.exe -m streamlit run .github\homologacao_hf58\demo.py --server.address 127.0.0.1 --server.port 8502
-   ```
-   Alternativamente, com o Streamlit instalado no Python 3.11, execute `INICIAR_DEMO_WINDOWS.bat`.
-4. Acesse **http://127.0.0.1:8502** no navegador do próprio computador.
+2. Extraia o ZIP inteiro em uma **pasta nova**, fora da pasta atual de GitHub Desktop que publica o Manager.
+3. Abra `.github → homologacao_hf58 → INICIAR_DEMO_WINDOWS.bat` com duplo clique.
+4. O inicializador procura **Python 3.11** (aceita 3.12 ou 3.13), cria automaticamente a pasta **`.venv_hf58_demo`**, instala **Streamlit somente nela**, e inicia a demonstração local em **http://127.0.0.1:8502**.
+5. Na primeira execução, o computador precisa de internet para instalar Streamlit. Nas seguintes, reutiliza o mesmo ambiente. Se Python não estiver instalado, o inicializador indicará a página oficial para instalação.
+
+**Não é necessário executar comandos de pip manualmente.** O programa não instala pacotes no Python do Manager em produção.
+
+Opcional, para verificar sem iniciar a interface:
+
+```bat
+.github\homologacao_hf58\INICIAR_DEMO_WINDOWS.bat --verificar
+```
 
 ## Conferir os fluxos
 
