@@ -31,7 +31,7 @@ jobs:
       PIP_DISABLE_PIP_VERSION_CHECK: '1'
     steps:
       - name: Checkout somente leitura da branch isolada
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -39,7 +39,7 @@ jobs:
         run: mkdir -p qa_logs
 
       - name: Python 3.11 com pip
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: pip
@@ -80,7 +80,7 @@ jobs:
 
       - name: Publicar evidencias de homologacao
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: AlphaFest-HF58-RC5-evidencias-${{ github.run_number }}
           path: qa_logs/
