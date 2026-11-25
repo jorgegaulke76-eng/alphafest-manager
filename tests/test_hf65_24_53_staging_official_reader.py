@@ -17,11 +17,11 @@ class Response:
 
 def demo_documents():
     return {
-        "historico_orcamentos": [
+        "historico_orcamentos": {"itens": [
             {"numero_proposta": "EX-P1", "atendimento_id": "EX-A1",
              "pago": True, "valor_total": "79,90",
              "cliente_nome": "NAO_PUBLICAR", "telefone": "11912345678"},
-        ],
+        ]},
         "atendimentos_db": {"config": {"api_key": "SEGREDO"},
                             "itens": [{"id": "EX-A1", "etapa_captacao": "Venda fechada",
                                       "mensagem": "CONVERSA_PRIVADA"}]},
@@ -99,3 +99,17 @@ def test_http_failure_never_returns_cached_or_local_documents():
     with pytest.raises(PrivateStoreDenied):
         read_sanitized_staging_official_snapshots(get=offline, base_url=URL, headers=HEADERS)
     assert calls == [1]
+
+
+def test_staging_json_object_contract_rejects_legacy_root_array_or_extra_fields():
+    original = demo_documents()
+    for invalid in (
+        original["historico_orcamentos"]["itens"],
+        {"itens": original["historico_orcamentos"]["itens"], "unrecognized": True},
+        {"itens": "not-a-list"},
+    ):
+        docs = dict(original, historico_orcamentos=invalid)
+        with pytest.raises(PrivateStoreDenied):
+            read_sanitized_staging_official_snapshots(
+                get=fake_get_for(docs, []), base_url=URL, headers=HEADERS,
+            )
