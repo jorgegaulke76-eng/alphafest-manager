@@ -122,7 +122,7 @@ def test_acl_changed_midflight_blocks_second_access_before_snapshots():
     original_get = cloud._SESSION.get
     def revoke_acl(*args, **kwargs):
         response = original_get(*args, **kwargs)
-        policy.grants[principal.subject].clear()
+        policy.grants.pop(principal.subject)
         return response
     cloud._SESSION.get = revoke_acl
     calls = []
