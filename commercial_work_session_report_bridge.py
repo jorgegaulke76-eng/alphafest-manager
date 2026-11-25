@@ -37,10 +37,28 @@ def build_work_session_commercial_report(
     except Exception:
         raise PrivateStoreDenied("Acesso privado indisponivel.") from None
 
-    # O gateway executa tambem a ACL antes de ler o documento remoto e
-    # apenas depois solicita as snapshots oficiais. Nenhum fallback local.
-    return build_authorized_commercial_report(
+    def recheck_session() -> None:
+        # As leituras remotas não são atômicas. Uma revogação entre o
+        # diário de atribuições e os snapshots não pode herdar a decisão
+        # de acesso anterior; exigir nova consulta remota e a mesma identidade.
+        current = authorized_work_session(
+            st, policy=policy, action=READ, get=get_session,
+        )
+        if current != principal:
+            raise PrivateStoreDenied(
+                "Sessão revogada ou permissão alterada durante a leitura."
+            )
+
+    def guarded_snapshots():
+        recheck_session()
+        return load_official_snapshots()
+
+    # O gateway consulta o diário privado com ACL e, depois, o snapshot
+    # guardado. Conferir uma última vez antes de devolver qualquer agregado.
+    report = build_authorized_commercial_report(
         session=None, authenticate=lambda _session: principal,
         authorize=policy.permitted, cloud=cloud,
-        load_official_snapshots=load_official_snapshots,
+        load_official_snapshots=guarded_snapshots,
     )
+    recheck_session()
+    return report
