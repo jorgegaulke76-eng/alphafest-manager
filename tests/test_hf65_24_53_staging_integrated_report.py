@@ -50,7 +50,10 @@ def prepared():
     st.secrets["HF53_COMMERCIAL_ACL_ENABLED"] = True
     st.secrets["HF53_COMMERCIAL_READ_SUBJECTS"] = [principal.subject]
     st.secrets["HF65_24_53_PRIVATE_REPORT_ENABLED"] = True
-    return st, sessions, Http(sessions), Cloud([EVENT])
+    cloud = Cloud([EVENT])
+    cloud._config = lambda: ("https://hvaptsdhaxrdxgqqpicu.supabase.co", "sb_secret_fake_backend_only")
+    cloud._headers = lambda: {"apikey": "sb_secret_fake_backend_only"}
+    return st, sessions, Http(sessions), cloud
 
 
 def test_full_integrated_report_reads_only_after_acl_and_live_session():
@@ -92,3 +95,23 @@ def test_missing_official_document_fails_not_replaced_with_local_file():
     assert http.snapshot_calls == [
         "eq.historico_orcamentos", "eq.atendimentos_db",
     ]
+
+
+@pytest.mark.parametrize("mismatch", ["production_host", "different_key", "injected_host"])
+def test_private_attribution_store_must_match_staging_project_and_key(mismatch):
+    st, sessions, http, cloud = prepared()
+    if mismatch == "production_host":
+        cloud._config = lambda: ("https://guejrwlblcxptzlobhit.supabase.co", "private")
+    elif mismatch == "different_key":
+        cloud._headers = lambda: {"apikey": "sb_secret_other_project"}
+    else:
+        cloud._config = lambda: (
+            "https://hvaptsdhaxrdxgqqpicu.supabase.co.attacker.invalid",
+            "private",
+        )
+    before = list(sessions.calls)
+    with pytest.raises(PrivateStoreDenied):
+        build_integrated_staging_commercial_report(st=st, cloud=cloud, http=http)
+    assert sessions.calls == before
+    assert cloud.calls == 0
+    assert http.snapshot_calls == []
