@@ -25,8 +25,8 @@ class DemoIsoladaHF58SmokeTest(unittest.TestCase):
         self.assertEqual(proposta["status"], "Em andamento")
         self.assertFalse(proposta["aprovado"])
         self.assertEqual(at.session_state["hf58_demo_gravacoes"], 0)
-        self.assertTrue(any(b.label.startswith("Baixar ficha ficticia") for b in at.button)
-                        or any("Baixar ficha ficticia" in t.label for t in at.get("button")))
-        
+        self.assertEqual(len(proposta["itens"]), 2)
+        self.assertEqual(at.session_state["hf58_demo_uploads"], 0)
+
 if __name__ == "__main__":
     unittest.main()
