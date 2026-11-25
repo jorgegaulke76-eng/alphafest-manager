@@ -45,6 +45,7 @@ REQUIRED_RUNTIME_FILES = {
     "proposal_review_ui_hf56.py",
     "proposal_draft_service_hf57.py",
     "proposal_draft_ui_hf57.py",
+    "ficha_producao_hf58.py",
     "manager_workflow_hf53.py",
     "manager_operational_planning_hf53.py",
     "compras_runtime_index_service.py",

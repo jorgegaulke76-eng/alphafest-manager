@@ -12096,7 +12096,7 @@ def atualizar_projeto(projeto_atualizado):
             break
     if not encontrado:
         projetos.insert(0, projeto_atualizado)
-    salvar_projetos(projetos)
+    return salvar_projetos(projetos)
 
 
 def texto_busca_projeto(projeto):
@@ -12483,6 +12483,8 @@ def dialog_projeto_personalizado_hf53():
     renderizar_assistente_projeto_personalizado()
 
 
+from ficha_producao_hf58 import artes as _hf58_artes, situacao_arte as _hf58_situacao_arte, registrar_aprovacao as _hf58_registrar_aprovacao, ficha_producao_txt as _hf58_ficha_producao_txt
+
 def renderizar_caixa_projeto(proposta, prefixo="historico"):
     """Caixa do Projeto: arquivos, observações e reutilização ligados ao pedido."""
     projeto, _ = obter_ou_criar_projeto(proposta)
@@ -12573,6 +12575,43 @@ def renderizar_caixa_projeto(proposta, prefixo="historico"):
                 st.rerun()
     else:
         st.info("Nenhum arquivo vinculado a este projeto ainda.")
+
+
+    st.markdown("#### 🎨 Versão da arte e ficha de produção")
+    status_arte, ultima_aprovada = _hf58_situacao_arte(projeto)
+    mensagens = {"aprovada": "Arte mais recente com confirmação registrada.",
+                 "revisao_pendente": "Há uma arte posterior ou o arquivo aprovado foi arquivado. Confirme a versão correta antes de produzir.",
+                 "sem_aprovacao": "Há artes cadastradas, mas nenhuma confirmação registrada.",
+                 "sem_arte": "Nenhuma arte ativa cadastrada neste projeto."}
+    st.caption(mensagens[status_arte] + " A aprovação comercial no Histórico permanece independente.")
+    if status_arte == "aprovada" and ultima_aprovada:
+        registro = projeto.get("aprovacao_arte_hf58") or {}
+        st.success(f"Arquivo: {ultima_aprovada.get('nome', '')} | Confirmado por: {registro.get('responsavel', '')} | {registro.get('registrado_em', '')}")
+    lista_artes = _hf58_artes(projeto)
+    if lista_artes:
+        recente = lista_artes[-1]
+        st.write("**Arte mais recente:** " + str(recente.get("nome") or "Sem nome"))
+        responsavel_hf58 = st.text_input("Responsável pela conferência da arte", key=f"hf58_responsavel_{kbase}", max_chars=90)
+        conf_hf58 = st.checkbox("Conferi a confirmação do cliente para esta versão específica da arte", key=f"hf58_confirmacao_{kbase}")
+        if st.button("Registrar aprovação desta versão", key=f"hf58_aprovar_{kbase}", disabled=not conf_hf58):
+            try:
+                revisado = _hf58_registrar_aprovacao(projeto, recente["id"], responsavel_hf58, agora_local())
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                if atualizar_projeto(revisado):
+                    st.success("Confirmação registrada no projeto.")
+                    st.rerun()
+                else:
+                    st.error("Não foi possível salvar a confirmação. Nada foi aprovado.")
+    try:
+        conteudo_ficha = _hf58_ficha_producao_txt(proposta, projeto, agora_local())
+        numero_ficha = re.sub(r"[^A-Za-z0-9_-]", "_", str(proposta.get("numero_proposta") or "sem_numero"))[:55]
+        st.download_button("📋 Baixar ficha de produção (TXT)", conteudo_ficha,
+                           file_name=f"ALPHAFEST_FICHA_{numero_ficha}.txt", mime="text/plain",
+                           key=f"hf58_ficha_{kbase}")
+    except (ValueError, TypeError) as exc:
+        st.error(f"Não foi possível preparar a ficha: {exc}")
 
 
 def carregar_catalogo():

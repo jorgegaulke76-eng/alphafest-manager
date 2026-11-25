@@ -1,0 +1,11 @@
+ALPHAFEST MANAGER — HF65.24.58
+
+Instalação segura:
+1. Baixe o ponto de restauração pelo Manager atual.
+2. Extraia o pacote e copie o CONTEÚDO de alphafest-manager-main para a raiz do repositório atual (onde está app.py), preservando os dados/credenciais existentes.
+3. Confira as alterações, faça Commit e Push no GitHub Desktop, aguarde o Streamlit apresentar HF65.24.58.
+4. No Histórico, abra a Caixa do Projeto vinculada a uma proposta de teste. Envie uma arte na categoria Arte. Informe o responsável, confira a confirmação do cliente e registre a aprovação da versão mais recente.
+5. Baixe a ficha interna de produção (TXT). Verifique dois itens com personalizações diferentes, data e identificação da arte.
+6. Envie uma nova arte: o status deve passar a revisão pendente até nova confirmação.
+
+Atenção: o registro de aprovação é OPERACIONAL e manual. NÃO é prova automática de concordância do cliente. NÃO aprova comercialmente a proposta e NÃO libera automaticamente a produção. A ficha contém dados internos e não deve ser enviada ao público sem revisão. Não há migração de banco nem alteração do site público nesta versão.

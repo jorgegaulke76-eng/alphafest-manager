@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.57",
-  "generated_at_utc": "2026-11-25T14:35:22.918774+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.58",
+  "generated_at_utc": "2026-11-25T16:19:05.876515+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -17,15 +17,15 @@
       "files_ok": 54
     },
     "tests": {
-      "found_files": 42,
-      "executed_files": 35,
-      "approved_files": 35,
-      "executed_cases": 502,
-      "approved_cases": 502,
-      "execution_status": "APROVADO",
+      "found_files": 43,
+      "executed_files": 0,
+      "approved_files": 0,
+      "executed_cases": 0,
+      "approved_cases": 0,
+      "execution_status": "NAO_EXECUTADO",
       "inventory": {
-        "total_files": 42,
-        "portable_files": 41,
+        "total_files": 43,
+        "portable_files": 42,
         "current_release_files": 0,
         "historical_version_files": 1,
         "historical_examples": [
@@ -34,377 +34,11 @@
         "invalid_files": 0,
         "invalid_examples": []
       },
-      "execution": {
-        "status": "APROVADO",
-        "selected_files": 35,
-        "executed_files": 35,
-        "approved_files": 35,
-        "tests_run": 502,
-        "tests_passed": 502,
-        "failures": 0,
-        "errors": 0,
-        "skipped": 0,
-        "historical_files": [],
-        "source_fingerprint": "b6fa1ace372759c9d7ad873971ea83e967455f405dd920ce9f7967b8428c2814",
-        "source_unchanged": true,
-        "python_version": "3.12.14",
-        "results": [
-          {
-            "file": "test_proposal_draft_hf57.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 47,
-            "tests_passed": 47,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_proposal_draft_ui_hf57.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 26,
-            "tests_passed": 26,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_proposal_draft_integration_hf57.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 24,
-            "tests_passed": 24,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_proposal_review_hf56.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 47,
-            "tests_passed": 47,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_proposal_review_ui_hf56.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 22,
-            "tests_passed": 22,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_proposal_review_integration_hf56.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 22,
-            "tests_passed": 22,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_site_cart_message_hf56.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 21,
-            "tests_passed": 21,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_site_cart_personalizations_hf55.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 14,
-            "tests_passed": 14,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_proposal_duplicates_hf55.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 54,
-            "tests_passed": 54,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_proposal_duplicate_ui_hf55.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 22,
-            "tests_passed": 22,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_proposal_duplicate_integration_hf55.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 24,
-            "tests_passed": 24,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_proposal_duplicate_navigation_hf55.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 4,
-            "tests_passed": 4,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_site_quote_import_hf54.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 26,
-            "tests_passed": 26,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_site_quote_import_integration_hf54.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 20,
-            "tests_passed": 20,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_site_quote_import_ui_hf54.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 14,
-            "tests_passed": 14,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_manager_workflow_hf53.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 18,
-            "tests_passed": 18,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_manager_operational_planning_hf53.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 4,
-            "tests_passed": 4,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_planejamento_diario_hf49.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 3,
-            "tests_passed": 3,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_planejamento_semanal_hf48.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 2,
-            "tests_passed": 2,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_central_producao_painel_hf41.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 4,
-            "tests_passed": 4,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_site_integrity_hf53.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 15,
-            "tests_passed": 15,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_site_cart_hf53.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 6,
-            "tests_passed": 6,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_site_search_hf53.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 4,
-            "tests_passed": 4,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_site_posts_hf53.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 7,
-            "tests_passed": 7,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_site_metrics_funnel_hf53.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 8,
-            "tests_passed": 8,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_release_diagnostics_hf53.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 8,
-            "tests_passed": 8,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_build_update_package_hf53.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 7,
-            "tests_passed": 7,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_site_vitrine_hf52.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 10,
-            "tests_passed": 10,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_site_release_cache_hf52.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 3,
-            "tests_passed": 3,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_update_package_hf52.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 1,
-            "tests_passed": 1,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_pwa_hf652414.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 1,
-            "tests_passed": 1,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_posts_hf652417.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 3,
-            "tests_passed": 3,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_posts_hf652418.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 2,
-            "tests_passed": 2,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_roteiro_producao_hf51.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 6,
-            "tests_passed": 6,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          },
-          {
-            "file": "test_hf652438_sob_encomenda.py",
-            "executed": true,
-            "status": "APROVADO",
-            "tests_run": 3,
-            "tests_passed": 3,
-            "failures": 0,
-            "errors": 0,
-            "skipped": 0
-          }
-        ]
-      }
+      "execution": {}
     }
   },
-  "file_count": 517,
-  "uncompressed_bytes": 40002413,
+  "file_count": 520,
+  "uncompressed_bytes": 40002935,
   "files": [
     {
       "path": ".gitignore",
@@ -492,6 +126,11 @@
       "sha256": "cf36d9a3fac91cd6771b7ec4b6baab3add8ea26d3252e8e6e2db75ce6b93d5c8"
     },
     {
+      "path": "LEIA_ME_HF65.24.58.txt",
+      "size": 1186,
+      "sha256": "1a38ebc9f3063939f14c221c950b6896d4713d0efe3385251a7d37f0814722ed"
+    },
+    {
       "path": "LEIA_ME_HF65_24_13.txt",
       "size": 316,
       "sha256": "e84e91049e3e5b0ba5327714a4b145b384477d88e5b2508e209d9d4783f11f21"
@@ -523,8 +162,8 @@
     },
     {
       "path": "RELEASE_INFO.json",
-      "size": 340,
-      "sha256": "031398097a6018147f5108c949ee5a7314adcb5f6cffc9a3f6fa68a6955463fc"
+      "size": 295,
+      "sha256": "2381954c3bccac38b4fca960364dd1c9ce6db38936dfd6197a002e70aab4b291"
     },
     {
       "path": "ROADMAP.md",
@@ -557,11 +196,6 @@
       "sha256": "a1dda15cd8e71853bd653cdf3cadc7e1e721ec56bf910051cfed5ccf6093cced"
     },
     {
-      "path": "UPDATE_INFO_HF65.24.57.md",
-      "size": 12082,
-      "sha256": "3e599a06eca4b7d408aa7062ab00f3dd7a8125f56d6186aeec717ee1aa3f81cd"
-    },
-    {
       "path": "VALIDACAO_HF65.24.52.md",
       "size": 3994,
       "sha256": "3a7d565c4899bf79b6b733fdf6859f1ad6ef2f8be83ea2fc58f1ee3338712521"
@@ -592,14 +226,19 @@
       "sha256": "b8daa9bc7df6da3fd68258c1c3188290ce07aef14e0317db2b75be06a06f27b5"
     },
     {
+      "path": "VALIDACAO_HF65.24.58.md",
+      "size": 1073,
+      "sha256": "c50b8acc62e433e4f41e9faa948a095faa61a750acc3c2cdb45845ebf1c2f681"
+    },
+    {
       "path": "VERSAO",
       "size": 37,
-      "sha256": "3b9a93b58d00c5317b95cdf21662977b07b7c83e830fdacf2e9516cf1277c743"
+      "sha256": "7a77d8f517a1d79c740c06be10388d9eb0c454ca0914e19d3200dbf40394e7c5"
     },
     {
       "path": "VERSAO.txt",
       "size": 37,
-      "sha256": "3b9a93b58d00c5317b95cdf21662977b07b7c83e830fdacf2e9516cf1277c743"
+      "sha256": "7a77d8f517a1d79c740c06be10388d9eb0c454ca0914e19d3200dbf40394e7c5"
     },
     {
       "path": "__init__.py",
@@ -673,8 +312,8 @@
     },
     {
       "path": "app.py",
-      "size": 2181873,
-      "sha256": "7038c4f27851e42e4ada80ba09d5178e26c3d8b5c424b87cc1bf4d45c4df409a"
+      "size": 2184573,
+      "sha256": "f200491851c9672700b370f29e523dc28b26913cafc8015c14080fb2e6ff3f34"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",
@@ -2168,8 +1807,8 @@
     },
     {
       "path": "build_update_package.py",
-      "size": 10084,
-      "sha256": "ed458800a420acb238ad4fbbd055597ee6de8fff9d9e3e66b98e8146809c59da"
+      "size": 10119,
+      "sha256": "5bed1c27ddfb6979d59827ca1c2fff154097c9c3d9ea8660bc3ac5ee7abcb728"
     },
     {
       "path": "catalogo_diagnostics_service.py",
@@ -2295,6 +1934,11 @@
       "path": "executive_center.py",
       "size": 3381,
       "sha256": "49d4099153ca1fa038845ff0f49f9a222280f4bf39796fa512e1c8fdbd4ade97"
+    },
+    {
+      "path": "ficha_producao_hf58.py",
+      "size": 5030,
+      "sha256": "1f9a3d81afc628abfd96c6ec3d277c17fde85a5745e183555e85c69131390d44"
     },
     {
       "path": "finance_runtime_index_service.py",
@@ -2752,6 +2396,11 @@
       "sha256": "0538b20c282b59d2550865ac885224fb00af5b5fdd225ae77eb5830c26fda57c"
     },
     {
+      "path": "test_ficha_producao_hf58.py",
+      "size": 2595,
+      "sha256": "2689afe972b0e336dd9f93d9e901d2ada2b91afd090d11f57a38f39285703053"
+    },
+    {
       "path": "test_hf652438_sob_encomenda.py",
       "size": 2429,
       "sha256": "ef2e147decc9fb9e03e75bc72d31360e16783e9d6ba16e7dff4cbb7729dd30e9"
@@ -2983,8 +2632,8 @@
     },
     {
       "path": "update_hygiene.py",
-      "size": 16076,
-      "sha256": "2cb9ffa605b1b85d3596bfc885b0b8eb7873790935676e6b894916fe7f0bce5b"
+      "size": 16106,
+      "sha256": "32a4e30f1bae27a237fada03ae7b083cecc1a2e7f17cd6fce6aacc947cda9f9a"
     },
     {
       "path": "update_safe_ui.py",
