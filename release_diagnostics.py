@@ -6,10 +6,12 @@ no build do ZIP e em CI/local.
 """
 from __future__ import annotations
 
+import ast
+import hashlib
 import json
 import py_compile
 import re
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Iterable
 
@@ -26,6 +28,14 @@ CRITICAL_PYTHON_FILES = (
     "marketing_template_engine.py",
     "marketing_anna_renderer_hf11.py",
     "site_metrics_service.py",
+    "site_integrity_service.py",
+    "manager_workflow_hf53.py",
+    "manager_operational_planning_hf53.py",
+    "site_carrinho_orcamento_service.py",
+    "site_vitrine_service.py",
+    "site_posts_service.py",
+    "site_posts_ui.py",
+    "site_metrics_dashboard_ui.py",
     "global_search_service.py",
     "update_safe_ui.py",
     "system_health_ui.py",
@@ -57,12 +67,11 @@ CRITICAL_PYTHON_FILES = (
     "risco_producao_engine.py",
 )
 
-# Versões do Manager aparecem em muitos formatos. O regex é propositalmente
-# restrito ao prefixo do produto para não classificar datas/números como release.
-_VERSION_RX = re.compile(r"20\.4\.9(?:-[A-Za-z0-9.]+)+")
-_VERSION_ASSERT_HINT_RX = re.compile(
-    r"(?:VERSAO(?:\.txt)?|APP_VERSION|vers[aã]o|version)", re.IGNORECASE
-)
+# HF65.24.53: reconhece também sufixos usados por asserts como endswith().
+# Só se classificam restrições sobre a versão lida do projeto. Versões em
+# comentários, fixtures e simulações de migração não tornam um teste histórico.
+_VERSION_RX = re.compile(r"(?:20\.4\.9(?:-[A-Za-z0-9.]+)+|HF\d+(?:\.\d+)+)")
+_VERSION_FILES = {"VERSAO", "VERSAO.txt", "RELEASE_INFO.json"}
 
 
 @dataclass
@@ -72,6 +81,8 @@ class TestInventory:
     current_release_files: int
     historical_version_files: int
     historical_examples: list[str]
+    invalid_files: int = 0
+    invalid_examples: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -100,10 +111,105 @@ def _read_current_version(root: Path) -> str:
 
 
 def _iter_test_files(root: Path) -> Iterable[Path]:
-    tests_dir = root / "tests"
-    if not tests_dir.is_dir():
-        return []
-    return sorted(p for p in tests_dir.rglob("test_*.py") if p.is_file())
+    candidates = list(root.glob("test_*.py"))
+    if (root / "tests").is_dir():
+        candidates.extend((root / "tests").rglob("test_*.py"))
+    seen: set[Path] = set()
+    result: list[Path] = []
+    for path in sorted(candidates, key=lambda p: p.relative_to(root).as_posix()):
+        resolved = path.resolve()
+        if path.is_file() and resolved.is_relative_to(root) and resolved not in seen:
+            seen.add(resolved)
+            result.append(path)
+    return result
+
+
+def _scope_nodes(scope: ast.AST) -> Iterable[ast.AST]:
+    """Percorre um escopo sem misturar variáveis de funções diferentes."""
+    for child in ast.iter_child_nodes(scope):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+            continue
+        yield child
+        yield from _scope_nodes(child)
+
+
+def _live_version_expression(node: ast.AST, names: set[str]) -> bool:
+    for child in ast.walk(node):
+        if isinstance(child, ast.Name) and (child.id in names or child.id == "APP_VERSION"):
+            return True
+        if isinstance(child, ast.Attribute) and child.attr == "APP_VERSION":
+            return True
+        if isinstance(child, ast.Constant) and isinstance(child.value, str) and child.value in _VERSION_FILES:
+            return True
+    return False
+
+
+def test_version_constraints(path: Path) -> set[str]:
+    """Extrai pins positivos da versão do projeto, sem executar o arquivo."""
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    module_names = {
+        alias.asname or alias.name
+        for node in tree.body if isinstance(node, ast.ImportFrom)
+        for alias in node.names if alias.name == "APP_VERSION"
+    }
+    constraints: set[str] = set()
+    scopes = [tree] + [node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    for scope in scopes:
+        nodes = list(_scope_nodes(scope))
+        names = set(module_names)
+        # Propaga aliases locais: p = root/'VERSAO.txt'; v = p.read_text().
+        while True:
+            before = set(names)
+            for node in nodes:
+                if isinstance(node, (ast.Assign, ast.AnnAssign)) and node.value is not None:
+                    if _live_version_expression(node.value, names):
+                        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                        names.update(n.id for target in targets for n in ast.walk(target) if isinstance(n, ast.Name))
+            if names == before:
+                break
+        for node in nodes:
+            expression = None
+            if isinstance(node, ast.Assert):
+                # Rejeitar uma versão antiga não prende o teste àquela versão.
+                if isinstance(node.test, ast.Compare) and all(isinstance(op, (ast.NotEq, ast.NotIn)) for op in node.test.ops):
+                    continue
+                expression = node.test
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                if node.func.attr in {"assertEqual", "assertIn", "assertTrue"}:
+                    expression = node
+            if expression is not None and _live_version_expression(expression, names):
+                for child in ast.walk(expression):
+                    if isinstance(child, ast.Constant) and isinstance(child.value, str):
+                        constraints.update(_VERSION_RX.findall(child.value))
+        if scope is tree:
+            module_names.update(names)
+    return constraints
+
+
+def classify_test_file(path: Path, current_version: str) -> str:
+    try:
+        constraints = test_version_constraints(path)
+    except (OSError, SyntaxError, UnicodeError):
+        return "invalid"
+    if not constraints:
+        return "portable"
+    if any(current_version == pin or current_version.endswith("-" + pin) for pin in constraints):
+        return "current_release"
+    return "historical_version"
+
+
+def release_source_fingerprint(root: str | Path) -> str:
+    """Assina fontes e versões usados pelo gate, sem ler bancos ou credenciais."""
+    root = Path(root).resolve()
+    paths = set(root.glob("*.py")) | set(_iter_test_files(root))
+    paths.update(root / name for name in ("VERSAO", "VERSAO.txt", "RELEASE_INFO.json"))
+    digest = hashlib.sha256()
+    for path in sorted(paths, key=lambda p: p.relative_to(root).as_posix()):
+        if path.is_file():
+            digest.update(path.relative_to(root).as_posix().encode("utf-8") + b"\0")
+            digest.update(path.read_bytes())
+            digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def scan_test_inventory(root: str | Path) -> TestInventory:
@@ -117,24 +223,23 @@ def scan_test_inventory(root: str | Path) -> TestInventory:
     """
     root = Path(root).resolve()
     current = _read_current_version(root)
-    portable = current_release = historical = 0
+    portable = current_release = historical = invalid = 0
     examples: list[str] = []
+    invalid_examples: list[str] = []
     files = list(_iter_test_files(root))
 
     for path in files:
-        try:
-            source = path.read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            portable += 1
-            continue
-        versions = set(_VERSION_RX.findall(source))
-        has_version_assert_hint = bool(_VERSION_ASSERT_HINT_RX.search(source))
-        if current and current in versions:
+        classification = classify_test_file(path, current)
+        if classification == "current_release":
             current_release += 1
-        elif versions and has_version_assert_hint:
+        elif classification == "historical_version":
             historical += 1
             if len(examples) < 8:
                 examples.append(path.relative_to(root).as_posix())
+        elif classification == "invalid":
+            invalid += 1
+            if len(invalid_examples) < 8:
+                invalid_examples.append(path.relative_to(root).as_posix())
         else:
             portable += 1
 
@@ -144,6 +249,8 @@ def scan_test_inventory(root: str | Path) -> TestInventory:
         current_release_files=current_release,
         historical_version_files=historical,
         historical_examples=examples,
+        invalid_files=invalid,
+        invalid_examples=invalid_examples,
     )
 
 
@@ -163,7 +270,7 @@ def _compile_critical_files(root: Path) -> tuple[list[str], list[str]]:
     return ok_files, errors
 
 
-def run_release_diagnostics(root: str | Path) -> ReleaseDiagnostics:
+def run_release_diagnostics(root: str | Path, *, test_execution: dict | None = None) -> ReleaseDiagnostics:
     root = Path(root).resolve()
     problems: list[str] = []
     warnings: list[str] = []
@@ -177,12 +284,25 @@ def run_release_diagnostics(root: str | Path) -> ReleaseDiagnostics:
     problems.extend(compile_errors)
 
     inventory = scan_test_inventory(root)
+    if inventory.invalid_files:
+        problems.append("Teste(s) ilegível(is) ou com sintaxe inválida: " + ", ".join(inventory.invalid_examples))
     if inventory.historical_version_files:
         warnings.append(
             f"{inventory.historical_version_files} arquivo(s) de teste dependem de versão histórica; "
             "eles são classificados como legado e não reprovam a release atual apenas pelo número antigo."
         )
 
+    execution = dict(test_execution or {})
+    if test_execution is not None:
+        if (execution.get("status") != "APROVADO"
+                or int(execution.get("executed_files", 0)) < 1
+                or execution.get("approved_files") != execution.get("executed_files")
+                or int(execution.get("tests_run", 0)) < 1
+                or execution.get("tests_passed") != execution.get("tests_run")
+                or any(execution.get(key, 0) for key in ("failures", "errors", "skipped"))):
+            problems.append("O conjunto crítico de testes não foi aprovado.")
+        if execution.get("source_fingerprint") != release_source_fingerprint(root):
+            problems.append("Os fontes ou metadados mudaram depois da execução dos testes críticos.")
     checks = {
         "runtime_integrity": "OK" if runtime.ok else "REPROVADO",
         "critical_python_compile": {
@@ -190,7 +310,16 @@ def run_release_diagnostics(root: str | Path) -> ReleaseDiagnostics:
             "files_checked": len(CRITICAL_PYTHON_FILES),
             "files_ok": len(compiled),
         },
-        "tests": inventory.to_dict(),
+        "tests": {
+            "found_files": inventory.total_files,
+            "executed_files": int(execution.get("executed_files", 0)),
+            "approved_files": int(execution.get("approved_files", 0)),
+            "executed_cases": int(execution.get("tests_run", 0)),
+            "approved_cases": int(execution.get("tests_passed", 0)),
+            "execution_status": execution.get("status", "NAO_EXECUTADO"),
+            "inventory": inventory.to_dict(),
+            "execution": execution,
+        },
     }
 
     return ReleaseDiagnostics(

@@ -56,9 +56,10 @@ def render_update_safe_tab(
         if release_diag.ok:
             st.success(
                 "Diagnóstico da release: OK • "
-                f"{tests.portable_files + tests.current_release_files} teste(s) atual(is)/portável(is) • "
+                f"{tests.total_files} arquivo(s) de teste encontrado(s) • "
                 f"{tests.historical_version_files} histórico(s) separado(s)."
             )
+            st.caption("Execução de testes não realizada neste diagnóstico. O empacotador oficial executa o conjunto crítico e registra os resultados no manifesto do ZIP.")
         else:
             st.error("Diagnóstico da release reprovado: " + " • ".join(release_diag.problems))
         for warning in release_diag.warnings:

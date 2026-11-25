@@ -1,21 +1,39 @@
-ALPHAFEST MANAGER — HF65.24.52 · SITE FINAL INTEGRADO
+ALPHAFEST MANAGER — HF65.24.53 · MELHORIAS OPERACIONAIS
 
-Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.24.52
-Base de instalação: Manager HF65.24.51_ROTEIROS_PRODUCAO.
+Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.24.53
+Base de integração: HF65.24.52, cujos ajustes da ficha móvel e dos links diretos estão incluídos.
 
-1. Prepare e baixe o ponto de restauração pelo recurso Atualização segura do Manager atual.
+INSTALAÇÃO DO MANAGER
+
+1. No Manager atual, abra Configurações > Núcleo Profissional > Atualização segura. Prepare a atualização segura e baixe o ponto de restauração.
 2. Extraia este ZIP em uma pasta temporária.
 3. Copie o CONTEÚDO da pasta alphafest-manager-main para a pasta do repositório existente que já contém app.py. Substitua os arquivos correspondentes, mantendo os dados e configurações locais. Não apague o repositório nem crie outra pasta alphafest-manager-main dentro dele.
 4. Faça Commit + Push pelo GitHub Desktop no repositório/branch do aplicativo atual.
-5. Aguarde o Streamlit atualizar e confira HF65.24.52 na interface.
-6. Abra Central do Site AlphaFest > Preparar / atualizar prévia do site.
-7. Confira Desktop e Celular e publique pelo botão Publicar site agora.
+5. Aguarde o Streamlit atualizar e confira HF65.24.53 na interface. Se necessário, reinicie pelo painel do Streamlit e abra a sessão novamente.
+6. Em um rascunho de orçamento, confira Editar item, Aplicar e Cancelar. Confira a proteção ao abrir outro trabalho e os planejamentos diário/semanal da Central da Anna.
 
-O pacote instala os ajustes da prévia validada nos geradores do Manager.
-O catálogo, a galeria e os demais conteúdos continuam vindo dos cadastros atuais.
-Não há SQL ou migração de dados novos.
+PUBLICAÇÃO DO SITE
 
-ESTE ZIP É DO MANAGER. Para Cloudflare, use o ZIP público gerado depois da atualização em Contingência / ZIP manual > Baixar ZIP de produção, ou o botão Publicar site agora.
+7. Abra Central do Site AlphaFest > Preparar / atualizar prévia do site.
+8. Confira Desktop e Celular, busca por tema, ficha do produto, itens do orçamento e Novidades/Ofertas.
+9. Marque a confirmação da prévia e clique em Publicar site agora. Se os dados salvos tiverem mudado, gere e confira uma nova prévia. Uma falha na conferência online interrompe a publicação.
+10. Abra o domínio habitual para conferir o resultado.
 
-Detalhes: UPDATE_INFO_HF65.24.52.md
-Validação: VALIDACAO_HF65.24.52.md
+ESTE ZIP ATUALIZA O MANAGER. O pacote público para Cloudflare é gerado pelo Manager atualizado, em Contingência / ZIP manual > Baixar ZIP de produção, ou publicado pelo botão Publicar site agora.
+
+PRINCIPAIS MELHORIAS
+
+- Orçamentos longos no site preservam a mensagem completa e oferecem copiar/colar no WhatsApp.
+- Busca por tema, recuperação sem resultados, paginação e validade das ofertas corrigidas.
+- Publicação vinculada aos dados conferidos na prévia; proteção para edições simultâneas dos conteúdos e recuperação de rascunhos.
+- Edição de itens no orçamento de Jorge e Anna, mantendo os detalhes e o preço combinado até uma alteração explícita.
+- Atalhos entre atendimento, projeto e orçamento com escolha ao encontrar um rascunho existente.
+- Planejamento diário e semanal na Central da Anna, com roteiro TXT e agenda CSV.
+- Métricas do caminho produto > WhatsApp e validação do pacote por testes efetivamente executados.
+
+Não há SQL novo nem migração de banco. DATA_VERSION permanece 5.
+O ZIP contém código e recursos; dados operacionais, credenciais e segredos locais são excluídos.
+Os rascunhos protegidos pertencem à sessão: baixe a recuperação antes de encerrar a sessão quando houver conflito editorial.
+
+Detalhes: UPDATE_INFO_HF65.24.53.md
+Testes, resultados e limites da verificação: VALIDACAO_HF65.24.53.md

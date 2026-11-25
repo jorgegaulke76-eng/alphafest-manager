@@ -8,12 +8,19 @@ import html
 import math
 import re
 import unicodedata
-from datetime import date
+from datetime import date, datetime, timezone
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 CATEGORIES = ['Natal', 'Black Friday', 'Brindes para empresas', 'Formaturas',
               'Balões', 'Festas e personalizados', 'Impressão 3D',
               'Gráfica rápida', 'Datas especiais', 'Outros']
+
+
+def _commercial_today(now=None):
+    """Data comercial de Itatiba, independente do fuso do servidor."""
+    moment = now if now is not None else datetime.now(timezone.utc)
+    return moment.astimezone(ZoneInfo('America/Sao_Paulo')).date()
 
 
 def normalize(posts):
@@ -42,7 +49,7 @@ def normalize(posts):
 
 
 def published(posts, today=None):
-    today = today or date.today()
+    today = today if today is not None else _commercial_today()
     visible = []
     for p in normalize(posts):
         if p['status'] != 'publicado' or not p['image_data_uri'].startswith('data:image/'):
@@ -74,7 +81,11 @@ def _card(p, number):
     # Título fica exclusivamente para organização interna e texto da mensagem.
     label = p['title'] or 'arte AlphaFest'
     url = safe(whatsapp(number, label))
-    return ('<article class="afposts-card">'
+    expiry = str(p.get('expires_at') or '')
+    # Um HTML guardado antes do vencimento não deve piscar uma oferta vencida
+    # antes da verificação no navegador. Ofertas sem prazo continuam autônomas.
+    validity = (' data-afpost-expires="' + safe(expiry) + '" hidden') if expiry else ''
+    return ('<article class="afposts-card"' + validity + '>'
             '<a class="afposts-img" href="' + url + '" target="_blank" rel="noopener noreferrer" aria-label="Pedir arte pelo WhatsApp">'
             '<img loading="lazy" decoding="async" src="' + safe(p['image_data_uri']) + '" alt="' + safe(label) + '"></a>'
             '<div class="afposts-info"><a class="afposts-cta" target="_blank" rel="noopener noreferrer" href="' + url + '">💬 Quero este</a></div>'
@@ -87,6 +98,7 @@ CSS = '''
 .afposts-head h2{color:#073d72;font-size:clamp(24px,3vw,34px);margin:7px 0}.afposts-head p{color:#526b81;margin:0}
 .afposts-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
 .afposts-card{background:#fff;border:1px solid #dceaf7;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px #143d5910;min-width:0}
+.afposts-card[hidden],.afposts-empty[hidden]{display:none!important}.afposts-empty{padding:20px;border:1px solid #c5dbea;border-radius:12px;background:#fff;color:#496780;line-height:1.6}
 .afposts-img{display:block;padding:10px;background:white;text-align:center}.afposts-img img{width:100%;height:auto;max-height:390px;object-fit:contain;display:block;margin:auto}
 .afposts-info{padding:0 12px 14px;text-align:center}.afposts-info span{font-size:11px;font-weight:800;color:#087ab8;text-transform:uppercase}
 .afposts-info h3{font-size:16px;margin:5px 0 9px;color:#103a60}.afposts-info p{font-size:13px;color:#567085;line-height:1.5}
@@ -95,6 +107,63 @@ CSS = '''
 @media(max-width:900px){.afposts-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:540px){.afposts-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.afposts-img img{max-height:250px}.afposts-info{padding:10px}.afposts-info h3{font-size:14px}.afposts-cta{font-size:11px;padding:9px}.afposts-section{padding:34px 0}}
 '''
+
+
+EXPIRY_JS = r'''
+(function(){
+  const scopes=[...document.querySelectorAll('[data-afposts-scope]')];
+  if(!scopes.length)return;
+  function commercialDay(){
+    try{
+      const parts=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+      const values={};parts.forEach(part=>values[part.type]=part.value);
+      return values.year+'-'+values.month+'-'+values.day;
+    }catch(e){return '';}
+  }
+  function active(card,day){
+    const expiry=card.dataset.afpostExpires||'';
+    return !expiry||Boolean(day&&/^\d{4}-\d{2}-\d{2}$/.test(expiry)&&expiry>=day);
+  }
+  function refresh(){
+    const day=commercialDay();
+    scopes.forEach(scope=>{
+      let visible=0;
+      scope.querySelectorAll('.afposts-card').forEach(card=>{card.hidden=!active(card,day);if(!card.hidden)visible++;});
+      const empty=scope.querySelector('[data-afposts-empty]');
+      if(empty)empty.hidden=visible>0;
+    });
+  }
+  function guardExpiredClick(event){
+    const card=event.target&&event.target.closest?event.target.closest('.afposts-card[data-afpost-expires]'):null;
+    if(card&&!active(card,commercialDay())){
+      event.preventDefault();event.stopImmediatePropagation();refresh();
+    }
+  }
+  // Datas são inclusivas até 23:59:59 em São Paulo. Revalidar também uma aba
+  // que ficou aberta durante a noite ou voltou do WhatsApp/cache do navegador.
+  refresh();
+  window.setInterval(refresh,30000);
+  window.addEventListener('pageshow',refresh);
+  window.addEventListener('focus',refresh);
+  document.addEventListener('visibilitychange',refresh);
+  document.addEventListener('click',guardExpiredClick,true);
+  document.addEventListener('auxclick',guardExpiredClick,true);
+})();
+'''
+
+
+def _with_expiry_check(page):
+    if 'id="afposts-expiry-hf53"' in page:
+        return page
+    script = '<script id="afposts-expiry-hf53">' + EXPIRY_JS + '</script>'
+    return page.replace('</body>', script + '</body>', 1) if '</body>' in page else page + script
+
+
+def _empty_notice(*, archive=False):
+    message = ('Não há ofertas vigentes nesta página. Use a navegação abaixo ou volte à loja.'
+               if archive else
+               'Nenhuma oferta vigente nesta seleção. Veja todas as publicações ou fale com a AlphaFest.')
+    return '<p class="afposts-empty" data-afposts-empty hidden role="status">' + message + '</p>'
 
 
 def inject_home(site_html, posts, number='', preview=False):
@@ -107,8 +176,8 @@ def inject_home(site_html, posts, number='', preview=False):
     elif not items:
         return page
     else:
-        inner = '<div class="afposts-grid">' + ''.join(_card(p, number) for p in items[:8]) + '</div>'
-    section = ('<section id="novidades-alphafest" class="afposts-section"><div class="afposts-container">'
+        inner = '<div class="afposts-grid">' + ''.join(_card(p, number) for p in items[:8]) + '</div>' + _empty_notice()
+    section = ('<section id="novidades-alphafest" class="afposts-section" data-afposts-scope><div class="afposts-container">'
                '<div class="afposts-head"><div><strong style="color:#097fc5">ALPHAFEST · NOVIDADES</strong>'
                '<h2>Novidades &amp; Ofertas</h2><p>Nossas campanhas, lançamentos e ideias para presentear.</p></div>'
                '<a class="afposts-all" href="/novidades/">Ver todas as publicações</a></div>' + inner + '</div></section>')
@@ -119,7 +188,7 @@ def inject_home(site_html, posts, number='', preview=False):
     elif '</body>' in page:
         page = page.replace('</body>', section + '</body>', 1)
     page = page.replace('</head>', '<style id="afposts-style">' + CSS + '</style></head>', 1)
-    return page
+    return _with_expiry_check(page)
 
 
 def archive_pages(posts, number=''):
@@ -133,7 +202,7 @@ def archive_pages(posts, number=''):
         subset = items[i*per_page:(i+1)*per_page]
         cards = ''.join(_card(p, number) for p in subset)
         # Páginas estáticas distintas, sem query-string dependente do Worker.
-        prev_link = ('<a href="/novidades/' + ('pagina-'+str(i+1)+'/' if i>1 else '') + '">← Anterior</a>' if i>0 else '')
+        prev_link = ('<a href="/novidades/' + ('pagina-'+str(i)+'/' if i>1 else '') + '">← Anterior</a>' if i>0 else '')
         next_link = ('<a href="/novidades/pagina-' + str(i+2) + '/">Próxima →</a>' if i+1<pages else '')
         pagination = '<nav class="afposts-pages">' + prev_link + '<span>Página ' + str(i+1) + ' de ' + str(pages) + '</span>' + next_link + '</nav>'
         body = ('''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="index,follow"><title>Novidades &amp; Ofertas | AlphaFest</title><meta name="description" content="Campanhas, lançamentos e novidades da AlphaFest em Itatiba"><link rel="icon" href="/favicon.ico"><style>body{font-family:Arial,sans-serif;background:#f5fbff;margin:0;color:#123a5b}header{background:#075da5;color:white;padding:22px max(20px,calc((100vw - 1240px)/2))}header a{color:white;text-decoration:none;font-weight:800}.afposts-pages{display:flex;justify-content:space-between;gap:14px;padding:28px 0}.afposts-pages a{color:#075da5;font-weight:800}footer{padding:30px;text-align:center;background:#fff}</style><style>''' + CSS + '''</style></head><body><header><a href="/">AlphaFest</a> · Novidades &amp; Ofertas</header><main class="afposts-section"><div class="afposts-container"><div class="afposts-head"><div><h1>Novidades &amp; Ofertas</h1><p>Confira nossas artes, campanhas e produtos personalizados.</p></div><a class="afposts-all" href="/">Voltar à loja</a></div><div class="afposts-grid">''' + cards + '''</div>''' + pagination + '''</div></main><footer>AlphaFest · Itatiba/SP · <a href="/">Site oficial</a></footer></body></html>''')
@@ -159,5 +228,7 @@ def archive_pages(posts, number=''):
         body = body.replace('</head>', complemento+'</head>', 1)
         body = body.replace('<title>Novidades &amp; Ofertas | AlphaFest</title>',
                             '<title>'+_escape_seo(titulo_seo)+'</title>', 1)
-        result['novidades/index.html' if i==0 else f'novidades/pagina-{i+1}/index.html'] = body
+        body = body.replace('<main class="afposts-section">', '<main class="afposts-section" data-afposts-scope>', 1)
+        body = body.replace(pagination, _empty_notice(archive=True) + pagination, 1)
+        result['novidades/index.html' if i==0 else f'novidades/pagina-{i+1}/index.html'] = _with_expiry_check(body)
     return result

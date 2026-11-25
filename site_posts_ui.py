@@ -181,13 +181,14 @@ def render(load, save, clear_cache):
         choices.update({p['id']:(p['title'] or 'Sem título')+' · '+p['status'] for p in reversed(posts)})
         selected=st.selectbox('Editar publicação',list(choices),format_func=lambda k:choices[k],key='afposts_selected')
         old=next((p for p in posts if p['id']==selected),{})
-        with st.form('afposts_editor'):
+        revision = st.session_state.get('_site_editorial_revisions_hf53', {}).get('site_posts_comerciais_db', 0)
+        with st.form('afposts_editor_' + str(revision) + '_' + str(selected), clear_on_submit=False):
             title=st.text_input('Nome interno para identificar a arte (opcional)',value=old.get('title',''),max_chars=140,help='Não aparece no site; pode ser preenchido automaticamente pelo nome do arquivo.')
             category=st.selectbox('Categoria',CATEGORIES+([old['category']] if old.get('category') and old['category'] not in CATEGORIES else []),index=(CATEGORIES+([old['category']] if old.get('category') and old['category'] not in CATEGORIES else [])).index(old.get('category','Outros')))
             status=st.selectbox('Publicação',['rascunho','publicado'],index=1 if old.get('status')=='publicado' else 0,
                                 format_func=lambda v:'✅ Aprovada para a próxima publicação' if v=='publicado' else '📝 Rascunho (não aparece no site)')
             featured=st.checkbox('Destacar na página inicial',value=bool(old.get('featured')))
-            expires=st.text_input('Fim da divulgação (opcional, AAAA-MM-DD)',value=old.get('expires_at',''),help='Após a data, a oferta sai do site quando você publicar uma nova versão. Deixe vazio para manter.')
+            expires=st.text_input('Fim da divulgação (opcional, AAAA-MM-DD)',value=old.get('expires_at',''),help='A oferta fica disponível até o fim desse dia, no horário de São Paulo. O site publicado passa a ocultá-la no dia seguinte. Deixe vazio para manter.')
             upload=st.file_uploader('Arte finalizada (JPG, PNG, WEBP)',type=['jpg','jpeg','png','webp'],key='afposts_img_'+selected)
             delete=st.checkbox('Arquivar / retirar do site (manter no Manager)',value=False) if selected!='__new__' else False
             save_clicked=st.form_submit_button('💾 Salvar publicação (sem publicar site)',width="stretch")
@@ -215,4 +216,4 @@ def render(load, save, clear_cache):
                     st.error('O banco não confirmou o salvamento; nenhum dado foi alterado.')
             except Exception as exc:
                 st.error('Não foi possível salvar: '+str(exc)[:180])
-        st.caption('Artes antigas permanecem no Manager. Para sair do site, selecione Rascunho ou informe a data de fim. A atualização do site exige publicação manual.')
+        st.caption('Artes antigas permanecem no Manager. Alterar conteúdo ou marcar Rascunho exige uma nova publicação. A data de fim já publicada é respeitada pelo site mesmo entre publicações.')

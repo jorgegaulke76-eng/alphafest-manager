@@ -1,3 +1,14 @@
+# HF65.24.53 — Melhorias operacionais (25/11/2026)
+
+- Mensagem completa do orçamento do site, busca por tema, recuperação sem resultados e validade/paginação das ofertas.
+- Publicação vinculada à prévia conferida, leitura online final e proteção de rascunhos em conflitos editoriais.
+- Edição de itens, abertura assistida entre atendimento/projeto/orçamento e planejamentos na Central da Anna.
+- Métricas por sessão e pacote condicionado a testes críticos executados.
+
+Instalação: **LEIA_ME_ATUALIZACAO.txt**. Detalhes: **UPDATE_INFO_HF65.24.53.md**. Resultados e limites: **VALIDACAO_HF65.24.53.md**.
+
+## Histórico
+
 # HF65.23 — Conexão OAuth Google/YouTube (2026-11-13)
 
 - Conectar canal oficial @AlphafestItatiba2026 com OAuth pelo próprio Streamlit.

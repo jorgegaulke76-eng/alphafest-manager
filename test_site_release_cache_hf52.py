@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import unittest
 
 from document_runtime_service import cache_get_or_build
+from site_integrity_service import invalidate_changed_preview, remember_preview
 
 
 def _contains_literal(node, value):
@@ -22,11 +23,11 @@ class TestSiteReleaseCacheHF52(unittest.TestCase):
     def setUpClass(cls):
         app_path = Path(__file__).resolve().with_name("app.py")
         tree = ast.parse(app_path.read_text(encoding="utf-8"), filename=str(app_path))
-        version_key = "site_hf59_preview_app_version"
-
         guards = [
             node for node in ast.walk(tree)
-            if isinstance(node, ast.If) and _contains_literal(node.test, version_key)
+            if isinstance(node, ast.If) and isinstance(node.test, ast.Call)
+            and isinstance(node.test.func, ast.Name)
+            and node.test.func.id == "_site_invalidate_preview_hf53"
         ]
         if len(guards) != 1:
             raise AssertionError("Esperado um único bloco real de invalidação da prévia por versão.")
@@ -34,15 +35,16 @@ class TestSiteReleaseCacheHF52(unittest.TestCase):
             ast.Module(body=[guards[0]], type_ignores=[]), str(app_path), "exec"
         )
 
-        version_writes = [
+        preview_writes = [
             node for node in ast.walk(tree)
-            if isinstance(node, ast.Assign)
-            and any(_contains_literal(target, version_key) for target in node.targets)
+            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+            and isinstance(node.value.func, ast.Name)
+            and node.value.func.id == "_site_remember_preview_hf53"
         ]
-        if len(version_writes) != 1:
+        if len(preview_writes) != 1:
             raise AssertionError("Esperado um único registro da versão da prévia gerada.")
         cls.version_record_code = compile(
-            ast.Module(body=[version_writes[0]], type_ignores=[]), str(app_path), "exec"
+            ast.Module(body=[preview_writes[0]], type_ignores=[]), str(app_path), "exec"
         )
 
         calls = [
@@ -79,8 +81,12 @@ class TestSiteReleaseCacheHF52(unittest.TestCase):
     def _execute(self, code, session, version="HF65.24.52"):
         exec(code, {
             "__builtins__": {},
-            "st": SimpleNamespace(session_state=session),
+            "st": SimpleNamespace(session_state=session, warning=lambda message: None),
             "APP_VERSION": version,
+            "_site_payload_hf53": {"versao_manager": version, "catalogo": [{"id": "teste"}]},
+            "_html_preview_hf53": session.get("site_hf59_html_preview", "<html>nova</html>"),
+            "_site_invalidate_preview_hf53": invalidate_changed_preview,
+            "_site_remember_preview_hf53": remember_preview,
         })
 
     def test_old_or_unversioned_preview_loses_only_preview_and_confirmation(self):
@@ -108,6 +114,8 @@ class TestSiteReleaseCacheHF52(unittest.TestCase):
         state = self._session()
         self._execute(self.version_record_code, state)
         self.assertEqual(state["site_hf59_preview_app_version"], "HF65.24.52")
+        self.assertNotIn("site_hf59_confirmar_publicacao", state)
+        state["site_hf59_confirmar_publicacao"] = True  # nova conferência explícita
         expected = copy.deepcopy(state)
         preview = state["site_hf59_html_preview"]
         order = state["pedido_em_edicao"]
@@ -143,7 +151,9 @@ class TestSiteReleaseCacheHF52(unittest.TestCase):
             return f"<html>pacote {number}</html>", f"ZIP de teste {number}".encode()
 
         def get_package(version, now):
-            payload = eval(self.payload_code, dict(context, APP_VERSION=version))
+            current = {key: value for key, value in context.items() if key != "__builtins__"}
+            current["versao_manager"] = version
+            payload = eval(self.payload_code, dict(context, APP_VERSION=version, _site_payload_hf53=current))
             return cache_get_or_build(
                 cache, self.cache_namespace, payload, build_package,
                 now=now, **self.cache_options,

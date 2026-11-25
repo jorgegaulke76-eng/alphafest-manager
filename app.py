@@ -296,6 +296,17 @@ from proposal_runtime_index_service import (
 )
 from historico_runtime_service import total_paginas_historico, paginar_historico
 from document_runtime_service import cache_get_or_build as _document_cache_get_or_build
+from site_integrity_service import (
+    EDITORIAL_DOCUMENT_KEYS as _site_editorial_keys_hf53,
+    invalidate_changed_preview as _site_invalidate_preview_hf53,
+    remember_preview as _site_remember_preview_hf53,
+    preview_matches as _site_preview_matches_hf53,
+    editorial_snapshot as _site_editorial_snapshot_hf53,
+    editorial_expected as _site_editorial_expected_hf53,
+    remember_editorial_draft as _site_remember_draft_hf53,
+    editorial_saved as _site_editorial_saved_hf53,
+    refresh_editorial_bases as _site_refresh_editors_hf53,
+)
 from anna_snapshot_runtime_service import prepare_daily_snapshot as _anna_prepare_daily_snapshot
 from marketing_results_runtime_service import build_marketing_product_resolver as _marketing_build_product_resolver
 from reports_runtime_index_service import build_reports_product_resolver as _reports_build_product_resolver
@@ -316,6 +327,11 @@ from proposal_status import (
 )
 from executive_center import renderizar_centro_executivo
 from pedido_resumo import resumo_produtos_pedido
+import manager_workflow_hf53 as _workflow_hf53
+from manager_operational_planning_hf53 import (
+    montar_planejamentos as _hf53_montar_planejamentos,
+    renderizar_planejamentos as _hf53_renderizar_planejamentos,
+)
 try:
     from anna_agenda_service import (
         montar_agenda_anna as _anna_montar_agenda,
@@ -579,14 +595,21 @@ def save_document(document_key, value, local_path, *, stop_on_error=True):
         # altera uma lista compartilhada e não pode sobrescrever outra sessão.
         "galeria_trabalhos_db", "site_youtube_oauth_db", "das_mei_controle_db",
     }
+    protected_keys.update(_site_editorial_keys_hf53)
 
     confirmado = False
     motivo = ""
-    if key in protected_keys and cached is not None:
+    if key in protected_keys and (cached is not None or key in _site_editorial_keys_hf53):
         cas_func = getattr(_cloud_db, "save_document_cas", None) if _cloud_db else None
-        if callable(cas_func):
-            esperado = copy.deepcopy(cached.get("value"))
+        if key in _site_editorial_keys_hf53 and cached is None and key not in st.session_state.get("_site_editorial_bases_hf53", {}):
+            motivo = "base de edição indisponível; atualize os conteúdos antes de salvar"
+        elif callable(cas_func):
+            esperado = copy.deepcopy((cached or {}).get("value"))
+            if key in _site_editorial_keys_hf53:
+                esperado = _site_editorial_expected_hf53(st.session_state, key, esperado)
             confirmado, motivo = cas_func(document_key, esperado, value, local_path)
+        elif key in _site_editorial_keys_hf53:
+            motivo = "proteção de edição indisponível; recarregue o Manager atualizado"
         else:
             # Compatibilidade temporária: se o backend ainda não expuser CAS,
             # mantém a gravação tradicional, mas nunca finge confirmação.
@@ -610,10 +633,12 @@ def save_document(document_key, value, local_path, *, stop_on_error=True):
             "time": time.monotonic(),
             "value": copy.deepcopy(value),
         }
+        _site_editorial_saved_hf53(st.session_state, key, value)
         return True
 
     # Uma tentativa não confirmada jamais pode virar a nova verdade da sessão.
     invalidate_document_cache(document_key)
+    _site_remember_draft_hf53(st.session_state, key, value)
     if key in protected_keys:
         # HF65.24.2: manutenção de boot nunca pode ocultar o painel com st.stop.
         # Propaga falha à migração para que ela NÃO avance schema_version.
@@ -631,6 +656,14 @@ def save_document(document_key, value, local_path, *, stop_on_error=True):
             st.error(
                 "🔴 O banco não confirmou esta gravação. Nada foi considerado salvo. "
                 f"Documento: {key}. Motivo: {str(motivo or 'não informado')[:120]}."
+            )
+        if key in _site_editorial_keys_hf53:
+            st.info("Seu conteúdo foi preservado nesta sessão. Baixe o rascunho e use Atualizar conteúdos salvos para conferir a versão mais recente.")
+            st.download_button(
+                "📥 Baixar rascunho para recuperação",
+                data=json.dumps(value, ensure_ascii=False, indent=2).encode("utf-8"),
+                file_name=f"alphafest_rascunho_{key}.json",
+                mime="application/json", key=f"site_hf53_recovery_error_{key}",
             )
         if stop_on_error:
             st.stop()
@@ -1003,8 +1036,15 @@ def carregar_config_empresa():
     return config
 
 # HF65 — configuração isolada da Campanha Destaque do site.
+def _carregar_editorial_site_hf53(document_key, local_path, default, force_refresh=False):
+    dados = load_document(document_key, local_path, default, force_refresh=force_refresh)
+    if force_refresh:
+        st.session_state.get("_site_editorial_bases_hf53", {}).pop(document_key, None)
+    return _site_editorial_snapshot_hf53(st.session_state, document_key, dados)
+
+
 def carregar_config_campanha_site(force_refresh=False):
-    dados = load_document("site_campaign_db", ARQUIVO_SITE_CAMPAIGN, _site_campaign_default, force_refresh=force_refresh)
+    dados = _carregar_editorial_site_hf53("site_campaign_db", ARQUIVO_SITE_CAMPAIGN, _site_campaign_default, force_refresh=force_refresh)
     return _site_campaign_normalize(dados)
 
 def salvar_config_campanha_site(config):
@@ -1013,7 +1053,7 @@ def salvar_config_campanha_site(config):
 
 # HF65.14 — conteúdo administrável da Home (CTA, banners, depoimentos e clientes).
 def carregar_config_home_site(force_refresh=False):
-    dados = load_document("site_home_content_db", ARQUIVO_SITE_HOME_CONTENT, _site_home_default, force_refresh=force_refresh)
+    dados = _carregar_editorial_site_hf53("site_home_content_db", ARQUIVO_SITE_HOME_CONTENT, _site_home_default, force_refresh=force_refresh)
     return _site_home_normalize(dados)
 
 def salvar_config_home_site(config):
@@ -1022,14 +1062,14 @@ def salvar_config_home_site(config):
 
 # HF65.22 — Base editorial unica do site e pacote YouTube.
 def carregar_dicas_multicanal(force_refresh=False):
-    dados = load_document("site_dicas_multicanal_db", ARQUIVO_SITE_DICAS, _site_dicas_default, force_refresh=force_refresh)
+    dados = _carregar_editorial_site_hf53("site_dicas_multicanal_db", ARQUIVO_SITE_DICAS, _site_dicas_default, force_refresh=force_refresh)
     return _site_dicas_normalize(dados)
 
 def salvar_dicas_multicanal(conteudos):
     return bool(save_document("site_dicas_multicanal_db", _site_dicas_normalize(conteudos), ARQUIVO_SITE_DICAS))
 
 def carregar_posts_site(force_refresh=False):
-    return _site_posts_normalize(load_document("site_posts_comerciais_db", ARQUIVO_SITE_POSTS, [], force_refresh=force_refresh))
+    return _site_posts_normalize(_carregar_editorial_site_hf53("site_posts_comerciais_db", ARQUIVO_SITE_POSTS, [], force_refresh=force_refresh))
 
 def salvar_posts_site(posts):
     return bool(save_document("site_posts_comerciais_db", _site_posts_normalize(posts), ARQUIVO_SITE_POSTS))
@@ -4417,6 +4457,7 @@ def aplicar_proposta_pendente_no_formulario():
     prop = pendente.get("prop", {}) or {}
     duplicar = bool(pendente.get("duplicar", False))
 
+    st.session_state.pop("_hf53_edicao_jorge", None)
     st.session_state.temp_itens = [dict(item) for item in prop.get("itens", []) or []]
     st.session_state.form_cliente = prop.get("cliente_nome", prop.get("cliente", ""))
     st.session_state.form_documento = prop.get("documento", prop.get("cliente_cpf_cnpj", ""))
@@ -4424,6 +4465,7 @@ def aplicar_proposta_pendente_no_formulario():
     st.session_state.pop("jorge_orc_cliente_seletor", None)
     st.session_state.pop("jorge_orc_cliente_token", None)
     st.session_state.form_evento = str(prop.get("evento", ""))
+    st.session_state.form_observacoes = str(prop.get("briefing_origem", ""))
     st.session_state.form_desconto = valor_float(prop.get("desconto", prop.get("desconto_valor", 0)))
     st.session_state.form_prazo = str(prop.get("prazo_dias", "10"))
     frete_salvo = str(prop.get("frete_tipo", "Retirada")).strip()
@@ -4450,6 +4492,7 @@ def aplicar_limpeza_formulario_pendente():
     if not st.session_state.pop("_limpar_formulario_pendente", False):
         return
 
+    st.session_state.pop("_hf53_edicao_jorge", None)
     st.session_state.temp_itens = []
     st.session_state.editar_numero = None
     st.session_state.form_cliente = ""
@@ -4458,6 +4501,7 @@ def aplicar_limpeza_formulario_pendente():
     st.session_state.pop("jorge_orc_cliente_seletor", None)
     st.session_state.pop("jorge_orc_cliente_token", None)
     st.session_state.form_evento = ""
+    st.session_state.form_observacoes = ""
     st.session_state.form_desconto = 0.0
     st.session_state.form_entrega = hoje_local()
     st.session_state.form_prazo = "10"
@@ -4474,6 +4518,164 @@ def remover_item_temp(indice, aba_destino=None):
             rerun_na_aba(aba_destino)
         else:
             st.rerun()
+
+
+def _hf53_rerun_item(anna=False):
+    if anna:
+        st.rerun(scope="fragment")
+    else:
+        rerun_na_aba("novo_orcamento")
+
+
+def _hf53_iniciar_edicao_item(itens_key, indice, *, anna=False):
+    chave = "_hf53_edicao_anna" if anna else "_hf53_edicao_jorge"
+    edicao = _workflow_hf53.iniciar_edicao(st.session_state.get(itens_key, []), indice)
+    st.session_state["_hf53_editor_sequencia"] = int(st.session_state.get("_hf53_editor_sequencia", 0)) + 1
+    edicao["token"] = st.session_state["_hf53_editor_sequencia"]
+    st.session_state[chave] = edicao
+    _hf53_rerun_item(anna)
+
+
+def _hf53_renderizar_edicao_item(itens_key, *, anna=False):
+    """Mesmo editor na entrada do Jorge e no diálogo da Anna, sem reaplicar preço."""
+    chave = "_hf53_edicao_anna" if anna else "_hf53_edicao_jorge"
+    edicao = st.session_state.get(chave)
+    if not edicao:
+        return
+    original = edicao["original"]
+    prefixo = f"hf53_item_{'anna' if anna else 'jorge'}_{edicao['token']}"
+    st.markdown(f"#### ✏️ Editar item {edicao['indice'] + 1}")
+    st.caption("Confira produto, quantidade, preço e personalização. Alterar os detalhes mantém o preço combinado e a identificação do item.")
+    with st.form(f"{prefixo}_form"):
+        produto = st.text_input("Produto", value=str(original.get("produto") or ""), key=f"{prefixo}_produto")
+        especificacoes = st.text_area(
+            "Personalização e especificações", value=str(original.get("especificacoes") or ""),
+            height=145, key=f"{prefixo}_especificacoes",
+            help="Edite tema, nome, idade, cor ou observações no texto existente. Todos os detalhes anteriores foram mantidos.",
+        )
+        qcol, vcol = st.columns(2)
+        quantidade = qcol.number_input("Quantidade", value=float(valor_float(original.get("quantidade")) or 1),
+                                       step=1.0, key=f"{prefixo}_quantidade")
+        valor = vcol.number_input("Valor unitário combinado (R$)", value=float(valor_float(original.get("valor_unitario"))),
+                                  step=0.5, key=f"{prefixo}_valor")
+        salvar_col, cancelar_col = st.columns(2)
+        salvar = salvar_col.form_submit_button("💾 Aplicar alteração do item", type="primary", width="stretch")
+        cancelar = cancelar_col.form_submit_button("Cancelar edição do item", width="stretch")
+    if cancelar:
+        _workflow_hf53.cancelar_edicao(st.session_state, chave)
+        _hf53_rerun_item(anna)
+    if salvar:
+        try:
+            snapshot = None
+            if produto.strip() != str(original.get("produto") or "").strip():
+                catalogo = carregar_catalogo()
+                produto, meta = _catalogo_resolver_orcamento(_catalogo_orcamento_livre, produto, catalogo)
+                snapshot = _catalogo_snapshot_item(meta, _catalogo_produto_da_meta(meta, catalogo))
+            st.session_state[itens_key] = _workflow_hf53.aplicar_edicao(
+                st.session_state.get(itens_key, []), edicao, produto=produto,
+                especificacoes=especificacoes, quantidade=quantidade, valor_unitario=valor,
+                catalogo_snapshot=snapshot,
+            )
+        except ValueError as erro:
+            st.error(str(erro))
+        else:
+            _workflow_hf53.cancelar_edicao(st.session_state, chave)
+            _hf53_rerun_item(anna)
+
+
+def _hf53_solicitar_abertura(destino, dados):
+    perfil = obter_perfil_configurado(obter_usuario_atual())
+    if destino not in set(perfil.get("abas", [])):
+        st.warning("Este formulário não está disponível para o seu perfil.")
+        return
+    _workflow_hf53.solicitar_abertura(
+        st.session_state, destino, dados, anna=usuario_em_operacao_protegida(obter_usuario_atual()),
+    )
+    st.rerun()
+
+
+def _hf53_registrar_abertura_origem(resultado):
+    """Registra a passagem só depois de aceitar a abertura, nunca ao cancelar."""
+    dados = resultado["dados"]
+    atendimento_id = dados.get("atendimento_id")
+    if atendimento_id:
+        atendimentos = carregar_atendimentos()
+        for item in atendimentos.get("itens", []):
+            if item.get("id") == atendimento_id:
+                item["status"] = "Orçamento em elaboração"
+                item["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                registrar_evento_atendimento(item, "Dados abertos no projeto personalizado" if resultado["destino"] == "projeto" else "Dados abertos para preparação do orçamento")
+                salvar_atendimentos(atendimentos)
+                break
+    projeto_id = dados.get("projeto_id")
+    if projeto_id:
+        projeto = next((p for p in carregar_projetos() if p.get("id") == projeto_id), None)
+        if projeto:
+            projeto["status"] = "Orçamento preparado"
+            registrar_evento_projeto(projeto, "Dados enviados para preparação do orçamento")
+            atualizar_projeto(projeto)
+
+
+def _hf53_vincular_proposta_origem_anna(dados, numero):
+    """Mantém os vínculos do atalho após a confirmação de gravação do modal."""
+    projeto_id = dados.get("projeto_id")
+    if projeto_id:
+        projeto = next((p for p in carregar_projetos() if p.get("id") == projeto_id), None)
+        if projeto:
+            projeto["numero_proposta"] = numero
+            projeto["status"] = "Orçamento criado"
+            registrar_evento_projeto(projeto, f"Proposta {numero} criada")
+            atualizar_projeto(projeto)
+    atendimento_id = dados.get("atendimento_id")
+    if atendimento_id:
+        atendimentos = carregar_atendimentos()
+        for atendimento in atendimentos.get("itens", []):
+            if atendimento.get("id") == atendimento_id:
+                atendimento["numero_proposta"] = numero
+                atendimento["status"] = "Aguardando cliente"
+                atendimento["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
+                registrar_evento_atendimento(atendimento, f"Proposta {numero} criada e enviada para acompanhamento")
+                salvar_atendimentos(atendimentos)
+                break
+
+
+def _hf53_processar_abertura_pendente():
+    # Interrompe a limpeza de widgets ao navegar, conservando o rascunho na sessão.
+    for chave in _workflow_hf53.chaves_rascunho(st.session_state):
+        st.session_state[chave] = st.session_state[chave]
+    pendente = st.session_state.get(_workflow_hf53.PENDING_KEY)
+    if not pendente:
+        return
+    destino = pendente["destino"]
+    if destino not in set(obter_perfil_configurado(obter_usuario_atual()).get("abas", [])):
+        _workflow_hf53.resolver_abertura(st.session_state, "cancelar")
+        st.warning("O formulário solicitado não está disponível para o seu perfil.")
+        return
+    escolha = "abrir"
+    if _workflow_hf53.possui_rascunho(st.session_state, destino, anna=pendente["anna"], hoje=hoje_local()):
+        with st.container(border=True):
+            rotulo = "projeto personalizado" if destino == "projeto" else "orçamento"
+            st.warning(f"Já existe um rascunho de {rotulo} nesta sessão.")
+            dados = pendente["dados"]
+            st.write(f"Novo trabalho: {dados.get('cliente') or 'Cliente ainda não informado'}")
+            st.caption("Continuar mantém o rascunho atual. Substituir abre os novos dados e descarta o rascunho anterior. Cancelar volta à tela de origem.")
+            continuar, substituir, cancelar = st.columns(3)
+            if continuar.button("Continuar rascunho atual", key="hf53_abertura_continuar", width="stretch"):
+                escolha = "continuar"
+            elif substituir.button("Substituir pelos novos dados", key="hf53_abertura_substituir", width="stretch"):
+                escolha = "substituir"
+            elif cancelar.button("Cancelar abertura", key="hf53_abertura_cancelar", width="stretch"):
+                _workflow_hf53.resolver_abertura(st.session_state, "cancelar")
+                st.rerun()
+            else:
+                st.stop()
+    resultado = _workflow_hf53.resolver_abertura(st.session_state, escolha, hoje=hoje_local())
+    if resultado["aplicado"]:
+        _hf53_registrar_abertura_origem(resultado)
+    if resultado["anna"]:
+        st.session_state["_hf53_anna_abrir_formulario"] = destino
+        rerun_na_aba("central")
+    rerun_na_aba(destino, "Dados preparados para revisão." if resultado["aplicado"] else "Rascunho atual preservado.")
 
 
 def data_entrega_segura(valor):
@@ -11860,15 +12062,21 @@ def renderizar_assistente_projeto_personalizado():
         "Comece pela necessidade do cliente. Os campos ajudam a organizar, mas não limitam o que a Alphafest pode criar."
     )
 
-    prefill = st.session_state.pop("_projeto_prefill", {}) if isinstance(st.session_state.get("_projeto_prefill", {}), dict) else {}
-    with st.form("form_projeto_personalizado", clear_on_submit=False):
+    legado = st.session_state.pop("_projeto_prefill", None)
+    if isinstance(legado, dict) and legado:
+        _hf53_solicitar_abertura("projeto", legado)
+    prefill = st.session_state.get("_hf53_projeto_contexto", {})
+    for campo in _workflow_hf53.PROJECT_FIELDS:
+        st.session_state.setdefault(f"hf53_projeto_{campo}", [] if campo == "bases" else "")
+    # Campos vivos permitem conservar o briefing ao navegar para outro módulo.
+    with st.container():
         c1, c2 = st.columns(2)
-        cliente = c1.text_input("Cliente / identificação (opcional)", value=str(prefill.get("cliente", "")), placeholder="Ex.: Maria, Escola ABC, Arena Beach")
-        whatsapp = c2.text_input("WhatsApp (opcional)", value=str(prefill.get("whatsapp", "")), placeholder="Ex.: 11999999999")
+        cliente = c1.text_input("Cliente / identificação (opcional)", key="hf53_projeto_cliente", placeholder="Ex.: Maria, Escola ABC, Arena Beach")
+        whatsapp = c2.text_input("WhatsApp (opcional)", key="hf53_projeto_whatsapp", placeholder="Ex.: 11999999999")
 
         necessidade = st.text_area(
             "O que o cliente precisa?",
-            value=str(prefill.get("necessidade", "")),
+            key="hf53_projeto_necessidade",
             placeholder=(
                 "Ex.: Um Bubble de 55 cm para aniversário de 6 anos, tema espaço, "
                 "confete fosco em formato de lua e coração, tons azul e prata, com LED."
@@ -11877,42 +12085,42 @@ def renderizar_assistente_projeto_personalizado():
         )
 
         p1, p2, p3 = st.columns(3)
-        ocasiao = p1.text_input("Ocasião (opcional)", placeholder="Aniversário, empresa, escola...")
-        tema = p2.text_input("Tema / personagem (opcional)", placeholder="Stitch, futebol, marca da empresa...")
+        ocasiao = p1.text_input("Ocasião (opcional)", key="hf53_projeto_ocasiao", placeholder="Aniversário, empresa, escola...")
+        tema = p2.text_input("Tema / personagem (opcional)", key="hf53_projeto_tema", placeholder="Stitch, futebol, marca da empresa...")
         quantidade_livre = p3.text_input(
-            "Quantidade / necessidade (opcional)",
+            "Quantidade / necessidade (opcional)", key="hf53_projeto_quantidade",
             placeholder="1 unidade, 30 pessoas, conforme necessário...",
         )
 
         p4, p5 = st.columns(2)
-        prazo_texto = p4.text_input("Prazo ou data desejada (opcional)", placeholder="Ex.: sábado, 15/08, urgente")
-        limite_orcamento = p5.text_input("Faixa de orçamento do cliente (opcional)", placeholder="Ex.: até R$ 150")
+        prazo_texto = p4.text_input("Prazo ou data desejada (opcional)", key="hf53_projeto_prazo", placeholder="Ex.: sábado, 15/08, urgente")
+        limite_orcamento = p5.text_input("Faixa de orçamento do cliente (opcional)", key="hf53_projeto_limite", placeholder="Ex.: até R$ 150")
 
         catalogo_atual = carregar_catalogo()
-        nomes_catalogo = sorted({str(x.get("nome", "")).strip() for x in catalogo_atual if str(x.get("nome", "")).strip()})
+        nomes_catalogo = sorted({str(x.get("Nome") or x.get("nome") or "").strip() for x in catalogo_atual if str(x.get("Nome") or x.get("nome") or "").strip()} | set(st.session_state.get("hf53_projeto_bases", [])))
         bases = st.multiselect(
             "Produtos-base que podem ajudar (opcional)",
-            nomes_catalogo,
+            nomes_catalogo, key="hf53_projeto_bases",
             help="Use apenas como ponto de partida. Você poderá criar qualquer solução fora do catálogo.",
         )
         solucao_livre = st.text_input(
-            "Outra solução / produto-base",
+            "Outra solução / produto-base", key="hf53_projeto_solucao",
             placeholder="Digite algo novo que ainda não existe no catálogo",
         )
         detalhes = st.text_area(
-            "Materiais, cores, tamanhos, acabamentos, acessórios e outros detalhes",
+            "Materiais, cores, tamanhos, acabamentos, acessórios e outros detalhes", key="hf53_projeto_detalhes",
             placeholder="Escreva livremente. Ex.: confete metalizado dourado, estrela pequena, fita azul, base de balões...",
             height=110,
         )
         observacoes = st.text_area(
-            "Observações internas",
+            "Observações internas", key="hf53_projeto_observacoes",
             placeholder="Preferências do cliente, restrições, referências, dúvidas para confirmar...",
             height=80,
         )
 
         salvar, preparar = st.columns(2)
-        botao_salvar = salvar.form_submit_button("💾 Salvar como projeto", width="stretch")
-        botao_preparar = preparar.form_submit_button("➡️ Salvar e preparar orçamento", type="primary", width="stretch")
+        botao_salvar = salvar.button("💾 Salvar como projeto", width="stretch")
+        botao_preparar = preparar.button("➡️ Salvar e preparar orçamento", type="primary", width="stretch")
 
     if botao_salvar or botao_preparar:
         if not necessidade.strip():
@@ -11956,8 +12164,6 @@ def renderizar_assistente_projeto_personalizado():
         salvar_projetos(projetos)
 
         if botao_preparar:
-            st.session_state.form_cliente = cliente.strip()
-            st.session_state.form_whatsapp = whatsapp.strip()
             especificacoes_partes = [
                 f"Necessidade: {necessidade.strip()}",
                 f"Ocasião: {ocasiao.strip()}" if ocasiao.strip() else "",
@@ -11969,30 +12175,33 @@ def renderizar_assistente_projeto_personalizado():
                 f"Observações: {observacoes.strip()}" if observacoes.strip() else "",
             ]
             especificacoes = " | ".join(x for x in especificacoes_partes if x)
+            itens_preparados = []
             for nome_produto in produtos_base:
-                preco = 0.0
-                produto_catalogo = next((x for x in catalogo_atual if str(x.get("nome", "")).strip() == nome_produto), None)
-                if produto_catalogo:
-                    preco = valor_float(produto_catalogo.get("preco", produto_catalogo.get("valor", 0)))
-                st.session_state.temp_itens.append({
-                    "produto": nome_produto,
+                oficial, meta = _catalogo_resolver_orcamento(_catalogo_orcamento_livre, nome_produto, catalogo_atual)
+                produto_catalogo = _catalogo_produto_da_meta(meta, catalogo_atual)
+                preco = float(_i811_preco_catalogo_float(produto_catalogo)) if produto_catalogo else 0.0
+                itens_preparados.append({
+                    "produto": oficial,
                     "especificacoes": especificacoes,
                     "quantidade": 1,
                     "valor_unitario": preco,
                     "projeto_id": projeto["id"],
+                    **_catalogo_snapshot_item(meta, produto_catalogo),
                 })
-            projeto["status"] = "Orçamento preparado"
-            registrar_evento_projeto(projeto, "Dados enviados para preparação do orçamento")
-            atualizar_projeto(projeto)
-            st.session_state._projeto_origem_id = projeto["id"]
-            st.session_state._atendimento_origem_id = projeto.get("atendimento_id", "") or st.session_state.get("_atendimento_origem_id", "")
-            st.session_state._mensagem_sucesso_pendente = (
-                "Projeto salvo e itens preparados. Abra a aba Novo Orçamento para revisar valores e finalizar."
-            )
-            st.rerun()
+            _hf53_solicitar_abertura("novo_orcamento", {
+                "cliente": cliente.strip(), "whatsapp": whatsapp.strip(),
+                "itens": itens_preparados, "projeto_id": projeto["id"],
+                "atendimento_id": projeto.get("atendimento_id", ""),
+                "observacoes": necessidade.strip(),
+            })
         else:
             st.success("Projeto personalizado salvo na Memória da Empresa.")
             st.rerun()
+
+
+@st.dialog("🧩 Projeto Personalizado", width="large")
+def dialog_projeto_personalizado_hf53():
+    renderizar_assistente_projeto_personalizado()
 
 
 def renderizar_caixa_projeto(proposta, prefixo="historico"):
@@ -18406,12 +18615,19 @@ def dialog_orcamento_anna(proposta=None):
         "atualizar_orcamento" if numero_original else "novo_orcamento",
         token=chave_modal,
     )
-    if not st.session_state.get(chave_modal):
+    if not st.session_state.get(chave_modal) or st.session_state.get("_hf53_anna_contexto_formulario") != chave_modal:
+        # Os widgets são compartilhados; voltar a outra proposta deve carregar
+        # os dados dela, mesmo que seu marcador de abertura antigo ainda exista.
+        st.session_state["_hf53_anna_contexto_formulario"] = chave_modal
         st.session_state[chave_modal] = True
         st.session_state["anna_modal_cliente"] = str(proposta.get("cliente_nome", proposta.get("cliente", "")))
         st.session_state["anna_modal_documento"] = str(proposta.get("documento", proposta.get("cliente_cpf_cnpj", "")))
         st.session_state["anna_modal_whatsapp"] = str(proposta.get("whatsapp", proposta.get("cliente_wa", "")))
         st.session_state["anna_modal_evento"] = str(proposta.get("evento", ""))
+        st.session_state["anna_modal_observacoes"] = str(proposta.get("briefing_origem", ""))
+        st.session_state["_anna_hf53_atendimento_origem_id"] = str(proposta.get("atendimento_id") or "")
+        st.session_state["_anna_hf53_projeto_origem_id"] = str(proposta.get("projeto_id") or "")
+        st.session_state.pop("_hf53_edicao_anna", None)
         st.session_state["anna_modal_itens"] = [dict(x) for x in proposta.get("itens", []) or []]
         st.session_state["anna_modal_item_key"] = int(st.session_state.get("anna_modal_item_key", 0)) + 1
         st.session_state["anna_modal_desconto"] = float(valor_float(proposta.get("desconto", proposta.get("desconto_valor", 0))))
@@ -18441,6 +18657,8 @@ def dialog_orcamento_anna(proposta=None):
 
     if numero_original:
         st.info(f"✏️ Editando a proposta {numero_original}")
+    if st.session_state.get("anna_modal_observacoes"):
+        st.info("Solicitação de origem: " + str(st.session_state["anna_modal_observacoes"]))
 
     ultima = st.session_state.get("_ultima_proposta_salva_anna")
     if ultima:
@@ -18506,110 +18724,114 @@ def dialog_orcamento_anna(proposta=None):
     elif msg_modal_i811 == "nao_encontrado":
         st.info("ℹ️ WhatsApp ainda não cadastrado. Continue preenchendo os dados normalmente como **Cliente novo** no próprio orçamento.")
 
-    # I8.11.3 — digitação viva do item no modal da Anna. O diálogo do Streamlit
-    # já executa isoladamente; por isso quantidade e valor podem recalcular a prévia
-    # sem atualizar os indicadores e sem sair da janela.
-    chave_item_i8113 = st.session_state.get("anna_modal_item_key", 0)
-    prod, prod_meta_i8113 = _orcamento_campos_produto(f"anna_modal_prod_{chave_item_i8113}")
-    produto_cat_auto_i8113 = _orcamento_aplicar_autopreenchimento_catalogo(
-        prod_meta_i8113,
-        marcador_key=f"anna_modal_catalogo_auto_{chave_item_i8113}",
-        valor_key=f"anna_modal_valor_{chave_item_i8113}",
-        material_key=f"anna_modal_cor_{chave_item_i8113}",
-        detalhes_key=f"anna_modal_obs_{chave_item_i8113}",
-    )
-    if produto_cat_auto_i8113:
-        resumo_auto_i8113 = _orcamento_resumo_dados_catalogo(produto_cat_auto_i8113)
-        st.success("⚡ Produto do Catálogo reconhecido: preço oficial carregado. Tema, nome, cor/material e detalhes permanecem manuais.")
-        if resumo_auto_i8113:
-            st.caption(resumo_auto_i8113)
-        _orcamento_previa_visual_catalogo(
-            produto_cat_auto_i8113,
-            prefixo=f"anna_orc_prev_{chave_item_i8113}",
-        )
-    with st.expander("🎨 Personalização & Especificações", expanded=True):
-        e1, e2 = st.columns(2)
-        tema = e1.text_input("Tema / Ocasião", key=f"anna_modal_tema_{chave_item_i8113}")
-        nome_item = e1.text_input("Nome(s) Personalizado(s)", key=f"anna_modal_nome_item_{chave_item_i8113}")
-        cor = e1.text_input("Cor / Material", key=f"anna_modal_cor_{chave_item_i8113}")
-        idade = e2.text_input("Idade / Data do Evento", key=f"anna_modal_idade_{chave_item_i8113}")
-        obs = e2.text_input("Outros Detalhes", key=f"anna_modal_obs_{chave_item_i8113}")
-    q = st.number_input("Qtd", min_value=1, value=1, key=f"anna_modal_qtd_{chave_item_i8113}")
-    _anna_valor_key_i8113 = f"anna_modal_valor_{chave_item_i8113}"
-    if _anna_valor_key_i8113 in st.session_state:
-        v = st.number_input("Valor Unitário (R$)", min_value=0.0, step=0.5, key=_anna_valor_key_i8113)
+    editando_item_hf53 = bool(st.session_state.get("_hf53_edicao_anna"))
+    if editando_item_hf53:
+        _hf53_renderizar_edicao_item("anna_modal_itens", anna=True)
     else:
-        v = st.number_input("Valor Unitário (R$)", min_value=0.0, value=0.0, step=0.5, key=_anna_valor_key_i8113)
-
-    itens_previa_i8113 = st.session_state.get("anna_modal_itens", []) or []
-    subtotal_atual_i8113 = sum(valor_float(i.get("quantidade")) * valor_float(i.get("valor_unitario")) for i in itens_previa_i8113)
-    cliente_previa_i8113 = localizar_cliente_comercial(nome, doc, wa)
-    preco_previa_i8113 = calcular_preco_cliente_item(cliente_previa_i8113, prod.strip(), v) if cliente_previa_i8113 and prod.strip() else None
-    valor_unitario_previa_i8113 = valor_float(v)
-    if preco_previa_i8113 and not preco_previa_i8113.get("bloqueado"):
-        valor_unitario_previa_i8113 = valor_float(preco_previa_i8113.get("preco_final"))
-    total_item_previa_i8113 = valor_float(q) * valor_unitario_previa_i8113
-    subtotal_com_item_i8113 = subtotal_atual_i8113 + total_item_previa_i8113
-    desc_previa_i8113 = valor_float(st.session_state.get("anna_modal_desconto", 0))
-    frete_previa_i8113 = str(st.session_state.get("anna_modal_frete", "Retirada"))
-    taxa_previa_i8113 = valor_float(st.session_state.get("anna_modal_taxa_entrega", 0)) if frete_previa_i8113 == "Entrega" else 0.0
-    total_proposta_previa_i8113 = max(subtotal_com_item_i8113 - desc_previa_i8113, 0.0) + taxa_previa_i8113
-
-    st.caption("💡 Prévia enquanto você digita — o item ainda não foi adicionado à proposta.")
-    pv1, pv2, pv3 = st.columns(3)
-    pv1.metric("Total deste item", _anna_fmt_moeda(total_item_previa_i8113))
-    pv2.metric("Itens já adicionados", _anna_fmt_moeda(subtotal_atual_i8113))
-    pv3.metric("Prévia do total da proposta", _anna_fmt_moeda(total_proposta_previa_i8113))
-    if preco_previa_i8113 and preco_previa_i8113.get("bloqueado"):
-        st.error("🛑 A prévia detectou abatimento maior que o preço oficial. Revise o Perfil Comercial antes de adicionar o item.")
-    elif preco_previa_i8113:
-        st.caption((f"💼 Prévia com preço especial: R$ {preco_previa_i8113['preco_base']:.2f} - R$ {preco_previa_i8113['abatimento']:.2f} = R$ {preco_previa_i8113['preco_final']:.2f} por unidade").replace(".", ","))
-
-    adicionar = st.button("➕ Adicionar Item", width="stretch", key=f"anna_modal_adicionar_{chave_item_i8113}")
-
-    if adicionar:
-        registrar_atividade(obter_usuario_atual(), "Adicionando item ao orçamento", "Orçamentos")
-        if not prod.strip():
-            st.warning("Informe o produto antes de adicionar.")
+        # I8.11.3 — digitação viva do item no modal da Anna. O diálogo do Streamlit
+        # já executa isoladamente; por isso quantidade e valor podem recalcular a prévia
+        # sem atualizar os indicadores e sem sair da janela.
+        chave_item_i8113 = st.session_state.get("anna_modal_item_key", 0)
+        prod, prod_meta_i8113 = _orcamento_campos_produto(f"anna_modal_prod_{chave_item_i8113}")
+        produto_cat_auto_i8113 = _orcamento_aplicar_autopreenchimento_catalogo(
+            prod_meta_i8113,
+            marcador_key=f"anna_modal_catalogo_auto_{chave_item_i8113}",
+            valor_key=f"anna_modal_valor_{chave_item_i8113}",
+            material_key=f"anna_modal_cor_{chave_item_i8113}",
+            detalhes_key=f"anna_modal_obs_{chave_item_i8113}",
+        )
+        if produto_cat_auto_i8113:
+            resumo_auto_i8113 = _orcamento_resumo_dados_catalogo(produto_cat_auto_i8113)
+            st.success("⚡ Produto do Catálogo reconhecido: preço oficial carregado. Tema, nome, cor/material e detalhes permanecem manuais.")
+            if resumo_auto_i8113:
+                st.caption(resumo_auto_i8113)
+            _orcamento_previa_visual_catalogo(
+                produto_cat_auto_i8113,
+                prefixo=f"anna_orc_prev_{chave_item_i8113}",
+            )
+        with st.expander("🎨 Personalização & Especificações", expanded=True):
+            e1, e2 = st.columns(2)
+            tema = e1.text_input("Tema / Ocasião", key=f"anna_modal_tema_{chave_item_i8113}")
+            nome_item = e1.text_input("Nome(s) Personalizado(s)", key=f"anna_modal_nome_item_{chave_item_i8113}")
+            cor = e1.text_input("Cor / Material", key=f"anna_modal_cor_{chave_item_i8113}")
+            idade = e2.text_input("Idade / Data do Evento", key=f"anna_modal_idade_{chave_item_i8113}")
+            obs = e2.text_input("Outros Detalhes", key=f"anna_modal_obs_{chave_item_i8113}")
+        q = st.number_input("Qtd", min_value=1, value=1, key=f"anna_modal_qtd_{chave_item_i8113}")
+        _anna_valor_key_i8113 = f"anna_modal_valor_{chave_item_i8113}"
+        if _anna_valor_key_i8113 in st.session_state:
+            v = st.number_input("Valor Unitário (R$)", min_value=0.0, step=0.5, key=_anna_valor_key_i8113)
         else:
-            detalhes = f"Tema: {tema} | Nome: {nome_item} | Idade: {idade} | Cor: {cor} | Obs: {obs}"
-            item_novo = {
-                "produto": prod.strip(), "especificacoes": detalhes, "quantidade": q, "valor_unitario": v,
-                **_catalogo_snapshot_item(prod_meta_i8113, produto_cat_auto_i8113),
-            }
-            cliente_item_i811 = localizar_cliente_comercial(nome, doc, wa)
-            preco_item_i811 = calcular_preco_cliente_item(cliente_item_i811, prod.strip(), v) if cliente_item_i811 else None
-            if preco_item_i811 and preco_item_i811.get("bloqueado"):
-                st.error(
-                    f"🛑 Não foi possível aplicar o preço especial de {preco_item_i811.get('produto_oficial', prod.strip())}. "
-                    f"Preço oficial R$ {preco_item_i811.get('preco_base', 0):.2f} e abatimento R$ {preco_item_i811.get('abatimento', 0):.2f}. "
-                    "Revise o Perfil Comercial do cliente antes de adicionar este item."
-                )
+            v = st.number_input("Valor Unitário (R$)", min_value=0.0, value=0.0, step=0.5, key=_anna_valor_key_i8113)
+
+        itens_previa_i8113 = st.session_state.get("anna_modal_itens", []) or []
+        subtotal_atual_i8113 = sum(valor_float(i.get("quantidade")) * valor_float(i.get("valor_unitario")) for i in itens_previa_i8113)
+        cliente_previa_i8113 = localizar_cliente_comercial(nome, doc, wa)
+        preco_previa_i8113 = calcular_preco_cliente_item(cliente_previa_i8113, prod.strip(), v) if cliente_previa_i8113 and prod.strip() else None
+        valor_unitario_previa_i8113 = valor_float(v)
+        if preco_previa_i8113 and not preco_previa_i8113.get("bloqueado"):
+            valor_unitario_previa_i8113 = valor_float(preco_previa_i8113.get("preco_final"))
+        total_item_previa_i8113 = valor_float(q) * valor_unitario_previa_i8113
+        subtotal_com_item_i8113 = subtotal_atual_i8113 + total_item_previa_i8113
+        desc_previa_i8113 = valor_float(st.session_state.get("anna_modal_desconto", 0))
+        frete_previa_i8113 = str(st.session_state.get("anna_modal_frete", "Retirada"))
+        taxa_previa_i8113 = valor_float(st.session_state.get("anna_modal_taxa_entrega", 0)) if frete_previa_i8113 == "Entrega" else 0.0
+        total_proposta_previa_i8113 = max(subtotal_com_item_i8113 - desc_previa_i8113, 0.0) + taxa_previa_i8113
+
+        st.caption("💡 Prévia enquanto você digita — o item ainda não foi adicionado à proposta.")
+        pv1, pv2, pv3 = st.columns(3)
+        pv1.metric("Total deste item", _anna_fmt_moeda(total_item_previa_i8113))
+        pv2.metric("Itens já adicionados", _anna_fmt_moeda(subtotal_atual_i8113))
+        pv3.metric("Prévia do total da proposta", _anna_fmt_moeda(total_proposta_previa_i8113))
+        if preco_previa_i8113 and preco_previa_i8113.get("bloqueado"):
+            st.error("🛑 A prévia detectou abatimento maior que o preço oficial. Revise o Perfil Comercial antes de adicionar o item.")
+        elif preco_previa_i8113:
+            st.caption((f"💼 Prévia com preço especial: R$ {preco_previa_i8113['preco_base']:.2f} - R$ {preco_previa_i8113['abatimento']:.2f} = R$ {preco_previa_i8113['preco_final']:.2f} por unidade").replace(".", ","))
+
+        adicionar = st.button("➕ Adicionar Item", width="stretch", key=f"anna_modal_adicionar_{chave_item_i8113}")
+
+        if adicionar:
+            registrar_atividade(obter_usuario_atual(), "Adicionando item ao orçamento", "Orçamentos")
+            if not prod.strip():
+                st.warning("Informe o produto antes de adicionar.")
             else:
-                if preco_item_i811:
-                    item_novo.update({
-                        "produto": preco_item_i811["produto_oficial"],
-                        "valor_unitario": preco_item_i811["preco_final"],
-                        "valor_base_oficial": preco_item_i811["preco_base"],
-                        "abatimento_fixo_cliente": preco_item_i811["abatimento"],
-                        "preco_especial_aplicado": True,
-                        "perfil_comercial_cliente_id": (cliente_item_i811 or {}).get("id", ""),
-                    })
-                    st.success(
-                        (f"💰 Preço especial aplicado a {preco_item_i811['produto_oficial']}: "
-                         f"R$ {preco_item_i811['preco_base']:.2f} - R$ {preco_item_i811['abatimento']:.2f} = R$ {preco_item_i811['preco_final']:.2f}").replace(".", ",")
+                detalhes = f"Tema: {tema} | Nome: {nome_item} | Idade: {idade} | Cor: {cor} | Obs: {obs}"
+                item_novo = {
+                    "produto": prod.strip(), "especificacoes": detalhes, "quantidade": q, "valor_unitario": v,
+                    **_catalogo_snapshot_item(prod_meta_i8113, produto_cat_auto_i8113),
+                }
+                cliente_item_i811 = localizar_cliente_comercial(nome, doc, wa)
+                preco_item_i811 = calcular_preco_cliente_item(cliente_item_i811, prod.strip(), v) if cliente_item_i811 else None
+                if preco_item_i811 and preco_item_i811.get("bloqueado"):
+                    st.error(
+                        f"🛑 Não foi possível aplicar o preço especial de {preco_item_i811.get('produto_oficial', prod.strip())}. "
+                        f"Preço oficial R$ {preco_item_i811.get('preco_base', 0):.2f} e abatimento R$ {preco_item_i811.get('abatimento', 0):.2f}. "
+                        "Revise o Perfil Comercial do cliente antes de adicionar este item."
                     )
-                st.session_state["anna_modal_itens"].append(item_novo)
-                st.session_state["anna_modal_item_key"] += 1
-                # Não executar rerun global dentro do diálogo: a lista abaixo já
-                # usa o session_state atualizado e mostra o item imediatamente.
+                else:
+                    if preco_item_i811:
+                        item_novo.update({
+                            "produto": preco_item_i811["produto_oficial"],
+                            "valor_unitario": preco_item_i811["preco_final"],
+                            "valor_base_oficial": preco_item_i811["preco_base"],
+                            "abatimento_fixo_cliente": preco_item_i811["abatimento"],
+                            "preco_especial_aplicado": True,
+                            "perfil_comercial_cliente_id": (cliente_item_i811 or {}).get("id", ""),
+                        })
+                        st.success(
+                            (f"💰 Preço especial aplicado a {preco_item_i811['produto_oficial']}: "
+                             f"R$ {preco_item_i811['preco_base']:.2f} - R$ {preco_item_i811['abatimento']:.2f} = R$ {preco_item_i811['preco_final']:.2f}").replace(".", ",")
+                        )
+                    st.session_state["anna_modal_itens"].append(item_novo)
+                    st.session_state["anna_modal_item_key"] += 1
+                    # Não executar rerun global dentro do diálogo: a lista abaixo já
+                    # usa o session_state atualizado e mostra o item imediatamente.
 
     itens = st.session_state.get("anna_modal_itens", [])
     if itens:
         cliente_itens_i811 = localizar_cliente_comercial(nome, doc, wa)
         perfil_itens_i811 = resumo_perfil_comercial(cliente_itens_i811) if cliente_itens_i811 else resumo_perfil_comercial({})
         if cliente_itens_i811 and perfil_itens_i811.get("qtd_regras_ativas", 0):
-            if st.button("💼 Recalcular itens pelo Perfil Comercial", key="anna_i811hf2_recalcular_itens", width="stretch"):
+            if st.button("💼 Recalcular itens pelo Perfil Comercial", key="anna_i811hf2_recalcular_itens", width="stretch", disabled=editando_item_hf53):
                 alterados_i811 = 0
                 bloqueados_i811 = []
                 for item_i811 in itens:
@@ -18636,7 +18858,7 @@ def dialog_orcamento_anna(proposta=None):
 
         st.write("📋 **Itens da proposta:**")
         for idx, item in enumerate(itens):
-            ci, cr = st.columns([8, 1])
+            ci, ce, cr = st.columns([7, 1.4, 1])
             qtd_item_i8113 = valor_float(item.get("quantidade"))
             unit_item_i8113 = valor_float(item.get("valor_unitario"))
             total_item_i8113 = qtd_item_i8113 * unit_item_i8113
@@ -18655,7 +18877,9 @@ def dialog_orcamento_anna(proposta=None):
                 ci.caption(
                     (f"💼 Preço especial: R$ {base_i811:.2f} - abatimento fixo R$ {abat_i811:.2f} = R$ {final_i811:.2f}").replace(".", ",")
                 )
-            if cr.button("🗑️", key=f"anna_modal_remover_{idx}", help="Remover item"):
+            if ce.button("✏️ Editar", key=f"anna_modal_editar_{idx}", disabled=editando_item_hf53):
+                _hf53_iniciar_edicao_item("anna_modal_itens", idx, anna=True)
+            if cr.button("🗑️", key=f"anna_modal_remover_{idx}", help="Remover item", disabled=editando_item_hf53):
                 itens.pop(idx)
                 try:
                     st.rerun(scope="fragment")
@@ -18695,7 +18919,7 @@ def dialog_orcamento_anna(proposta=None):
         t4.metric("Valor total", f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
         salvar_rotulo = "💾 SALVAR ALTERAÇÕES" if numero_original else "🚀 SALVAR PROPOSTA"
-        if st.button(salvar_rotulo, type="primary", width="stretch", key="anna_modal_salvar_orcamento"):
+        if st.button(salvar_rotulo, type="primary", width="stretch", key="anna_modal_salvar_orcamento", disabled=editando_item_hf53):
             if not nome.strip():
                 st.error("Informe o nome do cliente.")
                 return
@@ -18716,6 +18940,7 @@ def dialog_orcamento_anna(proposta=None):
                 "data_entrega": entrega.strftime("%d/%m/%Y"),
                 "cliente_nome": nome.strip(), "documento": doc.strip(), "whatsapp": wa.strip(),
                 "evento": evento.strip(),
+                "briefing_origem": str(st.session_state.get("anna_modal_observacoes") or ""),
                 "cliente_cpf_cnpj": doc.strip(), "cliente_wa": wa.strip(),
                 "relacionamento_id": (cliente_comercial_i811 or {}).get("id", proposta.get("relacionamento_id", "")),
                 "cliente_email": str((cliente_comercial_i811 or {}).get("email") or proposta.get("cliente_email", "") or "").strip(),
@@ -18733,11 +18958,13 @@ def dialog_orcamento_anna(proposta=None):
                 "entregue": proposta.get("entregue", False),
                 "aprovado": proposta.get("aprovado", False),
                 "timeline": proposta.get("timeline", []) if isinstance(proposta.get("timeline", []), list) else [],
-                "atendimento_id": proposta.get("atendimento_id") or st.session_state.get("_atendimento_origem_id", ""),
-                "projeto_id": proposta.get("projeto_id") or st.session_state.get("_projeto_origem_id", ""),
+                "atendimento_id": proposta.get("atendimento_id") or st.session_state.get("_anna_hf53_atendimento_origem_id", ""),
+                "projeto_id": proposta.get("projeto_id") or st.session_state.get("_anna_hf53_projeto_origem_id", ""),
             }
             ok_salvar, retorno_salvar = _anna_salvar_proposta(dados, numero_original)
             if ok_salvar:
+                if not numero_original:
+                    _hf53_vincular_proposta_origem_anna(dados, retorno_salvar)
                 registrar_atividade(obter_usuario_atual(), "Proposta salva", "Orçamentos", detalhe=f"{retorno_salvar} · {nome.strip()}", evento=True)
                 if cliente_novo_i811:
                     st.session_state["_mensagem_sucesso_pendente"] = (
@@ -24851,6 +25078,13 @@ def renderizar_workspace_anna_isolado():
     atendimentos = carregar_atendimentos()
     fila = [x for x in atendimentos.get("itens", []) if x.get("status") not in ("Arquivado", "Entregue", "Pós-venda") and str(x.get("responsavel", "")).strip() in ("", "Anna")]
     historico = carregar_historico(force_refresh=True)
+    formulario_hf53 = st.session_state.pop("_hf53_anna_abrir_formulario", None)
+    if formulario_hf53 == "novo_orcamento":
+        numero_hf53 = str(st.session_state.get("anna_modal_numero_original") or "")
+        proposta_hf53 = next((p for p in historico if p.get("numero_proposta") == numero_hf53), None) if numero_hf53 else None
+        dialog_orcamento_anna(proposta_hf53)
+    elif formulario_hf53 == "projeto":
+        dialog_projeto_personalizado_hf53()
     hoje_anna_hf40 = hoje_local()
     propostas_runtime_hf40 = _proposal_build_runtime_index(
         historico,
@@ -24935,6 +25169,13 @@ def renderizar_workspace_anna_isolado():
     if entregas_hoje:
         if m4.button("🔎 Ver quais são", key="anna_ver_entregas_hoje", width="stretch"):
             dialog_entregas_hoje_anna(historico)
+
+    # Mesmas engines da Central, derivadas desta leitura do Histórico e das etapas do Fluxo.
+    planos_hf53 = _hf53_montar_planejamentos(historico, carregar_producao(), hoje_anna_hf40)
+    def abrir_pedido_planejamento_hf53(numero):
+        st.session_state["alerta_proposta_numero"] = numero
+        rerun_na_aba("historico")
+    _hf53_renderizar_planejamentos(st, planos_hf53, abrir_pedido_planejamento_hf53)
 
     # HF18 — roteiro diário imprimível da Anna alinhado ao Histórico. Somente leitura e somente dados:
     # número, status, cliente, telefone, produtos e data de entrega.
@@ -25179,6 +25420,9 @@ def renderizar_workspace_anna_isolado():
         _renderizar_linha_proposta_anna(prop, f"anna_lista_{idx}")
 
 
+_hf53_processar_abertura_pendente()
+
+
 # O conjunto de abas continua estável no código; a exibição é personalizada por usuário.
 if (
     usuario_em_operacao_protegida(obter_usuario_atual())
@@ -25363,16 +25607,10 @@ if pagina_atual == "central":
                         if telefone_ws:
                             ra1.link_button("📱 Abrir WhatsApp", f"https://wa.me/{numero_ws}", width="stretch")
                         if ra2.button("➕ Orçamento", key=f"ws_orc_{item_ws.get('id')}", width="stretch"):
-                            st.session_state.form_cliente = item_ws.get("cliente", "")
-                            st.session_state.form_whatsapp = item_ws.get("telefone", "")
-                            st.session_state.form_observacoes = item_ws.get("mensagem", "")
-                            st.session_state._atendimento_origem_id = item_ws.get("id")
-                            item_ws["status"] = "Orçamento em elaboração"
-                            item_ws["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
-                            registrar_evento_atendimento(item_ws, "Orçamento iniciado pelo Modo Trabalho da Anna")
-                            salvar_atendimentos(dados_ws)
-                            st.session_state["_mensagem_sucesso_pendente"] = "Cliente e conversa preparados. Abra Novo Orçamento; a mensagem padrão permanece intacta."
-                            st.rerun()
+                            _hf53_solicitar_abertura("novo_orcamento", {
+                                "cliente": item_ws.get("cliente", ""), "whatsapp": item_ws.get("telefone", ""),
+                                "observacoes": item_ws.get("mensagem", ""), "atendimento_id": item_ws.get("id", ""),
+                            })
                         if ra3.button("✅ Respondido", key=f"ws_resp_{item_ws.get('id')}", width="stretch"):
                             status_ant = item_ws.get("status", "Novo contato")
                             item_ws["status"] = "Aguardando cliente"
@@ -27686,30 +27924,16 @@ if pagina_atual == "atendimento":
                 elif bloqueado_item:
                     b2.button("🛑 Bloqueado", disabled=True, width="stretch")
                 if b3.button("🧩 Criar projeto", key=f"proj_at_{item.get('id')}", width="stretch", disabled=orcamento_bloqueado_item):
-                    st.session_state._projeto_prefill = {
-                        "cliente": item.get("cliente", ""),
-                        "whatsapp": item.get("telefone", ""),
-                        "necessidade": item.get("mensagem", ""),
-                        "atendimento_id": item.get("id", ""),
+                    _hf53_solicitar_abertura("projeto", {
+                        "cliente": item.get("cliente", ""), "whatsapp": item.get("telefone", ""),
+                        "necessidade": item.get("mensagem", ""), "atendimento_id": item.get("id", ""),
                         "origem": "Atendimento",
-                    }
-                    status_antigo = item.get("status", "Novo contato")
-                    item["status"] = "Orçamento em elaboração"
-                    item["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
-                    registrar_evento_atendimento(item, "Dados enviados para criação de projeto personalizado")
-                    salvar_atendimentos(dados_at)
-                    st.success("Projeto preparado. Abra a aba Projeto Personalizado para revisar e salvar.")
+                    })
                 if b4.button("➕ Criar orçamento", key=f"orc_at_{item.get('id')}", width="stretch", disabled=orcamento_bloqueado_item):
-                    st.session_state.form_cliente = item.get("cliente", "")
-                    st.session_state.form_whatsapp = item.get("telefone", "")
-                    st.session_state.form_observacoes = item.get("mensagem", "")
-                    st.session_state._atendimento_origem_id = item.get("id")
-                    status_antigo = item.get("status", "Novo contato")
-                    item["status"] = "Orçamento em elaboração"
-                    item["atualizado_em"] = agora_local().strftime("%d/%m/%Y %H:%M")
-                    registrar_evento_atendimento(item, f"Status alterado de {status_antigo} para Orçamento em elaboração")
-                    salvar_atendimentos(dados_at)
-                    st.success("Dados preparados. Abra a aba Novo Orçamento.")
+                    _hf53_solicitar_abertura("novo_orcamento", {
+                        "cliente": item.get("cliente", ""), "whatsapp": item.get("telefone", ""),
+                        "observacoes": item.get("mensagem", ""), "atendimento_id": item.get("id", ""),
+                    })
 
                 q1, q2, q3, q4 = st.columns(4)
                 if q1.button("✅ Atendido", key=f"atendido_{item.get('id')}", width="stretch"):
@@ -28133,9 +28357,31 @@ if pagina_atual == "clientes_360":
 if pagina_atual == "site":
     st.markdown("# 🌐 Central do Site AlphaFest")
     st.caption(
-        "HF44 • O Catálogo do Manager continua como Fonte Única do site. "
-        "Marcar um produto prepara a próxima versão; a publicação no domínio oficial só acontece quando você confirma em **Publicar site agora**."
+        "As alterações no Catálogo e nos conteúdos entram no site depois que você prepara a prévia "
+        "e confirma em **Publicar site agora**."
     )
+
+    _editorial_drafts_hf53 = st.session_state.get("_site_editorial_drafts_hf53", {})
+    with st.expander("🔄 Atualização dos conteúdos e rascunhos", expanded=bool(_editorial_drafts_hf53)):
+        st.caption("Os formulários preservam a versão carregada nesta sessão enquanto você edita. Para incorporar alterações de outra pessoa, salve ou copie seus textos e atualize os conteúdos.")
+        for _draft_key_hf53, _draft_value_hf53 in _editorial_drafts_hf53.items():
+            _draft_names_hf53 = {"site_campaign_db": "Campanha", "site_home_content_db": "Home", "site_dicas_multicanal_db": "Dicas", "site_posts_comerciais_db": "Novidades"}
+            st.download_button(
+                f"📥 Recuperar rascunho de {_draft_names_hf53.get(_draft_key_hf53, 'conteúdo')}",
+                data=json.dumps(_draft_value_hf53, ensure_ascii=False, indent=2).encode("utf-8"),
+                file_name=f"alphafest_rascunho_{_draft_key_hf53}.json", mime="application/json",
+                key=f"site_hf53_recovery_top_{_draft_key_hf53}",
+            )
+        if st.button("🔄 Atualizar conteúdos salvos", key="site_hf53_reload_editors", help="Recarrega os formulários com os dados salvos. Copie textos ainda não enviados antes de atualizar; rascunhos de gravações recusadas continuam disponíveis para baixar."):
+            _site_refresh_editors_hf53(st.session_state)
+            for _editorial_key_hf53 in _site_editorial_keys_hf53:
+                invalidate_document_cache(_editorial_key_hf53)
+            for _widget_key_hf53 in list(st.session_state):
+                if str(_widget_key_hf53).startswith(("site_campaign_hf65_", "hf6514_", "hf65245_dep_", "hf6522_dica_", "hf6524_arte_", "hf6524_remover_", "afposts_")):
+                    st.session_state.pop(_widget_key_hf53, None)
+            st.rerun()
+
+    _editorial_revisions_hf53 = st.session_state.get("_site_editorial_revisions_hf53", {})
 
     catalogo_site_hf35 = carregar_catalogo()
     # HF45 — cache por assinatura do conteúdo do site. O cache vive somente na
@@ -28197,7 +28443,7 @@ if pagina_atual == "site":
                 elif not _camp_usar_padrao_hf65:
                     st.caption("A arte personalizada já salva será mantida se você não escolher outro arquivo.")
 
-            with st.form("site_campaign_hf65_form", clear_on_submit=False):
+            with st.form("site_campaign_hf65_form_" + str(_editorial_revisions_hf53.get("site_campaign_db", 0)), clear_on_submit=False):
                 _hf65_enabled = st.checkbox("Exibir campanha no site", value=bool(campanha_hf65.get("enabled")))
                 _hf65_name = st.text_input("Nome interno da campanha", value=str(campanha_hf65.get("campaign_name") or "Campanha"), max_chars=120)
 
@@ -28310,7 +28556,7 @@ if pagina_atual == "site":
                 st.error("O banco não confirmou a atualização da Home. Nada foi publicado.")
 
         st.markdown("#### 🔗 Botão principal")
-        with st.form("hf6514_home_cta_form"):
+        with st.form("hf6514_home_cta_form_" + str(_editorial_revisions_hf53.get("site_home_content_db", 0))):
             _home_cta_text_hf6514 = st.text_input(
                 "Texto do botão",
                 value=str(home_hf6514.get("hero_cta_text") or "Entre para nosso canal"),
@@ -28412,7 +28658,7 @@ if pagina_atual == "site":
                 )
                 if _dep_video_hf6514 is not None:
                     st.video(_dep_video_hf6514)
-            with st.form("hf6514_testimonial_form", clear_on_submit=True):
+            with st.form("hf6514_testimonial_form_" + str(_editorial_revisions_hf53.get("site_home_content_db", 0)), clear_on_submit=False):
                 _td1_hf6514, _td2_hf6514 = st.columns(2)
                 _dep_nome_hf6514 = _td1_hf6514.text_input("Nome do cliente")
                 _dep_empresa_hf6514 = _td2_hf6514.text_input("Empresa / referência (opcional)")
@@ -28677,7 +28923,7 @@ if pagina_atual == "site":
             key='hf6522_dica_selecionada',
         )
         _item_hf6522 = next((dict(x) for x in _dicas_hf6522 if x['slug']==_sel_slug_hf6522), {})
-        with st.form('hf6522_form_conteudo'):
+        with st.form('hf6522_form_conteudo_' + str(_editorial_revisions_hf53.get('site_dicas_multicanal_db', 0)) + '_' + str(_sel_slug_hf6522)):
             _titulo_hf6522 = st.text_input('Título',value=_item_hf6522.get('title',''))
             _resumo_hf6522 = st.text_area('Resumo para o site e para o YouTube',value=_item_hf6522.get('summary',''),height=85)
             _corpo_hf6522 = st.text_area('Texto do artigo (use ## para subtítulos)',value=_item_hf6522.get('body',''),height=210)
@@ -28811,11 +29057,44 @@ if pagina_atual == "site":
     hs2.metric("Categorias", resumo_vitrine_hf59.get("total_categorias", 0))
     hs3.metric("Fotos na Galeria", resumo_galeria_hf59.get("total_fotos", 0))
 
-    # HF65.24.52: uma sessão preservada não deve reaproveitar a prévia nem a
-    # confirmação de publicação de um gerador de versão anterior.
-    if st.session_state.get("site_hf59_preview_app_version") != APP_VERSION:
-        st.session_state.pop("site_hf59_html_preview", None)
-        st.session_state.pop("site_hf59_confirmar_publicacao", None)
+    def _ler_payload_site_hf53(force_refresh=False, require_online=False):
+        # Os formulários têm uma base estável de edição; a publicação lê os
+        # documentos salvos, sem promover um rascunho em tela a conteúdo público.
+        def _ler(key, path, default):
+            if require_online:
+                confirmed = getattr(_cloud_db, "load_document_confirmed", None) if _cloud_db else None
+                if not callable(confirmed):
+                    raise RuntimeError("Atualize o Manager completo para conferir os dados online antes de publicar.")
+                return confirmed(key, default=default)
+            return load_document(key, path, default, force_refresh=force_refresh)
+
+        _catalogo = _ler("catalogo_db", ARQUIVO_CATALOGO, [])
+        _catalogo = _catalogo if isinstance(_catalogo, list) else []
+        _galeria = _ler("galeria_trabalhos_db", ARQUIVO_GALERIA_TRABALHOS, [])
+        _galeria = _galeria if isinstance(_galeria, list) else []
+        _empresa = dict(CONFIG_EMPRESA_PADRAO)
+        _empresa_salva = _ler("config_empresa", ARQUIVO_EMPRESA, CONFIG_EMPRESA_PADRAO)
+        if isinstance(_empresa_salva, dict):
+            _empresa.update({k: v for k, v in _empresa_salva.items() if v is not None})
+        return {
+            "versao_manager": APP_VERSION,
+            "catalogo": _catalogo,
+            "empresa": _empresa,
+            "logo": logo_src_hf59,
+            "galeria": _galeria,
+            "total": _site_resumir_vitrine(_catalogo, usar_taxonomia_catalogo=True).get("total", 0),
+            "visual": "HF65",
+            "campaign": _site_campaign_normalize(_ler("site_campaign_db", ARQUIVO_SITE_CAMPAIGN, _site_campaign_default)),
+            "home": _site_home_normalize(_ler("site_home_content_db", ARQUIVO_SITE_HOME_CONTENT, _site_home_default)),
+            "adsense": _site_adsense_normalize(_ler("site_adsense_db", ARQUIVO_SITE_ADSENSE, _site_adsense_default)).get("publisher_id", ""),
+            "dicas": _site_dicas_normalize(_ler("site_dicas_multicanal_db", ARQUIVO_SITE_DICAS, _site_dicas_default)),
+            "posts": _site_posts_normalize(_ler("site_posts_comerciais_db", ARQUIVO_SITE_POSTS, [])),
+            "data_publicacao": hoje_local().isoformat(),
+        }
+
+    _site_payload_hf53 = _ler_payload_site_hf53()
+    if _site_invalidate_preview_hf53(st.session_state, APP_VERSION, _site_payload_hf53):
+        st.warning("Há alterações posteriores à prévia conferida. Prepare uma nova prévia para revisar o conteúdo atual antes de publicar.")
 
     col_preview_hf59, col_site_hf59 = st.columns([2, 1])
     if col_preview_hf59.button(
@@ -28825,25 +29104,26 @@ if pagina_atual == "site":
         key="site_hf59_preparar_preview",
     ):
         with st.spinner("Montando o site com o Catálogo e a Galeria atuais…"):
-            st.session_state["site_hf59_html_preview"] = _site_gerar_html_completo(
-                catalogo_site_hf35,
-                empresa_vitrine_hf59,
-                logo_src=logo_src_hf59,
+            _site_payload_hf53 = _ler_payload_site_hf53(force_refresh=True)
+            _html_preview_hf53 = _site_gerar_html_completo(
+                _site_payload_hf53["catalogo"],
+                _site_payload_hf53["empresa"],
+                logo_src=_site_payload_hf53["logo"],
                 imagem_resolver=_catalogo_html_src_imagem,
                 modo_preview=True,
                 usar_taxonomia_catalogo=True,
-                galeria_trabalhos=galeria_site_hf59,
+                galeria_trabalhos=_site_payload_hf53["galeria"],
                 galeria_imagem_resolver=_galeria_trabalho_imagem_data_uri,
                 incluir_galeria=True,
                 limite_fotos_galeria=48,
                 visual_hf48=True,
                 mascotes_hf48=True,
-                campaign_config=campanha_hf65,
-                home_content_config=home_hf6514,
-                dicas_content=_dicas_hf6522,
-                posts_content=_posts_hf652417,
+                campaign_config=_site_payload_hf53["campaign"],
+                home_content_config=_site_payload_hf53["home"],
+                dicas_content=_site_payload_hf53["dicas"],
+                posts_content=_site_payload_hf53["posts"],
             )
-            st.session_state["site_hf59_preview_app_version"] = APP_VERSION
+            _site_remember_preview_hf53(st.session_state, _html_preview_hf53, APP_VERSION, _site_payload_hf53)
         st.success("✅ Prévia atualizada. Confira abaixo antes de publicar.")
     col_site_hf59.link_button("🌐 Abrir site atual", "https://alphafest.com.br", width="stretch")
 
@@ -28865,38 +29145,38 @@ if pagina_atual == "site":
         with st.container(border=True):
             st.markdown("#### 🚀 Publicar site")
             st.caption(
-                "A publicação envia ao Worker `alphafest-novo` somente depois da sua confirmação. Catálogo, categorias, Galeria, lightbox, carrossel e demais funções homologadas usam a mesma Fonte Única do Manager."
+                "Depois de conferir a prévia e confirmar, esta ação atualiza o site público da AlphaFest."
             )
 
             def _build_producao_hf59():
                 _html = _site_gerar_html_completo(
-                    catalogo_site_hf35,
-                    empresa_vitrine_hf59,
-                    logo_src=logo_src_hf59,
+                    _site_payload_hf53["catalogo"],
+                    _site_payload_hf53["empresa"],
+                    logo_src=_site_payload_hf53["logo"],
                     imagem_resolver=_catalogo_html_src_imagem,
                     modo_preview=False,
                     usar_taxonomia_catalogo=True,
-                    galeria_trabalhos=galeria_site_hf59,
+                    galeria_trabalhos=_site_payload_hf53["galeria"],
                     galeria_imagem_resolver=_galeria_trabalho_imagem_data_uri,
                     incluir_galeria=True,
                     limite_fotos_galeria=48,
                     visual_hf48=True,
                     mascotes_hf48=True,
-                    campaign_config=campanha_hf65,
-                    home_content_config=home_hf6514,
-                    dicas_content=_dicas_hf6522,
-                    posts_content=_posts_hf652417,
+                    campaign_config=_site_payload_hf53["campaign"],
+                    home_content_config=_site_payload_hf53["home"],
+                    dicas_content=_site_payload_hf53["dicas"],
+                    posts_content=_site_payload_hf53["posts"],
                 )
                 _zip = _site_gerar_pacote_producao(
                     _html,
-                    total_produtos=resumo_vitrine_hf59.get("total", 0),
+                    total_produtos=_site_payload_hf53["total"],
                     versao_manager=APP_VERSION,
-                    adsense_publisher_id=_adsense_id_hf6520,
-                    dicas_content=_dicas_hf6522,
-                    dicas_whatsapp=empresa_vitrine_hf59.get("whatsapp_catalogo") or empresa_vitrine_hf59.get("celular") or "",
-                    posts_content=_posts_hf652417,
-                    corporate_products=catalogo_site_hf35,
-                    corporate_logo_src=logo_src_hf59,
+                    adsense_publisher_id=_site_payload_hf53["adsense"],
+                    dicas_content=_site_payload_hf53["dicas"],
+                    dicas_whatsapp=_site_payload_hf53["empresa"].get("whatsapp_catalogo") or _site_payload_hf53["empresa"].get("celular") or "",
+                    posts_content=_site_payload_hf53["posts"],
+                    corporate_products=_site_payload_hf53["catalogo"],
+                    corporate_logo_src=_site_payload_hf53["logo"],
                     corporate_image_resolver=_catalogo_html_src_imagem,
                 )
                 return _html, _zip
@@ -28904,20 +29184,7 @@ if pagina_atual == "site":
             (html_producao_hf59, pacote_producao_hf59), _site_prod_hit_hf59 = _document_cache_get_or_build(
                 _site_runtime_cache_hf45,
                 "site-producao-bundle-hf59",
-                {
-                    "versao_manager": APP_VERSION,
-                    "catalogo": catalogo_site_hf35,
-                    "empresa": empresa_vitrine_hf59,
-                    "logo": logo_src_hf59,
-                    "galeria": galeria_site_hf59,
-                    "total": resumo_vitrine_hf59.get("total", 0),
-                    "visual": "HF65",
-                    "campaign": campanha_hf65,
-                    "home": home_hf6514,
-                    "adsense": _adsense_id_hf6520,
-                    "dicas": _dicas_hf6522,
-                    "posts": _posts_hf652417,
-                },
+                _site_payload_hf53,
                 _build_producao_hf59,
                 ttl_seconds=180,
                 max_entries=6,
@@ -29020,7 +29287,7 @@ if pagina_atual == "site":
                 st.info("✅ Este mesmo conteúdo já foi publicado nesta sessão. Uma nova alteração no Catálogo, Galeria ou Campanha Destaque gerará outra versão.")
 
             _cf_confirmar_hf59 = st.checkbox(
-                f"Conferi a prévia e quero publicar agora {resumo_vitrine_hf59.get('total', 0)} produto(s) + a Galeria selecionada.",
+                f"Conferi a prévia e quero publicar agora {_site_payload_hf53.get('total', 0)} produto(s) + a Galeria selecionada.",
                 key="site_hf59_confirmar_publicacao",
             )
             _cf_pode_publicar_hf59 = bool(
@@ -29029,6 +29296,7 @@ if pagina_atual == "site":
                 and _cf_account_hf60
                 and _cf_token_hf60
                 and _cf_confirmar_hf59
+                and _site_preview_matches_hf53(st.session_state, APP_VERSION, _site_payload_hf53)
                 and (_cf_fingerprint_hf59 != _cf_ultimo_hf59 or not _cf_fingerprint_hf59)
             )
             if st.button(
@@ -29039,6 +29307,14 @@ if pagina_atual == "site":
                 key="site_hf59_publicar_agora",
             ):
                 try:
+                    # Nova leitura só no clique final: a conferência não pode
+                    # autorizar alterações salvas por outra sessão durante o TTL.
+                    _site_payload_fresco_hf53 = _ler_payload_site_hf53(force_refresh=True, require_online=True)
+                    if not _site_preview_matches_hf53(st.session_state, APP_VERSION, _site_payload_fresco_hf53):
+                        # A checkbox já foi criada neste rerun; sua chave só será
+                        # limpa pelo guard no próximo, antes de recriar o widget.
+                        st.session_state.pop("site_hf53_preview_signature", None)
+                        raise ValueError("O conteúdo salvo mudou depois da conferência. Prepare uma nova prévia e confira novamente.")
                     with st.spinner("Enviando a nova versão do site…"):
                         _cf_resultado_hf59 = _site_cf_publicar_pacote(
                             pacote_producao_hf59,
@@ -29050,10 +29326,7 @@ if pagina_atual == "site":
                     st.session_state["site_hf44_ultimo_fingerprint"] = str(
                         _cf_resultado_hf59.get("fingerprint", "") or _cf_fingerprint_hf59
                     )
-                    st.success(
-                        f"✅ Site publicado no Worker `{_cf_worker_hf60}`. "
-                        f"Versão Cloudflare: `{_cf_resultado_hf59.get('version_id', 'confirmada')}`."
-                    )
+                    st.success("✅ Site publicado com sucesso. Abra o site para conferir.")
                     st.link_button("🌐 Abrir alphafest.com.br para conferir", "https://alphafest.com.br", width="stretch")
                 except Exception as _cf_publish_exc_hf59:
                     st.error(f"A publicação foi interrompida com segurança: {_cf_publish_exc_hf59}")
@@ -31060,6 +31333,8 @@ if pagina_atual == "novo_orcamento":
         unsafe_allow_html=True,
     )
     renderizar_painel_alertas("novo_orcamento")
+    if st.session_state.get("form_observacoes"):
+        st.info("Solicitação de origem: " + str(st.session_state["form_observacoes"]))
 
     if st.session_state.editar_numero:
         st.info(f"✏️ Editando a proposta {st.session_state.editar_numero}")
@@ -31205,84 +31480,88 @@ if pagina_atual == "novo_orcamento":
     elif msg_identificacao_i8111 == "nao_encontrado":
         st.info("ℹ️ WhatsApp ainda não cadastrado. Continue preenchendo os dados normalmente como **Cliente novo** no próprio orçamento.")
 
-    # CAT1-HF5 — produto fica fora do form para que a seleção no Catálogo Oficial
-    # possa preencher os dados do item imediatamente. Os demais campos continuam
-    # isolados no formulário e não perdem o que o Jorge já digitou.
-    prod, prod_meta_i8113 = _orcamento_campos_produto(f"produto_novo_{st.session_state.form_key}")
-    produto_cat_auto_i8113 = _orcamento_aplicar_autopreenchimento_catalogo(
-        prod_meta_i8113,
-        marcador_key=f"produto_catalogo_auto_{st.session_state.form_key}",
-        valor_key=f"valor_{st.session_state.form_key}",
-        material_key=f"cor_{st.session_state.form_key}",
-        detalhes_key=f"obs_item_{st.session_state.form_key}",
-    )
-    if produto_cat_auto_i8113:
-        resumo_auto_i8113 = _orcamento_resumo_dados_catalogo(produto_cat_auto_i8113)
-        st.success("⚡ Produto do Catálogo reconhecido: preço oficial carregado. Tema, nome, cor/material e detalhes permanecem manuais.")
-        if resumo_auto_i8113:
-            st.caption(resumo_auto_i8113)
-        _orcamento_previa_visual_catalogo(
-            produto_cat_auto_i8113,
-            prefixo=f"orc_prev_{st.session_state.form_key}",
+    editando_item_hf53 = bool(st.session_state.get("_hf53_edicao_jorge"))
+    if editando_item_hf53:
+        _hf53_renderizar_edicao_item("temp_itens", anna=False)
+    else:
+        # CAT1-HF5 — produto fica fora do form para que a seleção no Catálogo Oficial
+        # possa preencher os dados do item imediatamente. Os demais campos continuam
+        # isolados no formulário e não perdem o que o Jorge já digitou.
+        prod, prod_meta_i8113 = _orcamento_campos_produto(f"produto_novo_{st.session_state.form_key}")
+        produto_cat_auto_i8113 = _orcamento_aplicar_autopreenchimento_catalogo(
+            prod_meta_i8113,
+            marcador_key=f"produto_catalogo_auto_{st.session_state.form_key}",
+            valor_key=f"valor_{st.session_state.form_key}",
+            material_key=f"cor_{st.session_state.form_key}",
+            detalhes_key=f"obs_item_{st.session_state.form_key}",
         )
+        if produto_cat_auto_i8113:
+            resumo_auto_i8113 = _orcamento_resumo_dados_catalogo(produto_cat_auto_i8113)
+            st.success("⚡ Produto do Catálogo reconhecido: preço oficial carregado. Tema, nome, cor/material e detalhes permanecem manuais.")
+            if resumo_auto_i8113:
+                st.caption(resumo_auto_i8113)
+            _orcamento_previa_visual_catalogo(
+                produto_cat_auto_i8113,
+                prefixo=f"orc_prev_{st.session_state.form_key}",
+            )
 
-    # O restante do ITEM continua isolado para evitar recálculos enquanto Jorge
-    # digita tema, nome e personalizações.
-    with st.form(key=f"form_item_orcamento_{st.session_state.form_key}", clear_on_submit=False):
-        with st.expander("🎨 Personalização & Especificações", expanded=True):
-            c1, c2 = st.columns(2)
-            et = c1.text_input("Tema / Ocasião", key=f"tema_{st.session_state.form_key}")
-            en = c1.text_input("Nome(s) Personalizado(s)", key=f"nome_item_{st.session_state.form_key}")
-            ec = c1.text_input("Cor / Material", key=f"cor_{st.session_state.form_key}")
-            ei = c2.text_input("Idade / Data do Evento", key=f"idade_{st.session_state.form_key}")
-            eg = c2.text_input("Outros Detalhes", key=f"obs_item_{st.session_state.form_key}")
+        # O restante do ITEM continua isolado para evitar recálculos enquanto Jorge
+        # digita tema, nome e personalizações.
+        with st.form(key=f"form_item_orcamento_{st.session_state.form_key}", clear_on_submit=False):
+            with st.expander("🎨 Personalização & Especificações", expanded=True):
+                c1, c2 = st.columns(2)
+                et = c1.text_input("Tema / Ocasião", key=f"tema_{st.session_state.form_key}")
+                en = c1.text_input("Nome(s) Personalizado(s)", key=f"nome_item_{st.session_state.form_key}")
+                ec = c1.text_input("Cor / Material", key=f"cor_{st.session_state.form_key}")
+                ei = c2.text_input("Idade / Data do Evento", key=f"idade_{st.session_state.form_key}")
+                eg = c2.text_input("Outros Detalhes", key=f"obs_item_{st.session_state.form_key}")
 
-        q = st.number_input("Qtd", min_value=1, value=1, key=f"qtd_{st.session_state.form_key}")
-        _jorge_valor_key_i8113 = f"valor_{st.session_state.form_key}"
-        if _jorge_valor_key_i8113 in st.session_state:
-            v = st.number_input("Valor Unitário (R$)", step=0.5, key=_jorge_valor_key_i8113)
-        else:
-            v = st.number_input("Valor Unitário (R$)", value=0.0, step=0.5, key=_jorge_valor_key_i8113)
-        adicionar_item = st.form_submit_button("➕ Adicionar Item", width="stretch")
-
-    if adicionar_item:
-        if not prod.strip():
-            st.warning("Informe o produto antes de adicionar.")
-        else:
-            detalhes = f"Tema: {et} | Nome: {en} | Idade: {ei} | Cor: {ec} | Obs: {eg}"
-            cliente_i811 = localizar_cliente_comercial(nome, doc, wa)
-            preco_i811 = calcular_preco_cliente_item(cliente_i811, prod, v) if cliente_i811 else None
-            item_novo = {
-                "produto": prod, "especificacoes": detalhes, "quantidade": q, "valor_unitario": v,
-                **_catalogo_snapshot_item(prod_meta_i8113, produto_cat_auto_i8113),
-            }
-            if preco_i811 and preco_i811.get("bloqueado"):
-                st.error(
-                    f"🛑 Regra comercial inválida para {preco_i811.get('produto_oficial')}: "
-                    f"preço oficial R$ {preco_i811.get('preco_base', 0):.2f} e abatimento R$ {preco_i811.get('abatimento', 0):.2f}. "
-                    "Revise o Perfil Comercial do cliente antes de adicionar este item."
-                )
+            q = st.number_input("Qtd", min_value=1, value=1, key=f"qtd_{st.session_state.form_key}")
+            _jorge_valor_key_i8113 = f"valor_{st.session_state.form_key}"
+            if _jorge_valor_key_i8113 in st.session_state:
+                v = st.number_input("Valor Unitário (R$)", step=0.5, key=_jorge_valor_key_i8113)
             else:
-                if preco_i811:
-                    item_novo.update({
-                        "produto": preco_i811["produto_oficial"],
-                        "valor_unitario": preco_i811["preco_final"],
-                        "valor_base_oficial": preco_i811["preco_base"],
-                        "abatimento_fixo_cliente": preco_i811["abatimento"],
-                        "preco_especial_aplicado": True,
-                        "perfil_comercial_cliente_id": (cliente_i811 or {}).get("id", ""),
-                    })
-                    st.session_state["_i811_aviso_preco"] = (
-                        f"💰 Preço especial aplicado a {preco_i811['produto_oficial']}: "
-                        f"R$ {preco_i811['preco_base']:.2f} - R$ {preco_i811['abatimento']:.2f} = R$ {preco_i811['preco_final']:.2f}"
-                    ).replace(".", ",")
-                if cliente_i811:
-                    perfil_i811 = resumo_perfil_comercial(cliente_i811)
-                    if perfil_i811.get("faturamento_mensal"):
-                        st.session_state["_i811_aviso_perfil"] = f"🔁 Cliente identificado com fechamento {str(perfil_i811.get('periodicidade_fechamento') or 'Mensal').casefold()}. A proposta será incluída no controle recorrente."
-                st.session_state.temp_itens.append(item_novo)
-                st.session_state.form_key += 1
-                rerun_na_aba("novo_orcamento")
+                v = st.number_input("Valor Unitário (R$)", value=0.0, step=0.5, key=_jorge_valor_key_i8113)
+            adicionar_item = st.form_submit_button("➕ Adicionar Item", width="stretch")
+
+        if adicionar_item:
+            if not prod.strip():
+                st.warning("Informe o produto antes de adicionar.")
+            else:
+                detalhes = f"Tema: {et} | Nome: {en} | Idade: {ei} | Cor: {ec} | Obs: {eg}"
+                cliente_i811 = localizar_cliente_comercial(nome, doc, wa)
+                preco_i811 = calcular_preco_cliente_item(cliente_i811, prod, v) if cliente_i811 else None
+                item_novo = {
+                    "produto": prod, "especificacoes": detalhes, "quantidade": q, "valor_unitario": v,
+                    **_catalogo_snapshot_item(prod_meta_i8113, produto_cat_auto_i8113),
+                }
+                if preco_i811 and preco_i811.get("bloqueado"):
+                    st.error(
+                        f"🛑 Regra comercial inválida para {preco_i811.get('produto_oficial')}: "
+                        f"preço oficial R$ {preco_i811.get('preco_base', 0):.2f} e abatimento R$ {preco_i811.get('abatimento', 0):.2f}. "
+                        "Revise o Perfil Comercial do cliente antes de adicionar este item."
+                    )
+                else:
+                    if preco_i811:
+                        item_novo.update({
+                            "produto": preco_i811["produto_oficial"],
+                            "valor_unitario": preco_i811["preco_final"],
+                            "valor_base_oficial": preco_i811["preco_base"],
+                            "abatimento_fixo_cliente": preco_i811["abatimento"],
+                            "preco_especial_aplicado": True,
+                            "perfil_comercial_cliente_id": (cliente_i811 or {}).get("id", ""),
+                        })
+                        st.session_state["_i811_aviso_preco"] = (
+                            f"💰 Preço especial aplicado a {preco_i811['produto_oficial']}: "
+                            f"R$ {preco_i811['preco_base']:.2f} - R$ {preco_i811['abatimento']:.2f} = R$ {preco_i811['preco_final']:.2f}"
+                        ).replace(".", ",")
+                    if cliente_i811:
+                        perfil_i811 = resumo_perfil_comercial(cliente_i811)
+                        if perfil_i811.get("faturamento_mensal"):
+                            st.session_state["_i811_aviso_perfil"] = f"🔁 Cliente identificado com fechamento {str(perfil_i811.get('periodicidade_fechamento') or 'Mensal').casefold()}. A proposta será incluída no controle recorrente."
+                    st.session_state.temp_itens.append(item_novo)
+                    st.session_state.form_key += 1
+                    rerun_na_aba("novo_orcamento")
 
     if st.session_state.temp_itens:
         cliente_atual_i811 = localizar_cliente_comercial(
@@ -31299,7 +31578,7 @@ if pagina_atual == "novo_orcamento":
                 )
             if resumo_atual_i811.get("qtd_regras_ativas", 0):
                 st.caption(f"💰 Perfil Comercial encontrado: {resumo_atual_i811.get('qtd_regras_ativas')} abatimento(s) fixo(s) ativo(s) por produto.")
-                if st.button("💼 Recalcular itens pelo Perfil Comercial", key="i811_recalcular_itens", width="stretch"):
+                if st.button("💼 Recalcular itens pelo Perfil Comercial", key="i811_recalcular_itens", width="stretch", disabled=editando_item_hf53):
                     alterados_i811 = 0
                     bloqueados_i811 = []
                     for item_i811 in st.session_state.temp_itens:
@@ -31327,7 +31606,7 @@ if pagina_atual == "novo_orcamento":
                         st.rerun()
         st.write("📋 **Itens da proposta:**")
         for idx, item in enumerate(st.session_state.temp_itens):
-            col_info, col_remover = st.columns([8, 1])
+            col_info, col_editar, col_remover = st.columns([7, 1.4, 1])
             qtd_item_i8113 = valor_float(item.get("quantidade"))
             unit_item_i8113 = valor_float(item.get("valor_unitario"))
             total_item_i8113 = qtd_item_i8113 * unit_item_i8113
@@ -31346,7 +31625,9 @@ if pagina_atual == "novo_orcamento":
                 col_info.caption(
                     (f"💼 Preço especial: R$ {base_i811:.2f} - abatimento fixo R$ {abat_i811:.2f} = R$ {final_i811:.2f}").replace(".", ",")
                 )
-            if col_remover.button("🗑️", key=f"remover_item_{idx}", help="Remover item"):
+            if col_editar.button("✏️ Editar", key=f"editar_item_{idx}", disabled=editando_item_hf53):
+                _hf53_iniciar_edicao_item("temp_itens", idx)
+            if col_remover.button("🗑️", key=f"remover_item_{idx}", help="Remover item", disabled=editando_item_hf53):
                 remover_item_temp(idx, "novo_orcamento")
 
         st.divider()
@@ -31370,7 +31651,7 @@ if pagina_atual == "novo_orcamento":
         r4.metric("Valor total", f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
         rotulo_salvar = "💾 SALVAR ALTERAÇÕES" if st.session_state.editar_numero else "🚀 SALVAR PROPOSTA"
-        if st.button(rotulo_salvar, type="primary"):
+        if st.button(rotulo_salvar, type="primary", disabled=editando_item_hf53):
             numero = st.session_state.editar_numero or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S')}"
             antigo = {}
             if st.session_state.editar_numero:
@@ -31395,6 +31676,7 @@ if pagina_atual == "novo_orcamento":
                 "documento": doc.strip(),
                 "whatsapp": wa.strip(),
                 "evento": evento.strip(),
+                "briefing_origem": str(st.session_state.get("form_observacoes") or ""),
                 # Mantém também os nomes antigos para compatibilidade com registros e telas antigas.
                 "cliente_cpf_cnpj": doc.strip(),
                 "cliente_wa": wa.strip(),

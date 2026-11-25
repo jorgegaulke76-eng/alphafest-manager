@@ -36,6 +36,9 @@ REQUIRED_RUNTIME_FILES = {
     "crm_runtime_index_service.py",
     "project_runtime_index_service.py",
     "document_runtime_service.py",
+    "site_integrity_service.py",
+    "manager_workflow_hf53.py",
+    "manager_operational_planning_hf53.py",
     "compras_runtime_index_service.py",
     "marketing_results_runtime_service.py",
     "reports_runtime_index_service.py",
@@ -206,7 +209,7 @@ def iter_update_files(root: Path, release_note: str | None = None) -> Iterable[P
         yield path
 
 
-def _manifest(root: Path, files: list[Path], version: str) -> dict:
+def _manifest(root: Path, files: list[Path], version: str, *, test_execution: dict | None = None) -> dict:
     entries = []
     total = 0
     for p in files:
@@ -218,13 +221,14 @@ def _manifest(root: Path, files: list[Path], version: str) -> dict:
     try:
         # Import tardio evita ciclo: release_diagnostics usa runtime_integrity_check.
         from release_diagnostics import run_release_diagnostics
-        diag = run_release_diagnostics(root)
+        # Recebe evidência do builder oficial; nunca executa testes aqui.
+        diag = run_release_diagnostics(root, test_execution=test_execution)
         validation = {
             "status": "OK" if diag.ok else "REPROVADO",
             "problems": list(diag.problems),
             "warnings": list(diag.warnings),
             "critical_python_compile": diag.checks.get("critical_python_compile", {}),
-            "tests": diag.test_inventory.to_dict(),
+            "tests": diag.checks.get("tests", {}),
         }
     except Exception as exc:
         validation = {"status": "INDISPONIVEL", "problems": [str(exc)]}
@@ -243,7 +247,13 @@ def _manifest(root: Path, files: list[Path], version: str) -> dict:
     }
 
 
-def build_clean_update_zip(root: str | Path, output: str | Path, *, release_note: str | None = None) -> dict:
+def build_clean_update_zip(
+    root: str | Path,
+    output: str | Path,
+    *,
+    release_note: str | None = None,
+    test_execution: dict | None = None,
+) -> dict:
     root = Path(root).resolve()
     output = Path(output).resolve()
     audit = runtime_integrity_check(root)
@@ -256,7 +266,9 @@ def build_clean_update_zip(root: str | Path, output: str | Path, *, release_note
     if missing:
         raise RuntimeError("Pacote limpo removeria arquivo obrigatório: " + ", ".join(missing))
 
-    manifest = _manifest(root, files, audit.version)
+    manifest = _manifest(root, files, audit.version, test_execution=test_execution)
+    if manifest["validation"].get("status") != "OK":
+        raise RuntimeError("Diagnóstico do pacote reprovado: " + " | ".join(manifest["validation"].get("problems", [])))
     output.parent.mkdir(parents=True, exist_ok=True)
     wrapper = root.name
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as zf:

@@ -129,6 +129,41 @@ def _write_local(path: str, value: Any) -> None:
         json.dump(value, file, ensure_ascii=False, indent=4)
 
 
+def load_document_confirmed(document_key: str, default: Any = None) -> Any:
+    """HF65.24.53: leitura confirmada para a conferência final da publicação.
+
+    Ausência confirmada usa só o default explícito. Erro nunca consulta nem
+    importa contingência local, nunca grava e nunca é tratado como confirmação.
+    A leitura normal do Manager mantém seu fallback em ``load_document``.
+    """
+    import copy
+
+    if not online_configured():
+        raise RuntimeError("A leitura online não está disponível para conferir a publicação.")
+    url, _ = _config()
+    try:
+        response = _SESSION.get(
+            f"{url}/rest/v1/app_data",
+            headers=_headers(),
+            params={"select": "value", "key": f"eq.{document_key}", "limit": "1"},
+            timeout=TIMEOUT,
+        )
+        response.raise_for_status()
+        rows = response.json()
+        if not isinstance(rows, list):
+            raise ValueError("resposta de leitura inválida")
+        if not rows:
+            return copy.deepcopy(default)
+        if not isinstance(rows[0], dict) or "value" not in rows[0]:
+            raise ValueError("documento sem conteúdo confirmado")
+        value = rows[0]["value"]
+        return copy.deepcopy(default if value is None else value)
+    except (requests.RequestException, ValueError, TypeError) as exc:
+        raise RuntimeError(
+            f"Não foi possível confirmar o conteúdo salvo ({document_key}; {_safe_http_failure(exc)}). Tente novamente antes de publicar."
+        ) from None
+
+
 def load_document(document_key: str, local_path: str, default: Any) -> Any:
     """Carrega do Supabase; se vazio, importa automaticamente o JSON local."""
     if not online_configured():

@@ -308,12 +308,60 @@ def _row_at_or_after(row: dict[str, Any], since: datetime) -> bool:
         return False
 
 
-def _session_ids(rows: Iterable[dict[str, Any]], since: datetime) -> set[str]:
-    return {
-        str(x.get("session_id") or "").strip()
-        for x in rows
-        if _row_at_or_after(x, since) and str(x.get("session_id") or "").strip()
-    }
+def _session_ids(rows: Iterable[dict[str, Any]], since: datetime, until: datetime | None = None) -> set[str]:
+    start = since.astimezone(timezone.utc)
+    end = until.astimezone(timezone.utc) if until is not None else None
+    sessions: set[str] = set()
+    for row in rows:
+        sid = str(row.get("session_id") or "").strip()
+        timestamp = _event_timestamp(row)
+        if sid and timestamp is not None and timestamp >= start and (end is None or timestamp <= end):
+            sessions.add(sid)
+    return sessions
+
+
+def _event_timestamp(row: dict[str, Any]) -> datetime | None:
+    """Lê timestamps de eventos; valores sem fuso seguem o contrato UTC legado."""
+    try:
+        value = datetime.fromisoformat(str(row.get("created_at") or "").strip().replace("Z", "+00:00"))
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _product_to_whatsapp_sessions(
+    product_rows: Iterable[dict[str, Any]],
+    whatsapp_rows: Iterable[dict[str, Any]],
+    since: datetime,
+    until: datetime,
+) -> set[str]:
+    """HF65.24.53: sessões com produto seguido de WhatsApp na mesma janela.
+
+    A abertura precisa ser estritamente anterior ao clique. Timestamps iguais
+    não comprovam a sequência e não contam nesta etapa; o clique continua nos
+    totais de WhatsApp. Uma sessão conta uma única vez, mesmo com vários eventos.
+    Os dois eventos devem estar no intervalo inclusivo [since, until].
+    """
+    start = since.astimezone(timezone.utc)
+    end = until.astimezone(timezone.utc)
+    first_product: dict[str, datetime] = {}
+    for row in product_rows:
+        sid = str(row.get("session_id") or "").strip()
+        timestamp = _event_timestamp(row)
+        if not sid or timestamp is None or not start <= timestamp <= end:
+            continue
+        if sid not in first_product or timestamp < first_product[sid]:
+            first_product[sid] = timestamp
+    converted: set[str] = set()
+    for row in whatsapp_rows:
+        sid = str(row.get("session_id") or "").strip()
+        timestamp = _event_timestamp(row)
+        opened = first_product.get(sid)
+        if opened is not None and timestamp is not None and start <= timestamp <= end and opened < timestamp:
+            converted.add(sid)
+    return converted
 
 
 def _pct(num: int, den: int) -> float:
@@ -626,8 +674,9 @@ def dashboard_summary(now: datetime | None = None) -> Dict[str, Any]:
     sessions={str(x.get("session_id") or "") for x in page_30 if str(x.get("session_id") or "")}; visitors={str(x.get("client_id") or "") for x in page_30 if str(x.get("client_id") or "")}
     periods={}
     for key,since in (("today",dtoday),("7d",d7),("30d",d30)):
-        ps=_session_ids(page_rows,since); prs=_session_ids(product_rows,since); ws=_session_ids(wa_rows,since)
-        periods[key]={"pageviews":_event_count(page_rows,since),"products":_event_count(product_rows,since),"whatsapp":_event_count(wa_rows,since),"sessions":len(ps),"product_sessions":len(prs),"whatsapp_sessions":len(ws),"conv_product":_pct(len(prs),len(ps)),"conv_whatsapp":_pct(len(ws),len(ps)),"conv_product_to_whatsapp":_pct(len(ws),len(prs))}
+        ps=_session_ids(page_rows,since,now); prs=_session_ids(product_rows,since,now); ws=_session_ids(wa_rows,since,now)
+        product_contacts = _product_to_whatsapp_sessions(product_rows, wa_rows, since, now)
+        periods[key]={"pageviews":_event_count(page_rows,since),"products":_event_count(product_rows,since),"whatsapp":_event_count(wa_rows,since),"sessions":len(ps),"product_sessions":len(prs),"whatsapp_sessions":len(ws),"conv_product":_pct(len(prs),len(ps)),"conv_whatsapp":_pct(len(ws),len(ps)),"conv_product_to_whatsapp":_pct(len(product_contacts),len(prs)),"product_to_whatsapp_sessions":len(product_contacts),"whatsapp_other_sessions":len(ws-product_contacts)}
     month_start=(local_now.replace(day=1,hour=0,minute=0,second=0,microsecond=0)-timedelta(days=335)).replace(day=1).astimezone(timezone.utc)
     year_start=local_now.replace(month=1,day=1,hour=0,minute=0,second=0,microsecond=0).astimezone(timezone.utc)
     return {

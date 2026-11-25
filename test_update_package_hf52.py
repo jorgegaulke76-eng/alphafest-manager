@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from zipfile import ZipFile
 
+from build_update_package import run_critical_tests
 from release_diagnostics import CRITICAL_PYTHON_FILES
 from update_hygiene import REQUIRED_RUNTIME_FILES, build_clean_update_zip
 
@@ -70,6 +71,18 @@ class TestUpdatePackageHF52(unittest.TestCase):
             output = Path(temp) / "atualizacao.zip"
             result = build_clean_update_zip(root, output)
             self.assertTrue(result["audit"]["ok"])
+            with ZipFile(output) as archive:
+                initial_manifest = json.loads(archive.read(root.name + "/UPDATE_MANIFEST.json"))
+                self.assertEqual(initial_manifest["validation"]["tests"]["execution_status"], "NAO_EXECUTADO")
+                self.assertEqual(initial_manifest["validation"]["tests"]["approved_files"], 0)
+
+            # O helper aceita evidência real de uma suíte explícita pequena, sem
+            # disparar novamente o gate oficial nem depender da versão atual.
+            (root / "test_gate_fixture.py").write_text("def test_ok(): assert True\n", encoding="utf-8")
+            execution = run_critical_tests(root, test_files=("test_gate_fixture.py",))
+            self.assertEqual(execution["status"], "APROVADO")
+            result = build_clean_update_zip(root, output, test_execution=execution)
+            self.assertTrue(result["audit"]["ok"])
 
             prefix = root.name + "/"
             with ZipFile(output) as archive:
@@ -85,6 +98,11 @@ class TestUpdatePackageHF52(unittest.TestCase):
                 manifest = json.loads(archive.read(prefix + "UPDATE_MANIFEST.json"))
                 self.assertEqual(manifest["version"], version)
                 self.assertNotIn("marcador", manifest)
+                self.assertEqual(manifest["validation"]["tests"]["found_files"], 1)
+                self.assertEqual(manifest["validation"]["tests"]["executed_files"], 1)
+                self.assertEqual(manifest["validation"]["tests"]["approved_files"], 1)
+                self.assertEqual(manifest["validation"]["tests"]["execution_status"], "APROVADO")
+                self.assertEqual(manifest["validation"]["tests"]["execution"]["source_fingerprint"], execution["source_fingerprint"])
                 entries = {item["path"]: item for item in manifest["files"]}
                 self.assertNotIn("UPDATE_MANIFEST.json", entries)
                 self.assertEqual(manifest["file_count"], len(names) - 1)
@@ -96,6 +114,12 @@ class TestUpdatePackageHF52(unittest.TestCase):
                 for relative in excluded:
                     with self.subTest(manifest_excluded=relative):
                         self.assertNotIn(relative, entries)
+
+            approved_bytes = output.read_bytes()
+            failed_execution = dict(execution, status="REPROVADO")
+            with self.assertRaisesRegex(RuntimeError, "Diagnóstico do pacote reprovado"):
+                build_clean_update_zip(root, output, test_execution=failed_execution)
+            self.assertEqual(output.read_bytes(), approved_bytes)
 
 
 if __name__ == "__main__":
