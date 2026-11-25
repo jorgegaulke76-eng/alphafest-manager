@@ -328,6 +328,7 @@ from proposal_status import (
 from executive_center import renderizar_centro_executivo
 from pedido_resumo import resumo_produtos_pedido
 import manager_workflow_hf53 as _workflow_hf53
+from site_quote_import_ui import renderizar_importacao as _hf54_renderizar_importacao
 from manager_operational_planning_hf53 import (
     montar_planejamentos as _hf53_montar_planejamentos,
     renderizar_planejamentos as _hf53_renderizar_planejamentos,
@@ -3850,6 +3851,11 @@ def _orcamento_autopreencher_cliente_por_nome(
     *, prefixo, nome_key, documento_key, whatsapp_key, reconhecido_id_key, mensagem_key
 ):
     """HF65.17: ao confirmar nome conhecido, carrega WhatsApp/CPF do cadastro mestre."""
+    contexto_hf54 = "anna" if nome_key.startswith("anna_modal_") else "jorge"
+    if (st.session_state.get(f"_hf54_cliente_importado_{contexto_hf54}")
+            and st.session_state.get(f"{prefixo}_seletor") == ORCAMENTO_CLIENTE_LIVRE):
+        # Um nome digitado na solicitação não confirma a identidade de um cadastro.
+        return
     nome_digitado = str(st.session_state.get(nome_key, "") or "").strip()
     cliente = _orcamento_cliente_por_nome_digitado_unico(nome_digitado)
     if not cliente:
@@ -4458,6 +4464,7 @@ def aplicar_proposta_pendente_no_formulario():
     duplicar = bool(pendente.get("duplicar", False))
 
     st.session_state.pop("_hf53_edicao_jorge", None)
+    st.session_state.pop("_hf54_cliente_importado_jorge", None)
     st.session_state.temp_itens = [dict(item) for item in prop.get("itens", []) or []]
     st.session_state.form_cliente = prop.get("cliente_nome", prop.get("cliente", ""))
     st.session_state.form_documento = prop.get("documento", prop.get("cliente_cpf_cnpj", ""))
@@ -4493,6 +4500,7 @@ def aplicar_limpeza_formulario_pendente():
         return
 
     st.session_state.pop("_hf53_edicao_jorge", None)
+    st.session_state.pop("_hf54_cliente_importado_jorge", None)
     st.session_state.temp_itens = []
     st.session_state.editar_numero = None
     st.session_state.form_cliente = ""
@@ -4583,6 +4591,72 @@ def _hf53_renderizar_edicao_item(itens_key, *, anna=False):
             _hf53_rerun_item(anna)
 
 
+def _hf54_pode_importar_site():
+    return usuario_pode_ver_aba("novo_orcamento") and usuario_pode_acao("novo_orcamento", "criar")
+
+
+def _hf54_carregar_catalogo_importacao():
+    """Consulta atual sem fallback ou importação de JSON local no banco."""
+    try:
+        dados = _cloud_db.load_document_confirmed("catalogo_db", [])
+    except Exception:
+        raise ValueError("Não foi possível conferir o catálogo online. Sua mensagem foi preservada. Tente analisar novamente quando a conexão estiver disponível.") from None
+    if not isinstance(dados, list) or any(not isinstance(item, dict) for item in dados):
+        raise ValueError("O catálogo retornou um conteúdo inválido. Confira o cadastro antes de importar a solicitação.")
+    return dados
+
+
+def _hf54_abrir_rascunho_importado(dados):
+    """Enfileira a abertura; o renderer conclui o próprio estado antes do rerun."""
+    if not _hf54_pode_importar_site():
+        st.warning("Seu perfil não permite criar um novo orçamento.")
+        return False
+    preparados = dict(dados)
+    preparados["_hf54_importacao_site"] = True
+    try:
+        _workflow_hf53.solicitar_abertura(
+            st.session_state, "novo_orcamento", preparados,
+            anna=usuario_em_operacao_protegida(obter_usuario_atual()),
+        )
+    except ValueError as erro:
+        st.warning(str(erro))
+        return False
+    return True
+
+
+def _hf54_identificacao_importada(resultado):
+    if not resultado.get("aplicado") or not resultado.get("dados", {}).get("_hf54_importacao_site"):
+        return
+    anna = bool(resultado.get("anna"))
+    prefixo = "anna_orc_cliente_novo" if anna else "jorge_orc_cliente"
+    st.session_state[f"{prefixo}_seletor"] = ORCAMENTO_CLIENTE_LIVRE
+    st.session_state.pop(f"{prefixo}_token", None)
+    st.session_state.pop(f"{prefixo}_whatsapp_autofill", None)
+    reconhecimento = "_i811hf2_anna_cliente_reconhecido" if anna else "_i8111_cliente_reconhecido"
+    for sufixo in ("_id", "_msg"):
+        st.session_state.pop(reconhecimento + sufixo, None)
+
+
+def _hf54_cliente_do_formulario(nome="", documento="", whatsapp="", *, anna=False):
+    if st.session_state.get(f"_hf54_cliente_importado_{'anna' if anna else 'jorge'}"):
+        return _rel_localizar_cliente_orcamento(
+            carregar_clientes(), nome=nome, documento=documento, whatsapp=whatsapp,
+        )
+    return localizar_cliente_comercial(nome, documento, whatsapp)
+
+
+def _hf54_mostrar_origem_orcamento(texto):
+    texto = str(texto or "")
+    if not texto:
+        return
+    if texto.startswith("Mensagem recebida do site:") or len(texto) > 800:
+        with st.expander("Mensagem de origem do orçamento", expanded=False):
+            st.text(texto)
+            st.caption("Confira com o cliente a identificação, a data de entrega e as condições antes de salvar a proposta.")
+    else:
+        st.info("Solicitação de origem: " + texto)
+
+
 def _hf53_solicitar_abertura(destino, dados):
     perfil = obter_perfil_configurado(obter_usuario_atual())
     if destino not in set(perfil.get("abas", [])):
@@ -4647,6 +4721,10 @@ def _hf53_processar_abertura_pendente():
     if not pendente:
         return
     destino = pendente["destino"]
+    if pendente.get("dados", {}).get("_hf54_importacao_site") and not _hf54_pode_importar_site():
+        _workflow_hf53.resolver_abertura(st.session_state, "cancelar")
+        st.warning("Seu perfil não permite criar um novo orçamento. A mensagem continua disponível na importação.")
+        return
     if destino not in set(obter_perfil_configurado(obter_usuario_atual()).get("abas", [])):
         _workflow_hf53.resolver_abertura(st.session_state, "cancelar")
         st.warning("O formulário solicitado não está disponível para o seu perfil.")
@@ -4671,6 +4749,8 @@ def _hf53_processar_abertura_pendente():
                 st.stop()
     resultado = _workflow_hf53.resolver_abertura(st.session_state, escolha, hoje=hoje_local())
     if resultado["aplicado"]:
+        if resultado["dados"].get("_hf54_importacao_site"):
+            _hf54_identificacao_importada(resultado)
         _hf53_registrar_abertura_origem(resultado)
     if resultado["anna"]:
         st.session_state["_hf53_anna_abrir_formulario"] = destino
@@ -18619,6 +18699,7 @@ def dialog_orcamento_anna(proposta=None):
         # Os widgets são compartilhados; voltar a outra proposta deve carregar
         # os dados dela, mesmo que seu marcador de abertura antigo ainda exista.
         st.session_state["_hf53_anna_contexto_formulario"] = chave_modal
+        st.session_state.pop("_hf54_cliente_importado_anna", None)
         st.session_state[chave_modal] = True
         st.session_state["anna_modal_cliente"] = str(proposta.get("cliente_nome", proposta.get("cliente", "")))
         st.session_state["anna_modal_documento"] = str(proposta.get("documento", proposta.get("cliente_cpf_cnpj", "")))
@@ -18657,8 +18738,7 @@ def dialog_orcamento_anna(proposta=None):
 
     if numero_original:
         st.info(f"✏️ Editando a proposta {numero_original}")
-    if st.session_state.get("anna_modal_observacoes"):
-        st.info("Solicitação de origem: " + str(st.session_state["anna_modal_observacoes"]))
+    _hf54_mostrar_origem_orcamento(st.session_state.get("anna_modal_observacoes"))
 
     ultima = st.session_state.get("_ultima_proposta_salva_anna")
     if ultima:
@@ -18706,7 +18786,7 @@ def dialog_orcamento_anna(proposta=None):
         help="Identifica o orçamento inteiro. Tema/Ocasião continua sendo uma informação de cada item.",
     )
 
-    cliente_modal_i811 = localizar_cliente_comercial(nome, doc, wa)
+    cliente_modal_i811 = _hf54_cliente_do_formulario(nome, doc, wa, anna=True)
     msg_modal_i811 = st.session_state.pop("_i811hf2_anna_cliente_reconhecido_msg", None)
     if cliente_modal_i811:
         resumo_modal_rec_i811 = resumo_cliente_reconhecido_i8111(cliente_modal_i811)
@@ -18765,7 +18845,7 @@ def dialog_orcamento_anna(proposta=None):
 
         itens_previa_i8113 = st.session_state.get("anna_modal_itens", []) or []
         subtotal_atual_i8113 = sum(valor_float(i.get("quantidade")) * valor_float(i.get("valor_unitario")) for i in itens_previa_i8113)
-        cliente_previa_i8113 = localizar_cliente_comercial(nome, doc, wa)
+        cliente_previa_i8113 = _hf54_cliente_do_formulario(nome, doc, wa, anna=True)
         preco_previa_i8113 = calcular_preco_cliente_item(cliente_previa_i8113, prod.strip(), v) if cliente_previa_i8113 and prod.strip() else None
         valor_unitario_previa_i8113 = valor_float(v)
         if preco_previa_i8113 and not preco_previa_i8113.get("bloqueado"):
@@ -18799,7 +18879,7 @@ def dialog_orcamento_anna(proposta=None):
                     "produto": prod.strip(), "especificacoes": detalhes, "quantidade": q, "valor_unitario": v,
                     **_catalogo_snapshot_item(prod_meta_i8113, produto_cat_auto_i8113),
                 }
-                cliente_item_i811 = localizar_cliente_comercial(nome, doc, wa)
+                cliente_item_i811 = _hf54_cliente_do_formulario(nome, doc, wa, anna=True)
                 preco_item_i811 = calcular_preco_cliente_item(cliente_item_i811, prod.strip(), v) if cliente_item_i811 else None
                 if preco_item_i811 and preco_item_i811.get("bloqueado"):
                     st.error(
@@ -18828,7 +18908,7 @@ def dialog_orcamento_anna(proposta=None):
 
     itens = st.session_state.get("anna_modal_itens", [])
     if itens:
-        cliente_itens_i811 = localizar_cliente_comercial(nome, doc, wa)
+        cliente_itens_i811 = _hf54_cliente_do_formulario(nome, doc, wa, anna=True)
         perfil_itens_i811 = resumo_perfil_comercial(cliente_itens_i811) if cliente_itens_i811 else resumo_perfil_comercial({})
         if cliente_itens_i811 and perfil_itens_i811.get("qtd_regras_ativas", 0):
             if st.button("💼 Recalcular itens pelo Perfil Comercial", key="anna_i811hf2_recalcular_itens", width="stretch", disabled=editando_item_hf53):
@@ -25134,6 +25214,9 @@ def renderizar_workspace_anna_isolado():
                 st.session_state.pop("_ultima_proposta_salva_anna", None)
                 st.rerun()
 
+    if _hf54_pode_importar_site():
+        _hf54_renderizar_importacao(st, _hf54_carregar_catalogo_importacao, _hf54_abrir_rascunho_importado, prefixo="hf54_importar_anna")
+
     a1, a2, a3, a4, a5 = st.columns(5)
     if a1.button("💬 Novo atendimento", width="stretch"): dialog_atendimento_anna()
     if a2.button("➕ Novo orçamento", type="primary", width="stretch"): dialog_orcamento_anna()
@@ -31333,8 +31416,9 @@ if pagina_atual == "novo_orcamento":
         unsafe_allow_html=True,
     )
     renderizar_painel_alertas("novo_orcamento")
-    if st.session_state.get("form_observacoes"):
-        st.info("Solicitação de origem: " + str(st.session_state["form_observacoes"]))
+    if _hf54_pode_importar_site():
+        _hf54_renderizar_importacao(st, _hf54_carregar_catalogo_importacao, _hf54_abrir_rascunho_importado, prefixo="hf54_importar_jorge")
+    _hf54_mostrar_origem_orcamento(st.session_state.get("form_observacoes"))
 
     if st.session_state.editar_numero:
         st.info(f"✏️ Editando a proposta {st.session_state.editar_numero}")
@@ -31470,7 +31554,7 @@ if pagina_atual == "novo_orcamento":
         help="Identifica a proposta inteira; Tema/Ocasião continua sendo específico de cada item.",
     )
 
-    cliente_reconhecido_i8111 = localizar_cliente_comercial(nome, doc, wa)
+    cliente_reconhecido_i8111 = _hf54_cliente_do_formulario(nome, doc, wa)
     msg_identificacao_i8111 = st.session_state.pop("_i8111_cliente_reconhecido_msg", None)
     if cliente_reconhecido_i8111:
         resumo_rec_i8111 = resumo_cliente_reconhecido_i8111(cliente_reconhecido_i8111)
@@ -31529,7 +31613,7 @@ if pagina_atual == "novo_orcamento":
                 st.warning("Informe o produto antes de adicionar.")
             else:
                 detalhes = f"Tema: {et} | Nome: {en} | Idade: {ei} | Cor: {ec} | Obs: {eg}"
-                cliente_i811 = localizar_cliente_comercial(nome, doc, wa)
+                cliente_i811 = _hf54_cliente_do_formulario(nome, doc, wa)
                 preco_i811 = calcular_preco_cliente_item(cliente_i811, prod, v) if cliente_i811 else None
                 item_novo = {
                     "produto": prod, "especificacoes": detalhes, "quantidade": q, "valor_unitario": v,
@@ -31564,7 +31648,7 @@ if pagina_atual == "novo_orcamento":
                     rerun_na_aba("novo_orcamento")
 
     if st.session_state.temp_itens:
-        cliente_atual_i811 = localizar_cliente_comercial(
+        cliente_atual_i811 = _hf54_cliente_do_formulario(
             st.session_state.get("form_cliente", ""),
             st.session_state.get("form_documento", ""),
             st.session_state.get("form_whatsapp", ""),

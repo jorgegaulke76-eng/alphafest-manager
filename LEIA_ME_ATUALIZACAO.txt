@@ -1,39 +1,41 @@
-ALPHAFEST MANAGER — HF65.24.53 · MELHORIAS OPERACIONAIS
+ALPHAFEST MANAGER — HF65.24.54 · IMPORTAÇÃO DO ORÇAMENTO DO SITE
 
-Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.24.53
-Base de integração: HF65.24.52, cujos ajustes da ficha móvel e dos links diretos estão incluídos.
+Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.24.54
+Pacote cumulativo a partir da HF65.24.53. Inclui as melhorias de site e operação das versões .52 e .53.
 
-INSTALAÇÃO DO MANAGER
+COMO ATUALIZAR
 
-1. No Manager atual, abra Configurações > Núcleo Profissional > Atualização segura. Prepare a atualização segura e baixe o ponto de restauração.
+1. No Manager atual, abra Configurações > Núcleo Profissional > Atualização segura. Prepare e baixe o ponto de restauração.
 2. Extraia este ZIP em uma pasta temporária.
-3. Copie o CONTEÚDO da pasta alphafest-manager-main para a pasta do repositório existente que já contém app.py. Substitua os arquivos correspondentes, mantendo os dados e configurações locais. Não apague o repositório nem crie outra pasta alphafest-manager-main dentro dele.
-4. Faça Commit + Push pelo GitHub Desktop no repositório/branch do aplicativo atual.
-5. Aguarde o Streamlit atualizar e confira HF65.24.53 na interface. Se necessário, reinicie pelo painel do Streamlit e abra a sessão novamente.
-6. Em um rascunho de orçamento, confira Editar item, Aplicar e Cancelar. Confira a proteção ao abrir outro trabalho e os planejamentos diário/semanal da Central da Anna.
+3. Copie o CONTEÚDO da pasta alphafest-manager-main para o repositório atual, na pasta que já contém app.py. Substitua os arquivos correspondentes, mantendo os dados e configurações locais. Não apague o repositório nem crie uma segunda pasta do mesmo nome dentro dele.
+4. No GitHub Desktop, confira as alterações, faça Commit e Push no repositório/branch do aplicativo atual.
+5. Aguarde o Streamlit atualizar e confira HF65.24.54 na interface. Se necessário, reinicie pelo painel do Streamlit e abra novamente.
 
-PUBLICAÇÃO DO SITE
+COMO IMPORTAR
 
-7. Abra Central do Site AlphaFest > Preparar / atualizar prévia do site.
-8. Confira Desktop e Celular, busca por tema, ficha do produto, itens do orçamento e Novidades/Ofertas.
-9. Marque a confirmação da prévia e clique em Publicar site agora. Se os dados salvos tiverem mudado, gere e confira uma nova prévia. Uma falha na conferência online interrompe a publicação.
-10. Abra o domínio habitual para conferir o resultado.
+1. Copie do WhatsApp a mensagem de orçamento recebida do site.
+2. No Jorge: abra Novo Orçamento > Importar orçamento do site. Na Anna: abra o mesmo recurso na Central Operacional.
+3. Cole a mensagem completa e clique em Analisar mensagem.
+4. Confira produtos e personalizações. Ajuste as quantidades e valores. O preço sugerido é o do catálogo atual, quando há uma correspondência única ativa.
+5. Informe ou confira cliente, WhatsApp e evento. Revise os avisos. Para trocar um produto nesta etapa, corrija a mensagem e analise novamente.
+6. Confirme a revisão e clique em Abrir rascunho no orçamento. Se houver um rascunho em andamento, escolha continuar, substituir ou cancelar.
+7. No formulário normal, confira o cliente, preços, data e condições. Salve a proposta pelo botão habitual quando a revisão estiver concluída.
 
-ESTE ZIP ATUALIZA O MANAGER. O pacote público para Cloudflare é gerado pelo Manager atualizado, em Contingência / ZIP manual > Baixar ZIP de produção, ou publicado pelo botão Publicar site agora.
+A importação prepara um rascunho. Não envia mensagens nem salva automaticamente uma proposta ou um cliente. A mensagem original fica na origem do orçamento e é preservada ao salvar a proposta.
+O modo Cliente novo / digitar manualmente conserva os dados revisados. Para usar outro cadastro existente, escolha-o explicitamente no seletor do formulário.
+Se faltarem preços, a abertura exige uma confirmação específica; confira esses valores antes de salvar a proposta.
+Se cancelar a abertura ou continuar o rascunho anterior, use Revisar importação novamente para retomar os ajustes da importação.
 
-PRINCIPAIS MELHORIAS
+SITE
 
-- Orçamentos longos no site preservam a mensagem completa e oferecem copiar/colar no WhatsApp.
-- Busca por tema, recuperação sem resultados, paginação e validade das ofertas corrigidas.
-- Publicação vinculada aos dados conferidos na prévia; proteção para edições simultâneas dos conteúdos e recuperação de rascunhos.
-- Edição de itens no orçamento de Jorge e Anna, mantendo os detalhes e o preço combinado até uma alteração explícita.
-- Atalhos entre atendimento, projeto e orçamento com escolha ao encontrar um rascunho existente.
-- Planejamento diário e semanal na Central da Anna, com roteiro TXT e agenda CSV.
-- Métricas do caminho produto > WhatsApp e validação do pacote por testes efetivamente executados.
+A importação aceita a mensagem já gerada pelo carrinho atual; não depende de mudar o site público. Se as correções de site da HF65.24.53 ainda não tiverem sido publicadas, abra Central do Site, prepare uma nova prévia, confira Desktop/Celular e publique pelo fluxo habitual.
+Este ZIP atualiza o Manager. O pacote público para Cloudflare é gerado pelo Manager em Contingência / ZIP manual > Baixar ZIP de produção.
 
-Não há SQL novo nem migração de banco. DATA_VERSION permanece 5.
-O ZIP contém código e recursos; dados operacionais, credenciais e segredos locais são excluídos.
-Os rascunhos protegidos pertencem à sessão: baixe a recuperação antes de encerrar a sessão quando houver conflito editorial.
+DADOS E DOCUMENTAÇÃO
 
-Detalhes: UPDATE_INFO_HF65.24.53.md
-Testes, resultados e limites da verificação: VALIDACAO_HF65.24.53.md
+Não há SQL novo nem migração de banco; DATA_VERSION permanece 5.
+Dados operacionais, credenciais e segredos locais não são incluídos no ZIP.
+A importação e seus rascunhos pertencem à sessão. Salve a proposta pelo fluxo normal para manter o trabalho após fechar/reiniciar a sessão.
+
+Detalhes: UPDATE_INFO_HF65.24.54.md
+Testes e limites: VALIDACAO_HF65.24.54.md

@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.53",
-  "generated_at_utc": "2026-11-25T12:14:36.507369+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.54",
+  "generated_at_utc": "2026-11-25T12:49:34.902847+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -13,19 +13,19 @@
     ],
     "critical_python_compile": {
       "status": "OK",
-      "files_checked": 46,
-      "files_ok": 46
+      "files_checked": 48,
+      "files_ok": 48
     },
     "tests": {
-      "found_files": 27,
-      "executed_files": 20,
-      "approved_files": 20,
-      "executed_cases": 115,
-      "approved_cases": 115,
+      "found_files": 30,
+      "executed_files": 23,
+      "approved_files": 23,
+      "executed_cases": 175,
+      "approved_cases": 175,
       "execution_status": "APROVADO",
       "inventory": {
-        "total_files": 27,
-        "portable_files": 26,
+        "total_files": 30,
+        "portable_files": 29,
         "current_release_files": 0,
         "historical_version_files": 1,
         "historical_examples": [
@@ -36,19 +36,49 @@
       },
       "execution": {
         "status": "APROVADO",
-        "selected_files": 20,
-        "executed_files": 20,
-        "approved_files": 20,
-        "tests_run": 115,
-        "tests_passed": 115,
+        "selected_files": 23,
+        "executed_files": 23,
+        "approved_files": 23,
+        "tests_run": 175,
+        "tests_passed": 175,
         "failures": 0,
         "errors": 0,
         "skipped": 0,
         "historical_files": [],
-        "source_fingerprint": "6627d418b741ae1b06b74e41edc6b148954ca55b1c1d72661734e3e46af5b1a7",
+        "source_fingerprint": "a3a194d37f6ef2b7b845e59e8c318573b7ed05fcf5956fc876919771f9c9a05b",
         "source_unchanged": true,
         "python_version": "3.12.14",
         "results": [
+          {
+            "file": "test_site_quote_import_hf54.py",
+            "executed": true,
+            "status": "APROVADO",
+            "tests_run": 26,
+            "tests_passed": 26,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          {
+            "file": "test_site_quote_import_integration_hf54.py",
+            "executed": true,
+            "status": "APROVADO",
+            "tests_run": 20,
+            "tests_passed": 20,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          {
+            "file": "test_site_quote_import_ui_hf54.py",
+            "executed": true,
+            "status": "APROVADO",
+            "tests_run": 14,
+            "tests_passed": 14,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
           {
             "file": "test_manager_workflow_hf53.py",
             "executed": true,
@@ -253,8 +283,8 @@
       }
     }
   },
-  "file_count": 490,
-  "uncompressed_bytes": 39451179,
+  "file_count": 496,
+  "uncompressed_bytes": 39545144,
   "files": [
     {
       "path": ".gitignore",
@@ -338,8 +368,8 @@
     },
     {
       "path": "LEIA_ME_ATUALIZACAO.txt",
-      "size": 2958,
-      "sha256": "0b0c50642a62b271a7c55ffdfe5a0697f748e9c8bb92519df1c5f83c49124ebc"
+      "size": 3245,
+      "sha256": "8cbe2ed7e8b122a3fc5b798702e55060087c10dda0e008a5b1474d8650d48066"
     },
     {
       "path": "LEIA_ME_HF65_24_13.txt",
@@ -373,8 +403,8 @@
     },
     {
       "path": "RELEASE_INFO.json",
-      "size": 428,
-      "sha256": "86d2128c91d41f8a49a69e6154335e879647c4d3da0dac6c83d63e96797bb7e3"
+      "size": 387,
+      "sha256": "1cd806f656187ee9ab5bca610260a17830a3a6acded4353759afe77523ca9cae"
     },
     {
       "path": "ROADMAP.md",
@@ -403,13 +433,13 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 2237,
-      "sha256": "3cf1d2cc73e2388026d3aeb558c7215da9202eb6c3270f4a0ce487ddb01f2524"
+      "size": 2713,
+      "sha256": "595d7ab4403b2224a91d0c8e04dcf5adb043e88099bd035a612d6521a0e03132"
     },
     {
-      "path": "UPDATE_INFO_HF65.24.53.md",
-      "size": 9213,
-      "sha256": "76994a4f8d567ecf0baf082a6fde6969a24ca853ac3192a2b26c60a2b1e4f8b7"
+      "path": "UPDATE_INFO_HF65.24.54.md",
+      "size": 6942,
+      "sha256": "a2c35f941b98db50baada14b2b936c525aa9f886cfffbd95c735e72f078b3055"
     },
     {
       "path": "VALIDACAO_HF65.24.52.md",
@@ -422,14 +452,19 @@
       "sha256": "192af10ca4447f6edd9d2c34423272223d7ffcb769338635d112e90d19ea1328"
     },
     {
+      "path": "VALIDACAO_HF65.24.54.md",
+      "size": 6577,
+      "sha256": "03065e3af63b80f1c13e16b615322759104f147bc605656c22af08726dec2f19"
+    },
+    {
       "path": "VERSAO",
       "size": 37,
-      "sha256": "83358df82f5a9285a48cbda6a20a6802036eb884105cca9fe0ff7715a34ddb0a"
+      "sha256": "30f4d953ef412a68ca4a9519a5e8a0570a90551174c3d15ad2a7ed2074370a57"
     },
     {
       "path": "VERSAO.txt",
       "size": 37,
-      "sha256": "83358df82f5a9285a48cbda6a20a6802036eb884105cca9fe0ff7715a34ddb0a"
+      "sha256": "30f4d953ef412a68ca4a9519a5e8a0570a90551174c3d15ad2a7ed2074370a57"
     },
     {
       "path": "__init__.py",
@@ -503,8 +538,8 @@
     },
     {
       "path": "app.py",
-      "size": 2164007,
-      "sha256": "619424b74fca670f5f55147420953b89dba1d8954f8f99553be0d955965f7193"
+      "size": 2168220,
+      "sha256": "77b61208ec35280b65358d2dd98e4e21ab7049a5b92d0ec65ae2d23386049861"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",
@@ -1998,8 +2033,8 @@
     },
     {
       "path": "build_update_package.py",
-      "size": 9444,
-      "sha256": "8affc8949447f5ea554cfc9bc75b7997838335be79529051eaf2e86a2e2ea3ec"
+      "size": 9573,
+      "sha256": "986b505a9bb231669f9d63492239374e76b61d44acfabff80fd35d3acbfbb755"
     },
     {
       "path": "catalogo_diagnostics_service.py",
@@ -2168,8 +2203,8 @@
     },
     {
       "path": "manager_workflow_hf53.py",
-      "size": 9552,
-      "sha256": "049101f82baba8edb47ca0715e109c50153fa3638dec4bf4d54900253b89cb25"
+      "size": 9668,
+      "sha256": "8a3d1bacbcb4fbe62ef71afe065ea118832f81a5a188d0f2337c01c654d21a9d"
     },
     {
       "path": "marketing_ai_engine.py",
@@ -2298,8 +2333,8 @@
     },
     {
       "path": "release_diagnostics.py",
-      "size": 13331,
-      "sha256": "fae032bd394cfa4db984921c16aa705ea05ba2424889378f483ae11b3d659d8e"
+      "size": 13398,
+      "sha256": "a48ee442800b85965da6a8e9a6d1340e17159573d0eead1b0dbeffb9a2c82d0c"
     },
     {
       "path": "reports_runtime_index_service.py",
@@ -2430,6 +2465,16 @@
       "path": "site_pwa_service.py",
       "size": 4233,
       "sha256": "b7dbf4f787780b5579341ddbf30ef3ab01c254ca0c969801ce956edea078fbc8"
+    },
+    {
+      "path": "site_quote_import_service.py",
+      "size": 16154,
+      "sha256": "ef46b2a5ef95286d39fe37afaf45541f456abeee3de8b870e392c45c088b8927"
+    },
+    {
+      "path": "site_quote_import_ui.py",
+      "size": 12353,
+      "sha256": "cd76ba52ca010e739ca0ce1f6f63a6a7428c97ad38c550f7af0d9f14fb7793ba"
     },
     {
       "path": "site_staging_service.py",
@@ -2632,6 +2677,21 @@
       "sha256": "dc9eaa5ccf3d4acdc07f7055128dd3900588fc5d412ab7682259fb0f860affeb"
     },
     {
+      "path": "test_site_quote_import_hf54.py",
+      "size": 16863,
+      "sha256": "def3c7227ab1634bfa3e5aa8e42e8d39789786643f7ffab62d9b0e5cddb59898"
+    },
+    {
+      "path": "test_site_quote_import_integration_hf54.py",
+      "size": 23555,
+      "sha256": "fac06a17e072e488224fa3ecf462b188b23a7e12ff52dc6d030b69419cfb9801"
+    },
+    {
+      "path": "test_site_quote_import_ui_hf54.py",
+      "size": 15420,
+      "sha256": "2244b96e184cb3a39094c81656134f9742179d6f5b67492a221c1998f31a22c2"
+    },
+    {
       "path": "test_site_release_cache_hf52.py",
       "size": 7770,
       "sha256": "fce28a5d1cea4b2003dac7756425e55c6631630c1fc8f24d8ab18d1554a6b67f"
@@ -2698,8 +2758,8 @@
     },
     {
       "path": "update_hygiene.py",
-      "size": 15786,
-      "sha256": "dbc88550b8b35b6a12bd52d5419f450f48713c5eaea8aebe2ba668dde8763be1"
+      "size": 15853,
+      "sha256": "78bee620cca9cce24c4776be7d60427217f34d1261eadd03dfcd4e5e43462e35"
     },
     {
       "path": "update_safe_ui.py",

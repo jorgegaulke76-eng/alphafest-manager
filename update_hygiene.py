@@ -37,6 +37,8 @@ REQUIRED_RUNTIME_FILES = {
     "project_runtime_index_service.py",
     "document_runtime_service.py",
     "site_integrity_service.py",
+    "site_quote_import_service.py",
+    "site_quote_import_ui.py",
     "manager_workflow_hf53.py",
     "manager_operational_planning_hf53.py",
     "compras_runtime_index_service.py",

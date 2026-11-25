@@ -29,6 +29,8 @@ CRITICAL_PYTHON_FILES = (
     "marketing_anna_renderer_hf11.py",
     "site_metrics_service.py",
     "site_integrity_service.py",
+    "site_quote_import_service.py",
+    "site_quote_import_ui.py",
     "manager_workflow_hf53.py",
     "manager_operational_planning_hf53.py",
     "site_carrinho_orcamento_service.py",

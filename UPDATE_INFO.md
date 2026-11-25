@@ -1,3 +1,11 @@
+# HF65.24.54 — Importação do orçamento do site (25/11/2026)
+
+- Colar, analisar e revisar a mensagem do carrinho antes de abrir um rascunho no orçamento.
+- Preços sugeridos pelo catálogo atual, produtos ambíguos sinalizados e mensagem original preservada.
+- Abertura protegida para Jorge e Anna, com preservação da identificação do cliente.
+
+Instalação: **LEIA_ME_ATUALIZACAO.txt**. Detalhes: **UPDATE_INFO_HF65.24.54.md**. Testes: **VALIDACAO_HF65.24.54.md**.
+
 # HF65.24.53 — Melhorias operacionais (25/11/2026)
 
 - Mensagem completa do orçamento do site, busca por tema, recuperação sem resultados e validade/paginação das ofertas.

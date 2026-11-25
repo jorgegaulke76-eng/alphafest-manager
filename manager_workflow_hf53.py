@@ -173,6 +173,7 @@ def resolver_abertura(estado, escolha, *, hoje=None):
         estado.pop("_projeto_prefill", None)
     else:
         prefixo, itens_key, numero_key = _quote_keys(anna)
+        estado[f"_hf54_cliente_importado_{'anna' if anna else 'jorge'}"] = bool(dados.get("_hf54_importacao_site"))
         defaults = dict(cliente="", documento="", whatsapp="", evento="", observacoes="",
                         desconto=0.0, entrega=hoje or date.today(), prazo="10", frete="Retirada",
                         taxa_entrega=0.0, validade="5")
