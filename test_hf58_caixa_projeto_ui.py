@@ -29,6 +29,7 @@ if not ACTUAL_UI:
     raise AssertionError("Nao foi possivel extrair a UI real da Caixa do Projeto.")
 
 FIXTURE = """
+import copy
 from copy import deepcopy
 from datetime import datetime
 import html
