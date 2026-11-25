@@ -14,3 +14,6 @@ Para preparar a homologacao no Windows:
 5. Somente apos todos os testes serem aprovados, avaliar uma release FINAL.
 
 Nao ha mudanca de schema, site publico ou dependencias declaradas nesta RC4.
+
+RC5 (25/11/2026): correcoes de Python 3.11 em Dicas e do botao Fechar revisao no importador.
+Em homologacao: testar no GitHub Actions e em ambiente isolado. Nao instalar na producao.

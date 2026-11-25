@@ -43,3 +43,10 @@ Arquivos criticos ainda bloqueados: test_proposal_draft_ui_hf57.py, test_proposa
 - A assinatura compara metadados registrados, mais o marcador de mutacao gerenciado pelo Manager. Uma troca clandestina dos bytes em armazenamento remoto, sem alteracao de metadados ou do marcador, nao e identificavel por essa assinatura.
 - A aprovacao de arte e registro manual operacional; nao substitui evidencia de aceite do cliente, aprovacao comercial nem liberacao de producao.
 - O arquivo TXT inclui detalhes internos e nao deve ser enviado ao cliente sem revisao.
+
+## RC5 - correções após execução real do GitHub Actions
+- Em 25/11/2026, o primeiro job remoto instalou Streamlit 1.67.0 e executou 509 testes; identificou quatro erros.
+- Compatibilidade Python 3.11: JSON-LD das páginas Dicas usa a variável `json_ld` fora da expressão de f-string.
+- Importador do site: botão **Fechar revisão** é habilitado no mesmo rerun da análise, sem exigir interação adicional.
+- Diagnóstico oficial passa a compilar também `site_dicas_multicanal_service.py`, impedindo regressão desse tipo.
+- RC5 permanece **HOMOLOGACAO_PARCIAL** até regressão remota sem erros e conferência manual dos perfis. Não instalar em produção.

@@ -16,3 +16,10 @@
 
 ## Validacao
 Leia VALIDACAO_HF65.24.58.md e VALIDAR_HF58_WINDOWS.bat. A regressao integral e a interface Streamlit real ainda precisam passar antes de uma versao FINAL.
+
+## RC5 - correções após execução real do GitHub Actions
+- Em 25/11/2026, o primeiro job remoto instalou Streamlit 1.67.0 e executou 509 testes; identificou quatro erros.
+- Compatibilidade Python 3.11: JSON-LD das páginas Dicas usa a variável `json_ld` fora da expressão de f-string.
+- Importador do site: botão **Fechar revisão** é habilitado no mesmo rerun da análise, sem exigir interação adicional.
+- Diagnóstico oficial passa a compilar também `site_dicas_multicanal_service.py`, impedindo regressão desse tipo.
+- RC5 permanece **HOMOLOGACAO_PARCIAL** até regressão remota sem erros e conferência manual dos perfis. Não instalar em produção.
