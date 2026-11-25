@@ -12483,7 +12483,12 @@ def dialog_projeto_personalizado_hf53():
     renderizar_assistente_projeto_personalizado()
 
 
-from ficha_producao_hf58 import artes as _hf58_artes, situacao_arte as _hf58_situacao_arte, registrar_aprovacao as _hf58_registrar_aprovacao, ficha_producao_txt as _hf58_ficha_producao_txt
+from ficha_producao_hf58 import (
+    artes as _hf58_artes, situacao_arte as _hf58_situacao_arte,
+    identidade_conferencia_arte as _hf58_identidade_arte,
+    registrar_aprovacao_conferida as _hf58_registrar_aprovacao_conferida,
+    ficha_producao_txt as _hf58_ficha_producao_txt,
+)
 
 def renderizar_caixa_projeto(proposta, prefixo="historico"):
     """Caixa do Projeto: arquivos, observações e reutilização ligados ao pedido."""
@@ -12580,7 +12585,7 @@ def renderizar_caixa_projeto(proposta, prefixo="historico"):
     st.markdown("#### 🎨 Versão da arte e ficha de produção")
     status_arte, ultima_aprovada = _hf58_situacao_arte(projeto)
     mensagens = {"aprovada": "Arte mais recente com confirmação registrada.",
-                 "revisao_pendente": "Há uma arte posterior ou o arquivo aprovado foi arquivado. Confirme a versão correta antes de produzir.",
+                 "revisao_pendente": "Há uma arte posterior, alterada ou arquivada. Confirme a versão correta antes de produzir.",
                  "sem_aprovacao": "Há artes cadastradas, mas nenhuma confirmação registrada.",
                  "sem_arte": "Nenhuma arte ativa cadastrada neste projeto."}
     st.caption(mensagens[status_arte] + " A aprovação comercial no Histórico permanece independente.")
@@ -12591,15 +12596,28 @@ def renderizar_caixa_projeto(proposta, prefixo="historico"):
     if lista_artes:
         recente = lista_artes[-1]
         st.write("**Arte mais recente:** " + str(recente.get("nome") or "Sem nome"))
-        responsavel_hf58 = st.text_input("Responsável pela conferência da arte", key=f"hf58_responsavel_{kbase}_{recente['id']}", max_chars=90)
-        conf_hf58 = st.checkbox("Conferi a confirmação do cliente para esta versão específica da arte", key=f"hf58_confirmacao_{kbase}_{recente['id']}")
-        if st.button("Registrar aprovação desta versão", key=f"hf58_aprovar_{kbase}", disabled=not conf_hf58):
+        versao_arte_hf58 = _hf58_identidade_arte(projeto)
+        token_tela_hf58 = f"_hf58_versao_exibida_{kbase}"
+        chave_aceite_hf58 = f"hf58_confirmacao_{kbase}_{versao_arte_hf58}"
+        if st.session_state.get(token_tela_hf58) != versao_arte_hf58:
+            # Mesmo que metadados retornem a uma versão anterior, o checkbox
+            # deve começar desmarcado sempre que a referência mudar.
+            st.session_state[token_tela_hf58] = versao_arte_hf58
+            st.session_state[chave_aceite_hf58] = False
+        responsavel_hf58 = st.text_input("Responsável pela conferência da arte", key=f"hf58_responsavel_{kbase}_{versao_arte_hf58}", max_chars=90)
+        conf_hf58 = st.checkbox("Conferi a confirmação do cliente para esta versão específica da arte", key=chave_aceite_hf58)
+        if st.button("Registrar aprovação desta versão", key=f"hf58_aprovar_{kbase}_{versao_arte_hf58}", disabled=not conf_hf58):
+            # Não usa uma cópia da Caixa antiga para gravar a aprovação, pois ela
+            # poderia sobrescrever uma arte adicionada por outra sessão.
+            atual_hf58 = next((p for p in carregar_projetos() if p.get("id") == projeto.get("id")), None)
             try:
-                revisado = _hf58_registrar_aprovacao(projeto, recente["id"], responsavel_hf58, agora_local())
+                revisado = _hf58_registrar_aprovacao_conferida(
+                    projeto, atual_hf58, recente["id"], responsavel_hf58, agora_local())
             except ValueError as exc:
                 st.error(str(exc))
             else:
                 if atualizar_projeto(revisado):
+                    st.session_state[token_tela_hf58] = None
                     st.success("Confirmação registrada no projeto.")
                     st.rerun()
                 else:

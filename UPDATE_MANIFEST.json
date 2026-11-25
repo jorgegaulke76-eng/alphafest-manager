@@ -2,25 +2,36 @@
   "schema": 2,
   "product": "AlphaFest Manager",
   "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.58",
-  "generated_at_utc": "2026-11-25T16:46:34.816994+00:00",
+  "generated_at_utc": "2026-11-25T17:07:11.050773+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
+  "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
     "status": "HOMOLOGACAO_PARCIAL",
     "problems": [
-      "Gate completo nao executado: Streamlit indisponivel no ambiente local. Nao instalar em producao antes de homologar."
+      "Regressao total reprovada: Streamlit ausente (4 erros de importacao; 93 testes ignorados).",
+      "Interface real e banco de homologacao ainda nao verificados. NAO instalar no Manager de producao."
+    ],
+    "warnings": [
+      "RC3 destinada somente a copia isolada de homologacao."
     ],
     "tests": {
-      "functional_offline_selected": 61,
-      "passed": 61,
-      "errors": 0,
-      "skipped": 0
+      "selected": 64,
+      "selected_passed": 64,
+      "selected_failed": 0,
+      "selected_skipped": 0,
+      "hf58_unit": 11,
+      "full_discovery_total": 427,
+      "full_discovery_errors": 4,
+      "full_discovery_skipped": 93,
+      "full_discovery_status": "REPROVADO"
     },
-    "warnings": [
-      "Previa RC2 somente para ambiente de teste."
-    ]
+    "critical_python_compile": {
+      "status": "OK",
+      "scope": "compileall de .py no pacote"
+    }
   },
-  "file_count": 520,
-  "uncompressed_bytes": 40005629,
+  "file_count": 521,
+  "uncompressed_bytes": 40014008,
   "files": [
     {
       "path": ".gitignore",
@@ -104,13 +115,13 @@
     },
     {
       "path": "LEIA_ME_ATUALIZACAO.txt",
-      "size": 5688,
-      "sha256": "cf36d9a3fac91cd6771b7ec4b6baab3add8ea26d3252e8e6e2db75ce6b93d5c8"
+      "size": 5900,
+      "sha256": "60baf58a514e62a07eedf62706a31629f552b048d307214bf516e02c8a95c701"
     },
     {
       "path": "LEIA_ME_HF65.24.58.txt",
-      "size": 1186,
-      "sha256": "1a38ebc9f3063939f14c221c950b6896d4713d0efe3385251a7d37f0814722ed"
+      "size": 1001,
+      "sha256": "ba94216b773072c665984e08045c85cc63518c10cd8c74807741e291b17d0651"
     },
     {
       "path": "LEIA_ME_HF65_24_13.txt",
@@ -144,8 +155,8 @@
     },
     {
       "path": "RELEASE_INFO.json",
-      "size": 295,
-      "sha256": "2381954c3bccac38b4fca960364dd1c9ce6db38936dfd6197a002e70aab4b291"
+      "size": 303,
+      "sha256": "eac68d86b462e38c0b6839ee68477e5cdd939092aee8f294dee82c2a08c0b5f6"
     },
     {
       "path": "ROADMAP.md",
@@ -176,6 +187,11 @@
       "path": "UPDATE_INFO.md",
       "size": 3598,
       "sha256": "a1dda15cd8e71853bd653cdf3cadc7e1e721ec56bf910051cfed5ccf6093cced"
+    },
+    {
+      "path": "UPDATE_INFO_HF65.24.58.md",
+      "size": 1317,
+      "sha256": "76fa7ac41800c86bd513b150a4e05d243c5398926edcdabb6ae97415f96ffbf0"
     },
     {
       "path": "VALIDACAO_HF65.24.52.md",
@@ -209,8 +225,8 @@
     },
     {
       "path": "VALIDACAO_HF65.24.58.md",
-      "size": 2435,
-      "sha256": "62e09f818a723b8772c3f95f93018ade7677cd8707cceaedea7e302362cd22e4"
+      "size": 4415,
+      "sha256": "4b6defbb2d29b5d2bebf723104c41580da4341b269ef6664951c0d817b0e40c4"
     },
     {
       "path": "VERSAO",
@@ -294,8 +310,8 @@
     },
     {
       "path": "app.py",
-      "size": 2184605,
-      "sha256": "66c7644fb4984f02addb4604caa62c5173ebda8096aee9467e4f714f361da1e0"
+      "size": 2185584,
+      "sha256": "0f9fe3f8a8580fa54bf545f7c5b9098a31842091b6eea819301d73484443a9bb"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",
@@ -1919,8 +1935,8 @@
     },
     {
       "path": "ficha_producao_hf58.py",
-      "size": 5559,
-      "sha256": "bd79cb456d61d270f405e08b02b9caf10680c36c5583a1cf0cc42e28b4dfdc6f"
+      "size": 7299,
+      "sha256": "57b7e086f788e2f3788419b210ab4126e504e06616178a367c59b0b9bb9c62cd"
     },
     {
       "path": "finance_runtime_index_service.py",
@@ -2379,8 +2395,8 @@
     },
     {
       "path": "test_ficha_producao_hf58.py",
-      "size": 3366,
-      "sha256": "309818e9728e04ed799855782a416ccba9cedaa8851e8f7a9798f143e7f58246"
+      "size": 5694,
+      "sha256": "e2bc0bf53e44abd99e32c6a07e4d684a2c6a5355c4fd283391ef0a60f7e63d55"
     },
     {
       "path": "test_hf652438_sob_encomenda.py",

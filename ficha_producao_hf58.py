@@ -9,7 +9,8 @@ import json
 
 
 def _texto(value, max_len=500):
-    return ' '.join(str(value or '').replace('\x00', '').split())[:max_len]
+    texto = ' '.join(str(value or '').replace('\x00', '').split())
+    return texto if max_len is None else texto[:max_len]
 
 
 def artes(projeto):
@@ -21,6 +22,40 @@ def assinatura_arquivo(arquivo):
     """Detecta alterações na referência aprovada, sem depender do nome isolado."""
     campos = {k: str(arquivo.get(k) or '') for k in ('id', 'nome', 'url', 'criado_em', 'categoria')}
     return sha256(json.dumps(campos, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()
+
+
+
+def identidade_conferencia_arte(projeto):
+    """Versão imutável da arte exibida na tela; troca a chave do aceite quando ela muda.
+
+    Inclui arte ativa mais recente, arquivos arquivados e ordem das artes, pois
+    apenas verificar o ID permite reaproveitar um checkbox de um arquivo trocado.
+    """
+    lista = artes(projeto)
+    if not lista:
+        return ''
+    todas = [a for a in (projeto.get('arquivos') or [])
+             if isinstance(a, dict) and a.get('categoria') == 'Arte' and a.get('id')]
+    estado = {
+        'projeto': str(projeto.get('id') or ''),
+        'recente': assinatura_arquivo(lista[-1]),
+        'artes': [{'assinatura': assinatura_arquivo(a),
+                   'arquivado': bool(a.get('arquivado'))} for a in todas],
+    }
+    return sha256(json.dumps(estado, sort_keys=True, ensure_ascii=False).encode('utf-8')).hexdigest()[:24]
+
+
+def registrar_aprovacao_conferida(projeto_exibido, projeto_mais_recente, arquivo_id, responsavel, instante):
+    """Revalida o alvo da confirmação antes de gerar o registro a ser salvo.
+
+    Não substitui controle transacional entre usuários no banco: a aplicação
+    também precisa usar dados atualizados e confirmar que o save foi aceito.
+    """
+    if (not isinstance(projeto_mais_recente, dict)
+            or str(projeto_exibido.get('id') or '') != str(projeto_mais_recente.get('id') or '')
+            or identidade_conferencia_arte(projeto_exibido) != identidade_conferencia_arte(projeto_mais_recente)):
+        raise ValueError('A arte mudou desde a conferência. Atualize a Caixa do Projeto e confirme novamente.')
+    return registrar_aprovacao(projeto_mais_recente, arquivo_id, responsavel, instante)
 
 
 def situacao_arte(projeto):
@@ -99,9 +134,9 @@ def ficha_producao_txt(proposta, projeto, instante):
     for i, item in enumerate(itens, 1):
         linhas.append(f'{i}. {_texto(item.get("produto") or item.get("nome") or "Produto", 180)}')
         linhas.append('   Quantidade: ' + _texto(item.get('quantidade', item.get('qtd', 'a conferir')), 50))
-        linhas.append('   Especificações: ' + _texto(item.get('especificacoes') or 'a conferir', 3000))
+        linhas.append('   Especificações: ' + _texto(item.get('especificacoes') or 'a conferir', None))
     linhas.extend(['', 'OBSERVAÇÕES INTERNAS',
-                   _texto(projeto.get('observacoes') or 'Sem observações cadastradas.', 3000), '',
+                   _texto(projeto.get('observacoes') or 'Sem observações cadastradas.', None), '',
                    'Conferência física: [ ] itens  [ ] personalizações  [ ] arte  [ ] embalagem',
                    'A ficha não altera os registros oficiais nem libera produção.'])
     return ('\n'.join(linhas) + '\n').encode('utf-8-sig')

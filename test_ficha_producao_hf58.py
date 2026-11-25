@@ -1,7 +1,8 @@
 """HF65.24.58 - validação offline da ficha e da confirmação explícita."""
 import unittest
 from datetime import datetime
-from ficha_producao_hf58 import situacao_arte, registrar_aprovacao, ficha_producao_txt
+from ficha_producao_hf58 import (situacao_arte, registrar_aprovacao, ficha_producao_txt,
+    identidade_conferencia_arte, registrar_aprovacao_conferida)
 
 NOW = datetime(2026, 11, 25, 13, 20)
 
@@ -61,6 +62,45 @@ class FichaHF58Tests(unittest.TestCase):
             registrar_aprovacao(projeto(), 'AR1', '', NOW)
         with self.assertRaises(ValueError):
             registrar_aprovacao(projeto(), 'X', 'Anna', NOW)
+
+    def test_identidade_interface_muda_mesmo_se_id_se_mantiver(self):
+        p = projeto()
+        p['id'] = 'PROJETO-1'
+        primeira = identidade_conferencia_arte(p)
+        self.assertEqual(primeira, identidade_conferencia_arte(p))
+        p['arquivos'][0]['url'] = 'https://exemplo.invalid/arte-v2.png'
+        segunda = identidade_conferencia_arte(p)
+        self.assertNotEqual(primeira, segunda)
+        p['arquivos'].append({'id':'AR2','nome':'Nova.png','categoria':'Arte','arquivado':False})
+        terceira = identidade_conferencia_arte(p)
+        self.assertNotEqual(segunda, terceira)
+        p['arquivos'][-1]['arquivado'] = True
+        self.assertNotEqual(terceira, identidade_conferencia_arte(p))
+
+    def test_aprovacao_confere_estado_exibido_com_fonte_atual(self):
+        exibido = projeto()
+        exibido['id'] = 'PROJETO-1'
+        atual = {**exibido, 'observacoes': 'Alteração salva por outra pessoa'}
+        p = registrar_aprovacao_conferida(exibido, atual, 'AR1', 'Anna', NOW)
+        self.assertEqual(p['observacoes'], 'Alteração salva por outra pessoa')
+        self.assertEqual(situacao_arte(p)[0], 'aprovada')
+        atual['arquivos'] = [{**exibido['arquivos'][0], 'nome': 'Nova_arte.png'}]
+        with self.assertRaisesRegex(ValueError, 'arte mudou'):
+            registrar_aprovacao_conferida(exibido, atual, 'AR1', 'Anna', NOW)
+        with self.assertRaisesRegex(ValueError, 'arte mudou'):
+            registrar_aprovacao_conferida(exibido, None, 'AR1', 'Anna', NOW)
+        with self.assertRaisesRegex(ValueError, 'arte mudou'):
+            registrar_aprovacao_conferida(exibido, {**exibido, 'id': 'OUTRO'}, 'AR1', 'Anna', NOW)
+
+    def test_ficha_nao_trunca_personalizacoes_e_observacoes_longas(self):
+        esp = 'Nome Ana; ' + 'pormenor-' * 480 + ' CONFERIR FIM DAS ESPECIFICAÇÕES'
+        obs = 'urgente ' * 430 + ' CONFERIR FIM DAS OBSERVAÇÕES'
+        p = projeto()
+        p['observacoes'] = obs
+        texto = ficha_producao_txt({'itens':[{'produto':'Caneca', 'quantidade':1,
+                                           'especificacoes':esp}]},p,NOW).decode('utf-8-sig')
+        self.assertIn('CONFERIR FIM DAS ESPECIFICAÇÕES', texto)
+        self.assertIn('CONFERIR FIM DAS OBSERVAÇÕES', texto)
 
     def test_ficha_sem_pedido(self):
         texto = ficha_producao_txt({}, {}, NOW).decode('utf-8-sig')
