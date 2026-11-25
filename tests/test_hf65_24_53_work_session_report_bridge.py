@@ -78,3 +78,54 @@ def test_report_denied_when_revocation_backend_fails():
         )
     assert cloud.calls == 0
     assert calls == []
+
+
+def test_revocation_during_attribution_read_blocks_official_snapshots():
+    ui, remote, _, policy = setup()
+    ui.secrets["HF65_24_53_PRIVATE_REPORT_ENABLED"] = True
+    cloud = Cloud([EVENT])
+    original_get = cloud._SESSION.get
+    def revoke_midflight(*args, **kwargs):
+        response = original_get(*args, **kwargs)
+        next(iter(remote.docs.values()))["revoked_at"] = "2026-11-25T10:00:00+00:00"
+        return response
+    cloud._SESSION.get = revoke_midflight
+    calls = []
+    with pytest.raises(PrivateStoreDenied, match="revogada|permissão"):
+        build(ui, remote, policy, cloud, calls)
+    assert cloud.calls == 1
+    assert calls == []
+
+
+def test_revocation_during_snapshots_blocks_final_report_delivery():
+    ui, remote, _, policy = setup()
+    ui.secrets["HF65_24_53_PRIVATE_REPORT_ENABLED"] = True
+    cloud = Cloud([EVENT])
+    calls = []
+    def snapshots_and_revoke():
+        calls.append("snapshot")
+        next(iter(remote.docs.values()))["revoked_at"] = "2026-11-25T10:00:00+00:00"
+        return PROPOSALS, CONTACTS
+    with pytest.raises(PrivateStoreDenied, match="revogada|permissão"):
+        build_work_session_commercial_report(
+            st=ui, policy=policy, cloud=cloud, get_session=remote.get,
+            load_official_snapshots=snapshots_and_revoke,
+        )
+    assert cloud.calls == 1
+    assert calls == ["snapshot"]
+
+
+def test_acl_changed_midflight_blocks_second_access_before_snapshots():
+    ui, remote, principal, policy = setup()
+    ui.secrets["HF65_24_53_PRIVATE_REPORT_ENABLED"] = True
+    cloud = Cloud([EVENT])
+    original_get = cloud._SESSION.get
+    def revoke_acl(*args, **kwargs):
+        response = original_get(*args, **kwargs)
+        policy.grants[principal.subject].clear()
+        return response
+    cloud._SESSION.get = revoke_acl
+    calls = []
+    with pytest.raises(PrivateStoreDenied):
+        build(ui, remote, policy, cloud, calls)
+    assert calls == []
