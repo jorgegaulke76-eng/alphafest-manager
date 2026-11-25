@@ -7,12 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 from urllib.parse import urlencode
-from functools import lru_cache
-from html import unescape
 import re
-import time
-import requests
-from site_vitrine_service import _slug as _slug_produto_site
 
 
 def _positive_int(value: Any) -> int:
@@ -66,7 +61,7 @@ def _ranking(st, rows, *, empty: str, max_items: int = 8, labeler: Callable[[str
         b.markdown(f'**{_positive_int(qty)}**')
 
 
-def campaign_link(source: str, medium: str, campaign: str, destination: str, product_slug: str = '') -> str:
+def campaign_link(source: str, medium: str, campaign: str, destination: str) -> str:
     """Gera somente URLs internas autorizadas e parâmetros UTM, sem dados pessoais."""
     targets={'Página inicial':'https://alphafest.com.br/',
              'Para Empresas':'https://alphafest.com.br/empresas/',
@@ -75,65 +70,9 @@ def campaign_link(source: str, medium: str, campaign: str, destination: str, pro
     def safe(v, limit=80):
         value=re.sub(r'[^a-z0-9_-]+','-',str(v or '').strip().lower().replace(' ','-'))
         return value.strip('-')[:limit]
-    params={'utm_source':safe(source), 'utm_medium':safe(medium),
-            'utm_campaign':safe(campaign,120)}
-    if destination=='Produto específico':
-        if not str(product_slug or '').strip() or not any(ch.isalnum() for ch in str(product_slug)):
-            raise ValueError('Informe o nome ou identificador do produto.')
-        slug=_slug_produto_site(str(product_slug))[:120]
-        base=targets['Página inicial']
-        params={'produto':slug, **params}
-    return base+'?'+urlencode(params)
-
-
-
-def published_products_from_html(page: str) -> tuple[tuple[str, str], ...]:
-    """Extrai os produtos existentes da vitrine publicada, sem criar cadastro.
-
-    Confia somente em cards com classe product-card e slug canônico. Em caso
-    de slug duplicado, exclui as opções ambíguas para evitar links incorretos.
-    """
-    valid: dict[str, str] = {}
-    duplicates: set[str] = set()
-    for match in re.finditer(r'<article\b[^>]*>', str(page or ''), flags=re.I | re.S):
-        attrs = {
-            key.lower(): unescape(value)
-            for key, value in re.findall(
-                r'([a-z][a-z0-9_-]*)\s*=\s*"([^"]*)"',
-                match.group(0), flags=re.I | re.S,
-            )
-        }
-        if 'product-card' not in attrs.get('class', '').split():
-            continue
-        slug = attrs.get('data-product', '').strip()
-        name = attrs.get('data-detail-name', '').strip()
-        if not name or not re.fullmatch(r'[a-z0-9]+(?:-[a-z0-9]+)*', slug):
-            continue
-        if slug in valid:
-            duplicates.add(slug)
-        else:
-            valid[slug] = name
-    return tuple(sorted(
-        ((name, slug) for slug, name in valid.items() if slug not in duplicates),
-        key=lambda item: (item[0].casefold(), item[1]),
-    ))
-
-
-@lru_cache(maxsize=3)
-def published_products_cached(cache_window: int) -> tuple[tuple[str, str], ...]:
-    """Consulta leve, em cache de 10 min, somente quando o destino é produto."""
-    response = requests.get(
-        'https://alphafest.com.br/',
-        timeout=15,
-        headers={'User-Agent': 'AlphaFest-Manager-HF65.24.52/1.0'},
-    )
-    response.raise_for_status()
-    if len(response.content) > 25_000_000:
-        raise ValueError('A vitrine publicada excede o limite de leitura segura (25 MB).')
-    products = published_products_from_html(response.content.decode('utf-8', errors='replace'))
-    if not products:
-        raise ValueError('Nenhum produto publicado foi reconhecido na vitrine.')
-    return products
+    return base+'?'+urlencode({'utm_source':safe(source),
+                                'utm_medium':safe(medium),
+                                'utm_campaign':safe(campaign,120)})
 
 
 def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str]):
@@ -339,43 +278,22 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
             st.caption('Ainda não há sessões com origem identificada.')
         st.caption('Associação na mesma sessão, não comprovação de venda ou causalidade. Acesso Direto pode incluir aplicativos sem referência; testes internos também podem estar presentes. Compare períodos antes de escolher onde investir.')
         st.markdown('#### 📣 Inteligência de campanhas · links rastreáveis')
-        st.caption('O painel considera a primeira campanha UTM identificada em cada sessão e somente cliques posteriores no WhatsApp. Isso representa intenção de contato, não mensagens enviadas ou vendas.')
+        st.caption('As campanhas aparecem após a primeira visita por um link com UTM; cliques no WhatsApp são associados à mesma sessão, não a vendas.')
         with st.container(border=True):
             st.markdown('**Criar link para divulgação**')
             col_a,col_b=st.columns(2)
             with col_a:
                 origem=st.selectbox('Canal de divulgação', ['instagram','facebook','google','whatsapp','tiktok','youtube','pinterest','outro'],key='hf37_canal')
-                destino=st.selectbox('Página de destino', ['Página inicial','Para Empresas','Novidades & Ofertas','Produto específico'],key='hf37_destino')
-                slug_produto=''
-                if destino=='Produto específico':
-                    try:
-                        produtos_publicados=published_products_cached(int(time.time() // 600))
-                    except (requests.RequestException, ValueError) as exc:
-                        st.warning('Não foi possível conferir os produtos publicados. Para evitar links incorretos, a geração de links de produtos está temporariamente indisponível.')
-                        produtos_publicados=()
-                    if produtos_publicados:
-                        escolhido=st.selectbox(
-                            'Selecione o produto publicado',
-                            options=produtos_publicados,
-                            index=None,
-                            placeholder='Pesquise pelo nome do produto',
-                            format_func=lambda item: item[0],
-                            key='hf52_produto_publicado',
-                            help='A lista vem da vitrine pública e fica em cache por 10 minutos. Se renomear um produto, mantenha o nome anterior no campo Aliases do Catálogo Oficial.',
-                        )
-                        slug_produto=escolhido[1] if escolhido else ''
-                        st.caption(f'{len(produtos_publicados)} produtos conferidos na vitrine pública.')
+                destino=st.selectbox('Página de destino', ['Página inicial','Para Empresas','Novidades & Ofertas'],key='hf37_destino')
             with col_b:
                 meio=st.selectbox('Tipo de divulgação', ['social','post','stories','bio','mensagem','cpc','email'],key='hf37_meio')
                 nome=st.text_input('Nome da campanha (sem informações pessoais)',value='natal-2026',max_chars=120,key='hf37_nome')
             if not nome.strip():
                 st.warning('Informe um nome de campanha para gerar o link.')
-            elif destino=='Produto específico' and not slug_produto:
-                st.info('Selecione um produto da vitrine pública para gerar um link válido.')
             else:
-                link=campaign_link(origem,meio,nome,destino,slug_produto)
+                link=campaign_link(origem,meio,nome,destino)
                 st.code(link,language=None)
-                st.caption('Link verificado pela vitrine publicada. A abertura direta da ficha será ativada na publicação da HF65.24.52; não inclua dados pessoais na campanha.')
+                st.caption('Copie este link e use na publicação ou no anúncio. O site já lê parâmetros UTM; não é preciso republicar no Cloudflare. Não insira dados de clientes no nome da campanha.')
         st.markdown('**Campanhas identificadas nos acessos**')
         periodo_camp=st.radio('Janela de análise das campanhas',['7 dias','30 dias'],horizontal=True,key='hf37_periodo')
         suffix='7d' if periodo_camp=='7 dias' else '30d'

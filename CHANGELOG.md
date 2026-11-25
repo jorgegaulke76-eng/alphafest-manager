@@ -1,3 +1,11 @@
+## HF65.24.52 — Prévia validada integrada ao gerador do site
+
+- Ficha de produto responsiva, acompanhando a viewport móvel e retornando corretamente ao layout de desktop.
+- Abertura por link `?produto=` com os mesmos eventos de navegação e métricas dos cartões.
+- Prévia, confirmação e cache de produção vinculados à versão do Manager.
+- RELEASE_INFO.json incluído no pacote e manifesto de integridade regenerado.
+- Sem migração de banco; roteiros e operação da HF65.24.51 preservados.
+
 ## HF65.24.51 — Roteiro do dia e agenda exportável
 
 - Botões TXT e CSV nas telas diárias e semanais existentes.

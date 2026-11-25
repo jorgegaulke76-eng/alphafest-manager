@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.23",
-  "generated_at_utc": "2026-11-13T11:41:27.149604+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.52",
+  "generated_at_utc": "2026-11-25T11:11:04.304588+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -22,8 +22,8 @@
       "historical_examples": []
     }
   },
-  "file_count": 418,
-  "uncompressed_bytes": 38417031,
+  "file_count": 476,
+  "uncompressed_bytes": 39284898,
   "files": [
     {
       "path": ".gitignore",
@@ -41,9 +41,59 @@
       "sha256": "8de1b888078981a49fbdff61fa35d49ed11d71735881c58f0ef9323b1d6b5d66"
     },
     {
+      "path": "ATUALIZACAO_HF65_24_11_WHATSAPP_INTELIGENTE.md",
+      "size": 1746,
+      "sha256": "9239d441e440a6d847861ad2a8c1dbbe08d9738d8052b2dd7c8baf32b891d1f1"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_12_FILTROS_GALERIA.md",
+      "size": 886,
+      "sha256": "a5d2ad8d8cfdd5335fe29299cef19a3ae8fb10c02b7e62e0aed1c48cd1fb5fbe"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_15_DAS_MEI.md",
+      "size": 2534,
+      "sha256": "887af1cb797a1e9fd217663caa9da8e886d070e3895f9795a940345ee9eeb605"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_16_ALERTAS_DAS.md",
+      "size": 997,
+      "sha256": "2c34508736cdbbe20ddf0f76c77bba9571f6fbf9682dc06f9ecf3a53f9ce5297"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_38_OPERACAO_SOB_ENCOMENDA.md",
+      "size": 2115,
+      "sha256": "95c66cb0cc5f28caf5684612ce75266aa5ae958180630dfd661bbd56bbfdf6f3"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_39_ORCAMENTO_CATALOGO.md",
+      "size": 1110,
+      "sha256": "2c8d951bc7d5985bc63af4f45212edc5624546a84facaf9c69d8cd9b99552b5a"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_48.md",
+      "size": 544,
+      "sha256": "fffdc5c0dbd5acb95c01339cdc801b1869a6dc1436dd8b9a796dcb80d7a72175"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_49.md",
+      "size": 699,
+      "sha256": "cda463598cba147f5e9f28b31a35b477b94990dde8ba08a8a602f37e4ad736de"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_8_MENU_DEPOIMENTOS_DICAS.md",
+      "size": 768,
+      "sha256": "a8cac9cecb5380fa7ebc24cc0478ca8afe91c9710443a6b38d94e1c9442ad000"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_9_CARDS_COMPACTOS.md",
+      "size": 491,
+      "sha256": "b3758aa328df3c9795efd47cc4f7f616d667b91f7f8387174e1205e68ae66d76"
+    },
+    {
       "path": "CHANGELOG.md",
-      "size": 107420,
-      "sha256": "eddbd941d10cbb953955f34c1b75934c67f5d24cb66cd2ede2b6e4d32731c1eb"
+      "size": 108213,
+      "sha256": "dca2b1f1a21358efee5763eedee89d31d4ddf60f0029d1a42ce2677f55879291"
     },
     {
       "path": "EDGE_FUNCTION_CATALOGO_PUBLICO.md",
@@ -57,8 +107,18 @@
     },
     {
       "path": "LEIA_ME_ATUALIZACAO.txt",
-      "size": 639,
-      "sha256": "eedd56a9e64682973d6866ea890e82c2d6627c5f083ccff449e83cbb83e8e68f"
+      "size": 1351,
+      "sha256": "c3260a4a0266b5352305d0157c6dc24b1f9fed4cfdfdb9fe3cceab60f6175efb"
+    },
+    {
+      "path": "LEIA_ME_HF65_24_13.txt",
+      "size": 316,
+      "sha256": "e84e91049e3e5b0ba5327714a4b145b384477d88e5b2508e209d9d4783f11f21"
+    },
+    {
+      "path": "LEIA_ME_HF65_24_18.txt",
+      "size": 514,
+      "sha256": "cbab5ee6c30bb5a12a5ac378752ad33d193a6312ca1584455cae3d72881cf073"
     },
     {
       "path": "LEIA_ME_ROLLBACK_URGENTE.txt",
@@ -79,6 +139,11 @@
       "path": "README_PASSO_A_PASSO.txt",
       "size": 3040,
       "sha256": "ae73b2ed362905721745a092f73359956e4e12088063590d823b968c28b7a23e"
+    },
+    {
+      "path": "RELEASE_INFO.json",
+      "size": 362,
+      "sha256": "c8e5f3f27f2f788d543325d72196fa9dd4fbd84dab8eeffc8eebf721bf714a3a"
     },
     {
       "path": "ROADMAP.md",
@@ -111,19 +176,24 @@
       "sha256": "3fd8806bfaabf13f128e46d669f37376f3373a6b5bae73d9614605ba709ab175"
     },
     {
-      "path": "UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF65_23.md",
-      "size": 3378,
-      "sha256": "77ec44ffc29e428e9232ccc62f7736f04de5fdbf213269caf3cd63b2d66c26d6"
+      "path": "UPDATE_INFO_HF65.24.52.md",
+      "size": 4200,
+      "sha256": "710c4470f28fe7fb872d5a1abd4eeda4ca50891f271e3340be3900332f6515f1"
+    },
+    {
+      "path": "VALIDACAO_HF65.24.52.md",
+      "size": 3994,
+      "sha256": "3a7d565c4899bf79b6b733fdf6859f1ad6ef2f8be83ea2fc58f1ee3338712521"
     },
     {
       "path": "VERSAO",
-      "size": 34,
-      "sha256": "62efff1787cb950081aae95fd3caf7a0015e68f76659f79906355ebdba7cec2e"
+      "size": 37,
+      "sha256": "e23562d4035ecf6cc126e7fa0fa8e0cb2da689527b10e98f00824e73c5cab107"
     },
     {
       "path": "VERSAO.txt",
-      "size": 34,
-      "sha256": "62efff1787cb950081aae95fd3caf7a0015e68f76659f79906355ebdba7cec2e"
+      "size": 37,
+      "sha256": "e23562d4035ecf6cc126e7fa0fa8e0cb2da689527b10e98f00824e73c5cab107"
     },
     {
       "path": "__init__.py",
@@ -131,9 +201,14 @@
       "sha256": "d3fae0d2d8cb98285cf665471c9cb4e20dc0e94e8310743320ad87fe43c56e89"
     },
     {
+      "path": "acompanhamento_pedidos_hf46.py",
+      "size": 3232,
+      "sha256": "760910f10673be134af9ef08033ef3dbf60c260bca6270c12f42a50620b2e661"
+    },
+    {
       "path": "alpha_connect_ui.py",
-      "size": 8340,
-      "sha256": "5d7b8102fd4e4f11ec65068959209bd85cad2bf3650de8a4970db0bca2a437c3"
+      "size": 8331,
+      "sha256": "007617b91ed45e06dcea51098e1c5cb499fc7ec6432ec367044a429b1cf326b4"
     },
     {
       "path": "alpha_core.py",
@@ -142,8 +217,8 @@
     },
     {
       "path": "alpha_intelligence.py",
-      "size": 11951,
-      "sha256": "82ee59239b755ed5cc3b87c195dd262b0fb7b00f0dce7a104d91fb193e8c5204"
+      "size": 11915,
+      "sha256": "c06020b89d9211cb55982338ea29da51e818c3431616e32e75f40c38320f14c2"
     },
     {
       "path": "alpha_live.py",
@@ -192,8 +267,8 @@
     },
     {
       "path": "app.py",
-      "size": 2114026,
-      "sha256": "aa2aba5613c740769d8d5b786c11cf4699ce8d3e1dd3191ca60e6eef64f6311e"
+      "size": 2145641,
+      "sha256": "394080aeb3c659e9bf6b3d52ca7a20189d19bfc1ede8c68a4a6fcd50a4d31f1c"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",
@@ -1586,6 +1661,46 @@
       "sha256": "393ace101400e71c8b2103d98576d6fb5a46fc4e6956a9ccf7e14e8771ad4ea9"
     },
     {
+      "path": "assets/site/favicon/favicon-16.png",
+      "size": 968,
+      "sha256": "984679c162d58c4aa8cd362205365a3c299a4cace666771cde490e3102c2e904"
+    },
+    {
+      "path": "assets/site/favicon/favicon-180.png",
+      "size": 56319,
+      "sha256": "db7207479caebf39c841f6e0c174c72760f4ffefc8e5e65797d94ee86c54dbc6"
+    },
+    {
+      "path": "assets/site/favicon/favicon-192.png",
+      "size": 62726,
+      "sha256": "aedb1f57950824ea28401a64de5dc30e5e06b55af910563a3f17866fb9c66154"
+    },
+    {
+      "path": "assets/site/favicon/favicon-256.png",
+      "size": 102389,
+      "sha256": "10c29b5442f78ce09f7542027c296fbf58cd8e0b9fa922efa53ed89ba142ffba"
+    },
+    {
+      "path": "assets/site/favicon/favicon-32.png",
+      "size": 2947,
+      "sha256": "2f01c131d9cf2e1676796fbc5ef833bacc663c2417bb17093d6a4ca55517799f"
+    },
+    {
+      "path": "assets/site/favicon/favicon-48.png",
+      "size": 5782,
+      "sha256": "efbcedaaa02810d988579859bdc903c970486bfc2a20be4fc2a64b39de05af46"
+    },
+    {
+      "path": "assets/site/favicon/favicon-512.png",
+      "size": 342002,
+      "sha256": "09561370a12b2bb7de3f5418301cd43849232f31324a2b6647ab6e8dd7872c48"
+    },
+    {
+      "path": "assets/site/favicon/favicon.ico",
+      "size": 19377,
+      "sha256": "20890d94ce593060444c93284ce026f2ee83edfcbb62a3be4927462ea66456f1"
+    },
+    {
       "path": "assets/site/service_icons/baloes_decoracao.webp",
       "size": 31674,
       "sha256": "073d15b4c471633ce5ee0ba671bfef254c0a3776fb769e0056199025d38a480d"
@@ -1627,8 +1742,8 @@
     },
     {
       "path": "audit_ui.py",
-      "size": 7085,
-      "sha256": "3962c0bfbaa2b5daa2f904e7c9650602efa2a922d90c6fe97a07c77eae0e781e"
+      "size": 7031,
+      "sha256": "5ca27f84d26530a738be33ad8ad8a505ef3321b90a657daddbee32603e2549d7"
     },
     {
       "path": "auditoria_operacional_service.py",
@@ -1662,8 +1777,8 @@
     },
     {
       "path": "catalogo_orcamento_service.py",
-      "size": 11192,
-      "sha256": "46b92f21bee9c4a2a18e85a90f70b10e09febe8a17c862548fff640bd9d57b7d"
+      "size": 13075,
+      "sha256": "6e185fc2845f4015e737e85e2bc9214bcdee5593e696b7756f81ef4ed9854e48"
     },
     {
       "path": "catalogo_runtime_index_service.py",
@@ -1677,18 +1792,23 @@
     },
     {
       "path": "central_operational_runtime.py",
-      "size": 5167,
-      "sha256": "3ba1da5a11138028797dc70393dfa78fa459361d1ecf2f7dcde21e0a9f897466"
+      "size": 7633,
+      "sha256": "cf507392c8f74c6cb01394573c8d57a1d29728ef31402e1f13edbda07daeba6b"
     },
     {
       "path": "central_oportunidades.py",
-      "size": 16792,
-      "sha256": "0e9977bb9cd87b599435c6e13980c3b0ffa28a9d4a1bff0467d63150431ae5b5"
+      "size": 16701,
+      "sha256": "ac303094e7e84391e9bed4851b7cb3e71f9e18460a889d7f99710e2a859e8bb9"
     },
     {
       "path": "central_producao_engine.py",
-      "size": 12780,
-      "sha256": "fa7be32d0378a1748c52bd4f9a495dba58e32a75cfe5c980013fc985201f8c3e"
+      "size": 12896,
+      "sha256": "d227d2cd5aba72ab8ef00401bbbf302ee0846aa698aafa91ea54323273e1e7d8"
+    },
+    {
+      "path": "central_producao_painel_hf41.py",
+      "size": 4156,
+      "sha256": "5206f51789c71acba949830ed1ca1b7dc1beeb2901b89d29adf6141383d7ea22"
     },
     {
       "path": "clientes_inteligencia.py",
@@ -1702,8 +1822,8 @@
     },
     {
       "path": "cloud_db.py",
-      "size": 37896,
-      "sha256": "f6e21800b9f4f2f72d4d8b3482c44f72f703c05ba192315cc8a01cfceef33205"
+      "size": 38641,
+      "sha256": "180529129eaf1ecca375e020938af4e27a7aada67653ad9b7bab629bec93550b"
     },
     {
       "path": "compras_runtime_index_service.py",
@@ -1711,9 +1831,14 @@
       "sha256": "14a100d37bb0af3c79cf8b2678141922132ca41f8643a0d4a96357b4e61f95c3"
     },
     {
+      "path": "comunicacao_pedidos_hf45.py",
+      "size": 1956,
+      "sha256": "cde247328397b8004882c0f2f03ef8665cdfb4b89edac78343721f13561d4f34"
+    },
+    {
       "path": "config.py",
-      "size": 698,
-      "sha256": "598a408b18b41481b394c7a56f7b8ffbc0de8d9efeb8c224818ee2d7133c09d9"
+      "size": 1527,
+      "sha256": "e1f65817938b25f9798137607ffe762732c18c279a17fb59394b0771a4e76006"
     },
     {
       "path": "consistencia_operacional_engine.py",
@@ -1734,6 +1859,21 @@
       "path": "crm_runtime_index_service.py",
       "size": 3853,
       "sha256": "f058d2fba7cb8a74a488374724843795c1067ad1cc15743e4e794e33bdbbaf17"
+    },
+    {
+      "path": "das_mei_service.py",
+      "size": 4731,
+      "sha256": "dc616186ee34fa5f2a088f7f91fc0b7c1d0f193420f77f30cfade70417dc68b2"
+    },
+    {
+      "path": "das_mei_storage.py",
+      "size": 2230,
+      "sha256": "54e9bea8074315c8265d0171734bb1dfb57a9e021488575c940dc3a115fc2e5d"
+    },
+    {
+      "path": "das_mei_ui.py",
+      "size": 10610,
+      "sha256": "273492e7accad79692e512525dc36eec39d75353b7a9fc7ba722948878ad0028"
     },
     {
       "path": "document_runtime_service.py",
@@ -1851,6 +1991,16 @@
       "sha256": "979f0fc393bb9c0bd27bdf8b9b2472e2b6a78f4b8bd2a09173537bdad9363254"
     },
     {
+      "path": "planejamento_diario_hf49.py",
+      "size": 2769,
+      "sha256": "a8de72f4696b517d37e1e9c64bd0ae358c436ec1468f29baa57b7c28bdb77223"
+    },
+    {
+      "path": "planejamento_semanal_hf48.py",
+      "size": 2292,
+      "sha256": "e62ec6d72ed041073ab428a11dd81c74b7fe417daa2d744470dd025f173cf577"
+    },
+    {
       "path": "prioridade_operacional_engine.py",
       "size": 9890,
       "sha256": "0c6cb06ad3c4eca241ee3b561fe2875fda1851616d48f56d2f4def78aa2ccd64"
@@ -1859,6 +2009,11 @@
       "path": "producao_operacional_service.py",
       "size": 6976,
       "sha256": "b9ee9ca86127e3f95778e20034dcce90de0c5c85967779906ada98d344624c89"
+    },
+    {
+      "path": "produtividade_entregas_hf47.py",
+      "size": 3390,
+      "sha256": "122b69e7d8f0b028cf373efe480158146b70c4f2b7111a9e056c3023ef35614e"
     },
     {
       "path": "project_runtime_index_service.py",
@@ -1907,8 +2062,8 @@
     },
     {
       "path": "requirements.txt",
-      "size": 315,
-      "sha256": "036644b9e17748a137c4551075314ed35615d54c1f53cb82a968c4b4c0b9159a"
+      "size": 318,
+      "sha256": "dcfedd6e02d6a81791c8f2e40ccbec30d2c8e19174f8574f9eedf909ea948de0"
     },
     {
       "path": "resultados_runtime_service.py",
@@ -1921,6 +2076,11 @@
       "sha256": "6b77edb6596c6973c19d771093795f55defb5eb7f49c845097bde3abe67a390d"
     },
     {
+      "path": "roteiro_producao_hf51.py",
+      "size": 5661,
+      "sha256": "0942a0d25491e863220f1e821d5e2a731cad67a4fdce09af5df53d8ff76c134e"
+    },
+    {
       "path": "site_adsense_service.py",
       "size": 2307,
       "sha256": "e258df1cc1ceb19a829d05071f9d254641ada821fa20342fb8cbe5a27e10e2cb"
@@ -1931,14 +2091,24 @@
       "sha256": "6a475409d988b461f80e412bbf80ab66c76dab9a7e2a8fd74db8f9a0aad0dd19"
     },
     {
+      "path": "site_carrinho_orcamento_service.py",
+      "size": 13819,
+      "sha256": "44040f77c5997a90b4b0a1c006c359c000599b3ba36160a2ff3bd4ff28ace1e8"
+    },
+    {
       "path": "site_cloudflare_publish_service.py",
-      "size": 12252,
-      "sha256": "230e7ccab6a3988d5b1ca71452d80a7c0d9d6220dccda8f364fdb86e676ddbec"
+      "size": 12644,
+      "sha256": "b205432514783d31d3a6da717d11aa52976a5a3820a322c6aeaa82dc54959ed3"
     },
     {
       "path": "site_completo_service.py",
-      "size": 32721,
-      "sha256": "5b8e3e71be9115416f62ea2bdb929f4f8ea8ea2d33449bf4e1e321f681be1312"
+      "size": 35217,
+      "sha256": "f7995ec70e2085d9c901cc4bb851fd55658c0e7c82b2449e27791e491a390371"
+    },
+    {
+      "path": "site_corporativo_service.py",
+      "size": 18913,
+      "sha256": "f92560b4f29bf872ad510ae9f08983f5e9ba2f17af0bbe4234aebe769eea5821"
     },
     {
       "path": "site_cutover_service.py",
@@ -1946,19 +2116,34 @@
       "sha256": "30ba0c1621d00eef413b753e9948bfbdb2943c3334cca5370b97d479e7507b37"
     },
     {
+      "path": "site_dicas_media_hf6524.py",
+      "size": 1674,
+      "sha256": "4ebd54fb5847d20e890225d318100d6c419fca94ecd8627751e33e26aee3d77d"
+    },
+    {
       "path": "site_dicas_multicanal_service.py",
-      "size": 19307,
-      "sha256": "0ae6502513ea00ee564868dd67350af33936b09dc37a8ec3a08f3709e99b8ffb"
+      "size": 23644,
+      "sha256": "292d031315af947ad8e6bf70a246b26a0964d11a3e233807619cf6628690ec9f"
+    },
+    {
+      "path": "site_entrega_rapida_service.py",
+      "size": 4535,
+      "sha256": "3c9a643cad08a7e8f12906d36f8eadb4cac9c4d83f54b228e019f0f508332596"
+    },
+    {
+      "path": "site_favicon_service.py",
+      "size": 1088,
+      "sha256": "7175ba2d96bdf24b07a2cd8c2bfa6e5286d1744aa383ca869e7323770ee39bfb"
     },
     {
       "path": "site_galeria_service.py",
-      "size": 28035,
-      "sha256": "78ce78ea8f6ca6dda70787fa3a66a321cb665c11a41c0dc822aa316771171ce6"
+      "size": 29628,
+      "sha256": "f46fd3f9bb5d139b94116d131b052926906d67b77f12870f757331f6fcbc4501"
     },
     {
       "path": "site_home_content_service.py",
-      "size": 14713,
-      "sha256": "3e7dad2eda90d632938bc38f6aeeaced6d73bb541f4f5c0d36d111fe94c15267"
+      "size": 17200,
+      "sha256": "3b28bbe3448a56477d3fb1749d1c92b08c56b043f587f6be02aa875b0cfd34dd"
     },
     {
       "path": "site_manager_service.py",
@@ -1966,29 +2151,54 @@
       "sha256": "fd6437877fc7ff43c41a79356fe6f7ad7b616aecfbbbe7471386a577cc124b63"
     },
     {
+      "path": "site_metrics_dashboard_ui.py",
+      "size": 25406,
+      "sha256": "fee1594cc992c308e375a61ba53184b3fe0258dbf753f3cadef7a7d5110a3d75"
+    },
+    {
       "path": "site_metrics_service.py",
-      "size": 21691,
-      "sha256": "c274085a8b84245c4e36f39edb51729cc4927d7c7eb48cc64d2259773c5d4243"
+      "size": 35305,
+      "sha256": "08c0f1515fb4037300eb6e359e12ad5731889d673a8112116505bd55356fbb3c"
+    },
+    {
+      "path": "site_posts_service.py",
+      "size": 10205,
+      "sha256": "74e2cb1ecc4f504dc25635016525442ea70e6c08e48b9004deba42d21e713512"
+    },
+    {
+      "path": "site_posts_ui.py",
+      "size": 14661,
+      "sha256": "66bc07a96aa6371b8e3f13f79bcfb6d3b4895aed6e047a5426d0958383aa536a"
     },
     {
       "path": "site_production_service.py",
-      "size": 9605,
-      "sha256": "8e6e5a1daef9dc3f9967ce4d3501656c09f7cbdf9f43124f017d95563162a1ef"
+      "size": 12080,
+      "sha256": "3fca025a94118519c00dd90944841179a6d597af59521c5821a6ec9f62f6aa5f"
+    },
+    {
+      "path": "site_pwa_service.py",
+      "size": 4233,
+      "sha256": "b7dbf4f787780b5579341ddbf30ef3ab01c254ca0c969801ce956edea078fbc8"
     },
     {
       "path": "site_staging_service.py",
-      "size": 5740,
-      "sha256": "d568fceac0c53814b77b57b4fe9d4bf9c55b647df501b8cfefdc1636fbb2d865"
+      "size": 5943,
+      "sha256": "74c911b5059660547549634c9222b4e38c7a0c892ba86afdd4014f16c9ce83c5"
     },
     {
       "path": "site_visual_hf48_service.py",
-      "size": 52590,
-      "sha256": "76b52bebe9fb2a29b101f0fce127c12cc3a60e8d592e39d496f200662d6dea92"
+      "size": 52628,
+      "sha256": "8ba188cb6103f164759d47574d3f0f431276ee5508fe6911b0811cc416bcf7b1"
     },
     {
       "path": "site_vitrine_service.py",
-      "size": 52235,
-      "sha256": "9464549ecadf2d933c982fec3896fb0148517ddafbf082635f297ba6ab4bcde8"
+      "size": 54831,
+      "sha256": "a380cc672e4369dfe438021792ee500a3d49e83bfee8c118e460bad25b7692e0"
+    },
+    {
+      "path": "site_whatsapp_context_service.py",
+      "size": 5904,
+      "sha256": "1af3226a86a665949a02eac807065defa0ea124b2daa9e08cb7e8c017db5bef0"
     },
     {
       "path": "site_youtube_multicanal_service.py",
@@ -2027,8 +2237,8 @@
     },
     {
       "path": "system_health_ui.py",
-      "size": 2986,
-      "sha256": "384635e73757bae45ba8552e892fe9cb6ad93a93241710706fc83e9a81597a84"
+      "size": 2959,
+      "sha256": "e9681eab21aca7bce8bc96d93af5c87fdcf6ad2fdf0f16a83caee86afac7bbb3"
     },
     {
       "path": "template_library_engine.py",
@@ -2059,6 +2269,86 @@
       "path": "tempo_ciclo_producao_service.py",
       "size": 29493,
       "sha256": "3edd6cc540bfe9110b67879e259353009be787926dcd5e2a22e1e692739c7e54"
+    },
+    {
+      "path": "test_acompanhamento_pedidos_hf46.py",
+      "size": 1076,
+      "sha256": "62ff1bebb3cfc9673f66b029ec5be9b4238b86d29c31f2d5924aba9fa1309616"
+    },
+    {
+      "path": "test_central_producao_painel_hf41.py",
+      "size": 1794,
+      "sha256": "a3697bf184da248bfc8cef5d73addc7ee17cf536f2e12ca8c46e6f8c8e59c022"
+    },
+    {
+      "path": "test_comunicacao_pedidos_hf45.py",
+      "size": 715,
+      "sha256": "0538b20c282b59d2550865ac885224fb00af5b5fdd225ae77eb5830c26fda57c"
+    },
+    {
+      "path": "test_hf652438_sob_encomenda.py",
+      "size": 2429,
+      "sha256": "ef2e147decc9fb9e03e75bc72d31360e16783e9d6ba16e7dff4cbb7729dd30e9"
+    },
+    {
+      "path": "test_hf652439_orcamento_catalogo.py",
+      "size": 955,
+      "sha256": "77042686f810585be5a6ca49b28a0d7da26ac4ad1a690f0fa1fa4a1f884ee693"
+    },
+    {
+      "path": "test_hf652450_otimizacao.py",
+      "size": 1903,
+      "sha256": "4a289c8abc9de2f30950b5862aa1680e183f9857ee38740bac37484df347bf7d"
+    },
+    {
+      "path": "test_planejamento_diario_hf49.py",
+      "size": 1350,
+      "sha256": "bb697cdec10a5386bdebca27ab41fd0bcffb2df9fb7536d33bc1bd8305149388"
+    },
+    {
+      "path": "test_planejamento_semanal_hf48.py",
+      "size": 1067,
+      "sha256": "af0089810e7499290a367e615c1028afe6126df7a82ec164bfc9d6d7b6030a82"
+    },
+    {
+      "path": "test_posts_hf652417.py",
+      "size": 1951,
+      "sha256": "165f9554296101f131b24b923212b893fbbf371c254a9ed871039555afccfb9a"
+    },
+    {
+      "path": "test_posts_hf652418.py",
+      "size": 1046,
+      "sha256": "61d3ffaa8e35e659f7a18545eccc9476e091502d48209a28fd6d8df2be71276a"
+    },
+    {
+      "path": "test_produtividade_entregas_hf47.py",
+      "size": 1561,
+      "sha256": "0122853c905f042ba453b59842838d670144180a3f94f9ed43b5b72872a5daa7"
+    },
+    {
+      "path": "test_pwa_hf652414.py",
+      "size": 1582,
+      "sha256": "6b1c07aedf5e68ec530676de20a9df248809730d5848cda954416b117529f66e"
+    },
+    {
+      "path": "test_roteiro_producao_hf51.py",
+      "size": 3927,
+      "sha256": "6da20abecfd5f52e0a52457c2286c601c4c28e406ca8db5b5c085ec611983c10"
+    },
+    {
+      "path": "test_site_release_cache_hf52.py",
+      "size": 6888,
+      "sha256": "b77e08d93635101c994d2355fef9ae0d0a24bf7ce18b0eb01402a05a255b806f"
+    },
+    {
+      "path": "test_site_vitrine_hf52.py",
+      "size": 13862,
+      "sha256": "624130fac99023c1187f65dcffb70d47d5e2e6066baf39f015623793d59bc389"
+    },
+    {
+      "path": "test_update_package_hf52.py",
+      "size": 4461,
+      "sha256": "8dc7f2beef43a9d2e87a8c614fb00ec006bed24ea03a61c6aa77a77b70aa9d4d"
     },
     {
       "path": "test_youtube_oauth_hf6523.py",
@@ -2102,18 +2392,18 @@
     },
     {
       "path": "trash_ui.py",
-      "size": 2585,
-      "sha256": "9a3194ca44fd745e9d08ee75219069ae44e7c60471beda1cdaf6c1c0b8e54286"
+      "size": 2567,
+      "sha256": "d1f4afdd52f7f2b501b40b9863e99a9c722aeed4e186255d9e2f3991498d76c9"
     },
     {
       "path": "update_hygiene.py",
-      "size": 14987,
-      "sha256": "c452a4dd9f4d163dc4e0caa045baedcdd30692029331881a476c33bc105dafe3"
+      "size": 15268,
+      "sha256": "0629a490efce3d2d545e44c2c438c326d827fb28f8c2abd5460ef0864311b203"
     },
     {
       "path": "update_safe_ui.py",
-      "size": 5014,
-      "sha256": "7439810b8306b6f55ea91154e597c40249ae830fd2425e3532a1f15a6c6a32de"
+      "size": 4996,
+      "sha256": "22238124d3c83b6036bf3a99869315ac65936f82bfaf7f5b0bd3c151c3f33b9a"
     }
   ]
 }

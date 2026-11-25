@@ -1,10 +1,21 @@
-AlphaFest Manager — HF65.23 · YouTube OAuth
+ALPHAFEST MANAGER — HF65.24.52 · SITE FINAL INTEGRADO
 
-- Mantém a edição de Dicas & Inspirações (HF65.22) e a integração AdSense (HF65.21).
-- Adiciona autorização Google OAuth com conferência do canal oficial, tokens cifrados e upload privado confirmado.
-- Configuração requer Client ID e Client Secret do Google Cloud + chave Fernet em Streamlit Secrets.
-- Nunca coloque credenciais no GitHub nem envie segredos por print/chat.
-- Nenhum vídeo, dica ou alteração do site é publicado automaticamente.
-- Instalar em branch e validar no Streamlit antes de mesclar à main.
+Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.24.52
+Base de instalação: Manager HF65.24.51_ROTEIROS_PRODUCAO.
 
-Detalhes: UPDATE_INFO_20_4_9_I8_13_5_HF53_3_HF8_HF65_23.md
+1. Prepare e baixe o ponto de restauração pelo recurso Atualização segura do Manager atual.
+2. Extraia este ZIP em uma pasta temporária.
+3. Copie o CONTEÚDO da pasta alphafest-manager-main para a pasta do repositório existente que já contém app.py. Substitua os arquivos correspondentes, mantendo os dados e configurações locais. Não apague o repositório nem crie outra pasta alphafest-manager-main dentro dele.
+4. Faça Commit + Push pelo GitHub Desktop no repositório/branch do aplicativo atual.
+5. Aguarde o Streamlit atualizar e confira HF65.24.52 na interface.
+6. Abra Central do Site AlphaFest > Preparar / atualizar prévia do site.
+7. Confira Desktop e Celular e publique pelo botão Publicar site agora.
+
+O pacote instala os ajustes da prévia validada nos geradores do Manager.
+O catálogo, a galeria e os demais conteúdos continuam vindo dos cadastros atuais.
+Não há SQL ou migração de dados novos.
+
+ESTE ZIP É DO MANAGER. Para Cloudflare, use o ZIP público gerado depois da atualização em Contingência / ZIP manual > Baixar ZIP de produção, ou o botão Publicar site agora.
+
+Detalhes: UPDATE_INFO_HF65.24.52.md
+Validação: VALIDACAO_HF65.24.52.md

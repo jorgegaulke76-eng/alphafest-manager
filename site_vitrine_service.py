@@ -20,6 +20,10 @@ from catalogo_orcamento_service import aliases_catalogo_atomicos
 ImagemResolver = Optional[Callable[[str], str]]
 
 
+# HF65.24.52 — acabamento móvel da ficha, homologado na prévia isolada.
+_PRODUCT_DETAIL_MOBILE_CSS_HF52 = r'''@media(max-width:620px){.product-detail-modal{padding:8px;align-items:flex-end;overflow:hidden}.product-detail-panel{width:100%;max-width:calc(100vw - 16px);max-height:94vh;overflow-x:hidden;border-radius:22px 22px 12px 12px;padding:18px 14px 16px}.product-detail-close{position:absolute;right:10px;top:9px;z-index:40;width:38px;height:38px}.product-detail-layout{grid-template-columns:minmax(0,1fr);gap:15px;min-width:0}.product-detail-media,.product-detail-copy{min-width:0;max-width:100%}.product-detail-media{aspect-ratio:4/3}}'''
+
+
 CATEGORIAS_COMERCIAIS = (
     "Festas & Personalizados",
     "Balões & Decoração",
@@ -329,26 +333,8 @@ def gerar_html_vitrine(
         if usar_taxonomia_catalogo else ''
     )
 
-    # HF65.24.52: URLs anteriores podem apontar para um Alias do mesmo produto.
-    # Usa somente o Catálogo Oficial. Não publica aliases ambíguos nem aliases
-    # que coincidam com o slug principal de outro item.
-    canonical_slugs = {
-        _slug(str(p.get("nome") or "")) for p in produtos
-    }
-    alias_owners: Dict[str, set[int]] = {}
-    for idx, p in enumerate(produtos):
-        for alias in _lista(p.get("aliases") or []):
-            alias_slug = _slug(alias)
-            if alias_slug and alias_slug != "sem-categoria" and alias_slug not in canonical_slugs:
-                alias_owners.setdefault(alias_slug, set()).add(idx)
-    valid_aliases: Dict[int, List[str]] = {}
-    for alias_slug, owners in alias_owners.items():
-        if len(owners) == 1:
-            owner = next(iter(owners))
-            valid_aliases.setdefault(owner, []).append(alias_slug)
-
     cards: List[str] = []
-    for product_index, item in enumerate(produtos):
+    for item in produtos:
         nome = str(item.get("nome") or "Produto").strip() or "Produto"
         descricao = str(item.get("descricao") or "").strip()
         categorias_origem = _lista(item.get("categorias_origem") or item.get("categorias_site") or [])
@@ -395,7 +381,6 @@ def gerar_html_vitrine(
         ])
         busca = unicodedata.normalize("NFKD", busca).encode("ascii", "ignore").decode("ascii").casefold()
         produto_slug = _slug(nome)
-        apelidos_slug = html.escape(' '.join(valid_aliases.get(product_index, [])), quote=True)
         sub_data = html.escape(_slug(subcategoria_publica), quote=True) if subcategoria_publica else ""
         categorias_slugs = " " + " ".join(_slug(cat) for cat in categorias_publicas) + " " if usar_taxonomia_catalogo else f" {_slug(categoria)} "
         tem_galeria = produto_slug in produtos_galeria_slugs
@@ -404,7 +389,7 @@ def gerar_html_vitrine(
         # na ficha aberta pelo cliente.
         cards.append(
             f'''<article class="product-card product-card-compact" role="button" tabindex="0" aria-label="Ver detalhes de {html.escape(nome, quote=True)}"
-                data-cat="{html.escape(_slug(categoria), quote=True)}" data-cats="{html.escape(categorias_slugs, quote=True)}" data-sub="{sub_data}" data-product="{html.escape(produto_slug, quote=True)}" data-product-aliases="{apelidos_slug}" data-search="{html.escape(busca, quote=True)}"
+                data-cat="{html.escape(_slug(categoria), quote=True)}" data-cats="{html.escape(categorias_slugs, quote=True)}" data-sub="{sub_data}" data-product="{html.escape(produto_slug, quote=True)}" data-search="{html.escape(busca, quote=True)}"
                 data-detail-name="{html.escape(nome, quote=True)}" data-detail-description="{html.escape(descricao, quote=True)}"
                 data-detail-category="{html.escape(categoria, quote=True)}" data-detail-subcategory="{html.escape(subcategoria_publica, quote=True)}"
                 data-detail-price="{html.escape(preco, quote=True)}" data-detail-image="{html.escape(img, quote=True)}"
@@ -550,9 +535,16 @@ def gerar_html_vitrine(
   let current=null;
   // HF65.24.52: a largura do layout pode superar a tela visual em navegadores
   // móveis. Centraliza a ficha na visualViewport sem deslocar o site inteiro.
+  function clearVisualViewport(){
+    if(modal.style){['left','top','width','height','right','bottom'].forEach(p=>modal.style.removeProperty(p));}
+  }
   function fitVisualViewport(){
+    if(!window.matchMedia || !window.matchMedia('(max-width:620px)').matches){
+      clearVisualViewport();
+      return;
+    }
     const v=window.visualViewport;
-    if(!v || !window.matchMedia || !window.matchMedia('(max-width:620px)').matches || modal.hidden || !modal.style)return;
+    if(!v || modal.hidden || !modal.style)return;
     modal.style.left=v.offsetLeft+'px';
     modal.style.top=v.offsetTop+'px';
     modal.style.width=v.width+'px';
@@ -564,6 +556,7 @@ def gerar_html_vitrine(
     window.visualViewport.addEventListener('resize',fitVisualViewport,{passive:true});
     window.visualViewport.addEventListener('scroll',fitVisualViewport,{passive:true});
   }
+  window.addEventListener('resize',fitVisualViewport,{passive:true});
   function esc(s){return (s||'').replace(/[&<>"]/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch];});}
   function relatedFor(card){
     const sameSub=cards.filter(c=>c!==card && card.dataset.sub && c.dataset.sub===card.dataset.sub && c.dataset.cat===card.dataset.cat);
@@ -595,21 +588,9 @@ def gerar_html_vitrine(
   }
   function close(){
     modal.hidden=true;modal.setAttribute('aria-hidden','true');document.body.classList.remove('product-modal-open');
-    if(modal.style){['left','top','width','height','right','bottom'].forEach(p=>modal.style.removeProperty(p));}
+    clearVisualViewport();
     if(current)current.focus();
   }
-  // HF65.24.52: abre a ficha diretamente quando o visitante chega por campanha.
-  // O identificador é comparado com os produtos existentes, sem HTML dinâmico.
-  try {
-    const requested=new URLSearchParams(window.location.search).get('produto');
-    if(requested && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(requested)) {
-      const match=cards.find(c=>c.dataset.product===requested) ||
-        cards.find(c=>(c.dataset.productAliases||'').split(/\s+/).includes(requested));
-      if(match) {
-        open(match);
-      }
-    }
-  } catch(e) { /* sem impacto na navegação normal */ }
   cards.forEach(function(card){
     card.addEventListener('click',function(){open(card);});
     card.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();open(card);}});
@@ -621,6 +602,22 @@ def gerar_html_vitrine(
     if(typeof window.alphaFestGalleryShowProduct==='function'){window.alphaFestGalleryShowProduct(slug,label);}
     else{const g=document.getElementById('galeria');if(g)g.scrollIntoView({behavior:'smooth',block:'start'});}
   });
+  // HF65.24.52: aguarda também os listeners de métricas e contexto WhatsApp.
+  // O clique usa o mesmo fluxo manual, sem criar uma segunda contagem de acesso.
+  function openRequestedProduct(){
+    try {
+      const requested=new URLSearchParams(window.location.search).get('produto');
+      if(requested && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(requested)) {
+        const match=cards.find(c=>c.dataset.product===requested);
+        if(match)match.click();
+      }
+    } catch(e) { /* sem impacto na navegação normal */ }
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',openRequestedProduct,{once:true});
+  }else{
+    openRequestedProduct();
+  }
 })();
 </script>'''
 
@@ -661,8 +658,8 @@ def gerar_html_vitrine(
 .product-detail-modal[hidden]{{display:none!important}} .product-detail-modal{{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;padding:24px}} .product-detail-backdrop{{position:absolute;inset:0;background:rgba(7,24,45,.68);backdrop-filter:blur(5px)}} .product-detail-panel{{position:relative;z-index:2;width:min(1040px,96vw);max-height:92vh;overflow:auto;background:#fff;border-radius:26px;box-shadow:0 30px 90px rgba(4,24,48,.30);padding:26px}} .product-detail-close{{position:absolute;right:15px;top:13px;z-index:5;width:42px;height:42px;border:0;border-radius:50%;background:#edf6fd;color:#153b61;font-size:30px;line-height:1;cursor:pointer}} .product-detail-layout{{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(320px,.95fr);gap:30px;align-items:start}} .product-detail-media{{background:#f4f9fd;border-radius:20px;overflow:hidden;aspect-ratio:1/1;display:flex;align-items:center;justify-content:center}} .product-detail-media img{{width:100%;height:100%;object-fit:contain;display:block}} .product-detail-placeholder{{font-size:34px;font-weight:950;color:#83a8c8}} .product-detail-copy{{padding:12px 4px 4px}} .product-detail-tax{{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.07em;color:var(--blue);margin-bottom:8px}} .product-detail-copy h2{{font-size:34px;line-height:1.06;margin:0 0 14px;color:var(--ink)}} .product-detail-price{{display:flex;align-items:center;justify-content:space-between;gap:16px;border:1px solid #bfe9cf;background:#effcf4;border-radius:15px;padding:13px 15px;font-size:25px;font-weight:950;color:#08773a;margin:0 0 14px}} .product-detail-price:before{{content:'Preço';font-size:12px;font-weight:900;letter-spacing:.06em;text-transform:uppercase;color:#43825e}} .product-detail-price[hidden]{{display:none!important}} .product-detail-copy p{{font-size:16px;line-height:1.65;color:#566f89;white-space:pre-line;margin:0 0 18px}} .product-detail-actions{{display:grid;grid-template-columns:1fr;gap:9px;margin:4px 0 18px}} .product-detail-gallery{{margin:0;min-height:46px;border:1px solid #9bc9ee;background:#f3f9ff;color:#075fae;border-radius:12px;font-weight:900;cursor:pointer}} .product-detail-whatsapp{{min-height:52px;font-size:16px}} .product-related{{border-top:1px solid #e7eef5;margin-top:24px;padding-top:20px}} .product-related-head{{display:flex;justify-content:space-between;gap:14px;align-items:end;margin-bottom:12px}} .product-related-head strong{{font-size:19px}} .product-related-head span{{font-size:12px;color:#71849b}} .product-related-grid{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}} .product-related-card{{border:1px solid #dce8f3;background:#fff;border-radius:14px;overflow:hidden;cursor:pointer;text-align:left;padding:0;color:var(--ink)}} .product-related-card img{{width:100%;aspect-ratio:1/1;object-fit:cover;display:block;background:#f4f9fd}} .product-related-card span{{display:block;padding:9px 10px;font-size:12px;font-weight:850;line-height:1.25}} body.product-modal-open{{overflow:hidden}}
 .empty{{padding:50px;text-align:center;border:1px dashed var(--line);border-radius:18px;color:#60748e}} .mobile-whatsapp{{display:none}} .footer{{background:#10243c;color:#d7e8f7}} .footer-in{{max-width:1240px;margin:auto;padding:34px 22px;display:flex;gap:24px;justify-content:space-between;align-items:center}} .footer strong{{color:#fff}} .footer small{{color:#9fb7cb}}
 @media(max-width:900px){{.hero-in{{grid-template-columns:1fr}}.hero-card{{display:none}}.grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
-@media(max-width:620px){{body{{padding-bottom:76px}}.preview-bar{{font-size:9px;padding:6px 10px}}.brand-copy{{display:none}}.ghost{{display:none}}.header-in{{padding:8px 12px;gap:8px}}.brand-logo{{width:54px;height:44px}}.header-actions .cta{{padding:10px 12px;font-size:13px;box-shadow:none}}.hero-in{{padding:30px 14px 26px}}.eyebrow{{font-size:11px}}.hero h1{{font-size:36px;line-height:1.02;margin:9px 0 14px}}.hero p{{font-size:15px;line-height:1.5}}.hero-actions{{gap:8px;margin-top:18px}}.hero-actions>a{{width:100%;min-height:46px}}.main{{padding:22px 12px 38px}}.section-head{{align-items:flex-start;flex-direction:column;gap:6px;margin:14px 0}}.section-head h2{{font-size:25px}}.search{{min-width:100%}}.search input{{font-size:16px;padding-top:13px;padding-bottom:13px}}.filters{{gap:7px;padding-bottom:9px}}.filter{{padding:10px 13px;min-height:42px}}.taxonomy-step{{padding:13px;border-radius:15px}}.taxonomy-focus{{align-items:stretch;flex-direction:column;padding:11px;border-radius:15px;gap:8px}}.taxonomy-back{{width:100%;min-height:42px}}.taxonomy-focus-copy{{padding:0 4px 3px}}.taxonomy-heading{{align-items:flex-start;flex-direction:column;gap:5px}}.taxonomy-heading small{{font-size:11px}}.subfilters{{gap:7px;padding-bottom:2px}}.subfilter{{padding:9px 12px;min-height:40px}}.taxonomy-current{{align-items:flex-start;flex-direction:column;gap:3px}}.taxonomy-current span:before{{display:none}}.grid{{grid-template-columns:1fr 1fr;gap:10px}}.product-card{{border-radius:14px;box-shadow:0 7px 22px rgba(20,37,61,.07)}}.product-card:hover{{transform:none}}.product-card-compact .photo{{aspect-ratio:1/1}}.compact-body{{padding:10px 10px 12px;min-height:58px}}.compact-body h3{{font-size:14px;line-height:1.2}}.product-detail-modal{{padding:8px;align-items:flex-end;overflow:hidden}}.product-detail-panel{{width:100%;max-width:calc(100vw - 16px);max-height:94vh;overflow-x:hidden;border-radius:22px 22px 12px 12px;padding:18px 14px 16px}}.product-detail-close{{position:absolute;right:10px;top:9px;z-index:40;width:38px;height:38px}}.product-detail-layout{{grid-template-columns:minmax(0,1fr);gap:15px;min-width:0}}.product-detail-media,.product-detail-copy{{min-width:0;max-width:100%}}.product-detail-media{{aspect-ratio:4/3}}.product-detail-copy{{padding:0 2px}}.product-detail-copy h2{{font-size:25px;padding-right:36px}}.product-detail-copy p{{font-size:14px;line-height:1.55}}.product-detail-price{{font-size:21px}}.product-related-head{{align-items:flex-start;flex-direction:column;gap:3px}}.product-related-grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}.product-related-card span{{font-size:11px}}.footer-in{{flex-direction:column;align-items:flex-start;padding-bottom:28px}}.mobile-whatsapp{{display:flex;position:fixed;left:12px;right:12px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50;align-items:center;justify-content:center;background:var(--green);color:#fff;text-decoration:none;font-weight:950;border-radius:14px;min-height:52px;box-shadow:0 10px 28px rgba(20,37,61,.25);border:2px solid rgba(255,255,255,.9)}}}}
-</style></head>
+@media(max-width:620px){{body{{padding-bottom:76px}}.preview-bar{{font-size:9px;padding:6px 10px}}.brand-copy{{display:none}}.ghost{{display:none}}.header-in{{padding:8px 12px;gap:8px}}.brand-logo{{width:54px;height:44px}}.header-actions .cta{{padding:10px 12px;font-size:13px;box-shadow:none}}.hero-in{{padding:30px 14px 26px}}.eyebrow{{font-size:11px}}.hero h1{{font-size:36px;line-height:1.02;margin:9px 0 14px}}.hero p{{font-size:15px;line-height:1.5}}.hero-actions{{gap:8px;margin-top:18px}}.hero-actions>a{{width:100%;min-height:46px}}.main{{padding:22px 12px 38px}}.section-head{{align-items:flex-start;flex-direction:column;gap:6px;margin:14px 0}}.section-head h2{{font-size:25px}}.search{{min-width:100%}}.search input{{font-size:16px;padding-top:13px;padding-bottom:13px}}.filters{{gap:7px;padding-bottom:9px}}.filter{{padding:10px 13px;min-height:42px}}.taxonomy-step{{padding:13px;border-radius:15px}}.taxonomy-focus{{align-items:stretch;flex-direction:column;padding:11px;border-radius:15px;gap:8px}}.taxonomy-back{{width:100%;min-height:42px}}.taxonomy-focus-copy{{padding:0 4px 3px}}.taxonomy-heading{{align-items:flex-start;flex-direction:column;gap:5px}}.taxonomy-heading small{{font-size:11px}}.subfilters{{gap:7px;padding-bottom:2px}}.subfilter{{padding:9px 12px;min-height:40px}}.taxonomy-current{{align-items:flex-start;flex-direction:column;gap:3px}}.taxonomy-current span:before{{display:none}}.grid{{grid-template-columns:1fr 1fr;gap:10px}}.product-card{{border-radius:14px;box-shadow:0 7px 22px rgba(20,37,61,.07)}}.product-card:hover{{transform:none}}.product-card-compact .photo{{aspect-ratio:1/1}}.compact-body{{padding:10px 10px 12px;min-height:58px}}.compact-body h3{{font-size:14px;line-height:1.2}}.product-detail-modal{{padding:8px;align-items:flex-end}}.product-detail-panel{{width:100%;max-height:94vh;border-radius:22px 22px 12px 12px;padding:18px 14px 16px}}.product-detail-close{{right:10px;top:9px;width:38px;height:38px}}.product-detail-layout{{grid-template-columns:1fr;gap:15px}}.product-detail-media{{aspect-ratio:4/3}}.product-detail-copy{{padding:0 2px}}.product-detail-copy h2{{font-size:25px;padding-right:36px}}.product-detail-copy p{{font-size:14px;line-height:1.55}}.product-detail-price{{font-size:21px}}.product-related-head{{align-items:flex-start;flex-direction:column;gap:3px}}.product-related-grid{{grid-template-columns:repeat(2,minmax(0,1fr))}}.product-related-card span{{font-size:11px}}.footer-in{{flex-direction:column;align-items:flex-start;padding-bottom:28px}}.mobile-whatsapp{{display:flex;position:fixed;left:12px;right:12px;bottom:max(10px,env(safe-area-inset-bottom));z-index:50;align-items:center;justify-content:center;background:var(--green);color:#fff;text-decoration:none;font-weight:950;border-radius:14px;min-height:52px;box-shadow:0 10px 28px rgba(20,37,61,.25);border:2px solid rgba(255,255,255,.9)}}}}
+</style><style id="hf652452-product-mobile-css">{_PRODUCT_DETAIL_MOBILE_CSS_HF52}</style></head>
 <body>{preview_bar}
 <header class="header"><div class="header-in"><a class="brand" href="#inicio">{logo}<div class="brand-copy"><strong>{html.escape(nome_empresa)}</strong><span>{html.escape(subtitulo)}</span></div></a><div class="header-actions"><a class="ghost" href="#produtos">Ver produtos</a><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Falar no WhatsApp</a></div></div></header>
 <section class="hero" id="inicio"><div class="hero-in"><div><div class="eyebrow">Personalização que vira presença</div><h1>Seu evento, sua marca, <span>do seu jeito.</span></h1><p>{html.escape(slogan)} Escolha uma ideia na vitrine e fale com a AlphaFest para personalizar detalhes, quantidade e prazo.</p><div class="hero-actions"><a class="cta" href="{html.escape(whatsapp_geral, quote=True)}" target="_blank" rel="noopener">💬 Quero um orçamento</a><a class="secondary" href="#produtos">Explorar produtos ↓</a></div></div><aside class="hero-card"><div class="eyebrow">Vitrine AlphaFest</div><h2>Personalizados & Balões</h2><p>Ideias selecionadas para você encontrar uma referência e pedir seu orçamento.</p><div class="hero-stat"><div class="stat"><strong>{resumo['total']}</strong><span>produtos na vitrine</span></div><div class="stat"><strong>{resumo['total_categorias']}</strong><span>{html.escape(rotulo_categorias)}</span></div></div></aside></div></section>

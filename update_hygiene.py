@@ -168,7 +168,12 @@ def exclusion_reason(rel: PurePosixPath) -> str | None:
         return "arquivo_copia"
     name = rel.name
     low = name.casefold()
-    if name in DATA_JSON_NAMES or (len(parts) == 1 and low.endswith(".json")):
+    # HF65.24.52: a data exibida pelo Manager depende deste metadado da release.
+    # A exceção é só para o nome exato; bancos/configurações seguem excluídos e
+    # UPDATE_MANIFEST.json continua sendo regenerado pelo builder.
+    if name in DATA_JSON_NAMES or (
+        len(parts) == 1 and low.endswith(".json") and name != "RELEASE_INFO.json"
+    ):
         return "dados_persistentes"
     if low.endswith((".pyc", ".pyo", ".tmp", ".log")) or "__pycache__" in parts:
         return "cache_temporario"

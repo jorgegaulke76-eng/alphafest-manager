@@ -28811,6 +28811,12 @@ if pagina_atual == "site":
     hs2.metric("Categorias", resumo_vitrine_hf59.get("total_categorias", 0))
     hs3.metric("Fotos na Galeria", resumo_galeria_hf59.get("total_fotos", 0))
 
+    # HF65.24.52: uma sessão preservada não deve reaproveitar a prévia nem a
+    # confirmação de publicação de um gerador de versão anterior.
+    if st.session_state.get("site_hf59_preview_app_version") != APP_VERSION:
+        st.session_state.pop("site_hf59_html_preview", None)
+        st.session_state.pop("site_hf59_confirmar_publicacao", None)
+
     col_preview_hf59, col_site_hf59 = st.columns([2, 1])
     if col_preview_hf59.button(
         "🔄 Preparar / atualizar prévia do site",
@@ -28837,6 +28843,7 @@ if pagina_atual == "site":
                 dicas_content=_dicas_hf6522,
                 posts_content=_posts_hf652417,
             )
+            st.session_state["site_hf59_preview_app_version"] = APP_VERSION
         st.success("✅ Prévia atualizada. Confira abaixo antes de publicar.")
     col_site_hf59.link_button("🌐 Abrir site atual", "https://alphafest.com.br", width="stretch")
 
@@ -28898,6 +28905,7 @@ if pagina_atual == "site":
                 _site_runtime_cache_hf45,
                 "site-producao-bundle-hf59",
                 {
+                    "versao_manager": APP_VERSION,
                     "catalogo": catalogo_site_hf35,
                     "empresa": empresa_vitrine_hf59,
                     "logo": logo_src_hf59,
