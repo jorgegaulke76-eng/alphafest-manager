@@ -87,6 +87,13 @@ def chaves_rascunho(estado):
     campos.update(f"anna_modal_{c}" for c in QUOTE_FIELDS)
     campos.update(f"hf53_projeto_{c}" for c in PROJECT_FIELDS)
     for chave in estado:
+        # HF55: a consulta do Histórico oculta os widgets do orçamento. Sem
+        # preservar a seleção, o retorno pode reconhecer um homônimo e
+        # sobrescrever os contatos que foram revisados no rascunho importado.
+        texto_chave = str(chave)
+        if (texto_chave.startswith(("jorge_orc_cliente_", "anna_orc_cliente_"))
+                and texto_chave.endswith("_seletor")):
+            campos.add(chave)
         if str(chave).startswith(("hf53_item_", "produto_novo_", "tema_", "nome_item_",
                                  "cor_", "idade_", "obs_item_", "qtd_", "valor_",
                                  "anna_modal_prod_", "anna_modal_tema_", "anna_modal_nome_",

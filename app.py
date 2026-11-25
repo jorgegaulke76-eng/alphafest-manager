@@ -329,6 +329,7 @@ from executive_center import renderizar_centro_executivo
 from pedido_resumo import resumo_produtos_pedido
 import manager_workflow_hf53 as _workflow_hf53
 from site_quote_import_ui import renderizar_importacao as _hf54_renderizar_importacao
+import proposal_duplicate_ui_hf55 as _duplicidades_hf55
 from manager_operational_planning_hf53 import (
     montar_planejamentos as _hf53_montar_planejamentos,
     renderizar_planejamentos as _hf53_renderizar_planejamentos,
@@ -4655,6 +4656,96 @@ def _hf54_mostrar_origem_orcamento(texto):
             st.caption("Confira com o cliente a identificação, a data de entrega e as condições antes de salvar a proposta.")
     else:
         st.info("Solicitação de origem: " + texto)
+
+
+def _hf55_carregar_historico_conferencia():
+    """Lê a fonte atual sem importar contingência local para o banco online."""
+    if not usuario_pode_ver_aba("historico"):
+        raise PermissionError("Seu perfil não permite consultar o Histórico.")
+    try:
+        if _cloud_db is None:
+            raise RuntimeError("Serviço de dados indisponível")
+        if _cloud_db.online_configured():
+            dados = _cloud_db.load_document_confirmed("historico_orcamentos", [])
+        else:
+            # Instalações explicitamente sem conexão configurada conservam o
+            # uso local. Uma falha online nunca passa por este ramo.
+            caminho = Path(ARQUIVO_HISTORICO)
+            if caminho.exists():
+                with caminho.open("r", encoding="utf-8") as arquivo:
+                    dados = json.load(arquivo)
+            else:
+                dados = []
+    except Exception:
+        raise ValueError("Não foi possível conferir o Histórico atual. O rascunho foi preservado; tente novamente quando a leitura estiver disponível.") from None
+    if not isinstance(dados, list) or any(not isinstance(item, dict) for item in dados):
+        raise ValueError("O Histórico retornou um conteúdo inválido para a conferência. O rascunho foi preservado.")
+    return copy.deepcopy(dados)
+
+
+def _hf55_rascunho_para_conferencia(*, nome, documento, whatsapp, evento, itens,
+                                   entrega, desconto, prazo, frete, taxa_entrega,
+                                   validade, subtotal, total, cliente_selecionado=None, anna=False):
+    """Snapshot dos campos reais: consultar não cadastra nem altera o cliente."""
+    estado = st.session_state
+    vinculo = _rel_localizar_cliente_orcamento(
+        [cliente_selecionado] if isinstance(cliente_selecionado, dict) else [],
+        nome=nome, documento=documento, whatsapp=whatsapp,
+    )
+    return {
+        "cliente_nome": str(nome or "").strip(),
+        "documento": str(documento or "").strip(),
+        "whatsapp": str(whatsapp or "").strip(),
+        "relacionamento_id": str((vinculo or {}).get("id") or ""),
+        "evento": str(evento or "").strip(),
+        "itens": copy.deepcopy(itens),
+        "briefing_origem": str(estado.get("anna_modal_observacoes" if anna else "form_observacoes") or ""),
+        "data_entrega": entrega.strftime("%d/%m/%Y"),
+        "subtotal": subtotal,
+        "desconto": desconto,
+        "valor_total": total,
+        "prazo_dias": prazo,
+        "frete_tipo": frete,
+        "taxa_entrega": valor_float(taxa_entrega) if frete == "Entrega" else 0.0,
+        "validade_dias": validade,
+        "atendimento_id": str(estado.get("_anna_hf53_atendimento_origem_id" if anna else "_atendimento_origem_id") or ""),
+        "projeto_id": str(estado.get("_anna_hf53_projeto_origem_id" if anna else "_projeto_origem_id") or ""),
+        "_contexto_formulario": {
+            "perfil": "anna" if anna else "jorge",
+            "sequencia": estado.get("anna_modal_item_key" if anna else "form_key", 0),
+        },
+    }
+
+
+def _hf55_consultar_proposta(numero):
+    """Navega para consulta; não carrega a proposta por cima do rascunho."""
+    if not usuario_pode_ver_aba("historico"):
+        st.warning("Seu perfil não permite consultar o Histórico.")
+        return
+    st.session_state["alerta_proposta_numero"] = str(numero)
+    rerun_na_aba("historico")
+
+
+def _hf55_renderizar_conferencia(proposta, *, anna=False, numero_original=""):
+    if numero_original:
+        return
+    if not usuario_pode_ver_aba("historico"):
+        st.caption("A conferência de propostas semelhantes está disponível para perfis com acesso ao Histórico.")
+        return
+    _duplicidades_hf55.renderizar_conferencia(
+        st, proposta, prefixo="hf55_anna" if anna else "hf55_jorge",
+        carregar_historico=_hf55_carregar_historico_conferencia,
+        hoje=hoje_local(), abrir_proposta=_hf55_consultar_proposta,
+    )
+
+
+def _hf55_validar_conferencia(proposta, *, anna=False, numero_original=""):
+    if numero_original or not usuario_pode_ver_aba("historico"):
+        return True
+    return _duplicidades_hf55.validar_salvamento(
+        st, proposta, prefixo="hf55_anna" if anna else "hf55_jorge",
+        carregar_historico=_hf55_carregar_historico_conferencia, hoje=hoje_local(),
+    )
 
 
 def _hf53_solicitar_abertura(destino, dados):
@@ -18998,10 +19089,20 @@ def dialog_orcamento_anna(proposta=None):
         t3.metric("Taxa de entrega", f"R$ {valor_float(taxa_entrega):,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         t4.metric("Valor total", f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
+        rascunho_hf55 = _hf55_rascunho_para_conferencia(
+            nome=nome, documento=doc, whatsapp=wa, evento=evento, itens=itens,
+            entrega=entrega, desconto=desconto, prazo=prazo, frete=frete,
+            taxa_entrega=taxa_entrega, validade=validade, subtotal=subtotal,
+            total=total, cliente_selecionado=cliente_selecionado_hf6, anna=True,
+        )
+        _hf55_renderizar_conferencia(rascunho_hf55, anna=True, numero_original=numero_original)
         salvar_rotulo = "💾 SALVAR ALTERAÇÕES" if numero_original else "🚀 SALVAR PROPOSTA"
         if st.button(salvar_rotulo, type="primary", width="stretch", key="anna_modal_salvar_orcamento", disabled=editando_item_hf53):
             if not nome.strip():
                 st.error("Informe o nome do cliente.")
+                return
+            if not _hf55_validar_conferencia(rascunho_hf55, anna=True, numero_original=numero_original):
+                st.rerun(scope="fragment")
                 return
             numero = numero_original or ""
             ok_cliente_i811, cliente_comercial_i811, cliente_novo_i811, erro_cliente_i811 = garantir_cliente_orcamento(
@@ -19043,6 +19144,7 @@ def dialog_orcamento_anna(proposta=None):
             }
             ok_salvar, retorno_salvar = _anna_salvar_proposta(dados, numero_original)
             if ok_salvar:
+                _duplicidades_hf55.limpar_conferencia(st.session_state, "hf55_anna")
                 if not numero_original:
                     _hf53_vincular_proposta_origem_anna(dados, retorno_salvar)
                 registrar_atividade(obter_usuario_atual(), "Proposta salva", "Orçamentos", detalhe=f"{retorno_salvar} · {nome.strip()}", evento=True)
@@ -31734,8 +31836,18 @@ if pagina_atual == "novo_orcamento":
         r3.metric("Taxa de entrega", f"R$ {valor_float(taxa_entrega):,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
         r4.metric("Valor total", f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
+        rascunho_hf55 = _hf55_rascunho_para_conferencia(
+            nome=nome, documento=doc, whatsapp=wa, evento=evento, itens=st.session_state.temp_itens,
+            entrega=dt_entrega, desconto=desc, prazo=prazo, frete=frete,
+            taxa_entrega=taxa_entrega, validade=validade, subtotal=subtotal, total=total,
+            cliente_selecionado=cliente_selecionado_hf6,
+        )
+        _hf55_renderizar_conferencia(rascunho_hf55, numero_original=st.session_state.editar_numero)
         rotulo_salvar = "💾 SALVAR ALTERAÇÕES" if st.session_state.editar_numero else "🚀 SALVAR PROPOSTA"
         if st.button(rotulo_salvar, type="primary", disabled=editando_item_hf53):
+            if not _hf55_validar_conferencia(rascunho_hf55, numero_original=st.session_state.editar_numero):
+                rerun_na_aba("novo_orcamento")
+                st.stop()
             numero = st.session_state.editar_numero or f"PROP-{agora_local().strftime('%Y%m%d%H%M%S')}"
             antigo = {}
             if st.session_state.editar_numero:
@@ -31796,6 +31908,7 @@ if pagina_atual == "novo_orcamento":
                 h.insert(0, dados)
                 salvar_historico_completo(h)
 
+            _duplicidades_hf55.limpar_conferencia(st.session_state, "hf55_jorge")
             projeto_origem_id = st.session_state.pop("_projeto_origem_id", None) or dados.get("projeto_id")
             if projeto_origem_id:
                 projetos_link = carregar_projetos()

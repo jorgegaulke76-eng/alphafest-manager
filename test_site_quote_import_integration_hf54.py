@@ -356,8 +356,13 @@ class ImportIntegrationTest(unittest.TestCase):
                 self.assertEqual(self.ui.infos, [])
                 self.state["form_observacoes"] = text
                 self.state["anna_modal_observacoes"] = text
-                values = [value for node in ast.walk(TREE) if isinstance(node, ast.Dict)
-                          for key, value in zip(node.keys, node.values)
+                # HF55 também possui briefing_origem no snapshot de consulta.
+                # Conferir os dois payloads reais de persistência, identificados
+                # pelo número da proposta, sem contar snapshots somente leitura.
+                persisted = [node for node in ast.walk(TREE) if isinstance(node, ast.Dict)
+                             and any(isinstance(key, ast.Constant) and key.value == "numero_proposta"
+                                     for key in node.keys)]
+                values = [value for node in persisted for key, value in zip(node.keys, node.values)
                           if isinstance(key, ast.Constant) and key.value == "briefing_origem"]
                 self.assertEqual(len(values), 2)
                 for value in values:

@@ -609,6 +609,8 @@ def gerar_html_vitrine(
   function open(card){
     current=card;
     const d=card.dataset;
+    // Identidade da ficha também em relacionados e links diretos, mesmo sem galeria.
+    modal.dataset.product=d.product||'';
     nameEl.textContent=d.detailName||'Produto';
     descEl.textContent=d.detailDescription||'';
     taxEl.textContent=[d.detailCategory,d.detailSubcategory].filter(Boolean).join(' · ');

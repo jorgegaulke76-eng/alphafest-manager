@@ -1,8 +1,8 @@
 {
   "schema": 2,
   "product": "AlphaFest Manager",
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.54",
-  "generated_at_utc": "2026-11-25T12:49:34.902847+00:00",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.55",
+  "generated_at_utc": "2026-11-25T13:29:24.782369+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
@@ -13,19 +13,19 @@
     ],
     "critical_python_compile": {
       "status": "OK",
-      "files_checked": 48,
-      "files_ok": 48
+      "files_checked": 50,
+      "files_ok": 50
     },
     "tests": {
-      "found_files": 30,
-      "executed_files": 23,
-      "approved_files": 23,
-      "executed_cases": 175,
-      "approved_cases": 175,
+      "found_files": 35,
+      "executed_files": 28,
+      "approved_files": 28,
+      "executed_cases": 289,
+      "approved_cases": 289,
       "execution_status": "APROVADO",
       "inventory": {
-        "total_files": 30,
-        "portable_files": 29,
+        "total_files": 35,
+        "portable_files": 34,
         "current_release_files": 0,
         "historical_version_files": 1,
         "historical_examples": [
@@ -36,19 +36,69 @@
       },
       "execution": {
         "status": "APROVADO",
-        "selected_files": 23,
-        "executed_files": 23,
-        "approved_files": 23,
-        "tests_run": 175,
-        "tests_passed": 175,
+        "selected_files": 28,
+        "executed_files": 28,
+        "approved_files": 28,
+        "tests_run": 289,
+        "tests_passed": 289,
         "failures": 0,
         "errors": 0,
         "skipped": 0,
         "historical_files": [],
-        "source_fingerprint": "a3a194d37f6ef2b7b845e59e8c318573b7ed05fcf5956fc876919771f9c9a05b",
+        "source_fingerprint": "0b2342e138efb3f18876cd76ff4e66fddc272c09407fb61de04e465ba54af9fc",
         "source_unchanged": true,
         "python_version": "3.12.14",
         "results": [
+          {
+            "file": "test_site_cart_personalizations_hf55.py",
+            "executed": true,
+            "status": "APROVADO",
+            "tests_run": 14,
+            "tests_passed": 14,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          {
+            "file": "test_proposal_duplicates_hf55.py",
+            "executed": true,
+            "status": "APROVADO",
+            "tests_run": 54,
+            "tests_passed": 54,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          {
+            "file": "test_proposal_duplicate_ui_hf55.py",
+            "executed": true,
+            "status": "APROVADO",
+            "tests_run": 18,
+            "tests_passed": 18,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          {
+            "file": "test_proposal_duplicate_integration_hf55.py",
+            "executed": true,
+            "status": "APROVADO",
+            "tests_run": 24,
+            "tests_passed": 24,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          {
+            "file": "test_proposal_duplicate_navigation_hf55.py",
+            "executed": true,
+            "status": "APROVADO",
+            "tests_run": 4,
+            "tests_passed": 4,
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
           {
             "file": "test_site_quote_import_hf54.py",
             "executed": true,
@@ -283,8 +333,8 @@
       }
     }
   },
-  "file_count": 496,
-  "uncompressed_bytes": 39545144,
+  "file_count": 504,
+  "uncompressed_bytes": 39693199,
   "files": [
     {
       "path": ".gitignore",
@@ -368,8 +418,8 @@
     },
     {
       "path": "LEIA_ME_ATUALIZACAO.txt",
-      "size": 3245,
-      "sha256": "8cbe2ed7e8b122a3fc5b798702e55060087c10dda0e008a5b1474d8650d48066"
+      "size": 4497,
+      "sha256": "9aef1a8731f2c0a12cd318e716e7a3051c0bd00ea0301fc188c2c2fd1ff8f7ec"
     },
     {
       "path": "LEIA_ME_HF65_24_13.txt",
@@ -403,8 +453,8 @@
     },
     {
       "path": "RELEASE_INFO.json",
-      "size": 387,
-      "sha256": "1cd806f656187ee9ab5bca610260a17830a3a6acded4353759afe77523ca9cae"
+      "size": 391,
+      "sha256": "492e66a1f3b1869d8f9ca2dcdfdf4212aa541b9219409207d64ab6f8e069b01b"
     },
     {
       "path": "ROADMAP.md",
@@ -433,13 +483,13 @@
     },
     {
       "path": "UPDATE_INFO.md",
-      "size": 2713,
-      "sha256": "595d7ab4403b2224a91d0c8e04dcf5adb043e88099bd035a612d6521a0e03132"
+      "size": 3598,
+      "sha256": "a1dda15cd8e71853bd653cdf3cadc7e1e721ec56bf910051cfed5ccf6093cced"
     },
     {
-      "path": "UPDATE_INFO_HF65.24.54.md",
-      "size": 6942,
-      "sha256": "a2c35f941b98db50baada14b2b936c525aa9f886cfffbd95c735e72f078b3055"
+      "path": "UPDATE_INFO_HF65.24.55.md",
+      "size": 9814,
+      "sha256": "041441d05718584ce465400dc7aafedb478c6910df9d164b0548e8d83972bf07"
     },
     {
       "path": "VALIDACAO_HF65.24.52.md",
@@ -457,14 +507,19 @@
       "sha256": "03065e3af63b80f1c13e16b615322759104f147bc605656c22af08726dec2f19"
     },
     {
+      "path": "VALIDACAO_HF65.24.55.md",
+      "size": 8773,
+      "sha256": "f96270c5c1603b4731a2051b83eefd9126859679d00253104d2cc0012ee26221"
+    },
+    {
       "path": "VERSAO",
       "size": 37,
-      "sha256": "30f4d953ef412a68ca4a9519a5e8a0570a90551174c3d15ad2a7ed2074370a57"
+      "sha256": "f09a52770fcf41c5322d8e42ade3f4bb09d90b34c32862daf51f32334376ff45"
     },
     {
       "path": "VERSAO.txt",
       "size": 37,
-      "sha256": "30f4d953ef412a68ca4a9519a5e8a0570a90551174c3d15ad2a7ed2074370a57"
+      "sha256": "f09a52770fcf41c5322d8e42ade3f4bb09d90b34c32862daf51f32334376ff45"
     },
     {
       "path": "__init__.py",
@@ -538,8 +593,8 @@
     },
     {
       "path": "app.py",
-      "size": 2168220,
-      "sha256": "77b61208ec35280b65358d2dd98e4e21ab7049a5b92d0ec65ae2d23386049861"
+      "size": 2174077,
+      "sha256": "e06733704200263c87dae64be31b93c60f8f327c2ef8ef90c142779a94ae9f34"
     },
     {
       "path": "assets/campaigns/dia_cliente_2026.webp",
@@ -2033,8 +2088,8 @@
     },
     {
       "path": "build_update_package.py",
-      "size": 9573,
-      "sha256": "986b505a9bb231669f9d63492239374e76b61d44acfabff80fd35d3acbfbb755"
+      "size": 9803,
+      "sha256": "d65f9e1b743cf1b10dc7e372197839ec80d981b461bfbc9e8de5c72330f3aee0"
     },
     {
       "path": "catalogo_diagnostics_service.py",
@@ -2203,8 +2258,8 @@
     },
     {
       "path": "manager_workflow_hf53.py",
-      "size": 9668,
-      "sha256": "8a3d1bacbcb4fbe62ef71afe065ea118832f81a5a188d0f2337c01c654d21a9d"
+      "size": 10096,
+      "sha256": "fe9633abc2d0c1af3687eb9eece6a522602888c614d04c6166d13283d01809f9"
     },
     {
       "path": "marketing_ai_engine.py",
@@ -2302,6 +2357,16 @@
       "sha256": "302130d49cdb211d670c1e7bacb537bea905c4f912d0217c979adf3b70ee76b4"
     },
     {
+      "path": "proposal_duplicate_service_hf55.py",
+      "size": 18959,
+      "sha256": "55f78c4db8cc5ab6c4a8a3ec3158fa06acda03deb2e291367b6db91a9f6664b1"
+    },
+    {
+      "path": "proposal_duplicate_ui_hf55.py",
+      "size": 7399,
+      "sha256": "104cab54085fd42681dd3f569cbc59f00ae86659c5662d54f37bc97c6e5b4868"
+    },
+    {
       "path": "proposal_persistence_service.py",
       "size": 2693,
       "sha256": "d6894ff04cf3aed2de72cb4c59a35d48c9d1f72cafb7a95dd698cd1b052316bf"
@@ -2333,8 +2398,8 @@
     },
     {
       "path": "release_diagnostics.py",
-      "size": 13398,
-      "sha256": "a48ee442800b85965da6a8e9a6d1340e17159573d0eead1b0dbeffb9a2c82d0c"
+      "size": 13477,
+      "sha256": "16cb23272806728ee8aa3589c747c329e2b41d533f68a66ae812009bd1ad6e74"
     },
     {
       "path": "reports_runtime_index_service.py",
@@ -2373,8 +2438,8 @@
     },
     {
       "path": "site_carrinho_orcamento_service.py",
-      "size": 16123,
-      "sha256": "0d4a9f7d6703ae16d5028c93d5328059816338a95f3ab8d8695c32f995d000c9"
+      "size": 20889,
+      "sha256": "a8286be5e20d6cdb7956d57e2739fc201cd99fc396e7be16715fd1462558010b"
     },
     {
       "path": "site_cloudflare_publish_service.py",
@@ -2488,8 +2553,8 @@
     },
     {
       "path": "site_vitrine_service.py",
-      "size": 58311,
-      "sha256": "c759fafe0ad626914e01d888056e762ea544ae62716b452cc184b93e836a3d86"
+      "size": 58439,
+      "sha256": "2462b5b04698be0d244ed7eb64b096e3353a7def3f55909b687a5655dc6d0fc0"
     },
     {
       "path": "site_whatsapp_context_service.py",
@@ -2642,6 +2707,26 @@
       "sha256": "0122853c905f042ba453b59842838d670144180a3f94f9ed43b5b72872a5daa7"
     },
     {
+      "path": "test_proposal_duplicate_integration_hf55.py",
+      "size": 18995,
+      "sha256": "5b4ce2d0cc5a0fb0a6e9abf95c48897cd359082aaf0b8c43dc9664b556826276"
+    },
+    {
+      "path": "test_proposal_duplicate_navigation_hf55.py",
+      "size": 10765,
+      "sha256": "7ca9296c95d69df39ffb92764ccde1124c574cba69eaf561147ec7179e62db2b"
+    },
+    {
+      "path": "test_proposal_duplicate_ui_hf55.py",
+      "size": 16697,
+      "sha256": "e3f287a5deaaa0093ae7cb978227ffaf11f3b725dbef106c7df549fdf0d686bc"
+    },
+    {
+      "path": "test_proposal_duplicates_hf55.py",
+      "size": 23429,
+      "sha256": "7925ce17491208460fd34d5ab0bdb901416446aa2bef39b24ed270801c23ac92"
+    },
+    {
       "path": "test_pwa_hf652414.py",
       "size": 1582,
       "sha256": "6b1c07aedf5e68ec530676de20a9df248809730d5848cda954416b117529f66e"
@@ -2660,6 +2745,11 @@
       "path": "test_site_cart_hf53.py",
       "size": 7573,
       "sha256": "53238323bc3bd2541ea401558e069a040d03769f1da0f04fc6596e34b2554ebb"
+    },
+    {
+      "path": "test_site_cart_personalizations_hf55.py",
+      "size": 26023,
+      "sha256": "7cbb22f92a5183d5f865931535b6fa0af10c4b158dd00c1f9eaf846826edfad0"
     },
     {
       "path": "test_site_integrity_hf53.py",
@@ -2683,8 +2773,8 @@
     },
     {
       "path": "test_site_quote_import_integration_hf54.py",
-      "size": 23555,
-      "sha256": "fac06a17e072e488224fa3ecf462b188b23a7e12ff52dc6d030b69419cfb9801"
+      "size": 23990,
+      "sha256": "7319d2b34b8ca10299b976d43fd2779fb39ff98b1d84d9695a2c6a3dae714721"
     },
     {
       "path": "test_site_quote_import_ui_hf54.py",
@@ -2758,8 +2848,8 @@
     },
     {
       "path": "update_hygiene.py",
-      "size": 15853,
-      "sha256": "78bee620cca9cce24c4776be7d60427217f34d1261eadd03dfcd4e5e43462e35"
+      "size": 15932,
+      "sha256": "23485b30aa466526a88a42201eba3adc8a11a2c3748d55cdeb6b61bd653600ff"
     },
     {
       "path": "update_safe_ui.py",

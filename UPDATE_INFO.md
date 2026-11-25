@@ -1,3 +1,15 @@
+# HF65.24.55 — Personalizações independentes e propostas semelhantes
+
+Carrinho com Outra personalização, quantidades/observações independentes por linha e migração dos itens salvos. Mensagem e importação preservam todas as personalizações.
+
+Propostas novas de Jorge e Anna recebem conferência de registros gerados nos últimos 30 dias, com revisão explícita dos candidatos e releitura antes de salvar. Consultar não grava clientes nem propostas; falha de leitura mantém o rascunho. Edição de propostas existentes e permissões do Histórico são preservadas.
+
+Instale o pacote no Manager atual e gere/publique novamente o site para disponibilizar o novo carrinho. Sem SQL novo, DATA_VERSION = 5 e sem mudança de dependências.
+
+Documentação completa: UPDATE_INFO_HF65.24.55.md. Validação: VALIDACAO_HF65.24.55.md. Instalação: LEIA_ME_ATUALIZACAO.txt.
+
+---
+
 # HF65.24.54 — Importação do orçamento do site (25/11/2026)
 
 - Colar, analisar e revisar a mensagem do carrinho antes de abrir um rascunho no orçamento.

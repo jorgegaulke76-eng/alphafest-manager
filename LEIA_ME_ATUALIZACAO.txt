@@ -1,41 +1,59 @@
-ALPHAFEST MANAGER — HF65.24.54 · IMPORTAÇÃO DO ORÇAMENTO DO SITE
+ALPHAFEST MANAGER — HF65.24.55 · PERSONALIZAÇÕES E CONFERÊNCIA
 
-Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.24.54
-Pacote cumulativo a partir da HF65.24.53. Inclui as melhorias de site e operação das versões .52 e .53.
+Versão: 20.4.9-I8.13.5-HF53.3-HF8-HF65.24.55
+Pacote cumulativo sobre a HF65.24.54. Inclui a importação do orçamento do site e as melhorias anteriores de site e operação.
 
-COMO ATUALIZAR
+COMO ATUALIZAR O MANAGER
 
 1. No Manager atual, abra Configurações > Núcleo Profissional > Atualização segura. Prepare e baixe o ponto de restauração.
 2. Extraia este ZIP em uma pasta temporária.
-3. Copie o CONTEÚDO da pasta alphafest-manager-main para o repositório atual, na pasta que já contém app.py. Substitua os arquivos correspondentes, mantendo os dados e configurações locais. Não apague o repositório nem crie uma segunda pasta do mesmo nome dentro dele.
+3. Copie o CONTEÚDO da pasta alphafest-manager-main para o repositório atual, na pasta que já contém app.py. Substitua os arquivos correspondentes, preservando os dados e configurações locais. Não apague o repositório nem crie uma segunda pasta do mesmo nome dentro dele.
 4. No GitHub Desktop, confira as alterações, faça Commit e Push no repositório/branch do aplicativo atual.
-5. Aguarde o Streamlit atualizar e confira HF65.24.54 na interface. Se necessário, reinicie pelo painel do Streamlit e abra novamente.
+5. Aguarde o Streamlit atualizar e confira HF65.24.55 na interface. Se necessário, reinicie pelo painel do Streamlit e abra novamente.
+6. Confira os formulários de Jorge e Anna e o novo painel de propostas semelhantes. Use registros de teste identificados ou ambiente de homologação para validar a gravação.
 
-COMO IMPORTAR
+PUBLICAR AS MUDANÇAS DO SITE
 
-1. Copie do WhatsApp a mensagem de orçamento recebida do site.
-2. No Jorge: abra Novo Orçamento > Importar orçamento do site. Na Anna: abra o mesmo recurso na Central Operacional.
-3. Cole a mensagem completa e clique em Analisar mensagem.
-4. Confira produtos e personalizações. Ajuste as quantidades e valores. O preço sugerido é o do catálogo atual, quando há uma correspondência única ativa.
-5. Informe ou confira cliente, WhatsApp e evento. Revise os avisos. Para trocar um produto nesta etapa, corrija a mensagem e analise novamente.
-6. Confirme a revisão e clique em Abrir rascunho no orçamento. Se houver um rascunho em andamento, escolha continuar, substituir ou cancelar.
-7. No formulário normal, confira o cliente, preços, data e condições. Salve a proposta pelo botão habitual quando a revisão estiver concluída.
+1. No Manager atualizado, abra a Central do Site e prepare uma nova prévia.
+2. Confira Desktop/Celular, duas personalizações do mesmo produto e a mensagem final.
+3. Publique pelo fluxo habitual. Se usar publicação manual, gere o arquivo em Contingência / ZIP manual > Baixar ZIP de produção.
 
-A importação prepara um rascunho. Não envia mensagens nem salva automaticamente uma proposta ou um cliente. A mensagem original fica na origem do orçamento e é preservada ao salvar a proposta.
-O modo Cliente novo / digitar manualmente conserva os dados revisados. Para usar outro cadastro existente, escolha-o explicitamente no seletor do formulário.
-Se faltarem preços, a abertura exige uma confirmação específica; confira esses valores antes de salvar a proposta.
-Se cancelar a abertura ou continuar o rascunho anterior, use Revisar importação novamente para retomar os ajustes da importação.
+Este ZIP instala o Manager. O ZIP público para Cloudflare é outro arquivo, gerado pelo Manager. As personalizações novas só aparecem no site depois dessa republicação.
 
-SITE
+CARRINHO: OUTRA PERSONALIZAÇÃO
 
-A importação aceita a mensagem já gerada pelo carrinho atual; não depende de mudar o site público. Se as correções de site da HF65.24.53 ainda não tiverem sido publicadas, abra Central do Site, prepare uma nova prévia, confira Desktop/Celular e publique pelo fluxo habitual.
-Este ZIP atualiza o Manager. O pacote público para Cloudflare é gerado pelo Manager em Contingência / ZIP manual > Baixar ZIP de produção.
+- Adicione um produto e preencha quantidade e observações.
+- Para o mesmo produto com outro nome, cor ou tamanho, clique em Outra personalização. A nova linha começa com quantidade 1 e observações vazias.
+- Para mais unidades iguais, altere Quantidade na linha correspondente.
+- Abrir a ficha e adicionar novamente um produto já presente apenas abre o carrinho para revisão; não aumenta a quantidade.
+- Cada linha pode ser editada ou removida separadamente. Limite de 25 linhas; de 1 a 999 unidades por linha.
+- As linhas antigas do carrinho são preservadas. O carrinho permanece no navegador usado pelo cliente.
+
+CONFERÊNCIA NO MANAGER
+
+- Ao preparar uma proposta nova, use Conferir propostas semelhantes ou clique normalmente em Salvar proposta.
+- O Manager consulta as propostas geradas hoje e nos 29 dias anteriores, buscando o cliente e a mesma mensagem do site ou as mesmas linhas/quantidades/personalizações.
+- Se houver candidatos, revise a tabela e use Consultar no Histórico quando necessário. A consulta não substitui seu rascunho.
+- Para retomar, volte a Novo Orçamento no Jorge ou abra Novo orçamento na Central da Anna, na mesma sessão.
+- Se for uma nova encomenda legítima, marque Conferi as propostas relacionadas e quero criar uma nova; depois clique novamente em Salvar proposta.
+- Alterar dados do rascunho ou candidatos relevantes exige nova conferência. O Histórico é reconsultado no salvamento.
+- Em falha de leitura, o rascunho permanece aberto e nenhuma nova proposta/cliente é gravada por aquele clique.
+- A edição de proposta existente mantém o fluxo normal. Perfis sem acesso ao Histórico não usam essa conferência.
+- O recurso sinaliza possibilidades; não mescla nem exclui propostas e não constitui bloqueio de duplicidade simultânea no banco.
+
+IMPORTAÇÃO DO SITE — MANTIDA DA HF54
+
+1. Copie a mensagem completa recebida do site no WhatsApp.
+2. No Jorge, abra Novo Orçamento > Importar orçamento do site. Na Anna, use o recurso na Central Operacional.
+3. Cole a mensagem e clique em Analisar mensagem. Confira produtos, quantidades, personalizações, valores e identificação.
+4. Confirme a revisão e abra o rascunho. Se já houver trabalho em andamento, escolha continuar, substituir ou cancelar.
+5. No formulário, confira data, condições e possíveis propostas semelhantes. Salve pelo fluxo normal.
 
 DADOS E DOCUMENTAÇÃO
 
-Não há SQL novo nem migração de banco; DATA_VERSION permanece 5.
+Não há SQL novo nem migração de banco; DATA_VERSION permanece 5. Não há nova dependência em requirements.txt.
 Dados operacionais, credenciais e segredos locais não são incluídos no ZIP.
-A importação e seus rascunhos pertencem à sessão. Salve a proposta pelo fluxo normal para manter o trabalho após fechar/reiniciar a sessão.
+Rascunhos e confirmações pertencem à sessão. Salve a proposta para manter o trabalho após fechar/reiniciar a sessão.
 
-Detalhes: UPDATE_INFO_HF65.24.54.md
-Testes e limites: VALIDACAO_HF65.24.54.md
+Detalhes e limites: UPDATE_INFO_HF65.24.55.md
+Testes: VALIDACAO_HF65.24.55.md
