@@ -180,7 +180,7 @@ class CaixaProjetoUIHF58Test(unittest.TestCase):
         self.aprovar(app, "Anna")
         self.assertEqual(app.session_state["gravacoes"], 0)
         self.assertEqual(situacao_arte(app.session_state["projeto"])[0], "sem_aprovacao")
-        self.assertTrue(any("arte mudou" in e.message.lower() for e in app.error))
+        self.assertTrue(any("arte mudou" in e.value.lower() for e in app.error))
 
     def test_falha_no_banco_nao_anuncia_aprovacao(self):
         app = self.app("Jorge")
@@ -188,7 +188,7 @@ class CaixaProjetoUIHF58Test(unittest.TestCase):
         self.aprovar(app, "Jorge")
         self.assertEqual(app.session_state["gravacoes"], 0)
         self.assertEqual(situacao_arte(app.session_state["projeto"])[0], "sem_aprovacao")
-        self.assertTrue(any("Não foi possível salvar" in e.message for e in app.error))
+        self.assertTrue(any("Não foi possível salvar" in e.value for e in app.error))
 
     def test_arquivar_arte_invalida_aprovacao_sem_alterar_pedido(self):
         app = self.app("Anna")
