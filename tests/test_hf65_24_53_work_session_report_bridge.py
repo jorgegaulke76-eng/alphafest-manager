@@ -91,7 +91,8 @@ def test_revocation_during_attribution_read_blocks_official_snapshots():
         return response
     cloud._SESSION.get = revoke_midflight
     calls = []
-    with pytest.raises(PrivateStoreDenied, match="revogada|permissão"):
+    # O gateway mascara detalhes internos em erro genérico de fonte privada.
+    with pytest.raises(PrivateStoreDenied, match="Fontes comerciais oficiais indisponíveis"):
         build(ui, remote, policy, cloud, calls)
     assert cloud.calls == 1
     assert calls == []
