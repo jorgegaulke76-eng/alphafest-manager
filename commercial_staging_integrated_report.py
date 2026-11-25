@@ -25,6 +25,20 @@ def build_integrated_staging_commercial_report(
         policy = commercial_read_policy_from_server_secrets(st)
         if not callable(getattr(http, "get", None)):
             raise ValueError()
+        # O diário de atribuições também precisa vir EXATAMENTE do staging.
+        # Não basta conferir o host das propostas: o cloud pode ter sido
+        # inicializado com credencial de outro projeto.
+        url, headers = _backend(st)
+        from commercial_bootstrap_postgrest_contract import _validate_args
+        from commercial_private_document_adapter import DOCUMENT_KEY
+        if (not callable(getattr(cloud, "_config", None))
+            or not callable(getattr(cloud, "_headers", None))):
+            raise ValueError()
+        cloud_url, _ = cloud._config()
+        cloud_headers = cloud._headers()
+        _validate_args(cloud_url, cloud_headers, DOCUMENT_KEY)
+        if cloud_url.rstrip("/") != url or cloud_headers.get("apikey") != headers["apikey"]:
+            raise ValueError()
     except Exception:
         raise PrivateStoreDenied("Leitura comercial de homologacao indisponivel.") from None
 
