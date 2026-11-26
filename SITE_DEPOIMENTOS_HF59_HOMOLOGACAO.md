@@ -49,3 +49,24 @@ Registrar apenas resultado, commit, data e eventuais problemas (sem copiar mensa
 ## Atualização de formatos — 26/11/2026
 
 As quatro imagens reais do cadastro são JPEG e foram confirmadas como existentes no bucket catalogo, por leitura de metadados. Esta verificação **não** comprova que os arquivos abrem no navegador ou que o conteúdo é legível. O QA automatizado adicionou um JPEG gerado artificialmente; o commit `d152958` corrigiu o arquivo sintético após falhas de decodificação em Chromium. A execução mais recente deve ser conferida no GitHub Actions antes de marcar a cobertura JPEG como aprovada. Nenhuma imagem real foi copiada para artefatos públicos.
+
+## Auditoria local e privada com JPEGs reais (sem credenciais)
+
+A branch HF59 inclui `scripts/hf59_auditar_jpegs_local.py`, criado para execução **somente no computador autorizado**, com uma cópia local da branch e quatro arquivos JPEG já disponíveis no disco. Não usa URLs do Supabase, chaves de API, upload para GitHub ou Cloudflare, nem modifica o cadastro dos depoimentos.
+
+Pré-requisitos: Python 3.11, dependências do Manager e Pillow instaladas no ambiente local. Os arquivos JPEG não devem ser adicionados à pasta versionada do GitHub nem anexados à CI.
+
+Teste fictício, sem acesso a clientes:
+
+```powershell
+python scripts/hf59_auditar_jpegs_local.py --self-test
+```
+
+Auditoria local das quatro imagens, depois de disponibilizadas por meio autorizado:
+
+```powershell
+python scripts/hf59_auditar_jpegs_local.py "C:\\caminho\\01.jpg" "C:\\caminho\\02.jpg" "C:\\caminho\\03.jpg" "C:\\caminho\\04.jpg"
+```
+
+O teste confere decodificação JPEG, dimensões, inserção sem duplicação no HTML e integridade do ZIP gerado **somente em memória**, incluindo filtro de arquivos públicos da Cloudflare. Ele imprime apenas tamanho e dimensões; não publica os arquivos. **Não é uma conferência visual do conteúdo textual das artes, nem prova a identidade, ordem e estado dos registros reais do Manager.** A revisão humana da prévia da branch em desktop/celular e o ZIP final gerado a partir dos próprios cadastros continuam necessários antes da publicação.
+
