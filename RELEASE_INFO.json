@@ -1,6 +1,6 @@
 {
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.60",
-  "created_at": "2026-11-26T21:16:00Z",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.61",
+  "created_at": "2026-11-26T21:50:00Z",
   "timezone": "America/Sao_Paulo",
-  "description": "HF65.24.60 - Caixa do Projeto: evitar falso upload online; Catálogo: três modalidades de preços com edição completa e rápida. Atualização controlada, exigir gate verde, backup e conferir UX; site Cloudflare é publicado separadamente."
+  "description": "HF61: resumo diario copiavel da Central da Anna sem consultas novas, dados pessoais ou publicacao Cloudflare. Gate isolado exigido."
 }
