@@ -20,6 +20,7 @@ from site_corporativo_service import corporate_page
 from site_favicon_service import favicon_assets, with_favicon
 from site_pwa_service import inject_pwa, pwa_assets
 from site_whatsapp_context_service import inject_whatsapp_context
+from site_institucional_adsense_service import paginas_institucionais
 
 def _rastreador_pagina_interna(pagina: str, home: str) -> str:
     """Injeta o rastreador; se os Secrets não estiverem visíveis nessa etapa,
@@ -168,6 +169,7 @@ def gerar_pacote_producao(
     robots = f"User-agent: *\nAllow: /\nSitemap: https://{DOMINIO_FINAL}/sitemap.xml\n"
     hoje = datetime.now(timezone.utc).date().isoformat()
     paginas = paginas_dicas(dicas_content or [], whatsapp=dicas_whatsapp)
+    paginas.update(paginas_institucionais())
     paginas.update(archive_pages(posts_content or [], number=dicas_whatsapp))
     paginas["empresas/index.html"] = _rastreador_pagina_interna(corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico), html_publico)
     # Todas as rotas realmente geradas entram no sitemap, sem URLs inventadas.
