@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/site-depoimentos-imagens
+      - release/hf65-24-59-candidata-homologacao
   workflow_dispatch:
 permissions:
   contents: read
@@ -27,8 +28,8 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           version = Path("VERSAO.txt").read_text(encoding="utf-8").strip()
-          assert version.endswith("HF65.24.58"), "Versao base mudou; revisar processo antes de empacotar"
-          print("Codigo da HF59 sobre base", version, "- SEM autorizacao de instalacao")
+          assert version.endswith("HF65.24.59"), "Versao da candidata inesperada"
+          print("Candidata de homologacao", version, "- NAO INSTALAR")
           PY
       - name: Diagnosticar isoladamente o teste de Fechar revisao
         run: |
