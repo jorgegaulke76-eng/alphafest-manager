@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/wrangler.json",
+  "name": "alphafest-alertas",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-11-26",
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+  "vars": {
+    "ALERTS_ENABLED": "false"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
