@@ -70,3 +70,11 @@ python scripts/hf59_auditar_jpegs_local.py "C:\\caminho\\01.jpg" "C:\\caminho\\0
 
 O teste confere decodificação JPEG, dimensões, inserção sem duplicação no HTML e integridade do ZIP gerado **somente em memória**, incluindo filtro de arquivos públicos da Cloudflare. Ele imprime apenas tamanho e dimensões; não publica os arquivos. **Não é uma conferência visual do conteúdo textual das artes, nem prova a identidade, ordem e estado dos registros reais do Manager.** A revisão humana da prévia da branch em desktop/celular e o ZIP final gerado a partir dos próprios cadastros continuam necessários antes da publicação.
 
+
+## Integração da correção mobile — issue #8
+
+A correção de rolagem horizontal da navegação/WhatsApp foi homologada na [execução #45855250641](https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/45855250641) do [PR #9](https://github.com/jorgegaulke76-eng/alphafest-manager/pull/9). Em 26/11/2026, o PR #9 foi integrado **exclusivamente** à branch `feature/site-depoimentos-imagens`, commit de merge `42f2b124`. A branch `main` e a publicação permaneceram intactas.
+
+Prévia privada integrada com os quatro JPEGs originais: `documentElement.scrollWidth` igual à largura da tela em 320, 390 e 430 px, bem como desktop 1440 px. Menu Mais e CTA WhatsApp dentro da viewport. As imagens reais não foram enviadas ao GitHub. O menu Mais foi aberto e fechado no ensaio local; os testes do PR #9 também passaram.
+
+**Gate final:** confirmar CI do HEAD atualizado desta branch, conferir o ZIP definitivo gerado no Manager com o cadastro integral e aprovar a publicação em janela separada, com backup. A prévia local e o ZIP de teste, com dados parciais/fictícios fora dos depoimentos, não são pacote de produção.
