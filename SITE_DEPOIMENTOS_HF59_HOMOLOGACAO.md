@@ -15,7 +15,7 @@ Esta proposta é apenas uma implementação de revisão em branch própria; prec
 
 ## QA automático da página completa
 
-O workflow da branch executa scripts/hf59_visual_qa.py, que chama a função real gerar_html_site_completo com quatro imagens SVG FICTÍCIAS em proporções variadas. Gera capturas de desktop (1440 × 900) e celular (390 × 844), incluindo o zoom. Verifica carregamento das quatro imagens e tamanho da seção. A partir do commit `f129508`, o teste percorre **cada uma das quatro imagens**, verificando correspondência entre cartão e ampliação, abertura, Escape, botão Fechar e retorno do foco em desktop e celular. A cobertura ampliada foi aprovada na [execução #45823025832](https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/45823025832), commit `8b2353e` (26/11/2026), incluindo QA de navegador desktop/celular e auditoria do ZIP fictício em memória.
+O workflow da branch executa scripts/hf59_visual_qa.py, que chama a função real gerar_html_site_completo com quatro imagens FICTÍCIAS em proporções variadas (duas SVG, uma PNG raster e uma JPEG). O JPEG é gerado para o teste e não representa nenhuma mensagem real de cliente. Gera capturas de desktop (1440 × 900) e celular (390 × 844), incluindo o zoom. Verifica carregamento das quatro imagens e tamanho da seção. A partir do commit `f129508`, o teste percorre **cada uma das quatro imagens**, verificando correspondência entre cartão e ampliação, abertura, Escape, botão Fechar e retorno do foco em desktop e celular. A cobertura anterior com imagens fictícias foi aprovada na [execução #45823025832](https://github.com/jorgegaulke76-eng/alphafest-manager/actions/runs/45823025832), commit `8b2353e` (26/11/2026), incluindo QA de navegador desktop/celular e auditoria do ZIP fictício em memória.
 
 As capturas e o HTML de teste ficam disponíveis no artifact AlphaFest-HF59-previa-ficticia da execução do GitHub Actions. Nenhum dado de clientes nem chave do Supabase é usado; nenhuma publicação é executada.
 
@@ -45,3 +45,7 @@ A automação executa também `scripts/hf59_zip_qa.py`, que monta em memória o 
 ### Gate de liberação
 
 Registrar apenas resultado, commit, data e eventuais problemas (sem copiar mensagens privadas) no PR #7. Manter o PR em **draft** se qualquer item estiver pendente. Planejar backup e publicação em etapa separada da RC6/HF58, somente após autorização explícita. A aprovação automatizada com SVGs fictícios não substitui esta revisão real.
+
+## Atualização de formatos — 26/11/2026
+
+As quatro imagens reais do cadastro são JPEG e foram confirmadas como existentes no bucket catalogo, por leitura de metadados. Esta verificação **não** comprova que os arquivos abrem no navegador ou que o conteúdo é legível. O QA automatizado adicionou um JPEG gerado artificialmente; o commit `d152958` corrigiu o arquivo sintético após falhas de decodificação em Chromium. A execução mais recente deve ser conferida no GitHub Actions antes de marcar a cobertura JPEG como aprovada. Nenhuma imagem real foi copiada para artefatos públicos.
