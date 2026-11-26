@@ -1,0 +1,40 @@
+name: HF60 Integrar app.py SOMENTE na branch de preparacao
+on:
+  push:
+    branches:
+      - feature/hf65-24-60-caixa-precos
+    paths:
+      - scripts/aplicar_hf60_catalogo.py
+permissions:
+  contents: write
+jobs:
+  aplicar:
+    if: github.ref == 'refs/heads/feature/hf65-24-60-caixa-precos'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout apenas da branch autorizada
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+          fetch-depth: 1
+      - name: Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Integrar app e verificar AST, sem banco
+        run: |
+          python scripts/aplicar_hf60_catalogo.py
+          python -m unittest discover -s tests -p test_hf60_catalogo_integracao.py -v
+          python -m py_compile app.py
+      - name: Commit apenas app.py na branch de preparacao
+        run: |
+          git config user.name "alphafest-ci"
+          git config user.email "alphafest-ci@users.noreply.github.com"
+          git add -- app.py
+          if git diff --cached --quiet; then
+            echo "Nenhum arquivo novo para integrar"
+            exit 0
+          fi
+          git commit -m "feat(hf60): integrar modalidades no formulario e edicao rapida"
+          git push origin HEAD:feature/hf65-24-60-caixa-precos
