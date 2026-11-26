@@ -1,0 +1,30 @@
+name: HF61 Resumo da Anna - validacao focal
+on:
+  push:
+    branches: [feature/hf65-24-61-resumo-diario]
+permissions:
+  contents: write
+jobs:
+  integrar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Integrar app sem iniciar Manager ou conectar ao banco
+        run: |
+          python scripts/aplicar_hf61_resumo.py
+          python -m py_compile app.py resumo_operacional_hf61_service.py
+          python -m unittest -v test_hf61_resumo_diario
+      - name: Salvar somente app.py na branch de preparo
+        run: |
+          git config user.name "alphafest-ci"
+          git config user.email "alphafest-ci@users.noreply.github.com"
+          git add -- app.py
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(hf61): resumo diario copiavel da Anna"
+          git push origin HEAD:feature/hf65-24-61-resumo-diario
