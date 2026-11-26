@@ -18,6 +18,7 @@ from typing import Any, Callable, Dict, Iterable, Optional
 from urllib.parse import quote
 
 from site_dicas_multicanal_service import inserir_chamada_dicas
+from site_conteudo_util_service import inject_conteudo_util
 from site_posts_service import inject_home as inject_posts_home
 from site_carrinho_orcamento_service import inject_cart
 from site_vitrine_service import gerar_html_vitrine
@@ -415,6 +416,7 @@ def gerar_html_site_completo(
     # HF65.24.25 — seção comercial derivada do Catálogo Oficial, sem duplicar produtos.
     pagina = inject_fast_delivery(pagina, catalogo_lista)
     pagina = inject_corporate_home(pagina)
+    pagina = inject_conteudo_util(pagina)
     pagina = inject_cart(pagina, empresa)
     pagina = inject_tracking(pagina, enabled=not modo_preview)
     return pagina
