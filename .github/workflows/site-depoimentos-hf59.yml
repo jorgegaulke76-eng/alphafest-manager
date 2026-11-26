@@ -60,6 +60,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ""
         run: |
           python scripts/hf59_auditar_jpegs_local.py --self-test
+      - name: Validar bloqueios do auditor ZIP oficial com pacotes ficticios
+        run: |
+          python -m unittest -v test_hf59_verificar_zip_oficial
       - name: Guardar capturas FICTICIAS como evidencia da homologacao
         if: always()
         uses: actions/upload-artifact@v7
