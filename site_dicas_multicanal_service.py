@@ -217,7 +217,12 @@ footer{border-top:1px solid #dfebf2;padding:25px;text-align:center;color:#587187
 
 
 def _page(title: str, description: str, url: str, content: str, schema: Dict[str, Any] | None = None) -> str:
-    structured = (f'<script type="application/ld+json">{json.dumps(schema, ensure_ascii=False).replace("<", "\\u003c")}</script>' if schema else "")
+    # Evita backslash dentro da expressão de f-string (incompatível com Python 3.11).
+    # Mantém o escape de '<' para prevenir fechamento precoce do script JSON-LD.
+    structured = ""
+    if schema:
+        json_ld = json.dumps(schema, ensure_ascii=False).replace("<", "\\u003c")
+        structured = f'<script type="application/ld+json">{json_ld}</script>'
     return (f'<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width,initial-scale=1">'
             f'<title>{_safe(title)} | AlphaFest</title><meta name="description" content="{_safe(description)}">'

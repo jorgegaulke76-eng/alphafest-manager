@@ -1,0 +1,97 @@
+name: AlphaFest Manager HF59 - Gate de Atualizacao (somente homologacao)
+on:
+  push:
+    branches:
+      - feature/site-depoimentos-imagens
+      - release/hf65-24-59-candidata-homologacao
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validar_manager_hf59:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout read only
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Instalacao de dependencias para diagnostico
+        run: |
+          python -m pip install -r requirements.txt
+      - name: Confirmar que versao ainda nao foi promovida
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          version = Path("VERSAO.txt").read_text(encoding="utf-8").strip()
+          assert version.endswith("HF65.24.59"), "Versao da candidata inesperada"
+          print("Candidata de homologacao", version, "- NAO INSTALAR")
+          PY
+      - name: Diagnosticar isoladamente o teste de Fechar revisao
+        run: |
+          python -m unittest -v test_site_quote_import_ui_hf54.ImportacaoSiteUITest.test_fechar_revisao_preserva_mensagem_e_rascunho_do_manager
+      - name: Testar interfaces isoladas e ficha HF58 com dados ficticios
+        env:
+          SUPABASE_URL: ""
+          SUPABASE_KEY: ""
+          SUPABASE_SERVICE_KEY: ""
+          SUPABASE_SERVICE_ROLE_KEY: ""
+          CLOUDFLARE_API_TOKEN: ""
+        run: |
+          python -m unittest -v test_manager_ui_hf53 test_ficha_producao_hf58 test_site_depoimentos_hf59
+      - name: Executar gate oficial do Manager e montar pacote temporario
+        run: |
+          python build_update_package.py --output /tmp/ALPHAFEST_HF65_24_59_ATUALIZACAO_CONTROLADA.zip
+      - name: Auditar pacote temporario antes da liberacao controlada
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          p=Path("/tmp/ALPHAFEST_HF65_24_59_ATUALIZACAO_CONTROLADA.zip")
+          with zipfile.ZipFile(p) as z:
+              assert z.testzip() is None
+              names=set(z.namelist())
+              prefixes={name.split("/", 1)[0] for name in names if "/" in name}
+              assert len(prefixes)==1, f"Mais de uma pasta raiz: {prefixes}"
+              wrapper=next(iter(prefixes))
+              required={"app.py", "VERSAO.txt", "site_home_content_service.py", "site_visual_hf48_service.py", "UPDATE_MANIFEST.json"}
+              missing={name for name in required if f"{wrapper}/{name}" not in names}
+              assert not missing, f"Arquivos ausentes no ZIP: {sorted(missing)}"
+              import json
+              version=z.read(f"{wrapper}/VERSAO.txt").decode("utf-8").strip()
+              assert version==z.read(f"{wrapper}/VERSAO").decode("utf-8").strip()
+              release=json.loads(z.read(f"{wrapper}/RELEASE_INFO.json"))
+              assert release["version"]==version and version.endswith("HF65.24.59")
+              assert "INSTALACAO CONTROLADA" in release.get("description", "")
+              galeria=z.read(f"{wrapper}/site_home_content_service.py").decode("utf-8")
+              mobile=z.read(f"{wrapper}/site_visual_hf48_service.py").decode("utf-8")
+              assert "hf6514-testimonial-dialog" in galeria
+              assert "hf6514-testimonial-zoom" in galeria
+              assert "O carinho dos nossos clientes" in galeria
+              assert ".mobile-whatsapp{box-sizing:border-box!important" in mobile
+              assert "hf50-mobile-more" in mobile
+              forbidden={"historico_orcamentos.json", "catalogo_db.json", "clientes_db.json",
+                         "projetos_db.json", "empresa_config.json", "system_meta.json"}
+              for name in names:
+                  leaf=name.rsplit("/",1)[-1].lower()
+                  assert leaf not in forbidden, f"Arquivo operacional indevido: {leaf}"
+                  assert leaf not in {"secrets.toml",".env"}, "Credencial no pacote"
+              print("ZIP temporario validado:", len(names), "arquivos; versao", version,
+                    "; HF59 presente; dados protegidos; SEM DEPLOY - exigir backup antes de instalar")
+          PY
+      - name: Disponibilizar pacote para atualizacao controlada, SEM DEPLOY
+        if: github.ref == 'refs/heads/release/hf65-24-59-candidata-homologacao'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ALPHAFEST-HF65-24-59-ATUALIZACAO-CONTROLADA
+          path: /tmp/ALPHAFEST_HF65_24_59_ATUALIZACAO_CONTROLADA.zip
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
+      - name: Descartar pacote temporario
+        if: always()
+        run: rm -f /tmp/ALPHAFEST_HF65_24_59_ATUALIZACAO_CONTROLADA.zip
