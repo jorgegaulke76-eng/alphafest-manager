@@ -48,6 +48,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ""
         run: |
           python scripts/hf59_zip_qa.py
+      - name: Auditar quatro JPEGs ficticios usando verificador local
+        env:
+          SUPABASE_URL: ""
+          SUPABASE_KEY: ""
+          SUPABASE_SERVICE_KEY: ""
+          CLOUDFLARE_API_TOKEN: ""
+        run: |
+          python scripts/hf59_auditar_jpegs_local.py --self-test
       - name: Guardar capturas FICTICIAS como evidencia da homologacao
         if: always()
         uses: actions/upload-artifact@v7
