@@ -249,6 +249,11 @@ class ImportacaoSiteUITest(unittest.TestCase):
 
     def test_fechar_revisao_preserva_mensagem_e_rascunho_do_manager(self):
         app = self.analisar(self.app(), mensagem())
+        # O botao e renderizado antes da analise; requer rerun para refletir a
+        # revisao que foi criada neste ciclo do Streamlit AppTest.
+        app.run()
+        self.sem_excecao(app)
+        self.assertFalse(self.botao(app, "Fechar revisão").disabled)
         existente = copy.deepcopy(app.session_state["temp_itens"])
         self.clicar(app, "Fechar revisão")
         self.assertEqual(app.text_area(key="teste_mensagem").value, mensagem())
