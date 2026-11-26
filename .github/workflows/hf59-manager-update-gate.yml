@@ -1,0 +1,49 @@
+name: AlphaFest Manager HF59 - Gate de Atualizacao (somente homologacao)
+on:
+  push:
+    branches:
+      - feature/site-depoimentos-imagens
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validar_manager_hf59:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout read only
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Instalacao de dependencias para diagnostico
+        run: |
+          python -m pip install -r requirements.txt
+      - name: Confirmar que versao ainda nao foi promovida
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          version = Path("VERSAO.txt").read_text(encoding="utf-8").strip()
+          assert version.endswith("HF65.24.58"), "Versao base mudou; revisar processo antes de empacotar"
+          print("Codigo da HF59 sobre base", version, "- SEM autorizacao de instalacao")
+          PY
+      - name: Executar gate oficial do Manager e montar pacote temporario
+        run: |
+          python build_update_package.py --output /tmp/ALPHAFEST_HF59_CANDIDATA_HOMOLOGACAO_NAO_INSTALAR.zip
+      - name: Auditar pacote local e retirar antes do encerramento
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import zipfile
+          p=Path("/tmp/ALPHAFEST_HF59_CANDIDATA_HOMOLOGACAO_NAO_INSTALAR.zip")
+          with zipfile.ZipFile(p) as z:
+              assert z.testzip() is None
+              names=set(z.namelist())
+              assert {"app.py", "VERSAO.txt", "site_home_content_service.py", "site_visual_hf48_service.py"}.issubset(names)
+              assert not any("secrets.toml" in name.lower() for name in names)
+              print("ZIP temporario validado:", len(names), "arquivos. NAO PUBLICAR/INSTALAR")
+          p.unlink()
+          PY
