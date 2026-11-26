@@ -84,30 +84,41 @@ def ensaio(browser, path, nome, largura, altura, mobile):
         assert imagem.evaluate("(e) => e.naturalWidth") > 0, f"{nome}: arte {i + 1} não carregada"
     secao.scroll_into_view_if_needed()
     secao.screenshot(path=str(OUT / (nome + "_galeria.png")), timeout=20000)
-    primeiro = botoes.first
-    primeiro.click()
+    # Exercita cada arte, não apenas a primeira. As quatro imagens podem ter
+    # proporções diferentes e cada botão precisa abrir a arte correspondente.
     dialog = secao.locator("dialog.hf6514-testimonial-dialog")
-    expect(dialog).to_be_visible()
-    expect(dialog).to_have_attribute("open", "")
     ampliada = dialog.locator(".hf6514-testimonial-full")
-    expect(ampliada).to_have_js_property("complete", True)
-    assert ampliada.evaluate("(el) => el.naturalWidth") > 0
-    assert ampliada.evaluate("(el) => el.currentSrc") == imagens.first.evaluate("(el) => el.currentSrc")
-    dialog.screenshot(path=str(OUT / (nome + "_zoom.png")), timeout=20000)
-    page.keyboard.press("Escape")
-    expect(dialog).not_to_be_visible()
-    page.wait_for_timeout(100)
-    assert primeiro.evaluate("(el) => document.activeElement===el"), f"{nome}: foco não retornou"
-    primeiro.click()
-    dialog.locator(".hf6514-testimonial-close").click()
-    expect(dialog).not_to_be_visible()
+    for i in range(4):
+        botao = botoes.nth(i)
+        botao.click()
+        expect(dialog).to_be_visible()
+        expect(dialog).to_have_attribute("open", "")
+        expect(ampliada).to_have_js_property("complete", True)
+        assert ampliada.evaluate("(el) => el.naturalWidth") > 0, f"{nome}: zoom da arte {i + 1} não carregou"
+        assert ampliada.evaluate("(el) => el.currentSrc") == imagens.nth(i).evaluate(
+            "(el) => el.currentSrc"
+        ), f"{nome}: zoom da arte {i + 1} não corresponde ao cartão"
+        if i == 0:
+            dialog.screenshot(path=str(OUT / (nome + "_zoom.png")), timeout=20000)
+        page.keyboard.press("Escape")
+        expect(dialog).not_to_be_visible()
+        assert botao.evaluate("(el) => document.activeElement===el"), (
+            f"{nome}: foco não retornou à arte {i + 1} após Escape"
+        )
+        botao.click()
+        expect(dialog).to_be_visible()
+        dialog.locator(".hf6514-testimonial-close").click()
+        expect(dialog).not_to_be_visible()
+        assert botao.evaluate("(el) => document.activeElement===el"), (
+            f"{nome}: foco não retornou à arte {i + 1} após Fechar"
+        )
     box = secao.bounding_box()
     assert box is not None and box["width"] <= largura + 3, f"{nome}: seção excede largura"
     erros = [x for x in erros if "hf6514" in x.lower() or "testimonial" in x.lower()]
     assert not erros, f"{nome}: erro JavaScript da galeria: {erros}"
     ctx.close()
     return {"perfil": nome, "largura": largura, "altura": altura, "imagens": 4,
-            "zoom": "aprovado", "escape": "aprovado", "fechar": "aprovado",
+            "zoom": "4/4 aprovados", "escape": "4/4 aprovados", "fechar": "4/4 aprovados",
             "foco": "aprovado", "sem_rede_externa": True}
 
 
