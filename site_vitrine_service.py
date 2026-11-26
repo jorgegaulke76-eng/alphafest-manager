@@ -377,7 +377,9 @@ def gerar_html_vitrine(
             categorias_publicas = [categoria]
         subcategoria_publica = str(item.get("subcategoria_publica") or "").strip() if usar_taxonomia_catalogo else ""
         exibir_preco = bool(item.get("exibir_preco_site")) and bool(str(item.get("preco") or "").strip())
-        preco = _preco_br(item.get("preco")) if exibir_preco else ""
+        preco = _preco_br(item.get("preco")) if exibir_preco else "Consultar valores"
+        if exibir_preco and item.get("modalidade_preco_site") == "a_partir":
+            preco = f"A partir de {preco}"
         img = str(item.get("imagem_principal") or "").strip()
         if img and imagem_resolver is not None:
             try:

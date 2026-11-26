@@ -691,7 +691,8 @@ def upload_catalog_image(upload: Any, local_upload_dir: str = "uploads") -> str:
 def upload_library_file(upload: Any, produto_nome: str = "produto", local_upload_dir: str = "biblioteca_uploads") -> str:
     """Envia qualquer arquivo da memória do produto ao bucket público ``catalogo``.
 
-    Usa uma subpasta ``biblioteca/<produto>`` e mantém fallback local.
+    Usa ``biblioteca/<produto>`` no Supabase e fallback local apenas offline.
+    Com armazenamento online configurado, nunca simula sucesso no disco efêmero.
     """
     if upload is None:
         return ""
@@ -720,7 +721,9 @@ def upload_library_file(upload: Any, produto_nome: str = "produto", local_upload
             response.raise_for_status()
             return f"{url}/storage/v1/object/public/catalogo/{encoded_path}"
         except requests.RequestException:
-            pass
+            # O arquivo precisa sobreviver ao reinicio do Manager online.
+            # Falha no Supabase nao pode virar sucesso em caminho local efemero.
+            return ""
 
     local_dir = Path(local_upload_dir) / produto_seguro
     local_dir.mkdir(parents=True, exist_ok=True)
