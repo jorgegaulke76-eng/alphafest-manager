@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - feature/site-depoimentos-imagens
+      - fix/mobile-overflow-hf59-issue8
   workflow_dispatch:
 permissions:
   contents: read
@@ -39,6 +40,9 @@ jobs:
           SUPABASE_SERVICE_KEY: ""
         run: |
           python scripts/hf59_visual_qa.py
+      - name: Conferir overflow mobile e navegacao da issue 8
+        run: |
+          python scripts/hf59_mobile_overflow_qa.py
       - name: Auditar ZIP de producao REAL somente em memoria, sem publicar
         env:
           SUPABASE_URL: ""

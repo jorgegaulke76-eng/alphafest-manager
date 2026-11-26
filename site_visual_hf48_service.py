@@ -297,6 +297,16 @@ body{background:var(--hf48-bg)}
 @media(max-width:620px){.header-in{min-height:74px!important;padding:6px 8px!important;gap:7px!important}.brand{flex:1 1 auto!important;min-width:0!important;min-height:64px!important}.brand-logo{width:min(205px,61vw)!important;height:64px!important;object-fit:contain!important;object-position:left center!important}.header-actions{flex:0 0 auto!important}.header-actions .cta{padding:10px 10px!important;font-size:10px!important}.site-nav{top:74px!important;border-top:1px solid rgba(255,255,255,.15)!important;overflow:visible!important}.site-nav-in{overflow:visible!important;justify-content:flex-start!important;padding:0 5px!important;gap:0!important;position:relative!important}.site-nav a,.site-nav button{font-size:9.7px!important;padding:10px 7px!important;white-space:nowrap!important}.site-nav .hf50-mobile-hide{display:none!important}.hf50-mobile-more{display:block!important;margin-left:auto!important;position:relative!important}.hf50-mobile-more>button{display:flex!important;align-items:center!important;gap:4px!important;color:#fff!important;background:rgba(255,255,255,.09)!important;border:0!important;border-radius:8px!important}.hf50-more-menu{display:none;position:absolute;right:0;top:calc(100% + 5px);min-width:160px;background:#fff;border:1px solid #dce8f3;border-radius:12px;padding:6px;box-shadow:0 12px 30px rgba(10,55,100,.20);z-index:9999}.hf50-more-menu.open{display:grid}.hf50-more-menu a,.hf50-more-menu button{display:block!important;width:100%!important;text-align:left!important;color:#173d66!important;background:#fff!important;border:0!important;border-radius:8px!important;padding:10px 11px!important;font-size:12px!important}.hf50-more-menu a:hover,.hf50-more-menu button:hover{background:#eef7ff!important}}
 @media(min-width:621px){.hf50-mobile-more{display:none!important}}
 
+/* HF59 issue #8 — conter a navegação e o CTA móvel sem ocultar a página */
+@media(max-width:620px){
+.site-nav-in{box-sizing:border-box!important;width:100%!important;max-width:100vw!important;min-width:0!important;display:flex!important;align-items:stretch!important}
+.site-nav-in>a:not(.hf50-mobile-hide),.site-nav-in>button:not(.hf50-mobile-hide){box-sizing:border-box!important;flex:0 1 auto!important;min-width:0!important;padding-left:4px!important;padding-right:4px!important;overflow:hidden!important;text-overflow:ellipsis!important}
+.site-nav-in>.hf50-mobile-more{box-sizing:border-box!important;flex:0 0 auto!important;min-width:0!important;max-width:100%!important;margin-left:auto!important}
+.site-nav-in>.hf50-mobile-more>button{box-sizing:border-box!important;white-space:nowrap!important;padding:10px 5px!important}
+.mobile-whatsapp{box-sizing:border-box!important;width:auto!important;max-width:none!important;left:12px!important;right:12px!important}
+}
+
+
 
 '''
     pagina = pagina.replace("</style>", css + "</style>", 1)
