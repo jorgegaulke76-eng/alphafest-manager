@@ -7,6 +7,9 @@ Persistência, permissões e navegação continuam sob responsabilidade do app.
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List
+import re
+
+from catalogo_modalidade_preco_service import modalidade_atual
 
 
 def _texto(produto: Dict[str, Any], *chaves: str) -> str:
@@ -86,6 +89,22 @@ def _imagens(produto: Dict[str, Any]) -> List[str]:
     return saida
 
 
+def _preco_numerico_publicavel(valor: str) -> bool:
+    """Evita expor textos internos como 'SOB/CONSULTA' como valor monetario."""
+    texto = str(valor or "").strip()
+    if not re.fullmatch(r"(?:R\$\s*)?(?:\d+(?:[.,]\d{1,2})?|\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?)", texto):
+        return False
+    texto = texto.replace("R$", "").replace(" ", "")
+    if "," in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    elif "." in texto and len(texto.rsplit(".", 1)[1]) == 3:
+        texto = texto.replace(".", "")
+    try:
+        return float(texto) > 0
+    except (ValueError, OverflowError):
+        return False
+
+
 def avaliar_produto_site(produto: Dict[str, Any]) -> Dict[str, Any]:
     """Avalia prontidão sem alterar nem completar dados do produto.
 
@@ -103,7 +122,8 @@ def avaliar_produto_site(produto: Dict[str, Any]) -> Dict[str, Any]:
     ativo = produto.get("Ativo") is not False
     publicar = bool(produto.get("PublicarSite"))
     destaque = bool(produto.get("Destaque"))
-    exibir_preco_site = bool(produto.get("ExibirPrecoSite", False))
+    modalidade_preco_site = modalidade_atual(produto)
+    exibir_preco_site = (modalidade_preco_site != "sob_orcamento" and _preco_numerico_publicavel(preco))
 
     faltas: List[str] = []
     if not nome:
@@ -133,6 +153,7 @@ def avaliar_produto_site(produto: Dict[str, Any]) -> Dict[str, Any]:
         "publicar_site": publicar,
         "destaque": destaque,
         "exibir_preco_site": exibir_preco_site,
+        "modalidade_preco_site": modalidade_preco_site,
         "faltas": faltas,
         "avisos": avisos,
         "pronto": pronto,
