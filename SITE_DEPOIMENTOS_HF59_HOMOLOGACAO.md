@@ -15,7 +15,7 @@ Esta proposta é apenas uma implementação de revisão em branch própria; prec
 
 ## QA automático da página completa
 
-O workflow da branch executa scripts/hf59_visual_qa.py, que chama a função real gerar_html_site_completo com quatro imagens SVG FICTÍCIAS em proporções variadas. Gera capturas de desktop (1440 × 900) e celular (390 × 844), incluindo o zoom. Verifica abertura, Escape, botão de fechar, retorno do foco, carregamento das imagens e tamanho da seção.
+O workflow da branch executa scripts/hf59_visual_qa.py, que chama a função real gerar_html_site_completo com quatro imagens SVG FICTÍCIAS em proporções variadas. Gera capturas de desktop (1440 × 900) e celular (390 × 844), incluindo o zoom. Verifica carregamento das quatro imagens e tamanho da seção. A partir do commit `f129508`, o teste percorre **cada uma das quatro imagens**, verificando correspondência entre cartão e ampliação, abertura, Escape, botão Fechar e retorno do foco em desktop e celular. A aprovação dessa ampliação depende de conferir a execução mais recente do GitHub Actions; não deve ser presumida a partir de execuções anteriores.
 
 As capturas e o HTML de teste ficam disponíveis no artifact AlphaFest-HF59-previa-ficticia da execução do GitHub Actions. Nenhum dado de clientes nem chave do Supabase é usado; nenhuma publicação é executada.
 
