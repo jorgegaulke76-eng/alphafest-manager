@@ -45,13 +45,13 @@ jobs:
           python -m unittest -v test_manager_ui_hf53 test_ficha_producao_hf58 test_site_depoimentos_hf59
       - name: Executar gate oficial do Manager e montar pacote temporario
         run: |
-          python build_update_package.py --output /tmp/ALPHAFEST_HF59_CANDIDATA_HOMOLOGACAO_NAO_INSTALAR.zip
-      - name: Auditar pacote temporario antes da distribuicao de homologacao
+          python build_update_package.py --output /tmp/ALPHAFEST_HF65_24_59_ATUALIZACAO_CONTROLADA.zip
+      - name: Auditar pacote temporario antes da liberacao controlada
         run: |
           python - <<'PY'
           from pathlib import Path
           import zipfile
-          p=Path("/tmp/ALPHAFEST_HF59_CANDIDATA_HOMOLOGACAO_NAO_INSTALAR.zip")
+          p=Path("/tmp/ALPHAFEST_HF65_24_59_ATUALIZACAO_CONTROLADA.zip")
           with zipfile.ZipFile(p) as z:
               assert z.testzip() is None
               names=set(z.namelist())
@@ -66,7 +66,7 @@ jobs:
               assert version==z.read(f"{wrapper}/VERSAO").decode("utf-8").strip()
               release=json.loads(z.read(f"{wrapper}/RELEASE_INFO.json"))
               assert release["version"]==version and version.endswith("HF65.24.59")
-              assert "NAO INSTALAR" in release.get("description", "")
+              assert "INSTALACAO CONTROLADA" in release.get("description", "")
               galeria=z.read(f"{wrapper}/site_home_content_service.py").decode("utf-8")
               mobile=z.read(f"{wrapper}/site_visual_hf48_service.py").decode("utf-8")
               assert "hf6514-testimonial-dialog" in galeria
@@ -81,17 +81,17 @@ jobs:
                   assert leaf not in forbidden, f"Arquivo operacional indevido: {leaf}"
                   assert leaf not in {"secrets.toml",".env"}, "Credencial no pacote"
               print("ZIP temporario validado:", len(names), "arquivos; versao", version,
-                    "; HF59 presente; dados protegidos; NAO PUBLICAR/INSTALAR")
+                    "; HF59 presente; dados protegidos; SEM DEPLOY - exigir backup antes de instalar")
           PY
-      - name: Disponibilizar SOMENTE a candidata HF59 para homologacao isolada
+      - name: Disponibilizar pacote para atualizacao controlada, SEM DEPLOY
         if: github.ref == 'refs/heads/release/hf65-24-59-candidata-homologacao'
         uses: actions/upload-artifact@v4
         with:
-          name: ALPHAFEST-HF65-24-59-HOMOLOGACAO-NAO-INSTALAR
-          path: /tmp/ALPHAFEST_HF59_CANDIDATA_HOMOLOGACAO_NAO_INSTALAR.zip
+          name: ALPHAFEST-HF65-24-59-ATUALIZACAO-CONTROLADA
+          path: /tmp/ALPHAFEST_HF65_24_59_ATUALIZACAO_CONTROLADA.zip
           retention-days: 3
           compression-level: 0
           if-no-files-found: error
       - name: Descartar pacote temporario
         if: always()
-        run: rm -f /tmp/ALPHAFEST_HF59_CANDIDATA_HOMOLOGACAO_NAO_INSTALAR.zip
+        run: rm -f /tmp/ALPHAFEST_HF65_24_59_ATUALIZACAO_CONTROLADA.zip

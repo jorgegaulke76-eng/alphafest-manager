@@ -2,5 +2,5 @@
   "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.59",
   "created_at": "2026-11-26T16:54:14.893Z",
   "timezone": "America/Sao_Paulo",
-  "description": "HF65.24.59 CANDIDATA DE HOMOLOGACAO - depoimentos com imagens originais e correcao da navegacao mobile integradas; NAO INSTALAR nem publicar antes da aprovacao de QA do Manager e revisao do ZIP oficial do site."
+  "description": "HF65.24.59 - INSTALACAO CONTROLADA DO MANAGER, com depoimentos HF59 e correção de navegação mobile. Exige backup HF58 recuperável e conferência funcional após atualizar; a publicação do site Cloudflare é etapa separada."
 }
