@@ -232,6 +232,7 @@ O rollback do DNS anterior continua documentado no kit HF41.
         zf.writestr("sitemap.xml", sitemap)
         # HF65.22 — publicacoes editoriais sao paginas estaticas opcionais.
         paginas = paginas_dicas(dicas_content or [], whatsapp=dicas_whatsapp)
+        paginas.update(paginas_institucionais())
         paginas.update(archive_pages(posts_content or [], number=dicas_whatsapp))
         paginas["empresas/index.html"] = _rastreador_pagina_interna(corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico), html_publico)
         for caminho, conteudo in sorted(paginas.items()):
