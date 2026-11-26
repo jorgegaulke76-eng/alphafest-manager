@@ -1,6 +1,6 @@
 """HF59: valida o ZIP estatico REAL de producao, sem publica-lo.
 
-Usa apenas quatro imagens FICTICIAS (3 SVG e 1 PNG raster) geradas por hf59_visual_qa.
+Usa apenas quatro imagens FICTICIAS (2 SVG, 1 PNG raster e 1 JPEG) geradas por hf59_visual_qa.
 O ZIP com conteúdo fictício é construido EM MEMÓRIA e não fica disponível
 para download/publicação acidental. Salva somente um relatorio de auditoria.
 """
@@ -70,7 +70,8 @@ def avaliar_pacote() -> dict:
         assert index.count('class="hf6514-testimonial-full"') == 1
         assert "Texto redundante de QA" not in index
         assert "Depoimento enviado pela AlphaFest" not in index
-        assert index.count("data:image/svg+xml;base64,") == 3
+        assert index.count("data:image/svg+xml;base64,") == 2
+        assert index.count("data:image/jpeg;base64,") == 1
         assert index.count("data:image/png;base64,") == 1
         assert "hf6514-testimonial-dialog" in index
         assert 'name="robots" content="index,follow' in index
