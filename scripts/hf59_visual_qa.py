@@ -1,12 +1,15 @@
 """QA real de navegador para página COMPLETA do site, com dados fictícios.
 
-Não lê clientes nem acessa Supabase; não publica. Imagens de QA são SVGs
-originais gerados aqui com o aviso DEPOIMENTO FICTÍCIO em destaque.
+Não lê clientes nem acessa Supabase; não publica. Usa três imagens SVG
+fictícias com aviso visível e um PNG raster fictício para cobrir decodificação
+real de imagem data:image/png;base64.
 """
 from __future__ import annotations
 
 import base64
 import json
+import struct
+import zlib
 import os
 import sys
 from pathlib import Path
@@ -38,13 +41,31 @@ def imagem_teste(n, largura, altura):
     return "data:image/svg+xml;base64," + base64.b64encode(imagem.encode()).decode("ascii")
 
 
+def png_ficticio(largura: int, altura: int) -> str:
+    """PNG RGB raster simples, criado sem dependências ou dados de clientes."""
+    def chunk(tipo: bytes, dados: bytes) -> bytes:
+        payload = tipo + dados
+        return struct.pack(">I", len(dados)) + payload + struct.pack(
+            ">I", zlib.crc32(payload) & 0xffffffff
+        )
+
+    # Linhas reais de pixels: valida decodificação PNG no Chromium.
+    pixel = bytes((220, 239, 251))
+    linha = b"\\x00" + pixel * largura
+    pixels = zlib.compress(linha * altura, level=9)
+    arquivo = (b"\\x89PNG\\r\\n\\x1a\\n"
+               + chunk(b"IHDR", struct.pack(">IIBBBBB", largura, altura, 8, 2, 0, 0, 0))
+               + chunk(b"IDAT", pixels) + chunk(b"IEND", b""))
+    return "data:image/png;base64," + base64.b64encode(arquivo).decode("ascii")
+
+
 def escrever_site():
     OUT.mkdir(parents=True, exist_ok=True)
     dimensoes = [(440, 680), (640, 350), (430, 540), (520, 760)]
     depoimentos = [
         {
             "kind": "image", "active": True, "id": f"ficticio-{n}",
-            "name": f"Pessoa fictícia {n}", "image_src": imagem_teste(n, *dims),
+            "name": f"Pessoa fictícia {n}", "image_src": png_ficticio(*dims) if n == 2 else imagem_teste(n, *dims),
             "text": "Texto redundante de QA: NÃO DEVE APARECER NO CARTÃO.",
         }
         for n, dims in enumerate(dimensoes, 1)
@@ -58,6 +79,8 @@ def escrever_site():
     assert "hf6514-testimonial-zoom" in site, "Depoimentos não foram inseridos pelo gerador completo"
     assert site.count("O carinho dos nossos clientes") == 1
     assert "Texto redundante de QA" not in site
+    assert site.count("data:image/png;base64,") == 1
+    assert site.count("data:image/svg+xml;base64,") == 3
     path = OUT / "SITE_FICTICIO_PARA_REVISAO.html"
     path.write_text(site, encoding="utf-8")
     return path
@@ -134,7 +157,7 @@ def main():
         browser.close()
     report = {
         "status": "APROVADO", "origem": "site_completo_service.gerar_html_site_completo",
-        "conteudo": "QUATRO IMAGENS FICTÍCIAS; NÃO SÃO DEPOIMENTOS REAIS",
+        "conteudo": "QUATRO IMAGENS FICTÍCIAS (3 SVG, 1 PNG); NÃO SÃO DEPOIMENTOS REAIS",
         "publicado": False, "testes": resultados,
     }
     (OUT / "RELATORIO_VISUAL_HF59.json").write_text(
