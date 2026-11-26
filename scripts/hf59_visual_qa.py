@@ -1,8 +1,8 @@
 """QA real de navegador para página COMPLETA do site, com dados fictícios.
 
 Não lê clientes nem acessa Supabase; não publica. Usa duas imagens SVG
-fictícias com aviso visível um PNG raster e um JPEG fictícios para cobrir decodificação
-real de imagem data:image/png;base64.
+fictícias com aviso visível, um PNG raster e um JPEG fictícios para cobrir a
+decodificação de diferentes formatos de imagem em navegador real.
 """
 from __future__ import annotations
 
