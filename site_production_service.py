@@ -227,7 +227,17 @@ O rollback do DNS anterior continua documentado no kit HF41.
             zf.writestr(_favicon_path, _favicon_bytes)
         for _pwa_path, _pwa_bytes in pwa_assets().items():
             zf.writestr(_pwa_path, _pwa_bytes)
-        zf.writestr("404.html", html_publico)
+        # Não disfarçar rotas ausentes mostrando o catálogo na página 404.
+        erro_404 = (
+            '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">'
+            '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            '<meta name="robots" content="noindex,follow">'
+            '<title>Página não encontrada | AlphaFest</title></head>'
+            '<body style="font:16px/1.6 system-ui,Arial,sans-serif;max-width:680px;margin:10vh auto;padding:24px">'
+            '<h1>Página não encontrada</h1><p>O endereço solicitado não foi localizado.</p>'
+            '<p><a href="/">Voltar à página inicial</a></p></body></html>'
+        )
+        zf.writestr("404.html", erro_404)
         zf.writestr("robots.txt", robots)
         zf.writestr("sitemap.xml", sitemap)
         # HF65.22 — publicacoes editoriais sao paginas estaticas opcionais.
