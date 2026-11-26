@@ -110,6 +110,14 @@ def extrair_pacote_publico(pacote_zip: bytes) -> Tuple[Dict[str, bytes], Dict[st
                     assets[f"/{seguro}"] = zf.read(nome)
             if "/index.html" not in assets:
                 raise CloudflarePublishError("index.html não pôde ser extraído do pacote.")
+            # HF65 AdSense: links institucionais não podem apontar a páginas ausentes.
+            obrigatorias = {"/privacidade/index.html", "/como-encomendar/index.html"}
+            ausentes = sorted(obrigatorias - set(assets))
+            if ausentes:
+                raise CloudflarePublishError(
+                    "Pacote sem páginas institucionais (" + ", ".join(ausentes) + "). "
+                    "Atualize o Manager e gere novamente o pacote do site antes de publicar."
+                )
             return assets, modulos
     except zipfile.BadZipFile as exc:
         raise CloudflarePublishError("Pacote de produção inválido ou corrompido.") from exc
