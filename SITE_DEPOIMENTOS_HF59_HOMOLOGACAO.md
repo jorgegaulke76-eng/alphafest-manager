@@ -78,3 +78,27 @@ A correção de rolagem horizontal da navegação/WhatsApp foi homologada na [ex
 Prévia privada integrada com os quatro JPEGs originais: `documentElement.scrollWidth` igual à largura da tela em 320, 390 e 430 px, bem como desktop 1440 px. Menu Mais e CTA WhatsApp dentro da viewport. As imagens reais não foram enviadas ao GitHub. O menu Mais foi aberto e fechado no ensaio local; os testes do PR #9 também passaram.
 
 **Gate final:** confirmar CI do HEAD atualizado desta branch, conferir o ZIP definitivo gerado no Manager com o cadastro integral e aprovar a publicação em janela separada, com backup. A prévia local e o ZIP de teste, com dados parciais/fictícios fora dos depoimentos, não são pacote de produção.
+
+## Fechamento técnico — exportar e auditar o ZIP OFICIAL (sem publicar)
+
+**Não use ZIP de homologação, ZIP de instalação do Manager, preview do GitHub Actions ou HTML isolado.** O arquivo necessário é o ZIP público produzido pelo **Manager com o código HF59 da branch homologada**, lendo os dados verdadeiros existentes. O Manager antigo em produção pode não incluir essas alterações. Não instalar RC6/HF58 em produção para executar este ensaio.
+
+1. Em uma instância **isolada e autorizada** do Manager, confirme a revisão HF59 integrada (commit `36ef9778` ou sucessor aprovado), a fonte de dados e a quantidade real de produtos e depoimentos. Não alterar registros.
+2. Na **Central do Site AlphaFest**, use **Preparar / atualizar prévia do site**. Confira a galeria, o topo, catálogo, carrinho, Dicas/Novidades e CTA em desktop e celular. Esta etapa não publica.
+3. Use **Contingência / ZIP manual → Baixar ZIP de produção** e guarde-o **privadamente**. Não clique em **Publicar site agora**, não faça upload à Cloudflare e não anexe o ZIP com dados reais ao GitHub.
+4. Baixe o arquivo `scripts/hf59_verificar_zip_oficial.py` desta mesma branch para a pasta onde está o ZIP e rode em Python 3.11:
+
+   ```powershell
+   python hf59_verificar_zip_oficial.py "NOME-DO-ZIP-OFICIAL.zip"
+   ```
+
+   Opcionalmente, com os quatro JPEGs originais na mesma máquina:
+
+   ```powershell
+   python hf59_verificar_zip_oficial.py "NOME-DO-ZIP-OFICIAL.zip" --jpegs "01.jpeg" "02.jpeg" "03.jpeg" "04.jpg"
+   ```
+
+5. O auditor somente **lê** o ZIP e retorna: integridade, presença de HTML/404/robots/sitemap/PWA/cabeçalhos/status, domínio, versão, quantidade positiva de produtos, 4 cartões de depoimentos, título e agradecimento únicos, ausência de marcadores conhecidos de prévia e SHA-256 do pacote. Ele não garante que os dados operacionais foram todos capturados nem testa a publicação. O conjunto de arquivos e a contagem de produtos devem ser confrontados com o Manager.
+6. Registre no PR #7 somente o resultado, versão, quantidade de produtos, SHA-256 e eventuais erros — **nunca** as imagens, o ZIP completo ou informações privadas. Antes de publicar, confira backup recuperável e a versão ativa do Worker, solicite autorização específica para aquele fingerprint e planeje rollback.
+
+A automação do GitHub valida o auditor **somente com pacotes fictícios**. Nenhum teste da CI é prova de que já foi gerado o ZIP oficial com a base verdadeira do Manager.
