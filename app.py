@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import json
+from catalogo_modalidade_preco_service import MODALIDADES as PRECO_MODALIDADES_HF60, modalidade_atual as preco_modalidade_atual_hf60
 import os
 import html
 import re
@@ -37304,15 +37305,16 @@ if pagina_atual == "catalogo":
                 "Publicar no site/catálogo online", value=bool(item_edicao.get("PublicarSite", False)),
                 key=f"cat_publicar_{sufixo}"
             )
-            exibir_preco_site = st.checkbox(
-                "Exibir preço no site",
-                value=bool(item_edicao.get("ExibirPrecoSite", False)),
-                key=f"cat_exibir_preco_site_{sufixo}",
-                help=(
-                    "Desativado por padrão. Quando desligado, a vitrine mostra apenas o botão de orçamento. "
-                    "Ative somente quando o valor cadastrado puder ser divulgado como preço público deste produto."
-                ),
+            _preco_modos_hf60 = list(PRECO_MODALIDADES_HF60)
+            modalidade_preco_site = st.selectbox(
+                "Preço mostrado no site",
+                options=_preco_modos_hf60,
+                index=_preco_modos_hf60.index(preco_modalidade_atual_hf60(item_edicao)),
+                format_func=lambda codigo: PRECO_MODALIDADES_HF60[codigo],
+                key=f"cat_modalidade_preco_site_{sufixo}",
+                help="A partir de: anuncie somente um valor inicial realmente disponível. Sem preço numérico válido, o site exibirá Consultar valores.",
             )
+            exibir_preco_site = modalidade_preco_site != "sob_orcamento"
             destaque_cat = st.checkbox(
                 "Produto em destaque", value=bool(item_edicao.get("Destaque", False)),
                 key=f"cat_destaque_{sufixo}"
@@ -37474,7 +37476,7 @@ if pagina_atual == "catalogo":
                     "ObservacaoInterna": observacao_interna.strip(), "PalavrasChave": palavras_chave.strip(),
                     "LegendaSocial": legenda_instagram.strip(), "Hashtags": hashtags.strip(),
                     "DescricaoMercadoLivre": texto_ml.strip(), "DescricaoShopee": texto_shopee.strip(),
-                    "PublicarSite": publicar_site, "ExibirPrecoSite": bool(exibir_preco_site), "Destaque": destaque_cat, "EntregaRapidaSite": bool(entrega_rapida_cat),
+                    "PublicarSite": publicar_site, "ExibirPrecoSite": bool(exibir_preco_site), "ModalidadePrecoSite": modalidade_preco_site, "Destaque": destaque_cat, "EntregaRapidaSite": bool(entrega_rapida_cat),
                     "CategoriasExtrasSite": [
                         str(cat).strip() for cat in categorias_extras_site_cat
                         if str(cat).strip() and str(cat).strip().casefold() != categoria_cat.strip().casefold()
@@ -37687,12 +37689,12 @@ if pagina_atual == "catalogo":
         with aba_lista:
             # HF51.4-HF3 — edição rápida preservada + carrossel sazonal rápido.
             # Evita abrir o formulário completo produto por produto apenas para
-            # PublicarSite / ExibirPrecoSite / Destaque. Nada é publicado no
+            # PublicarSite / ModalidadePrecoSite / Destaque. Nada é publicado no
             # domínio aqui: esta grade altera somente o Catálogo Oficial; o HF44
             # continua sendo a etapa explícita de publicação do site.
             st.markdown("#### ⚡ Edição rápida do site · auto-save")
             st.caption(
-                "Marque diretamente na tabela quais produtos entram no site, se o preço aparece, quais ficam em destaque e quais entram no carrossel comercial. "
+                "Escolha na tabela os produtos do site, o tipo de preço (sob orçamento, fixo ou a partir de), os destaques e o carrossel comercial. "
                 "Cada alteração é salva automaticamente no Catálogo Oficial. **O site não é publicado automaticamente** — "
                 "a publicação continua pelo fluxo seguro do HF44. O carrossel mostra até 5 produtos por vez."
             )
@@ -37856,7 +37858,7 @@ if pagina_atual == "catalogo":
                     "Subcategoria": str(_prod_hf492.get("Subcategoria") or ""),
                     "Preço atual": formatar_preco_catalogo(_prod_hf492.get("Preco")),
                     "🌐 Publicar": bool(_prod_hf492.get("PublicarSite", False)),
-                    "💰 Mostrar preço": bool(_prod_hf492.get("ExibirPrecoSite", False)),
+                    "💰 Preço no site": PRECO_MODALIDADES_HF60[preco_modalidade_atual_hf60(_prod_hf492)],
                     "⭐ Destaque": bool(_prod_hf492.get("Destaque", False)),
                     "🎠 Carrossel": bool(_prod_hf492.get("CarrosselSite", False)),
                     "⚡ Entrega rápida": bool(_prod_hf492.get("EntregaRapidaSite", False)),
@@ -37972,10 +37974,11 @@ if pagina_atual == "catalogo":
                             help="Inclui o produto na próxima publicação do site.",
                             width="small",
                         ),
-                        "💰 Mostrar preço": st.column_config.CheckboxColumn(
-                            "💰 Mostrar preço",
-                            help="Quando marcado, o preço é exibido no site. Desmarcado = orçamento pelo WhatsApp.",
-                            width="small",
+                        "💰 Preço no site": st.column_config.SelectboxColumn(
+                            "💰 Preço no site",
+                            options=list(PRECO_MODALIDADES_HF60.values()),
+                            help="Sob orçamento, Preço fixo ou A partir de. O site só publica valores numéricos válidos.",
+                            width="medium",
                         ),
                         "⭐ Destaque": st.column_config.CheckboxColumn(
                             "⭐ Destaque",
@@ -37996,6 +37999,7 @@ if pagina_atual == "catalogo":
                 )
 
                 _hf492_mudancas = []
+                _hf60_preco_codigos = {rotulo: codigo for codigo, rotulo in PRECO_MODALIDADES_HF60.items()}
                 if isinstance(_hf492_editado, pd.DataFrame):
                     for _pos_hf492, _idx_catalogo_hf492 in enumerate(_hf492_indices):
                         if _pos_hf492 >= len(_hf492_editado):
@@ -38003,13 +38007,16 @@ if pagina_atual == "catalogo":
                         _linha_hf492 = _hf492_editado.iloc[_pos_hf492]
                         _produto_hf492 = catalogo[_idx_catalogo_hf492] or {}
                         _novo_publicar_hf492 = bool(_linha_hf492.get("🌐 Publicar", False))
-                        _novo_preco_hf492 = bool(_linha_hf492.get("💰 Mostrar preço", False))
+                        _novo_preco_hf492 = _hf60_preco_codigos.get(
+                            str(_linha_hf492.get("💰 Preço no site", "")).strip(),
+                            preco_modalidade_atual_hf60(_produto_hf492),
+                        )
                         _novo_destaque_hf492 = bool(_linha_hf492.get("⭐ Destaque", False))
                         _novo_carrossel_hf501 = bool(_linha_hf492.get("🎠 Carrossel", False))
                         _novo_rapida_hf6525 = bool(_linha_hf492.get("⚡ Entrega rápida", False))
                         if (
                             _novo_publicar_hf492 != bool(_produto_hf492.get("PublicarSite", False))
-                            or _novo_preco_hf492 != bool(_produto_hf492.get("ExibirPrecoSite", False))
+                            or _novo_preco_hf492 != preco_modalidade_atual_hf60(_produto_hf492)
                             or _novo_destaque_hf492 != bool(_produto_hf492.get("Destaque", False))
                             or _novo_carrossel_hf501 != bool(_produto_hf492.get("CarrosselSite", False))
                             or _novo_rapida_hf6525 != bool(_produto_hf492.get("EntregaRapidaSite", False))
@@ -38029,7 +38036,8 @@ if pagina_atual == "catalogo":
                     for _idx_catalogo_hf492, _pub_hf492, _preco_hf492, _dest_hf492, _car_hf501, _rapida_hf6525 in _hf492_mudancas:
                         _registro_hf492 = dict(_catalogo_hf492[_idx_catalogo_hf492] or {})
                         _registro_hf492["PublicarSite"] = bool(_pub_hf492)
-                        _registro_hf492["ExibirPrecoSite"] = bool(_preco_hf492)
+                        _registro_hf492["ModalidadePrecoSite"] = _preco_hf492
+                        _registro_hf492["ExibirPrecoSite"] = _preco_hf492 != "sob_orcamento"
                         _registro_hf492["Destaque"] = bool(_dest_hf492)
                         _registro_hf492["CarrosselSite"] = bool(_car_hf501)
                         _registro_hf492["EntregaRapidaSite"] = bool(_rapida_hf6525)
