@@ -52,7 +52,26 @@ jobs:
               required={"app.py", "VERSAO.txt", "site_home_content_service.py", "site_visual_hf48_service.py", "UPDATE_MANIFEST.json"}
               missing={name for name in required if f"{wrapper}/{name}" not in names}
               assert not missing, f"Arquivos ausentes no ZIP: {sorted(missing)}"
-              assert not any("secrets.toml" in name.lower() for name in names)
-              print("ZIP temporario validado:", len(names), "arquivos com raiz", wrapper, "NAO PUBLICAR/INSTALAR")
+              import json
+              version=z.read(f"{wrapper}/VERSAO.txt").decode("utf-8").strip()
+              assert version==z.read(f"{wrapper}/VERSAO").decode("utf-8").strip()
+              release=json.loads(z.read(f"{wrapper}/RELEASE_INFO.json"))
+              assert release["version"]==version and version.endswith("HF65.24.59")
+              assert "NAO INSTALAR" in release.get("description", "")
+              galeria=z.read(f"{wrapper}/site_home_content_service.py").decode("utf-8")
+              mobile=z.read(f"{wrapper}/site_visual_hf48_service.py").decode("utf-8")
+              assert "hf6514-testimonial-dialog" in galeria
+              assert "hf6514-testimonial-zoom" in galeria
+              assert "O carinho dos nossos clientes" in galeria
+              assert ".mobile-whatsapp{box-sizing:border-box!important" in mobile
+              assert "hf50-mobile-more" in mobile
+              forbidden={"historico_orcamentos.json", "catalogo_db.json", "clientes_db.json",
+                         "projetos_db.json", "empresa_config.json", "system_meta.json"}
+              for name in names:
+                  leaf=name.rsplit("/",1)[-1].lower()
+                  assert leaf not in forbidden, f"Arquivo operacional indevido: {leaf}"
+                  assert leaf not in {"secrets.toml",".env"}, "Credencial no pacote"
+              print("ZIP temporario validado:", len(names), "arquivos; versao", version,
+                    "; HF59 presente; dados protegidos; NAO PUBLICAR/INSTALAR")
           p.unlink()
           PY
