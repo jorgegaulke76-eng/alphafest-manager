@@ -45,8 +45,13 @@ jobs:
           with zipfile.ZipFile(p) as z:
               assert z.testzip() is None
               names=set(z.namelist())
-              assert {"app.py", "VERSAO.txt", "site_home_content_service.py", "site_visual_hf48_service.py"}.issubset(names)
+              prefixes={name.split("/", 1)[0] for name in names if "/" in name}
+              assert len(prefixes)==1, f"Mais de uma pasta raiz: {prefixes}"
+              wrapper=next(iter(prefixes))
+              required={"app.py", "VERSAO.txt", "site_home_content_service.py", "site_visual_hf48_service.py", "UPDATE_MANIFEST.json"}
+              missing={name for name in required if f"{wrapper}/{name}" not in names}
+              assert not missing, f"Arquivos ausentes no ZIP: {sorted(missing)}"
               assert not any("secrets.toml" in name.lower() for name in names)
-              print("ZIP temporario validado:", len(names), "arquivos. NAO PUBLICAR/INSTALAR")
+              print("ZIP temporario validado:", len(names), "arquivos com raiz", wrapper, "NAO PUBLICAR/INSTALAR")
           p.unlink()
           PY
