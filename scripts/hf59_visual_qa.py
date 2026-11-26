@@ -1,7 +1,7 @@
 """QA real de navegador para página COMPLETA do site, com dados fictícios.
 
-Não lê clientes nem acessa Supabase; não publica. Usa três imagens SVG
-fictícias com aviso visível e um PNG raster fictício para cobrir decodificação
+Não lê clientes nem acessa Supabase; não publica. Usa duas imagens SVG
+fictícias com aviso visível um PNG raster e um JPEG fictícios para cobrir decodificação
 real de imagem data:image/png;base64.
 """
 from __future__ import annotations
@@ -59,13 +59,20 @@ def png_ficticio(largura: int, altura: int) -> str:
     return "data:image/png;base64," + base64.b64encode(arquivo).decode("ascii")
 
 
+def jpeg_ficticio() -> str:
+    """JPEG RGB ficticio de 10x6, sem mensagens ou dados de clientes."""
+    return "data:image/jpeg;base64," + (
+        "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAAGAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFAEBAAAAAAAAAAAAAAAAAAAAA//EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/ALcAYT//2Q=="
+    )
+
+
 def escrever_site():
     OUT.mkdir(parents=True, exist_ok=True)
     dimensoes = [(440, 680), (640, 350), (430, 540), (520, 760)]
     depoimentos = [
         {
             "kind": "image", "active": True, "id": f"ficticio-{n}",
-            "name": f"Pessoa fictícia {n}", "image_src": png_ficticio(*dims) if n == 2 else imagem_teste(n, *dims),
+            "name": f"Pessoa fictícia {n}", "image_src": (png_ficticio(*dims) if n == 2 else jpeg_ficticio() if n == 3 else imagem_teste(n, *dims)),
             "text": "Texto redundante de QA: NÃO DEVE APARECER NO CARTÃO.",
         }
         for n, dims in enumerate(dimensoes, 1)
@@ -80,7 +87,8 @@ def escrever_site():
     assert site.count("O carinho dos nossos clientes") == 1
     assert "Texto redundante de QA" not in site
     assert site.count("data:image/png;base64,") == 1
-    assert site.count("data:image/svg+xml;base64,") == 3
+    assert site.count("data:image/svg+xml;base64,") == 2
+    assert site.count("data:image/jpeg;base64,") == 1
     path = OUT / "SITE_FICTICIO_PARA_REVISAO.html"
     path.write_text(site, encoding="utf-8")
     return path
@@ -157,7 +165,7 @@ def main():
         browser.close()
     report = {
         "status": "APROVADO", "origem": "site_completo_service.gerar_html_site_completo",
-        "conteudo": "QUATRO IMAGENS FICTÍCIAS (3 SVG, 1 PNG); NÃO SÃO DEPOIMENTOS REAIS",
+        "conteudo": "QUATRO IMAGENS FICTÍCIAS (2 SVG, 1 PNG, 1 JPEG); NÃO SÃO DEPOIMENTOS REAIS",
         "publicado": False, "testes": resultados,
     }
     (OUT / "RELATORIO_VISUAL_HF59.json").write_text(
