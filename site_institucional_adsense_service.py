@@ -44,7 +44,7 @@ PRIVACIDADE = """
 consulta produtos ou entra em contato para encomendar personalizados. Última atualização: 26/11/2026.</p>
 <h2>Quem é responsável pelo site?</h2>
 <p>AlphaFest — Personalizados &amp; Balões, em Itatiba, São Paulo. Para dúvidas sobre privacidade,
-escreva para <a href="mailto:alphafesti@gmail.com">alphafesti@gmail.com</a>.</p>
+utilize os canais de contato informados na <a href="/">página principal</a>.</p>
 <h2>Dados de navegação e métricas</h2>
 <p>O site utiliza infraestrutura de hospedagem e serviços técnicos para carregar páginas,
 imagens e acompanhar o funcionamento da vitrine. Dados técnicos como endereço IP, tipo de
@@ -119,7 +119,7 @@ legibilidade da marca e no uso real do objeto.</p>
 variar em tamanho, material, arte e quantidade, os valores e prazos são confirmados
 pela equipe conforme os detalhes solicitados. A consulta não constitui compra automática.</p>
 <p><a href="/">Conheça a vitrine de produtos</a> ou
-<a href="https://wa.me/5511972949533" rel="noopener noreferrer">converse com a AlphaFest no WhatsApp</a>.</p>
+<a href="/#contato">entre em contato com a AlphaFest</a>.</p>
 """
 
 
