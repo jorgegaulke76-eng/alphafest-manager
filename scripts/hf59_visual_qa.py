@@ -112,8 +112,13 @@ def ensaio(browser, path, nome, largura, altura, mobile):
     for i in range(4):
         imagem = imagens.nth(i)
         imagem.scroll_into_view_if_needed()
-        expect(imagem).to_have_js_property("complete", True, timeout=10000)
-        assert imagem.evaluate("(e) => e.naturalWidth") > 0, f"{nome}: arte {i + 1} não carregada"
+        # Imagens lazy podem reportar complete=True antes do carregamento
+        # efetivo. Aguarda pixels decodificados, não apenas complete.
+        imagem.evaluate("(img) => { img.loading = 'eager'; }")
+        page.wait_for_function(
+            "(img) => img.complete && img.naturalWidth > 0",
+            arg=imagem.element_handle(), timeout=15000,
+        )
     secao.scroll_into_view_if_needed()
     secao.screenshot(path=str(OUT / (nome + "_galeria.png")), timeout=20000)
     # Exercita cada arte, não apenas a primeira. As quatro imagens podem ter
@@ -125,8 +130,10 @@ def ensaio(browser, path, nome, largura, altura, mobile):
         botao.click()
         expect(dialog).to_be_visible()
         expect(dialog).to_have_attribute("open", "")
-        expect(ampliada).to_have_js_property("complete", True)
-        assert ampliada.evaluate("(el) => el.naturalWidth") > 0, f"{nome}: zoom da arte {i + 1} não carregou"
+        page.wait_for_function(
+            "(img) => img.complete && img.naturalWidth > 0",
+            arg=ampliada.element_handle(), timeout=15000,
+        )
         assert ampliada.evaluate("(el) => el.currentSrc") == imagens.nth(i).evaluate(
             "(el) => el.currentSrc"
         ), f"{nome}: zoom da arte {i + 1} não corresponde ao cartão"
