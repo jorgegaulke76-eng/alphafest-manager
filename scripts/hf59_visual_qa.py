@@ -8,7 +8,13 @@ from __future__ import annotations
 import base64
 import json
 import os
+import sys
 from pathlib import Path
+
+# Execucao direta por scripts/hf59_visual_qa.py precisa enxergar o projeto raiz.
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from playwright.sync_api import sync_playwright, expect
 from site_completo_service import gerar_html_site_completo
