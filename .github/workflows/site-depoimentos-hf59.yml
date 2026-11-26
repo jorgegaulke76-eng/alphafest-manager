@@ -1,0 +1,29 @@
+name: AlphaFest Site - Depoimentos em Imagens (homologacao isolada)
+on:
+  push:
+    branches:
+      - feature/site-depoimentos-imagens
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  conferir_depoimentos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Checkout apenas leitura
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Verificar Python e 7 cenarios de depoimentos
+        run: |
+          python -m py_compile site_home_content_service.py test_site_depoimentos_hf59.py
+          python -m unittest -v test_site_depoimentos_hf59
+      - name: Verificar sintaxe JavaScript da galeria
+        run: |
+          python -c "from pathlib import Path; from site_home_content_service import HOME_CONTENT_JS; Path('/tmp/alphafest-testimonials-hf59.js').write_text(HOME_CONTENT_JS, encoding='utf-8')"
+          node --check /tmp/alphafest-testimonials-hf59.js
