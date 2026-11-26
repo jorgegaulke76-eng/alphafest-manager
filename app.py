@@ -34,6 +34,7 @@ alt = LazyModule("altair")
 _BOOT_PROCESS_STARTED_AT = time.perf_counter()
 
 from config import APP_VERSION, DATA_VERSION, DEFAULT_TIMEZONE, DOCUMENT_CACHE_TTL_SECONDS, CONNECTION_CACHE_TTL_SECONDS, APP_RELEASE_DISPLAY
+from resumo_operacional_hf61_service import montar_resumo_anna as _resumo_diario_hf61
 from site_manager_service import (
     resumir_catalogo_site as _site_resumir_catalogo,
     ordenar_produtos_site as _site_ordenar_produtos,
@@ -25554,6 +25555,23 @@ def renderizar_workspace_anna_isolado():
     if entregas_hoje:
         if m4.button("🔎 Ver quais são", key="anna_ver_entregas_hoje", width="stretch"):
             dialog_entregas_hoje_anna(historico)
+
+    # HF61: somente leitura, usando os quatro indicadores que ja estao na tela.
+    with st.expander("📋 Resumo do dia · copiar ou baixar", expanded=False):
+        st.caption("Totais e prioridades, sem nomes, telefones ou valores.")
+        resumo_txt_hf61 = _resumo_diario_hf61(
+            hoje_anna_hf40, novos=qtd_novos,
+            aguardando=qtd_aguardando, ativos=len(ativos),
+            entregas=qtd_entregas,
+        )
+        st.code(resumo_txt_hf61, language=None)
+        st.download_button(
+            "⬇️ Baixar resumo (.txt)",
+            data=resumo_txt_hf61.encode("utf-8"),
+            file_name=f"ALPHAFEST_RESUMO_{hoje_anna_hf40:%Y-%m-%d}.txt",
+            mime="text/plain", key="anna_resumo_diario_hf61",
+            width="stretch",
+        )
 
     # Mesmas engines da Central, derivadas desta leitura do Histórico e das etapas do Fluxo.
     planos_hf53 = _hf53_montar_planejamentos(historico, carregar_producao(), hoje_anna_hf40)
