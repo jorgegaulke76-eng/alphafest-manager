@@ -39,6 +39,15 @@ jobs:
           SUPABASE_SERVICE_KEY: ""
         run: |
           python scripts/hf59_visual_qa.py
+      - name: Auditar ZIP de producao REAL somente em memoria, sem publicar
+        env:
+          SUPABASE_URL: ""
+          SUPABASE_KEY: ""
+          SUPABASE_SERVICE_KEY: ""
+          SUPABASE_SERVICE_ROLE_KEY: ""
+          CLOUDFLARE_API_TOKEN: ""
+        run: |
+          python scripts/hf59_zip_qa.py
       - name: Guardar capturas FICTICIAS como evidencia da homologacao
         if: always()
         uses: actions/upload-artifact@v7

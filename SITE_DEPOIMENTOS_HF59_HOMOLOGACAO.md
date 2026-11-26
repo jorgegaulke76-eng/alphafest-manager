@@ -20,3 +20,9 @@ O workflow da branch executa scripts/hf59_visual_qa.py, que chama a função rea
 As capturas e o HTML de teste ficam disponíveis no artifact AlphaFest-HF59-previa-ficticia da execução do GitHub Actions. Nenhum dado de clientes nem chave do Supabase é usado; nenhuma publicação é executada.
 
 A inspeção visual com os quatro depoimentos REAIS cadastrados no Manager e o teste do ZIP do site público permanecem pendentes.
+
+## Verificação do ZIP final
+
+A automação executa também `scripts/hf59_zip_qa.py`, que monta em memória o ZIP **real** com `gerar_pacote_producao`, verifica CRC, HTML, índice, PWA, robots, política de cabeçalhos e arquivos esperados. Em seguida usa `extrair_pacote_publico` (mesmo filtro do envio Cloudflare) para conferir os assets e calcula o fingerprint. O teste não utiliza credenciais nem chama a API Cloudflare.
+
+**Importante:** nenhum ZIP de produção com as quatro imagens fictícias é salvo para download. Só o relatório JSON de auditoria aparece nas evidências da CI. A publicação real depende de revisar as mensagens reais no Manager e de gerar o ZIP com os conteúdos verdadeiros, após liberação formal.
