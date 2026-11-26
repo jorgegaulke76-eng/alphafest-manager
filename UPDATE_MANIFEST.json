@@ -2,19 +2,20 @@
   "schema": 2,
   "product": "AlphaFest Manager",
   "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.58",
-  "generated_at_utc": "2026-11-25T17:30:31.099600+00:00",
+  "generated_at_utc": "2026-11-25T17:57:15.634182+00:00",
   "policy": "codigo_assets_migracoes_sem_dados",
   "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
   "validation": {
     "status": "HOMOLOGACAO_PARCIAL",
     "problems": [
-      "Regressao completa reprovada: ausencia de Streamlit (4 erros de importacao e 93 skips).",
-      "Gate critico individual nao aprovado: 9 arquivos dependem de Streamlit real.",
-      "Homologacao UI de Jorge e Anna em ambiente real ainda pendente. Nao instalar em producao."
+      "HF65.24.58 RC6: aguarda execucao remota da regressao e gate critico com as mudancas de upload.",
+      "A transicao revisao_pendente ainda requer evidencia visual manual; upload real em Supabase de homologacao permanece nao testado."
     ],
     "warnings": [
       "RC4 exclusivamente para testes isolados e com dados ficticios.",
-      "Aprovacao manual exige prova de cliente e conferencia operacional."
+      "Aprovacao manual exige prova de cliente e conferencia operacional.",
+      "RC5: corregiu o f-string JSON-LD Python 3.11 e o botao Fechar revisao; teste remoto deve certificar.",
+      "RC6: quando Supabase esta configurado, falha de upload nao deve aparentar sucesso via arquivo local efemero."
     ],
     "critical_python_compile": {
       "status": "OK",
@@ -34,10 +35,30 @@
       "critical_individual_skipped": 87,
       "status": "REPROVADO",
       "streamlit_available": false
+    },
+    "ci_rc4": {
+      "run_id": 45669463827,
+      "tests_run": 509,
+      "errors": 4,
+      "failures": 0,
+      "skipped": 0,
+      "status": "REPROVADO"
+    },
+    "ci_rc5": {
+      "status": "APROVADO",
+      "run_id": 45682643988,
+      "unittest": 525,
+      "critical": 518,
+      "critical_files": 36,
+      "skipped": 0,
+      "failures": 0
+    },
+    "ci_rc6": {
+      "status": "PENDENTE"
     }
   },
   "file_count": 522,
-  "uncompressed_bytes": 40020034,
+  "uncompressed_bytes": 40022346,
   "files": [
     {
       "path": ".gitignore",
@@ -126,8 +147,8 @@
     },
     {
       "path": "LEIA_ME_HF65.24.58.txt",
-      "size": 987,
-      "sha256": "bfc100f01d70ec9bc9a120145c7eb7b5cd95977dd82b4872201904bb1fc9b0af"
+      "size": 1171,
+      "sha256": "bc486bc91d9262c8b6273485a370ce0816ba2909c218f83888d3abdb54c37c28"
     },
     {
       "path": "LEIA_ME_HF65_24_13.txt",
@@ -196,8 +217,8 @@
     },
     {
       "path": "UPDATE_INFO_HF65.24.58.md",
-      "size": 1275,
-      "sha256": "ba2a6a846a3af81da3d2d066156226c30ca01af4375e36153f7be88ce6820bd4"
+      "size": 1945,
+      "sha256": "4f1a496ce43e94fb754ac5071540ed29693a46018556e03adb0b2a1020f648f5"
     },
     {
       "path": "VALIDACAO_HF65.24.52.md",
@@ -231,8 +252,8 @@
     },
     {
       "path": "VALIDACAO_HF65.24.58.md",
-      "size": 4492,
-      "sha256": "fb3736918d61eb168f9f48d15d8684f566d142e6a2a0f8cf237200b386826d1c"
+      "size": 5162,
+      "sha256": "cb9952b4226edc99e1b1ae995dc9ad240981ab556875d38e079388f562f17e95"
     },
     {
       "path": "VALIDAR_HF58_WINDOWS.bat",
@@ -1876,8 +1897,8 @@
     },
     {
       "path": "cloud_db.py",
-      "size": 40179,
-      "sha256": "b6d7d08863b2ca277c714e2968cfd0c9ad1ac6a4ff022c7d0079bf9d330e815a"
+      "size": 40498,
+      "sha256": "5dd94988213012dcca72b775620eb99c0cad9da4756ecc03f4f3dd36ebd3a978"
     },
     {
       "path": "compras_runtime_index_service.py",
@@ -2151,8 +2172,8 @@
     },
     {
       "path": "release_diagnostics.py",
-      "size": 13621,
-      "sha256": "905bb0e00a9bdf515b0f3fedf5358f3ac0269acc80af1d3836479837b3c60419"
+      "size": 13714,
+      "sha256": "706667176d5e819b772452df6ac8fb88bfa65c8d844432fdb6238cb3f815449b"
     },
     {
       "path": "reports_runtime_index_service.py",
@@ -2221,8 +2242,8 @@
     },
     {
       "path": "site_dicas_multicanal_service.py",
-      "size": 23644,
-      "sha256": "292d031315af947ad8e6bf70a246b26a0964d11a3e233807619cf6628690ec9f"
+      "size": 23859,
+      "sha256": "a07be91cc4ed31e4deba02367022dd0adb655e3aa834912ad4d00c3accd45271"
     },
     {
       "path": "site_entrega_rapida_service.py",
@@ -2291,8 +2312,8 @@
     },
     {
       "path": "site_quote_import_ui.py",
-      "size": 12353,
-      "sha256": "cd76ba52ca010e739ca0ce1f6f63a6a7428c97ad38c550f7af0d9f14fb7793ba"
+      "size": 12514,
+      "sha256": "e9f10b7ca7b40d1a93bf48fb350ef5761377b3d38059896a515e6d1b5c1a1e77"
     },
     {
       "path": "site_staging_service.py",
@@ -2649,5 +2670,6 @@
       "size": 5142,
       "sha256": "e5fbbf4a5f09892b6dbc5314463ca4a35428401da921a874f5e4e70803b60059"
     }
-  ]
+  ],
+  "release_candidate": "RC6"
 }

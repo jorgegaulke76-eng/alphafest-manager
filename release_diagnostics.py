@@ -41,6 +41,7 @@ CRITICAL_PYTHON_FILES = (
     "manager_operational_planning_hf53.py",
     "site_carrinho_orcamento_service.py",
     "site_vitrine_service.py",
+    "site_dicas_multicanal_service.py",  # RC5: impediu erro Python 3.11 na geracao de Dicas
     "site_posts_service.py",
     "site_posts_ui.py",
     "site_metrics_dashboard_ui.py",

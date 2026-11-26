@@ -112,13 +112,6 @@ def renderizar_importacao(ui, carregar_catalogo, abrir_rascunho, *, prefixo="hf5
         estado[texto_key] = texto
         analisar, cancelar = ui.columns([2, 1])
         clicou_analisar = analisar.button("Analisar mensagem", key=f"{prefixo}_analisar", width="stretch")
-        clicou_cancelar = cancelar.button(
-            "Fechar revisão", key=f"{prefixo}_cancelar", width="stretch", disabled=chave not in estado,
-        )
-        if clicou_cancelar:
-            estado.pop(chave, None)
-            ui.rerun()
-            return
         if clicou_analisar:
             try:
                 analise = analisar_mensagem(texto, carregar_catalogo())
@@ -126,6 +119,15 @@ def renderizar_importacao(ui, carregar_catalogo, abrir_rascunho, *, prefixo="hf5
                 ui.error("Não foi possível analisar a mensagem com o Catálogo atual. Confira a conexão e tente novamente. A revisão anterior foi preservada.")
                 return
             _nova_revisao(estado, chave, analise)
+        # Desenhar Fechar revisão depois de analisar: o botão já fica habilitado
+        # no mesmo rerun que cria a revisão (também no Streamlit AppTest).
+        clicou_cancelar = cancelar.button(
+            "Fechar revisão", key=f"{prefixo}_cancelar", width="stretch", disabled=chave not in estado,
+        )
+        if clicou_cancelar:
+            estado.pop(chave, None)
+            ui.rerun()
+            return
 
         revisao = estado.get(chave)
         if not revisao:

@@ -1,0 +1,113 @@
+name: AlphaFest HF65.24.58 - Homologacao RC6 isolada
+
+on:
+  push:
+    branches:
+      - homologacao-hf58
+  workflow_dispatch:
+
+# Nao instalar o aplicativo, nao publicar, nao escrever no repositorio.
+permissions:
+  contents: read
+
+concurrency:
+  group: alphafest-hf58-rc6-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validar:
+    if: github.ref == 'refs/heads/homologacao-hf58'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      ALPHAFEST_CI_HOMOLOGACAO: '1'
+      SUPABASE_URL: ''
+      SUPABASE_KEY: ''
+      SUPABASE_SERVICE_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+      SUPABASE_ANON_KEY: ''
+      STREAMLIT_SERVER_HEADLESS: 'true'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+    steps:
+      - name: Checkout somente leitura da branch isolada
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Preparar evidencias
+        run: mkdir -p qa_logs
+
+      - name: Python 3.11 com pip
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Conferir pacote RC6 SHA-256, versao e branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B conferir_hf58_rc4.py 2>&1 | tee qa_logs/preflight.log
+
+      - name: Instalar dependencias do Manager e Streamlit real
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -r requirements.txt 2>&1 | tee qa_logs/dependencias.log
+          python -m pip check 2>&1 | tee -a qa_logs/dependencias.log
+          python -B -c "import streamlit; from streamlit.testing.v1 import AppTest; print('Streamlit real:', streamlit.__version__)" 2>&1 | tee -a qa_logs/dependencias.log
+
+      - name: Regressao completa unittest com resultado estruturado
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B executar_regressao_hf58.py 2>&1 | tee qa_logs/regressao_completa.log
+
+      - name: Gate critico oficial isolado por arquivo
+        if: ${{ success() || failure() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B validar_hf58_ci.py 2>&1 | tee qa_logs/gate_critico.log
+
+      - name: Verificar novamente integridade apos os testes
+        if: ${{ success() || failure() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -B conferir_hf58_rc4.py 2>&1 | tee qa_logs/preflight_final.log
+
+      - name: Publicar evidencias de homologacao
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: AlphaFest-HF58-RC6-evidencias-${{ github.run_number }}
+          path: qa_logs/
+          if-no-files-found: warn
+          retention-days: 14
+
+  validar_inicializador_windows:
+    if: github.ref == 'refs/heads/homologacao-hf58'
+    runs-on: windows-2025
+    timeout-minutes: 30
+    env:
+      GITHUB_ACTIONS: 'true'
+      ALPHAFEST_CI_HOMOLOGACAO: '1'
+      SUPABASE_URL: ''
+      SUPABASE_KEY: ''
+      SUPABASE_ANON_KEY: ''
+      SUPABASE_SERVICE_KEY: ''
+      SUPABASE_SERVICE_ROLE_KEY: ''
+    steps:
+      - name: Checkout isolado somente leitura
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Preparar Python 3.11 no Windows
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.11'
+      - name: Verificar inicializador e criar ambiente isolado
+        shell: cmd
+        run: call .github\homologacao_hf58\INICIAR_DEMO_WINDOWS.bat --verificar
