@@ -34,6 +34,15 @@ jobs:
       - name: Diagnosticar isoladamente o teste de Fechar revisao
         run: |
           python -m unittest -v test_site_quote_import_ui_hf54.ImportacaoSiteUITest.test_fechar_revisao_preserva_mensagem_e_rascunho_do_manager
+      - name: Testar interfaces isoladas e ficha HF58 com dados ficticios
+        env:
+          SUPABASE_URL: ""
+          SUPABASE_KEY: ""
+          SUPABASE_SERVICE_KEY: ""
+          SUPABASE_SERVICE_ROLE_KEY: ""
+          CLOUDFLARE_API_TOKEN: ""
+        run: |
+          python -m unittest -v test_manager_ui_hf53 test_ficha_producao_hf58 test_site_depoimentos_hf59
       - name: Executar gate oficial do Manager e montar pacote temporario
         run: |
           python build_update_package.py --output /tmp/ALPHAFEST_HF59_CANDIDATA_HOMOLOGACAO_NAO_INSTALAR.zip
