@@ -30,6 +30,9 @@ jobs:
           assert version.endswith("HF65.24.58"), "Versao base mudou; revisar processo antes de empacotar"
           print("Codigo da HF59 sobre base", version, "- SEM autorizacao de instalacao")
           PY
+      - name: Diagnosticar isoladamente o teste de Fechar revisao
+        run: |
+          python -m unittest -v test_site_quote_import_ui_hf54.ImportacaoSiteUITest.test_fechar_revisao_preserva_mensagem_e_rascunho_do_manager
       - name: Executar gate oficial do Manager e montar pacote temporario
         run: |
           python build_update_package.py --output /tmp/ALPHAFEST_HF59_CANDIDATA_HOMOLOGACAO_NAO_INSTALAR.zip
