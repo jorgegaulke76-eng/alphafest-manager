@@ -46,7 +46,7 @@ jobs:
       - name: Executar gate oficial do Manager e montar pacote temporario
         run: |
           python build_update_package.py --output /tmp/ALPHAFEST_HF59_CANDIDATA_HOMOLOGACAO_NAO_INSTALAR.zip
-      - name: Auditar pacote local e retirar antes do encerramento
+      - name: Auditar pacote temporario antes da distribuicao de homologacao
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -82,5 +82,16 @@ jobs:
                   assert leaf not in {"secrets.toml",".env"}, "Credencial no pacote"
               print("ZIP temporario validado:", len(names), "arquivos; versao", version,
                     "; HF59 presente; dados protegidos; NAO PUBLICAR/INSTALAR")
-          p.unlink()
           PY
+      - name: Disponibilizar SOMENTE a candidata HF59 para homologacao isolada
+        if: github.ref == 'refs/heads/release/hf65-24-59-candidata-homologacao'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ALPHAFEST-HF65-24-59-HOMOLOGACAO-NAO-INSTALAR
+          path: /tmp/ALPHAFEST_HF59_CANDIDATA_HOMOLOGACAO_NAO_INSTALAR.zip
+          retention-days: 3
+          compression-level: 0
+          if-no-files-found: error
+      - name: Descartar pacote temporario
+        if: always()
+        run: rm -f /tmp/ALPHAFEST_HF59_CANDIDATA_HOMOLOGACAO_NAO_INSTALAR.zip
