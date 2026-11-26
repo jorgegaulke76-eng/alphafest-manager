@@ -7,6 +7,7 @@ decodificação de diferentes formatos de imagem em navegador real.
 from __future__ import annotations
 
 import base64
+import io
 import json
 import struct
 import zlib
@@ -60,11 +61,19 @@ def png_ficticio(largura: int, altura: int) -> str:
 
 
 def jpeg_ficticio() -> str:
-    """JPEG RGB 24x16 criado com Pillow e previamente decodificado."""
-    jpeg = "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIBwcHBw8LCwkMEQ8SEhEPERETFhwXExQaFRERGCEYGh0dHx8fExciJCIeJBweHx7/2wBDAQUFBQcGBw4ICA4eFBEUHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh7/wAARCAAQABgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD6roooruPPCiiigD//2Q=="
-    dados = base64.b64decode(jpeg, validate=True)
-    assert dados.startswith(bytes.fromhex("ffd8ff")) and dados.endswith(bytes.fromhex("ffd9"))
-    return "data:image/jpeg;base64," + jpeg
+    """Cria e valida um JPEG RGB de QA sem dados de clientes."""
+    from PIL import Image
+
+    buffer = io.BytesIO()
+    with Image.new("RGB", (640, 350), color=(220, 239, 251)) as imagem:
+        imagem.save(buffer, format="JPEG", quality=85)
+    dados = buffer.getvalue()
+    with Image.open(io.BytesIO(dados)) as verificada:
+        verificada.load()
+        assert verificada.format == "JPEG", "Imagem fictícia não é JPEG"
+        assert verificada.size == (640, 350), "Dimensões inesperadas no JPEG fictício"
+    return "data:image/jpeg;base64," + base64.b64encode(dados).decode("ascii")
+
 
 
 def escrever_site():
