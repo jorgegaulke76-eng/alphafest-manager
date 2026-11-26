@@ -66,7 +66,7 @@ export function formatAlert(summary, period) {
       ? "🎁 AlphaFest — interesse em produtos no site"
       : "🔔 AlphaFest — atividade no site";
   const lines = [
-    headline
+    headline,
     "🕒 " + horaEmBrasilia(period.start) + "–" + horaEmBrasilia(period.end) + " (Brasília)",
     "🌐 Acessos registrados: " + summary.pageViews,
     "📱 Sessões estimadas: " + summary.sessions,
