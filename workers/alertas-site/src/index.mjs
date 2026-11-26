@@ -51,15 +51,34 @@ function horaEmBrasilia(utcDate) {
   }).format(utcDate);
 }
 
+// O destaque reflete eventos registrados, não novos pedidos nem mensagens recebidas.
+export function classifyAlert(summary) {
+  if (summary.whatsapp > 0) return "whatsapp";
+  if (summary.opened > 0) return "products";
+  return "visits";
+}
+
 export function formatAlert(summary, period) {
+  const type = classifyAlert(summary);
+  const headline = type === "whatsapp"
+    ? "🚨 AlphaFest — clique no WhatsApp detectado"
+    : type === "products"
+      ? "🎁 AlphaFest — interesse em produtos no site"
+      : "🔔 AlphaFest — atividade no site";
   const lines = [
-    "🔔 AlphaFest — atividade no site",
+    headline,
     "🕒 " + horaEmBrasilia(period.start) + "–" + horaEmBrasilia(period.end) + " (Brasília)",
     "🌐 Acessos registrados: " + summary.pageViews,
     "📱 Sessões estimadas: " + summary.sessions,
     "🎁 Produtos consultados: " + summary.opened,
     "💬 Cliques para o WhatsApp: " + summary.whatsapp
   ];
+  if (type === "whatsapp") {
+    lines.push("", "📌 Ação sugerida: conferir as conversas no WhatsApp Business.");
+    lines.push("⚠️ Clique não confirma mensagem enviada, orçamento ou venda.");
+  } else if (type === "products") {
+    lines.push("", "👀 Produtos consultados; acompanhe eventuais contatos.");
+  }
   if (summary.truncated) lines.push("⚠️ Movimento alto: contagem parcial.");
   lines.push("", "São eventos do site, não identificação de pessoas ou vendas.");
   return lines.join("\n");

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {windowFor, isTechnicalPath, summarizeRows, formatAlert, executeAlert, supabaseRequest} from "./index.mjs";
+import {windowFor, isTechnicalPath, summarizeRows, classifyAlert, formatAlert, executeAlert, supabaseRequest} from "./index.mjs";
 
 const env = {
   ALERTS_ENABLED: "true",
@@ -24,8 +24,8 @@ test("filtra URLs técnicas; não afirma identificação real", () => {
   assert.equal(isTechnicalPath("/cdn-cgi/trace"), true);
   assert.equal(isTechnicalPath("/produtos/"), false);
   const s = summarizeRows([
-    {event_type:"page_view", page_path:"/", session_id:"A"},
-    {event_type:"page_view", page_path:"/produtos/", session_id:"A"},
+    {event_type:"page_view", page_path:"/", session_id:"identificador_de_sessao_123"},
+    {event_type:"page_view", page_path:"/produtos/", session_id:"identificador_de_sessao_123"},
     {event_type:"page_view", page_path:"/galeria/", session_id:"B"},
     {event_type:"page_view", page_path:"/robots.txt", session_id:"C"},
     {event_type:"product_open", page_path:"/", session_id:"B"},
@@ -85,4 +85,42 @@ test("consulta PostgREST usa filtros exclusivos da janela", () => {
   assert.ok(bounds[0].startsWith("gte."));
   assert.ok(bounds[1].startsWith("lt."));
   assert.equal(p.get("limit"),"1000");
+});
+
+test("destaque comercial só quando há clique para WhatsApp", () => {
+  assert.equal(classifyAlert({pageViews:2,opened:0,whatsapp:0}), "visits");
+  assert.equal(classifyAlert({pageViews:2,opened:1,whatsapp:0}), "products");
+  assert.equal(classifyAlert({pageViews:1,opened:0,whatsapp:1}), "whatsapp");
+  const visits = formatAlert({pageViews:2,sessions:2,opened:0,whatsapp:0,truncated:false}, period);
+  const products = formatAlert({pageViews:2,sessions:1,opened:2,whatsapp:0,truncated:false}, period);
+  const commercial = formatAlert({pageViews:0,sessions:0,opened:1,whatsapp:3,truncated:false}, period);
+  assert.match(visits, /🔔 AlphaFest — atividade no site/);
+  assert.doesNotMatch(visits, /🚨|Ação sugerida/);
+  assert.match(products, /🎁 AlphaFest — interesse em produtos/);
+  assert.doesNotMatch(products, /🚨|Ação sugerida/);
+  assert.match(commercial, /🚨 AlphaFest — clique no WhatsApp detectado/);
+  assert.match(commercial, /Cliques para o WhatsApp: 3/);
+  assert.match(commercial, /conferir as conversas no WhatsApp Business/);
+  assert.match(commercial, /não confirma mensagem enviada, orçamento ou venda/);
+});
+
+test("um único envio por janela mesmo com cliques comerciais", async () => {
+  const requests=[];
+  const result=await executeAlert(date,env,async(url,opts)=>{
+    requests.push({url,opts});
+    return requests.length===1
+      ? {ok:true,json:async()=>[
+          {event_type:"page_view",page_path:"/",session_id:"identificador_de_sessao_123"},
+          {event_type:"whatsapp_click",page_path:"/",session_id:"identificador_de_sessao_123"},
+          {event_type:"whatsapp_click",page_path:"/",session_id:"identificador_de_sessao_123"}
+        ]}
+      : {ok:true,json:async()=>({ok:true})};
+  });
+  assert.equal(result.status,"sent");
+  assert.equal(result.summary.whatsapp,2);
+  assert.equal(requests.length,2);
+  const msg=JSON.parse(requests[1].opts.body);
+  assert.match(msg.text,/🚨 AlphaFest/);
+  assert.equal(msg.disable_notification,false);
+  assert.doesNotMatch(msg.text,/session_id|identificador_de_sessao_123/);
 });

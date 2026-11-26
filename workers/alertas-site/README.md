@@ -38,3 +38,30 @@ Na pasta \`workers/alertas-site\`, executar \`node --test src/index.test.mjs\`. 
 - A janela é fixa e sem sobreposição: a cada 5 min há no máximo uma execução programada, mas retry manual/atrasos de infraestrutura podem gerar perda ou duplicação de aviso; não usar alertas como auditoria.
 - Consultas são limitadas a 1000 eventos/intervalo; o texto indica contagem parcial se chegar nesse limite.
 - Este é um recurso de conveniência operacional, não emergência ou segurança.
+
+## Melhoria: destacar interesses comerciais (preparada em novembro de 2026)
+
+O bot continua mandando **no máximo um alerta por execução de 5 minutos**,
+sem repetir mensagens quando surgem vários cliques no mesmo intervalo.
+
+- **🚨 Clique no WhatsApp detectado:** prioridade comercial; pede para conferir
+  conversas, mas avisa que o clique **não comprova mensagem, pedido ou venda**.
+- **🎁 Produtos consultados:** destaque de interesse, se não houver clique no WhatsApp.
+- **🔔 Visitas:** resumo normal quando ocorrer apenas navegação.
+
+O som continua definido pelo Telegram em cada celular. **Não é possível garantir
+um toque diferente para apenas uma mensagem no mesmo grupo.** Essa alteração
+muda o texto, não a configuração do áudio.
+
+### Como aplicar ao Worker já criado
+
+1. Abra o **mesmo** Worker `alphafest-alertas` na Cloudflare.
+2. Clique em **Edit code**. Substitua o conteúdo do arquivo principal pelo
+   [código atualizado](https://raw.githubusercontent.com/jorgegaulke76-eng/alphafest-manager/main/workers/alertas-site/src/index.mjs).
+3. Salve em **Deploy**; não altere Secrets, Cron Triggers, nome do Worker, ou
+   o Worker do site `alphafest-novo`.
+4. Se o Worker estava ativo, os novos avisos passam a usar o texto atualizado
+   no próximo ciclo em que houver eventos.
+
+Uma alteração no GitHub **não** atualiza automaticamente o Worker da Cloudflare.
+Não reenviar tokens para GitHub, chats ou navegador público.
