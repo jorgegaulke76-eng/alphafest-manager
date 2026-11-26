@@ -51,9 +51,9 @@ def png_ficticio(largura: int, altura: int) -> str:
 
     # Linhas reais de pixels: valida decodificação PNG no Chromium.
     pixel = bytes((220, 239, 251))
-    linha = b"\\x00" + pixel * largura
+    linha = b"\x00" + pixel * largura
     pixels = zlib.compress(linha * altura, level=9)
-    arquivo = (b"\\x89PNG\\r\\n\\x1a\\n"
+    arquivo = (b"\x89PNG\r\n\x1a\n"
                + chunk(b"IHDR", struct.pack(">IIBBBBB", largura, altura, 8, 2, 0, 0, 0))
                + chunk(b"IDAT", pixels) + chunk(b"IEND", b""))
     return "data:image/png;base64," + base64.b64encode(arquivo).decode("ascii")
