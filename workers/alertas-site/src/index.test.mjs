@@ -24,8 +24,8 @@ test("filtra URLs técnicas; não afirma identificação real", () => {
   assert.equal(isTechnicalPath("/cdn-cgi/trace"), true);
   assert.equal(isTechnicalPath("/produtos/"), false);
   const s = summarizeRows([
-    {event_type:"page_view", page_path:"/", session_id:"A"},
-    {event_type:"page_view", page_path:"/produtos/", session_id:"A"},
+    {event_type:"page_view", page_path:"/", session_id:"identificador_de_sessao_123"},
+    {event_type:"page_view", page_path:"/produtos/", session_id:"identificador_de_sessao_123"},
     {event_type:"page_view", page_path:"/galeria/", session_id:"B"},
     {event_type:"page_view", page_path:"/robots.txt", session_id:"C"},
     {event_type:"product_open", page_path:"/", session_id:"B"},
@@ -110,9 +110,9 @@ test("um único envio por janela mesmo com cliques comerciais", async () => {
     requests.push({url,opts});
     return requests.length===1
       ? {ok:true,json:async()=>[
-          {event_type:"page_view",page_path:"/",session_id:"A"},
-          {event_type:"whatsapp_click",page_path:"/",session_id:"A"},
-          {event_type:"whatsapp_click",page_path:"/",session_id:"A"}
+          {event_type:"page_view",page_path:"/",session_id:"identificador_de_sessao_123"},
+          {event_type:"whatsapp_click",page_path:"/",session_id:"identificador_de_sessao_123"},
+          {event_type:"whatsapp_click",page_path:"/",session_id:"identificador_de_sessao_123"}
         ]}
       : {ok:true,json:async()=>({ok:true})};
   });
@@ -122,5 +122,5 @@ test("um único envio por janela mesmo com cliques comerciais", async () => {
   const msg=JSON.parse(requests[1].opts.body);
   assert.match(msg.text,/🚨 AlphaFest/);
   assert.equal(msg.disable_notification,false);
-  assert.doesNotMatch(msg.text,/session_id|\bA\b/);
+  assert.doesNotMatch(msg.text,/session_id|identificador_de_sessao_123/);
 });
