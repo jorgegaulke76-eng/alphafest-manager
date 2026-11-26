@@ -19,6 +19,8 @@ from urllib.parse import quote
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import streamlit as st
 from ficha_producao_hf58 import (
@@ -30,6 +32,7 @@ from ficha_producao_hf58 import (
     ficha_producao_txt as _hf58_ficha_producao_txt,
 )
 from test_hf58_caixa_projeto_ui import ACTUAL_UI
+from trilha_hf58 import adicionar_transicao, relatorio_trilha_txt
 
 
 def verificar_release():
@@ -61,8 +64,17 @@ def carregar_projetos():
 
 def atualizar_projeto(projeto):
     # SOMENTE memoria da sessao Streamlit. Nenhum modulo de banco e importado.
-    st.session_state["projeto"] = deepcopy(projeto)
-    st.session_state["hf58_demo_gravacoes"] = st.session_state.get("hf58_demo_gravacoes", 0) + 1
+    anterior = deepcopy(st.session_state["projeto"])
+    novo = deepcopy(projeto)
+    proxima_gravacao = st.session_state.get("hf58_demo_gravacoes", 0) + 1
+    st.session_state["hf58_demo_trilha"] = adicionar_transicao(
+        st.session_state.get("hf58_demo_trilha", []),
+        anterior, novo, passo=proxima_gravacao,
+        perfil=st.session_state.get("hf58_demo_perfil", "Jorge"),
+        instante=agora_local(),
+    )
+    st.session_state["projeto"] = novo
+    st.session_state["hf58_demo_gravacoes"] = proxima_gravacao
     return True
 
 
@@ -111,6 +123,7 @@ def iniciar():
         st.session_state["projeto"], st.session_state["proposta"] = dados_ficticios()
         st.session_state["hf58_demo_gravacoes"] = 0
         st.session_state["hf58_demo_uploads"] = 0
+        st.session_state["hf58_demo_trilha"] = []
 
 
 def reiniciar():
@@ -156,6 +169,28 @@ def main():
     st.write("Arquivos recebidos pelo simulador:", st.session_state.get("hf58_demo_uploads", 0))
     st.write("Situação comercial do pedido:", proposta.get("status"))
     st.write("Aprovação comercial:", proposta.get("aprovado"))
+    st.subheader("Trilha das mudanças de estado — somente demonstração")
+    trilha = st.session_state.get("hf58_demo_trilha", [])
+    if trilha:
+        st.table(trilha)
+        if any(item["Antes"] == "aprovada" and item["Depois"] == "revisao_pendente" for item in trilha):
+            st.success(
+                "Evidência registrada nesta sessão: a aprovação anterior ficou "
+                "PENDENTE após uma mudança de arte, antes de nova confirmação."
+            )
+        st.download_button(
+            "Baixar relatório da trilha fictícia (TXT)",
+            data=relatorio_trilha_txt(trilha),
+            file_name="ALPHAFEST_HF58_TRILHA_DEMO.txt",
+            mime="text/plain",
+            key="hf58_demo_trilha_download",
+        )
+    else:
+        st.info("A trilha começa vazia. Envie e aprove a primeira arte para registrar os estados.")
+    st.caption(
+        "O histórico só contém alterações desta sessão local e não é comprovante "
+        "de upload no Supabase ou de aprovação efetiva de cliente."
+    )
     st.download_button(
         "Baixar ficha ficticia para conferencia (TXT)",
         data=_hf58_ficha_producao_txt(proposta, projeto, agora_local()),

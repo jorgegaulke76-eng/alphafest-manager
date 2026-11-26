@@ -34,3 +34,9 @@ Opcional, para verificar sem iniciar a interface:
 - A ficha TXT é gerada pela função oficial da HF58, mas contém **apenas dados fictícios**.
 - O programa não importa `app.py`, não inicializa `cloud_db.py`, não utiliza credenciais e não conecta ao banco. O navegador roda no endereço local `127.0.0.1`.
 - Esta demonstração **não substitui** a homologação manual com upload real em um ambiente de testes com banco próprio, nem autoriza o merge do PR #5.
+
+## Nova trilha visual de homologação
+
+Na seção **Trilha das mudanças de estado — somente demonstração**, cada alteração confirmada do projeto registra a situação **antes e depois**. Assim, mesmo depois de aprovar a arte v2, o operador pode conferir e baixar o histórico demonstrativo incluindo `aprovada → revisao_pendente → aprovada`.
+
+Esse histórico **existe só na sessão local**, usa dados fictícios e não prova upload no Supabase ou aprovação do cliente. Não envie dados reais para essa demonstração.
