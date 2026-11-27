@@ -160,6 +160,23 @@ def render_dashboard(st, pd, summary: dict, friendly_name: Callable[[str], str])
                         hide_index=True,width="stretch")
                 else: st.caption('Sem aberturas de produtos nas duas janelas.')
     with tab_products:
+        st.markdown('#### 🔔 Do alerta comercial ao orçamento real')
+        st.caption('Conferência operacional: um clique no site NÃO significa mensagem recebida, cliente identificado, orçamento criado ou venda.')
+        with st.expander('📋 Roteiro rápido para Jorge e Anna · sem cadastro automático'):
+            st.markdown(
+                '1. **Telegram:** ao receber 🚨, confira as conversas novas no WhatsApp Business. '
+                'O Telegram mostra eventos agregados, não identifica qual visitante clicou.\n'
+                '2. **WhatsApp:** só considere um contato quando houver mensagem efetivamente recebida. '
+                'Verifique se veio de carrinho, Para Empresas ou de outro link, sem deduzir a origem quando ela não estiver clara.\n'
+                '3. **Manager → Central de Oportunidades:** para um contato real, localize primeiro o atendimento existente. '
+                'Se necessário, registre a captação com canal **Site / Catálogo** e acompanhe a etapa. '
+                'Não crie clientes, contatos ou orçamentos a partir de cliques anônimos.\n'
+                '4. **Orçamento:** só atualize a etapa após criar ou confirmar a proposta correspondente no Manager. '
+                'Use a fila de retorno de orçamentos enviados para acompanhar quem aguarda resposta.\n'
+                '5. **Fechamento:** marque venda somente com confirmação comercial; '
+                'não use quantidade de cliques como total de pedidos ou faturamento.'
+            )
+            st.info('Se o alerta não corresponder a uma conversa recebida, apenas registre a observação operacional; nenhuma oportunidade individual pode ser atribuída ao clique.')
         st.markdown('#### 🧭 Ranking de oportunidades · últimos 30 dias')
         st.caption('Prioriza sinais de interesse observados. Não é ranking de vendas, pedidos ou faturamento.')
         candidates=m.get('product_opportunities_30d') or []
