@@ -323,7 +323,14 @@ def render_central_oportunidades(
                 key="opp_retornos_resumo_txt",
             )
         if not agir:
-            st.info("Nenhum orçamento enviado precisa de acompanhamento neste momento.")
+            st.info("Nenhum orçamento com envio registrado precisa de acompanhamento neste momento.")
+            st.caption(
+                "A fila considera somente propostas marcadas como enviadas no Histórico. "
+                "Propostas sem esse registro não entram no acompanhamento, mesmo que já tenham sido criadas. "
+                "Depois de realmente enviar o orçamento ao cliente, use **Registrar envio** "
+                "no Histórico da proposta (disponível para Jorge). "
+                "Não marque como enviado um orçamento que ainda não foi encaminhado."
+            )
         else:
             st.caption("Confira o histórico da conversa antes de retomar. Os prazos são sugestões operacionais, não confirmação de silêncio do cliente.")
             for item in agir:
