@@ -734,7 +734,7 @@ def render_central_oportunidades(
                     "incluídos nesta visão de prioridades. Consulte a aba de "
                     "retornos e a conferência do Histórico."
                 )
-            with st.expander("📂 Conferências cadastrais", expanded=False):
+            cadastro_hf74, retornos_hf74 = st.tabs(["📂 Cadastros", "💬 Retornos"])\n            with cadastro_hf74:
                 if quadro_hf70["cadastro"]:
                     st.dataframe(
                         pd.DataFrame(quadro_hf70["cadastro"][:100]),
@@ -744,7 +744,7 @@ def render_central_oportunidades(
                         st.caption("Exibindo as primeiras 100 pendências; use a pesquisa HF69 para as demais.")
                 else:
                     st.success("Nenhuma pendência cadastral identificada.")
-            with st.expander("💬 Retornos comerciais para conferir", expanded=False):
+            with retornos_hf74:
                 if quadro_hf70["comercial"]:
                     st.dataframe(
                         pd.DataFrame(quadro_hf70["comercial"][:100]),
