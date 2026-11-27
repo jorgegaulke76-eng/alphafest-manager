@@ -18,7 +18,7 @@ class InterfaceHF74(unittest.TestCase):
         self.assertLess(painel, detalhes)
         self.assertLess(detalhes, abas)
         self.assertIn('with guia_hf74:', fonte)
-        self.assertIn('with consulta_hf74:', fonte)
+        self.assertIn('with consulta_hf74:', fonte)\n        self.assertIn('with cadastro_hf74:', fonte)\n        self.assertIn('with retornos_hf74:', fonte)\n        self.assertNotIn('with st.expander("📂 Conferências cadastrais", expanded=False):', fonte)
 
     def test_mantem_as_funcoes_e_controles_de_consulta(self):
         fonte = self.fonte
