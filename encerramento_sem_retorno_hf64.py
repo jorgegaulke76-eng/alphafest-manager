@@ -24,14 +24,12 @@ def _data_ultimo_envio(valor: Any) -> date | None:
     texto = str(valor or "").strip()
     if not texto:
         return None
-    # Dados do Manager sao registrados em horario local dd/mm/aaaa hh:mm.
+    # O Manager registra datas locais no formato brasileiro.
     if len(texto) >= 10 and texto[2] == "/" and texto[5] == "/":
-        for formato in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
-            try:
-                return datetime.strptime(texto[:len(formato.replace("%d","00").replace("%m","00").replace("%Y","0000").replace("%H","00").replace("%M","00").replace("%S","00"))], formato).date()
-            except (ValueError, TypeError):
-                continue
-        return None
+        try:
+            return datetime.strptime(texto[:10], "%d/%m/%Y").date()
+        except ValueError:
+            return None
     try:
         dt = datetime.fromisoformat(texto.replace("Z", "+00:00"))
         return dt.astimezone(_FUSO_BRASILIA).date() if dt.tzinfo else dt.date()
