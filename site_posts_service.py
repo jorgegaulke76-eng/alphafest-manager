@@ -201,6 +201,33 @@ def archive_pages(posts, number=''):
     for i in range(pages):
         subset = items[i*per_page:(i+1)*per_page]
         cards = ''.join(_card(p, number) for p in subset)
+        # Conteúdo contextual real e específico a esta página, sem tocar nas artes
+        # ou revelar títulos internos dos posts.
+        categorias = list(dict.fromkeys(
+            p['category'] for p in subset if p.get('category') and p['category'] != 'Outros'
+        ))
+        temas = ', '.join(categorias[:5]) or 'festas, balões e presentes personalizados'
+        temas_meta = ' e '.join(categorias[:2]) or 'personalizados para festas'
+        nome_pagina = f'página {i+1} de {pages}'
+        titulo_h1 = 'Novidades & Ofertas' + (f' — página {i+1}' if i else '')
+        descricao_seo = (
+            f'AlphaFest em Itatiba: artes de {temas_meta}. '
+            f'Veja ideias e peça orçamento pelo WhatsApp ({nome_pagina}).'
+        )[:155].rstrip(' ,;.') + '.'
+        contexto = (
+            '<div class="afposts-context">'
+            '<p>Conheça as artes de divulgação e as ideias de personalização '
+            'da AlphaFest, em Itatiba. As imagens são referências de produtos '
+            'e campanhas: materiais, cores, quantidades, disponibilidade '
+            'e prazos são confirmados no atendimento.</p>'
+            '<p><strong>Temas desta seleção:</strong> ' + safe(temas) +
+            '. Escolha a arte que combina com sua ocasião e use o botão '
+            '“Quero este” para conversar diretamente com a equipe pelo WhatsApp. '
+            'O orçamento é preparado conforme os detalhes do seu projeto.</p>'
+            '<p><small>Você está na ' + safe(nome_pagina) +
+            ' do mural de novidades.</small></p>'
+            '</div>'
+        )
         # Páginas estáticas distintas, sem query-string dependente do Worker.
         prev_link = ('<a href="/novidades/' + ('pagina-'+str(i)+'/' if i>1 else '') + '">← Anterior</a>' if i>0 else '')
         next_link = ('<a href="/novidades/pagina-' + str(i+2) + '/">Próxima →</a>' if i+1<pages else '')
@@ -208,7 +235,6 @@ def archive_pages(posts, number=''):
         body = ('''<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="index,follow"><title>Novidades &amp; Ofertas | AlphaFest</title><meta name="description" content="Campanhas, lançamentos e novidades da AlphaFest em Itatiba"><link rel="icon" href="/favicon.ico"><style>body{font-family:Arial,sans-serif;background:#f5fbff;margin:0;color:#123a5b}header{background:#075da5;color:white;padding:22px max(20px,calc((100vw - 1240px)/2))}header a{color:white;text-decoration:none;font-weight:800}.afposts-pages{display:flex;justify-content:space-between;gap:14px;padding:28px 0}.afposts-pages a{color:#075da5;font-weight:800}footer{padding:30px;text-align:center;background:#fff}</style><style>''' + CSS + '''</style></head><body><header><a href="/">AlphaFest</a> · Novidades &amp; Ofertas</header><main class="afposts-section"><div class="afposts-container"><div class="afposts-head"><div><h1>Novidades &amp; Ofertas</h1><p>Confira nossas artes, campanhas e produtos personalizados.</p></div><a class="afposts-all" href="/">Voltar à loja</a></div><div class="afposts-grid">''' + cards + '''</div>''' + pagination + '''</div></main><footer>AlphaFest · Itatiba/SP · <a href="/">Site oficial</a></footer></body></html>''')
         endereco = 'https://alphafest.com.br/novidades/' + (f'pagina-{i+1}/' if i else '')
         titulo_seo = 'Novidades e ofertas da AlphaFest em Itatiba' + (f' — página {i+1}' if i else '')
-        descricao_seo = 'Veja campanhas e artes de produtos personalizados, balões e presentes da AlphaFest em Itatiba. Consulte pelo WhatsApp.'
         from html import escape as _escape_seo
         from json import dumps as _dumps_seo
         complemento = (
@@ -225,6 +251,21 @@ def archive_pages(posts, number=''):
             {'@type':'ListItem','position':2,'name':'Novidades e Ofertas','item':'https://alphafest.com.br/novidades/'},
         ]}
         complemento += '<script type="application/ld+json">'+_dumps_seo(trilha,ensure_ascii=False,separators=(',',':'))+'</script>'
+        body = body.replace(
+            '<meta name="description" content="Campanhas, lançamentos e novidades da AlphaFest em Itatiba">',
+            '<meta name="description" content="' + safe(descricao_seo) + '">',
+            1,
+        )
+        body = body.replace(
+            '<h1>Novidades &amp; Ofertas</h1>', '<h1>' + safe(titulo_h1) + '</h1>', 1
+        )
+        body = body.replace(
+            '<div class="afposts-grid">',
+            '<style>.afposts-context{max-width:950px;line-height:1.65;color:#365b7b;'
+            'padding:0 1px 18px}.afposts-context p{margin:0 0 10px}</style>'
+            + contexto + '<div class="afposts-grid">',
+            1,
+        )
         body = body.replace('</head>', complemento+'</head>', 1)
         body = body.replace('<title>Novidades &amp; Ofertas | AlphaFest</title>',
                             '<title>'+_escape_seo(titulo_seo)+'</title>', 1)
