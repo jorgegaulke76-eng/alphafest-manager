@@ -18810,6 +18810,45 @@ def renderizar_painel_alertas(prefixo):
             st.session_state.alerta_proposta_numero = None
             st.rerun()
 
+        # O cartão rápido também permite registrar o envio real, sem exigir
+        # que Jorge volte ao Histórico completo. Pedidos aprovados ou encerrados
+        # permanecem fora do acompanhamento comercial.
+        estado_alerta_envio = _status_resumo(proposta_alerta)
+        if (
+            usuario_alerta_jorge_hf2
+            and not estado_alerta_envio.get("aprovado")
+            and not estado_alerta_envio.get("encerrada")
+            and not estado_alerta_envio.get("entregue")
+        ):
+            if proposta_alerta.get("enviado"):
+                st.caption(
+                    "💬 Último envio/contato registrado: "
+                    + str(proposta_alerta.get("ultimo_envio_em") or proposta_alerta.get("enviado_em") or "não informado")
+                )
+            else:
+                st.caption("💬 Após realmente enviar o orçamento ao cliente, registre o envio para acompanhar o retorno.")
+            rotulo_alerta_envio = (
+                "🔁 Registrar novo contato"
+                if proposta_alerta.get("enviado")
+                else "✅ Registrar envio"
+            )
+            if st.button(
+                rotulo_alerta_envio,
+                key=f"registrar_envio_alerta_{prefixo}_{proposta_alerta.get('numero_proposta')}",
+                help="Use apenas depois do envio real no WhatsApp. Não envia mensagem nem altera aprovação ou pagamento.",
+                width="stretch",
+            ):
+                ok_alerta_envio, _, motivo_alerta_envio = registrar_envio_comercial_proposta(
+                    proposta_alerta.get("numero_proposta", "")
+                )
+                if ok_alerta_envio:
+                    st.session_state["_mensagem_sucesso_pendente"] = (
+                        "Envio comercial registrado. O retorno poderá ser acompanhado em Clientes → Multicanal → Oportunidades."
+                    )
+                    st.rerun()
+                else:
+                    st.error(motivo_alerta_envio or "Não foi possível registrar o envio.")
+
         # Ações administrativas da proposta ficam em uma linha própria para não
         # comprimir os botões comerciais. Excluir continua exclusivo do Jorge.
         if usuario_alerta_jorge_hf2:
