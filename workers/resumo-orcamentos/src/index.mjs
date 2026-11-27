@@ -26,15 +26,37 @@ function dateParts(clock) {
   const obj = Object.fromEntries(parts.map(x=>[x.type,x.value]));
   return Date.UTC(Number(obj.year),Number(obj.month)-1,Number(obj.day));
 }
+function statusBool(p, key) {
+  const aliases = {
+    aprovado:["aprovado","Aprovado"],
+    pago:["pago","Pago"],
+    pronto:["pronto","Pronto"],
+    entregue:["entregue","Entregue"],
+    cancelado_cliente:["cancelado_cliente","CanceladoCliente","cancelado_pelo_cliente"],
+    encerrado:["encerrado","Encerrado"]
+  }[key] || [key];
+  for (const alias of aliases) {
+    if (Object.prototype.hasOwnProperty.call(p,alias) && p[alias] !== null) return truthy(p[alias]);
+  }
+  return false;
+}
 function closed(p) {
+  // Espelha a fonte unica em proposal_status.py: aliases e precedencia.
+  if (statusBool(p,"cancelado_cliente")) return true;
   const status = String(p.status_comercial || p.situacao_comercial || p.status || "").trim().toLowerCase();
-  const hard = ["cancelado","cancelada","cancelado_cliente","cancelado pelo cliente","cancelada pelo cliente","recusado","recusada","arquivado","arquivada","excluído","excluída"].includes(status);
-  if (hard || truthy(p.cancelado_cliente) || truthy(p.cancelado_pelo_cliente)) return true;
-  const progressed = ["pago","pronto","entregue"].some(k=>truthy(p[k])||truthy(p[k[0].toUpperCase()+k.slice(1)]));
-  const commercialClosed = truthy(p.nao_fechado_pagamento)||truthy(p.nao_fechado_sem_retorno)||
-    ["encerrado","encerrada","encerrado sem retorno","encerrado por preço","encerrado por preco","nao_fechado_pagamento","nao_fechado_sem_retorno"].includes(status);
-  if (progressed && commercialClosed) return false;
-  return commercialClosed || truthy(p.encerrado) || truthy(p.Encerrado);
+  const hard = new Set([
+    "cancelado","cancelada","cancelado_cliente","cancelado pelo cliente","cancelada pelo cliente",
+    "recusado","recusada","arquivado","arquivada","excluído","excluida","excluída"
+  ]);
+  if (hard.has(status)) return true;
+  const commercial = truthy(p.nao_fechado_pagamento) || truthy(p.nao_fechado_sem_retorno) ||
+    new Set([
+      "encerrado","encerrada","encerrado sem retorno","encerrado por preço","encerrado por preco",
+      "encerrado pelo cliente","encerrado por prazo","nao_fechado_pagamento",
+      "não fechado — falta de pagamento","nao_fechado_sem_retorno","não fechado — sem retorno do cliente"
+    ]).has(status);
+  if (commercial && (statusBool(p,"pago") || statusBool(p,"pronto") || statusBool(p,"entregue"))) return false;
+  return commercial || statusBool(p,"encerrado");
 }
 export function summarizeQuotes(document, clock = new Date()) {
   if (!Array.isArray(document)) throw new Error("Historico de propostas com formato inesperado");
@@ -43,9 +65,9 @@ export function summarizeQuotes(document, clock = new Date()) {
   const counts = {pending:0, next:0, late:0, unknown:0, deliveryUrgent:0};
   for (const p of document) {
     if (!p || typeof p !== "object" || Array.isArray(p)) continue;
-    if (!truthy(p.enviado) || truthy(p.aprovado) || truthy(p.Aprovado) || truthy(p.entregue) || truthy(p.Entregue) || closed(p)) continue;
+    if (!truthy(p.enviado) || statusBool(p,"aprovado") || statusBool(p,"entregue") || closed(p)) continue;
     counts.pending++;
-    const last = dateOnly(p.ultimo_envio_em) ?? dateOnly(p.enviado_em);
+    const last = dateOnly(p.ultimo_envio_em) ?? dateOnly(p.enviado_em) ?? dateOnly(p.data_geracao) ?? dateOnly(p.data);
     if (last === null) counts.unknown++;
     else {
       const days = Math.max(0,Math.floor((today-last)/86400000));
@@ -89,11 +111,26 @@ export async function runDaily(env, fetcher = fetch, clock = new Date()) {
   const rows = await response.json();
   if (!Array.isArray(rows) || rows.length!==1 || !rows[0] || !Array.isArray(rows[0].value)) throw new Error("Historico ausente ou invalido");
   const counts = summarizeQuotes(rows[0].value,clock);
+  // D1: reserva atomica por dia ANTES de enviar. At-most-once, nao exactly-once:
+  // falha de rede apos reserva exige intervencao manual, nunca retry automatico.
+  const db = env.QUOTE_DEDUPE_DB;
+  if (!db || typeof db.prepare !== "function") throw new Error("D1 dedupe nao configurado; envio bloqueado");
+  const dateKey = new Date(dateParts(clock)).toISOString().slice(0,10);
+  const claimed = await db.prepare(
+    "INSERT OR IGNORE INTO quote_summary_delivery(day_key, claimed_at) VALUES (?, ?)"
+  ).bind(dateKey,clock.toISOString()).run();
+  if (!claimed?.success) throw new Error("Falha ao reservar dia no D1");
+  if (Number(claimed.meta?.changes || 0) === 0) return {status:"already-claimed"};
   const sent = await fetcher("https://api.telegram.org/bot"+token+"/sendMessage",{
     method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({chat_id:chat,text:formatSummary(counts,clock),disable_notification:true})
   });
-  if (!sent.ok || (await sent.json())?.ok!==true) throw new Error("Telegram nao confirmou envio");
+  if (!sent.ok || (await sent.json())?.ok!==true) {
+    // Nao libera a reserva: retry poderia duplicar se o Telegram recebeu.
+    throw new Error("Envio nao confirmado; reserva mantida, verificar grupo antes de agir");
+  }
+  await db.prepare("UPDATE quote_summary_delivery SET confirmed_at = ? WHERE day_key = ?")
+    .bind(new Date().toISOString(), dateKey).run().catch(() => {});
   return {status:"sent",counts};
 }
 export default {
