@@ -9,6 +9,8 @@ import re
 import urllib.parse
 from collections import defaultdict
 from datetime import datetime
+
+from thu_comercial_service import montar_retornos_comerciais
 from typing import Any, Callable, Dict, List
 
 import pandas as pd
@@ -116,7 +118,7 @@ def render_central_oportunidades(
     c4.metric("Orçamentos", sum(bool(propostas_map.get(str(i.get("id", "")))) or _etapa(i) in ("Orçamento criado", "Venda fechada") for i in captacoes))
     c5.metric("Vendas", sum(_etapa(i) == "Venda fechada" for i in captacoes))
 
-    tab_fila, tab_funil, tab_conteudos = st.tabs(["📥 Fila de captação", "📊 Conversão por canal", "🎬 Conteúdos que geram contatos"])
+    tab_fila, tab_funil, tab_conteudos, tab_retornos = st.tabs(["📥 Fila de captação", "📊 Conversão por canal", "🎬 Conteúdos que geram contatos", "🔔 Retornos de orçamentos"])
 
     with tab_fila:
         f1, f2, f3 = st.columns([2, 1, 1])
@@ -279,3 +281,36 @@ def render_central_oportunidades(
             st.dataframe(dfc, width="stretch", hide_index=True, column_config={"Faturamento": st.column_config.NumberColumn(format="R$ %.2f")})
         else:
             st.info("Cadastre o nome do post, Reel, vídeo ou página em cada oportunidade para descobrir quais conteúdos colocam dinheiro no caixa.")
+
+    with tab_retornos:
+        st.markdown("#### 🔔 Lembretes de orçamentos enviados")
+        st.caption(
+            "Acompanhamento assistido, calculado a partir das propostas reais do Histórico. "
+            "Não envia WhatsApp ou Telegram, não registra um contato e não altera pedidos."
+        )
+        hoje = (now_fn() if now_fn else datetime.now()).date()
+        retornos = montar_retornos_comerciais(historico, hoje, limite=200)
+        agir = [item for item in retornos if item.get("nivel") != "aguardar"]
+        alta = sum(item.get("nivel") in ("alta", "urgente") for item in agir)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Retornos a conferir", len(agir))
+        c2.metric("Prioridade alta ou urgente", alta)
+        c3.metric("Aguardar cliente", len(retornos) - len(agir))
+        if not agir:
+            st.info("Nenhum orçamento enviado precisa de acompanhamento neste momento.")
+        else:
+            st.caption("Confira o histórico da conversa antes de retomar. Os prazos são sugestões operacionais, não confirmação de silêncio do cliente.")
+            for item in agir:
+                numero = str(item.get("numero_proposta") or "—")
+                cliente = str(item.get("cliente_nome") or "Cliente")
+                with st.expander(f"{item.get('nivel', 'normal').upper()} · Proposta {numero} · {cliente}"):
+                    st.write(item.get("motivo") or "Revisar o orçamento enviado.")
+                    st.write("**Próxima ação:** " + str(item.get("acao") or "Conferir atendimento"))
+                    st.caption("Último envio registrado: " + str(item.get("ultimo_contato_em") or "Não informado"))
+                    st.text_area(
+                        "Mensagem sugerida para revisão manual",
+                        value=str(item.get("mensagem_sugerida") or ""),
+                        key=f"opp_retorno_msg_{numero}",
+                        height=95,
+                    )
+                    st.caption("Copie a mensagem apenas após conferir o atendimento. Nenhum contato é enviado automaticamente.")
