@@ -1,0 +1,23 @@
+name: AlphaFest HF72 - roteiro diario sem escrita
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - central_oportunidades.py
+      - roteiro_diario_hf72.py
+      - test_roteiro_diario_hf72.py
+      - .github/workflows/hf72-roteiro-diario-gate.yml
+  push:
+    branches: [feature/hf72-roteiro-diario]
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Sintaxe
+        run: python -m py_compile central_oportunidades.py roteiro_diario_hf72.py test_roteiro_diario_hf72.py
+      - name: Testes com dados artificiais
+        run: python -m unittest -v test_roteiro_diario_hf72 test_resumo_diario_hf71 test_prioridades_comerciais_hf70 test_conferencia_vinculos_hf68 test_filtros_conferencia_hf69
