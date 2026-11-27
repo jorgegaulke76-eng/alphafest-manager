@@ -1,0 +1,23 @@
+name: AlphaFest HF71 - resumo diario sem dados pessoais
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - central_oportunidades.py
+      - resumo_diario_hf71.py
+      - test_resumo_diario_hf71.py
+      - .github/workflows/hf71-resumo-diario-gate.yml
+  push:
+    branches: [feature/hf71-resumo-diario-unificado]
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validar sintaxe
+        run: python -m py_compile central_oportunidades.py resumo_diario_hf71.py test_resumo_diario_hf71.py
+      - name: Testar resumo e prioridades com dados artificiais
+        run: python -m unittest -v test_resumo_diario_hf71 test_prioridades_comerciais_hf70 test_conferencia_vinculos_hf68 test_filtros_conferencia_hf69
