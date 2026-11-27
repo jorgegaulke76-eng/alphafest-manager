@@ -15640,7 +15640,7 @@ def proxima_acao_proposta(proposta):
 
 
 def registrar_envio_comercial_proposta(numero):
-    """HF14: registra manualmente envio/retorno para o THU, somente pelo Jorge.
+    """HF14: registra manualmente envio/retorno para o THU, por Jorge ou Anna.
 
     O registro não envia mensagem, não aprova a proposta e não altera nenhum
     marco operacional. Ele apenas cria a referência temporal necessária para o
@@ -15648,8 +15648,8 @@ def registrar_envio_comercial_proposta(numero):
     """
     usuario = obter_usuario_atual() or {}
     nome_usuario = str(usuario.get("nome") or "").strip()
-    if nome_usuario.casefold() != "jorge":
-        return False, None, "Registro de envio disponível somente para Jorge nesta homologação."
+    if nome_usuario.casefold() not in ("jorge", "anna"):
+        return False, None, "Registro de envio disponível somente para Jorge e Anna."
 
     instante = agora_local().strftime("%d/%m/%Y %H:%M")
 
@@ -25377,6 +25377,38 @@ def _renderizar_linha_proposta_anna(prop, prefixo, permitir_reserva_rapida=True)
         width="stretch",
     )
 
+    # Registro assistido de envio para Anna: o clique em Enviar/WhatsApp
+    # apenas abre o canal e NUNCA confirma que o cliente recebeu a proposta.
+    # Não muda status, aprovação, pagamento ou produção.
+    if (
+        numero
+        and not estado_linha_hf653.get("aprovado")
+        and not estado_linha_hf653.get("encerrada")
+        and not estado_linha_hf653.get("entregue")
+    ):
+        if prop.get("enviado"):
+            st.caption(
+                "💬 Último contato registrado: "
+                + str(prop.get("ultimo_envio_em") or prop.get("enviado_em") or "sem data")
+            )
+        else:
+            st.caption("💬 Depois de realmente enviar o orçamento no WhatsApp, confirme o envio abaixo.")
+        rotulo_envio_anna = "🔁 Registrei novo contato" if prop.get("enviado") else "✅ Registrar envio"
+        if st.button(
+            rotulo_envio_anna,
+            key=f"{prefixo}_registrar_envio_{numero}",
+            width="stretch",
+            help="Registra somente o contato real. Não envia WhatsApp e não altera o status do pedido.",
+        ):
+            ok_envio_anna, _, motivo_envio_anna = registrar_envio_comercial_proposta(numero)
+            if ok_envio_anna:
+                st.session_state["_mensagem_sucesso_pendente"] = (
+                    "Envio registrado. O acompanhamento comercial foi atualizado."
+                )
+                st.rerun()
+            else:
+                st.error(motivo_envio_anna or "Não foi possível registrar o envio.")
+
     _i8124_render_status_pedido(prop, prefixo=f"{prefixo}_estoque", detalhado=False)
 
     # 20.4.9-I1 — THU avisa a Anna enquanto houver produto sem cadastro oficial.
@@ -25548,6 +25580,30 @@ def renderizar_workspace_anna_isolado():
             link = f"https://wa.me/{numero}?text={quote(formatar_msg_whatsapp(ultima))}" if numero else f"https://wa.me/?text={quote(formatar_msg_whatsapp(ultima))}"
             c1.link_button("📱 Enviar por WhatsApp", link, width="stretch")
             c2.download_button("📄 Gerar HTML", gerar_html(ultima), file_name=f"{ultima.get('numero_proposta','orcamento')}.html", mime="text/html", width="stretch", key=f"html_ultima_{ultima.get('numero_proposta','orcamento')}")
+            estado_ultima_anna = _status_resumo(ultima)
+            if (
+                ultima.get("numero_proposta")
+                and not estado_ultima_anna.get("aprovado")
+                and not estado_ultima_anna.get("encerrada")
+                and not estado_ultima_anna.get("entregue")
+            ):
+                st.caption("💬 Confirme o envio somente depois de realmente encaminhar a proposta.")
+                rotulo_ultima_anna = "🔁 Registrei novo contato" if ultima.get("enviado") else "✅ Registrar envio"
+                if st.button(
+                    rotulo_ultima_anna,
+                    key=f"anna_ultima_registrar_envio_{ultima.get('numero_proposta')}",
+                    width="stretch",
+                ):
+                    ok_ultima_anna, proposta_registrada_anna, motivo_ultima_anna = registrar_envio_comercial_proposta(
+                        ultima.get("numero_proposta", "")
+                    )
+                    if ok_ultima_anna:
+                        st.session_state["_ultima_proposta_salva_anna"] = dict(proposta_registrada_anna or ultima)
+                        st.session_state["_mensagem_sucesso_pendente"] = "Envio real registrado para acompanhamento comercial."
+                        st.rerun()
+                    else:
+                        st.error(motivo_ultima_anna or "Não foi possível registrar o envio.")
+
             if c3.button("➕ Outro", width="stretch"):
                 st.session_state.pop("_ultima_proposta_salva_anna", None)
                 dialog_orcamento_anna()
