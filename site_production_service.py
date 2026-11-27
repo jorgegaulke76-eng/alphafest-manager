@@ -44,6 +44,27 @@ def preparar_html_producao(html_site: str) -> str:
     """Acrescenta metadados públicos, SEO social e dicas de performance sem alterar o visual."""
     pagina = str(html_site or "")
 
+    # SEO local da página inicial: melhora identificação sem mudar o visual.
+    # Este preparador recebe o HTML da home; as páginas internas são geradas separadamente.
+    titulo_local = "Personalizados em Itatiba | AlphaFest - Festas, Balões e Brindes"
+    pagina = re.sub(
+        r"(?is)<title\b[^>]*>.*?</title>",
+        f"<title>{titulo_local}</title>",
+        pagina,
+        count=1,
+    )
+    descricao_local = (
+        "AlphaFest: personalizados em Itatiba para festas, presentes e empresas. "
+        "Kits festa, balões, brindes, gráfica rápida, impressão 3D e gravação a laser. "
+        "Solicite um orçamento."
+    )
+    pagina = re.sub(
+        r"""(?is)<meta\b(?=[^>]*\bname\s*=\s*['"]description['"])[^>]*>""",
+        '<meta name="description" content="' + descricao_local + '">',
+        pagina,
+        count=1,
+    )
+
     metas = []
     if 'name="robots"' not in pagina:
         metas.append('<meta name="robots" content="index,follow,max-image-preview:large">')
@@ -88,6 +109,22 @@ def preparar_html_producao(html_site: str) -> str:
                 "name": "AlphaFest",
                 "inLanguage": "pt-BR",
                 "publisher": {"@id": f"https://{DOMINIO_FINAL}/#organization"},
+            },
+            {
+                "@type": "Store",
+                "@id": f"https://{DOMINIO_FINAL}/#loja",
+                "name": "AlphaFest - Personalizados e Balões",
+                "url": f"https://{DOMINIO_FINAL}/",
+                "telephone": "+55 11 97294-9533",
+                "address": {
+                    "@type": "PostalAddress",
+                    "streetAddress": "Avenida Manoel Verginio de Almeida, 442",
+                    "addressLocality": "Itatiba",
+                    "addressRegion": "SP",
+                    "postalCode": "13251-530",
+                    "addressCountry": "BR",
+                },
+                "areaServed": {"@type": "City", "name": "Itatiba"},
             },
         ],
     }
