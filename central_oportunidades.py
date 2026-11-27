@@ -10,6 +10,7 @@ import urllib.parse
 from collections import defaultdict
 from datetime import datetime
 
+from retorno_registrado_hf65 import link_whatsapp_retorno
 from encerramento_sem_retorno_hf64 import elegibilidade_encerramento
 from retornos_sem_envio_hf63 import listar_sem_registro_envio
 from thu_comercial_service import montar_retornos_comerciais
@@ -176,6 +177,7 @@ def render_central_oportunidades(
     abrir_orcamento: Callable[[Dict[str, Any]], Any] | None = None,
     registrar_envio: Callable[[str], Any] | None = None,
     encerrar_sem_retorno: Callable[[str], Any] | None = None,
+    registrar_retorno_realizado: Callable[[str], Any] | None = None,
 ) -> None:
     itens = dados_at.setdefault("itens", [])
     historico = historico or []
@@ -594,13 +596,48 @@ def render_central_oportunidades(
                     st.write(item.get("motivo") or "Revisar o orçamento enviado.")
                     st.write("**Próxima ação:** " + str(item.get("acao") or "Conferir atendimento"))
                     st.caption("Último envio registrado: " + str(item.get("ultimo_contato_em") or "Não informado"))
-                    st.text_area(
+                    mensagem_retorno_hf65 = st.text_area(
                         "Mensagem sugerida para revisão manual",
                         value=str(item.get("mensagem_sugerida") or ""),
                         key=f"opp_retorno_msg_{numero}",
                         height=95,
                     )
-                    st.caption("Copie a mensagem apenas após conferir o atendimento. Nenhum contato é enviado automaticamente.")
+                    st.caption("Edite a mensagem, confira o contato e envie manualmente. Abrir o WhatsApp não confirma envio.")
+                    link_retorno_hf65 = link_whatsapp_retorno(
+                        str(item.get("whatsapp") or ""), mensagem_retorno_hf65
+                    )
+                    if link_retorno_hf65:
+                        st.link_button(
+                            "📱 Abrir conversa no WhatsApp",
+                            link_retorno_hf65,
+                            width="stretch",
+                        )
+                    else:
+                        st.caption("WhatsApp ausente ou inválido: confirme os dados do cliente no Histórico.")
+                    if registrar_retorno_realizado is not None:
+                        with st.container(border=True):
+                            st.markdown("**✅ Registrar retorno realmente realizado**")
+                            st.caption(
+                                "Somente após encaminhar a mensagem ao cliente no WhatsApp, "
+                                "registre o contato. Nenhuma mensagem será enviada por este botão."
+                            )
+                            confirma_retorno_hf65 = st.checkbox(
+                                "Confirmei que fiz o contato comercial com este cliente",
+                                key=f"hf65_confirmar_retorno_{numero}",
+                            )
+                            if st.button(
+                                "✅ Registrar contato realizado",
+                                key=f"hf65_registrar_retorno_{numero}",
+                                disabled=not confirma_retorno_hf65,
+                                width="stretch",
+                            ):
+                                ok_hf65, aviso_hf65 = registrar_retorno_realizado(numero)
+                                if ok_hf65:
+                                    st.success("Contato registrado no Histórico oficial. Data do acompanhamento atualizada.")
+                                    st.rerun()
+                                else:
+                                    st.error(aviso_hf65 or "Não foi possível registrar o contato.")
+
                     # HF64: somente uma decisao manual e rastreavel; tempo decorrido
                     # nao e evidencia de ausencia de resposta.
                     proposta_atual_hf64 = next(
