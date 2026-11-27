@@ -49,6 +49,59 @@ def _telefone(valor: Any) -> str:
     return re.sub(r"\D", "", str(valor or ""))
 
 
+def _telefone_chave(valor: Any) -> str:
+    """Compara WhatsApp apenas quando existe número suficientemente completo."""
+    digitos = _telefone(valor)
+    if digitos.startswith("55") and len(digitos) > 11:
+        digitos = digitos[2:]
+    return digitos if 10 <= len(digitos) <= 11 else ""
+
+
+def diagnosticar_vinculos_propostas(
+    atendimentos: List[Dict[str, Any]],
+    historico: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Diagnóstico sem escrita: vínculos ausentes/quebrados e pistas por telefone.
+
+    O telefone serve somente como pista; NUNCA cria ou confirma vínculo sozinho.
+    """
+    ids = {str(i.get("id") or "").strip() for i in atendimentos if isinstance(i, dict)}
+    ids.discard("")
+    fontes = defaultdict(list)
+    for item in atendimentos:
+        if not isinstance(item, dict):
+            continue
+        chave = _telefone_chave(item.get("telefone") or item.get("whatsapp"))
+        if chave:
+            fontes[chave].append(item)
+
+    ausentes = []
+    invalidos = []
+    pistas = []
+    for proposta in historico:
+        if not isinstance(proposta, dict):
+            continue
+        aid = str(proposta.get("atendimento_id") or "").strip()
+        if aid in ids:
+            continue
+        if aid:
+            invalidos.append(proposta)
+        else:
+            ausentes.append(proposta)
+        chave = _telefone_chave(proposta.get("whatsapp") or proposta.get("cliente_wa"))
+        candidatos = fontes.get(chave, []) if chave else []
+        if candidatos:
+            pistas.append({
+                "numero_proposta": str(proposta.get("numero_proposta") or "Sem número"),
+                "candidatos": [
+                    {"id": str(i.get("id") or ""), "origem": _origem(i)}
+                    for i in candidatos
+                ],
+            })
+    return {"sem_vinculo": len(ausentes), "vinculo_invalido": len(invalidos),
+            "pistas": pistas}
+
+
 def _origem(item: Dict[str, Any]) -> str:
     return str(item.get("canal_origem") or item.get("origem") or item.get("canal") or "Outro")
 
@@ -179,6 +232,37 @@ def render_central_oportunidades(
             st.caption("Exibindo os primeiros 10 vínculos a conferir.")
         if not (sem_whatsapp or sem_conteudo or sem_vinculo or vendas_sem_confirmacao):
             st.success("Os atendimentos externos cadastrados não apresentam pendências nessas quatro conferências.")
+        diagnostico_propostas = diagnosticar_vinculos_propostas(itens, historico)
+        st.markdown("#### 📄 Propostas do Histórico sem vínculo válido")
+        v1, v2 = st.columns(2)
+        v1.metric("Sem atendimento vinculado", diagnostico_propostas["sem_vinculo"])
+        v2.metric("Referência a atendimento não encontrado", diagnostico_propostas["vinculo_invalido"])
+        st.caption(
+            "Nem todo orçamento precisa ter uma origem digital. Essas contagens não significam erro "
+            "nem diminuem vendas confirmadas no Histórico; indicam apenas que não é possível atribuir "
+            "a proposta a um atendimento desta Central."
+        )
+        if diagnostico_propostas["pistas"]:
+            st.markdown("**Possíveis correspondências para conferência manual**")
+            for pista in diagnostico_propostas["pistas"][:10]:
+                candidatos_txt = ", ".join(
+                    str(c["id"]) + " (" + str(c["origem"]) + ")"
+                    for c in pista["candidatos"][:3]
+                )
+                st.write(
+                    "• Proposta " + pista["numero_proposta"]
+                    + " · possível atendimento: " + candidatos_txt
+                )
+            st.caption(
+                "Correspondências usam apenas número de WhatsApp; não comprovam que se trata "
+                "do mesmo pedido. Nenhum vínculo é criado por esta conferência."
+            )
+        st.info(
+            "Para novos orçamentos, inicie a proposta pela Caixa unificada, usando a ação "
+            "Orçamento no atendimento correspondente. Isso preserva a origem sem precisar "
+            "adivinhar a associação depois."
+        )
+
         st.info(
             "Fluxo correto: identificar um contato real → registrar o canal de origem "
             "→ continuar o atendimento no WhatsApp → vincular o orçamento real "
