@@ -327,6 +327,7 @@ from proposal_status import (
     pagamento_individual_pendente as _status_pagamento_pendente,
     resumo_status as _status_resumo,
 )
+from retornos_sem_envio_hf63 import listar_sem_registro_envio as _hf63_listar_sem_registro_envio
 from atendimento_descarte_hf62 import (
     MOTIVOS_RETIRADA as _hf62_motivos_retirada,
     propostas_ligadas as _hf62_propostas_ligadas,
@@ -15676,6 +15677,29 @@ def registrar_envio_comercial_proposta(numero):
     return atualizar_proposta_com_leitura_fresca(numero, _mutar)
 
 
+def _hf63_registrar_envio_confirmado(numero):
+    """Confirma envio real na tela de oportunidades sem enviar WhatsApp/Telegram."""
+    usuario_hf63 = str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold()
+    if usuario_hf63 != "jorge":
+        return False, None, "Somente Jorge pode confirmar o envio nesta tela."
+    numero = str(numero or "").strip()
+    if not numero:
+        return False, None, "Número de proposta inválido."
+    historico_atual = carregar_historico(force_refresh=True)
+    atual = next(
+        (p for p in historico_atual if str((p or {}).get("numero_proposta") or "").strip() == numero),
+        None,
+    )
+    if not atual:
+        return False, None, "Proposta não encontrada. Atualize o Histórico."
+    if not any(
+        str(p.get("numero_proposta") or "").strip() == numero
+        for p in _hf63_listar_sem_registro_envio([atual])
+    ):
+        return False, atual, "Esta proposta mudou de situação ou já tem envio registrado. Atualize a tela."
+    return registrar_envio_comercial_proposta(numero)
+
+
 def registrar_cobranca_financeira_proposta(numero):
     """HF15: registra cobrança realmente feita sem marcar o pedido como Pago.
 
@@ -28400,6 +28424,7 @@ if pagina_atual == "atendimento":
                     historico=carregar_historico(),
                     now_fn=agora_local,
                     abrir_orcamento=lambda dados: _hf53_solicitar_abertura("novo_orcamento", dados),
+                    registrar_envio=_hf63_registrar_envio_confirmado if pode_executar_acoes_tecnicas() else None,
                 )
             except Exception as exc:
                 st.error("A Central de Oportunidades encontrou um erro, mas a Caixa Unificada e o restante da operação continuam disponíveis.")

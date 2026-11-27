@@ -1,0 +1,35 @@
+name: AlphaFest HF63 - retornos de orcamentos (sem deploy)
+on:
+  push:
+    branches: [feature/hf63-retornos-envio-assistido]
+  pull_request:
+    branches: [main]
+    paths:
+      - app.py
+      - central_oportunidades.py
+      - retornos_sem_envio_hf63.py
+      - test_retornos_sem_envio_hf63.py
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Sintaxe dos modulos essenciais
+        run: python -m py_compile app.py central_oportunidades.py retornos_sem_envio_hf63.py test_retornos_sem_envio_hf63.py
+      - name: Testar com propostas ficticias sem conectar ao banco
+        run: python -m unittest -v test_retornos_sem_envio_hf63
+      - name: Arquivos obrigatorios preservados
+        run: |
+          test -s app.py
+          test -s requirements.txt
+          test -s central_oportunidades.py
+          test -s thu_comercial_service.py
+          test -s proposal_status.py
