@@ -178,7 +178,7 @@ def render_central_oportunidades(
         if len(sem_vinculo) > 10:
             st.caption("Exibindo os primeiros 10 vínculos a conferir.")
         if not (sem_whatsapp or sem_conteudo or sem_vinculo or vendas_sem_confirmacao):
-            st.success("Os atendimentos externos cadastrados não apresentam pendências nessas três conferências.")
+            st.success("Os atendimentos externos cadastrados não apresentam pendências nessas quatro conferências.")
         st.info(
             "Fluxo correto: identificar um contato real → registrar o canal de origem "
             "→ continuar o atendimento no WhatsApp → vincular o orçamento real "
