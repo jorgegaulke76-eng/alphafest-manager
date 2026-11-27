@@ -118,6 +118,46 @@ def render_central_oportunidades(
     c4.metric("Orçamentos", sum(bool(propostas_map.get(str(i.get("id", "")))) or _etapa(i) in ("Orçamento criado", "Venda fechada") for i in captacoes))
     c5.metric("Vendas", sum(_etapa(i) == "Venda fechada" for i in captacoes))
 
+    # Diagnóstico da ligação real entre captação, WhatsApp e proposta.
+    # Eventos anônimos do site são métricas, não cadastros de clientes.
+    sem_whatsapp = [i for i in abertas if not _telefone(i.get("telefone") or i.get("whatsapp"))]
+    sem_conteudo = [i for i in abertas if not str(i.get("conteudo_titulo") or "").strip()]
+    sem_vinculo = [
+        i for i in captacoes
+        if _etapa(i) in ("Orçamento criado", "Venda fechada")
+        and not propostas_map.get(str(i.get("id") or ""))
+    ]
+    with st.expander("🔎 Conferência da origem e dos vínculos comerciais", expanded=False):
+        st.caption(
+            "Confira os registros de atendimentos reais antes de interpretar o funil. "
+            "Visitas e cliques anônimos no site não são clientes, mensagens recebidas, orçamentos ou vendas."
+        )
+        q1, q2, q3 = st.columns(3)
+        q1.metric("Sem WhatsApp no atendimento", len(sem_whatsapp))
+        q2.metric("Sem conteúdo de origem", len(sem_conteudo))
+        q3.metric("Etapa comercial sem proposta vinculada", len(sem_vinculo))
+        st.caption(
+            "Vínculo de proposta significa que o Histórico contém atendimento_id correspondente. "
+            "Uma etapa marcada manualmente não comprova, por si só, que existe orçamento vinculado ou venda aprovada."
+        )
+        for registro in sem_vinculo[:10]:
+            st.write(
+                "• "
+                + str(registro.get("cliente") or "Contato sem identificação")
+                + " · " + _origem(registro)
+                + " · " + _etapa(registro)
+                + " — conferir associação da proposta no Histórico"
+            )
+        if len(sem_vinculo) > 10:
+            st.caption("Exibindo os primeiros 10 vínculos a conferir.")
+        if not (sem_whatsapp or sem_conteudo or sem_vinculo):
+            st.success("Os atendimentos externos cadastrados não apresentam pendências nessas três conferências.")
+        st.info(
+            "Fluxo correto: identificar um contato real → registrar o canal de origem "
+            "→ continuar o atendimento no WhatsApp → vincular o orçamento real "
+            "→ confirmar a venda somente após aprovação. Nenhuma etapa é avançada automaticamente."
+        )
+
     tab_fila, tab_funil, tab_conteudos, tab_retornos = st.tabs(["📥 Fila de captação", "📊 Conversão por canal", "🎬 Conteúdos que geram contatos", "🔔 Retornos de orçamentos"])
 
     with tab_fila:
