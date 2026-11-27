@@ -1,0 +1,29 @@
+name: AlphaFest SEO Novidades - testes seguros
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'site_posts_service.py'
+      - 'test_seo_novidades_itatiba.py'
+      - '.github/workflows/seo-novidades-itatiba.yml'
+  push:
+    branches: [seo-novidades-itatiba-20261127]
+permissions:
+  contents: read
+jobs:
+  arquivo-novidades:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verificar sintaxe
+        run: python -m py_compile site_posts_service.py test_seo_novidades_itatiba.py
+      - name: Testar SEO e paginacao
+        run: python -m unittest -v test_seo_novidades_itatiba
+      - name: Regressao anterior
+        run: python -m unittest -v test_site_posts_hf53
