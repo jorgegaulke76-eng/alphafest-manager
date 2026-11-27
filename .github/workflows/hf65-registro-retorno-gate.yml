@@ -1,0 +1,35 @@
+name: AlphaFest HF65 - registro manual retorno WhatsApp
+on:
+  push:
+    branches: [feature/hf65-registro-retorno-whatsapp]
+  pull_request:
+    branches: [main]
+    paths:
+      - app.py
+      - central_oportunidades.py
+      - retorno_registrado_hf65.py
+      - test_retorno_registrado_hf65.py
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validar sintaxe do Manager
+        run: python -m py_compile app.py central_oportunidades.py retorno_registrado_hf65.py test_retorno_registrado_hf65.py
+      - name: Testar regras com propostas ficticias
+        run: python -m unittest -v test_retorno_registrado_hf65
+      - name: Garantir arquivos essenciais
+        run: |
+          test -s app.py
+          test -s requirements.txt
+          test -s central_oportunidades.py
+          test -s thu_comercial_service.py
+          test -s proposal_status.py
