@@ -11,6 +11,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from conferencia_vinculos_hf68 import fila_conferencia_vinculos
+from filtros_conferencia_hf69 import filtrar_fila_vinculos
 from insights_organicos_hf67 import sugerir_acoes_organicas
 from analytics_vendas_produtos_hf66 import consolidar_vendas_e_produtos
 from retorno_registrado_hf65 import link_whatsapp_retorno
@@ -276,11 +277,34 @@ def render_central_oportunidades(
             "cliente ou origem é alterado automaticamente."
         )
         if fila_hf68["registros"]:
-            st.dataframe(
-                pd.DataFrame(fila_hf68["registros"]),
-                hide_index=True,
-                use_container_width=True,
+            st.markdown("**HF69 — Pesquisa e filtros de pendências**")
+            filtro_numero_hf69, filtro_situacao_hf69 = st.columns([2, 2])
+            numero_hf69 = filtro_numero_hf69.text_input(
+                "Pesquisar número do orçamento",
+                key="hf69_busca_numero_orcamento",
+                placeholder="Digite todo ou parte do número",
             )
+            situacoes_hf69 = sorted(fila_hf68["por_situacao"])
+            situacao_hf69 = filtro_situacao_hf69.selectbox(
+                "Filtrar tipo de pendência",
+                ["Todas"] + situacoes_hf69,
+                key="hf69_filtro_tipo_pendencia",
+            )
+            registros_filtrados_hf69 = filtrar_fila_vinculos(
+                fila_hf68["registros"], numero_hf69, situacao_hf69
+            )
+            st.caption(
+                f"Exibindo {len(registros_filtrados_hf69)} de "
+                f"{fila_hf68['total']} registros para conferência."
+            )
+            if registros_filtrados_hf69:
+                st.dataframe(
+                    pd.DataFrame(registros_filtrados_hf69),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+            else:
+                st.info("Nenhum registro corresponde à pesquisa ou ao filtro selecionado.")
             st.caption(
                 "Antes de corrigir qualquer registro no fluxo oficial, confira o "
                 "orçamento, o atendimento e a conversa original. Números e IDs "
