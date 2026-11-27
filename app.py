@@ -327,6 +327,10 @@ from proposal_status import (
     pagamento_individual_pendente as _status_pagamento_pendente,
     resumo_status as _status_resumo,
 )
+from retorno_registrado_hf65 import (
+    validar_retorno_realizado as _hf65_validar_retorno,
+    aplicar_retorno_realizado as _hf65_aplicar_retorno,
+)
 from encerramento_sem_retorno_hf64 import (
     elegibilidade_encerramento as _hf64_elegivel,
     aplicar_encerramento_sem_retorno as _hf64_aplicar_encerramento,
@@ -15681,6 +15685,58 @@ def registrar_envio_comercial_proposta(numero):
     return atualizar_proposta_com_leitura_fresca(numero, _mutar)
 
 
+def _hf65_registrar_contato_comercial_realizado(numero):
+    """Registra contato humano confirmado sem enviar mensagem nem alterar pedido."""
+    usuario_hf65 = str((obter_usuario_atual() or {}).get("nome") or "").strip()
+    if usuario_hf65.casefold() != "jorge":
+        return False, "Ação disponível apenas para Jorge nesta tela."
+    numero = str(numero or "").strip()
+    if not numero:
+        return False, "Número da proposta não informado."
+    atual_hf65 = next(
+        (p for p in carregar_historico(force_refresh=True)
+         if str((p or {}).get("numero_proposta") or "").strip() == numero), None,
+    )
+    if not atual_hf65:
+        return False, "Proposta não localizada. Atualize a tela."
+    instante_hf65 = agora_local().strftime("%d/%m/%Y %H:%M")
+    permitido_hf65, motivo_hf65 = _hf65_validar_retorno(
+        atual_hf65, instante=instante_hf65
+    )
+    if not permitido_hf65:
+        return False, motivo_hf65
+    validacao_hf65 = {"aplicado": False, "motivo": ""}
+
+    def _mutar_retorno_hf65(p):
+        ok, msg = _hf65_validar_retorno(p, instante=instante_hf65)
+        if not ok:
+            validacao_hf65["motivo"] = msg
+            return p
+        _hf65_aplicar_retorno(
+            p, instante=instante_hf65, usuario=usuario_hf65
+        )
+        registrar_evento_proposta(
+            p, "Retorno comercial realmente realizado e confirmado manualmente",
+            usuario=usuario_hf65,
+        )
+        validacao_hf65["aplicado"] = True
+        return p
+
+    gravado_hf65, atualizado_hf65, detalhe_hf65 = atualizar_proposta_com_leitura_fresca(
+        numero, _mutar_retorno_hf65
+    )
+    if not gravado_hf65 or not validacao_hf65["aplicado"]:
+        return False, validacao_hf65["motivo"] or detalhe_hf65 or "Gravação não confirmada."
+    registrar_mudanca_oficial(
+        "Proposta", numero, "ultimo_envio_em",
+        str(atual_hf65.get("ultimo_envio_em") or ""),
+        str(atualizado_hf65.get("ultimo_envio_em") or ""),
+        origem="Central Multicanal — retorno confirmado",
+        contexto={"responsavel": usuario_hf65},
+    )
+    return True, ""
+
+
 def _hf64_encerrar_sem_retorno_confirmado(numero):
     """Registra declaracao humana de nao retorno; nao envia mensagem nem exclui proposta."""
     usuario_hf64 = str((obter_usuario_atual() or {}).get("nome") or "").strip()
@@ -28477,6 +28533,7 @@ if pagina_atual == "atendimento":
                     abrir_orcamento=lambda dados: _hf53_solicitar_abertura("novo_orcamento", dados),
                     registrar_envio=_hf63_registrar_envio_confirmado if pode_executar_acoes_tecnicas() else None,
                     encerrar_sem_retorno=_hf64_encerrar_sem_retorno_confirmado if pode_executar_acoes_tecnicas() else None,
+                    registrar_retorno_realizado=_hf65_registrar_contato_comercial_realizado if pode_executar_acoes_tecnicas() else None,
                 )
             except Exception as exc:
                 st.error("A Central de Oportunidades encontrou um erro, mas a Caixa Unificada e o restante da operação continuam disponíveis.")
