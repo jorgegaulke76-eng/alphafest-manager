@@ -681,52 +681,12 @@ def render_central_oportunidades(
         c1.metric("Retornos a conferir", len(agir))
         c2.metric("Prioridade alta ou urgente", alta)
         c3.metric("Aguardar cliente", len(retornos) - len(agir))
-        st.markdown("#### 🧭 HF70 — Prioridades separadas por tipo de trabalho")
+        # HF74: resumo no topo; detalhes antigos permanecem acessiveis,
+        # sem duplicar indicadores na primeira visualizacao.
         quadro_hf70 = quadro_prioridades_hf70(
             fila_hf68["registros"], agir, propostas_sem_envio
         )
-        col_cadastro_hf70, col_comercial_hf70 = st.columns(2)
-        col_cadastro_hf70.metric(
-            "Conferência cadastral", quadro_hf70["cadastro_total"]
-        )
-        col_comercial_hf70.metric(
-            "Retornos comerciais elegíveis", quadro_hf70["comercial_total"]
-        )
-        st.caption(
-            "As pendências cadastrais não são oportunidades de venda. "
-            "Retornos comerciais dependem da fila de propostas enviadas do Manager; "
-            "propostas com vínculo inconsistente ou sem registro de envio "
-            "ficam fora desta lista de retornos elegíveis até conferência manual. "
-            "Nenhuma mensagem é disparada e nenhum registro é modificado."
-        )
-        if quadro_hf70["retornos_bloqueados_por_conferencia"]:
-            st.info(
-                f"{quadro_hf70['retornos_bloqueados_por_conferencia']} retorno(s) "
-                "da fila oficial exigem conferência cadastral antes de serem "
-                "incluídos nesta visão de prioridades. Consulte a aba de "
-                "retornos e a conferência do Histórico."
-            )
-        with st.expander("📂 Conferências cadastrais", expanded=False):
-            if quadro_hf70["cadastro"]:
-                st.dataframe(
-                    pd.DataFrame(quadro_hf70["cadastro"][:100]),
-                    hide_index=True, use_container_width=True,
-                )
-                if len(quadro_hf70["cadastro"]) > 100:
-                    st.caption("Exibindo as primeiras 100 pendências; use a pesquisa HF69 para as demais.")
-            else:
-                st.success("Nenhuma pendência cadastral identificada.")
-        with st.expander("💬 Retornos comerciais para conferir", expanded=False):
-            if quadro_hf70["comercial"]:
-                st.dataframe(
-                    pd.DataFrame(quadro_hf70["comercial"][:100]),
-                    hide_index=True, use_container_width=True,
-                )
-                if len(quadro_hf70["comercial"]) > 100:
-                    st.caption("Exibindo os primeiros 100 retornos.")
-            else:
-                st.info("Nenhum retorno elegível para esta visão.")
-        st.markdown("#### 📅 HF71 — Resumo comercial do dia")
+        st.markdown("#### 📅 Painel comercial do dia")
         resumo_hf71 = resumo_diario_hf71(
             quadro_hf70, propostas_sem_envio, retornos, hoje
         )
@@ -752,67 +712,115 @@ def render_central_oportunidades(
             "O resumo contém apenas contagens e recomendações gerais. "
             "Não envia mensagens, não gera campanhas e não modifica o Histórico."
         )
-        st.markdown("#### 🧩 HF72 — Roteiro de conferência do dia")
-        roteiro_hf72 = roteiro_diario_hf72(resumo_hf71)
-        if roteiro_hf72:
+        with st.expander("📂 Detalhes de cadastro e retornos (HF70)", expanded=False):
+            col_cadastro_hf70, col_comercial_hf70 = st.columns(2)
+            col_cadastro_hf70.metric(
+                "Conferência cadastral", quadro_hf70["cadastro_total"]
+            )
+            col_comercial_hf70.metric(
+                "Retornos comerciais elegíveis", quadro_hf70["comercial_total"]
+            )
             st.caption(
-                "Ordem sugerida para organizar as conferências, não uma lista "
-                "de tarefas executadas. Nenhuma ação é marcada ou enviada automaticamente."
+                "As pendências cadastrais não são oportunidades de venda. "
+                "Retornos comerciais dependem da fila de propostas enviadas do Manager; "
+                "propostas com vínculo inconsistente ou sem registro de envio "
+                "ficam fora desta lista de retornos elegíveis até conferência manual. "
+                "Nenhuma mensagem é disparada e nenhum registro é modificado."
             )
-            st.dataframe(
-                pd.DataFrame(roteiro_hf72),
-                hide_index=True,
-                use_container_width=True,
-            )
-        else:
-            st.success("Nenhuma tarefa sinalizada neste roteiro com os dados atuais.")
-        st.download_button(
-            "📥 Baixar roteiro do dia sem dados pessoais (.txt)",
-            data=texto_roteiro_hf72(
-                roteiro_hf72, resumo_hf71["data"]
-            ).encode("utf-8"),
-            file_name="alphafest-roteiro-diario-conferencia.txt",
-            mime="text/plain",
-            key="hf72_roteiro_diario_txt",
-        )
-        st.markdown("#### 🔎 HF73 — Consultar tarefas do roteiro")
-        st.caption(
-            "Selecione a categoria para consultar os números das propostas nesta "
-            "mesma tela. Consulte o Histórico antes de agir; nenhuma mensagem "
-            "é enviada e nenhum registro é alterado."
-        )
-        categorias_hf73 = dict(CATEGORIAS)
-        categoria_hf73 = st.selectbox(
-            "Categoria para consultar",
-            options=list(categorias_hf73),
-            format_func=lambda chave: categorias_hf73[chave],
-            key="hf73_categoria_roteiro",
-        )
-        busca_hf73 = st.text_input(
-            "Pesquisar número da proposta nesta categoria",
-            key="hf73_busca_proposta",
-            placeholder="Número completo ou parcial",
-        )
-        consulta_hf73 = consultar_categoria_hf73(
-            categoria_hf73, quadro_hf70, propostas_sem_envio,
-            busca=busca_hf73, limite=30,
-        )
-        st.caption(
-            f"{consulta_hf73['total']} registro(s) encontrado(s). "
-            f"Exibindo até {consulta_hf73['exibidos']} nesta consulta."
-        )
-        if consulta_hf73["registros"]:
-            st.dataframe(
-                pd.DataFrame(consulta_hf73["registros"]),
-                hide_index=True, use_container_width=True,
-            )
-            if consulta_hf73["total"] > consulta_hf73["exibidos"]:
-                st.caption(
-                    "Refine a pesquisa pelo número para encontrar outros registros. "
-                    "A consulta não altera o Histórico."
+            if quadro_hf70["retornos_bloqueados_por_conferencia"]:
+                st.info(
+                    f"{quadro_hf70['retornos_bloqueados_por_conferencia']} retorno(s) "
+                    "da fila oficial exigem conferência cadastral antes de serem "
+                    "incluídos nesta visão de prioridades. Consulte a aba de "
+                    "retornos e a conferência do Histórico."
                 )
-        else:
-            st.info("Nenhuma proposta encontrada para esta categoria e pesquisa.")
+            cadastro_hf74, retornos_hf74 = st.tabs(["📂 Cadastros", "💬 Retornos"])
+            with cadastro_hf74:
+                if quadro_hf70["cadastro"]:
+                    st.dataframe(
+                        pd.DataFrame(quadro_hf70["cadastro"][:100]),
+                        hide_index=True, use_container_width=True,
+                    )
+                    if len(quadro_hf70["cadastro"]) > 100:
+                        st.caption("Exibindo as primeiras 100 pendências; use a pesquisa HF69 para as demais.")
+                else:
+                    st.success("Nenhuma pendência cadastral identificada.")
+            with retornos_hf74:
+                if quadro_hf70["comercial"]:
+                    st.dataframe(
+                        pd.DataFrame(quadro_hf70["comercial"][:100]),
+                        hide_index=True, use_container_width=True,
+                    )
+                    if len(quadro_hf70["comercial"]) > 100:
+                        st.caption("Exibindo os primeiros 100 retornos.")
+                else:
+                    st.info("Nenhum retorno elegível para esta visão.")
+        guia_hf74, consulta_hf74 = st.tabs([
+            "🧩 Roteiro de conferência", "🔎 Consultar propostas"
+        ])
+        with guia_hf74:
+            st.markdown("#### 🧩 HF72 — Roteiro de conferência do dia")
+            roteiro_hf72 = roteiro_diario_hf72(resumo_hf71)
+            if roteiro_hf72:
+                st.caption(
+                    "Ordem sugerida para organizar as conferências, não uma lista "
+                    "de tarefas executadas. Nenhuma ação é marcada ou enviada automaticamente."
+                )
+                st.dataframe(
+                    pd.DataFrame(roteiro_hf72),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+            else:
+                st.success("Nenhuma tarefa sinalizada neste roteiro com os dados atuais.")
+            st.download_button(
+                "📥 Baixar roteiro do dia sem dados pessoais (.txt)",
+                data=texto_roteiro_hf72(
+                    roteiro_hf72, resumo_hf71["data"]
+                ).encode("utf-8"),
+                file_name="alphafest-roteiro-diario-conferencia.txt",
+                mime="text/plain",
+                key="hf72_roteiro_diario_txt",
+            )
+        with consulta_hf74:
+            st.markdown("#### 🔎 HF73 — Consultar tarefas do roteiro")
+            st.caption(
+                "Selecione a categoria para consultar os números das propostas nesta "
+                "mesma tela. Consulte o Histórico antes de agir; nenhuma mensagem "
+                "é enviada e nenhum registro é alterado."
+            )
+            categorias_hf73 = dict(CATEGORIAS)
+            categoria_hf73 = st.selectbox(
+                "Categoria para consultar",
+                options=list(categorias_hf73),
+                format_func=lambda chave: categorias_hf73[chave],
+                key="hf73_categoria_roteiro",
+            )
+            busca_hf73 = st.text_input(
+                "Pesquisar número da proposta nesta categoria",
+                key="hf73_busca_proposta",
+                placeholder="Número completo ou parcial",
+            )
+            consulta_hf73 = consultar_categoria_hf73(
+                categoria_hf73, quadro_hf70, propostas_sem_envio,
+                busca=busca_hf73, limite=30,
+            )
+            st.caption(
+                f"{consulta_hf73['total']} registro(s) encontrado(s). "
+                f"Exibindo até {consulta_hf73['exibidos']} nesta consulta."
+            )
+            if consulta_hf73["registros"]:
+                st.dataframe(
+                    pd.DataFrame(consulta_hf73["registros"]),
+                    hide_index=True, use_container_width=True,
+                )
+                if consulta_hf73["total"] > consulta_hf73["exibidos"]:
+                    st.caption(
+                        "Refine a pesquisa pelo número para encontrar outros registros. "
+                        "A consulta não altera o Histórico."
+                    )
+            else:
+                st.info("Nenhuma proposta encontrada para esta categoria e pesquisa.")
         if agir:
             resumo = [
                 "ALPHAFEST | RETORNOS COMERCIAIS A CONFERIR",
