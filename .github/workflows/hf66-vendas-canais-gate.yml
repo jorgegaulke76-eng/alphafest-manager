@@ -1,0 +1,33 @@
+name: AlphaFest HF66 - conversao e produtos sem deploy
+on:
+  push:
+    branches: [feature/hf66-vendas-produtos-canais]
+  pull_request:
+    branches: [main]
+    paths:
+      - central_oportunidades.py
+      - analytics_vendas_produtos_hf66.py
+      - test_analytics_vendas_produtos_hf66.py
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verificar sintaxe do app e indicadores
+        run: python -m py_compile app.py central_oportunidades.py analytics_vendas_produtos_hf66.py test_analytics_vendas_produtos_hf66.py
+      - name: Testar dados comerciais ficticios
+        run: python -m unittest -v test_analytics_vendas_produtos_hf66
+      - name: Verificar arquivos operacionais essenciais
+        run: |
+          test -s app.py
+          test -s requirements.txt
+          test -s central_oportunidades.py
+          test -s proposal_status.py
