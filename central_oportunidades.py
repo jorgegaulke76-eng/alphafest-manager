@@ -14,6 +14,7 @@ from conferencia_vinculos_hf68 import fila_conferencia_vinculos
 from filtros_conferencia_hf69 import filtrar_fila_vinculos
 from prioridades_comerciais_hf70 import quadro_prioridades_hf70
 from resumo_diario_hf71 import resumo_diario_hf71
+from roteiro_diario_hf72 import roteiro_diario_hf72, texto_roteiro_hf72
 from insights_organicos_hf67 import sugerir_acoes_organicas
 from analytics_vendas_produtos_hf66 import consolidar_vendas_e_produtos
 from retorno_registrado_hf65 import link_whatsapp_retorno
@@ -749,6 +750,29 @@ def render_central_oportunidades(
         st.caption(
             "O resumo contém apenas contagens e recomendações gerais. "
             "Não envia mensagens, não gera campanhas e não modifica o Histórico."
+        )
+        st.markdown("#### 🧩 HF72 — Roteiro de conferência do dia")
+        roteiro_hf72 = roteiro_diario_hf72(resumo_hf71)
+        if roteiro_hf72:
+            st.caption(
+                "Ordem sugerida para organizar as conferências, não uma lista "
+                "de tarefas executadas. Nenhuma ação é marcada ou enviada automaticamente."
+            )
+            st.dataframe(
+                pd.DataFrame(roteiro_hf72),
+                hide_index=True,
+                use_container_width=True,
+            )
+        else:
+            st.success("Nenhuma tarefa sinalizada neste roteiro com os dados atuais.")
+        st.download_button(
+            "📥 Baixar roteiro do dia sem dados pessoais (.txt)",
+            data=texto_roteiro_hf72(
+                roteiro_hf72, resumo_hf71["data"]
+            ).encode("utf-8"),
+            file_name="alphafest-roteiro-diario-conferencia.txt",
+            mime="text/plain",
+            key="hf72_roteiro_diario_txt",
         )
         if agir:
             resumo = [
