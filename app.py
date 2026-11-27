@@ -327,6 +327,12 @@ from proposal_status import (
     pagamento_individual_pendente as _status_pagamento_pendente,
     resumo_status as _status_resumo,
 )
+from atendimento_descarte_hf62 import (
+    MOTIVOS_RETIRADA as _hf62_motivos_retirada,
+    propostas_ligadas as _hf62_propostas_ligadas,
+    preparar_retirada as _hf62_preparar_retirada,
+    preparar_reativacao as _hf62_preparar_reativacao,
+)
 from executive_center import renderizar_centro_executivo
 from pedido_resumo import resumo_produtos_pedido
 import manager_workflow_hf53 as _workflow_hf53
@@ -28406,8 +28412,16 @@ if pagina_atual == "atendimento":
         prioridade_filtro = f3.selectbox("Prioridade", ["Todas", "Urgente", "Alta", "Normal", "Baixa"], key="filtro_prior_at")
         responsavel_filtro = f4.selectbox("Responsável", ["Todos", "Anna", "Jorge", "Sem responsável"], key="filtro_resp_at")
         canal_filtro = f5.selectbox("Canal", ["Todos"] + CANAIS_ATENDIMENTO, key="filtro_canal_at")
+        mostrar_arquivados_hf62 = st.checkbox(
+            "📦 Mostrar atendimentos arquivados e descartados",
+            value=False,
+            key="hf62_mostrar_arquivados",
+            help="A fila ativa não inclui registros arquivados. Marque para consultar ou reativar descartes anteriores.",
+        )
         filtrados = []
         for item in itens_at:
+            if not mostrar_arquivados_hf62 and str(item.get("status") or "") == "Arquivado":
+                continue
             base = " ".join(str(item.get(k, "")) for k in ["cliente", "telefone", "mensagem", "status", "assunto", "responsavel"]).lower()
             if busca_at and busca_at not in base:
                 continue
@@ -28538,6 +28552,68 @@ if pagina_atual == "atendimento":
                     registrar_evento_atendimento(item, f"Atendimento arquivado a partir do status {status_anterior}")
                     salvar_atendimentos(dados_at)
                     st.rerun()
+
+                # HF62: retirar consultas sem venda, sem apagar nenhum registro
+                # e sem alterar propostas aprovadas, operacionais ou financeiras.
+                # Acoes de descarte e reativacao ficam restritas a Jorge.
+                pode_descartar_hf62 = str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold() == "jorge"
+                if pode_descartar_hf62 and str(item.get("status") or "") == "Arquivado" and item.get("descartado_em"):
+                    with st.expander("♻️ Reativar consulta descartada", expanded=False):
+                        st.caption("O atendimento volta ao status anterior, com o histórico de descarte preservado.")
+                        if st.button("♻️ Reativar atendimento", key=f"hf62_reativar_{item.get('id')}", width="stretch"):
+                            try:
+                                atualizado_hf62 = _hf62_preparar_reativacao(item, agora_local().strftime("%d/%m/%Y %H:%M"))
+                                versao_hf62 = carregar_atendimentos()
+                                atual_hf62 = next((r for r in versao_hf62.get("itens", []) if r.get("id") == item.get("id")), None)
+                                if not atual_hf62 or str(atual_hf62.get("status") or "") != "Arquivado":
+                                    st.error("O atendimento mudou em outra sessão. Atualize antes de reativar.")
+                                else:
+                                    restaurado_hf62 = _hf62_preparar_reativacao(atual_hf62, agora_local().strftime("%d/%m/%Y %H:%M"))
+                                    atual_hf62.update(restaurado_hf62)
+                                    registrar_evento_atendimento(atual_hf62, "Consulta reativada após descarte", usuario="Jorge")
+                                    if salvar_atendimentos(versao_hf62):
+                                        st.rerun()
+                                    else:
+                                        st.error("O banco não confirmou a reativação. Nenhuma alteração foi confirmada.")
+                            except ValueError as erro_hf62:
+                                st.error(str(erro_hf62))
+                elif pode_descartar_hf62 and str(item.get("status") or "") not in ("Arquivado", "Pedido aprovado", "Comprovante recebido", "Arte aprovada", "Em produção", "Pronto", "Entregue", "Pós-venda"):
+                    with st.expander("🗑️ Retirar consulta sem venda da fila", expanded=False):
+                        motivo_hf62 = st.selectbox(
+                            "Motivo da retirada", list(_hf62_motivos_retirada),
+                            key=f"hf62_motivo_{item.get('id')}",
+                        )
+                        confirma_hf62 = st.checkbox(
+                            "Confirmo que esta consulta não virou pedido e pode sair da fila ativa",
+                            key=f"hf62_confirmar_{item.get('id')}",
+                        )
+                        if st.button(
+                            "📦 Descartar e arquivar consulta",
+                            key=f"hf62_descartar_{item.get('id')}",
+                            disabled=not confirma_hf62,
+                            width="stretch",
+                        ):
+                            try:
+                                # Releitura antes da gravacao: nunca usamos um
+                                # snapshot antigo para sobrepor a operacao atual.
+                                versao_hf62 = carregar_atendimentos()
+                                atual_hf62 = next((r for r in versao_hf62.get("itens", []) if r.get("id") == item.get("id")), None)
+                                if not atual_hf62 or str(atual_hf62.get("status") or "") != str(item.get("status") or ""):
+                                    st.error("Este atendimento mudou em outra sessão. Atualize e confira novamente.")
+                                else:
+                                    ligadas_hf62 = _hf62_propostas_ligadas(atual_hf62, carregar_historico(force_refresh=True))
+                                    retirado_hf62 = _hf62_preparar_retirada(
+                                        atual_hf62, motivo_hf62,
+                                        agora_local().strftime("%d/%m/%Y %H:%M"), ligadas_hf62,
+                                    )
+                                    atual_hf62.update(retirado_hf62)
+                                    registrar_evento_atendimento(atual_hf62, "Consulta retirada da fila: " + motivo_hf62, usuario="Jorge")
+                                    if salvar_atendimentos(versao_hf62):
+                                        st.rerun()
+                                    else:
+                                        st.error("O banco não confirmou o descarte. Nenhuma alteração foi confirmada.")
+                            except ValueError as erro_hf62:
+                                st.error(str(erro_hf62))
 
     with tab_novo:
         st.subheader("Registrar mensagem ou contato")

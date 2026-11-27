@@ -1,0 +1,32 @@
+name: AlphaFest HF62 - descarte seguro (sem deploy)
+on:
+  push:
+    branches: [feature/atendimento-descarte-seguro-hf62]
+  pull_request:
+    branches: [main]
+    paths:
+      - app.py
+      - atendimento_descarte_hf62.py
+      - test_atendimento_descarte_hf62.py
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validar sintaxe dos arquivos da atualizacao
+        run: python -m py_compile app.py atendimento_descarte_hf62.py test_atendimento_descarte_hf62.py
+      - name: Testar logica comercial somente com dados ficticios
+        run: python -m unittest -v test_atendimento_descarte_hf62
+      - name: Conferir que o descarte nao remove arquivos basicos do Manager
+        run: |
+          test -s app.py
+          test -s requirements.txt
+          test -s central_oportunidades.py
