@@ -28508,7 +28508,10 @@ if pagina_atual == "atendimento":
             "Facebook", "Google", "TikTok", "YouTube", "Indicação",
             "Loja física", "Telefone", "Balcão", "Outro",
         ]
-        origem_padrao = canal_at if canal_at in origens_cadastro else "Não informado"
+        origem_padrao = (
+            canal_at if canal_at in origens_cadastro and canal_at not in ("WhatsApp", "Telefone", "Balcão")
+            else "Não informado"
+        )
         origem_at = st.selectbox(
             "Onde o cliente conheceu a AlphaFest?",
             origens_cadastro,
@@ -28570,9 +28573,9 @@ if pagina_atual == "atendimento":
                     "prioridade": prioridade_at,
                     "responsavel": "" if responsavel_at == "Sem responsável" else responsavel_at,
                     "modo": config_at.get("modo", "Manual"),
-                    "origem": origem_at if origem_at != "Não informado" else canal_at,
+                    "origem": origem_at,
                     "canal": canal_at,
-                    "canal_origem": origem_at if origem_at != "Não informado" else canal_at,
+                    "canal_origem": origem_at,
                     "canal_atendimento": canal_at,
                     "etapa_captacao": (
                         "Em atendimento no WhatsApp" if canal_at == "WhatsApp"
