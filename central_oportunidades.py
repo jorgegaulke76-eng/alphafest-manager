@@ -734,7 +734,8 @@ def render_central_oportunidades(
                     "incluídos nesta visão de prioridades. Consulte a aba de "
                     "retornos e a conferência do Histórico."
                 )
-            cadastro_hf74, retornos_hf74 = st.tabs(["📂 Cadastros", "💬 Retornos"])\n            with cadastro_hf74:
+            cadastro_hf74, retornos_hf74 = st.tabs(["📂 Cadastros", "💬 Retornos"])
+            with cadastro_hf74:
                 if quadro_hf70["cadastro"]:
                     st.dataframe(
                         pd.DataFrame(quadro_hf70["cadastro"][:100]),
