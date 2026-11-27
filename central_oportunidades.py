@@ -10,6 +10,7 @@ import urllib.parse
 from collections import defaultdict
 from datetime import datetime
 
+from conferencia_vinculos_hf68 import fila_conferencia_vinculos
 from insights_organicos_hf67 import sugerir_acoes_organicas
 from analytics_vendas_produtos_hf66 import consolidar_vendas_e_produtos
 from retorno_registrado_hf65 import link_whatsapp_retorno
@@ -266,6 +267,28 @@ def render_central_oportunidades(
                 "Correspondências usam apenas número de WhatsApp; não comprovam que se trata "
                 "do mesmo pedido. Nenhum vínculo é criado por esta conferência."
             )
+        st.markdown("#### 🗂️ HF68 — Fila de conferência manual do Histórico")
+        fila_hf68 = fila_conferencia_vinculos(itens, historico)
+        st.metric("Registros para conferir", fila_hf68["total"])
+        st.caption(
+            "Somente leitura: identifica registros antigos com vínculo ausente, inválido "
+            "ou ambíguo. Telefone é apenas pista. Nenhuma proposta, atendimento, "
+            "cliente ou origem é alterado automaticamente."
+        )
+        if fila_hf68["registros"]:
+            st.dataframe(
+                pd.DataFrame(fila_hf68["registros"]),
+                hide_index=True,
+                use_container_width=True,
+            )
+            st.caption(
+                "Antes de corrigir qualquer registro no fluxo oficial, confira o "
+                "orçamento, o atendimento e a conversa original. Números e IDs "
+                "duplicados exigem revisão individual."
+            )
+        else:
+            st.success("Nenhuma pendência de vínculo identificada nesta conferência.")
+
         st.info(
             "Para novos orçamentos, inicie a proposta pela Caixa unificada, usando a ação "
             "Orçamento no atendimento correspondente. Isso preserva a origem sem precisar "
