@@ -610,7 +610,8 @@ def render_central_oportunidades(
                     )
                     elegivel_hf64, _ = elegibilidade_encerramento(proposta_atual_hf64, hoje)
                     if encerrar_sem_retorno is not None and elegivel_hf64:
-                        with st.expander("📦 Encerrar orçamento sem retorno (manual)"):
+                        with st.container(border=True):
+                            st.markdown("**📦 Encerrar orçamento sem retorno (manual)**")
                             st.warning(
                                 "Use somente depois de conferir a conversa real: "
                                 "o prazo sozinho não comprova que o cliente deixou de responder. "
