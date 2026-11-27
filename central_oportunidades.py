@@ -12,6 +12,7 @@ from datetime import datetime
 
 from conferencia_vinculos_hf68 import fila_conferencia_vinculos
 from filtros_conferencia_hf69 import filtrar_fila_vinculos
+from prioridades_comerciais_hf70 import quadro_prioridades_hf70
 from insights_organicos_hf67 import sugerir_acoes_organicas
 from analytics_vendas_produtos_hf66 import consolidar_vendas_e_produtos
 from retorno_registrado_hf65 import link_whatsapp_retorno
@@ -677,6 +678,51 @@ def render_central_oportunidades(
         c1.metric("Retornos a conferir", len(agir))
         c2.metric("Prioridade alta ou urgente", alta)
         c3.metric("Aguardar cliente", len(retornos) - len(agir))
+        st.markdown("#### 🧭 HF70 — Prioridades separadas por tipo de trabalho")
+        quadro_hf70 = quadro_prioridades_hf70(
+            fila_hf68["registros"], agir, propostas_sem_envio
+        )
+        col_cadastro_hf70, col_comercial_hf70 = st.columns(2)
+        col_cadastro_hf70.metric(
+            "Conferência cadastral", quadro_hf70["cadastro_total"]
+        )
+        col_comercial_hf70.metric(
+            "Retornos comerciais elegíveis", quadro_hf70["comercial_total"]
+        )
+        st.caption(
+            "As pendências cadastrais não são oportunidades de venda. "
+            "Retornos comerciais dependem da fila de propostas enviadas do Manager; "
+            "propostas com vínculo inconsistente ou sem registro de envio "
+            "ficam fora desta lista de retornos elegíveis até conferência manual. "
+            "Nenhuma mensagem é disparada e nenhum registro é modificado."
+        )
+        if quadro_hf70["retornos_bloqueados_por_conferencia"]:
+            st.info(
+                f"{quadro_hf70['retornos_bloqueados_por_conferencia']} retorno(s) "
+                "da fila oficial exigem conferência cadastral antes de serem "
+                "incluídos nesta visão de prioridades. Consulte a aba de "
+                "retornos e a conferência do Histórico."
+            )
+        with st.expander("📂 Conferências cadastrais", expanded=False):
+            if quadro_hf70["cadastro"]:
+                st.dataframe(
+                    pd.DataFrame(quadro_hf70["cadastro"][:100]),
+                    hide_index=True, use_container_width=True,
+                )
+                if len(quadro_hf70["cadastro"]) > 100:
+                    st.caption("Exibindo as primeiras 100 pendências; use a pesquisa HF69 para as demais.")
+            else:
+                st.success("Nenhuma pendência cadastral identificada.")
+        with st.expander("💬 Retornos comerciais para conferir", expanded=False):
+            if quadro_hf70["comercial"]:
+                st.dataframe(
+                    pd.DataFrame(quadro_hf70["comercial"][:100]),
+                    hide_index=True, use_container_width=True,
+                )
+                if len(quadro_hf70["comercial"]) > 100:
+                    st.caption("Exibindo os primeiros 100 retornos.")
+            else:
+                st.info("Nenhum retorno elegível para esta visão.")
         if agir:
             resumo = [
                 "ALPHAFEST | RETORNOS COMERCIAIS A CONFERIR",
