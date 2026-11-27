@@ -10,6 +10,7 @@ import urllib.parse
 from collections import defaultdict
 from datetime import datetime
 
+from retornos_sem_envio_hf63 import listar_sem_registro_envio
 from thu_comercial_service import montar_retornos_comerciais
 from proposal_status import status_bool, proposta_encerrada
 from typing import Any, Callable, Dict, List
@@ -172,6 +173,7 @@ def render_central_oportunidades(
     historico: List[Dict[str, Any]] | None = None,
     now_fn: Callable[[], datetime] | None = None,
     abrir_orcamento: Callable[[Dict[str, Any]], Any] | None = None,
+    registrar_envio: Callable[[str], Any] | None = None,
 ) -> None:
     itens = dados_at.setdefault("itens", [])
     historico = historico or []
@@ -464,6 +466,75 @@ def render_central_oportunidades(
             st.info("Cadastre o nome do post, Reel, vídeo ou página em cada oportunidade para descobrir quais conteúdos colocam dinheiro no caixa.")
 
     with tab_retornos:
+        st.markdown("#### 📋 Orçamentos sem registro de envio")
+        st.caption(
+            "Estes orçamentos ainda não têm envio registrado no Manager. "
+            "Isso NÃO significa que o cliente não recebeu a proposta. "
+            "A confirmação abaixo não envia mensagem e não marca venda."
+        )
+        propostas_sem_envio = listar_sem_registro_envio(historico)
+        st.metric("Propostas sem registro de envio", len(propostas_sem_envio))
+        if propostas_sem_envio:
+            busca_sem_envio = st.text_input(
+                "Localizar proposta sem registro de envio",
+                placeholder="Número ou nome do cliente",
+                key="hf63_busca_sem_envio",
+            ).strip().casefold()
+            filtradas_sem_envio = [
+                p for p in propostas_sem_envio
+                if not busca_sem_envio or busca_sem_envio in (
+                    str(p.get("numero_proposta") or "") + " "
+                    + str(p.get("cliente_nome") or p.get("cliente") or "")
+                ).casefold()
+            ]
+            st.caption(
+                f"{len(filtradas_sem_envio)} proposta(s) encontrada(s). "
+                "Mostrando até 30 por página para manter o Manager leve."
+            )
+            total_paginas = max(1, (len(filtradas_sem_envio) + 29) // 30)
+            pagina_sem_envio = st.number_input(
+                "Página das propostas sem registro",
+                min_value=1,
+                max_value=total_paginas,
+                value=1,
+                step=1,
+                key="hf63_pagina_sem_envio",
+            ) if total_paginas > 1 else 1
+            inicio_sem_envio = (int(pagina_sem_envio) - 1) * 30
+            for proposta_sem in filtradas_sem_envio[inicio_sem_envio:inicio_sem_envio + 30]:
+                numero_sem = str(proposta_sem.get("numero_proposta") or "").strip()
+                nome_sem = str(proposta_sem.get("cliente_nome") or proposta_sem.get("cliente") or "Cliente")
+                data_sem = str(proposta_sem.get("data_geracao") or proposta_sem.get("data") or "Data não informada")
+                with st.expander(f"📄 {numero_sem} · {nome_sem} · {data_sem}"):
+                    st.info(
+                        "Confira primeiro a conversa real no WhatsApp. "
+                        "Só registre se o orçamento já foi efetivamente enviado ao cliente."
+                    )
+                    if registrar_envio is None:
+                        st.caption("Para registrar o envio, abra esta proposta em Operação → Histórico.")
+                    else:
+                        ciente_sem = st.checkbox(
+                            "Confirmo que enviei este orçamento ao cliente",
+                            key=f"hf63_confirmar_envio_{numero_sem}",
+                        )
+                        if st.button(
+                            "✅ Registrar envio já realizado",
+                            key=f"hf63_registrar_envio_{numero_sem}",
+                            disabled=not ciente_sem,
+                            width="stretch",
+                        ):
+                            ok_envio, _proposta_atual, msg_envio = registrar_envio(numero_sem)
+                            if ok_envio:
+                                st.success(f"Envio confirmado para a proposta {numero_sem}.")
+                                st.rerun()
+                            else:
+                                st.error(msg_envio or "Não foi possível confirmar o registro.")
+        else:
+            st.success(
+                "Não foram encontradas propostas abertas sem registro de envio. "
+                "Consulte abaixo os retornos das propostas já registradas."
+            )
+        st.divider()
         st.markdown("#### 🔔 Lembretes de orçamentos enviados")
         st.caption(
             "Acompanhamento assistido, calculado a partir das propostas reais do Histórico. "
