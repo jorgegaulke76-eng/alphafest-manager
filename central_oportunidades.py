@@ -10,6 +10,7 @@ import urllib.parse
 from collections import defaultdict
 from datetime import datetime
 
+from insights_organicos_hf67 import sugerir_acoes_organicas
 from analytics_vendas_produtos_hf66 import consolidar_vendas_e_produtos
 from retorno_registrado_hf65 import link_whatsapp_retorno
 from encerramento_sem_retorno_hf64 import elegibilidade_encerramento
@@ -516,6 +517,22 @@ def render_central_oportunidades(
             )
         else:
             st.info("Nenhum produto identificado em pedido aprovado no Histórico.")
+        st.divider()
+        st.markdown("##### 🌱 Próximas ações orgânicas sugeridas")
+        sugestoes_hf67 = sugerir_acoes_organicas(hf66_dados)
+        if sugestoes_hf67["cobertura_atribuicao"] is not None:
+            st.caption(
+                f"Cobertura de origem vinculada: {sugestoes_hf67['cobertura_atribuicao']:.1f}% "
+                "dos pedidos aprovados. Origem de venda só é confirmada por vínculo oficial."
+            )
+        else:
+            st.caption("Cobertura de origem ainda não calculável: não há pedidos aprovados.")
+        for sugestao_hf67 in sugestoes_hf67["acoes"]:
+            with st.container(border=True):
+                st.markdown("**" + sugestao_hf67["titulo"] + "**")
+                st.write(sugestao_hf67["descricao"])
+        st.caption(sugestoes_hf67["observacao"])
+
         hf66_problemas = hf66_dados["diagnostico"]
         with st.expander("🔎 Conferência de vínculos e qualidade dos dados"):
             st.caption(
