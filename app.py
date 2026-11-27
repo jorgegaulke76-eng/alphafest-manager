@@ -25624,6 +25624,50 @@ def renderizar_workspace_anna_isolado():
     if a5.button("📋 Histórico", width="stretch"):
         rerun_na_aba("historico")
 
+    # Atalho operacional: os novos orçamentos podem nascer de um atendimento real.
+    # O vínculo só é gravado após salvar a proposta no formulário oficial.
+    atendimentos_para_orcamento_anna = [
+        item for item in atendimentos.get("itens", [])
+        if isinstance(item, dict)
+        and str(item.get("id") or "").strip()
+        and str(item.get("status") or "") not in ("Arquivado", "Entregue", "Pós-venda")
+    ]
+    propostas_por_atendimento_anna = {
+        str(p.get("atendimento_id") or "").strip()
+        for p in historico if isinstance(p, dict) and str(p.get("atendimento_id") or "").strip()
+    }
+    atendimentos_livres_anna = [
+        item for item in atendimentos_para_orcamento_anna
+        if str(item.get("id") or "") not in propostas_por_atendimento_anna
+    ]
+    with st.expander("🔗 Criar orçamento vinculado a atendimento", expanded=False):
+        st.caption(
+            "Escolha uma conversa real já registrada. O orçamento será aberto com o cliente, "
+            "WhatsApp e contexto, preservando a origem do atendimento. "
+            "Nenhum pedido é criado até você salvar o formulário."
+        )
+        if atendimentos_livres_anna:
+            idx_atendimento_anna = st.selectbox(
+                "Atendimento de origem",
+                range(len(atendimentos_livres_anna)),
+                format_func=lambda i: (
+                    str(atendimentos_livres_anna[i].get("cliente") or "Contato")
+                    + " · " + str(atendimentos_livres_anna[i].get("canal_origem") or "Origem não informada")
+                    + " · " + str(atendimentos_livres_anna[i].get("id") or "")
+                ),
+                key="anna_selecionar_atendimento_orcamento",
+            )
+            if st.button("📄 Abrir orçamento vinculado", key="anna_criar_orcamento_vinculado", width="stretch"):
+                escolhido = atendimentos_livres_anna[idx_atendimento_anna]
+                _hf53_solicitar_abertura("novo_orcamento", {
+                    "cliente": str(escolhido.get("cliente") or ""),
+                    "whatsapp": str(escolhido.get("telefone") or ""),
+                    "observacoes": str(escolhido.get("mensagem") or ""),
+                    "atendimento_id": str(escolhido.get("id") or ""),
+                })
+        else:
+            st.info("Não há atendimentos abertos sem proposta vinculada. Você pode registrar um novo atendimento primeiro.")
+
     st.markdown("### 📚 Catálogo")
     st.caption("⚡ CAT1 ativa • Kits Festa e catálogos antigos disponíveis no Acervo Histórico.")
     k1, k2, k3, k4, k5, k6, k7 = st.columns(7)
@@ -28349,6 +28393,7 @@ if pagina_atual == "atendimento":
                     salvar_atendimentos=salvar_atendimentos,
                     historico=carregar_historico(),
                     now_fn=agora_local,
+                    abrir_orcamento=lambda dados: _hf53_solicitar_abertura("novo_orcamento", dados),
                 )
             except Exception as exc:
                 st.error("A Central de Oportunidades encontrou um erro, mas a Caixa Unificada e o restante da operação continuam disponíveis.")
