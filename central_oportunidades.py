@@ -15,6 +15,7 @@ from filtros_conferencia_hf69 import filtrar_fila_vinculos
 from prioridades_comerciais_hf70 import quadro_prioridades_hf70
 from resumo_diario_hf71 import resumo_diario_hf71
 from roteiro_diario_hf72 import roteiro_diario_hf72, texto_roteiro_hf72
+from consulta_roteiro_hf73 import CATEGORIAS, consultar_categoria_hf73
 from insights_organicos_hf67 import sugerir_acoes_organicas
 from analytics_vendas_produtos_hf66 import consolidar_vendas_e_produtos
 from retorno_registrado_hf65 import link_whatsapp_retorno
@@ -774,6 +775,44 @@ def render_central_oportunidades(
             mime="text/plain",
             key="hf72_roteiro_diario_txt",
         )
+        st.markdown("#### 🔎 HF73 — Consultar tarefas do roteiro")
+        st.caption(
+            "Selecione a categoria para consultar os números das propostas nesta "
+            "mesma tela. Consulte o Histórico antes de agir; nenhuma mensagem "
+            "é enviada e nenhum registro é alterado."
+        )
+        categorias_hf73 = dict(CATEGORIAS)
+        categoria_hf73 = st.selectbox(
+            "Categoria para consultar",
+            options=list(categorias_hf73),
+            format_func=lambda chave: categorias_hf73[chave],
+            key="hf73_categoria_roteiro",
+        )
+        busca_hf73 = st.text_input(
+            "Pesquisar número da proposta nesta categoria",
+            key="hf73_busca_proposta",
+            placeholder="Número completo ou parcial",
+        )
+        consulta_hf73 = consultar_categoria_hf73(
+            categoria_hf73, quadro_hf70, propostas_sem_envio,
+            busca=busca_hf73, limite=30,
+        )
+        st.caption(
+            f"{consulta_hf73['total']} registro(s) encontrado(s). "
+            f"Exibindo até {consulta_hf73['exibidos']} nesta consulta."
+        )
+        if consulta_hf73["registros"]:
+            st.dataframe(
+                pd.DataFrame(consulta_hf73["registros"]),
+                hide_index=True, use_container_width=True,
+            )
+            if consulta_hf73["total"] > consulta_hf73["exibidos"]:
+                st.caption(
+                    "Refine a pesquisa pelo número para encontrar outros registros. "
+                    "A consulta não altera o Histórico."
+                )
+        else:
+            st.info("Nenhuma proposta encontrada para esta categoria e pesquisa.")
         if agir:
             resumo = [
                 "ALPHAFEST | RETORNOS COMERCIAIS A CONFERIR",
