@@ -115,9 +115,7 @@ export async function runDaily(env, fetcher = fetch, clock = new Date()) {
   // falha de rede apos reserva exige intervencao manual, nunca retry automatico.
   const db = env.QUOTE_DEDUPE_DB;
   if (!db || typeof db.prepare !== "function") throw new Error("D1 dedupe nao configurado; envio bloqueado");
-  const dateKey = new Intl.DateTimeFormat("en-CA",{
-    timeZone:"America/Sao_Paulo", year:"numeric",month:"2-digit",day:"2-digit"
-  }).format(clock);
+  const dateKey = new Date(dateParts(clock)).toISOString().slice(0,10);
   const claimed = await db.prepare(
     "INSERT OR IGNORE INTO quote_summary_delivery(day_key, claimed_at) VALUES (?, ?)"
   ).bind(dateKey,clock.toISOString()).run();
