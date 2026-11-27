@@ -1,0 +1,23 @@
+name: AlphaFest HF70 - prioridades seguras
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - central_oportunidades.py
+      - prioridades_comerciais_hf70.py
+      - test_prioridades_comerciais_hf70.py
+      - .github/workflows/hf70-prioridades-gate.yml
+  push:
+    branches: [feature/hf70-prioridades-separadas]
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Sintaxe
+        run: python -m py_compile central_oportunidades.py prioridades_comerciais_hf70.py test_prioridades_comerciais_hf70.py
+      - name: Testes de classificacao sem banco
+        run: python -m unittest -v test_prioridades_comerciais_hf70 test_conferencia_vinculos_hf68 test_filtros_conferencia_hf69
