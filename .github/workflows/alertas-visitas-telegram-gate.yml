@@ -1,0 +1,31 @@
+name: AlphaFest - alertas sonoros de visitas (sem deploy)
+on:
+  push:
+    branches: [feature/alertas-sonoros-visitas-telegram]
+    paths:
+      - "workers/alertas-site/**"
+      - ".github/workflows/alertas-visitas-telegram-gate.yml"
+  pull_request:
+    paths:
+      - "workers/alertas-site/**"
+      - ".github/workflows/alertas-visitas-telegram-gate.yml"
+permissions:
+  contents: read
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Testar intervalos, privacidade e envio fictício
+        run: |
+          node --check workers/alertas-site/src/index.mjs
+          node --test workers/alertas-site/src/index.test.mjs
+      - name: Confirmar que alertas nascem desligados
+        run: |
+          node -e "const fs=require('fs');const c=JSON.parse(fs.readFileSync('workers/alertas-site/wrangler.jsonc','utf8'));if(c.vars.ALERTS_ENABLED!=='false')process.exit(1);console.log('OK: alerta desligado e sem deploy')"

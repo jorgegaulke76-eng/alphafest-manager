@@ -1,4 +1,5 @@
-name: HF65.24.52 - Validacao comercial
+name: HF65.24.52 - Validacao comercial (escopo legado)
+# Regressao HF52 restrita a seus modulos; mudancas na vitrine atual usam gate focal.
 
 on:
   push:
@@ -10,7 +11,6 @@ on:
     paths:
       - 'site_metrics_dashboard_ui.py'
       - 'site_metrics_service.py'
-      - 'site_vitrine_service.py'
       - 'site_carrinho_orcamento_service.py'
       - 'tests/test_hf65_24_52_commercial_links.py'
       - 'tests/test_hf65_24_52_site_runtime.py'
@@ -21,7 +21,6 @@ on:
       - 'scripts/hf65_24_52_postgrest_contract.py'
       - 'scripts/hf65_24_52_postgrest_browser.py'
       - 'tests/fixtures/hf65_24_52_metrics_contract.sql'
-      - '.github/workflows/hf65-24-52-commercial-tests.yml'
 
 permissions:
   contents: read
