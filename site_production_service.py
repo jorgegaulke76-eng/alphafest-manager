@@ -121,7 +121,6 @@ def preparar_html_producao(html_site: str) -> str:
                     "streetAddress": "Avenida Manoel Virgínio de Almeida, 442",
                     "addressLocality": "Itatiba",
                     "addressRegion": "SP",
-                    "postalCode": "13251-530",
                     "addressCountry": "BR",
                 },
                 "areaServed": {"@type": "City", "name": "Itatiba"},
