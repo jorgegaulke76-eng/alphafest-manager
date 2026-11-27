@@ -13,6 +13,7 @@ from datetime import datetime
 from conferencia_vinculos_hf68 import fila_conferencia_vinculos
 from filtros_conferencia_hf69 import filtrar_fila_vinculos
 from prioridades_comerciais_hf70 import quadro_prioridades_hf70
+from resumo_diario_hf71 import resumo_diario_hf71
 from insights_organicos_hf67 import sugerir_acoes_organicas
 from analytics_vendas_produtos_hf66 import consolidar_vendas_e_produtos
 from retorno_registrado_hf65 import link_whatsapp_retorno
@@ -723,6 +724,32 @@ def render_central_oportunidades(
                     st.caption("Exibindo os primeiros 100 retornos.")
             else:
                 st.info("Nenhum retorno elegível para esta visão.")
+        st.markdown("#### 📅 HF71 — Resumo comercial do dia")
+        resumo_hf71 = resumo_diario_hf71(
+            quadro_hf70, propostas_sem_envio, retornos, hoje
+        )
+        h1, h2, h3 = st.columns(3)
+        h1.metric("Conferências cadastrais", resumo_hf71["conferencias"])
+        h2.metric("Propostas sem registro de envio", resumo_hf71["sem_registro_envio"])
+        h3.metric("Retornos elegíveis", resumo_hf71["retornos_elegiveis"])
+        st.caption(
+            f"Prioridades entre os retornos elegíveis: "
+            f"{resumo_hf71['urgentes']} urgente(s), "
+            f"{resumo_hf71['altos']} alta(s) e "
+            f"{resumo_hf71['normais']} normal(is). "
+            "São orientações para conferência, não confirmações de silêncio do cliente."
+        )
+        st.download_button(
+            "📥 Baixar resumo diário sem dados pessoais (.txt)",
+            data=resumo_hf71["texto"].encode("utf-8"),
+            file_name="alphafest-resumo-diario-comercial.txt",
+            mime="text/plain",
+            key="hf71_resumo_diario_txt",
+        )
+        st.caption(
+            "O resumo contém apenas contagens e recomendações gerais. "
+            "Não envia mensagens, não gera campanhas e não modifica o Histórico."
+        )
         if agir:
             resumo = [
                 "ALPHAFEST | RETORNOS COMERCIAIS A CONFERIR",
