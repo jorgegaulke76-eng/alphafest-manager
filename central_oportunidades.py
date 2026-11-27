@@ -296,6 +296,32 @@ def render_central_oportunidades(
         c1.metric("Retornos a conferir", len(agir))
         c2.metric("Prioridade alta ou urgente", alta)
         c3.metric("Aguardar cliente", len(retornos) - len(agir))
+        if agir:
+            resumo = [
+                "ALPHAFEST | RETORNOS COMERCIAIS A CONFERIR",
+                "Gerado em: " + hoje.strftime("%d/%m/%Y"),
+                "Pendentes: " + str(len(agir)),
+                "Alta prioridade: " + str(alta),
+                "",
+                "Lista operacional sem nomes, telefones, valores ou mensagens de clientes:",
+            ]
+            for item in agir:
+                numero = str(item.get("numero_proposta") or "Sem número")
+                resumo.append(
+                    "Proposta " + numero
+                    + " | Prioridade: " + str(item.get("nivel") or "normal")
+                    + " | Dias desde último envio: " + str(item.get("dias_sem_retorno") or 0)
+                    + " | Ação: " + str(item.get("acao") or "Conferir atendimento")
+                )
+            resumo.append("")
+            resumo.append("Confira os detalhes no Manager antes de qualquer contato. Nenhuma mensagem foi enviada.")
+            st.download_button(
+                "📥 Baixar resumo de retornos (.txt)",
+                data="\n".join(resumo).encode("utf-8"),
+                file_name="alphafest-retornos-comerciais.txt",
+                mime="text/plain",
+                key="opp_retornos_resumo_txt",
+            )
         if not agir:
             st.info("Nenhum orçamento enviado precisa de acompanhamento neste momento.")
         else:
