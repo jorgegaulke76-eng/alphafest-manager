@@ -1,0 +1,23 @@
+name: AlphaFest HF69 - filtros de conferencia somente leitura
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - central_oportunidades.py
+      - filtros_conferencia_hf69.py
+      - test_filtros_conferencia_hf69.py
+      - .github/workflows/hf69-filtros-conferencia-gate.yml
+  push:
+    branches: [feature/hf69-filtros-conferencia-historico]
+jobs:
+  testar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validar sintaxe
+        run: python -m py_compile central_oportunidades.py filtros_conferencia_hf69.py test_filtros_conferencia_hf69.py
+      - name: Testes de consulta com dados ficticios
+        run: python -m unittest -v test_filtros_conferencia_hf69 test_conferencia_vinculos_hf68
