@@ -14,8 +14,26 @@ test("conta apenas propostas enviadas, abertas e reais", () => {
     {enviado:false,ultimo_envio_em:"24/11/2026"},
   ];
   assert.deepEqual(summarizeQuotes(data,clock),{
-    pending:2,next:1,late:1,unknown:0,deliveryUrgent:0
+    pending:2,actionable:2,highPriority:1,waiting:0,next:1,late:1,unknown:0,deliveryUrgent:0
   });
+});
+
+test("contagens de acao, prioridade e espera seguem criterio do THU",()=> {
+  const data = [
+    {enviado:true,ultimo_envio_em:"27/11/2026"},
+    {enviado:true,ultimo_envio_em:"26/11/2026"},
+    {enviado:true,ultimo_envio_em:"24/11/2026"},
+    {enviado:true,ultimo_envio_em:"27/11/2026",data_entrega:"28/11/2026"},
+    {enviado:true,ultimo_envio_em:"26/11/2026",data_entrega:"25/11/2026"},
+    {enviado:true,ultimo_envio_em:"27/11/2026",aprovado:true},
+  ];
+  assert.deepEqual(summarizeQuotes(data,clock),{
+    pending:5,actionable:4,highPriority:3,waiting:1,next:2,late:1,unknown:0,deliveryUrgent:2
+  });
+  const message=formatSummary(summarizeQuotes(data,clock),clock);
+  assert.match(message,/Retornos a conferir: 4/);
+  assert.match(message,/Prioridade alta ou urgente: 3/);
+  assert.match(message,/Aguardando cliente: 1/);
 });
 
 test("status comercial obsoleto nao encerra pedido que progrediu",()=>{
