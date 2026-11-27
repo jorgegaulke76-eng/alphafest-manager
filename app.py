@@ -28499,14 +28499,37 @@ if pagina_atual == "atendimento":
         n1, n2, ncanal = st.columns([2, 2, 1])
         nome_at = n1.text_input("Nome / identificação", key="novo_at_nome")
         telefone_at = n2.text_input("Telefone / WhatsApp (opcional)", key="novo_at_telefone")
-        canal_at = ncanal.selectbox("Canal", CANAIS_ATENDIMENTO, key="novo_at_canal")
+        canal_at = ncanal.selectbox(
+            "Canal de atendimento", CANAIS_ATENDIMENTO, key="novo_at_canal",
+            help="Onde a mensagem realmente chegou à equipe (ex.: WhatsApp).",
+        )
+        origens_cadastro = [
+            "Não informado", "WhatsApp", "Site / Catálogo", "Instagram",
+            "Facebook", "Google", "TikTok", "YouTube", "Indicação",
+            "Loja física", "Telefone", "Balcão", "Outro",
+        ]
+        origem_padrao = (
+            canal_at if canal_at in origens_cadastro and canal_at not in ("WhatsApp", "Telefone", "Balcão")
+            else "Não informado"
+        )
+        origem_at = st.selectbox(
+            "Onde o cliente conheceu a AlphaFest?",
+            origens_cadastro,
+            index=origens_cadastro.index(origem_padrao),
+            key="novo_at_origem_real",
+            help="Ex.: entrou pelo WhatsApp depois de visitar o site? Selecione Site / Catálogo. Não presuma a origem se o cliente não informou.",
+        )
+        st.caption(
+            "Cadastre apenas conversas ou contatos reais. Visita ao site e clique em WhatsApp, "
+            "sem mensagem recebida, não geram oportunidade automaticamente."
+        )
         mensagem_at = st.text_area("Mensagem recebida", key="novo_at_mensagem", placeholder="Ex.: Gostaria do catálogo de topos e um orçamento para sábado")
         sugestao_status = sugerir_tipo_atendimento(mensagem_at)
         n3, n4, n5 = st.columns(3)
         status_at = n3.selectbox("Classificação", STATUS_ATENDIMENTO, index=STATUS_ATENDIMENTO.index(sugestao_status), key="novo_at_status")
         prioridade_at = n4.selectbox("Prioridade", ["Urgente", "Alta", "Normal", "Baixa"], index=2, key="novo_at_prioridade")
         responsavel_at = n5.selectbox("Responsável", ["Sem responsável", "Anna", "Jorge"], key="novo_at_responsavel")
-        with st.expander("🎯 Fonte do contato / conteúdo que gerou o interesse", expanded=canal_at not in ("WhatsApp", "Telefone", "Balcão")):
+        with st.expander("🎯 Fonte do contato / conteúdo que gerou o interesse", expanded=origem_at not in ("WhatsApp", "Telefone", "Balcão", "Não informado")):
             fc1, fc2 = st.columns(2)
             tipo_conteudo_at = fc1.selectbox("Tipo de conteúdo", ["Reel", "Story", "Post", "Comentário", "Short", "Vídeo", "Página do site", "Catálogo", "Anúncio", "Pesquisa Google", "Indicação", "Outro"], key="novo_at_tipo_conteudo")
             motivo_contato_at = fc2.selectbox("Motivo do contato", ["Pedido de orçamento", "Pedido de catálogo", "Dúvida", "Solicitação de arte", "Balões", "Topo de bolo", "Lembrancinhas", "Locação", "Pós-venda", "Indicação", "Outro"], key="novo_at_motivo")
@@ -28515,9 +28538,31 @@ if pagina_atual == "atendimento":
             campanha_at = fc3.text_input("Campanha", key="novo_at_campanha")
             produto_interesse_at = fc4.text_input("Produto relacionado", key="novo_at_produto")
             conteudo_url_at = st.text_input("Link do conteúdo (opcional)", key="novo_at_conteudo_url")
+        # Evita novos cadastros duplicados por engano. O usuário ainda pode
+        # registrar um atendimento realmente distinto, de forma explícita.
+        telefone_chave_at = _telefone_chave(telefone_at)
+        repetidos_at = [
+            i for i in itens_at
+            if telefone_chave_at
+            and _telefone_chave(i.get("telefone") or i.get("whatsapp")) == telefone_chave_at
+            and str(i.get("status") or "") not in ("Arquivado", "Entregue", "Pós-venda")
+        ]
+        if repetidos_at:
+            st.warning(
+                f"Já existem {len(repetidos_at)} atendimento(s) ativo(s) com esse WhatsApp. "
+                "Confira a Caixa unificada antes de criar outro registro."
+            )
+            permitir_duplicado_at = st.checkbox(
+                "É um novo atendimento distinto; quero registrar mesmo assim",
+                key="novo_at_confirmar_distinto",
+            )
+        else:
+            permitir_duplicado_at = True
         if st.button("➕ Adicionar à fila", type="primary", width="stretch"):
             if not nome_at.strip() and not telefone_at.strip():
                 st.warning("Informe pelo menos um nome ou WhatsApp.")
+            elif repetidos_at and not permitir_duplicado_at:
+                st.warning("Confira os atendimentos existentes ou confirme que se trata de um contato distinto.")
             else:
                 itens_at.append({
                     "id": f"AT-{agora_local().strftime('%Y%m%d%H%M%S%f')}",
@@ -28528,11 +28573,14 @@ if pagina_atual == "atendimento":
                     "prioridade": prioridade_at,
                     "responsavel": "" if responsavel_at == "Sem responsável" else responsavel_at,
                     "modo": config_at.get("modo", "Manual"),
-                    "origem": canal_at,
+                    "origem": origem_at,
                     "canal": canal_at,
-                    "canal_origem": canal_at,
-                    "canal_atendimento": "WhatsApp" if canal_at == "WhatsApp" else canal_at,
-                    "etapa_captacao": "Nova captação" if canal_at not in ("WhatsApp", "Telefone", "Balcão") else "Em atendimento no WhatsApp",
+                    "canal_origem": origem_at,
+                    "canal_atendimento": canal_at,
+                    "etapa_captacao": (
+                        "Em atendimento no WhatsApp" if canal_at == "WhatsApp"
+                        else "Nova captação"
+                    ),
                     "tipo_conteudo": tipo_conteudo_at,
                     "motivo_contato": motivo_contato_at,
                     "conteudo_titulo": conteudo_titulo_at.strip(),

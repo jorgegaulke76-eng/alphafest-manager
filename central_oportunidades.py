@@ -53,7 +53,7 @@ def _origem(item: Dict[str, Any]) -> str:
 
 
 def _eh_captacao_externa(item: Dict[str, Any]) -> bool:
-    return _origem(item) not in ("WhatsApp", "Telefone", "Balcão")
+    return _origem(item) not in ("WhatsApp", "Telefone", "Balcão", "Não informado")
 
 
 def _etapa(item: Dict[str, Any]) -> str:
