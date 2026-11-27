@@ -1,0 +1,424 @@
+"""Site institucional + vitrine AlphaFest (HF40).
+
+A HF40 mantém a vitrine homologada como núcleo comercial e acrescenta as
+seções Início, Produtos, Serviços, Quem Somos e Contato usando a mesma
+identidade visual. O Catálogo continua sendo a Fonte Única dos produtos e os
+dados de contato vêm da configuração oficial da empresa no Manager.
+
+Este módulo é somente leitura: não persiste dados, não publica e não altera DNS.
+"""
+from __future__ import annotations
+
+from datetime import datetime
+import base64
+import html
+from pathlib import Path
+import re
+from typing import Any, Callable, Dict, Iterable, Optional
+from urllib.parse import quote
+
+from site_dicas_multicanal_service import inserir_chamada_dicas
+from site_conteudo_util_service import inject_conteudo_util
+from site_institucional_adsense_service import inserir_links_institucionais
+from site_posts_service import inject_home as inject_posts_home
+from site_carrinho_orcamento_service import inject_cart
+from site_vitrine_service import gerar_html_vitrine
+from site_corporativo_service import inject_corporate_home
+from site_entrega_rapida_service import inject_fast_delivery
+from site_galeria_service import gerar_fragmento_galeria, selecionar_trabalhos_site
+from site_visual_hf48_service import aplicar_visual_hf48
+from site_metrics_service import inject_tracking
+from site_campaign_service import inject_campaign
+from site_home_content_service import (
+    normalize_home_content_config, banner_carousel_html, testimonials_html,
+    client_showcase_html, HOME_CONTENT_CSS, HOME_CONTENT_JS,
+)
+
+ImagemResolver = Optional[Callable[[str], str]]
+
+
+SERVICOS_PADRAO = (
+    ("personalizados_festas.webp", "Personalizados para festas", "Topos, lembranças, papelaria, displays e peças criadas para cada tema e ocasião."),
+    ("baloes_decoracao.webp", "Balões & decoração", "Balões personalizados, bubbles e soluções decorativas para presentes, festas e eventos."),
+    ("grafica_rapida.webp", "Gráfica rápida", "Impressos, banners, faixas, adesivos e materiais gráficos para festas, negócios e eventos."),
+    ("brindes_personalizados.webp", "Brindes personalizados", "Canecas, copos, lembranças e brindes para empresas, equipes, escolas e comemorações."),
+    ("convites_papelaria.webp", "Convites & papelaria", "Convites e papelaria personalizada para aniversários, casamentos, batizados e eventos especiais."),
+    ("impressao_3d.webp", "Impressão 3D", "Peças, displays, lembranças e projetos personalizados produzidos sob medida em impressão 3D."),
+    ("gravacao_laser.webp", "Gravação a laser", "Personalização e gravação de peças e brindes com acabamento preciso para projetos especiais."),
+    ("kits_festa.webp", "Kits & composição de festa", "Itens coordenados para montar uma identidade visual completa, do bolo às lembranças."),
+)
+
+
+def _service_icon_src(filename: str) -> str:
+    """Embute o ícone 3D no HTML publicado para não depender de arquivo externo."""
+    try:
+        icon_path = Path(__file__).resolve().parent / "assets" / "site" / "service_icons" / str(filename)
+        payload = base64.b64encode(icon_path.read_bytes()).decode("ascii")
+        return f"data:image/webp;base64,{payload}"
+    except Exception:
+        return ""
+
+
+def _numero_whatsapp(empresa: Dict[str, Any]) -> str:
+    numero = re.sub(r"\D", "", str((empresa or {}).get("whatsapp_catalogo") or (empresa or {}).get("celular") or ""))
+    if numero and not numero.startswith("55"):
+        numero = "55" + numero
+    return numero
+
+
+def _wa(numero: str, mensagem: str) -> str:
+    return f"https://wa.me/{numero}?text={quote(mensagem)}" if numero else "#"
+
+
+def _bloco_servicos() -> str:
+    cards = []
+    for icone_arquivo, titulo, texto in SERVICOS_PADRAO:
+        src = _service_icon_src(icone_arquivo)
+        icone_html = (
+            f'<img src="{html.escape(src, quote=True)}" alt="" loading="lazy" decoding="async">'
+            if src else ""
+        )
+        cards.append(
+            f'''<article class="service-card"><div class="service-icon">{icone_html}</div>
+            <h3>{html.escape(titulo)}</h3><p>{html.escape(texto)}</p></article>'''
+        )
+    return "".join(cards)
+
+
+
+def _brand_icon(name: str) -> str:
+    """SVGs vetoriais das marcas, substituindo emojis na área de comunicação."""
+    name = str(name or "").strip().lower()
+    paths = {
+        "instagram": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.8 2h8.4A5.8 5.8 0 0 1 22 7.8v8.4a5.8 5.8 0 0 1-5.8 5.8H7.8A5.8 5.8 0 0 1 2 16.2V7.8A5.8 5.8 0 0 1 7.8 2Zm-.2 2A3.6 3.6 0 0 0 4 7.6v8.8A3.6 3.6 0 0 0 7.6 20h8.8a3.6 3.6 0 0 0 3.6-3.6V7.6A3.6 3.6 0 0 0 16.4 4H7.6Zm9.65 1.5a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5ZM12 7a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm0 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z"/></svg>',
+        "facebook": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.7 22v-8h2.7l.4-3.1h-3.1V8.9c0-.9.25-1.5 1.55-1.5H17V4.6c-.3-.04-1.3-.13-2.48-.13-2.45 0-4.13 1.5-4.13 4.25v2.17H7.6V14h2.79v8h3.31Z"/></svg>',
+        "tiktok": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.6 3c.38 2.2 1.65 3.5 3.9 3.64v2.48c-1.3.13-2.44-.3-3.85-1.16v5.15c0 6.54-7.13 8.58-10 3.9-1.84-3.02-.71-8.32 5.2-8.53v2.62c-.43.07-.9.18-1.31.32-1.27.43-1.99 1.25-1.79 2.72.38 2.81 5.55 3.64 5.12-1.85V3h2.73Z"/></svg>',
+        "youtube": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8ZM9.6 15.6V8.4L15.8 12 9.6 15.6Z"/></svg>',
+        "whatsapp": '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 3.5A11.8 11.8 0 0 0 12.08 0C5.54 0 .23 5.3.23 11.84c0 2.09.55 4.13 1.6 5.92L.13 24l6.4-1.68a11.84 11.84 0 0 0 5.54 1.41h.01c6.53 0 11.85-5.31 11.85-11.85 0-3.17-1.22-6.15-3.43-8.38Zm-8.42 18.23h-.01a9.83 9.83 0 0 1-5.02-1.38l-.36-.22-3.8 1 1.01-3.7-.24-.38a9.82 9.82 0 0 1-1.5-5.21c0-5.43 4.42-9.84 9.86-9.84a9.78 9.78 0 0 1 6.96 2.89 9.78 9.78 0 0 1 2.88 6.97c0 5.43-4.42 9.86-9.78 9.87Z"/></svg>',
+    }
+    return paths.get(name, "")
+
+def gerar_html_site_completo(
+    catalogo: Iterable[Dict[str, Any]],
+    empresa: Dict[str, Any],
+    *,
+    logo_src: str = "",
+    imagem_resolver: ImagemResolver = None,
+    modo_preview: bool = True,
+    usar_taxonomia_catalogo: bool = False,
+    galeria_trabalhos: Optional[Iterable[Dict[str, Any]]] = None,
+    galeria_imagem_resolver: ImagemResolver = None,
+    incluir_galeria: bool = False,
+    limite_fotos_galeria: Optional[int] = 24,
+    visual_hf48: bool = False,
+    mascotes_hf48: bool = False,
+    campaign_config: Optional[Dict[str, Any]] = None,
+    campaign_force_preview: bool = False,
+    home_content_config: Optional[Dict[str, Any]] = None,
+    dicas_content: Optional[Iterable[Dict[str, Any]]] = None,
+    posts_content: Optional[Iterable[Dict[str, Any]]] = None,
+) -> str:
+    """Gera o site completo sem publicar ou persistir qualquer dado.
+
+    HF45.4 permite uma prévia paralela usando Categoria → Subcategoria do
+    Catálogo Oficial. HF47.1 acrescenta, somente quando solicitado, a Galeria de
+    Trabalhos já autorizada/pré-selecionada no Manager. HF48.1 adiciona uma
+    camada visual comercial opt-in; HF48.2 pode acrescentar Thu + Fox sobre essa
+    mesma camada, também opt-in e inicialmente somente em prévia. Os parâmetros
+    padrão permanecem desligados para preservar integralmente o site público HF44.
+    """
+    catalogo_lista = list(catalogo or [])
+    galeria_lista = list(galeria_trabalhos or [])
+    produtos_com_galeria = []
+    if incluir_galeria:
+        produtos_com_galeria = [str(x.get("produto") or "").strip() for x in selecionar_trabalhos_site(galeria_lista) if str(x.get("produto") or "").strip()]
+    pagina = gerar_html_vitrine(
+        catalogo_lista,
+        empresa,
+        logo_src=logo_src,
+        imagem_resolver=imagem_resolver,
+        modo_preview=False,
+        usar_taxonomia_catalogo=usar_taxonomia_catalogo,
+        produtos_com_galeria=produtos_com_galeria,
+    )
+
+    empresa = dict(empresa or {})
+    home_cfg = normalize_home_content_config(home_content_config or {})
+    nome = str(empresa.get("nome") or "AlphaFest").strip() or "AlphaFest"
+    subtitulo = str(empresa.get("subtitulo") or "Personalizados & Balões").strip()
+    slogan = str(empresa.get("slogan") or "O poder de estar presente em cada presente!").strip()
+    endereco = str(empresa.get("endereco") or "").strip()
+    cep = str(empresa.get("cep") or "").strip()
+    email = str(empresa.get("email") or "").strip()
+    celular = str(empresa.get("celular") or "").strip()
+    cidade = str(empresa.get("cidade") or "").strip()
+    uf = str(empresa.get("uf") or "").strip()
+    numero = _numero_whatsapp(empresa)
+    whatsapp = _wa(numero, "Olá! Vim pelo novo site da AlphaFest e gostaria de conversar sobre um projeto personalizado.")
+    mapa = "https://www.google.com/maps/search/?api=1&query=" + quote(endereco) if endereco else "#"
+    instagram = str(empresa.get("instagram_url") or "https://www.instagram.com/alphafest10/").strip()
+    facebook = str(empresa.get("facebook_url") or "https://www.facebook.com/alphafest10").strip()
+    tiktok = str(empresa.get("tiktok_url") or "").strip()
+    youtube = str(empresa.get("youtube_url") or "").strip()
+
+    galeria_fragmento = {"html": "", "css": "", "js": "", "resumo": {"total_trabalhos": 0, "total_fotos": 0}}
+    if incluir_galeria:
+        galeria_fragmento = gerar_fragmento_galeria(
+            galeria_lista,
+            empresa,
+            imagem_resolver=galeria_imagem_resolver,
+            limite_fotos=limite_fotos_galeria,
+        )
+
+    css_extra = r'''
+.site-nav{position:sticky;top:79px;z-index:19;background:rgba(255,255,255,.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.site-nav-in{max-width:1240px;margin:auto;padding:0 22px;display:flex;align-items:center;justify-content:center;gap:6px;overflow-x:auto;scrollbar-width:none}.site-nav-in::-webkit-scrollbar{display:none}
+.site-nav a,.site-nav button{color:var(--ink);text-decoration:none;font-size:13px;font-weight:850;padding:11px 13px;border-radius:10px;white-space:nowrap}.site-nav button{border:0;background:transparent;font-family:inherit;cursor:pointer}.site-nav a:hover,.site-nav button:hover{background:#eef7ff;color:var(--blue)}
+.site-section{padding:72px 22px}.site-section.alt{background:linear-gradient(180deg,#fbfdff,#f6fbff)}.site-section.pink{background:linear-gradient(135deg,#fff,#fff6fb)}
+.site-wrap{max-width:1240px;margin:auto}.section-kicker{color:var(--blue);font-size:12px;font-weight:950;letter-spacing:.08em;text-transform:uppercase}.section-title{font-size:38px;line-height:1.08;margin:8px 0 12px}.section-copy{max-width:780px;color:#5d718b;font-size:16px;line-height:1.7;margin:0}
+.services-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:28px}.service-card{border:1px solid var(--line);border-radius:18px;background:#fff;padding:22px;box-shadow:0 8px 26px rgba(20,37,61,.05);transition:transform .18s ease,box-shadow .18s ease}.service-card:hover{transform:translateY(-3px);box-shadow:0 13px 30px rgba(20,37,61,.10)}.service-icon{width:68px;height:68px;display:flex;align-items:center;justify-content:center}.service-icon img{display:block;width:68px;height:68px;object-fit:contain;filter:drop-shadow(0 7px 9px rgba(20,37,61,.18));transition:transform .18s ease}.service-card:hover .service-icon img{transform:scale(1.06)}.service-card h3{font-size:17px;margin:12px 0 8px}.service-card p{font-size:14px;line-height:1.55;color:#62758e;margin:0}
+.about-grid{display:grid;grid-template-columns:1.12fr .88fr;gap:28px;align-items:stretch}.about-card{border:1px solid var(--line);background:#fff;border-radius:22px;padding:28px;box-shadow:0 12px 34px rgba(20,37,61,.06)}.about-card h3{margin:0 0 14px;font-size:23px}.about-card p{color:#5d718b;line-height:1.75}.about-points{display:grid;gap:12px;margin-top:20px}.about-point{display:flex;gap:10px;align-items:flex-start;background:#f7fbff;border-radius:13px;padding:13px}.about-point strong{display:block;font-size:14px}.about-point span{font-size:13px;color:#647991}
+.contact-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;margin-top:28px}.contact-card{border:1px solid var(--line);background:#fff;border-radius:20px;padding:24px}.contact-list{display:grid;gap:12px;margin-top:18px}.contact-item{display:flex;gap:12px;align-items:flex-start}.contact-item b{display:block}.contact-item span,.contact-item a{font-size:14px;color:#60748e;text-decoration:none}.contact-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}.contact-actions .secondary{display:inline-flex}
+.hf522-social{background:linear-gradient(135deg,#eef9ff 0%,#fff 48%,#fff1f8 100%)}.hf522-social-grid{display:grid;grid-template-columns:1.05fr .95fr;gap:22px;align-items:center;margin-top:24px}.hf522-social-card{border:1px solid var(--line);background:#fff;border-radius:22px;padding:24px;box-shadow:0 10px 30px rgba(20,37,61,.06)}.hf522-social-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.hf522-social-link{position:relative;overflow:hidden;display:flex;align-items:center;gap:13px;min-height:66px;border:1px solid #dfeaf5;border-radius:17px;padding:12px 15px;color:#173d66;text-decoration:none;font-weight:950;letter-spacing:.01em;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,filter .18s ease}.hf522-social-link:after{content:'↗';margin-left:auto;font-size:14px;opacity:.38;font-weight:900}.hf522-social-link:hover{transform:translateY(-3px);filter:saturate(1.04);box-shadow:0 11px 24px rgba(18,35,61,.11)}.hf522-social-link .hf522-brand-icon{width:40px;height:40px;border-radius:13px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;color:#fff;box-shadow:0 7px 13px rgba(18,35,61,.18),inset 0 1px 0 rgba(255,255,255,.42);transition:transform .18s ease,box-shadow .18s ease}.hf522-social-link:hover .hf522-brand-icon{transform:translateY(-1px) scale(1.04)}.hf522-social-link svg{width:23px;height:23px;fill:currentColor;filter:drop-shadow(0 1px 1px rgba(0,0,0,.18))}.hf522-instagram{background:linear-gradient(135deg,#fff8fb 0%,#fff1f7 58%,#fff8ef 100%);border-color:rgba(228,64,95,.18);color:#71324c}.hf522-instagram .hf522-brand-icon{background:radial-gradient(circle at 30% 105%,#fdf497 0 7%,#fd5949 33%,#d6249f 58%,#285AEB 92%);box-shadow:0 8px 15px rgba(214,36,159,.22),inset 0 1px 0 rgba(255,255,255,.42)}.hf522-instagram:hover{border-color:rgba(214,36,159,.34)}.hf522-facebook{background:linear-gradient(135deg,#f7fbff,#edf5ff);border-color:rgba(24,119,242,.18);color:#1559aa}.hf522-facebook .hf522-brand-icon{background:linear-gradient(145deg,#2d8cff,#1468d8);box-shadow:0 8px 15px rgba(24,119,242,.25),inset 0 1px 0 rgba(255,255,255,.45)}.hf522-facebook:hover{border-color:rgba(24,119,242,.34)}.hf522-tiktok{background:linear-gradient(135deg,#fbfbfc 0%,#f2fbfb 52%,#fff5f8 100%);border-color:rgba(17,17,17,.13);color:#161616}.hf522-tiktok .hf522-brand-icon{background:linear-gradient(145deg,#191919,#050505);box-shadow:3px 3px 0 rgba(37,244,238,.42),-3px -3px 0 rgba(254,44,85,.30),0 8px 15px rgba(0,0,0,.19),inset 0 1px 0 rgba(255,255,255,.18)}.hf522-tiktok:hover{border-color:rgba(17,17,17,.28)}.hf522-youtube{background:linear-gradient(135deg,#fffafa,#fff1f1);border-color:rgba(255,0,0,.16);color:#a51616}.hf522-youtube .hf522-brand-icon{background:linear-gradient(145deg,#ff2424,#e60000);box-shadow:0 8px 15px rgba(255,0,0,.24),inset 0 1px 0 rgba(255,255,255,.42)}.hf522-youtube:hover{border-color:rgba(255,0,0,.32)}.hf522-whatsapp .hf522-brand-icon{color:#fff}.hf522-social-cta .hf522-brand-icon{width:22px;height:22px;display:flex}.hf522-social-cta svg{width:22px;height:22px;fill:currentColor}.hf522-social-note{font-size:13px;color:#667b92;line-height:1.55;margin-top:10px}.hf522-social-cta{display:inline-flex;margin-top:18px}
+.site-footnote{font-size:12px;color:#71849c;margin-top:18px}.legacy-note{margin-top:22px;border:1px dashed #bdd6ea;border-radius:14px;padding:14px;background:#f8fcff;color:#5b7089;font-size:13px}
+.hf52-footer-in{display:grid!important;grid-template-columns:1fr!important;justify-items:center!important;text-align:center!important;gap:18px!important;padding-top:38px!important;padding-bottom:38px!important}.hf52-footer-brand{display:grid;gap:8px;justify-items:center}.hf52-footer-brand-logo{width:min(300px,72vw);height:72px;object-fit:contain;object-position:center;background:transparent;border:0;box-shadow:none;filter:drop-shadow(0 3px 6px rgba(0,0,0,.18))}.hf52-footer-brand strong{font-size:20px}.hf52-footer-brand small{color:#bcd0e2!important}.hf52-footer-verse{max-width:780px;margin:0;padding:0 18px;font-size:16px;line-height:1.65;font-style:italic;color:#eef7ff}.hf52-footer-verse cite{display:block;margin-top:7px;font-size:13px;font-style:normal;font-weight:900;color:#8ed7ff}.hf52-footer-dev{padding-top:14px;border-top:1px solid rgba(255,255,255,.12);width:min(720px,100%);font-size:12px;color:#9fb7cb}.hf52-footer-dev strong{color:#fff}
+@media(max-width:940px){.services-grid{grid-template-columns:repeat(2,1fr)}.about-grid,.contact-grid{grid-template-columns:1fr}.site-nav{top:69px}}
+@media(max-width:620px){.site-nav{top:69px}.site-nav-in{justify-content:flex-start;padding:0 10px}.site-nav a,.site-nav button{padding:10px 9px;font-size:12px}.site-section{padding:46px 14px}.section-title{font-size:30px}.services-grid{grid-template-columns:1fr}.service-card{padding:18px}.about-card,.contact-card{padding:20px}.contact-actions>a{width:100%}.hf522-social-grid{grid-template-columns:1fr}.hf522-social-links{grid-template-columns:1fr}}
+'''
+    if incluir_galeria:
+        css_extra += str(galeria_fragmento.get("css") or "")
+    pagina = pagina.replace("</style>", css_extra + "</style>", 1)
+
+    # A barra identifica claramente qual estrutura está sendo homologada.
+    if modo_preview:
+        if incluir_galeria:
+            preview = '<div class="preview-bar">PRÉVIA INTERNA HF47.1 · GALERIA + CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
+        elif usar_taxonomia_catalogo:
+            preview = '<div class="preview-bar">PRÉVIA INTERNA HF45.4-HF1 · CATEGORIA → SUBCATEGORIA · NÃO PUBLICADA</div>'
+        else:
+            preview = '<div class="preview-bar">PRÉVIA INTERNA HF40 · SITE COMPLETO · AINDA NÃO PUBLICADO</div>'
+        pagina = pagina.replace("<body>", "<body>" + preview, 1)
+
+    # Navegação única, mantendo o header da vitrine homologada.
+    # HF47.1-HF1: somente a prévia com Galeria usa botões com scrollIntoView,
+    # evitando que links por hash façam o iframe do components.html sair da prévia.
+    if incluir_galeria:
+        galeria_nav = '<button type="button" data-site-scroll="galeria">Galeria</button>'
+        nav = f'''<nav class="site-nav" aria-label="Navegação principal"><div class="site-nav-in">
+          <button type="button" data-site-scroll="inicio">Início</button><button type="button" data-site-scroll="produtos">Produtos</button><button type="button" data-site-scroll="servicos">Serviços</button><button type="button" data-site-scroll="quem-somos">Quem Somos</button><button type="button" data-site-scroll="contato">Contato</button>{galeria_nav}
+        </div></nav>'''
+    else:
+        nav = '''<nav class="site-nav" aria-label="Navegação principal"><div class="site-nav-in">
+          <a href="#inicio">Início</a><a href="#produtos">Produtos</a><a href="#servicos">Serviços</a><a href="#quem-somos">Quem Somos</a><a href="#contato">Contato</a>
+        </div></nav>'''
+    marcador_header = "</header>"
+    pagina = pagina.replace(marcador_header, marcador_header + nav, 1)
+
+    local_txt = " · ".join([x for x in [cidade, uf] if x])
+    sobre = f'''<section class="site-section alt" id="quem-somos"><div class="site-wrap"><div class="about-grid">
+      <div><div class="section-kicker">Quem Somos</div><h2 class="section-title">Personalização com cuidado em cada detalhe.</h2>
+      <p class="section-copy"><strong>Sou feliz e grata por ter o melhor time para oferecer o melhor a você!</strong><br><br>A {html.escape(nome)} é uma empresa especializada em tudo o que há de personalizado para sua festa ou evento.<br><br>Estamos sempre de olho nas tendências do mercado e nas novidades do universo infantil, criando lembranças criativas com muita dedicação e profissionalismo.<br><br>Nossas peças são personalizadas de acordo com os desejos de cada cliente, transformando sonhos em realidade.</p></div>
+      <aside class="about-card"><h3>Por que falar com a AlphaFest?</h3><div class="about-points">
+        <div class="about-point"><div>🎨</div><div><strong>Personalização de verdade</strong><span>Cada pedido pode ser ajustado à ocasião e à identidade do cliente.</span></div></div>
+        <div class="about-point"><div>🧩</div><div><strong>Várias soluções no mesmo lugar</strong><span>Personalizados, gráfica, brindes, balões, impressão 3D e gravação a laser.</span></div></div>
+        <div class="about-point"><div>💬</div><div><strong>Atendimento direto</strong><span>O orçamento começa pelo WhatsApp e segue de acordo com as escolhas do projeto.</span></div></div>
+        <div class="about-point"><div>📍</div><div><strong>AlphaFest em {html.escape(local_txt or 'Itatiba')}</strong><span>{html.escape(slogan)}</span></div></div>
+      </div></aside></div></div></section>'''
+
+    servicos = f'''<section class="site-section pink" id="servicos"><div class="site-wrap"><div class="section-kicker">Serviços</div>
+      <h2 class="section-title">Do detalhe da festa à presença da sua marca.</h2>
+      <p class="section-copy">O novo site reúne os principais tipos de trabalho da AlphaFest em uma navegação simples. A vitrine mostra exemplos; para medidas, materiais, quantidades e personalizações, o orçamento continua sendo feito sob medida.</p>
+      <div class="services-grid">{_bloco_servicos()}</div></div></section>'''
+
+    contact_parts = []
+    if celular:
+        contact_parts.append(f'<div class="contact-item"><div>💬</div><div><b>WhatsApp</b><a href="{html.escape(whatsapp, quote=True)}" target="_blank" rel="noopener">{html.escape(celular)}</a></div></div>')
+    if email:
+        contact_parts.append(f'<div class="contact-item"><div>✉️</div><div><b>E-mail</b><a href="mailto:{html.escape(email, quote=True)}">{html.escape(email)}</a></div></div>')
+    if endereco:
+        endereco_completo = endereco + (f" · CEP {cep}" if cep else "")
+        contact_parts.append(f'<div class="contact-item"><div>📍</div><div><b>Endereço</b><span>{html.escape(endereco_completo)}</span></div></div>')
+
+    contato = f'''<section class="site-section" id="contato"><div class="site-wrap"><div class="section-kicker">Contato</div><h2 class="section-title">Conte o que você precisa. A gente monta com você.</h2>
+      <p class="section-copy">Como tamanho, quantidade, material, cor e personalização mudam de projeto para projeto, o melhor caminho é conversar diretamente com a AlphaFest.</p>
+      <div class="contact-grid"><div class="contact-card"><h3>Fale com a AlphaFest</h3><div class="contact-list">{''.join(contact_parts) or '<div class="contact-item"><div>💬</div><div><b>Contato</b><span>Consulte os canais oficiais da AlphaFest.</span></div></div>'}</div>
+      <div class="contact-actions"><a class="cta" href="{html.escape(whatsapp, quote=True)}" target="_blank" rel="noopener">💬 Pedir orçamento</a>{f'<a class="secondary" href="{html.escape(mapa, quote=True)}" target="_blank" rel="noopener">📍 Ver localização</a>' if endereco else ''}</div></div>
+      <div class="contact-card"><h3>Como funciona o orçamento</h3><div class="about-points">
+        <div class="about-point"><div>1️⃣</div><div><strong>Escolha uma referência</strong><span>Use a vitrine ou descreva sua ideia.</span></div></div>
+        <div class="about-point"><div>2️⃣</div><div><strong>Defina os detalhes</strong><span>Tamanho, cor, quantidade, material, personalização e prazo.</span></div></div>
+        <div class="about-point"><div>3️⃣</div><div><strong>Receba a orientação</strong><span>A AlphaFest confirma possibilidades, valor e próximos passos.</span></div></div>
+      </div></div></div>{('<div class="site-footnote">Dados de contato exibidos nesta página são lidos da configuração oficial da empresa no AlphaFest Manager.</div>' if modo_preview else '')}</div></section>'''
+
+    social_links = []
+    for rotulo, chave_icone, url in (("Instagram", "instagram", instagram), ("Facebook", "facebook", facebook), ("TikTok", "tiktok", tiktok), ("YouTube", "youtube", youtube)):
+        if url:
+            social_links.append(f'<a class="hf522-social-link hf522-{chave_icone}" href="{html.escape(url, quote=True)}" target="_blank" rel="noopener"><span class="hf522-brand-icon">{_brand_icon(chave_icone)}</span>{html.escape(rotulo)}</a>')
+    fale_alphafest = f'''<section class="site-section hf522-social" id="fale-alphafest"><div class="site-wrap"><div class="section-kicker">Fale com a AlphaFest</div><h2 class="section-title">Acompanhe, converse e veja as novidades.</h2><p class="section-copy">Siga a AlphaFest nas redes sociais e fale diretamente com a equipe para orçamentos, dúvidas e projetos personalizados.</p><div class="hf522-social-grid"><div class="hf522-social-card"><h3>Redes da AlphaFest</h3><div class="hf522-social-links">{''.join(social_links) or '<div class="hf522-social-note">Cadastre os links das redes sociais no Manager para exibi-los aqui.</div>'}</div></div><div class="hf522-social-card"><h3>Prefere falar agora?</h3><p class="section-copy">Conte sua ideia pelo WhatsApp. A equipe ajuda com material, quantidade, personalização e prazo.</p><a class="cta hf522-social-cta hf522-whatsapp" href="{html.escape(whatsapp, quote=True)}" target="_blank" rel="noopener"><span class="hf522-brand-icon">{_brand_icon("whatsapp")}</span>Falar com a AlphaFest</a></div></div></div></section>'''
+
+    # HF52.2: jornada comercial primeiro; Galeria/fotos fica próxima ao rodapé.
+    # HF52.2-HF1: ordem final é aplicada após a camada visual.
+    galeria_html = str(galeria_fragmento.get("html") or "") if incluir_galeria else ""
+    extras = servicos + sobre + contato + fale_alphafest + galeria_html
+    marcador_mobile = '<a class="mobile-whatsapp"'
+    pos = pagina.find(marcador_mobile)
+    if pos >= 0:
+        pagina = pagina[:pos] + extras + pagina[pos:]
+    else:
+        pagina = pagina.replace("<footer class=\"footer\">", extras + '<footer class="footer">', 1)
+
+    if incluir_galeria:
+        nav_scroll_js = r'''
+(function(){
+  document.querySelectorAll('[data-site-scroll]').forEach(function(btn){
+    btn.addEventListener('click', function(ev){
+      ev.preventDefault();
+      var alvo=document.getElementById(btn.getAttribute('data-site-scroll'));
+      if(alvo) alvo.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+  });
+})();
+'''
+        pagina = pagina.replace("</body>", "<script>" + nav_scroll_js + "</script></body>", 1)
+
+    if incluir_galeria and galeria_fragmento.get("js"):
+        pagina = pagina.replace("</body>", "<script>" + str(galeria_fragmento.get("js") or "") + "</script></body>", 1)
+
+    # No site completo, o CTA de navegação deixa de falar só em "Ver produtos".
+    pagina = pagina.replace('>Ver produtos</a>', '>Produtos</a>', 1)
+
+    # HF48.1 — camada visual isolada. O padrão False preserva a produção HF44
+    # e todas as prévias anteriores exatamente como estavam.
+    if visual_hf48:
+        pagina = aplicar_visual_hf48(
+            pagina,
+            catalogo_lista,
+            empresa,
+            incluir_galeria=incluir_galeria,
+            galeria_trabalhos=galeria_lista,
+            usar_mascotes=mascotes_hf48,
+            imagem_resolver=imagem_resolver,
+            home_content_config=home_cfg,
+        )
+
+        # HF52.2-HF1 — ordem comercial final. Hero + carrossel permanecem no topo.
+        def _retira_bloco(texto: str, padrao: str):
+            m = re.search(padrao, texto, flags=re.S)
+            if not m:
+                return texto, ""
+            return texto[:m.start()] + texto[m.end():], m.group(0)
+
+        blocos = {}
+        padroes = {
+            "categorias": r'<section class="hf48-categories" id="categorias">.*?</section>',
+            "carrossel": r'<section class="hf50-carousel" id="destaques">.*?</section>',
+            "servicos": r'<section class="site-section pink" id="servicos">.*?</section>',
+            "quem": r'<section class="site-section alt" id="quem-somos">.*?</section>',
+            "contato": r'<section class="site-section" id="contato">.*?</section>',
+            "fale": r'<section class="site-section hf522-social" id="fale-alphafest">.*?</section>',
+            "produtos": r'<main class="main" id="produtos">.*?</main>',
+            "galeria": r'<section[^>]*id="galeria"[^>]*>.*?</section>',
+            "processo": r'<section class="hf48-process" id="como-funciona">.*?</section>',
+            "cta_antigo": r'<section class="hf48-brand-cta">.*?</section>',
+        }
+        for chave, padrao in padroes.items():
+            pagina, blocos[chave] = _retira_bloco(pagina, padrao)
+        ordem = "".join(blocos[k] for k in ("categorias", "carrossel", "servicos", "quem", "contato", "fale", "produtos", "galeria") if blocos.get(k))
+        marcador_final = '<a class="mobile-whatsapp"'
+        pos_final = pagina.find(marcador_final)
+        if pos_final < 0:
+            pos_final = pagina.find('<footer class="footer">')
+        if pos_final >= 0:
+            pagina = pagina[:pos_final] + ordem + pagina[pos_final:]
+
+        # HF65.14 — conteúdo administrável da Home. O banner ocupa o espaço logo
+        # abaixo do Hero; empresas e depoimentos entram no centro da jornada.
+        _banner_hf6514 = banner_carousel_html(home_cfg)
+        if _banner_hf6514:
+            _hero_start_hf6514 = pagina.find('id="inicio"')
+            _hero_end_hf6514 = pagina.find('</section>', _hero_start_hf6514) if _hero_start_hf6514 >= 0 else -1
+            if _hero_end_hf6514 >= 0:
+                _hero_end_hf6514 += len('</section>')
+                pagina = pagina[:_hero_end_hf6514] + _banner_hf6514 + pagina[_hero_end_hf6514:]
+
+        _clientes_hf6514 = client_showcase_html(home_cfg)
+        _depoimentos_hf6514 = testimonials_html(home_cfg)
+        _blocos_hf6514 = _clientes_hf6514 + _depoimentos_hf6514
+        if _blocos_hf6514:
+            _marcador_quem_hf6514 = '<section class="site-section alt" id="quem-somos">'
+            _pos_hf6514 = pagina.find(_marcador_quem_hf6514)
+            if _pos_hf6514 < 0:
+                _pos_hf6514 = pagina.find('<section class="site-section" id="contato">')
+            if _pos_hf6514 >= 0:
+                pagina = pagina[:_pos_hf6514] + _blocos_hf6514 + pagina[_pos_hf6514:]
+
+        pagina = pagina.replace('</head>', '<style id="hf6514-home-content-style">' + HOME_CONTENT_CSS + '</style></head>', 1)
+        pagina = pagina.replace('</body>', '<script id="hf6514-home-content-script">' + HOME_CONTENT_JS + '</script></body>', 1)
+
+    # HF52.2 — rodapé institucional: recupera o versículo do site anterior e
+    # identifica o desenvolvimento do site, usando sempre o ano vigente.
+    ano_vigente = datetime.now().year
+    # HF52.2-HF1-HF3 — o rodapé reutiliza exatamente o mesmo wordmark do cabeçalho
+    # aprovado, evitando uma segunda representação tipográfica da marca.
+    logo_rodape_match = re.search(r'<img class="brand-logo" src="([^"]+)" alt="AlphaFest"\>', pagina)
+    logo_rodape_src = logo_rodape_match.group(1) if logo_rodape_match else ""
+    marca_rodape = (
+        f'<img class="hf52-footer-brand-logo" src="{html.escape(logo_rodape_src, quote=True)}" alt="AlphaFest">'
+        if logo_rodape_src
+        else f'<strong>{html.escape(nome)}</strong>'
+    )
+    footer_hf52 = f'''<footer class="footer"><div class="footer-in hf52-footer-in">
+      <div class="hf52-footer-brand">{marca_rodape}<small>{html.escape(slogan)}</small></div>
+      <blockquote class="hf52-footer-verse">“Consagre ao Senhor tudo o que você faz, e os seus planos serão bem-sucedidos.”<cite>Provérbios 16:3</cite></blockquote>
+      <div class="hf52-footer-dev">© {ano_vigente} AlphaFest · Desenvolvido por <strong>Jorge Gauke</strong></div>
+    </div></footer>'''
+    pagina = re.sub(r'<footer class="footer">.*?</footer>', footer_hf52, pagina, count=1, flags=re.S)
+
+    # HF65 — campanha temporária reutilizável. A injeção é isolada e não altera
+    # a estrutura homologada do site. Na produção, enabled + período são respeitados.
+    pagina = inject_campaign(
+        pagina,
+        campaign_config or {},
+        empresa,
+        force_preview=bool(modo_preview and campaign_force_preview),
+    )
+
+    # HF52.1: somente a versão pública coleta métricas. Prévia interna não conta acesso.
+    pagina = inserir_chamada_dicas(pagina, list(dicas_content or []), modo_preview=bool(modo_preview))
+    pagina = inject_posts_home(pagina, list(posts_content or []), numero, preview=bool(modo_preview))
+
+    # HF65.24.8 — links no menu superior para as seções multimídia e editorial.
+    # Só exibir o destino quando a seção existir neste HTML: rascunhos não
+    # geram links vazios no site público, mas aparecem na prévia interna.
+    # O site homologado usa botões de scroll em sua navegação com Galeria.
+    novos_destinos = []
+    if 'id="depoimentos"' in pagina:
+        novos_destinos.append(("depoimentos", "Depoimentos"))
+    if 'id="dicas-alphafest"' in pagina:
+        novos_destinos.append(("dicas-alphafest", "Dicas & Inspirações"))
+    if 'id="novidades-alphafest"' in pagina:
+        novos_destinos.append(("novidades-alphafest", "Novidades & Ofertas"))
+    if novos_destinos:
+        nav_match = re.search(r'(<nav class="site-nav"[^>]*>\s*<div class="site-nav-in"[^>]*>)(.*?)(</div>\s*</nav>)', pagina, flags=re.S)
+        if nav_match:
+            nav_body = nav_match.group(2)
+            usa_botoes = 'data-site-scroll=' in nav_body
+            novos_links = []
+            for destino, rotulo in novos_destinos:
+                if f'data-site-scroll="{destino}"' in nav_body or f'href="#{destino}"' in nav_body:
+                    continue
+                if usa_botoes:
+                    novos_links.append(f'<button type="button" data-site-scroll="{destino}">{rotulo}</button>')
+                else:
+                    novos_links.append(f'<a href="#{destino}">{rotulo}</a>')
+            if novos_links:
+                pagina = (pagina[:nav_match.start(3)] + ''.join(novos_links) + pagina[nav_match.start(3):])
+        pagina = pagina.replace('</head>', '<style id="hf65248-nav-style">#depoimentos,#dicas-alphafest,#novidades-alphafest{scroll-margin-top:170px}@media(max-width:620px){#depoimentos,#dicas-alphafest,#novidades-alphafest{scroll-margin-top:125px}}</style></head>', 1)
+
+    # HF65.24.25 — seção comercial derivada do Catálogo Oficial, sem duplicar produtos.
+    pagina = inject_fast_delivery(pagina, catalogo_lista)
+    pagina = inject_corporate_home(pagina)
+    pagina = inject_conteudo_util(pagina)
+    pagina = inserir_links_institucionais(pagina)
+    pagina = inject_cart(pagina, empresa)
+    pagina = inject_tracking(pagina, enabled=not modo_preview)
+    return pagina

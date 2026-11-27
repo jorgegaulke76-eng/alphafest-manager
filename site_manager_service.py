@@ -1,0 +1,200 @@
+"""Leitura pura da Central do Site AlphaFest (HF35).
+
+O módulo não mantém um cadastro paralelo do site. Ele interpreta o Catálogo
+oficial do Manager e devolve indicadores de prontidão para a vitrine pública.
+Persistência, permissões e navegação continuam sob responsabilidade do app.
+"""
+from __future__ import annotations
+
+from typing import Any, Dict, Iterable, List
+import re
+
+from catalogo_modalidade_preco_service import modalidade_atual
+
+
+def _texto(produto: Dict[str, Any], *chaves: str) -> str:
+    for chave in chaves:
+        valor = produto.get(chave)
+        if valor is not None and str(valor).strip():
+            return str(valor).strip()
+    return ""
+
+
+
+
+def _lista_textos(valor: Any) -> List[str]:
+    if valor is None:
+        return []
+    if isinstance(valor, (str, bytes, bytearray)):
+        valor = [valor]
+    try:
+        itens = list(valor)
+    except TypeError:
+        itens = [valor]
+    saida: List[str] = []
+    vistos = set()
+    for item in itens:
+        texto = str(item or "").strip()
+        chave = texto.casefold()
+        if texto and chave not in vistos:
+            vistos.add(chave)
+            saida.append(texto)
+    return saida
+
+
+def categorias_site_produto(produto: Dict[str, Any]) -> List[str]:
+    """Categorias públicas do produto, preservando a primeira como principal.
+
+    HF59 acrescenta ``CategoriasExtrasSite`` sem quebrar cadastros antigos.
+    Para compatibilidade com edições já digitadas, Categoria também aceita
+    vírgula, ponto e vírgula, barra vertical ou quebra de linha como separador.
+    """
+    produto = produto or {}
+    bruto_principal = _texto(produto, "Categoria", "categoria")
+    partes_principal: List[str] = []
+    if bruto_principal:
+        import re
+        partes_principal = [x.strip() for x in re.split(r"[,;|\n]+", bruto_principal) if x.strip()]
+    extras = _lista_textos(
+        produto.get("CategoriasExtrasSite")
+        or produto.get("CategoriasSiteExtras")
+        or produto.get("categorias_extras_site")
+        or []
+    )
+    saida: List[str] = []
+    vistos = set()
+    for item in [*partes_principal, *extras]:
+        chave = item.casefold()
+        if item and chave not in vistos:
+            vistos.add(chave)
+            saida.append(item)
+    return saida
+
+
+def _imagens(produto: Dict[str, Any]) -> List[str]:
+    bruto = produto.get("Imagens", []) or []
+    if isinstance(bruto, (str, bytes, bytearray)):
+        bruto = [bruto]
+    try:
+        itens = list(bruto)
+    except TypeError:
+        itens = [bruto]
+    saida: List[str] = []
+    vistos = set()
+    for item in itens:
+        texto = str(item or "").strip()
+        if texto and texto not in vistos:
+            vistos.add(texto)
+            saida.append(texto)
+    return saida
+
+
+def _preco_numerico_publicavel(valor: str) -> bool:
+    """Evita expor textos internos como 'SOB/CONSULTA' como valor monetario."""
+    texto = str(valor or "").strip()
+    if not re.fullmatch(r"(?:R\$\s*)?(?:\d+(?:[.,]\d{1,2})?|\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?)", texto):
+        return False
+    texto = texto.replace("R$", "").replace(" ", "")
+    if "," in texto:
+        texto = texto.replace(".", "").replace(",", ".")
+    elif "." in texto and len(texto.rsplit(".", 1)[1]) == 3:
+        texto = texto.replace(".", "")
+    try:
+        return float(texto) > 0
+    except (ValueError, OverflowError):
+        return False
+
+
+def avaliar_produto_site(produto: Dict[str, Any]) -> Dict[str, Any]:
+    """Avalia prontidão sem alterar nem completar dados do produto.
+
+    Nome, descrição e foto são requisitos de apresentação. Preço e categoria
+    geram aviso, mas não bloqueiam a vitrine porque muitos personalizados são
+    orçados conforme quantidade/arte.
+    """
+    produto = produto or {}
+    nome = _texto(produto, "Nome", "nome")
+    descricao = _texto(produto, "DescricaoCompleta", "DescricaoCurta", "Descricao", "descricao")
+    categorias_site = categorias_site_produto(produto)
+    categoria = categorias_site[0] if categorias_site else ""
+    preco = _texto(produto, "Preco", "preco")
+    imagens = _imagens(produto)
+    ativo = produto.get("Ativo") is not False
+    publicar = bool(produto.get("PublicarSite"))
+    destaque = bool(produto.get("Destaque"))
+    modalidade_preco_site = modalidade_atual(produto)
+    exibir_preco_site = (modalidade_preco_site != "sob_orcamento" and _preco_numerico_publicavel(preco))
+
+    faltas: List[str] = []
+    if not nome:
+        faltas.append("Nome")
+    if not descricao:
+        faltas.append("Descrição")
+    if not imagens:
+        faltas.append("Foto")
+
+    avisos: List[str] = []
+    if not categoria:
+        avisos.append("Categoria")
+    if not preco:
+        avisos.append("Valor sob consulta")
+
+    pronto = bool(ativo and not faltas)
+    return {
+        "nome": nome or "Produto sem nome",
+        "descricao": descricao,
+        "categoria": categoria,
+        "categorias_site": categorias_site,
+        "categorias_extras_site": categorias_site[1:] if len(categorias_site) > 1 else [],
+        "preco": preco,
+        "imagens": imagens,
+        "imagem_principal": imagens[0] if imagens else "",
+        "ativo": ativo,
+        "publicar_site": publicar,
+        "destaque": destaque,
+        "exibir_preco_site": exibir_preco_site,
+        "modalidade_preco_site": modalidade_preco_site,
+        "faltas": faltas,
+        "avisos": avisos,
+        "pronto": pronto,
+        "status": "Pronto para vitrine" if pronto else "Revisar cadastro",
+    }
+
+
+def resumir_catalogo_site(catalogo: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
+    itens = [avaliar_produto_site(p) for p in (catalogo or []) if isinstance(p, dict)]
+    ativos = [x for x in itens if x["ativo"]]
+    marcados = [x for x in ativos if x["publicar_site"]]
+    return {
+        "total": len(itens),
+        "ativos": len(ativos),
+        "marcados_site": len(marcados),
+        "destaques": sum(1 for x in marcados if x["destaque"]),
+        "prontos_marcados": sum(1 for x in marcados if x["pronto"]),
+        "revisar_marcados": sum(1 for x in marcados if not x["pronto"]),
+        "prontos_nao_marcados": sum(1 for x in ativos if x["pronto"] and not x["publicar_site"]),
+        "sem_foto_marcados": sum(1 for x in marcados if "Foto" in x["faltas"]),
+        "sem_descricao_marcados": sum(1 for x in marcados if "Descrição" in x["faltas"]),
+        "itens": itens,
+    }
+
+
+def ordenar_produtos_site(catalogo: Iterable[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Retorna índices originais + leitura de prontidão em ordem de trabalho."""
+    saida = []
+    for indice, produto in enumerate(catalogo or []):
+        if not isinstance(produto, dict):
+            continue
+        leitura = avaliar_produto_site(produto)
+        leitura["indice_catalogo"] = indice
+        leitura["produto"] = produto
+        saida.append(leitura)
+    saida.sort(
+        key=lambda x: (
+            not x["publicar_site"],
+            not x["destaque"],
+            not x["pronto"],
+            x["nome"].casefold(),
+        )
+    )
+    return saida

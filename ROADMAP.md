@@ -1,0 +1,110 @@
+# Roadmap FestManager
+
+## Concluído — 7.0.0
+- Relacionamentos com papéis múltiplos.
+- Política e segurança de atendimento.
+- Fornecedor e cliente no mesmo cadastro.
+
+## Próximos passos
+- Conectar as credenciais oficiais Meta.
+- Aplicar políticas individuais aos webhooks recebidos.
+- Histórico de compras com fornecedores.
+- Compras, estoque e contas a pagar.
+
+# Roadmap FestManager
+
+## Atual
+- 5.7.0 CRM Inteligente
+
+## Próximos passos
+- 5.8 Integração oficial WhatsApp Cloud API
+- 5.9 Instagram e Facebook Messenger
+- 6.0 Alpha Assistente Comercial
+
+## Concluído — 6.1.0
+- Alpha Assistente Comercial local e assistido.
+
+## Próximos passos
+- Pesquisa universal visual.
+- Publicação e conexão do webhook Meta.
+- Respostas assistidas diretamente na Central Multicanal.
+
+## Ciclo atual — I8.13.5 / THU assistido
+- HF14: Retornos Comerciais (Jorge) — homologado.
+- HF15: Cobranças Assistidas (Jorge) — homologado.
+- HF16: Agenda Executiva do THU (Jorge) — incorporada ao ciclo atual.
+- HF17: Agenda Operacional imprimível da Anna — substituída pela reconciliação da HF18.
+- HF18: Agenda Anna x Histórico na mesma Fonte Única — homologado.
+- HF20: Fechamento Diário da Anna + agenda atualizável durante o expediente — homologado; fotografia da manhã preservada, PDF atual regenerável e fechamento comparativo somente leitura.
+- HF21: THU • Sem avanço registrado (Jorge) — homologado; usa as fotografias diárias da Anna para sinalizar permanência no mesmo estágio/status, sem alterar permissões ou pedidos.
+- HF22: Biblioteca 3D privada (Jorge) — homologado; preserva imagem + arquivo 3D diretamente no Manager, sem link externo e sem acesso da Anna.
+- HF23: Catálogo 3D (Jorge) — homologado; transforma o mesmo acervo privado em fonte única para gerar seleções HTML com nome, descrição, tempo e 1 imagem, sem expor o arquivo 3D.
+- HF24: Continuidade na Agenda Executiva do THU (Jorge) — homologado; incorpora o sinal de sem avanço à ordem única de decisão, com deduplicação e sem automatizar status/contato.
+- HF25: Prevenção de prazo e pressão de agenda (Jorge) — homologado; radar preventivo de 3–10 dias usando prazo informado, dias úteis restantes, estágio/material e concentração de entregas, sem fingir capacidade exata.
+- HF26: Plano de amanhã do THU (Jorge) — homologado; transforma os sinais preventivos em preparação curta de Produção/Materiais/Saídas para o próximo dia, sem repetir urgências atuais.
+- HF27: Memória de tempo de ciclo observado (Jorge) — registra intervalos explícitos Em produção → Pronto/Entregue, preservando quantidade e sem confundir ciclo com mão de obra.
+- HF28: Estorno visível de reserva/consumo por pedido (Jorge) — corrige a seleção administrativa para permitir liberar reservas já ativas pelo fluxo auditado do próprio pedido.
+- HF31: Qualidade da Base de Tempos — homologado; sinaliza variação extrema e distribuição por quantidade sem excluir amostras nem calcular capacidade.
+- HF32: Revisão Assistida dos Tempos — contexto humano auditado para variações, preservando a amostra original.
+- Próximo após homologação da HF32: acumular amostras revisadas e só então avaliar referência separada por quantidade/processo; capacidade quantitativa continua bloqueada até base suficiente.
+- HF29: Identificação do ciclo em andamento (Jorge) — mostra proposta, cliente, produto, quantidade e início explícito para cada ciclo observado aberto, sem alterar status.
+
+- HF30: Memória de ciclo alinhada à Fonte Única — homologado; corrige ciclos residuais de pedidos já Prontos/Entregues sem inventar duração.
+
+- HF33: Performance conservadora — reduzir custo de inicialização e imports sob demanda, preservando integralmente funções homologadas, Fonte Única e coerência Jorge/Anna.
+- Direção após HF33: melhorar/incorporar o site ao Manager e depois evoluir o Marketing Automatizado. A trilha de capacidade quantitativa fica pausada porque a operação atual é enxuta e a HF32 já atende a necessidade de tempos.
+
+- HF34: Health Monitor compatível com carga sob demanda — correção do falso alerta visual da HF33, preservando integralmente a otimização e a Fonte Única.
+
+- HF35: Central do Site AlphaFest — integrar a gestão do site ao Manager usando o Catálogo como Fonte Única, com leitura comum para Jorge/Anna, prévia interna e comparação manual com o site legado. Sem publicação automática nesta fase.
+- Após homologar HF35: construir a nova vitrine pública a partir dos produtos aprovados no mesmo Catálogo e só então planejar a migração/publicação do domínio, preservando o site atual até aprovação visual.
+
+- HF36: Prévia da Nova Vitrine Pública — site responsivo interno gerado da Fonte Única, com busca/categorias/WhatsApp e modos Desktop/Celular; nenhuma publicação nesta etapa.
+- Após homologar HF36: ajustar visual/conteúdo aprovado pelo usuário e então preparar publicação controlada sem retirar o site atual antes da validação final.
+
+- HF37: controle individual `Exibir preço no site` no Catálogo; padrão oculto e vitrine orientada a orçamento para personalizados variáveis.
+- Após homologar HF37: validar modo Celular e lapidar conteúdo/estrutura da vitrine antes de preparar publicação controlada.
+
+- HF38: experiência móvel e WhatsApp contextual na nova vitrine, preservando preço opcional e Fonte Única.
+- Após homologar HF38: lapidar conteúdo institucional/estrutura final da vitrine e preparar publicação controlada sem retirar o site atual antes da validação final.
+
+- HF39: Site paralelo / staging seguro — gerar o novo site a partir da Fonte Única e homologar em endereço temporário, sem tocar em `alphafest.com.br`.
+- Após homologar HF39: reaproveitar seletivamente conteúdo institucional do site antigo (sobre, serviços, contato e materiais úteis), concluir a estrutura do novo site e só então preparar a virada manual do domínio com backup/rollback.
+
+- HF40: Site completo paralelo — Início, Produtos, Serviços, Quem Somos e Contato na estética da vitrine homologada; Fonte Única preservada; staging no Cloudflare Workers · Static Assets.
+- Próxima etapa após homologar HF40: revisar textos/serviços no endereço temporário, validar celular e contato, depois acrescentar acabamento institucional/SEO local antes da preparação da virada de `alphafest.com.br`.
+
+### HF41 — Preparação da virada do domínio
+- [x] Staging externo HF40 homologado em Desktop e Celular.
+- [x] Kit de segurança pré-virada e rollback dentro do Manager.
+- [ ] Capturar o DNS atual e confirmar onde a zona é administrada.
+- [ ] Só depois preparar a conexão de `alphafest.com.br` ao Worker homologado.
+
+### HF42 — Site oficial / produção final
+- [x] Nameservers migrados para Cloudflare e zona Active.
+- [x] `alphafest.com.br` conectado ao Worker `alphafest-novo`.
+- [x] Pacote público final gerado sem staging/noindex.
+- [x] Fazer New deployment do pacote HF42 e validar o domínio raiz em desktop.
+- [ ] Conectar `www.alphafest.com.br` ao mesmo Worker ou redirecioná-lo para o domínio raiz.
+- [ ] Confirmar indexação/SEO básico após estabilização.
+
+
+### HF43 — Categorias comerciais na vitrine
+- [x] Agrupamento comercial implementado sem novo banco/cadastro.
+- [x] `Todos` preservado e categorias vazias ocultadas automaticamente.
+- [x] Pacote público HF43 preparado com SEO/WhatsApp/preço opcional preservados.
+- [ ] Instalar HF43 e conferir a prévia no Manager.
+- [ ] Fazer New deployment HF43 no Worker `alphafest-novo` e validar filtros em `alphafest.com.br`.
+- [ ] Só depois resolver `www.alphafest.com.br`.
+
+
+### HF44 — Publicação assistida do site
+- [x] Site oficial HF43 homologado em `alphafest.com.br`.
+- [x] `www.alphafest.com.br` redirecionando em 301 para o domínio raiz.
+- [x] Fluxo de publicação API implementado sem automação de DNS.
+- [x] Confirmação explícita antes de publicar; marcação de produto continua apenas preparando a próxima versão.
+- [x] ZIP manual preservado como fallback/rollback.
+- [ ] Instalar HF44 e validar a tela de publicação assistida.
+- [ ] Criar API Token Cloudflare com permissão mínima de Workers Scripts e testar conexão sem publicar.
+- [ ] Fazer primeiro deployment HF44 pelo botão e validar `alphafest.com.br`.
+- [ ] Depois da homologação, configurar token em Streamlit Secrets para deixar o processo realmente em um clique.

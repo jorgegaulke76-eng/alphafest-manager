@@ -1,0 +1,13 @@
+ALPHAFEST MANAGER — ROLLBACK URGENTE DA CENTRAL DA ANNA
+
+Objetivo: restaurar imediatamente a última base testada que carregava normalmente.
+Base restaurada: alphafest-manager-main 84 testado.
+
+IMPORTANTE:
+- Este pacote não contém alteração estrutural na Central da Anna.
+- Os dados online do Supabase não são apagados nem substituídos pelo código.
+- Publique todos os arquivos na raiz do repositório, substituindo o código atual.
+- Depois, no Streamlit Cloud, clique em Reboot app.
+- Não restaure arquivos JSON antigos sobre o banco online.
+
+Após a Anna voltar a trabalhar, o Alpha Marketing Studio 14.2.3 deverá ser corrigido e homologado separadamente na Central do Jorge.

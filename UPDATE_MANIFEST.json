@@ -1,0 +1,2653 @@
+{
+  "schema": 2,
+  "product": "AlphaFest Manager",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.58",
+  "generated_at_utc": "2026-11-25T17:30:31.099600+00:00",
+  "policy": "codigo_assets_migracoes_sem_dados",
+  "hf7_preview_sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601",
+  "validation": {
+    "status": "HOMOLOGACAO_PARCIAL",
+    "problems": [
+      "Regressao completa reprovada: ausencia de Streamlit (4 erros de importacao e 93 skips).",
+      "Gate critico individual nao aprovado: 9 arquivos dependem de Streamlit real.",
+      "Homologacao UI de Jorge e Anna em ambiente real ainda pendente. Nao instalar em producao."
+    ],
+    "warnings": [
+      "RC4 exclusivamente para testes isolados e com dados ficticios.",
+      "Aprovacao manual exige prova de cliente e conferencia operacional."
+    ],
+    "critical_python_compile": {
+      "status": "OK",
+      "scope": "Todos os arquivos Python do pacote"
+    },
+    "tests": {
+      "hf58_specific_passed": 16,
+      "selected_3_files_passed": 69,
+      "full_discovery_tests": 432,
+      "full_discovery_errors": 4,
+      "full_discovery_skipped": 93,
+      "critical_individual_files": 36,
+      "critical_individual_approved_files": 27,
+      "critical_individual_tests": 435,
+      "critical_individual_passed": 348,
+      "critical_individual_errors": 4,
+      "critical_individual_skipped": 87,
+      "status": "REPROVADO",
+      "streamlit_available": false
+    }
+  },
+  "file_count": 522,
+  "uncompressed_bytes": 40020034,
+  "files": [
+    {
+      "path": ".gitignore",
+      "size": 605,
+      "sha256": "a16504bbd297cd95fbc6a380e9f4c3a3914f4670521276e4422f06406afe8056"
+    },
+    {
+      "path": "ALPHA_CREATIVE_9_1.md",
+      "size": 1652,
+      "sha256": "82e82ed94bbc3b8eed3a53a2ec69e4d40e39ff329e779a6bc060207564ea1e63"
+    },
+    {
+      "path": "ARQUITETURA_OPERACIONAL_I8_13_5.md",
+      "size": 1747,
+      "sha256": "8de1b888078981a49fbdff61fa35d49ed11d71735881c58f0ef9323b1d6b5d66"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_11_WHATSAPP_INTELIGENTE.md",
+      "size": 1746,
+      "sha256": "9239d441e440a6d847861ad2a8c1dbbe08d9738d8052b2dd7c8baf32b891d1f1"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_12_FILTROS_GALERIA.md",
+      "size": 886,
+      "sha256": "a5d2ad8d8cfdd5335fe29299cef19a3ae8fb10c02b7e62e0aed1c48cd1fb5fbe"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_15_DAS_MEI.md",
+      "size": 2534,
+      "sha256": "887af1cb797a1e9fd217663caa9da8e886d070e3895f9795a940345ee9eeb605"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_16_ALERTAS_DAS.md",
+      "size": 997,
+      "sha256": "2c34508736cdbbe20ddf0f76c77bba9571f6fbf9682dc06f9ecf3a53f9ce5297"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_38_OPERACAO_SOB_ENCOMENDA.md",
+      "size": 2115,
+      "sha256": "95c66cb0cc5f28caf5684612ce75266aa5ae958180630dfd661bbd56bbfdf6f3"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_39_ORCAMENTO_CATALOGO.md",
+      "size": 1110,
+      "sha256": "2c8d951bc7d5985bc63af4f45212edc5624546a84facaf9c69d8cd9b99552b5a"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_48.md",
+      "size": 544,
+      "sha256": "fffdc5c0dbd5acb95c01339cdc801b1869a6dc1436dd8b9a796dcb80d7a72175"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_49.md",
+      "size": 699,
+      "sha256": "cda463598cba147f5e9f28b31a35b477b94990dde8ba08a8a602f37e4ad736de"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_8_MENU_DEPOIMENTOS_DICAS.md",
+      "size": 768,
+      "sha256": "a8cac9cecb5380fa7ebc24cc0478ca8afe91c9710443a6b38d94e1c9442ad000"
+    },
+    {
+      "path": "ATUALIZACAO_HF65_24_9_CARDS_COMPACTOS.md",
+      "size": 491,
+      "sha256": "b3758aa328df3c9795efd47cc4f7f616d667b91f7f8387174e1205e68ae66d76"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "size": 108213,
+      "sha256": "dca2b1f1a21358efee5763eedee89d31d4ddf60f0029d1a42ce2677f55879291"
+    },
+    {
+      "path": "EDGE_FUNCTION_CATALOGO_PUBLICO.md",
+      "size": 1672,
+      "sha256": "134f5140113a194a714b05830e57a1decc0a44e058a2bf9e367c521fe02c2a0c"
+    },
+    {
+      "path": "EXEMPLO_PROMPT_MESTRE_LEOPARDO.txt",
+      "size": 3290,
+      "sha256": "7d1109cba1aaa435d759f478049971a71a4ff6616c9af7e1707d33679cde0c05"
+    },
+    {
+      "path": "LEIA_ME_ATUALIZACAO.txt",
+      "size": 6074,
+      "sha256": "5ce3e1d62a5d5f948bac5aacee937a90bcf6515143191f47efd53bb721af0041"
+    },
+    {
+      "path": "LEIA_ME_HF65.24.58.txt",
+      "size": 987,
+      "sha256": "bfc100f01d70ec9bc9a120145c7eb7b5cd95977dd82b4872201904bb1fc9b0af"
+    },
+    {
+      "path": "LEIA_ME_HF65_24_13.txt",
+      "size": 316,
+      "sha256": "e84e91049e3e5b0ba5327714a4b145b384477d88e5b2508e209d9d4783f11f21"
+    },
+    {
+      "path": "LEIA_ME_HF65_24_18.txt",
+      "size": 514,
+      "sha256": "cbab5ee6c30bb5a12a5ac378752ad33d193a6312ca1584455cae3d72881cf073"
+    },
+    {
+      "path": "LEIA_ME_ROLLBACK_URGENTE.txt",
+      "size": 691,
+      "sha256": "03582e2659da5455e30fb575d4eed62620a637042d00871297755b6a9b6e43c2"
+    },
+    {
+      "path": "META_INTEGRACAO.md",
+      "size": 1154,
+      "sha256": "7ea2230c55cf027a1181391ff8ad0d5fe8fc45ab01be3484bf3fdfe8a2e76c22"
+    },
+    {
+      "path": "META_WEBHOOK_PASSO_A_PASSO.md",
+      "size": 943,
+      "sha256": "90ba26744b0e0a04fc77623601e5283a2c47053c45765f58e7cf4ded577efd9a"
+    },
+    {
+      "path": "README_PASSO_A_PASSO.txt",
+      "size": 3040,
+      "sha256": "ae73b2ed362905721745a092f73359956e4e12088063590d823b968c28b7a23e"
+    },
+    {
+      "path": "RELEASE_INFO.json",
+      "size": 310,
+      "sha256": "02ea0ae30711f547d9e6c1cfafd457cd4c2b445dbd1459b09a397a59ab9beb1d"
+    },
+    {
+      "path": "ROADMAP.md",
+      "size": 8496,
+      "sha256": "73fe3da8f5947ecd8afc8d8c81f933415c9698f57b3b24b73a519416d35ac518"
+    },
+    {
+      "path": "SECURITY_ZERO_COST.md",
+      "size": 1731,
+      "sha256": "c8f791a4636ae22702a3d2ac0491c25d955f463eeaefff46ac482db74803c284"
+    },
+    {
+      "path": "SUPABASE_SITE_METRICS_HF52_1.sql",
+      "size": 1724,
+      "sha256": "da0045d6db89d47a00dcff023f4f3e8f39adb857dd6c375efb1ecb67432b87ee"
+    },
+    {
+      "path": "SUPABASE_SITE_METRICS_HF52_1_HF3.sql",
+      "size": 890,
+      "sha256": "d1c31ff4a432af7dfd49f0bbe358f1432d3af564af419bacdd87208e38d73eae"
+    },
+    {
+      "path": "SUPABASE_SITE_METRICS_HF65_12.sql",
+      "size": 2394,
+      "sha256": "6611aea32d278367c6ceefdd48151cc197de8b0100fc4d2eff5d7b59af176f5c"
+    },
+    {
+      "path": "UPDATE_INFO.md",
+      "size": 3598,
+      "sha256": "a1dda15cd8e71853bd653cdf3cadc7e1e721ec56bf910051cfed5ccf6093cced"
+    },
+    {
+      "path": "UPDATE_INFO_HF65.24.58.md",
+      "size": 1275,
+      "sha256": "ba2a6a846a3af81da3d2d066156226c30ca01af4375e36153f7be88ce6820bd4"
+    },
+    {
+      "path": "VALIDACAO_HF65.24.52.md",
+      "size": 3994,
+      "sha256": "3a7d565c4899bf79b6b733fdf6859f1ad6ef2f8be83ea2fc58f1ee3338712521"
+    },
+    {
+      "path": "VALIDACAO_HF65.24.53.md",
+      "size": 6427,
+      "sha256": "192af10ca4447f6edd9d2c34423272223d7ffcb769338635d112e90d19ea1328"
+    },
+    {
+      "path": "VALIDACAO_HF65.24.54.md",
+      "size": 6577,
+      "sha256": "03065e3af63b80f1c13e16b615322759104f147bc605656c22af08726dec2f19"
+    },
+    {
+      "path": "VALIDACAO_HF65.24.55.md",
+      "size": 8773,
+      "sha256": "f96270c5c1603b4731a2051b83eefd9126859679d00253104d2cc0012ee26221"
+    },
+    {
+      "path": "VALIDACAO_HF65.24.56.md",
+      "size": 10275,
+      "sha256": "826d0fb36568179d670cb07e6075a65560c679682b9408bca50c2c73e5ddf266"
+    },
+    {
+      "path": "VALIDACAO_HF65.24.57.md",
+      "size": 10299,
+      "sha256": "b8daa9bc7df6da3fd68258c1c3188290ce07aef14e0317db2b75be06a06f27b5"
+    },
+    {
+      "path": "VALIDACAO_HF65.24.58.md",
+      "size": 4492,
+      "sha256": "fb3736918d61eb168f9f48d15d8684f566d142e6a2a0f8cf237200b386826d1c"
+    },
+    {
+      "path": "VALIDAR_HF58_WINDOWS.bat",
+      "size": 1480,
+      "sha256": "81deccec7d7b7aedfb8f2576a704278512f29be8b20c8085c977cab0619ea0f1"
+    },
+    {
+      "path": "VERSAO",
+      "size": 37,
+      "sha256": "7a77d8f517a1d79c740c06be10388d9eb0c454ca0914e19d3200dbf40394e7c5"
+    },
+    {
+      "path": "VERSAO.txt",
+      "size": 37,
+      "sha256": "7a77d8f517a1d79c740c06be10388d9eb0c454ca0914e19d3200dbf40394e7c5"
+    },
+    {
+      "path": "__init__.py",
+      "size": 42,
+      "sha256": "d3fae0d2d8cb98285cf665471c9cb4e20dc0e94e8310743320ad87fe43c56e89"
+    },
+    {
+      "path": "acompanhamento_pedidos_hf46.py",
+      "size": 3232,
+      "sha256": "760910f10673be134af9ef08033ef3dbf60c260bca6270c12f42a50620b2e661"
+    },
+    {
+      "path": "alpha_connect_ui.py",
+      "size": 8331,
+      "sha256": "007617b91ed45e06dcea51098e1c5cb499fc7ec6432ec367044a429b1cf326b4"
+    },
+    {
+      "path": "alpha_core.py",
+      "size": 7302,
+      "sha256": "bd1bf82d1115840601d9d9fa6b3085cf64223da401af199ba73626fac9e7623d"
+    },
+    {
+      "path": "alpha_intelligence.py",
+      "size": 11915,
+      "sha256": "c06020b89d9211cb55982338ea29da51e818c3431616e32e75f40c38320f14c2"
+    },
+    {
+      "path": "alpha_live.py",
+      "size": 5892,
+      "sha256": "f157eee7e7def44afb8cc7a2132d3308d13aed230fd55b5ea211cfebba5de57c"
+    },
+    {
+      "path": "alpha_marketing_autopilot.py",
+      "size": 3678,
+      "sha256": "291ae09e5f13124735071c740a23b685a95e46a2c9d7c26e928c26041c23727c"
+    },
+    {
+      "path": "alpha_marketing_designer.py",
+      "size": 10374,
+      "sha256": "4889bcd95dd52e0268050fc75083240a1918997026ee4f08e11b83ce1d5b7122"
+    },
+    {
+      "path": "alphafest_design_system.py",
+      "size": 5330,
+      "sha256": "cbec1f32b9e85cc9144876efeb237483a1ebeec48dccb56777cf47ff063c3333"
+    },
+    {
+      "path": "alphafest_dna.py",
+      "size": 1694,
+      "sha256": "f00ee0eee9e416ca32a5c1f62fa11b3538f69f3a0a8b70a839d81d29066b9105"
+    },
+    {
+      "path": "alphafest_font_manager.py",
+      "size": 2845,
+      "sha256": "36c8eb120f39c25b199bc095ff97994c6db0d2d36751dcb2e1dba67f8df55128"
+    },
+    {
+      "path": "anna_agenda_service.py",
+      "size": 10016,
+      "sha256": "69d2e982c280d17aaea8933e0871e855d4c2b5c417083c1da6108432c3cca100"
+    },
+    {
+      "path": "anna_fechamento_service.py",
+      "size": 13207,
+      "sha256": "c9baec58aa6463cb058093ea000248a06639e7bfedcddec84260e6197ff55ef7"
+    },
+    {
+      "path": "anna_snapshot_runtime_service.py",
+      "size": 1785,
+      "sha256": "c4446835a9d9d9fabde7cc5c31f8c9476795165ad7a3ad8af7f1bec3981caddb"
+    },
+    {
+      "path": "app.py",
+      "size": 2186405,
+      "sha256": "90f17d3a2c040267967cedd9635011ecfb03e044304d27d403bec644330a7c25"
+    },
+    {
+      "path": "assets/campaigns/dia_cliente_2026.webp",
+      "size": 275748,
+      "sha256": "89948cd188d6a573580d478e66dc6d94cfef1c3586816382534735c4f4dee88d"
+    },
+    {
+      "path": "assets/catalogos_legados/acervo_catalogos_legados.json",
+      "size": 416412,
+      "sha256": "419cd400cb73dea5aba41b72576d2d2b1fe5ba5a688796d1554da5c12384b4e2"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p001.jpg",
+      "size": 89560,
+      "sha256": "459eadd828e5764bcf474ce88e9c96cc16f44f49d3a7f4d1367cab20313cc97c"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p002.jpg",
+      "size": 52854,
+      "sha256": "1ee30602375112a02a9e5abe844017ff2e405588db4331fbcff2af052d625bbe"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p003.jpg",
+      "size": 62293,
+      "sha256": "42f760e53491d10eb30134975a93ca195ec61c497dade4a9f2666b8971cfd0a8"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p004.jpg",
+      "size": 59637,
+      "sha256": "54eb773f69c644443732fb973574d994bcef387ea66ee090c7246539f4d52cb2"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p005.jpg",
+      "size": 56859,
+      "sha256": "e6d1dfffdef8a2f75b7c6b596c240d3b5964e7134c5ca72e5bb596763d345c57"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p006.jpg",
+      "size": 59550,
+      "sha256": "7b2329839d060e3575ca676e233d23a7d486687e78251a5a02d4e804fe7089c9"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p007.jpg",
+      "size": 61292,
+      "sha256": "bf8292c554bc7a7fb2b1ebb570bd78aaaaa0a93d8da6d501ad7af530e5635ffe"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p008.jpg",
+      "size": 59502,
+      "sha256": "73c3ab3c9d84e04e3c6f93b357f0c136e958d2c44df6175af9195261e280accf"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p009.jpg",
+      "size": 65906,
+      "sha256": "e25e70e2e171de9edcd7f81a915f0bcd54e7687a322d1561bc9701410ede4d2f"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p010.jpg",
+      "size": 62030,
+      "sha256": "4bfc0c281a39c58bf79a29aa4ff0c3c217546021cae75867155607d884e7d164"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p011.jpg",
+      "size": 60499,
+      "sha256": "2f7fd29eb3c03aced573698978197b42c2240d4d2541605af932733c34b81bce"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p012.jpg",
+      "size": 61161,
+      "sha256": "03b86350607749c5ce3be9e34038aab41549455dfc06e704d927d29a6ab7d4c6"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p013.jpg",
+      "size": 62393,
+      "sha256": "8d3ccf9db6942bf50cfe80fff4919cfe0cef95e41948ab30ad3a05903348a727"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p014.jpg",
+      "size": 60786,
+      "sha256": "322b4b6f9a19195846081d26f5e1f3431ef1ba5db28f026dc8582938e3e5ca26"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p015.jpg",
+      "size": 62092,
+      "sha256": "e97822aaee703e8394e5d41e6882edb0f2b2d7585bcd8955d8bd9971d47feb7d"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p016.jpg",
+      "size": 59541,
+      "sha256": "18ff8e35a3710b1ba65a099dc757d7cd1addcc4c7591996a4e774fd7fb9f51aa"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p017.jpg",
+      "size": 57990,
+      "sha256": "323bd169e153d1c1c97bf4071434b10602bdc7b6e8e1f7b9bcb516575c9635ff"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p018.jpg",
+      "size": 52979,
+      "sha256": "2404ddd690c74bd37872c344a6e6990af6be6ba8c795b6d6ddccdf29fd3735f4"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p019.jpg",
+      "size": 62663,
+      "sha256": "3310b87642c74f3e5d8d621980dd6f7b951bd370c5be71af824f2a6357d473d2"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p020.jpg",
+      "size": 50986,
+      "sha256": "ae0a9f3f43ae461dfacf4e93785a4b50e591e6353fd9fa1e3f1d3478606e5091"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p021.jpg",
+      "size": 55238,
+      "sha256": "183b780577d9dc8215da8256034b828e44fc9ffdef60daa47946a01dd11cb707"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p022.jpg",
+      "size": 58821,
+      "sha256": "e99aed2aaa7de0223254ab5ff63bdd761fa2b77fc6ab1deeef86c5e62a274108"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p023.jpg",
+      "size": 53333,
+      "sha256": "bec4ecc0bdfc0bd64797344c21a13c13a0c4e00568c429083c5aa59a72833af6"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p024.jpg",
+      "size": 57066,
+      "sha256": "13419da099bfc5e8a3f649df5f5d43fc95bba144587f0a3d7fb6872cb6bf44e4"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p025.jpg",
+      "size": 56962,
+      "sha256": "29f0fee547ae6a05832875bc3e8c61686e3aa496b01b27594da2bf22174f36ec"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p026.jpg",
+      "size": 57972,
+      "sha256": "8297591f9b56def03e7518479e8fde31fa045bbc55eac65527c08a5904e89b19"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p027.jpg",
+      "size": 53366,
+      "sha256": "b034db5e631df11751ce88dc9c888e4ea2f235c16e4c3679c8770cabc8110473"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p028.jpg",
+      "size": 57800,
+      "sha256": "766831e6a0cd681cf5d3d1d4c115e58f8d4607548a54a837e8ec9111699911ee"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p029.jpg",
+      "size": 53521,
+      "sha256": "730b4c9df2510bee388088af8213473b0077574fffb502ab50dd724856e194dd"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p030.jpg",
+      "size": 55291,
+      "sha256": "0484e99d5f4032b24da3238d4645fc920e54c8a58593cded983366b050419202"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p031.jpg",
+      "size": 46971,
+      "sha256": "686697337c6ea6f7026d2d9079eb8f7d338a50cce726b7efade3d499460d6742"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p032.jpg",
+      "size": 54364,
+      "sha256": "4b4761cbe6adaa80ed5caf757c9cfc983952a336b4b1c5b63f8608a6b81cf7c3"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p033.jpg",
+      "size": 56435,
+      "sha256": "6ec2f75b484fa1cc79286afd2b117419fa46ce4cad3734209e1c7ffe6d35fd85"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p034.jpg",
+      "size": 45692,
+      "sha256": "cf19cd548850a21dd05206803d0c458f4dd85965919fc2456c67abeed8c34e53"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p035.jpg",
+      "size": 49771,
+      "sha256": "bafd2ea2ec9a800e25830f115aeda4ae79ce56420e5821f971412e5acd3d6a0c"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p036.jpg",
+      "size": 47464,
+      "sha256": "fd5054f0aee525f0cc5f4dc8e3f3e275e76af56131f0b9fb0a75bc21d7e17cb6"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p037.jpg",
+      "size": 52446,
+      "sha256": "26c86a55bb16d3854e10b8c8a1bdeca54020ae79411a80a8e0833344e7c66687"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p038.jpg",
+      "size": 58462,
+      "sha256": "481f626705eb7a6e173442e4e0cd8189f90327447372fa954ff4a3fe5e703543"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p039.jpg",
+      "size": 57265,
+      "sha256": "9402baa099b557919b79781cdd22ae63528675c61b530e4f4cfbc913bd5cd18e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p040.jpg",
+      "size": 47794,
+      "sha256": "9920a46e2fbef79740c7861cccf34be2cb44bcb6821ec1b90835a11fe85d2d20"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p041.jpg",
+      "size": 58074,
+      "sha256": "b60882c32216e2a0ac977b6d6883001e94501c837fb173d9913641dd8dace34d"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p042.jpg",
+      "size": 61405,
+      "sha256": "840b4a25c59cde834de5df0472537f8f192d43d15fb1b4c80d7b8e27d0648eae"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p043.jpg",
+      "size": 50831,
+      "sha256": "44708919f6e52d41ebfb4045dde787aa7fe2463a0707012cfd2a6f875e4a6825"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p044.jpg",
+      "size": 56976,
+      "sha256": "3f7504081c931ede72057b4627fddccd2785277ab1b1a441af03ae0da026bfdc"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p045.jpg",
+      "size": 60211,
+      "sha256": "471d851c493560c1ee8100a3a5fb5824c3f271182caec01e8056efde4cdda4ee"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p046.jpg",
+      "size": 62135,
+      "sha256": "91f8ada7461ec8c94c3d5ac89420c7fd858d4be236bdd1d65bfee44d1fd0aeb4"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p047.jpg",
+      "size": 61429,
+      "sha256": "6b499dbad86551a9d09083d2820ee37c3bdff725c844b7640904185fa9b5c2bc"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p048.jpg",
+      "size": 60656,
+      "sha256": "6d4f6efcb2e0616da2e6ccac462a1d28925a2e50917d84c7a165d686fffcf814"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p049.jpg",
+      "size": 59641,
+      "sha256": "09f2ae745775ce50962d7f413728243bdb05ef1fbce6c0fad1e5a736fba60e4e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/copos/p050.jpg",
+      "size": 51074,
+      "sha256": "40fc36a6f7369edbc1c72999ed22b931da860ea6052b11fbaa757be5af3634b6"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p001.jpg",
+      "size": 56450,
+      "sha256": "c0bfbd47c89298f0a8920ed66d67406edb4bede1e78c1905f7c249654e73cb6e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p002.jpg",
+      "size": 48058,
+      "sha256": "514c3229cd0955227637b3dae8d25bd1f15c58edb3d656aab5126009418756ce"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p003.jpg",
+      "size": 45536,
+      "sha256": "f8600273f0acf1cbc377aebeab98146938329e827b1df7fbbb11ccc9492a261b"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p004.jpg",
+      "size": 32797,
+      "sha256": "9ab56e3a6551291af8c1b362e800b96767e7a262b08f53eef56b34d19d17f4f2"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p005.jpg",
+      "size": 28045,
+      "sha256": "74047c849e4a961a45a37f4930389a8a46f7dbaa308e5fae25c6c71667d94617"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p006.jpg",
+      "size": 29544,
+      "sha256": "37f95d75c4f0deea7b20c294f4bdbffa6a70549bdf5fa469cba12356ffb9c1b7"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p007.jpg",
+      "size": 31254,
+      "sha256": "330364dd9229071729f8a9515cc0cdb4fd0c52c2547f73d2bcbd0940f444452f"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p008.jpg",
+      "size": 29404,
+      "sha256": "36640845c6553cd518732c02f60d62d9d455ad66724417e274678245402d3c2c"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p009.jpg",
+      "size": 29146,
+      "sha256": "6c57d296b88f19de283b1b4fbfe25779b348a3db0533e58fca101b0506c2b5c4"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p010.jpg",
+      "size": 32599,
+      "sha256": "4093a0737c350836b0f58629584534145d810222b30ba707e0d026523f2bba11"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p011.jpg",
+      "size": 30278,
+      "sha256": "b91cf81e54b14193643764a26c420bdc2a34630896b8dc32bdd0ea0e58c51279"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p012.jpg",
+      "size": 30691,
+      "sha256": "464822baa96dd567d1461edd5fe976f379e104cfb93f5b588f5ac968c1c1f7ba"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p013.jpg",
+      "size": 39743,
+      "sha256": "9c4c845bc7829f479cf5b53ccaa53bed6e60a5826c71b76b63e77e9679ea58c9"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p014.jpg",
+      "size": 34857,
+      "sha256": "596ff1f34c3db38819e0a8eb2a304ae686e682626cbae050ae5636ce55d1e00f"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p015.jpg",
+      "size": 35803,
+      "sha256": "c9df2d13c8b4575e98f11c092ae4037cd37618063aabd8a2a2b546cf3a3c4acd"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p016.jpg",
+      "size": 29264,
+      "sha256": "a080903d3a1ac0d0f2d567f7cd122432b57b60d0d7b8596a69201982268c8379"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p017.jpg",
+      "size": 31261,
+      "sha256": "72e27d91877d2bc2df398197ba5fd59990600f4801990593e0c3cf44abcc11af"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p018.jpg",
+      "size": 37469,
+      "sha256": "37a7d51c1d46e0284b3f42b455ea4f4672ffcedc1b7e89b25a68d10c76a20d24"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p019.jpg",
+      "size": 30768,
+      "sha256": "602ed0fdedfd41a3bc1e2c49be8d0d50b71dd4e149220ed85f84e57c630184ce"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p020.jpg",
+      "size": 27116,
+      "sha256": "95a5b1c64c8ab84ef289fa2fc8c4e4fe8ccf1944320febc2aa3d0b498e3d512a"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p021.jpg",
+      "size": 32573,
+      "sha256": "dd33b05c7bc610d6e308498b0cf139ccc53730d87be5f9c715af554402d13824"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p022.jpg",
+      "size": 32189,
+      "sha256": "30ee29954525d30ab42db88b59956ef8a6ed478e3be3be8775ad6f2f13f0fb10"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p023.jpg",
+      "size": 30747,
+      "sha256": "b61add71060604a27f27e82cd1a05bc231b2b363883ed416b1144cc95194b431"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p024.jpg",
+      "size": 36630,
+      "sha256": "dc736b9f787a084c2e8f656b0e0ccb512d905f465e5f701553a288def5adbf54"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p025.jpg",
+      "size": 27209,
+      "sha256": "facce3c56bb14858039155cb91dbc71d241a8daf049c301cc69112f31da9d363"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/dia_crianca/p026.jpg",
+      "size": 39484,
+      "sha256": "51257a46c2beb8fe985a710f12c221e64fe27a9ef3089829b3544734102e2303"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/grafica_rapida/p001.jpg",
+      "size": 56450,
+      "sha256": "c0bfbd47c89298f0a8920ed66d67406edb4bede1e78c1905f7c249654e73cb6e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/grafica_rapida/p002.jpg",
+      "size": 48058,
+      "sha256": "514c3229cd0955227637b3dae8d25bd1f15c58edb3d656aab5126009418756ce"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/grafica_rapida/p003.jpg",
+      "size": 25583,
+      "sha256": "0b2ede072aa3221216370fd0247ad07959772db7f34ae959fed92d3981ede6be"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/grafica_rapida/p004.jpg",
+      "size": 47430,
+      "sha256": "7ddc95ebd0a6fe0b017d963c00a8bd91b1c857af758e283aa2ca5d18703be8af"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/grafica_rapida/p005.jpg",
+      "size": 45281,
+      "sha256": "f7189a20824cc74aadefa2b18f8e92e6b3e95c75f37af47dd95a7a142b5d826d"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/grafica_rapida/p006.jpg",
+      "size": 41190,
+      "sha256": "6c0731e0b33c05ec14f901bbdef3304bbb5fd37d40eb9d0ab2f0b4b9ebc05029"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/grafica_rapida/p007.jpg",
+      "size": 44813,
+      "sha256": "e383f44fdc9653f9a0cb0a2cf7e4a9233cf8b2675d8c53f272d07ffe0221d575"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/grafica_rapida/p008.jpg",
+      "size": 44874,
+      "sha256": "14aff27f48110b9ffff37d519b2eea82d4e35269e716fe2a9a64c720e5a2996a"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/kit_festa_2026_2s/p001.jpg",
+      "size": 174584,
+      "sha256": "8c27d90523846045471cead0274681df152f77b93e7a9f29fc5445994be464df"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/kit_festa_2026_2s/p002.jpg",
+      "size": 189990,
+      "sha256": "79ef0fe98219bfd76e3e26fb68e72b1165b58e03ae10e2b1fac0be9c4d9a13b8"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/kit_festa_2026_2s/p003.jpg",
+      "size": 242539,
+      "sha256": "dbcd535de2ca62a05486d63faf82b4196480c77e0db1f9389832aede714de607"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/kit_festa_2026_2s/p004.jpg",
+      "size": 174990,
+      "sha256": "78be0e96807961b86d6d16b8899bf136470e48bf455c40b8f5e1b303698c32fe"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/kit_festa_2026_2s/p005.jpg",
+      "size": 207774,
+      "sha256": "4251cf3f9183625b850c8366a22fcb1ce486dffb78267b5decb2fe1448029ea6"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/kit_festa_2026_2s/p006.jpg",
+      "size": 201568,
+      "sha256": "fe4331452e4e63332dc794c6667f5bb95d0a69938a8a66442d5f6af7075541a0"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/kit_festa_2026_2s/p007.jpg",
+      "size": 203755,
+      "sha256": "c1a03ec5dacca01b6c4ae8bc06fb9df5e762cc9b118206556cb2fb106a2516f4"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/kit_festa_2026_2s/p008.jpg",
+      "size": 217223,
+      "sha256": "aed74aabd94f4b859e2e4b4c76ec72adb924ee2a0ec18201c439a621fe64218b"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/kit_festa_2026_2s/p009.jpg",
+      "size": 236146,
+      "sha256": "36b3541d0c9d921df596d916d30f023f9a55bed74a7b6804fd501e9e73533b83"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/kit_festa_2026_2s/p010.jpg",
+      "size": 206657,
+      "sha256": "eef370f8ccf7201c746306b807097a83e8c8c3b72c2bcf7e11fe38c8eb5133c7"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/kit_festa_2026_2s/p011.jpg",
+      "size": 222570,
+      "sha256": "467b6b1a80d17e8edca469770e19efa9c8564633a2c2884199a54f22cda26a1e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p001.jpg",
+      "size": 23522,
+      "sha256": "56098205604430720ce5257e582f4452596103a20bbf20d02e0a1017fcc63159"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p002.jpg",
+      "size": 36914,
+      "sha256": "ca020ab69939070a962234c89a1304bf80ce1e4f9f1fed568dcf0dbbc4c6de5c"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p003.jpg",
+      "size": 39268,
+      "sha256": "70e3c004dcdbc1da250f544b5978fb9897e750190f5cfd8f211324bc157aac56"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p004.jpg",
+      "size": 38628,
+      "sha256": "7eddff5ffd3aafecccfaf551411a1a490fdbebd7fe48e5a949c11a02e2c658b0"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p005.jpg",
+      "size": 32272,
+      "sha256": "edc2427228fe0ac3f9588f00622ea4e6d0f4103afbba2677cd9b1e19a810a45e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p006.jpg",
+      "size": 40275,
+      "sha256": "1f41e58b645c1a6a6e40ad337e708f739ea90a51c5bf18a88adaef5414d34f0f"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p007.jpg",
+      "size": 36974,
+      "sha256": "366a9f3c450d7a84889c0c938433b88663ee779a23b7d9a46a05483abe810287"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p008.jpg",
+      "size": 44647,
+      "sha256": "edcfbacb68523d945f7a8efa99c61c2a1567170124af8f5a85eb74f2b43dc2ea"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p009.jpg",
+      "size": 44184,
+      "sha256": "fbe319963a2d4c540d48c635f3afccc3aecae94fea1df0c7e903ea14e0f31fff"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p010.jpg",
+      "size": 42737,
+      "sha256": "e1473e6db74e77be75c7d98fc8240d688e157f8eddf56377469d44eb34e23530"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p011.jpg",
+      "size": 31679,
+      "sha256": "089750c99e7c398adaa4c007909f36bf5191b6df9142f1631a92770844f67ab4"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p012.jpg",
+      "size": 44002,
+      "sha256": "a736ea309b2a35c5548cf900cd2019455249c13558cebb1714dc6180ab3a9cc9"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p013.jpg",
+      "size": 32126,
+      "sha256": "eb7e1d487973dcc5742848b4b1caa6b758274e14c237a5cc40f7051e5146ddeb"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p014.jpg",
+      "size": 43237,
+      "sha256": "d57061f612d5b9e60e738bf24c2cb136074c1786db22f033ed621482533b1140"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p015.jpg",
+      "size": 47895,
+      "sha256": "57b54c159afdf962130e1ab11d90e310f7f9bdc598b1fd31f3a75e1c46eb2c7d"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p016.jpg",
+      "size": 32842,
+      "sha256": "0813b0c8c6f0ec0d872249d54f7f05ec230bbdc460e0f81d4c3076cfce0128ce"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p017.jpg",
+      "size": 29939,
+      "sha256": "c85d64cc8df85cbcc244fc1200f8adbde3bcc39cd6ec292afc0d0607fe4f7a13"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p018.jpg",
+      "size": 31295,
+      "sha256": "ece6a938a66e31282d4dbe7e6d4a9024992d2b851faa46313353b4fa4f33a136"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p019.jpg",
+      "size": 37658,
+      "sha256": "a3d0f8ddd2c2d436da768a173de4fd432c0a408f216828bb226ef66237b3c676"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p020.jpg",
+      "size": 32883,
+      "sha256": "48fd7ab58c087d32fa5211fe7b98b4dfe093741fc7b5b38aacbea976edc29b7c"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p021.jpg",
+      "size": 35234,
+      "sha256": "67d77431698989b080ca971bba73348cce5df3cf0a5ca912305473b13c0f9324"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p022.jpg",
+      "size": 40326,
+      "sha256": "a252fdca94d398c1ec5d77ac83aa91a963719e2a70d19a657b8f5b83bb9a977b"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p023.jpg",
+      "size": 29518,
+      "sha256": "a68ff635caeb57e51be1d566e64acafc318f6d98861592cd6c0836eb137ff64c"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p024.jpg",
+      "size": 40381,
+      "sha256": "b5fde049d353a5a244d77fc81a15d9689021fa18d0c73c6e6f4253a479003eab"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas/p025.jpg",
+      "size": 36086,
+      "sha256": "592bbffd6e7d08cdfd90c289b827e01372099aaaad0f7b84457129107315485a"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p001.jpg",
+      "size": 97062,
+      "sha256": "aae0d974de42927338b61a4b2b5bf67b6529357c6eefe30c3278b131fe1c5a00"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p002.jpg",
+      "size": 69794,
+      "sha256": "66fdfb03399f3f3affe3f3dc121a4af893170f84f730a575c1c017c83895e460"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p003.jpg",
+      "size": 148243,
+      "sha256": "a772471cd7d0480f288f242cb45c86e76211cde69c7aa01c7bfdf98fb09290f9"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p004.jpg",
+      "size": 154460,
+      "sha256": "04544c0a21377d08298f3a33c3a9793b952fcd6d37fc713c7c253092db2ade20"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p005.jpg",
+      "size": 156678,
+      "sha256": "123308d3249937706f3492543e3b378b7495f372ca09f6cb608996d0026a27df"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p006.jpg",
+      "size": 154876,
+      "sha256": "db7bc6a84e4c6eb41357fa9a54752fa89a042ceebc35be81bff90f6e20d6188f"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p007.jpg",
+      "size": 163261,
+      "sha256": "2c85350041d18bc1d69536f5fbe1005681f4026a82b540236d3e1394effeaf6e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p008.jpg",
+      "size": 145003,
+      "sha256": "3d6eed774014d703e2c6c9d9e67c0b0883e28292f6a98454f900633117d1563d"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p009.jpg",
+      "size": 153442,
+      "sha256": "60bae140ece9b364aaa0767477fcf7af39639cccb47aae2c96e78b96dfd704da"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p010.jpg",
+      "size": 147291,
+      "sha256": "bdc1ccdeb5c6dcd3b7f946d14a3125c45dcb36beaf87267e19d1949bfc7e9d71"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p011.jpg",
+      "size": 150949,
+      "sha256": "b6f19f88ea72325c480d48bd2069dc1ded4523fee849861975b6a9dcac2128f1"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p012.jpg",
+      "size": 151215,
+      "sha256": "3d38db92d60ddf5d62baabc19a2f7a328d3bd2c98a57b146ecacf00b92ed2432"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p013.jpg",
+      "size": 151173,
+      "sha256": "837ce85e8cd5d8389c80ab272f1afadc281c8e7bef6a517debd53db5c71c96ff"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p014.jpg",
+      "size": 147151,
+      "sha256": "9aeb67cd9ca48eb09ec75aca7b32405c556f447ae552dc9e061acd0de8b7bcdc"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p015.jpg",
+      "size": 145872,
+      "sha256": "185daa7e9ca1e0d03f48485a29f82db97a2628ceee01082baf7d454c0e34d8b7"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p016.jpg",
+      "size": 143493,
+      "sha256": "45a0232e3d2c397a4cfee4c5802b43c79b12a7dad84014094127256164a05e94"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p017.jpg",
+      "size": 141491,
+      "sha256": "c98af815c7b44097efc97fb3ee9b7ce0c61be5e3aa83f97f31e472a84a67d50a"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/lembrancas_natal/p018.jpg",
+      "size": 148018,
+      "sha256": "75de6d446adf666a8fd0fe86325b376d0545586f8c12712a415866ce1ad9abbf"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/natal/p001.jpg",
+      "size": 56450,
+      "sha256": "c0bfbd47c89298f0a8920ed66d67406edb4bede1e78c1905f7c249654e73cb6e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/natal/p002.jpg",
+      "size": 48058,
+      "sha256": "514c3229cd0955227637b3dae8d25bd1f15c58edb3d656aab5126009418756ce"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/natal/p003.jpg",
+      "size": 27288,
+      "sha256": "bea79fc5245634ca147aff0e9de7a5876b25e96cd3a2df583b9710c3dd0e294e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/natal/p004.jpg",
+      "size": 65361,
+      "sha256": "b880540e40504539779398710789263cb29ab8cf3a80f9b0e790aa7352c9713e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/natal/p005.jpg",
+      "size": 61287,
+      "sha256": "87bd517ad265806f647274459c622fc4918952b3d29403a7fc9e3c07eaa4bb5d"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/natal/p006.jpg",
+      "size": 63412,
+      "sha256": "86e1cd104d62e379ac6447f4ecb642b6f5552fe3b46f4bd9ba9d27f0acf92b2a"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/natal/p007.jpg",
+      "size": 56642,
+      "sha256": "14e15bbbb565494885a444712bf73ed77a8380550f43855be317b19ec97e17ef"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/natal/p008.jpg",
+      "size": 59978,
+      "sha256": "f57430b4f96b3e0d2dec0887c523e2989d66599a4efa0b6ab98cdcfba7d8ad8b"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/natal/p009.jpg",
+      "size": 61533,
+      "sha256": "9a72bd4c2091f78a1686553ddb03566cb133130fb9da44b8f84e3502a6a15fe2"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/natal/p010.jpg",
+      "size": 58175,
+      "sha256": "61aa8238cedd971a6b6ba3bf9f58345aae37880811626812fea8d35bc347f112"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/natal/p011.jpg",
+      "size": 65136,
+      "sha256": "bb44d426bbce31f9a98ec5dbf277dfe072a8b0c14c53afad29b04c71060beb87"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/natal/p012.jpg",
+      "size": 61049,
+      "sha256": "af5e4eeba7670e501fe39bf7e29e10ef6aaee7baa22be22c37c78499636e7bcf"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/novembro_azul/p001.jpg",
+      "size": 51829,
+      "sha256": "6ca809aba55d59a272d166dedc99d09329f01e04326ccbc085492176b81dd7eb"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/novembro_azul/p002.jpg",
+      "size": 53084,
+      "sha256": "cbf838c413e741616ef9a9bef3e1ebf52ac044f6c690a06073e8bf75fdee6ec4"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/novembro_azul/p003.jpg",
+      "size": 94830,
+      "sha256": "d5c9e1834eed0c8e76b2e3c515b80592a1eebf6d78f943469301edfcc53bdb7e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/novembro_azul/p004.jpg",
+      "size": 94914,
+      "sha256": "4fe22d3ac84005ee3e762cfa8188d85e357303ef1e32f06d563546f432021b5e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/novembro_azul/p005.jpg",
+      "size": 86084,
+      "sha256": "98405616751c532046f89ccda285d0339df0cbda40686d55e861e54db8e2311d"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/novembro_azul/p006.jpg",
+      "size": 98202,
+      "sha256": "7bceb6f436014d444c98fd7f42ca8634a410bd04c58ee2cc15810d48d9628530"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/novembro_azul/p007.jpg",
+      "size": 88442,
+      "sha256": "8742345ccea1c6fcd4cdd8ee8eedb9793c69ae5749e2afc40caf0a1511d07d0c"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/novembro_azul/p008.jpg",
+      "size": 88236,
+      "sha256": "3fd69ca2f41806d4862ce72f3fd8898405b4e2ed6e788525dbe42e2ebeeb0eae"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/novembro_azul/p009.jpg",
+      "size": 102953,
+      "sha256": "fc20b73752a69e81bc2d77208e02ae221c01fa2e0576d572b7b83c484cc72558"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p001.jpg",
+      "size": 64990,
+      "sha256": "c198b7a2e9783483c6bb37046ffbfcf499eceaa4a7962f507864435004f0d7a4"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p002.jpg",
+      "size": 69784,
+      "sha256": "726fb4e78828e4db67c0a479c7bc768517071c57568a4b4b6f1919ff452f354b"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p003.jpg",
+      "size": 116848,
+      "sha256": "3261aad29179a4b1666bd007a69047b5d5a99bb9885d948e1278ea2440ca9663"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p004.jpg",
+      "size": 99198,
+      "sha256": "df0b8d4653efc9f8461a8d54f0712b5143be6f6fa090390f5671e0cf140b13da"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p005.jpg",
+      "size": 103900,
+      "sha256": "75a920fd0bceaf51f79ba57f9e002f28c62aa254adf5d327975af1ed20570c90"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p006.jpg",
+      "size": 126141,
+      "sha256": "22fe9f7e0e7dd763656949e2ccffc415cbef19c8d1e0964fb3d9e0942b7cad17"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p007.jpg",
+      "size": 134424,
+      "sha256": "27ff9cb0e9e5a945b18f8d3e55dd9513e05cfbaefe4c8263c12e14e8d9ec4bb0"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p008.jpg",
+      "size": 129909,
+      "sha256": "456cfbbda38b63f0bd1772c9aac71a003f96081ce9efb21dca3539e6825f9f24"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p009.jpg",
+      "size": 117567,
+      "sha256": "72ceaa73d31240f6ee730c9e6688638b1fde28e649708bf1c2b7fcb2bd8bdb3d"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p010.jpg",
+      "size": 117699,
+      "sha256": "1bada0d169b3cf2b0ef57f8a88d6756c59a460adb585029a60db9f8270d676d0"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p011.jpg",
+      "size": 116487,
+      "sha256": "4dcdb414d08e9230f99695d4c5fb8443c23ce6b3844a554e5e1693266ee0e7eb"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p012.jpg",
+      "size": 113958,
+      "sha256": "fcff8d8966eab86de50addd3e491ece5e13a633cd0d0f4e8e50748702eb95481"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p013.jpg",
+      "size": 120754,
+      "sha256": "7df3f665b7d6a8e49c1433a4a1fe7be5d6faccbe1597a1c5998056538223e69d"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/outubro_rosa/p014.jpg",
+      "size": 128256,
+      "sha256": "c8627f2fa2437ef584bc1e993256ec8045f9ce59cf31b0d34736f4a456c9f553"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p001.jpg",
+      "size": 56450,
+      "sha256": "c0bfbd47c89298f0a8920ed66d67406edb4bede1e78c1905f7c249654e73cb6e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p002.jpg",
+      "size": 48058,
+      "sha256": "514c3229cd0955227637b3dae8d25bd1f15c58edb3d656aab5126009418756ce"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p003.jpg",
+      "size": 21173,
+      "sha256": "2fc332bb4b27b8200a6994065023fab14f7623d3053a75102806141f9b1a35d6"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p004.jpg",
+      "size": 14727,
+      "sha256": "ea3cdb8dd7178c2ba2904e82836ec6be706956078b69974cdccafd6d61bfef12"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p005.jpg",
+      "size": 53349,
+      "sha256": "c6b7e485a560660b41b1fd3a7e00df9ad102a1a633e40aa4d4230556e61c6d0a"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p006.jpg",
+      "size": 46590,
+      "sha256": "d34a75201cf132d4db3857bf38a651a2daeda15968fed0142e8caecd82d12b67"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p007.jpg",
+      "size": 42876,
+      "sha256": "6beba716f5514732e55facb5b6c15d7b4c057b3bb61c4a4cbce6705b1fb50842"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p008.jpg",
+      "size": 43590,
+      "sha256": "31f6c313783998bd845250f74e326acba53c81e54d2dea7ca897f51be4c23e8f"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p009.jpg",
+      "size": 47406,
+      "sha256": "6fc8bd66c3422761e17f4f02d5d766ac901aaf26a8f4ee7340e3bad70dcf7073"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p010.jpg",
+      "size": 45373,
+      "sha256": "ba3dd8288cf94243f228ab03c31e90aff304463d5b0093eabd09ae144b4ba352"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p011.jpg",
+      "size": 46786,
+      "sha256": "0f445fbd7404c7221336cf542d3093cf575e7dc592f086057432621b9853a8c8"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p012.jpg",
+      "size": 51858,
+      "sha256": "8db71b617b9bdc0c31d4c6599ef3b31fc07aea80ed4f96b22bc2df676767bf6d"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p013.jpg",
+      "size": 36427,
+      "sha256": "0d4bc3397eb0bab57b2a399c18ab92f2ee6636e04b23534bca99ab16d29b9da2"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p014.jpg",
+      "size": 38136,
+      "sha256": "9fd0ddde4e98c41e4a672eda13ad2d9c3fd07fba62cf168fc5d1ab3da76ce277"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p015.jpg",
+      "size": 39072,
+      "sha256": "7fbd0131045deb0141e5b89f38b6e8d606efee51836274a50ed5cc0f36dd44f6"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p016.jpg",
+      "size": 52134,
+      "sha256": "ac6ab6af21ab9ffc2b96d17d677f8379c763258015263d94fd20bc8af50e7a5c"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p017.jpg",
+      "size": 34848,
+      "sha256": "2811ed5cf2650003d0dcd7e822b7bfab0b14d041dc3db8dd9545bde79d745fa5"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p018.jpg",
+      "size": 36746,
+      "sha256": "b63a88ed19063227972048a1974203542ae0a563f4ed80bd78f5f7e2c31b87d6"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p019.jpg",
+      "size": 35030,
+      "sha256": "e046deb0906bc67e180cee30e0ff4e9fbe0e03b20db383cc6d1079a199220cb2"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p020.jpg",
+      "size": 37168,
+      "sha256": "adc0ccc1f0beb60ec41a4002819449585d94a7f58acae7abddd593f62e8103fb"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p021.jpg",
+      "size": 37229,
+      "sha256": "80d7442830e623efbf51ca62bdb66d5eafe1072a605205d4df2841b0ca6a718c"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p022.jpg",
+      "size": 39678,
+      "sha256": "6e6a34aaf90e071d21757c4444b9b1abf933942fc38011c76bf2b033bbbf3465"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p023.jpg",
+      "size": 36303,
+      "sha256": "acadd594e7b8b01fb009664b54bc65b686d639a846427317e05794c5930abd45"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/papelaria/p024.jpg",
+      "size": 44551,
+      "sha256": "7d486a8317321569be699c0edff081fcf5e02a0f43aa982fe581fe113e04050e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p001.jpg",
+      "size": 64990,
+      "sha256": "c198b7a2e9783483c6bb37046ffbfcf499eceaa4a7962f507864435004f0d7a4"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p002.jpg",
+      "size": 69784,
+      "sha256": "726fb4e78828e4db67c0a479c7bc768517071c57568a4b4b6f1919ff452f354b"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p003.jpg",
+      "size": 145871,
+      "sha256": "641a2ac4d749ecabeceab7ff3c8bad24b113acaef14f7ec8bf3e2433b0eb3bd9"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p004.jpg",
+      "size": 141085,
+      "sha256": "4b499841090f70e363c400b367823cbadc149283ed1812581b4b26e30caf4807"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p005.jpg",
+      "size": 147866,
+      "sha256": "f4371fb6050b447b8ac8273bb93bea4f02d261ed0bb092043b93a7641458b2de"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p006.jpg",
+      "size": 137577,
+      "sha256": "e916560cc882a0bb21c20aa4037c3f224b84190af67ba33ab8ef094824711bfd"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p007.jpg",
+      "size": 149709,
+      "sha256": "608cda0e7cf953d0be94624eba66b2e6154473018da226d9973fcdb209e3e076"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p008.jpg",
+      "size": 155121,
+      "sha256": "ff473bb92cd3494871be26d21a24013b1fe35e6b6f79b9066b8cc7170e2e119c"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p009.jpg",
+      "size": 136765,
+      "sha256": "917ad7bf18dc11f9f896fdcebf2059e274ea2a5f1b3395ae2b6c7e10802ce9c1"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p010.jpg",
+      "size": 132012,
+      "sha256": "b9bf60f379e548dbc825ee96844e38d63a896f96a8336efd0d5cec9ab2414094"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p011.jpg",
+      "size": 136075,
+      "sha256": "a21c54dfb859e2ca72e99ed408ab1d85a6aa3a2817e826d1cf3f04a5ebb521b3"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p012.jpg",
+      "size": 151075,
+      "sha256": "164efc0588b30a242a8e9227c11a4e5227d2c849b5fff531e1966f825d0e4707"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p013.jpg",
+      "size": 147260,
+      "sha256": "85ca6199b994a26d65112200e94b61cfb3b9c623cec8458e270d11588c290e98"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p014.jpg",
+      "size": 136822,
+      "sha256": "3e65971f9e58c9fb92ff7b8b34be49149e9980a58416bd38868264cc75ce493d"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p015.jpg",
+      "size": 132460,
+      "sha256": "2b3b8b5aace617a58ccc49c802773a0b34f4056df489f304aa94358d4e7e6f22"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/professores/p016.jpg",
+      "size": 136316,
+      "sha256": "f988171ae95f10d0325ec7fa2c27a38a8090c483ed2dabe69ef67534576d525e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/religiosos_nascimento/p001.jpg",
+      "size": 56450,
+      "sha256": "c0bfbd47c89298f0a8920ed66d67406edb4bede1e78c1905f7c249654e73cb6e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/religiosos_nascimento/p002.jpg",
+      "size": 48058,
+      "sha256": "514c3229cd0955227637b3dae8d25bd1f15c58edb3d656aab5126009418756ce"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/religiosos_nascimento/p003.jpg",
+      "size": 21173,
+      "sha256": "2fc332bb4b27b8200a6994065023fab14f7623d3053a75102806141f9b1a35d6"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/religiosos_nascimento/p004.jpg",
+      "size": 17944,
+      "sha256": "c90386c73670fe54c2fc2278b74926d3d97eba84b3e082a57c682c6178acc28e"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/religiosos_nascimento/p005.jpg",
+      "size": 37659,
+      "sha256": "baa14a65494d1eda98c779de4511ecf848396401088de9e6476b374c8c090ac2"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/religiosos_nascimento/p006.jpg",
+      "size": 33582,
+      "sha256": "b41839aad180b19e888ee6696c81f03da4079a72c544068d72622a5e5494ded3"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/religiosos_nascimento/p007.jpg",
+      "size": 35236,
+      "sha256": "8fb8638a1bebf5a4735d4b26db5b1df8965b18c443b66b1cdd822f09ca25f336"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/religiosos_nascimento/p008.jpg",
+      "size": 34387,
+      "sha256": "381d98a5a207622b3a8d7f88a6811ad7863525b78ba74b9ad0104e694c1012b1"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/setembro_amarelo/p001.jpg",
+      "size": 64990,
+      "sha256": "c198b7a2e9783483c6bb37046ffbfcf499eceaa4a7962f507864435004f0d7a4"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/setembro_amarelo/p002.jpg",
+      "size": 69784,
+      "sha256": "726fb4e78828e4db67c0a479c7bc768517071c57568a4b4b6f1919ff452f354b"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/setembro_amarelo/p003.jpg",
+      "size": 115614,
+      "sha256": "33658074161b80c327305abadead511581c58b27e0b4e04299904fb4f78dfda8"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/setembro_amarelo/p004.jpg",
+      "size": 112944,
+      "sha256": "76cb767c04eedeb4c8fd0d138135a3570bf38547b0edb1a2550967ef077ca88b"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/setembro_amarelo/p005.jpg",
+      "size": 114677,
+      "sha256": "afa9d712b732b557f9cfa237ffec57d20baa56b70c88f92a9f68abbbeaf8fa9f"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/setembro_amarelo/p006.jpg",
+      "size": 124790,
+      "sha256": "5d8b0e7971d64349cb981e7be8fa1461eb4223780b3da016919f9d4b26e65374"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/setembro_amarelo/p007.jpg",
+      "size": 130799,
+      "sha256": "c3a7956a9fb89079eac93f142d8421f0360eca0c11fdba08f1dc06e78a3fb9b0"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/setembro_amarelo/p008.jpg",
+      "size": 141557,
+      "sha256": "119aca79bd158350a9cac7b333b2ce04320522992cab7a2e32bb8bba1b726d48"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/setembro_amarelo/p009.jpg",
+      "size": 122953,
+      "sha256": "f321a00329b5b87caa3d7d79f37aae2534b52e39c0ed15eb28be65fded6fc080"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/setembro_amarelo/p010.jpg",
+      "size": 128522,
+      "sha256": "4d055c04b6bed45f1d18305a881a6c3cc2b17e5d7061a5fd22b4e29a56aab465"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p001.jpg",
+      "size": 56811,
+      "sha256": "85c47c3396bca52a961caf011f3ebeae83d92da8961eeb16a8aabc555e07a5b5"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p002.jpg",
+      "size": 48087,
+      "sha256": "1a05a0266d474b48d7148e6380e33c10fdf60f0511825ae27c7df6a0bdc0f645"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p003.jpg",
+      "size": 41008,
+      "sha256": "142780801cc1d1561b4f741bdcc1ddba96de8a78adf128a8b5a8d0b3a52e6618"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p004.jpg",
+      "size": 42334,
+      "sha256": "1de421240df31147f694ed3b5bb8b41ce4160076e4ff35da7e7c113b6e8a2cd0"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p005.jpg",
+      "size": 42422,
+      "sha256": "805065e19ed83248a50ce976e36a502fcae6758018538b5f3b3b52cf317ef83b"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p006.jpg",
+      "size": 38416,
+      "sha256": "d9d58f67294d29441572c9e43ab0a5286dd3739aaa31e57b99b75e2a7b1d8f00"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p007.jpg",
+      "size": 44336,
+      "sha256": "492bd930474bb43653e122b4e3b2f666de4e489377e642371deceebe44006cab"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p008.jpg",
+      "size": 44176,
+      "sha256": "6c2a3fd0250421eef824d7fcd59918fc2f14c09c0fe2aa3744e1238ae4872dda"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p009.jpg",
+      "size": 32634,
+      "sha256": "ff01810b6cf7a29b851f4e699640d50ccd9c3d109278128dbceb2d1aa2167432"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p010.jpg",
+      "size": 31177,
+      "sha256": "e4e5999159991f6cbab7932a168f1872fec3be81ca1d595378e5fcab21b05d23"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p011.jpg",
+      "size": 31516,
+      "sha256": "7a90261d0bcf89ddef28400c2d2faea4f2b83d69b2c619caafeacb21afdab9bd"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p012.jpg",
+      "size": 30193,
+      "sha256": "9bea94578aacf59d4f6850b51312caba0b4b0553144c425c11c66f46983eb22f"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p013.jpg",
+      "size": 32947,
+      "sha256": "c28a23ca243485ea238f58eaae67690d952669eb80b9ab36d1b710c6cd7bf531"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p014.jpg",
+      "size": 35020,
+      "sha256": "ac9481556807d505c31ffe3d17acd7385270d1ee8957cb693b47bfceaecb79b8"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p015.jpg",
+      "size": 45474,
+      "sha256": "45067791bc299a0741ba4d41970d58db665a8b5f217c34c667ef96f654e65d92"
+    },
+    {
+      "path": "assets/catalogos_legados/previews/volta_aulas/p016.jpg",
+      "size": 35635,
+      "sha256": "913de8d931cc987b2c64a2ca63e91b04cd74c513a034c4b39e2d9d1296a58d1d"
+    },
+    {
+      "path": "assets/marketing/anna_modelo1_title_protect_mask.png",
+      "size": 5147,
+      "sha256": "d36978aeb1f956f9757365b9bfeb603d65f4d46c720ff5072ea125b8f7c40f4c"
+    },
+    {
+      "path": "assets/marketing/anna_skin_master_1.png",
+      "size": 528830,
+      "sha256": "26071d1d72ed5f7b85f6c3522ac442319f93d773582bfe1da7f4ecc4aa2a49f3"
+    },
+    {
+      "path": "assets/marketing/anna_skin_master_1_reference.png",
+      "size": 2293227,
+      "sha256": "e494a91c49e8291e6454e1e85575c0f5696993e2fcab134de3e9b492adf379cf"
+    },
+    {
+      "path": "assets/marketing/template_anna_redes_preview.png",
+      "size": 1773019,
+      "sha256": "7cc3e84963ea2166930f5aa40127e340b5066780635601a7b1a5222e762d9679"
+    },
+    {
+      "path": "assets/marketing/template_mestre_hf7_preview.png",
+      "size": 468797,
+      "sha256": "b3600ab50b327c6eb972f120654d554bec8a18967ce08f300392e2301a7d9601"
+    },
+    {
+      "path": "assets/marketing/whatsapp_classic.png",
+      "size": 99580,
+      "sha256": "2aff9c453fb46d0ac0fca6a8f5a5ae75bf30f60732b6e8a9413c11fb8ce3072b"
+    },
+    {
+      "path": "assets/mascotes/baloes_hero.webp",
+      "size": 43674,
+      "sha256": "5e1b973a3fdf491a9cb78a9515cab4473119ed59c3ab51dbc1c2f9966ae3dd05"
+    },
+    {
+      "path": "assets/mascotes/fox_galeria.webp",
+      "size": 53510,
+      "sha256": "b0ab90a269bf43ccc2c7c73d43d01f8efc19eeadebe8c9d223cf78e355f02607"
+    },
+    {
+      "path": "assets/mascotes/logo_novo_alphafest.png",
+      "size": 1225758,
+      "sha256": "11687c48e459a3935c7985be6aeb7dffcc6ecf0e2c02b8824316b5bcfd3758e1"
+    },
+    {
+      "path": "assets/mascotes/logo_wordmark.webp",
+      "size": 31550,
+      "sha256": "e09305b01b3c649db8bee6e9e2e0e0acdf1ed4ac11780da0e90c2df3ca95f38e"
+    },
+    {
+      "path": "assets/mascotes/logo_wordmark_transparent.png",
+      "size": 120429,
+      "sha256": "96ca9a5f43a7aa0b57b8f805adce0f10e423b1edc18cf860afb14a1d87f76bf8"
+    },
+    {
+      "path": "assets/mascotes/thu_fox_cta.webp",
+      "size": 46880,
+      "sha256": "bd5989693ede0e0451e27d0ceee9ba281c3718796113aef820869098e3de1659"
+    },
+    {
+      "path": "assets/mascotes/thu_fox_hero.webp",
+      "size": 46880,
+      "sha256": "bd5989693ede0e0451e27d0ceee9ba281c3718796113aef820869098e3de1659"
+    },
+    {
+      "path": "assets/mascotes/thu_joinha.png",
+      "size": 477366,
+      "sha256": "d8e6c5ad5df504d0c74576ab035c6ab84306c677ae94436becbb7c64524626ab"
+    },
+    {
+      "path": "assets/site/category_icons/balao.webp",
+      "size": 29778,
+      "sha256": "a797316ac4dfa4cd832c8aedeeb92956ecbb1e8f9aaee69dbb2b3e1fe29a5475"
+    },
+    {
+      "path": "assets/site/category_icons/bandeiras_flamulas.webp",
+      "size": 18996,
+      "sha256": "2669264b3937e1f674ffeaea674fc31d3161301a0b445602c6b4bdb86494ced5"
+    },
+    {
+      "path": "assets/site/category_icons/centro_mesa.webp",
+      "size": 41954,
+      "sha256": "2a3ec526cf544250657dc9bc3d1ff156c27ecb6b854b62d5458127dd2813dacb"
+    },
+    {
+      "path": "assets/site/category_icons/convite.webp",
+      "size": 39678,
+      "sha256": "9aef2bd7e21fa9111b3f94e2683aed2ef44f5cff27be0e143bbf1139f29ca5a0"
+    },
+    {
+      "path": "assets/site/category_icons/copos_canecas.webp",
+      "size": 37084,
+      "sha256": "3847f011ab87cf831afb304aa0ee26f3a8f8deb133ef9e43dc05362f2578916e"
+    },
+    {
+      "path": "assets/site/category_icons/datas_ocasioes.webp",
+      "size": 33890,
+      "sha256": "04346755360f0626e5d4646410bf6f70592e4838ed9857b3cad3a622634cc1dd"
+    },
+    {
+      "path": "assets/site/category_icons/embalagem.webp",
+      "size": 37884,
+      "sha256": "bd3a0440e7738cf153ef230d9531669b6662df8f5ae9c330670682f021ac182a"
+    },
+    {
+      "path": "assets/site/category_icons/grafica.webp",
+      "size": 32412,
+      "sha256": "e6a7c98bdf3929c3b8b0f32ba0484179ef35533dc60b55970646c4e56c0ade59"
+    },
+    {
+      "path": "assets/site/category_icons/gravacao_laser.webp",
+      "size": 30340,
+      "sha256": "b30d74ae2e68780bcba601d62516d152c85858bf4d05073d3336ced8f77788c9"
+    },
+    {
+      "path": "assets/site/category_icons/impressao_3d.webp",
+      "size": 35006,
+      "sha256": "991455354ad64a03b748df37fe02bdd62b98ec45030d989581dc5324796ec714"
+    },
+    {
+      "path": "assets/site/category_icons/kit_festa.webp",
+      "size": 47246,
+      "sha256": "b5bf0a1c0b750e9535dd33e26fa04cac9fd8d600b59c70989e5ba84cbf7cb3b0"
+    },
+    {
+      "path": "assets/site/category_icons/lembrancas.webp",
+      "size": 40936,
+      "sha256": "4d6e2251370c6dc7e50463994e51b523b8abe46698bf3b67ab91de9ce1bf6326"
+    },
+    {
+      "path": "assets/site/category_icons/papel_arroz.webp",
+      "size": 60464,
+      "sha256": "7cf3f983485a92d53fd61ad9a61527862e6287afc82ed2a098f6ccf91051f37b"
+    },
+    {
+      "path": "assets/site/category_icons/papelaria.webp",
+      "size": 46310,
+      "sha256": "62f86049ba40eccf084f56c63452db263d6774d10d1d6fe084d531ac63483085"
+    },
+    {
+      "path": "assets/site/category_icons/personalizados.webp",
+      "size": 42124,
+      "sha256": "393ace101400e71c8b2103d98576d6fb5a46fc4e6956a9ccf7e14e8771ad4ea9"
+    },
+    {
+      "path": "assets/site/favicon/favicon-16.png",
+      "size": 968,
+      "sha256": "984679c162d58c4aa8cd362205365a3c299a4cace666771cde490e3102c2e904"
+    },
+    {
+      "path": "assets/site/favicon/favicon-180.png",
+      "size": 56319,
+      "sha256": "db7207479caebf39c841f6e0c174c72760f4ffefc8e5e65797d94ee86c54dbc6"
+    },
+    {
+      "path": "assets/site/favicon/favicon-192.png",
+      "size": 62726,
+      "sha256": "aedb1f57950824ea28401a64de5dc30e5e06b55af910563a3f17866fb9c66154"
+    },
+    {
+      "path": "assets/site/favicon/favicon-256.png",
+      "size": 102389,
+      "sha256": "10c29b5442f78ce09f7542027c296fbf58cd8e0b9fa922efa53ed89ba142ffba"
+    },
+    {
+      "path": "assets/site/favicon/favicon-32.png",
+      "size": 2947,
+      "sha256": "2f01c131d9cf2e1676796fbc5ef833bacc663c2417bb17093d6a4ca55517799f"
+    },
+    {
+      "path": "assets/site/favicon/favicon-48.png",
+      "size": 5782,
+      "sha256": "efbcedaaa02810d988579859bdc903c970486bfc2a20be4fc2a64b39de05af46"
+    },
+    {
+      "path": "assets/site/favicon/favicon-512.png",
+      "size": 342002,
+      "sha256": "09561370a12b2bb7de3f5418301cd43849232f31324a2b6647ab6e8dd7872c48"
+    },
+    {
+      "path": "assets/site/favicon/favicon.ico",
+      "size": 19377,
+      "sha256": "20890d94ce593060444c93284ce026f2ee83edfcbb62a3be4927462ea66456f1"
+    },
+    {
+      "path": "assets/site/service_icons/baloes_decoracao.webp",
+      "size": 31674,
+      "sha256": "073d15b4c471633ce5ee0ba671bfef254c0a3776fb769e0056199025d38a480d"
+    },
+    {
+      "path": "assets/site/service_icons/brindes_personalizados.webp",
+      "size": 25452,
+      "sha256": "4874d1959a0009470402dde6a0da62ab0359a3673c6bdf815d703357783b0acf"
+    },
+    {
+      "path": "assets/site/service_icons/convites_papelaria.webp",
+      "size": 27278,
+      "sha256": "6a5e5d02137cfa3c00eba753415397a5739a22136a63b040421508f1d2023a64"
+    },
+    {
+      "path": "assets/site/service_icons/grafica_rapida.webp",
+      "size": 22852,
+      "sha256": "da220b88adb99427b1d698a0107ca56b02fa7542bd780d96bec0aed1efb6cb2a"
+    },
+    {
+      "path": "assets/site/service_icons/gravacao_laser.webp",
+      "size": 29596,
+      "sha256": "c1bdfff1db4880481518a68a4539fbffa0b2e15570f343ffafa87a48db4248a5"
+    },
+    {
+      "path": "assets/site/service_icons/impressao_3d.webp",
+      "size": 24836,
+      "sha256": "e40beadc12ded6b4820a1b7c4832d268f452a703649c424a17bde4a3bd50bd3a"
+    },
+    {
+      "path": "assets/site/service_icons/kits_festa.webp",
+      "size": 32912,
+      "sha256": "8dd5579898c9ee301b933c889b8db9c98ebc80a0f5bc481116f73ab75dfd5b47"
+    },
+    {
+      "path": "assets/site/service_icons/personalizados_festas.webp",
+      "size": 28534,
+      "sha256": "263a25b625811c314cc381bfcfee6cb4df8ff26e7248979587a565ee380bf6a2"
+    },
+    {
+      "path": "audit_ui.py",
+      "size": 7031,
+      "sha256": "5ca27f84d26530a738be33ad8ad8a505ef3321b90a657daddbee32603e2549d7"
+    },
+    {
+      "path": "auditoria_operacional_service.py",
+      "size": 7208,
+      "sha256": "ea0ba3a190e2281eaa186a2350dd9ffdc74ebdb0fdbac7a16c48299423c63c43"
+    },
+    {
+      "path": "backup_schedule_service.py",
+      "size": 1675,
+      "sha256": "3c24dac111bf3d21bd9a1ec131611beffee21dde8d9575cf3b93b12c23847978"
+    },
+    {
+      "path": "biblioteca_3d_service.py",
+      "size": 6779,
+      "sha256": "7594f1b0d1528c5f31a377123af2b2a4c420151f3400b36b28bb11cb25bf7699"
+    },
+    {
+      "path": "build_update_package.py",
+      "size": 10119,
+      "sha256": "5bed1c27ddfb6979d59827ca1c2fff154097c9c3d9ea8660bc3ac5ee7abcb728"
+    },
+    {
+      "path": "catalogo_diagnostics_service.py",
+      "size": 7617,
+      "sha256": "38a3349c69e2f4fb8960c957ad9c2d177833b7ccee18f3b56b019c088205f19e"
+    },
+    {
+      "path": "catalogo_midias_service.py",
+      "size": 3546,
+      "sha256": "732000322895be5ad9ee0a2cf9beb8e618a88946831de03084add829dc79ce22"
+    },
+    {
+      "path": "catalogo_orcamento_service.py",
+      "size": 13075,
+      "sha256": "6e185fc2845f4015e737e85e2bc9214bcdee5593e696b7756f81ef4ed9854e48"
+    },
+    {
+      "path": "catalogo_runtime_index_service.py",
+      "size": 7135,
+      "sha256": "74418d8e2e347040fba9ff02398189108651827bdd395b71d080109bd0e36008"
+    },
+    {
+      "path": "central_entregas_engine.py",
+      "size": 7243,
+      "sha256": "8ea9f546b8aea3f067e921c7a4b1be99798366b4d701b8199c5e83f734423d79"
+    },
+    {
+      "path": "central_operational_runtime.py",
+      "size": 7633,
+      "sha256": "cf507392c8f74c6cb01394573c8d57a1d29728ef31402e1f13edbda07daeba6b"
+    },
+    {
+      "path": "central_oportunidades.py",
+      "size": 16701,
+      "sha256": "ac303094e7e84391e9bed4851b7cb3e71f9e18460a889d7f99710e2a859e8bb9"
+    },
+    {
+      "path": "central_producao_engine.py",
+      "size": 12896,
+      "sha256": "d227d2cd5aba72ab8ef00401bbbf302ee0846aa698aafa91ea54323273e1e7d8"
+    },
+    {
+      "path": "central_producao_painel_hf41.py",
+      "size": 4156,
+      "sha256": "5206f51789c71acba949830ed1ca1b7dc1beeb2901b89d29adf6141383d7ea22"
+    },
+    {
+      "path": "clientes_inteligencia.py",
+      "size": 12327,
+      "sha256": "bc395684ba42284df1f8f0e7a37e2934d0137169303ee052c286b2b72b13c202"
+    },
+    {
+      "path": "clientes_runtime_index_service.py",
+      "size": 2797,
+      "sha256": "7a54a2995c916c02df0000c0a6228e496994529bbba21ee3e09e80d8c0953480"
+    },
+    {
+      "path": "cloud_db.py",
+      "size": 40179,
+      "sha256": "b6d7d08863b2ca277c714e2968cfd0c9ad1ac6a4ff022c7d0079bf9d330e815a"
+    },
+    {
+      "path": "compras_runtime_index_service.py",
+      "size": 7921,
+      "sha256": "14a100d37bb0af3c79cf8b2678141922132ca41f8643a0d4a96357b4e61f95c3"
+    },
+    {
+      "path": "comunicacao_pedidos_hf45.py",
+      "size": 1956,
+      "sha256": "cde247328397b8004882c0f2f03ef8665cdfb4b89edac78343721f13561d4f34"
+    },
+    {
+      "path": "config.py",
+      "size": 1527,
+      "sha256": "e1f65817938b25f9798137607ffe762732c18c279a17fb59394b0771a4e76006"
+    },
+    {
+      "path": "consistencia_operacional_engine.py",
+      "size": 8378,
+      "sha256": "d533588b0ee2a3f6cb11ad5e6668e94501b765785c082ac4a70f614d91a8dd63"
+    },
+    {
+      "path": "constants.py",
+      "size": 609,
+      "sha256": "024558059a79936de95fb970da439cca83af3d657dab762de31c6dbc206d154e"
+    },
+    {
+      "path": "consumo_estoque_engine.py",
+      "size": 16292,
+      "sha256": "1ebc984be9cd6fc71eb76adfb04cc51fbfa967e7dac6b93cc03b4e3a85d993bd"
+    },
+    {
+      "path": "crm_runtime_index_service.py",
+      "size": 3853,
+      "sha256": "f058d2fba7cb8a74a488374724843795c1067ad1cc15743e4e794e33bdbbaf17"
+    },
+    {
+      "path": "das_mei_service.py",
+      "size": 4731,
+      "sha256": "dc616186ee34fa5f2a088f7f91fc0b7c1d0f193420f77f30cfade70417dc68b2"
+    },
+    {
+      "path": "das_mei_storage.py",
+      "size": 2230,
+      "sha256": "54e9bea8074315c8265d0171734bb1dfb57a9e021488575c940dc3a115fc2e5d"
+    },
+    {
+      "path": "das_mei_ui.py",
+      "size": 10610,
+      "sha256": "273492e7accad79692e512525dc36eec39d75353b7a9fc7ba722948878ad0028"
+    },
+    {
+      "path": "document_runtime_service.py",
+      "size": 4176,
+      "sha256": "de1071b7edd4bf267f1cf0b0858f85cd04f49856cafcc5d318dce7b314ec8e5d"
+    },
+    {
+      "path": "entregas_logistica_service.py",
+      "size": 5347,
+      "sha256": "6e8af004c683549fa85d1c8cbc98c7647ea30941b3bb3e06f4d251b161b5bedb"
+    },
+    {
+      "path": "executive_center.py",
+      "size": 3381,
+      "sha256": "49d4099153ca1fa038845ff0f49f9a222280f4bf39796fa512e1c8fdbd4ade97"
+    },
+    {
+      "path": "ficha_producao_hf58.py",
+      "size": 7957,
+      "sha256": "359b358b28fdd22a26b9fd624b5361756664c617883046aeeefa4825ca549a24"
+    },
+    {
+      "path": "finance_runtime_index_service.py",
+      "size": 4022,
+      "sha256": "1c35e1fecac3b0f784370f497eac994bb00def2f0bc924bd2f55518bd516c3ac"
+    },
+    {
+      "path": "fluxo_operacional_service.py",
+      "size": 11357,
+      "sha256": "5e4e574a61e18cbe2b8cf0819cd10419332d438cc5af8faf8b2888bf78b71404"
+    },
+    {
+      "path": "github-pages/index.html",
+      "size": 2573,
+      "sha256": "a38f696974d28a974349e5007281856737fda6eff675980426a0f8d49e1053cb"
+    },
+    {
+      "path": "global_search_service.py",
+      "size": 4403,
+      "sha256": "001dd461d8005fd34d6467004626aa575223c01457ac44daa7447ab51acbfc0a"
+    },
+    {
+      "path": "historico_runtime_service.py",
+      "size": 1108,
+      "sha256": "0eda22d0ddff3c634974f86fda8fe1f060acc19ccff0fde86fad07d176df5c02"
+    },
+    {
+      "path": "lazy_runtime.py",
+      "size": 1439,
+      "sha256": "9fc4752fab0ef2009c93d3f00ab64b23a634c10cb97a595a5ca44acf4ba78de5"
+    },
+    {
+      "path": "logo.png",
+      "size": 1442912,
+      "sha256": "af770faed18d72aad178d97e0ab60bf32c1b132f43efd53ae4a3fbcc2fd7862c"
+    },
+    {
+      "path": "manager_operational_planning_hf53.py",
+      "size": 5808,
+      "sha256": "b5b40c063bb0a163aafc85083749cc1b45e52621aa935acee565bcd1b3e49000"
+    },
+    {
+      "path": "manager_workflow_hf53.py",
+      "size": 12168,
+      "sha256": "9e650d3ce212f87826d2230fa385bf2323c9cf24f934f307bea184de566e4bfc"
+    },
+    {
+      "path": "marketing_ai_engine.py",
+      "size": 4224,
+      "sha256": "6fd77fddf00bd5bb7faff485dbe1b8b9a31ed01949c89d360e4bc5f2098ab0d5"
+    },
+    {
+      "path": "marketing_anna_renderer.py",
+      "size": 45705,
+      "sha256": "7ae7da78039f82279ae0953ebb1758fd5c1a373b9a6ec55986ca341cab4549c9"
+    },
+    {
+      "path": "marketing_anna_renderer_hf11.py",
+      "size": 49668,
+      "sha256": "6e5904677f7f73b5f23443a98710bead43df8855f2af4b63c3f6009515552f1c"
+    },
+    {
+      "path": "marketing_design_intelligence.py",
+      "size": 14148,
+      "sha256": "cdc4e838242c2a64664dd9e2da10c48296f09f867d8b8c71432cdf625ada62f6"
+    },
+    {
+      "path": "marketing_prompt_builder.py",
+      "size": 8778,
+      "sha256": "8ad17c0e8739e4b2108667d9c3570ce2511c3424342b14c5c0b5cf773b0583bb"
+    },
+    {
+      "path": "marketing_results_runtime_service.py",
+      "size": 1900,
+      "sha256": "1c53bda55a212d6afd63ef767b71c539f9e57c57f881de69e94060dc6b7a7fd1"
+    },
+    {
+      "path": "marketing_template_engine.py",
+      "size": 88147,
+      "sha256": "0db53b5eaf21dd48fb9013e314a793f1f7a1b7a57d3291fee06069cc9ea83cd0"
+    },
+    {
+      "path": "materiais_pedido_service.py",
+      "size": 11267,
+      "sha256": "21106e38ededd158140be5d520905b28abd3cd26443da5b03e07b34e9fc995df"
+    },
+    {
+      "path": "necessidades_compras_engine.py",
+      "size": 3989,
+      "sha256": "8244c2f8f64fbe92fc8e0c3e96fa836eb4bda996abb8194278b7c5719d0df61d"
+    },
+    {
+      "path": "painel_indicadores.py",
+      "size": 7410,
+      "sha256": "5a6a071e600d449611828e8eb7d8de05893d2102ba28d242d3e5ba213b7cf2bb"
+    },
+    {
+      "path": "pedido_resumo.py",
+      "size": 1616,
+      "sha256": "dd68a4de31e0744d82adc810cb1402242f043e188d2ea58c2eb63363bcafb0d2"
+    },
+    {
+      "path": "pix.png",
+      "size": 55739,
+      "sha256": "81b57f8cfd7fe47591a10f0e27b832fec1c00a3183448971ce0598be0378273d"
+    },
+    {
+      "path": "planejamento_compras_engine.py",
+      "size": 3369,
+      "sha256": "979f0fc393bb9c0bd27bdf8b9b2472e2b6a78f4b8bd2a09173537bdad9363254"
+    },
+    {
+      "path": "planejamento_diario_hf49.py",
+      "size": 2769,
+      "sha256": "a8de72f4696b517d37e1e9c64bd0ae358c436ec1468f29baa57b7c28bdb77223"
+    },
+    {
+      "path": "planejamento_semanal_hf48.py",
+      "size": 2292,
+      "sha256": "e62ec6d72ed041073ab428a11dd81c74b7fe417daa2d744470dd025f173cf577"
+    },
+    {
+      "path": "prioridade_operacional_engine.py",
+      "size": 9890,
+      "sha256": "0c6cb06ad3c4eca241ee3b561fe2875fda1851616d48f56d2f4def78aa2ccd64"
+    },
+    {
+      "path": "producao_operacional_service.py",
+      "size": 6976,
+      "sha256": "b9ee9ca86127e3f95778e20034dcce90de0c5c85967779906ada98d344624c89"
+    },
+    {
+      "path": "produtividade_entregas_hf47.py",
+      "size": 3390,
+      "sha256": "122b69e7d8f0b028cf373efe480158146b70c4f2b7111a9e056c3023ef35614e"
+    },
+    {
+      "path": "project_runtime_index_service.py",
+      "size": 4652,
+      "sha256": "302130d49cdb211d670c1e7bacb537bea905c4f912d0217c979adf3b70ee76b4"
+    },
+    {
+      "path": "proposal_draft_service_hf57.py",
+      "size": 19133,
+      "sha256": "97a5e54bcea50cab26197d56562bed42b01f1a8596b3ed49b618289154c7099e"
+    },
+    {
+      "path": "proposal_draft_ui_hf57.py",
+      "size": 19552,
+      "sha256": "7d2e55fcb94b97c393445f32d8c194ffe1453a8c478d8232896f871f1dff3f50"
+    },
+    {
+      "path": "proposal_duplicate_service_hf55.py",
+      "size": 18959,
+      "sha256": "55f78c4db8cc5ab6c4a8a3ec3158fa06acda03deb2e291367b6db91a9f6664b1"
+    },
+    {
+      "path": "proposal_duplicate_ui_hf55.py",
+      "size": 8121,
+      "sha256": "131a42ff410aceb241988806c4d9eca8970ede7b02943590e751a0dcdc48ffea"
+    },
+    {
+      "path": "proposal_persistence_service.py",
+      "size": 2693,
+      "sha256": "d6894ff04cf3aed2de72cb4c59a35d48c9d1f72cafb7a95dd698cd1b052316bf"
+    },
+    {
+      "path": "proposal_review_service_hf56.py",
+      "size": 15983,
+      "sha256": "5cef7352660525479841d574d6188ed6d3ef4526975ddfb17861b15a245c5810"
+    },
+    {
+      "path": "proposal_review_ui_hf56.py",
+      "size": 7610,
+      "sha256": "3100660d40b711b07cf229877d7bf05803fe8c5a78bbe39b7e28f4ebacb951e5"
+    },
+    {
+      "path": "proposal_runtime_index_service.py",
+      "size": 6539,
+      "sha256": "67c8eb01d4b61c4e6ab9642a0fff1b4b55c29f5d0b1196e5982f79a5f00beed7"
+    },
+    {
+      "path": "proposal_status.py",
+      "size": 6811,
+      "sha256": "46515f700f6404d95f007fe59edbb4b2342dccddb56e5dbc7cea0c0d66dac346"
+    },
+    {
+      "path": "proposal_status_service.py",
+      "size": 8026,
+      "sha256": "30460766aaa6c19e58b4492f2c8ec15b011b13c45c9b4e22e755ebb2e96eb011"
+    },
+    {
+      "path": "relacionamentos_runtime_service.py",
+      "size": 1985,
+      "sha256": "0ae3ac484d4f9fc101653a6c7703832b33976a9df015dbed9f9d9b25ec6e8f1b"
+    },
+    {
+      "path": "relacionamentos_service.py",
+      "size": 10853,
+      "sha256": "4553bb5eb29aed7724747e26c52ed863079cfe6486e2a8a0fc83377ab34e3913"
+    },
+    {
+      "path": "release_diagnostics.py",
+      "size": 13621,
+      "sha256": "905bb0e00a9bdf515b0f3fedf5358f3ac0269acc80af1d3836479837b3c60419"
+    },
+    {
+      "path": "reports_runtime_index_service.py",
+      "size": 3193,
+      "sha256": "ef21083049623925f09ea6033ced2c50b630b1aec79b778165e2dd91f41e98c8"
+    },
+    {
+      "path": "requirements.txt",
+      "size": 318,
+      "sha256": "dcfedd6e02d6a81791c8f2e40ccbec30d2c8e19174f8574f9eedf909ea948de0"
+    },
+    {
+      "path": "resultados_runtime_service.py",
+      "size": 5577,
+      "sha256": "503c1fec90ed2084b0f96dcba1d9d28e6452070466b6d5301d0c398e87dbfb6f"
+    },
+    {
+      "path": "risco_producao_engine.py",
+      "size": 13738,
+      "sha256": "6b77edb6596c6973c19d771093795f55defb5eb7f49c845097bde3abe67a390d"
+    },
+    {
+      "path": "roteiro_producao_hf51.py",
+      "size": 5661,
+      "sha256": "0942a0d25491e863220f1e821d5e2a731cad67a4fdce09af5df53d8ff76c134e"
+    },
+    {
+      "path": "site_adsense_service.py",
+      "size": 2307,
+      "sha256": "e258df1cc1ceb19a829d05071f9d254641ada821fa20342fb8cbe5a27e10e2cb"
+    },
+    {
+      "path": "site_campaign_service.py",
+      "size": 12800,
+      "sha256": "6a475409d988b461f80e412bbf80ab66c76dab9a7e2a8fd74db8f9a0aad0dd19"
+    },
+    {
+      "path": "site_carrinho_orcamento_service.py",
+      "size": 31944,
+      "sha256": "839c7377f4b204aeee202cfdaa41369ce9c5b85d85efdc3c787b097bd72e9f0e"
+    },
+    {
+      "path": "site_cloudflare_publish_service.py",
+      "size": 12644,
+      "sha256": "b205432514783d31d3a6da717d11aa52976a5a3820a322c6aeaa82dc54959ed3"
+    },
+    {
+      "path": "site_completo_service.py",
+      "size": 35217,
+      "sha256": "f7995ec70e2085d9c901cc4bb851fd55658c0e7c82b2449e27791e491a390371"
+    },
+    {
+      "path": "site_corporativo_service.py",
+      "size": 18913,
+      "sha256": "f92560b4f29bf872ad510ae9f08983f5e9ba2f17af0bbe4234aebe769eea5821"
+    },
+    {
+      "path": "site_cutover_service.py",
+      "size": 4912,
+      "sha256": "30ba0c1621d00eef413b753e9948bfbdb2943c3334cca5370b97d479e7507b37"
+    },
+    {
+      "path": "site_dicas_media_hf6524.py",
+      "size": 1674,
+      "sha256": "4ebd54fb5847d20e890225d318100d6c419fca94ecd8627751e33e26aee3d77d"
+    },
+    {
+      "path": "site_dicas_multicanal_service.py",
+      "size": 23644,
+      "sha256": "292d031315af947ad8e6bf70a246b26a0964d11a3e233807619cf6628690ec9f"
+    },
+    {
+      "path": "site_entrega_rapida_service.py",
+      "size": 4535,
+      "sha256": "3c9a643cad08a7e8f12906d36f8eadb4cac9c4d83f54b228e019f0f508332596"
+    },
+    {
+      "path": "site_favicon_service.py",
+      "size": 1088,
+      "sha256": "7175ba2d96bdf24b07a2cd8c2bfa6e5286d1744aa383ca869e7323770ee39bfb"
+    },
+    {
+      "path": "site_galeria_service.py",
+      "size": 29628,
+      "sha256": "f46fd3f9bb5d139b94116d131b052926906d67b77f12870f757331f6fcbc4501"
+    },
+    {
+      "path": "site_home_content_service.py",
+      "size": 17200,
+      "sha256": "3b28bbe3448a56477d3fb1749d1c92b08c56b043f587f6be02aa875b0cfd34dd"
+    },
+    {
+      "path": "site_integrity_service.py",
+      "size": 3634,
+      "sha256": "24545c64cbd4b48c1c81cc931f149380fccd50ee9d50ec821b06b7dc38214d48"
+    },
+    {
+      "path": "site_manager_service.py",
+      "size": 6208,
+      "sha256": "fd6437877fc7ff43c41a79356fe6f7ad7b616aecfbbbe7471386a577cc124b63"
+    },
+    {
+      "path": "site_metrics_dashboard_ui.py",
+      "size": 25804,
+      "sha256": "50da094b84ce1d863cd4c727b3121fd31f3cbc1d307b628ffb9e123ba43289da"
+    },
+    {
+      "path": "site_metrics_service.py",
+      "size": 37680,
+      "sha256": "310121358cbfba3366faa3d77251a98d3d3d8a7793729e6fc7a31161a0255cd2"
+    },
+    {
+      "path": "site_posts_service.py",
+      "size": 13709,
+      "sha256": "6fd9df7bf0a48bb124ad5f26da43dc996dc222d18525b6881948390e25f2bd71"
+    },
+    {
+      "path": "site_posts_ui.py",
+      "size": 14919,
+      "sha256": "5c73baea25ec874eb48eb72342a53297ab3a0546f9ea59c8ee05da59ddd93a19"
+    },
+    {
+      "path": "site_production_service.py",
+      "size": 12080,
+      "sha256": "3fca025a94118519c00dd90944841179a6d597af59521c5821a6ec9f62f6aa5f"
+    },
+    {
+      "path": "site_pwa_service.py",
+      "size": 4233,
+      "sha256": "b7dbf4f787780b5579341ddbf30ef3ab01c254ca0c969801ce956edea078fbc8"
+    },
+    {
+      "path": "site_quote_import_service.py",
+      "size": 16154,
+      "sha256": "ef46b2a5ef95286d39fe37afaf45541f456abeee3de8b870e392c45c088b8927"
+    },
+    {
+      "path": "site_quote_import_ui.py",
+      "size": 12353,
+      "sha256": "cd76ba52ca010e739ca0ce1f6f63a6a7428c97ad38c550f7af0d9f14fb7793ba"
+    },
+    {
+      "path": "site_staging_service.py",
+      "size": 5943,
+      "sha256": "74c911b5059660547549634c9222b4e38c7a0c892ba86afdd4014f16c9ce83c5"
+    },
+    {
+      "path": "site_visual_hf48_service.py",
+      "size": 52628,
+      "sha256": "8ba188cb6103f164759d47574d3f0f431276ee5508fe6911b0811cc416bcf7b1"
+    },
+    {
+      "path": "site_vitrine_service.py",
+      "size": 58439,
+      "sha256": "2462b5b04698be0d244ed7eb64b096e3353a7def3f55909b687a5655dc6d0fc0"
+    },
+    {
+      "path": "site_whatsapp_context_service.py",
+      "size": 5904,
+      "sha256": "1af3226a86a665949a02eac807065defa0ea124b2daa9e08cb7e8c017db5bef0"
+    },
+    {
+      "path": "site_youtube_multicanal_service.py",
+      "size": 8221,
+      "sha256": "88953519eba26769460a63393db8250fad5c9a111a12a343781a1554cf83b01a"
+    },
+    {
+      "path": "site_youtube_oauth_service.py",
+      "size": 8199,
+      "sha256": "ce64a1205a454f8781947f3a26a29284c16e70d2157d2db9250e8140cb629ae7"
+    },
+    {
+      "path": "status_diagnostics_service.py",
+      "size": 2466,
+      "sha256": "8eb70d28bbb83f4d7519221c3c078a40a19a6594361672bbf5d7166eac16479e"
+    },
+    {
+      "path": "supabase/config.toml",
+      "size": 48,
+      "sha256": "11be5a4369950ba8c0def61d768496efb0686d6ab57ff2051ff451ad25b8dc88"
+    },
+    {
+      "path": "supabase/functions/catalogo-publico/index.ts",
+      "size": 2912,
+      "sha256": "1cedc4c12f689c3bd90fcba613d76a0c2e158a92ca649a9a3dbffd340684f994"
+    },
+    {
+      "path": "supabase_hardening_zero_cost.sql",
+      "size": 1230,
+      "sha256": "095c70fa2eaa0abdf020acb2e156f5a8a4b52c439391b066a79b7a2dd497a43a"
+    },
+    {
+      "path": "supabase_setup.sql",
+      "size": 1556,
+      "sha256": "b5f65584027258c4ec7394ddcf3ba873190832c74e8e380c32446163fc816482"
+    },
+    {
+      "path": "system_health_ui.py",
+      "size": 2959,
+      "sha256": "e9681eab21aca7bce8bc96d93af5c87fdcf6ad2fdf0f16a83caee86afac7bbb3"
+    },
+    {
+      "path": "template_library_engine.py",
+      "size": 26105,
+      "sha256": "6fad7b0413d36f6bc90c87498871105a7e51779278e41bd08506337e39cacfe9"
+    },
+    {
+      "path": "templates/anna_base_dinamica/config.json",
+      "size": 526,
+      "sha256": "0fecee732dd4aded113825bd33043c01a871f51dac66d6a841da19c2ab96f8a7"
+    },
+    {
+      "path": "templates/anna_base_dinamica/fundo.png",
+      "size": 1670480,
+      "sha256": "a363364c4f7b89dcd04ec1c879d7ff9480446766fc577e41796a9898b32e02a4"
+    },
+    {
+      "path": "templates/anna_base_dinamica/layout.json",
+      "size": 3515,
+      "sha256": "0d50b97c4e240a4b21b3685cd6077e3228e1faa515f4403f96134ca1a91e3596"
+    },
+    {
+      "path": "templates/anna_base_dinamica/preview.png",
+      "size": 2375687,
+      "sha256": "2f96b8f3cb8adc39b2ba241e4571dcdfee0fbe7531b8a735fc5aaef15142ee43"
+    },
+    {
+      "path": "tempo_ciclo_producao_service.py",
+      "size": 29493,
+      "sha256": "3edd6cc540bfe9110b67879e259353009be787926dcd5e2a22e1e692739c7e54"
+    },
+    {
+      "path": "test_acompanhamento_pedidos_hf46.py",
+      "size": 1076,
+      "sha256": "62ff1bebb3cfc9673f66b029ec5be9b4238b86d29c31f2d5924aba9fa1309616"
+    },
+    {
+      "path": "test_build_update_package_hf53.py",
+      "size": 5640,
+      "sha256": "a4afe5c38821dca8d518be13baed0556a912a001b8060dac19dfe3b0f2676ed2"
+    },
+    {
+      "path": "test_central_producao_painel_hf41.py",
+      "size": 1794,
+      "sha256": "a3697bf184da248bfc8cef5d73addc7ee17cf536f2e12ca8c46e6f8c8e59c022"
+    },
+    {
+      "path": "test_comunicacao_pedidos_hf45.py",
+      "size": 715,
+      "sha256": "0538b20c282b59d2550865ac885224fb00af5b5fdd225ae77eb5830c26fda57c"
+    },
+    {
+      "path": "test_ficha_producao_hf58.py",
+      "size": 8559,
+      "sha256": "7ff9adafd6f10833fc3f1b72e3fb7e317fe12b4c4c63e3df949ea78d8b68f088"
+    },
+    {
+      "path": "test_hf652438_sob_encomenda.py",
+      "size": 2429,
+      "sha256": "ef2e147decc9fb9e03e75bc72d31360e16783e9d6ba16e7dff4cbb7729dd30e9"
+    },
+    {
+      "path": "test_hf652439_orcamento_catalogo.py",
+      "size": 955,
+      "sha256": "77042686f810585be5a6ca49b28a0d7da26ac4ad1a690f0fa1fa4a1f884ee693"
+    },
+    {
+      "path": "test_hf652450_otimizacao.py",
+      "size": 1903,
+      "sha256": "4a289c8abc9de2f30950b5862aa1680e183f9857ee38740bac37484df347bf7d"
+    },
+    {
+      "path": "test_manager_operational_planning_hf53.py",
+      "size": 5867,
+      "sha256": "a9749ea44fee694f03c0d9f03811fa899f0f53503aaa94099b187e1611b47226"
+    },
+    {
+      "path": "test_manager_ui_hf53.py",
+      "size": 10205,
+      "sha256": "9d99cb05e14751bf0719cd14d82445db77b46a6a5ccba7077fc726b761e4806b"
+    },
+    {
+      "path": "test_manager_workflow_hf53.py",
+      "size": 12407,
+      "sha256": "3ae9b282ecaf827de917ba47f2838d3272a078a5b7663b970a7d372699d59410"
+    },
+    {
+      "path": "test_planejamento_diario_hf49.py",
+      "size": 1350,
+      "sha256": "bb697cdec10a5386bdebca27ab41fd0bcffb2df9fb7536d33bc1bd8305149388"
+    },
+    {
+      "path": "test_planejamento_semanal_hf48.py",
+      "size": 1067,
+      "sha256": "af0089810e7499290a367e615c1028afe6126df7a82ec164bfc9d6d7b6030a82"
+    },
+    {
+      "path": "test_posts_hf652417.py",
+      "size": 1951,
+      "sha256": "165f9554296101f131b24b923212b893fbbf371c254a9ed871039555afccfb9a"
+    },
+    {
+      "path": "test_posts_hf652418.py",
+      "size": 1046,
+      "sha256": "61d3ffaa8e35e659f7a18545eccc9476e091502d48209a28fd6d8df2be71276a"
+    },
+    {
+      "path": "test_produtividade_entregas_hf47.py",
+      "size": 1561,
+      "sha256": "0122853c905f042ba453b59842838d670144180a3f94f9ed43b5b72872a5daa7"
+    },
+    {
+      "path": "test_proposal_draft_hf57.py",
+      "size": 33807,
+      "sha256": "a5f1bed65b32aeb6b91a0c2256c38dff48da93706b03e25182d1a59b6288dd85"
+    },
+    {
+      "path": "test_proposal_draft_integration_hf57.py",
+      "size": 33612,
+      "sha256": "983cb4f7aed584adb9ae8583a1a91ad09c4e276161f61dc82971bfb2b1f04cde"
+    },
+    {
+      "path": "test_proposal_draft_ui_hf57.py",
+      "size": 28551,
+      "sha256": "5790086aa09cdcfe8906c54c9e8754f83577afbb42912dee807fe1d6daed3454"
+    },
+    {
+      "path": "test_proposal_duplicate_integration_hf55.py",
+      "size": 19210,
+      "sha256": "e66c6f25e1ee690c7f60be0daf2a8dd5a7b79396b532a7c38740132f985efb83"
+    },
+    {
+      "path": "test_proposal_duplicate_navigation_hf55.py",
+      "size": 10765,
+      "sha256": "7ca9296c95d69df39ffb92764ccde1124c574cba69eaf561147ec7179e62db2b"
+    },
+    {
+      "path": "test_proposal_duplicate_ui_hf55.py",
+      "size": 22908,
+      "sha256": "5c21bfb49642cf03286caf6aed3d622d0ef8766add1bbdf7d5616e4fc845b1d6"
+    },
+    {
+      "path": "test_proposal_duplicates_hf55.py",
+      "size": 23429,
+      "sha256": "7925ce17491208460fd34d5ab0bdb901416446aa2bef39b24ed270801c23ac92"
+    },
+    {
+      "path": "test_proposal_review_hf56.py",
+      "size": 26993,
+      "sha256": "c73fb604d2dcc3f2b4337f34799154402916ed10d5eeed3d3bdc8a88411d54cd"
+    },
+    {
+      "path": "test_proposal_review_integration_hf56.py",
+      "size": 22260,
+      "sha256": "2b2aab7135b50d62e09f91b738d1662e8d0988b26347d4ae7f043c3cc5b5eab2"
+    },
+    {
+      "path": "test_proposal_review_ui_hf56.py",
+      "size": 23237,
+      "sha256": "840879f3dbb5782c7d2e20fc8fc6cfa86515f04b36dc17b31eb45760b5773c2a"
+    },
+    {
+      "path": "test_pwa_hf652414.py",
+      "size": 1582,
+      "sha256": "6b1c07aedf5e68ec530676de20a9df248809730d5848cda954416b117529f66e"
+    },
+    {
+      "path": "test_release_diagnostics_hf53.py",
+      "size": 5414,
+      "sha256": "d9516b9ddd4a422ff2ec85a89e51ae83e6e5f7662ea76f0d083d6e2ced968258"
+    },
+    {
+      "path": "test_roteiro_producao_hf51.py",
+      "size": 3927,
+      "sha256": "6da20abecfd5f52e0a52457c2286c601c4c28e406ca8db5b5c085ec611983c10"
+    },
+    {
+      "path": "test_site_cart_hf53.py",
+      "size": 7688,
+      "sha256": "ee790ed3a83efaa0f5ef6572c079af48c2473ef54342f3dcc5918a9107185c3e"
+    },
+    {
+      "path": "test_site_cart_message_hf56.py",
+      "size": 23154,
+      "sha256": "898457fcd6d8b553d4d5b2c9cf4b0936bf912f7cb6d61532980fcc742221676a"
+    },
+    {
+      "path": "test_site_cart_personalizations_hf55.py",
+      "size": 28608,
+      "sha256": "f35ca9beb0aa3d05ea7b5e28da3e9658acbbbd1f91b71c645bddd0f1766fa68a"
+    },
+    {
+      "path": "test_site_integrity_hf53.py",
+      "size": 14928,
+      "sha256": "bc87b42853acb78d4681630fadfd33b41e3e6aa079efbe03ec0290d45da0ed60"
+    },
+    {
+      "path": "test_site_metrics_funnel_hf53.py",
+      "size": 5320,
+      "sha256": "4a0d882011d789f578c2c3934fcf94f98a16f8260d7266028e5bfd4b274469f4"
+    },
+    {
+      "path": "test_site_posts_hf53.py",
+      "size": 7828,
+      "sha256": "dc9eaa5ccf3d4acdc07f7055128dd3900588fc5d412ab7682259fb0f860affeb"
+    },
+    {
+      "path": "test_site_quote_import_hf54.py",
+      "size": 16863,
+      "sha256": "def3c7227ab1634bfa3e5aa8e42e8d39789786643f7ffab62d9b0e5cddb59898"
+    },
+    {
+      "path": "test_site_quote_import_integration_hf54.py",
+      "size": 23990,
+      "sha256": "7319d2b34b8ca10299b976d43fd2779fb39ff98b1d84d9695a2c6a3dae714721"
+    },
+    {
+      "path": "test_site_quote_import_ui_hf54.py",
+      "size": 15420,
+      "sha256": "2244b96e184cb3a39094c81656134f9742179d6f5b67492a221c1998f31a22c2"
+    },
+    {
+      "path": "test_site_release_cache_hf52.py",
+      "size": 7770,
+      "sha256": "fce28a5d1cea4b2003dac7756425e55c6631630c1fc8f24d8ab18d1554a6b67f"
+    },
+    {
+      "path": "test_site_search_hf53.py",
+      "size": 7947,
+      "sha256": "89175e249a10ea224ade3acd2b4cffb76f789fcf20b03f1cf28ed5f3d48770af"
+    },
+    {
+      "path": "test_site_vitrine_hf52.py",
+      "size": 13862,
+      "sha256": "624130fac99023c1187f65dcffb70d47d5e2e6066baf39f015623793d59bc389"
+    },
+    {
+      "path": "test_update_package_hf52.py",
+      "size": 6264,
+      "sha256": "fba2f42d07243dfca35b96a5492698eaaeb7a0cd19596f409371faad28e43b10"
+    },
+    {
+      "path": "test_youtube_oauth_hf6523.py",
+      "size": 4099,
+      "sha256": "1b86140e717e46597a94cc7185708d40034b4327b72989cd398d480d9e38ffc2"
+    },
+    {
+      "path": "thu_comercial_service.py",
+      "size": 23547,
+      "sha256": "3868007d6504c2b597bdc1cd51c6b0a8e7c569c9c881aa0407cbfb7938f531d1"
+    },
+    {
+      "path": "thu_continuidade_service.py",
+      "size": 9735,
+      "sha256": "323848f0da8f09f4c1a95c8dbbd4076cd50f76fd7d5ab8be75f2cc64fa968b61"
+    },
+    {
+      "path": "thu_embedded.py",
+      "size": 64440,
+      "sha256": "5e96b1cc8791a9e697683b86486ab611bbb6124ae26662854ca58b800eb5545b"
+    },
+    {
+      "path": "thu_executivo.py",
+      "size": 7571,
+      "sha256": "29d712cf78e30b4d228d3dffc1423e51b3ac0181d584e7fbf2cd35837d721cb2"
+    },
+    {
+      "path": "thu_plano_amanha_service.py",
+      "size": 5964,
+      "sha256": "af8c5e5ca9f41ab9f879b8d3bcb87f1e41917ddd4511bb0dc92222d9663460a3"
+    },
+    {
+      "path": "thu_poses_embedded.py",
+      "size": 2721864,
+      "sha256": "545b92bec73228186bf1e2e0b1c3f25ff0c1f97ec5704e4e4069caaa1100f30e"
+    },
+    {
+      "path": "thu_prevencao_prazo_service.py",
+      "size": 8239,
+      "sha256": "2492fa98a164a45ea195c1d2654760c6d5f64c2fc52c19e93599642b0af1c567"
+    },
+    {
+      "path": "trash_ui.py",
+      "size": 2567,
+      "sha256": "d1f4afdd52f7f2b501b40b9863e99a9c722aeed4e186255d9e2f3991498d76c9"
+    },
+    {
+      "path": "update_hygiene.py",
+      "size": 16106,
+      "sha256": "32a4e30f1bae27a237fada03ae7b083cecc1a2e7f17cd6fce6aacc947cda9f9a"
+    },
+    {
+      "path": "update_safe_ui.py",
+      "size": 5142,
+      "sha256": "e5fbbf4a5f09892b6dbc5314463ca4a35428401da921a874f5e4e70803b60059"
+    }
+  ]
+}
