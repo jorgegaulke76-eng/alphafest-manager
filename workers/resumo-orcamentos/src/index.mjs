@@ -62,20 +62,35 @@ export function summarizeQuotes(document, clock = new Date()) {
   if (!Array.isArray(document)) throw new Error("Historico de propostas com formato inesperado");
   if (document.length > MAX_RECORDS) throw new Error("Historico excede limite seguro");
   const today = dateParts(clock);
-  const counts = {pending:0, next:0, late:0, unknown:0, deliveryUrgent:0};
+  const counts = {pending:0, actionable:0, highPriority:0, waiting:0, next:0, late:0, unknown:0, deliveryUrgent:0};
   for (const p of document) {
     if (!p || typeof p !== "object" || Array.isArray(p)) continue;
     if (!truthy(p.enviado) || statusBool(p,"aprovado") || statusBool(p,"entregue") || closed(p)) continue;
     counts.pending++;
     const last = dateOnly(p.ultimo_envio_em) ?? dateOnly(p.enviado_em) ?? dateOnly(p.data_geracao) ?? dateOnly(p.data);
+    const days = last === null ? 0 : Math.max(0,Math.floor((today-last)/86400000));
     if (last === null) counts.unknown++;
-    else {
-      const days = Math.max(0,Math.floor((today-last)/86400000));
-      if (days >= 3) counts.late++;
-      else if (days >= 1) counts.next++;
-    }
+    else if (days >= 3) counts.late++;
+    else if (days >= 1) counts.next++;
+
     const delivery = dateOnly(p.data_entrega);
-    if (delivery !== null && delivery <= today+2*86400000) counts.deliveryUrgent++;
+    const deliveryDays = delivery === null ? null : Math.floor((delivery-today)/86400000);
+    if (deliveryDays !== null && deliveryDays <= 2) counts.deliveryUrgent++;
+
+    // Mesma ordem de prioridade do THU em thu_comercial_service.py:
+    // prazo vencido / ate 2 dias > 3+ dias sem retorno > 1-2 dias > aguardar.
+    // Uma proposta enviada hoje pode precisar de acao se a entrega for urgente.
+    if (deliveryDays !== null && deliveryDays <= 2) {
+      counts.actionable++;
+      counts.highPriority++;
+    } else if (days >= 3) {
+      counts.actionable++;
+      counts.highPriority++;
+    } else if (days >= 1) {
+      counts.actionable++;
+    } else {
+      counts.waiting++;
+    }
   }
   return counts;
 }
@@ -84,6 +99,9 @@ export function formatSummary(c, clock = new Date()) {
     "📋 AlphaFest — resumo de retornos comerciais",
     "📅 "+brDate(clock),
     "📨 Orçamentos enviados e não aprovados: "+c.pending,
+    "📋 Retornos a conferir: "+c.actionable,
+    "🔴 Prioridade alta ou urgente: "+c.highPriority,
+    "🕒 Aguardando cliente: "+c.waiting,
     "🔴 Último envio há 3+ dias: "+c.late,
     "🟡 Último envio há 1–2 dias: "+c.next,
     "📅 Prazo de entrega vencido ou até 2 dias: "+c.deliveryUrgent,
