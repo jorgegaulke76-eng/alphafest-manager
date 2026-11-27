@@ -1,0 +1,12 @@
+name = "alphafest-resumo-orcamentos"
+main = "src/index.mjs"
+compatibility_date = "2026-11-26"
+
+# Rotina independente dos alertas do site.
+# Ativar QUOTE_SUMMARY_ENABLED=true apenas apos configurar e validar segredos.
+# 12:00 UTC = 09:00 em Brasilia (horario sem DST).
+[triggers]
+crons = ["0 12 * * *"]
+
+[vars]
+QUOTE_SUMMARY_ENABLED = "false"
