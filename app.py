@@ -327,6 +327,10 @@ from proposal_status import (
     pagamento_individual_pendente as _status_pagamento_pendente,
     resumo_status as _status_resumo,
 )
+from encerramento_sem_retorno_hf64 import (
+    elegibilidade_encerramento as _hf64_elegivel,
+    aplicar_encerramento_sem_retorno as _hf64_aplicar_encerramento,
+)
 from retornos_sem_envio_hf63 import listar_sem_registro_envio as _hf63_listar_sem_registro_envio
 from atendimento_descarte_hf62 import (
     MOTIVOS_RETIRADA as _hf62_motivos_retirada,
@@ -15677,6 +15681,53 @@ def registrar_envio_comercial_proposta(numero):
     return atualizar_proposta_com_leitura_fresca(numero, _mutar)
 
 
+def _hf64_encerrar_sem_retorno_confirmado(numero):
+    """Registra declaracao humana de nao retorno; nao envia mensagem nem exclui proposta."""
+    usuario_hf64 = str((obter_usuario_atual() or {}).get("nome") or "").strip()
+    if usuario_hf64.casefold() != "jorge":
+        return False, "Esta acao esta disponivel somente para Jorge."
+    numero = str(numero or "").strip()
+    if not numero:
+        return False, "Numero da proposta nao informado."
+    hoje_hf64 = hoje_local()
+    # Conferir sempre o documento mais atual, nao o snapshot da tela.
+    proposta_hf64 = next(
+        (p for p in carregar_historico(force_refresh=True)
+         if str((p or {}).get("numero_proposta") or "").strip() == numero), None,
+    )
+    elegivel, motivo = _hf64_elegivel(proposta_hf64, hoje_hf64)
+    if not elegivel:
+        return False, motivo
+    resultado_hf64 = {"aplicado": False, "motivo": ""}
+    instante_hf64 = agora_local().strftime("%d/%m/%Y %H:%M")
+
+    def _mutar_hf64(p):
+        pode_hf64, aviso_hf64 = _hf64_elegivel(p, hoje_hf64)
+        if not pode_hf64:
+            resultado_hf64["motivo"] = aviso_hf64
+            return p
+        _hf64_aplicar_encerramento(
+            p, hoje=hoje_hf64, agora_texto=instante_hf64, usuario=usuario_hf64
+        )
+        registrar_evento_proposta(
+            p, "Não fechado — sem retorno do cliente (conferência manual)", usuario=usuario_hf64
+        )
+        resultado_hf64["aplicado"] = True
+        return p
+
+    ok_hf64, atual_hf64, detalhe_hf64 = atualizar_proposta_com_leitura_fresca(
+        numero, _mutar_hf64
+    )
+    if not ok_hf64 or not resultado_hf64["aplicado"]:
+        return False, resultado_hf64["motivo"] or detalhe_hf64 or "Registro nao confirmado."
+    registrar_mudanca_oficial(
+        "Proposta", numero, "nao_fechado_sem_retorno", False, True,
+        origem="Central Multicanal — encerramento manual",
+        contexto={"responsavel": usuario_hf64},
+    )
+    return True, ""
+
+
 def _hf63_registrar_envio_confirmado(numero):
     """Confirma envio real na tela de oportunidades sem enviar WhatsApp/Telegram."""
     usuario_hf63 = str((obter_usuario_atual() or {}).get("nome") or "").strip().casefold()
@@ -28425,6 +28476,7 @@ if pagina_atual == "atendimento":
                     now_fn=agora_local,
                     abrir_orcamento=lambda dados: _hf53_solicitar_abertura("novo_orcamento", dados),
                     registrar_envio=_hf63_registrar_envio_confirmado if pode_executar_acoes_tecnicas() else None,
+                    encerrar_sem_retorno=_hf64_encerrar_sem_retorno_confirmado if pode_executar_acoes_tecnicas() else None,
                 )
             except Exception as exc:
                 st.error("A Central de Oportunidades encontrou um erro, mas a Caixa Unificada e o restante da operação continuam disponíveis.")
