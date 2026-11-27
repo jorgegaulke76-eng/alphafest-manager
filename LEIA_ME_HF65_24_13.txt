@@ -1,5 +1,0 @@
-AlphaFest Manager HF65.24.13
-Registro de versão, data e horário do pacote em horário de Brasília.
-A data registrada é a geração do pacote, não a confirmação de instalação no Streamlit.
-Atualiza VERSAO, VERSAO.txt e RELEASE_INFO.json, e exibe no rodapé.
-Preserva ajustes da HF65.24.12 e demais módulos.

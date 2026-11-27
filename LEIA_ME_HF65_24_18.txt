@@ -1,5 +1,0 @@
-HF65.24.18 — Posts comerciais simplificados e correção da prévia.
-
-No site, os cards exibem somente a arte inteira e o botão Quero este (WhatsApp). O título é somente para organização interna; a descrição não é usada. Corrigido NameError: number -> numero na geração da prévia do site. Não publica automaticamente.
-
-Para instalar, substitua os arquivos do projeto pela atualização completa, prepare a prévia e só então publique pelo fluxo habitual. Mantenha os Secrets e o banco existentes.
