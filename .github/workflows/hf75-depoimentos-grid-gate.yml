@@ -1,0 +1,22 @@
+name: AlphaFest HF75 - depoimentos responsivos sem deploy
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - site_home_content_service.py
+      - test_site_depoimentos_hf75.py
+      - .github/workflows/hf75-depoimentos-grid-gate.yml
+  push:
+    branches: [fix/hf75-depoimentos-grid-responsiva]
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validar sintaxe
+        run: python -m py_compile site_home_content_service.py test_site_depoimentos_hf59.py test_site_depoimentos_hf75.py
+      - name: Testar galeria original e nova grade
+        run: python -m unittest -v test_site_depoimentos_hf59 test_site_depoimentos_hf75
