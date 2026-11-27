@@ -10,6 +10,7 @@ import urllib.parse
 from collections import defaultdict
 from datetime import datetime
 
+from encerramento_sem_retorno_hf64 import elegibilidade_encerramento
 from retornos_sem_envio_hf63 import listar_sem_registro_envio
 from thu_comercial_service import montar_retornos_comerciais
 from proposal_status import status_bool, proposta_encerrada
@@ -174,6 +175,7 @@ def render_central_oportunidades(
     now_fn: Callable[[], datetime] | None = None,
     abrir_orcamento: Callable[[Dict[str, Any]], Any] | None = None,
     registrar_envio: Callable[[str], Any] | None = None,
+    encerrar_sem_retorno: Callable[[str], Any] | None = None,
 ) -> None:
     itens = dados_at.setdefault("itens", [])
     historico = historico or []
@@ -599,3 +601,34 @@ def render_central_oportunidades(
                         height=95,
                     )
                     st.caption("Copie a mensagem apenas após conferir o atendimento. Nenhum contato é enviado automaticamente.")
+                    # HF64: somente uma decisao manual e rastreavel; tempo decorrido
+                    # nao e evidencia de ausencia de resposta.
+                    proposta_atual_hf64 = next(
+                        (p for p in historico
+                         if str((p or {}).get("numero_proposta") or "").strip() == numero),
+                        None,
+                    )
+                    elegivel_hf64, _ = elegibilidade_encerramento(proposta_atual_hf64, hoje)
+                    if encerrar_sem_retorno is not None and elegivel_hf64:
+                        with st.expander("📦 Encerrar orçamento sem retorno (manual)"):
+                            st.warning(
+                                "Use somente depois de conferir a conversa real: "
+                                "o prazo sozinho não comprova que o cliente deixou de responder. "
+                                "Esta ação preserva a proposta no Histórico e retira da fila de retornos."
+                            )
+                            confirmar_sem_retorno_hf64 = st.checkbox(
+                                "Conferi a conversa e confirmo que não houve retorno e que não virou pedido",
+                                key=f"hf64_confirmar_sem_retorno_{numero}",
+                            )
+                            if st.button(
+                                "📦 Marcar como não fechado — sem retorno",
+                                key=f"hf64_encerrar_sem_retorno_{numero}",
+                                disabled=not confirmar_sem_retorno_hf64,
+                                width="stretch",
+                            ):
+                                ok_hf64, motivo_hf64 = encerrar_sem_retorno(numero)
+                                if ok_hf64:
+                                    st.success("Proposta encerrada comercialmente. Histórico preservado.")
+                                    st.rerun()
+                                else:
+                                    st.error(motivo_hf64 or "Não foi possível encerrar a proposta.")
