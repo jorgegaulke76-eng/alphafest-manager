@@ -118,9 +118,10 @@ def preparar_html_producao(html_site: str) -> str:
                 "telephone": "+55 11 97294-9533",
                 "address": {
                     "@type": "PostalAddress",
-                    "streetAddress": "Avenida Manoel Virgínio de Almeida, 442",
+                    "streetAddress": "Avenida Manoel Verginio de Almeida, 442",
                     "addressLocality": "Itatiba",
                     "addressRegion": "SP",
+                    "postalCode": "13251-530",
                     "addressCountry": "BR",
                 },
                 "areaServed": {"@type": "City", "name": "Itatiba"},
