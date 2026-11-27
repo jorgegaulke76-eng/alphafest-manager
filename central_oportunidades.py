@@ -171,6 +171,7 @@ def render_central_oportunidades(
     salvar_atendimentos: Callable[[Dict[str, Any]], Any],
     historico: List[Dict[str, Any]] | None = None,
     now_fn: Callable[[], datetime] | None = None,
+    abrir_orcamento: Callable[[Dict[str, Any]], Any] | None = None,
 ) -> None:
     itens = dados_at.setdefault("itens", [])
     historico = historico or []
@@ -367,6 +368,29 @@ def render_central_oportunidades(
                     _evento(item, "Oportunidade descartada", now_fn)
                     salvar_atendimentos(dados_at)
                     st.rerun()
+
+                # Abre o formulário oficial preservando atendimento_id e origem.
+                # Não cria proposta ao clicar; a gravação continua no orçamento.
+                if abrir_orcamento is not None:
+                    possui_proposta = _tem_orcamento_vinculado(item, propostas_map)
+                    if possui_proposta:
+                        st.caption(
+                            "📄 Este atendimento já possui proposta vinculada. "
+                            "Consulte o Histórico antes de criar outra."
+                        )
+                    if st.button(
+                        "➕ Criar orçamento a partir deste atendimento",
+                        key=f"opp_novo_orcamento_{item.get('id')}",
+                        disabled=possui_proposta or not str(item.get("id") or "").strip(),
+                        width="stretch",
+                        help="Abre a criação oficial com cliente, WhatsApp, mensagem e vínculo do atendimento.",
+                    ):
+                        abrir_orcamento({
+                            "cliente": str(item.get("cliente") or ""),
+                            "whatsapp": str(item.get("telefone") or ""),
+                            "observacoes": str(item.get("mensagem") or ""),
+                            "atendimento_id": str(item.get("id") or ""),
+                        })
 
                 r1, r2, r3 = st.columns(3)
                 if r1.button("🚫 Recusar", key=f"opp_recusar_{item.get('id')}", width="stretch"):
