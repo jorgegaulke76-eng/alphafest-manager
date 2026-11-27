@@ -10,6 +10,7 @@ import urllib.parse
 from collections import defaultdict
 from datetime import datetime
 
+from analytics_vendas_produtos_hf66 import consolidar_vendas_e_produtos
 from retorno_registrado_hf65 import link_whatsapp_retorno
 from encerramento_sem_retorno_hf64 import elegibilidade_encerramento
 from retornos_sem_envio_hf63 import listar_sem_registro_envio
@@ -276,7 +277,11 @@ def render_central_oportunidades(
             "→ confirmar a venda somente após aprovação. Nenhuma etapa é avançada automaticamente."
         )
 
-    tab_fila, tab_funil, tab_conteudos, tab_retornos = st.tabs(["📥 Fila de captação", "📊 Conversão por canal", "🎬 Conteúdos que geram contatos", "🔔 Retornos de orçamentos"])
+    tab_fila, tab_funil, tab_conteudos, tab_retornos, tab_resultados = st.tabs([
+        "📥 Fila de captação", "📊 Conversão por canal",
+        "🎬 Conteúdos que geram contatos", "🔔 Retornos de orçamentos",
+        "📈 Produtos e vendas aprovadas",
+    ])
 
     with tab_fila:
         f1, f2, f3 = st.columns([2, 1, 1])
@@ -438,13 +443,13 @@ def render_central_oportunidades(
                 "Canal": canal_nome, "Contatos": len(grupo), "Migraram ao WhatsApp": len(migrados),
                 "Orçamentos": len(orcados), "Vendas": len(vendas),
                 "Conversão final (%)": round((len(vendas) / len(grupo) * 100), 1) if grupo else 0,
-                "Faturamento": faturamento,
+                "Valor aprovado": faturamento,
             })
         if linhas:
             df = pd.DataFrame(linhas).sort_values(["Vendas", "Contatos"], ascending=False)
-            st.dataframe(df, width="stretch", hide_index=True, column_config={"Faturamento": st.column_config.NumberColumn(format="R$ %.2f")})
+            st.dataframe(df, width="stretch", hide_index=True, column_config={"Valor aprovado": st.column_config.NumberColumn(format="R$ %.2f")})
             campeao = df.iloc[0]
-            st.success(f"🏆 Canal com melhor resultado registrado: **{campeao['Canal']}** · {int(campeao['Vendas'])} venda(s) · conversão de {campeao['Conversão final (%)']}%.")
+            st.success(f"🏆 Canal com mais vendas registradas: **{campeao['Canal']}** · {int(campeao['Vendas'])} venda(s) · conversão de {campeao['Conversão final (%)']}%.")
         else:
             st.info("Os indicadores aparecerão conforme as oportunidades forem registradas e tratadas.")
 
@@ -453,7 +458,7 @@ def render_central_oportunidades(
         for item in captacoes:
             titulo = str(item.get("conteudo_titulo") or "Conteúdo não identificado").strip()
             chave = f"{_origem(item)}|{titulo}"
-            reg = agregado.setdefault(chave, {"Canal": _origem(item), "Conteúdo": titulo, "Contatos": 0, "WhatsApp": 0, "Orçamentos": 0, "Vendas": 0, "Faturamento": 0.0})
+            reg = agregado.setdefault(chave, {"Canal": _origem(item), "Conteúdo": titulo, "Contatos": 0, "WhatsApp": 0, "Orçamentos": 0, "Vendas": 0, "Valor aprovado": 0.0})
             reg["Contatos"] += 1
             if _etapa(item) in ("Migrou para WhatsApp", "Em atendimento no WhatsApp", "Orçamento criado", "Venda fechada"):
                 reg["WhatsApp"] += 1
@@ -462,12 +467,68 @@ def render_central_oportunidades(
             if _tem_venda_confirmada(item, propostas_map):
                 reg["Vendas"] += 1
             for p in _propostas_aprovadas(item, propostas_map):
-                reg["Faturamento"] += _valor_proposta(p)
+                reg["Valor aprovado"] += _valor_proposta(p)
         if agregado:
-            dfc = pd.DataFrame(agregado.values()).sort_values(["Faturamento", "Vendas", "Contatos"], ascending=False)
-            st.dataframe(dfc, width="stretch", hide_index=True, column_config={"Faturamento": st.column_config.NumberColumn(format="R$ %.2f")})
+            dfc = pd.DataFrame(agregado.values()).sort_values(["Valor aprovado", "Vendas", "Contatos"], ascending=False)
+            st.dataframe(dfc, width="stretch", hide_index=True, column_config={"Valor aprovado": st.column_config.NumberColumn(format="R$ %.2f")})
         else:
             st.info("Cadastre o nome do post, Reel, vídeo ou página em cada oportunidade para descobrir quais conteúdos colocam dinheiro no caixa.")
+
+    with tab_resultados:
+        st.markdown("#### 📈 Produtos e vendas aprovadas")
+        st.caption(
+            "Indicadores somente de pedidos com aprovação registrada no Histórico. "
+            "Valor aprovado NÃO é dinheiro recebido nem faturamento fiscal. "
+            "A origem por canal exige vínculo explícito ao atendimento; sem esse vínculo, não é atribuída."
+        )
+        hf66_dados = consolidar_vendas_e_produtos(itens, historico)
+        hf66_indicadores = hf66_dados["indicadores"]
+        ra, rb, rc, rd = st.columns(4)
+        ra.metric("Pedidos aprovados", hf66_indicadores["pedidos_aprovados"])
+        rb.metric("Atendimentos convertidos", hf66_indicadores["atendimentos_convertidos"])
+        rc.metric("Conversão por atendimento", f"{hf66_indicadores['taxa_conversao']:.1f}%")
+        rd.metric("Valor de propostas aprovadas", f"R$ {hf66_indicadores['valor_aprovado']:,.2f}")
+        st.caption(
+            f"{hf66_indicadores['pedidos_atribuidos']} pedido(s) aprovado(s) com origem vinculada. "
+            "A taxa é por atendimento identificado, não por quantidade de propostas."
+        )
+        st.markdown("##### 📣 Canais com pedidos aprovados")
+        if hf66_dados["por_canal"]:
+            st.dataframe(
+                pd.DataFrame(hf66_dados["por_canal"]),
+                width="stretch", hide_index=True,
+                column_config={
+                    "Valor aprovado (R$)": st.column_config.NumberColumn(format="R$ %.2f"),
+                    "Conversão (%)": st.column_config.NumberColumn(format="%.1f%%"),
+                },
+            )
+        else:
+            st.info("Ainda não há atendimentos com identificador para calcular conversão por canal.")
+        st.markdown("##### 🎁 Produtos presentes em pedidos aprovados")
+        st.caption("O valor bruto dos itens não inclui descontos nem frete e não representa recebimento.")
+        if hf66_dados["por_produto"]:
+            st.dataframe(
+                pd.DataFrame(hf66_dados["por_produto"]),
+                width="stretch", hide_index=True,
+                column_config={
+                    "Bruto dos itens (R$)": st.column_config.NumberColumn(format="R$ %.2f"),
+                },
+            )
+        else:
+            st.info("Nenhum produto identificado em pedido aprovado no Histórico.")
+        hf66_problemas = hf66_dados["diagnostico"]
+        with st.expander("🔎 Conferência de vínculos e qualidade dos dados"):
+            st.caption(
+                "Registros antigos sem atendimento_id continuam no total de pedidos e produtos, "
+                "mas não são atribuídos a um canal por suposição."
+            )
+            st.write({
+                "Propostas aprovadas sem vínculo": hf66_problemas["aprovadas_sem_atendimento"],
+                "Propostas aprovadas com vínculo inválido": hf66_problemas["aprovadas_vinculo_invalido"],
+                "Pedidos sem valor confiável": hf66_problemas["pedidos_sem_total_confiavel"],
+                "Itens sem preço/quantidade válida": hf66_problemas["itens_sem_valor_unitario"],
+                "Números de proposta repetidos": hf66_problemas["numeros_repetidos"],
+            })
 
     with tab_retornos:
         st.markdown("#### 📋 Orçamentos sem registro de envio")
