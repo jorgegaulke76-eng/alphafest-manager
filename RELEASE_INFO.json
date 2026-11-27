@@ -1,6 +1,6 @@
 {
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.61",
-  "created_at": "2026-11-26T21:50:00Z",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.61-HF67",
+  "created_at": "2026-11-27T19:20:45Z",
   "timezone": "America/Sao_Paulo",
-  "description": "HF61: resumo diario copiavel da Central da Anna sem consultas novas, dados pessoais ou publicacao Cloudflare. Gate isolado exigido."
+  "description": "HF67: recomendacoes organicas conservadoras com criterio de amostra e confiabilidade dos vinculos comerciais; data referente ao merge HF67 (#43)."
 }
