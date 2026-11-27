@@ -1,0 +1,33 @@
+name: AlphaFest HF67 - insights organicos sem deploy
+on:
+  push:
+    branches: [feature/hf67-insights-organicos]
+  pull_request:
+    branches: [main]
+    paths:
+      - central_oportunidades.py
+      - insights_organicos_hf67.py
+      - test_insights_organicos_hf67.py
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verificar sintaxe
+        run: python -m py_compile app.py central_oportunidades.py insights_organicos_hf67.py test_insights_organicos_hf67.py
+      - name: Testar com metricas ficticias
+        run: python -m unittest -v test_insights_organicos_hf67
+      - name: Arquivos essenciais
+        run: |
+          test -s app.py
+          test -s requirements.txt
+          test -s analytics_vendas_produtos_hf66.py
+          test -s central_oportunidades.py
