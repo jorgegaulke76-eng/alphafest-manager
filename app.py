@@ -25651,6 +25651,41 @@ def renderizar_workspace_anna_isolado():
         if m4.button("🔎 Ver quais são", key="anna_ver_entregas_hoje", width="stretch"):
             dialog_entregas_hoje_anna(historico)
 
+    # Retornos comerciais da Anna: mesma regra do THU, somente leitura.
+    # Reutiliza o Histórico já carregado; nunca cria um contato nem envia mensagens.
+    retornos_anna = _thu_comercial_montar_retornos(historico, hoje_anna_hf40, limite=200)
+    pendentes_anna = [item for item in retornos_anna if item.get("nivel") != "aguardar"]
+    aguardando_anna = [item for item in retornos_anna if item.get("nivel") == "aguardar"]
+    prioritarios_anna = sum(item.get("nivel") in ("alta", "urgente") for item in pendentes_anna)
+
+    st.markdown("### 🔔 Retornos comerciais")
+    st.caption(
+        "Somente orçamentos realmente enviados, ainda sem aprovação ou encerramento. "
+        "Os prazos são sugestões; confira o WhatsApp antes de retomar."
+    )
+    ret1, ret2, ret3 = st.columns(3)
+    ret1.metric("Retornos a conferir", len(pendentes_anna))
+    ret2.metric("Alta prioridade", prioritarios_anna)
+    ret3.metric("Aguardando cliente", len(aguardando_anna))
+    if pendentes_anna:
+        with st.expander("📋 Ver propostas para acompanhar", expanded=False):
+            for item in pendentes_anna[:20]:
+                numero_retorno = str(item.get("numero_proposta") or "Sem número")
+                dias_retorno = int(item.get("dias_sem_retorno") or 0)
+                nivel_retorno = str(item.get("nivel") or "normal").upper()
+                st.markdown(
+                    f"**{nivel_retorno} · Proposta {numero_retorno}** — "
+                    f"último contato há {dias_retorno} dia(s)"
+                )
+                st.caption(str(item.get("acao") or "Conferir atendimento"))
+            if len(pendentes_anna) > 20:
+                st.caption("Outros retornos podem ser consultados pelo Jorge na Central de Oportunidades.")
+            st.caption("Nenhum contato é enviado automaticamente por este painel.")
+    elif aguardando_anna:
+        st.info("Envio registrado. Aguardar retorno do cliente antes de fazer novo contato.")
+    else:
+        st.info("Nenhum orçamento com envio registrado exige acompanhamento neste momento.")
+
     # HF61: somente leitura, usando os quatro indicadores que ja estao na tela.
     with st.expander("📋 Resumo do dia · copiar ou baixar", expanded=False):
         st.caption("Totais e prioridades, sem nomes, telefones ou valores.")
