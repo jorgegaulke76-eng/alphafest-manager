@@ -11,6 +11,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from thu_comercial_service import montar_retornos_comerciais
+from proposal_status import status_bool, proposta_encerrada
 from typing import Any, Callable, Dict, List
 
 import pandas as pd
@@ -77,6 +78,23 @@ def _propostas_por_atendimento(historico: List[Dict[str, Any]]) -> Dict[str, Lis
     return mapa
 
 
+def _propostas_aprovadas(item: Dict[str, Any], propostas_map: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Venda confirmada exige aprovação oficial e vínculo explícito ao atendimento."""
+    vinculadas = propostas_map.get(str(item.get("id") or ""), [])
+    return [
+        p for p in vinculadas
+        if status_bool(p, "aprovado") and not proposta_encerrada(p)
+    ]
+
+
+def _tem_orcamento_vinculado(item: Dict[str, Any], propostas_map: Dict[str, List[Dict[str, Any]]]) -> bool:
+    return bool(propostas_map.get(str(item.get("id") or "")))
+
+
+def _tem_venda_confirmada(item: Dict[str, Any], propostas_map: Dict[str, List[Dict[str, Any]]]) -> bool:
+    return bool(_propostas_aprovadas(item, propostas_map))
+
+
 def _valor_proposta(proposta: Dict[str, Any]) -> float:
     for chave in ("total", "valor_total", "total_geral"):
         try:
@@ -115,8 +133,12 @@ def render_central_oportunidades(
     c1.metric("Novas", sum(_etapa(i) == "Nova captação" for i in abertas))
     c2.metric("Convites enviados", sum(_etapa(i) in ("Convite para WhatsApp enviado", "Aguardando migração") for i in abertas))
     c3.metric("Migraram ao WhatsApp", sum(_etapa(i) in ("Migrou para WhatsApp", "Em atendimento no WhatsApp", "Orçamento criado", "Venda fechada") for i in captacoes))
-    c4.metric("Orçamentos", sum(bool(propostas_map.get(str(i.get("id", "")))) or _etapa(i) in ("Orçamento criado", "Venda fechada") for i in captacoes))
-    c5.metric("Vendas", sum(_etapa(i) == "Venda fechada" for i in captacoes))
+    c4.metric("Orçamentos vinculados", sum(_tem_orcamento_vinculado(i, propostas_map) for i in captacoes))
+    c5.metric("Vendas confirmadas", sum(_tem_venda_confirmada(i, propostas_map) for i in captacoes))
+    st.caption(
+        "Orçamentos e vendas confirmadas exigem vínculo com o Histórico pelo atendimento_id; "
+        "venda exige aprovação oficial. Etapas marcadas manualmente não aumentam esses totais."
+    )
 
     # Diagnóstico da ligação real entre captação, WhatsApp e proposta.
     # Eventos anônimos do site são métricas, não cadastros de clientes.
@@ -125,7 +147,11 @@ def render_central_oportunidades(
     sem_vinculo = [
         i for i in captacoes
         if _etapa(i) in ("Orçamento criado", "Venda fechada")
-        and not propostas_map.get(str(i.get("id") or ""))
+        and not _tem_orcamento_vinculado(i, propostas_map)
+    ]
+    vendas_sem_confirmacao = [
+        i for i in captacoes
+        if _etapa(i) == "Venda fechada" and not _tem_venda_confirmada(i, propostas_map)
     ]
     with st.expander("🔎 Conferência da origem e dos vínculos comerciais", expanded=False):
         st.caption(
@@ -136,6 +162,7 @@ def render_central_oportunidades(
         q1.metric("Sem WhatsApp no atendimento", len(sem_whatsapp))
         q2.metric("Sem conteúdo de origem", len(sem_conteudo))
         q3.metric("Etapa comercial sem proposta vinculada", len(sem_vinculo))
+        st.metric("Vendas marcadas sem aprovação vinculada", len(vendas_sem_confirmacao))
         st.caption(
             "Vínculo de proposta significa que o Histórico contém atendimento_id correspondente. "
             "Uma etapa marcada manualmente não comprova, por si só, que existe orçamento vinculado ou venda aprovada."
@@ -150,8 +177,8 @@ def render_central_oportunidades(
             )
         if len(sem_vinculo) > 10:
             st.caption("Exibindo os primeiros 10 vínculos a conferir.")
-        if not (sem_whatsapp or sem_conteudo or sem_vinculo):
-            st.success("Os atendimentos externos cadastrados não apresentam pendências nessas três conferências.")
+        if not (sem_whatsapp or sem_conteudo or sem_vinculo or vendas_sem_confirmacao):
+            st.success("Os atendimentos externos cadastrados não apresentam pendências nessas quatro conferências.")
         st.info(
             "Fluxo correto: identificar um contato real → registrar o canal de origem "
             "→ continuar o atendimento no WhatsApp → vincular o orçamento real "
@@ -263,12 +290,20 @@ def render_central_oportunidades(
                     _evento(item, "Oportunidade recusada pela política comercial", now_fn)
                     salvar_atendimentos(dados_at)
                     st.rerun()
-                if r2.button("📄 Marcar orçamento", key=f"opp_orcamento_{item.get('id')}", width="stretch"):
+                if r2.button(
+                    "📄 Marcar orçamento", key=f"opp_orcamento_{item.get('id')}",
+                    width="stretch", disabled=not _tem_orcamento_vinculado(item, propostas_map),
+                    help="Disponível quando houver uma proposta real no Histórico vinculada a este atendimento.",
+                ):
                     item["etapa_captacao"] = "Orçamento criado"
                     _evento(item, "Orçamento criado a partir desta oportunidade", now_fn)
                     salvar_atendimentos(dados_at)
                     st.rerun()
-                if r3.button("💰 Marcar venda", key=f"opp_venda_{item.get('id')}", width="stretch"):
+                if r3.button(
+                    "💰 Marcar venda", key=f"opp_venda_{item.get('id')}",
+                    width="stretch", disabled=not _tem_venda_confirmada(item, propostas_map),
+                    help="Somente após aprovação oficial de proposta vinculada no Histórico.",
+                ):
                     item["etapa_captacao"] = "Venda fechada"
                     _evento(item, "Venda fechada a partir desta oportunidade", now_fn)
                     salvar_atendimentos(dados_at)
@@ -279,13 +314,12 @@ def render_central_oportunidades(
         for canal_nome in sorted({_origem(i) for i in captacoes}):
             grupo = [i for i in captacoes if _origem(i) == canal_nome]
             migrados = [i for i in grupo if _etapa(i) in ("Migrou para WhatsApp", "Em atendimento no WhatsApp", "Orçamento criado", "Venda fechada")]
-            orcados = [i for i in grupo if _etapa(i) in ("Orçamento criado", "Venda fechada") or propostas_map.get(str(i.get("id", "")))]
-            vendas = [i for i in grupo if _etapa(i) == "Venda fechada"]
-            faturamento = 0.0
-            for i in grupo:
-                for p in propostas_map.get(str(i.get("id", "")), []):
-                    if p.get("aprovado") or p.get("pago") or p.get("entregue"):
-                        faturamento += _valor_proposta(p)
+            orcados = [i for i in grupo if _tem_orcamento_vinculado(i, propostas_map)]
+            vendas = [i for i in grupo if _tem_venda_confirmada(i, propostas_map)]
+            faturamento = sum(
+                _valor_proposta(p)
+                for i in grupo for p in _propostas_aprovadas(i, propostas_map)
+            )
             linhas.append({
                 "Canal": canal_nome, "Contatos": len(grupo), "Migraram ao WhatsApp": len(migrados),
                 "Orçamentos": len(orcados), "Vendas": len(vendas),
@@ -309,13 +343,12 @@ def render_central_oportunidades(
             reg["Contatos"] += 1
             if _etapa(item) in ("Migrou para WhatsApp", "Em atendimento no WhatsApp", "Orçamento criado", "Venda fechada"):
                 reg["WhatsApp"] += 1
-            if _etapa(item) in ("Orçamento criado", "Venda fechada") or propostas_map.get(str(item.get("id", ""))):
+            if _tem_orcamento_vinculado(item, propostas_map):
                 reg["Orçamentos"] += 1
-            if _etapa(item) == "Venda fechada":
+            if _tem_venda_confirmada(item, propostas_map):
                 reg["Vendas"] += 1
-            for p in propostas_map.get(str(item.get("id", "")), []):
-                if p.get("aprovado") or p.get("pago") or p.get("entregue"):
-                    reg["Faturamento"] += _valor_proposta(p)
+            for p in _propostas_aprovadas(item, propostas_map):
+                reg["Faturamento"] += _valor_proposta(p)
         if agregado:
             dfc = pd.DataFrame(agregado.values()).sort_values(["Faturamento", "Vendas", "Contatos"], ascending=False)
             st.dataframe(dfc, width="stretch", hide_index=True, column_config={"Faturamento": st.column_config.NumberColumn(format="R$ %.2f")})
