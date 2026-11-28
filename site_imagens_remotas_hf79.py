@@ -95,13 +95,17 @@ def otimizar_imagens_remotas_hf79(
     *,
     baixar=_baixar,
 ) -> tuple[str, dict[str, bytes], dict[str, Any]]:
-    """Otimiza ate um banner e um produto em destaque; falha preserva original."""
+    """Otimiza ate tres banners, uma campanha e um destaque; falha preserva original."""
     assets = dict(arquivos)
     relatorio: dict[str, Any] = {"imagens_tentadas": 0, "imagens_otimizadas": 0,
                                 "bytes_originais": 0, "bytes_principais": 0,
                                 "elegiveis_sem_variante": 0, "falhas_download": 0,
                                 "origens_ignoradas": 0, "fallback_original_preservado": True}
-    vistos = set()
+    limites_categoria = {"banner": 3, "campanha": 1, "produto": 1}
+    atendidos = {"banner": 0, "campanha": 0, "produto": 0}
+    # Limitar a quantidade de tentativas para nao prolongar a geracao do ZIP.
+    tentativas = {"banner": 0, "campanha": 0, "produto": 0}
+    urls_ja_vistas = set()
 
     def trocar(match: re.Match) -> str:
         tag = match.group(0)
@@ -110,11 +114,13 @@ def otimizar_imagens_remotas_hf79(
         alt = ALT.search(tag)
         texto_alt = alt.group(2).lower() if alt else ""
         categoria = ""
-        if "banner informativo alphafest" in texto_alt:
+        if "hf6514-banner-slide" in classe or "banner informativo alphafest" in texto_alt:
             categoria = "banner"
+        elif "hf65-art" in classe and "campanha especial alphafest" in texto_alt:
+            categoria = "campanha"
         elif "hf50-carousel-product-img" in classe:
             categoria = "produto"
-        if not categoria or categoria in vistos:
+        if not categoria or atendidos[categoria] >= limites_categoria[categoria]:
             return tag
         src = SRC.search(tag)
         if src is None:
@@ -123,19 +129,23 @@ def otimizar_imagens_remotas_hf79(
         if not _permitida(url):
             relatorio["origens_ignoradas"] += 1
             return tag
+        if url in urls_ja_vistas or tentativas[categoria] >= 6:
+            return tag
+        urls_ja_vistas.add(url)
+        tentativas[categoria] += 1
         relatorio["imagens_tentadas"] += 1
         bruto = baixar(url)
         if not bruto:
             relatorio["falhas_download"] += 1
             return tag
-        limites = (1280, 900) if categoria == "banner" else (760, 480)
+        limites = (1280, 900) if categoria == "banner" else ((760, 480) if categoria == "produto" else (840, 520))
         variantes = _variantes(bruto, *limites)
         if not variantes:
             relatorio["elegiveis_sem_variante"] += 1
             return tag
         # Marcar como atendida somente depois de gerar uma variante real.
         # Caso contrário o primeiro card bloqueia os seguintes.
-        vistos.add(categoria)
+        atendidos[categoria] += 1
         arquivos_gerados = {}
         for largura, blob in variantes.items():
             caminho = "assets/img/" + hashlib.sha256(blob).hexdigest()[:24] + ".webp"
@@ -152,7 +162,7 @@ def otimizar_imagens_remotas_hf79(
             adicional = (f' srcset="{arquivos_gerados[menor][0]} {menor}w, '
                          f'{arquivos_gerados[maior][0]} {maior}w" sizes="{tamanhos}"')
             novo = novo[:-1] + adicional + ">"
-        if categoria == "banner":
+        if categoria == "banner" and atendidos[categoria] == 1:
             novo = re.sub(r"""\bloading\s*=\s*(["'])lazy\1""", 'loading="eager"', novo, flags=re.I)
             if not re.search(r"\bfetchpriority\s*=", novo, re.I):
                 novo = novo[:-1] + ' fetchpriority="high">'
