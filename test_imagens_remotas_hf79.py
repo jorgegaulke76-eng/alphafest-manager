@@ -96,6 +96,14 @@ class ImagensRemotasHF79(unittest.TestCase):
         self.assertNotIn(campanha, novo)
         self.assertTrue(assets)
 
+    def test_classe_real_afc65_art_da_campanha(self):
+        html = '<img class="afc65-art" src="' + self.url + '" alt="Campanha especial AlphaFest">'
+        novo, arquivos, rel = otimizar_imagens_remotas_hf79(
+            html, {}, baixar=lambda u: self.dados)
+        self.assertEqual(rel["imagens_otimizadas"], 1)
+        self.assertIn("assets/img/", novo)
+        self.assertTrue(arquivos)
+
     def test_maximo_uma_imagem_por_categoria(self):
         html = ''.join('<img class="hf50-carousel-product-img" src="' + self.url +
                        '" alt="Produto ' + str(i) + '">' for i in range(8))
