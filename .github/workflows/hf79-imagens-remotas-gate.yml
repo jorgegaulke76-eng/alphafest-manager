@@ -1,0 +1,25 @@
+name: AlphaFest HF79 - imagens remotas seguras
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - site_imagens_remotas_hf79.py
+      - site_production_service.py
+      - test_imagens_remotas_hf79.py
+      - .github/workflows/hf79-imagens-remotas-gate.yml
+  push:
+    branches: [feature/hf79-imagens-publicas-leves]
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dependencias de imagens
+        run: python -m pip install pillow requests
+      - name: Sintaxe
+        run: python -m py_compile site_imagens_remotas_hf79.py site_production_service.py test_imagens_remotas_hf79.py
+      - name: Testes sinteticos e regressao de imagens
+        run: python -m unittest -v test_imagens_remotas_hf79 test_site_imagens_hf76 test_site_banner_hf78
