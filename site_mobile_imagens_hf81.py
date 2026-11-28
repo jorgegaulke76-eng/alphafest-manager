@@ -66,7 +66,7 @@ def otimizar_imagens_mobile_hf81(
     *,
     baixar=_baixar,
 ) -> tuple[str, dict[str, bytes], dict[str, Any]]:
-    """Otimizacao de ate 3 banners e um pop-up, sem mudar a versao desktop."""
+    """Otimizacao de ate 6 banners e um pop-up, sem mudar a versao desktop."""
     assets = dict(arquivos)
     relatorio: dict[str, Any] = {
         "banners_mobile": 0,
@@ -75,7 +75,7 @@ def otimizar_imagens_mobile_hf81(
         "original_desktop_preservado": True,
         "falhas_ou_sem_economia": 0,
     }
-    limites = {"banner": 3, "popup": 1}
+    limites = {"banner": 6, "popup": 1}
     tentativas = {"banner": 0, "popup": 0}
     memo: dict[str, tuple[str, int, int] | None] = {}
 
@@ -115,8 +115,8 @@ def otimizar_imagens_mobile_hf81(
             if blob:
                 mobile = _mobile_webp(
                     blob,
-                    largura=(900 if categoria == "banner" else 720),
-                    qualidade=(85 if categoria == "banner" else 88),
+                    largura=(720 if categoria == "banner" else 600),
+                    qualidade=(80 if categoria == "banner" else 82),
                 )
                 if mobile:
                     webp, orig_w, orig_h = mobile
@@ -138,9 +138,9 @@ def otimizar_imagens_mobile_hf81(
             novo = novo[:-1] + f' height="{altura_original}">'
         if not re.search(r'\bdecoding\s*=', novo, re.I):
             novo = novo[:-1] + ' decoding="async">'
-        if categoria == "banner" and relatorio["banners_mobile"] == 0:
-            if not re.search(r'\bfetchpriority\s*=', novo, re.I):
-                novo = novo[:-1] + ' fetchpriority="high">'
+        if categoria == "popup" and not re.search(r'\bfetchpriority\s*=', novo, re.I):
+            # PageSpeed LCP: a arte do pop-up visivel e prioridade, nao o carrossel secundario.
+            novo = novo[:-1] + ' fetchpriority="high">'
         estilo = "display:block;width:100%;height:100%" if categoria == "banner" else "display:block;width:100%"
         classe_picture = "hf81-banner-media" if categoria == "banner" else "hf81-popup-media"
         source = (
