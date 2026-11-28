@@ -1,7 +1,7 @@
 {
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.61-HF80",
-  "created_at": "2026-11-28T15:00:04Z",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.61-HF81",
+  "created_at": "2026-11-28T16:40:41Z",
   "timezone": "America/Sao_Paulo",
-  "description": "HF80: caracterização natalina azul dos mascotes externos Thu e Fox; código incorporado ao GitHub no PR #61.",
-  "source_commit": "b2a73820c2db5d85bae5338c7f46716f3175d2d9"
+  "description": "HF81: sincronização automática após merge no GitHub.",
+  "source_commit": "6ddc6bf8960ebb2bb314c3e9655fd70fc355b17b"
 }
