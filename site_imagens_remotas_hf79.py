@@ -99,7 +99,8 @@ def otimizar_imagens_remotas_hf79(
     assets = dict(arquivos)
     relatorio: dict[str, Any] = {"imagens_tentadas": 0, "imagens_otimizadas": 0,
                                 "bytes_originais": 0, "bytes_principais": 0,
-                                "fallback_original_preservado": True}
+                                "elegiveis_sem_variante": 0, "falhas_download": 0,
+                                "origens_ignoradas": 0, "fallback_original_preservado": True}
     vistos = set()
 
     def trocar(match: re.Match) -> str:
@@ -115,21 +116,26 @@ def otimizar_imagens_remotas_hf79(
             categoria = "produto"
         if not categoria or categoria in vistos:
             return tag
-        vistos.add(categoria)
         src = SRC.search(tag)
         if src is None:
             return tag
         url = html_lib.unescape(src.group(2))
         if not _permitida(url):
+            relatorio["origens_ignoradas"] += 1
             return tag
         relatorio["imagens_tentadas"] += 1
         bruto = baixar(url)
         if not bruto:
+            relatorio["falhas_download"] += 1
             return tag
         limites = (1280, 900) if categoria == "banner" else (760, 480)
         variantes = _variantes(bruto, *limites)
         if not variantes:
+            relatorio["elegiveis_sem_variante"] += 1
             return tag
+        # Marcar como atendida somente depois de gerar uma variante real.
+        # Caso contrário o primeiro card bloqueia os seguintes.
+        vistos.add(categoria)
         arquivos_gerados = {}
         for largura, blob in variantes.items():
             caminho = "assets/img/" + hashlib.sha256(blob).hexdigest()[:24] + ".webp"
