@@ -61,6 +61,22 @@ class ImagensRemotasHF79(unittest.TestCase):
         self.assertEqual(arquivos, {})
         self.assertEqual(rel["imagens_otimizadas"], 0)
 
+    def test_falha_no_primeiro_produto_nao_impede_proximo(self):
+        ruim = self.url.replace("banner.png", "falha.png")
+        html = ('<img class="hf50-carousel-product-img" src="' + ruim + '">'
+                '<img class="hf50-carousel-product-img" src="' + self.url + '">')
+        chamadas = []
+        def baixar(url):
+            chamadas.append(url)
+            return None if url == ruim else self.dados
+        novo, arquivos, rel = otimizar_imagens_remotas_hf79(
+            html, {}, baixar=baixar)
+        self.assertEqual(chamadas, [ruim, self.url])
+        self.assertEqual(rel["falhas_download"], 1)
+        self.assertEqual(rel["imagens_otimizadas"], 1)
+        self.assertIn("assets/img/", novo)
+        self.assertTrue(arquivos)
+
     def test_maximo_uma_imagem_por_categoria(self):
         html = ''.join('<img class="hf50-carousel-product-img" src="' + self.url +
                        '" alt="Produto ' + str(i) + '">' for i in range(8))
