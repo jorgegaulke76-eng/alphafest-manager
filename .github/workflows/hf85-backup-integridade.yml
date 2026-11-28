@@ -1,0 +1,28 @@
+name: AlphaFest HF85 - backup sem escrita e versao
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - backup_continuidade_hf85.py
+      - test_backup_continuidade_hf85.py
+      - HF85_CONTINUIDADE_BACKUPS.md
+      - .github/workflows/hf85-backup-integridade.yml
+  push:
+    branches:
+      - fix/hf84-1-backup-integridade-e-rodape
+permissions:
+  contents: read
+jobs:
+  testar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Conferir sintaxe
+        run: python -m py_compile backup_continuidade_hf85.py test_backup_continuidade_hf85.py
+      - name: Testar backup e rodape
+        run: python -m unittest -v test_backup_continuidade_hf85 test_hf84_preflight test_sincronizar_release_rodape
+      - name: Preflight somente leitura
+        run: python scripts/hf84_preflight_seguranca.py --min-hf 84
