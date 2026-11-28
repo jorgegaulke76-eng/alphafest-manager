@@ -102,7 +102,7 @@ def extrair_pacote_publico(pacote_zip: bytes) -> Tuple[Dict[str, bytes], Dict[st
                     continue
                 if seguro in MODULOS_STATIC_ASSETS:
                     modulos[seguro] = zf.read(nome)
-                elif re.fullmatch(r"assets/img/[0-9a-f]{24}\\.(?:png|jpg|webp|gif|avif)", seguro) or seguro in ARQUIVOS_PUBLICOS_PERMITIDOS or re.fullmatch(
+                elif re.fullmatch(r"assets/img/[0-9a-f]{24}\.(?:png|jpg|webp|gif|avif)", seguro) or seguro in ARQUIVOS_PUBLICOS_PERMITIDOS or re.fullmatch(
                     r"dicas/(?:[a-z0-9-]+/)?index\.html", seguro
                 ) or re.fullmatch(
                     r"novidades/(?:pagina-[1-9][0-9]*/)?index\.html", seguro
