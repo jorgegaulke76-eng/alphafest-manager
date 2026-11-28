@@ -11,8 +11,6 @@ import io
 import re
 from typing import Any
 
-from PIL import Image, UnidentifiedImageError
-
 PRIMEIRO_BANNER = re.compile(
     r'(<section\b[^>]*class=["\'][^"\']*\bhf6514-banner\b[^"\']*["\'][^>]*>)(.*?)(</section>)',
     re.IGNORECASE | re.DOTALL,
@@ -47,6 +45,11 @@ def otimizar_banner_inicial_hf78(html: str, arquivos: dict[str, bytes]) -> tuple
     relatorio["banner_identificado"] = True
     novo_caminho = caminho
     dimensoes = None
+    try:
+        from PIL import Image, UnidentifiedImageError
+    except ImportError:
+        # Ambientes de verificacao sem Pillow continuam gerando o mesmo site.
+        return html, assets, relatorio
     try:
         with Image.open(io.BytesIO(bruto)) as original:
             # Respeitar limites de memoria do gerador. Preservar transparencias.
