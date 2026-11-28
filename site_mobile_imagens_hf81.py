@@ -88,7 +88,7 @@ def otimizar_imagens_mobile_hf81(
         classe_txt = classe.group(2).lower() if classe else ""
         alt_txt = alt.group(2).lower() if alt else ""
         categoria = ""
-        if "hf65-art" in classe_txt and "campanha especial alphafest" in alt_txt:
+        if ("hf65-art" in classe_txt or "afc65-art" in classe_txt) and "campanha especial alphafest" in alt_txt:
             categoria = "popup"
         elif "banner informativo alphafest" in alt_txt or "hf81-banner-principal" in classe_txt:
             categoria = "banner"
