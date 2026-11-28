@@ -15,6 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict
 from urllib.parse import quote
+from site_mascotes_natal_hf80 import eh_natal_azul, mascote_natal_html, NATAL_CSS
 
 _BASE = Path(__file__).resolve().parent
 _DEFAULT_ART = _BASE / "assets" / "campaigns" / "dia_cliente_2026.webp"
@@ -159,8 +160,13 @@ def inject_campaign(page: str, config: Any, empresa: Dict[str, Any], *, force_pr
     if headline or message:
         copy_html = '<div class="afc65-copy">' + (f'<strong>{html.escape(headline)}</strong>' if headline else "") + (f'<span>{html.escape(message)}</span>' if message else "") + '</div>'
     cta_html = f'<a class="afc65-cta" href="{html.escape(cta_href, quote=True)}" target="_blank" rel="noopener">{html.escape(cta_text)}</a>' if cta_href and cta_text else ""
-    thu_html = f'<img class="afc65-mascot afc65-thu" src="{html.escape(thu_src, quote=True)}" alt="Thu">' if thu_src else ""
-    fox_html = f'<img class="afc65-mascot afc65-fox" src="{html.escape(fox_src, quote=True)}" alt="Fox">' if fox_src else ""
+    natal_azul = eh_natal_azul(cfg)
+    if natal_azul:
+        thu_html = mascote_natal_html("thu", thu_src, "Thu") if thu_src else ""
+        fox_html = mascote_natal_html("fox", fox_src, "Fox") if fox_src else ""
+    else:
+        thu_html = f'<img class="afc65-mascot afc65-thu" src="{html.escape(thu_src, quote=True)}" alt="Thu">' if thu_src else ""
+        fox_html = f'<img class="afc65-mascot afc65-fox" src="{html.escape(fox_src, quote=True)}" alt="Fox">' if fox_src else ""
 
     cfg_js = json.dumps(
         {
@@ -177,6 +183,7 @@ def inject_campaign(page: str, config: Any, empresa: Dict[str, Any], *, force_pr
 
     block = f'''
 <style id="alphafest-campaign-hf65-style">
+{NATAL_CSS if natal_azul else ""}
 #afc65-root{{position:fixed;inset:0;z-index:99990;display:none;pointer-events:none;font-family:Inter,Arial,sans-serif}}
 #afc65-root.afc65-active{{display:block}}
 #afc65-root:before{{content:"";position:absolute;inset:0;background:rgba(8,37,74,.12);opacity:0;transition:opacity .45s ease;pointer-events:none}}
