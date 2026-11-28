@@ -183,7 +183,7 @@ def inject_campaign(page: str, config: Any, empresa: Dict[str, Any], *, force_pr
 
     block = f'''
 <style id="alphafest-campaign-hf65-style">
-{NATAL_CSS if natal_azul else ""}
+{NATAL_CSS if natal_azul and cfg.get("show_mascots") else ""}
 #afc65-root{{position:fixed;inset:0;z-index:99990;display:none;pointer-events:none;font-family:Inter,Arial,sans-serif}}
 #afc65-root.afc65-active{{display:block}}
 #afc65-root:before{{content:"";position:absolute;inset:0;background:rgba(8,37,74,.12);opacity:0;transition:opacity .45s ease;pointer-events:none}}
