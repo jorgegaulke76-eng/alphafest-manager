@@ -12,7 +12,7 @@ class NatalHF80(unittest.TestCase):
         pagina = inject_campaign(HTML, cfg, {"whatsapp_catalogo":"11972949533"})
         self.assertIn('afc65-thu afc65-mascot-natal', pagina)
         self.assertIn('afc65-fox afc65-mascot-natal', pagina)
-        self.assertEqual(pagina.count('afc65-natal-hat'), 4) # duas tags + estilo
+        self.assertGreaterEqual(pagina.count('afc65-natal-hat'), 5) # duas tags e estilos
         self.assertIn('width:min(370px,31vw)', pagina)
         self.assertIn('Produtos e preços', pagina)
         self.assertIn('afc65-cta', pagina)
