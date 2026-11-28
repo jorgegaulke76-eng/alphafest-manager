@@ -1,0 +1,37 @@
+name: AlphaFest HF84 - fundacao segura e rodape
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - VERSAO
+      - VERSAO.txt
+      - RELEASE_INFO.json
+      - config.py
+      - scripts/hf84_preflight_seguranca.py
+      - scripts/sincronizar_release_rodape.py
+      - test_hf84_preflight.py
+      - test_sincronizar_release_rodape.py
+      - .github/workflows/sincronizar-rodape-manager.yml
+      - .github/workflows/hf84-fundacao-segura.yml
+      - HF84_FUNDACAO_SEGURA.md
+      - .gitignore
+  push:
+    branches:
+      - feature/hf84-fundacao-segura-rodape
+      - main
+permissions:
+  contents: read
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Sintaxe
+        run: python -m py_compile scripts/hf84_preflight_seguranca.py scripts/sincronizar_release_rodape.py config.py test_hf84_preflight.py test_sincronizar_release_rodape.py
+      - name: Preflight de versao e integridade
+        run: python scripts/hf84_preflight_seguranca.py --min-hf 83
+      - name: Testes de nao regressao do rodape
+        run: python -m unittest -v test_hf84_preflight test_sincronizar_release_rodape
