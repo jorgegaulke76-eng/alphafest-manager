@@ -1,7 +1,7 @@
 {
-  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.61-HF84",
-  "created_at": "2026-11-28T18:08:40Z",
+  "version": "20.4.9-I8.13.5-HF53.3-HF8-HF65.24.61-HF85",
+  "created_at": "2026-11-28T18:25:35Z",
   "timezone": "America/Sao_Paulo",
-  "description": "HF84: sincronização automática após merge no GitHub.",
-  "source_commit": "ef1957e17218ca408174c070a621ab2ada5a4331"
+  "description": "HF85: sincronização automática após merge no GitHub.",
+  "source_commit": "b916a66ad13b01726920e4d4fb6141c5410774f7"
 }
