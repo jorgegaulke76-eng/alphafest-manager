@@ -15,11 +15,11 @@ from typing import Dict, Tuple
 TIPOS = {"png": "png", "jpeg": "jpg", "jpg": "jpg", "webp": "webp",
          "gif": "gif", "avif": "avif"}
 IMG_SRC = re.compile(
-    r"""(<img\\b[^>]*?\\bsrc\\s*=\\s*["'])(data:image/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+))(["'])""",
+    r"""(<img\b[^>]*?\bsrc\s*=\s*["'])(data:image/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+))(["'])""",
     re.IGNORECASE | re.DOTALL,
 )
 PRODUCT_DETAIL_IMAGE = re.compile(
-    r"""(\\bdata-detail-image\\s*=\\s*["'])(data:image/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+))(["'])""",
+    r"""(<article\b[^>]*?\bdata-detail-image\s*=\s*["'])(data:image/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+))(["'])""",
     re.IGNORECASE,
 )
 
