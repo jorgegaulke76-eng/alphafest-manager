@@ -157,7 +157,7 @@ def inject_campaign(page: str, config: Any, empresa: Dict[str, Any], *, force_pr
     cta_text = str(cfg.get("cta_text") or "").strip()
     key = _campaign_key(cfg)
 
-    image_html = f'<img class="afc65-art" src="{html.escape(src, quote=True)}" alt="Campanha especial AlphaFest" decoding="async">' if src else ""
+    image_html = f'<img class="afc65-art" src="{html.escape(src, quote=True)}" alt="Campanha especial AlphaFest" decoding="async" fetchpriority="high">' if src else ""
     copy_html = ""
     if headline or message:
         copy_html = '<div class="afc65-copy">' + (f'<strong>{html.escape(headline)}</strong>' if headline else "") + (f'<span>{html.escape(message)}</span>' if message else "") + '</div>'
