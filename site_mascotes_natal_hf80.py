@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import base64
 import unicodedata
-from datetime import date
 from typing import Any
 
 
@@ -26,18 +25,15 @@ _AZUL_NATAL_HAT = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 330 21
 </svg>"""
 
 
-def eh_natal_azul(config: Any, hoje: date | None = None) -> bool:
-    """Aplica aos pop-ups natalinos e à janela sazonal de Natal 2026."""
+def eh_natal_azul(config: Any) -> bool:
+    """Aplica somente a campanha identificada explicitamente como Natal."""
     config = config if isinstance(config, dict) else {}
-    valor = " ".join(str(config.get(c) or "") for c in ("campaign_name", "headline", "message"))
+    valor = " ".join(str(config.get(c) or "") for c in ("campaign_name", "headline", "message", "image_src"))
     sem_acentos = "".join(
         c for c in unicodedata.normalize("NFKD", valor.lower())
         if not unicodedata.combining(c)
     )
-    if "natal" in sem_acentos:
-        return True
-    hoje = hoje or date.today()
-    return date(2026, 11, 28) <= hoje <= date(2027, 1, 6)
+    return "natal" in sem_acentos
 
 
 def natal_hat_data_uri() -> str:
