@@ -64,7 +64,7 @@ class BannerHF78(unittest.TestCase):
         import base64
         png = png_teste()
         uri = "data:image/png;base64," + base64.b64encode(png).decode("ascii")
-        html = pagina(uri)
+        html = pagina(uri).replace('src="/data:image/', 'src="data:image/')
         # A função de produção primeiro extrai a imagem inline e depois a otimiza.
         pacote = gerar_pacote_producao(html)
         with zipfile.ZipFile(io.BytesIO(pacote)) as zf:
