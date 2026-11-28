@@ -54,7 +54,7 @@ def otimizar_banner_inicial_hf78(html: str, arquivos: dict[str, bytes]) -> tuple
                 dimensoes = (original.width, original.height)
                 if src.group(3).lower() == "png" and original.format == "PNG" and len(bruto) >= 70_000:
                     buffer = io.BytesIO()
-                    original.save(buffer, format="WEBP", lossless=True, method=4)
+                    original.save(buffer, format="WEBP", lossless=True, exact=True, method=4)
                     variante = buffer.getvalue()
                     if len(variante) <= len(bruto) * .88:
                         digest = hashlib.sha256(variante).hexdigest()[:24]
