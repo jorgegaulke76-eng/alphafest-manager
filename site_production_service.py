@@ -196,10 +196,19 @@ def gerar_pacote_producao(
     html_publico = inject_pwa(inject_whatsapp_context(with_favicon(preparar_html_producao(html_site))))
     adsense_id = normalizar_publisher_id(adsense_publisher_id)
     html_publico = inserir_meta_adsense(html_publico, adsense_id)
+    tamanho_html_antes_hf76 = len(html_publico.encode("utf-8"))
     html_publico, imagens_home_hf76 = extrair_imagens_inline_hf76(html_publico)
+    tamanho_html_depois_hf76 = len(html_publico.encode("utf-8"))
     status = resumo_producao(total_produtos=total_produtos)
     status["adsense_metatag_incluida"] = bool(adsense_id)
     status["adsense_anuncios_ativados"] = False
+    status["hf76_imagens_home"] = {
+        "html_antes_bytes": tamanho_html_antes_hf76,
+        "html_depois_bytes": tamanho_html_depois_hf76,
+        "html_reducao_bytes": max(0, tamanho_html_antes_hf76 - tamanho_html_depois_hf76),
+        "arquivos_separados": len(imagens_home_hf76),
+        "total_bytes_imagens_originais": sum(len(v) for v in imagens_home_hf76.values()),
+    }
     status.update({
         "versao_manager": versao_manager,
         "gerado_em_utc": datetime.now(timezone.utc).isoformat(),
@@ -294,6 +303,13 @@ O rollback do DNS anterior continua documentado no kit HF41.
             pagina_final, imagens_pagina = extrair_imagens_inline_hf76(pagina_final)
             imagens_paginas_hf76.update(imagens_pagina)
             zf.writestr(caminho, pagina_final)
+        status["hf76_imagens_paginas_adicionais"] = {
+            "arquivos_distintos": len(set(imagens_paginas_hf76) - set(imagens_home_hf76)),
+            "total_bytes_originais": sum(
+                len(blob) for caminho_img, blob in imagens_paginas_hf76.items()
+                if caminho_img not in imagens_home_hf76
+            ),
+        }
         for caminho_img, bytes_img in sorted(imagens_paginas_hf76.items()):
             if caminho_img not in imagens_home_hf76:
                 zf.writestr(caminho_img, bytes_img)
