@@ -1,0 +1,22 @@
+name: AlphaFest HF77 - acessibilidade do carrossel
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - site_visual_hf48_service.py
+      - test_carrossel_acessibilidade_hf77.py
+      - .github/workflows/hf77-acessibilidade-gate.yml
+  push:
+    branches: [fix/hf77-carousel-acessibilidade]
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Conferir sintaxe
+        run: python -m py_compile site_visual_hf48_service.py test_carrossel_acessibilidade_hf77.py
+      - name: Testes de acessibilidade sem dados reais
+        run: python -m unittest -v test_carrossel_acessibilidade_hf77
