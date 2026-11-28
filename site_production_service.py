@@ -23,6 +23,7 @@ from site_whatsapp_context_service import inject_whatsapp_context
 from site_institucional_adsense_service import paginas_institucionais
 from site_imagens_hf76 import extrair_imagens_inline_hf76
 from site_banner_hf78 import otimizar_banner_inicial_hf78
+from site_imagens_remotas_hf79 import otimizar_imagens_remotas_hf79
 
 def _rastreador_pagina_interna(pagina: str, home: str) -> str:
     """Injeta o rastreador; se os Secrets não estiverem visíveis nessa etapa,
@@ -202,9 +203,13 @@ def gerar_pacote_producao(
     html_publico, imagens_home_hf76, diagnostico_banner_hf78 = otimizar_banner_inicial_hf78(
         html_publico, imagens_home_hf76
     )
+    html_publico, imagens_home_hf76, diagnostico_hf79 = otimizar_imagens_remotas_hf79(
+        html_publico, imagens_home_hf76
+    )
     tamanho_html_depois_hf76 = len(html_publico.encode("utf-8"))
     status = resumo_producao(total_produtos=total_produtos)
     status["hf78_banner_inicial"] = diagnostico_banner_hf78
+    status["hf79_imagens_remotas"] = diagnostico_hf79
     status["adsense_metatag_incluida"] = bool(adsense_id)
     status["adsense_anuncios_ativados"] = False
     status["hf76_imagens_home"] = {
