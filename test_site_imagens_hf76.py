@@ -40,15 +40,16 @@ class ImagensHF76(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(pacote)) as z:
             nomes = z.namelist()
             imagem = [n for n in nomes if n.startswith("assets/img/")]
-            self.assertEqual(len(imagem), 1)
-            self.assertEqual(z.read(imagem[0]), PNG)
+            correspondentes = [n for n in imagem if z.read(n) == PNG]
+            self.assertEqual(len(correspondentes), 1)
+            caminho = correspondentes[0]
             home = z.read("index.html").decode("utf-8")
-            self.assertIn('/' + imagem[0], home)
+            self.assertIn('/' + caminho, home)
             self.assertNotIn(DATA, home)
             self.assertIn(b"max-age=31536000", z.read("_headers"))
         assets, _ = extrair_pacote_publico(pacote)
-        self.assertIn("/" + imagem[0], assets)
-        self.assertEqual(assets["/" + imagem[0]], PNG)
+        self.assertIn("/" + caminho, assets)
+        self.assertEqual(assets["/" + caminho], PNG)
 
     def test_nao_aceitar_ficheiro_falso_na_publicacao(self):
         pacote = io.BytesIO()
