@@ -15,12 +15,14 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict
 from urllib.parse import quote
-from site_mascotes_natal_hf80 import eh_natal_azul, mascote_natal_html, NATAL_CSS
+from site_mascotes_natal_hf80 import eh_natal_azul
 
 _BASE = Path(__file__).resolve().parent
 _DEFAULT_ART = _BASE / "assets" / "campaigns" / "dia_cliente_2026.webp"
 _THU_ASSET = _BASE / "assets" / "mascotes" / "thu_joinha.png"
 _FOX_ASSET = _BASE / "assets" / "mascotes" / "fox_galeria.webp"
+_THU_NATAL_ASSET = _BASE / "assets" / "mascotes" / "thu_natal_azul.webp"
+_FOX_NATAL_ASSET = _BASE / "assets" / "mascotes" / "fox_natal_azul.webp"
 
 DEFAULT_CAMPAIGN_CONFIG: Dict[str, Any] = {
     "enabled": False,
@@ -161,12 +163,15 @@ def inject_campaign(page: str, config: Any, empresa: Dict[str, Any], *, force_pr
         copy_html = '<div class="afc65-copy">' + (f'<strong>{html.escape(headline)}</strong>' if headline else "") + (f'<span>{html.escape(message)}</span>' if message else "") + '</div>'
     cta_html = f'<a class="afc65-cta" href="{html.escape(cta_href, quote=True)}" target="_blank" rel="noopener">{html.escape(cta_text)}</a>' if cta_href and cta_text else ""
     natal_azul = eh_natal_azul(cfg)
-    if natal_azul:
-        thu_html = mascote_natal_html("thu", thu_src, "Thu") if thu_src else ""
-        fox_html = mascote_natal_html("fox", fox_src, "Fox") if fox_src else ""
-    else:
-        thu_html = f'<img class="afc65-mascot afc65-thu" src="{html.escape(thu_src, quote=True)}" alt="Thu">' if thu_src else ""
-        fox_html = f'<img class="afc65-mascot afc65-fox" src="{html.escape(fox_src, quote=True)}" alt="Fox">' if fox_src else ""
+    # Somente imagens natalinas reais podem substituir os personagens.
+    # Sem os dois arquivos no repo, manter ambas as artes oficiais, sem sobreposições.
+    natal_assets_ok = (natal_azul and cfg.get("show_mascots")
+                       and _THU_NATAL_ASSET.is_file() and _FOX_NATAL_ASSET.is_file())
+    if natal_assets_ok:
+        thu_src = _asset_data_uri(str(_THU_NATAL_ASSET))
+        fox_src = _asset_data_uri(str(_FOX_NATAL_ASSET))
+    thu_html = f'<img class="afc65-mascot afc65-thu" src="{html.escape(thu_src, quote=True)}" alt="Thu">' if thu_src else ""
+    fox_html = f'<img class="afc65-mascot afc65-fox" src="{html.escape(fox_src, quote=True)}" alt="Fox">' if fox_src else ""
 
     cfg_js = json.dumps(
         {
@@ -183,7 +188,7 @@ def inject_campaign(page: str, config: Any, empresa: Dict[str, Any], *, force_pr
 
     block = f'''
 <style id="alphafest-campaign-hf65-style">
-{NATAL_CSS if natal_azul and cfg.get("show_mascots") else ""}
+
 #afc65-root{{position:fixed;inset:0;z-index:99990;display:none;pointer-events:none;font-family:Inter,Arial,sans-serif}}
 #afc65-root.afc65-active{{display:block}}
 #afc65-root:before{{content:"";position:absolute;inset:0;background:rgba(8,37,74,.12);opacity:0;transition:opacity .45s ease;pointer-events:none}}
