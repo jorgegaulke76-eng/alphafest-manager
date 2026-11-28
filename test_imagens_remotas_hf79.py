@@ -77,6 +77,25 @@ class ImagensRemotasHF79(unittest.TestCase):
         self.assertIn("assets/img/", novo)
         self.assertTrue(arquivos)
 
+    def test_tres_banners_e_campanha_podem_ser_otimizados(self):
+        urls = [self.url.replace("banner.png", f"banner-{i}.png") for i in range(4)]
+        campanha = self.url.replace("banner.png", "campanha.png")
+        html = ''.join(
+            '<img src="' + url + '" alt="Banner informativo AlphaFest" loading="lazy">'
+            for url in urls
+        ) + '<img class="hf65-art" src="' + campanha + '" alt="Campanha especial AlphaFest">'
+        chamadas = []
+        def carregar(url):
+            chamadas.append(url)
+            return self.dados
+        novo, assets, rel = otimizar_imagens_remotas_hf79(html, {}, baixar=carregar)
+        self.assertEqual(rel["imagens_otimizadas"], 4)
+        self.assertEqual(len(chamadas), 4)
+        self.assertIn(urls[-1], novo)
+        self.assertNotIn(urls[0], novo)
+        self.assertNotIn(campanha, novo)
+        self.assertTrue(assets)
+
     def test_maximo_uma_imagem_por_categoria(self):
         html = ''.join('<img class="hf50-carousel-product-img" src="' + self.url +
                        '" alt="Produto ' + str(i) + '">' for i in range(8))
