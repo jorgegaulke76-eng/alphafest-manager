@@ -1,8 +1,7 @@
 """HF76: extrai imagens embutidas de tags img para assets estaticos.
 
-Nao modifica a imagem original, nao altera cadastro e nao publica. Escopo
-intencionalmente restrito a src de <img>, preservando URLs de scripts, CSS e
-dados de JSON fora de atributos de imagem.
+Nao modifica a imagem original, nao altera cadastro e nao publica. Escopo restrito aos atributos de imagem src de <img> e data-detail-image
+nos cards de produtos, preservando scripts, CSS e dados JSON.
 """
 from __future__ import annotations
 
@@ -18,6 +17,10 @@ TIPOS = {"png": "png", "jpeg": "jpg", "jpg": "jpg", "webp": "webp",
 IMG_SRC = re.compile(
     r"""(<img\b[^>]*?\bsrc\s*=\s*["'])(data:image/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+))(["'])""",
     re.IGNORECASE | re.DOTALL,
+)
+PRODUCT_DETAIL_IMAGE = re.compile(
+    r"""(<article\b[^>]*?\bdata-detail-image\s*=\s*["'])(data:image/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=]+))(["'])""",
+    re.IGNORECASE,
 )
 
 
@@ -43,4 +46,6 @@ def extrair_imagens_inline_hf76(html: str) -> Tuple[str, Dict[str, bytes]]:
         caminho = f"assets/img/{digest}.{extensao}"
         arquivos[caminho] = bruto
         return inicio + "/" + caminho + aspas
-    return IMG_SRC.sub(substituir, str(html or "")), arquivos
+    pagina = IMG_SRC.sub(substituir, str(html or ""))
+    pagina = PRODUCT_DETAIL_IMAGE.sub(substituir, pagina)
+    return pagina, arquivos

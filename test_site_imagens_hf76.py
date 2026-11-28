@@ -25,6 +25,24 @@ class ImagensHF76(unittest.TestCase):
         self.assertEqual(novo.count("/" + caminho), 2)
         self.assertEqual(arquivos[caminho], PNG)
 
+    def test_ficha_do_produto_usa_mesma_imagem_sem_duplicar_base64(self):
+        pagina = ('<article class="product-card" data-detail-image="' + DATA + '">'
+                  '<img src="' + DATA + '" alt="Produto"></article>')
+        novo, arquivos = extrair_imagens_inline_hf76(pagina)
+        self.assertEqual(len(arquivos), 1)
+        self.assertEqual(novo.count("data:image/png;base64,"), 0)
+        caminho = next(iter(arquivos))
+        self.assertIn('data-detail-image="/' + caminho + '"', novo)
+        self.assertIn('src="/' + caminho + '"', novo)
+        self.assertEqual(arquivos[caminho], PNG)
+
+    def test_ignora_atributo_suspeito_e_script(self):
+        pagina = ('<script>const elemento="data-detail-image=\\\"' + DATA + '\\\""</script>'
+                  '<article data-detail-image="data:image/png;base64,@@@"></article>')
+        novo, arquivos = extrair_imagens_inline_hf76(pagina)
+        self.assertEqual(novo, pagina)
+        self.assertEqual(arquivos, {})
+
     def test_nao_reescreve_json_script_ou_uri_invalida(self):
         html = ('<script>const original="' + DATA + '"</script>'
                 '<img src="data:image/png;base64,@@@">'
