@@ -185,6 +185,7 @@ def inject_campaign(page: str, config: Any, empresa: Dict[str, Any], *, force_pr
         {
             "key": key,
             "delay": int(cfg["delay_seconds"]) * 1000,
+            "hasImage": bool(src),
             "duration": int(cfg["duration_seconds"]) * 1000,
             "once": bool(cfg.get("show_once_per_session", True)),
             "start": cfg.get("start_date") or "",
@@ -214,6 +215,7 @@ def inject_campaign(page: str, config: Any, empresa: Dict[str, Any], *, force_pr
 #afc65-root.afc65-leave .afc65-card{{transform:translate(-50%,-44%) scale(.93);opacity:0}}#afc65-root.afc65-leave .afc65-thu{{transform:translateX(-120vw);opacity:0}}#afc65-root.afc65-leave .afc65-fox{{transform:translateX(120vw);opacity:0}}#afc65-root.afc65-leave:before{{opacity:0}}
 @media(max-width:900px){{.afc65-card{{width:min(620px,88vw)}}.afc65-thu{{left:-3vw;height:46vh;opacity:.0!important}}.afc65-fox{{right:-4vw;width:30vw;opacity:.0!important}}}}
 @media(max-width:620px){{#afc65-root:before{{background:rgba(8,37,74,.08)}}.afc65-card{{width:92vw;max-height:82vh;border-radius:20px}}.afc65-art{{max-height:68vh}}.afc65-copy{{padding:14px 14px 4px}}.afc65-copy strong{{font-size:20px}}.afc65-copy span{{font-size:14px;max-height:84px;padding-right:6px}}.afc65-close{{width:36px;height:36px;right:8px;top:8px}}.afc65-mascot{{display:none!important}}}}
+@media(max-width:700px){{#afc65-root.afc65-fast-mobile .afc65-card,#afc65-root.afc65-fast-mobile:before{{transition:none!important}}}}
 @media(prefers-reduced-motion:reduce){{.afc65-card,.afc65-mascot,#afc65-root:before{{transition:none!important}}}}
 </style>
 <div id="afc65-root" aria-live="polite" aria-label="Campanha especial AlphaFest">
@@ -234,10 +236,14 @@ def inject_campaign(page: str, config: Any, empresa: Dict[str, Any], *, force_pr
   let closed=false, timer=null;
   function markSeen(){{if(!C.force && C.once){{try{{sessionStorage.setItem(storageKey,'1');}}catch(e){{}}}}}}
   function hide(){{if(closed)return;closed=true;root.classList.add('afc65-leave');root.classList.remove('afc65-show');if(timer)clearTimeout(timer);setTimeout(function(){{root.className='';root.style.display='none';}},760);}}
-  function show(){{if(closed)return;markSeen();root.classList.add('afc65-active');requestAnimationFrame(function(){{requestAnimationFrame(function(){{root.classList.add('afc65-show');}});}});timer=setTimeout(hide,C.duration);}}
+  // HF83: o atraso padrao de 2s faz o pop-up virar LCP tardio no celular.
+  // Respeitar atrasos personalizados pelo Manager; desktop permanece identico.
+  const fastMobile=!!(C.hasImage && C.delay===2000 && window.matchMedia && window.matchMedia('(max-width: 700px)').matches);
+  if(fastMobile) root.classList.add('afc65-fast-mobile');
+  function show(){{if(closed)return;markSeen();root.classList.add('afc65-active');if(fastMobile){{root.classList.add('afc65-show');}}else{{requestAnimationFrame(function(){{requestAnimationFrame(function(){{root.classList.add('afc65-show');}});}});}}timer=setTimeout(hide,C.duration);}}
   const close=root.querySelector('.afc65-close'); if(close) close.addEventListener('click',hide);
   const cta=root.querySelector('.afc65-cta'); if(cta) cta.addEventListener('click',function(){{setTimeout(hide,160);}});
-  setTimeout(show,C.delay);
+  if(fastMobile) show(); else setTimeout(show,C.delay);
 }})();
 </script>
 '''
