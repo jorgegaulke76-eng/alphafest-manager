@@ -116,7 +116,7 @@ def otimizar_imagens_remotas_hf79(
         categoria = ""
         if "hf6514-banner-slide" in classe or "banner informativo alphafest" in texto_alt:
             categoria = "banner"
-        elif "hf65-art" in classe and "campanha especial alphafest" in texto_alt:
+        elif ("hf65-art" in classe or "afc65-art" in classe) and "campanha especial alphafest" in texto_alt:
             categoria = "campanha"
         elif "hf50-carousel-product-img" in classe:
             categoria = "produto"
