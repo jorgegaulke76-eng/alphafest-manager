@@ -1,0 +1,53 @@
+name: AlphaFest - sincronizar versao do rodape
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - VERSAO
+      - VERSAO.txt
+      - RELEASE_INFO.json
+      - scripts/sincronizar_release_rodape.py
+      - test_sincronizar_release_rodape.py
+      - .github/workflows/sincronizar-rodape-manager.yml
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  validar-e-sincronizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validar script e metadados
+        run: |
+          python -m py_compile scripts/sincronizar_release_rodape.py
+          python -m unittest -v test_sincronizar_release_rodape
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          v = Path("VERSAO.txt").read_text().strip()
+          assert v == Path("VERSAO").read_text().strip()
+          assert v == json.loads(Path("RELEASE_INFO.json").read_text())["version"]
+          print("Metadados do rodape consistentes:", v)
+          PY
+      - name: Sincronizar com o commit que entrou na main
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          python scripts/sincronizar_release_rodape.py \
+            --message "$(git log -1 --format=%s)" \
+            --sha "$(git rev-parse HEAD)" \
+            --date "$(git log -1 --format=%cI)"
+          if ! git diff --quiet -- VERSAO VERSAO.txt RELEASE_INFO.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add VERSAO VERSAO.txt RELEASE_INFO.json
+            git commit -m "chore(release): atualizar rodape conforme release"
+            git push
+          fi
