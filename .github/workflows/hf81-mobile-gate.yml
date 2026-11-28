@@ -1,0 +1,26 @@
+name: AlphaFest HF81 - mobile seguro
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - site_mobile_imagens_hf81.py
+      - site_production_service.py
+      - site_campaign_service.py
+      - test_site_mobile_hf81.py
+      - .github/workflows/hf81-mobile-gate.yml
+  push:
+    branches: [feature/hf81-mobile-imagens-seguras]
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dependencias
+        run: python -m pip install pillow requests
+      - name: Sintaxe
+        run: python -m py_compile site_mobile_imagens_hf81.py site_campaign_service.py site_production_service.py test_site_mobile_hf81.py
+      - name: Testes e regressao
+        run: python -m unittest -v test_site_mobile_hf81 test_imagens_remotas_hf79 test_site_banner_hf78 test_site_imagens_hf76 test_mascotes_natal_hf80
