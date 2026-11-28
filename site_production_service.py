@@ -21,6 +21,7 @@ from site_favicon_service import favicon_assets, with_favicon
 from site_pwa_service import inject_pwa, pwa_assets
 from site_whatsapp_context_service import inject_whatsapp_context
 from site_institucional_adsense_service import paginas_institucionais
+from site_imagens_hf76 import extrair_imagens_inline_hf76
 
 def _rastreador_pagina_interna(pagina: str, home: str) -> str:
     """Injeta o rastreador; se os Secrets não estiverem visíveis nessa etapa,
@@ -195,6 +196,7 @@ def gerar_pacote_producao(
     html_publico = inject_pwa(inject_whatsapp_context(with_favicon(preparar_html_producao(html_site))))
     adsense_id = normalizar_publisher_id(adsense_publisher_id)
     html_publico = inserir_meta_adsense(html_publico, adsense_id)
+    html_publico, imagens_home_hf76 = extrair_imagens_inline_hf76(html_publico)
     status = resumo_producao(total_produtos=total_produtos)
     status["adsense_metatag_incluida"] = bool(adsense_id)
     status["adsense_anuncios_ativados"] = False
@@ -217,7 +219,9 @@ def gerar_pacote_producao(
         for url in urls_publicas
     )
     sitemap = f'''<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n  <url>\n    <loc>https://{DOMINIO_FINAL}/</loc>\n    <lastmod>{hoje}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>1.0</priority>\n  </url>\n{urls_dicas}</urlset>\n'''
-    headers = """/sw.js
+    headers = """/assets/img/*
+  Cache-Control: public, max-age=31536000, immutable
+/sw.js
   Cache-Control: no-cache, no-store, must-revalidate
 /manifest.webmanifest
   Cache-Control: no-cache, no-store, must-revalidate
@@ -260,6 +264,8 @@ O rollback do DNS anterior continua documentado no kit HF41.
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("index.html", html_publico)
+        for caminho_img, bytes_img in sorted(imagens_home_hf76.items()):
+            zf.writestr(caminho_img, bytes_img)
         for _favicon_path, _favicon_bytes in favicon_assets().items():
             zf.writestr(_favicon_path, _favicon_bytes)
         for _pwa_path, _pwa_bytes in pwa_assets().items():
@@ -282,8 +288,15 @@ O rollback do DNS anterior continua documentado no kit HF41.
         paginas.update(paginas_institucionais())
         paginas.update(archive_pages(posts_content or [], number=dicas_whatsapp))
         paginas["empresas/index.html"] = _rastreador_pagina_interna(corporate_page({"whatsapp_catalogo": dicas_whatsapp}, produtos=corporate_products, imagem_resolver=corporate_image_resolver, logo_src=corporate_logo_src, site_shell_html=html_publico), html_publico)
+        imagens_paginas_hf76 = {}
         for caminho, conteudo in sorted(paginas.items()):
-            zf.writestr(caminho, inject_pwa(inject_whatsapp_context(with_favicon(conteudo))))
+            pagina_final = inject_pwa(inject_whatsapp_context(with_favicon(conteudo)))
+            pagina_final, imagens_pagina = extrair_imagens_inline_hf76(pagina_final)
+            imagens_paginas_hf76.update(imagens_pagina)
+            zf.writestr(caminho, pagina_final)
+        for caminho_img, bytes_img in sorted(imagens_paginas_hf76.items()):
+            if caminho_img not in imagens_home_hf76:
+                zf.writestr(caminho_img, bytes_img)
         if adsense_id:
             zf.writestr("ads.txt", gerar_ads_txt(adsense_id))
         zf.writestr("_headers", headers)
