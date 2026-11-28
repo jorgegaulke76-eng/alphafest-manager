@@ -60,7 +60,10 @@ def _baixar(url: str) -> bytes | None:
 
 
 def _variantes(dados: bytes, limite_desktop: int, limite_mobile: int) -> dict[int, bytes]:
-    from PIL import Image, ImageOps, UnidentifiedImageError
+    try:
+        from PIL import Image, ImageOps, UnidentifiedImageError
+    except ImportError:
+        return {}
     saida: dict[int, bytes] = {}
     try:
         with Image.open(io.BytesIO(dados)) as img:
@@ -139,8 +142,9 @@ def otimizar_imagens_remotas_hf79(
         relatorio["bytes_principais"] += len(arquivos_gerados[maior][2])
         novo = tag[:src.start(2)] + html_lib.escape(arquivos_gerados[maior][0], quote=True) + tag[src.end(2):]
         if menor != maior and not re.search(r"\bsrcset\s*=", novo, re.I):
+            tamanhos = "(max-width: 700px) 100vw, 90vw" if categoria == "banner" else "(max-width: 700px) 90vw, 340px"
             adicional = (f' srcset="{arquivos_gerados[menor][0]} {menor}w, '
-                         f'{arquivos_gerados[maior][0]} {maior}w" sizes="100vw"')
+                         f'{arquivos_gerados[maior][0]} {maior}w" sizes="{tamanhos}"')
             novo = novo[:-1] + adicional + ">"
         if categoria == "banner":
             novo = re.sub(r"""\bloading\s*=\s*(["'])lazy\1""", 'loading="eager"', novo, flags=re.I)
