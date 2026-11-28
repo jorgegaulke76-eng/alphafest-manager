@@ -1,0 +1,23 @@
+name: AlphaFest HF80 - mascotes de Natal azul
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - site_campaign_service.py
+      - site_mascotes_natal_hf80.py
+      - test_mascotes_natal_hf80.py
+      - .github/workflows/hf80-natal-mascotes.yml
+  push:
+    branches: [fix/hf80-mascotes-externos-natal-azul]
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Sintaxe
+        run: python -m py_compile site_mascotes_natal_hf80.py site_campaign_service.py test_mascotes_natal_hf80.py
+      - name: Testes isolados
+        run: python -m unittest -v test_mascotes_natal_hf80
