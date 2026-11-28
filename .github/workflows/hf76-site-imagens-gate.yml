@@ -1,0 +1,26 @@
+name: AlphaFest HF76 - imagens estaticas sem deploy
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - site_imagens_hf76.py
+      - site_production_service.py
+      - site_cloudflare_publish_service.py
+      - test_site_imagens_hf76.py
+      - .github/workflows/hf76-site-imagens-gate.yml
+  push:
+    branches: [feature/hf76-imagens-externas-site]
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dependencias minimas do gerador
+        run: python -m pip install requests pillow
+      - name: Sintaxe
+        run: python -m py_compile site_imagens_hf76.py site_production_service.py site_cloudflare_publish_service.py test_site_imagens_hf76.py
+      - name: Testes com imagem sintetica e empacotamento
+        run: python -m unittest -v test_site_imagens_hf76
