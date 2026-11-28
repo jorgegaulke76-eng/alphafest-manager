@@ -97,6 +97,33 @@ class SiteMobileHF81(unittest.TestCase):
         second, _, _ = otimizar_imagens_mobile_hf81(first, assets, baixar=lambda u:self.image)
         self.assertEqual(second.count('<picture'),1)
 
+    def test_popup_padrao_abre_imediato_somente_no_mobile(self):
+        pagina = inject_campaign(
+            "<html><head></head><body><h1>AlphaFest</h1></body></html>",
+            {"enabled": True, "campaign_name": "Natal na AlphaFest",
+             "image_src": "https://example.com/natal.webp",
+             "show_mascots": False}, {},
+        )
+        self.assertIn("const fastMobile=!!(", pagina)
+        self.assertIn("C.delay===2000", pagina)
+        self.assertIn("max-width: 700px", pagina)
+        self.assertIn("if(fastMobile) show(); else setTimeout(show,C.delay);", pagina)
+        self.assertIn("afc65-fast-mobile", pagina)
+        self.assertIn('fetchpriority="high"', pagina)
+        self.assertIn("function markSeen()", pagina)
+        self.assertIn("setTimeout(hide,C.duration)", pagina)
+
+    def test_atraso_personalizado_permanece_configurado(self):
+        pagina = inject_campaign(
+            "<html><head></head><body></body></html>",
+            {"enabled": True, "delay_seconds": 7,
+             "image_src": "https://example.com/campanha.webp",
+             "show_mascots": False}, {},
+        )
+        self.assertIn('"delay": 7000', pagina)
+        self.assertIn("C.delay===2000", pagina)
+        self.assertIn("else setTimeout(show,C.delay)", pagina)
+
     def test_legenda_de_novembro_sai_somente_no_natal(self):
         html = "<html><head></head><body><h1>AlphaFest</h1></body></html>"
         natal = inject_campaign(html, {
