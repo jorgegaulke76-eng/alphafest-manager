@@ -1,0 +1,32 @@
+"""Entrada isolada para deploy de homologação Streamlit HF65.24.53.
+
+Sem import de app.py do Manager e sem consultas financeiras.
+A página principal permanece na raiz do repositório para testes unitários.
+"""
+from __future__ import annotations
+
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import streamlit as st
+from hf65_24_53_homologacao_login import render
+from hf65_24_53_http_diagnostic import render_http_diagnostic, render_session_write_diagnostic
+from hf65_24_53_oidc_bound_probe import render_bound_session_diagnostic
+from hf65_24_53_work_session_diagnostic import render_work_session_diagnostic
+from hf65_24_53_fictional_commercial_preview import render_fictional_commercial_preview
+from hf65_24_53_staging_readiness import render_staging_readiness
+from hf65_24_53_staging_synthetic_e2e import render_staging_synthetic_report
+
+st.set_page_config(page_title="AlphaFest HF65.24.53 — Login teste")
+render(st)
+render_http_diagnostic(st)
+render_session_write_diagnostic(st)
+render_bound_session_diagnostic(st)
+render_work_session_diagnostic(st)
+render_fictional_commercial_preview(st)
+render_staging_readiness(st)
+render_staging_synthetic_report(st)
