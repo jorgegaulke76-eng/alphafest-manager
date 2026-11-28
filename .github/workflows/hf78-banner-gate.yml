@@ -1,0 +1,25 @@
+name: AlphaFest HF78 - banner sem perda e sem deploy
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - site_banner_hf78.py
+      - site_production_service.py
+      - test_site_banner_hf78.py
+      - .github/workflows/hf78-banner-gate.yml
+  push:
+    branches: [feature/hf78-banner-lossless]
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Dependencias
+        run: python -m pip install pillow requests
+      - name: Conferir sintaxe
+        run: python -m py_compile site_banner_hf78.py site_production_service.py test_site_banner_hf78.py
+      - name: Testar otimizacao e regressao HF76
+        run: python -m unittest -v test_site_banner_hf78 test_site_imagens_hf76 test_auditoria_site_hf76
