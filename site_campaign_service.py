@@ -157,12 +157,20 @@ def inject_campaign(page: str, config: Any, empresa: Dict[str, Any], *, force_pr
     cta_text = str(cfg.get("cta_text") or "").strip()
     key = _campaign_key(cfg)
 
-    image_html = f'<img class="afc65-art" src="{html.escape(src, quote=True)}" alt="Campanha especial AlphaFest">' if src else ""
+    image_html = f'<img class="afc65-art" src="{html.escape(src, quote=True)}" alt="Campanha especial AlphaFest" decoding="async">' if src else ""
     copy_html = ""
     if headline or message:
         copy_html = '<div class="afc65-copy">' + (f'<strong>{html.escape(headline)}</strong>' if headline else "") + (f'<span>{html.escape(message)}</span>' if message else "") + '</div>'
     cta_html = f'<a class="afc65-cta" href="{html.escape(cta_href, quote=True)}" target="_blank" rel="noopener">{html.escape(cta_text)}</a>' if cta_href and cta_text else ""
     natal_azul = eh_natal_azul(cfg)
+    # HF81: não repetir a campanha anterior na legenda pública do Natal.
+    # O cadastro histórico permanece intocado no Manager.
+    if natal_azul and re.sub(r"\s+", " ", message).strip().casefold() == "novembro azul":
+        message = ""
+        copy_html = (
+            '<div class="afc65-copy"><strong>' + html.escape(headline) + '</strong></div>'
+            if headline else ""
+        )
     # Somente imagens natalinas reais podem substituir os personagens.
     # Sem os dois arquivos no repo, manter ambas as artes oficiais, sem sobreposições.
     natal_assets_ok = (natal_azul and cfg.get("show_mascots")
